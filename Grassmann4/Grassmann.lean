@@ -3,3 +3,5 @@ import Grassmann.BitMask
 import Grassmann.Manifold
 import Grassmann.Blade
 import Grassmann.Parity
+import Grassmann.Products
+import Grassmann.Notation

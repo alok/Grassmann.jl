@@ -16,3 +16,18 @@ rev = "v4.26.0-rc2"
 
 [[lean_lib]]
 name = "Grassmann"
+
+# Note: Verso documentation setup is available but requires
+# additional build configuration. See Manual/ folder for content.
+# To enable: add verso dependency and uncomment Manual targets.
+# [[require]]
+# name = "verso"
+# git = "https://github.com/leanprover/verso"
+# rev = "main"
+
+# [[lean_lib]]
+# name = "Manual"
+
+# [[lean_exe]]
+# name = "manual"
+# root = "Manual.Main"
