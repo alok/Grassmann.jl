@@ -307,6 +307,47 @@ def sandwich (a x : Multivector sig F) : Multivector sig F :=
 
 end Multivector
 
+/-! ## Float-specific Operations -/
+
+namespace Multivector
+
+/-- Norm (magnitude) of a multivector: √(m m†) -/
+def norm (m : Multivector sig Float) : Float :=
+  Float.sqrt (m * m†).scalarPart
+
+/-- Normalize a multivector to unit norm -/
+def normalize (m : Multivector sig Float) : Multivector sig Float :=
+  let n := m.norm
+  if n == 0 then m else m.smul (1 / n)
+
+/-- Check if multivector has unit norm (within tolerance) -/
+def isUnit (m : Multivector sig Float) (tol : Float := 1e-10) : Bool :=
+  let nsq := (m * m†).scalarPart
+  Float.abs (nsq - 1) < tol
+
+/-- Square root of a scalar multivector -/
+def sqrtScalar (m : Multivector sig Float) : Multivector sig Float :=
+  Multivector.scalar (Float.sqrt m.scalarPart)
+
+/-- Exponential of a bivector using closed form (for unit bivector B² = -1):
+    exp(θB) = cos(θ) + sin(θ)B -/
+def expUnitBivector (B : Multivector sig Float) (theta : Float) : Multivector sig Float :=
+  let c := Float.cos theta
+  let s := Float.sin theta
+  (Multivector.scalar c).add (B.smul s)
+
+/-- Logarithm of a rotor (returns bivector angle×axis) -/
+def logRotor (R : Multivector sig Float) : Multivector sig Float :=
+  let c := R.scalarPart  -- cos(θ)
+  let theta := Float.acos c
+  if theta < 1e-10 then
+    Multivector.zero  -- Near identity
+  else
+    let sinTheta := Float.sin theta
+    R.evenPart.sub (Multivector.scalar c) |>.smul (theta / sinTheta)
+
+end Multivector
+
 /-! ## Convenience Functions -/
 
 section Convenience

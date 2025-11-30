@@ -10,5 +10,6 @@ import Grassmann.Versor
 import Grassmann.CGA
 import Grassmann.PGA
 import Grassmann.LinearAlgebra
+import Grassmann.Calculus
 import Grassmann.Tests
 import Grassmann.OracleTests

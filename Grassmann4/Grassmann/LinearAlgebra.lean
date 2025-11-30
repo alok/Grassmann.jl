@@ -73,7 +73,7 @@ namespace LinearMap
 variable [Zero F] [One F] [Add F] [Neg F] [Mul F] [Sub F] [Div F]
 
 /-- Get the i-th basis blade (single bit set) -/
-private def basisBlade (i : Fin n) : Blade sig :=
+def basisBlade (i : Fin n) : Blade sig :=
   ⟨BitVec.ofNat n (1 <<< i.val)⟩
 
 /-- Apply a linear map to a vector: L(v) = Σᵢ vᵢ L(eᵢ) -/
