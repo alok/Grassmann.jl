@@ -239,8 +239,65 @@ prefix:max "⋆ᵐ" => Multivector.hodgeDual
 /-! ### Norms -/
 
 /-- Squared norm: scalar part of m * m† -/
-def normSq [DecidableEq F] (m : Multivector sig F) : F :=
+def normSq (m : Multivector sig F) : F :=
   (m * m†).scalarPart
+
+/-- Squared reverse norm: m† * m (alternative convention) -/
+def normSqRev (m : Multivector sig F) : F :=
+  (m† * m).scalarPart
+
+/-! ### Scalar Product -/
+
+/-- Scalar product of two multivectors: ⟨a†b⟩₀ -/
+def scalarProduct (a b : Multivector sig F) : F :=
+  (a† * b).scalarPart
+
+/-! ### Right Contraction -/
+
+/-- Right contraction: a ⌊ b -/
+def rightContract (a b : Multivector sig F) : Multivector sig F :=
+  ⟨fun k =>
+    let indices := allIndices n
+    indices.foldl (init := (0 : F)) fun acc i =>
+      indices.foldl (init := acc) fun acc2 j =>
+        let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
+        let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
+        if (bj.bits &&& bi.bits) = bj.bits && bj.grade ≤ bi.grade then
+          let resultBits := bi.bits ^^^ bj.bits
+          if resultBits.toNat = k.val then
+            let sign := geometricSign sig bi bj
+            let coeff := a.coeffs i * b.coeffs j
+            acc2 + (if sign < 0 then -coeff else coeff)
+          else acc2
+        else acc2⟩
+
+infixl:65 " ⌊ᵐ " => Multivector.rightContract
+
+/-! ### Fat Dot Product -/
+
+/-- Fat dot / inner product: sum of left and right contractions minus scalar product -/
+def fatDot (a b : Multivector sig F) : Multivector sig F :=
+  (a ⌋ᵐ b).add (a ⌊ᵐ b)
+
+infixl:65 " ⋅ᵐ " => Multivector.fatDot
+
+/-! ### Commutator and Anti-commutator -/
+
+/-- Commutator product: (ab - ba) / 2 -/
+def commutator [Div F] [OfNat F 2] (a b : Multivector sig F) : Multivector sig F :=
+  ((a * b).sub (b * a)).smul (1 / (2 : F))
+
+/-- Anti-commutator product: (ab + ba) / 2 -/
+def antiCommutator [Div F] [OfNat F 2] (a b : Multivector sig F) : Multivector sig F :=
+  ((a * b).add (b * a)).smul (1 / (2 : F))
+
+/-! ### Inverse -/
+
+/-- Inverse of multivector (when it exists): m⁻¹ = m† / (m m†)
+    Only valid when normSq is non-zero and invertible. -/
+def inv [Div F] (m : Multivector sig F) : Multivector sig F :=
+  let nsq := m.normSq
+  m†.smul (1 / nsq)
 
 /-! ### Sandwich Product -/
 

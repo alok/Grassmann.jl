@@ -6,4 +6,9 @@ import Grassmann.Parity
 import Grassmann.Products
 import Grassmann.Notation
 import Grassmann.Multivector
+import Grassmann.Versor
+import Grassmann.CGA
+import Grassmann.PGA
+import Grassmann.LinearAlgebra
 import Grassmann.Tests
+import Grassmann.OracleTests
