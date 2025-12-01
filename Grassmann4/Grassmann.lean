@@ -16,5 +16,8 @@ import Grassmann.Calculus
 import Grassmann.SpecialFunctions
 import Grassmann.Theorems
 import Grassmann.R3Utils
+import Grassmann.SparseMultivector
+import Grassmann.MetalCodegen
+import Grassmann.StressTests
 import Grassmann.Tests
 import Grassmann.OracleTests

@@ -17,6 +17,10 @@ rev = "v4.26.0-rc2"
 [[lean_lib]]
 name = "Grassmann"
 
+[[lean_exe]]
+name = "genmetalshaders"
+root = "GenMetalShaders"
+
 # Note: Verso documentation setup is available but requires
 # additional build configuration. See Manual/ folder for content.
 # To enable: add verso dependency and uncomment Manual targets.
