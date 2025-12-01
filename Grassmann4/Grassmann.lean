@@ -15,5 +15,6 @@ import Grassmann.LinearAlgebra
 import Grassmann.Calculus
 import Grassmann.SpecialFunctions
 import Grassmann.Theorems
+import Grassmann.R3Utils
 import Grassmann.Tests
 import Grassmann.OracleTests
