@@ -6,11 +6,14 @@ import Grassmann.Parity
 import Grassmann.Products
 import Grassmann.Notation
 import Grassmann.Multivector
+import Grassmann.MultivectorArray
 import Grassmann.Versor
 import Grassmann.Spinor
 import Grassmann.CGA
 import Grassmann.PGA
 import Grassmann.LinearAlgebra
 import Grassmann.Calculus
+import Grassmann.SpecialFunctions
+import Grassmann.Theorems
 import Grassmann.Tests
 import Grassmann.OracleTests

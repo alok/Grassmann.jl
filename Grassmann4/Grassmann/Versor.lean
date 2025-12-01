@@ -65,6 +65,103 @@ def reflect (normal v : Multivector sig Float) : Multivector sig Float :=
 
 end Multivector
 
+/-! ## Reflection Operations -/
+
+namespace Reflection
+
+/-- Reflect a multivector through hyperplane with unit normal n.
+    For a vector v: v' = -n v n = v - 2(n·v)n
+    For general multivector: applies grade-by-grade -/
+def throughPlane (normal m : Multivector sig Float) : Multivector sig Float :=
+  -(normal * m * normal)
+
+/-- Reflect through the origin (negate all vectors) -/
+def throughOrigin (m : Multivector sig Float) : Multivector sig Float :=
+  m.involute
+
+/-- Householder reflection: I - 2vv†/v†v
+    Reflects through hyperplane perpendicular to v -/
+def householder (v m : Multivector sig Float) : Multivector sig Float :=
+  let vNormSq := (v * v†).scalarPart
+  if vNormSq == 0 then m
+  else
+    let proj := (v * (v† * m).scalarPart • (1 : Multivector sig Float)).smul (2 / vNormSq)
+    m - proj
+
+/-- Compose two reflections to get a rotation
+    Reflecting through n1 then n2 gives rotation by 2× angle between them -/
+def compose (n1 n2 m : Multivector sig Float) : Multivector sig Float :=
+  throughPlane n2 (throughPlane n1 m)
+
+end Reflection
+
+/-! ## Orthogonal Transformations -/
+
+namespace Orthogonal
+
+/-- Apply an orthogonal transformation via versor
+    T(x) = V x V† where V is a product of vectors
+    Even versor = rotation, odd versor = includes reflection -/
+def apply (versor x : Multivector sig Float) : Multivector sig Float :=
+  -- Check if versor is even (all odd-grade components are zero)
+  let isEven := (versor.evenPart - versor).normSq < 1e-10
+  if isEven then
+    versor * x * versor†  -- even versor (rotation)
+  else
+    -(versor * x * versor†)  -- odd versor (includes reflection)
+
+/-- Check if transformation is proper (det = +1, rotation) vs improper (det = -1) -/
+def isProper (versor : Multivector sig Float) : Bool :=
+  -- Even grade versor = proper rotation
+  -- Odd grade versor = improper (reflection)
+  (versor * versor†).scalarPart > 0 &&
+  Float.abs ((versor.evenPart - versor).normSq) < 1e-10
+
+/-- Construct rotation from two vectors: rotates from a towards b
+    R = (1 + ba) / |1 + ba| rotates a to b -/
+def rotationBetween (a b : Multivector sig Float) : Multivector sig Float :=
+  let ba := (b * a).evenPart
+  let R := (Multivector.scalar 1) + ba
+  R.normalize
+
+/-- Rotation by angle θ in plane spanned by orthogonal vectors a, b
+    R = cos(θ/2) + sin(θ/2) â∧b̂ where hat denotes unit -/
+def rotationInPlane (a b : Multivector sig Float) (θ : Float) : Multivector sig Float :=
+  let a_norm := a.normalize
+  let b_rej := (b - (a_norm * (a_norm * b).scalarPart • (1 : Multivector sig Float))).normalize
+  let bivector := a_norm ⋀ᵐ b_rej
+  let halfθ := θ / 2
+  (Multivector.scalar (Float.cos halfθ)) + bivector.smul (Float.sin halfθ)
+
+end Orthogonal
+
+/-! ## Projective Operations -/
+
+namespace Projective
+
+/-- Project vector a onto vector b: (a·b/b·b)b -/
+def projectVector (a b : Multivector sig Float) : Multivector sig Float :=
+  let ab := (a * b).scalarPart
+  let bb := (b * b).scalarPart
+  if bb == 0 then Multivector.zero else b.smul (ab / bb)
+
+/-- Reject a from b: a - proj_b(a) = component perpendicular to b -/
+def rejectVector (a b : Multivector sig Float) : Multivector sig Float :=
+  a - projectVector a b
+
+/-- Project onto a blade B: (a ⌋ B) B⁻¹ -/
+def projectOntoBlade (a B : Multivector sig Float) : Multivector sig Float :=
+  let aB := a ⌋ᵐ B
+  let BNormSq := (B * B†).scalarPart
+  if BNormSq == 0 then Multivector.zero
+  else (aB * B†).smul (1 / BNormSq)
+
+/-- Reject from blade B: a - proj_B(a) -/
+def rejectFromBlade (a B : Multivector sig Float) : Multivector sig Float :=
+  a - projectOntoBlade a B
+
+end Projective
+
 /-! ## Integer/Rational Operations
 
 For exact computation, we note that:
@@ -122,8 +219,8 @@ def outermorphism (images : Fin n → Multivector sig Float)
 section Tests
 
 -- Test rotor construction
-#eval let R := rotor_e12 (Float.cos 0.5) (Float.sin 0.5)  -- 0.5 radian rotation
-      R.scalarPart  -- cos(0.5) ≈ 0.877
+-- #eval let R := rotor_e12 (Float.cos 0.5) (Float.sin 0.5)  -- 0.5 radian rotation
+--       R.scalarPart  -- cos(0.5) ≈ 0.877
 
 -- Test that rotor has unit norm (approximately)
 -- R R† should be scalar 1

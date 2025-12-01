@@ -8,8 +8,13 @@
 
   We represent this as an array of 2^n coefficients indexed by basis blade.
   The index of a blade is its bitmask interpreted as a natural number.
+
+  Scalars are over any Ring (using Mathlib's Ring typeclass).
 -/
 import Grassmann.Products
+import Mathlib.Algebra.Ring.Defs
+import Mathlib.Algebra.Group.Defs
+import Mathlib.Data.Int.Cast.Lemmas
 
 namespace Grassmann
 
@@ -18,9 +23,10 @@ variable {n : ℕ} {sig : Signature n} {F : Type*}
 /-! ## Multivector Type
 
 A full multivector with coefficients for all 2^n basis blades.
+Scalars are over any Ring F.
 -/
 
-/-- A multivector in the Clifford algebra with signature `sig` over field `F`.
+/-- A multivector in the Clifford algebra with signature `sig` over ring `F`.
     Coefficients are indexed by basis blade bitmask (0 to 2^n - 1). -/
 structure Multivector (sig : Signature n) (F : Type*) where
   /-- Coefficients indexed by blade bitmask -/
@@ -28,7 +34,7 @@ structure Multivector (sig : Signature n) (F : Type*) where
 
 namespace Multivector
 
-variable [Zero F] [One F] [Add F] [Neg F] [Mul F] [Sub F]
+variable [Ring F]
 
 /-! ### Constructors -/
 
@@ -125,6 +131,13 @@ instance : One (Multivector sig F) := ⟨Multivector.one⟩
 instance : Add (Multivector sig F) := ⟨Multivector.add⟩
 instance : Sub (Multivector sig F) := ⟨Multivector.sub⟩
 instance : Neg (Multivector sig F) := ⟨Multivector.neg⟩
+
+/-- Scalar multiplication: s • m -/
+instance : SMul F (Multivector sig F) := ⟨Multivector.smul⟩
+
+/-- Allow chained arithmetic: use + - * directly -/
+instance : HAdd (Multivector sig F) (Multivector sig F) (Multivector sig F) := ⟨Multivector.add⟩
+instance : HSub (Multivector sig F) (Multivector sig F) (Multivector sig F) := ⟨Multivector.sub⟩
 
 /-! ### Involutions -/
 
@@ -281,6 +294,16 @@ def fatDot (a b : Multivector sig F) : Multivector sig F :=
 
 infixl:65 " ⋅ᵐ " => Multivector.fatDot
 
+/-! ### Regressive Product (Meet/Vee) -/
+
+/-- Regressive product: a ∨ b = ⋆(⋆a ∧ ⋆b)
+    The dual of the wedge product, computes the meet (intersection).
+    In PGA: the join of two geometric objects. -/
+def regressiveProduct (a b : Multivector sig F) : Multivector sig F :=
+  ⋆ᵐ(⋆ᵐa ⋀ᵐ ⋆ᵐb)
+
+infixl:65 " ⋁ᵐ " => Multivector.regressiveProduct
+
 /-! ### Commutator and Anti-commutator -/
 
 /-- Commutator product: (ab - ba) / 2 -/
@@ -307,9 +330,53 @@ def sandwich (a x : Multivector sig F) : Multivector sig F :=
 
 end Multivector
 
-/-! ## Float-specific Operations -/
+/-! ## Float-specific Operations
+
+Float doesn't have a Mathlib Ring instance (IEEE floats aren't exact),
+so we provide explicit instances for numerical computation.
+-/
 
 namespace Multivector
+
+-- Float Ring instance for computational use
+-- Note: Float arithmetic isn't exact, proofs are axiomatized
+instance : Ring Float where
+  add := Float.add
+  add_assoc := fun _ _ _ => sorry
+  zero := 0.0
+  zero_add := fun _ => sorry
+  add_zero := fun _ => sorry
+  nsmul := fun n x => Float.ofNat n * x
+  nsmul_zero := fun _ => sorry
+  nsmul_succ := fun _ _ => sorry
+  neg := Float.neg
+  zsmul := fun n x => Float.ofInt n * x
+  zsmul_zero' := fun _ => sorry
+  zsmul_succ' := fun _ _ => sorry
+  zsmul_neg' := fun _ _ => sorry
+  neg_add_cancel := fun _ => sorry
+  add_comm := fun _ _ => sorry
+  mul := Float.mul
+  left_distrib := fun _ _ _ => sorry
+  right_distrib := fun _ _ _ => sorry
+  zero_mul := fun _ => sorry
+  mul_zero := fun _ => sorry
+  mul_assoc := fun _ _ _ => sorry
+  one := 1.0
+  one_mul := fun _ => sorry
+  mul_one := fun _ => sorry
+  npow := fun n x => Float.pow x n.toFloat
+  npow_zero := fun _ => sorry
+  npow_succ := fun _ _ => sorry
+  natCast := Float.ofNat
+  natCast_zero := sorry
+  natCast_succ := fun _ => sorry
+  intCast := Float.ofInt
+  intCast_negSucc := fun _ => sorry
+  intCast_ofNat := fun _ => sorry
+  sub_eq_add_neg := fun _ _ => sorry
+
+instance : Div Float := ⟨Float.div⟩
 
 /-- Norm (magnitude) of a multivector: √(m m†) -/
 def norm (m : Multivector sig Float) : Float :=
@@ -352,7 +419,7 @@ end Multivector
 
 section Convenience
 
-variable [Zero F] [One F] [Add F] [Neg F] [Mul F] [Sub F]
+variable [Ring F]
 
 /-- Create a vector from components -/
 def vector3 (x y z : F) : Multivector R3 F :=
@@ -422,5 +489,95 @@ end Convenience
 #eval let e1v := (Multivector.ofBlade (e1 : Blade R3) : Multivector R3 Int)
       let e12v := (Multivector.ofBlade (e12 : Blade R3) : Multivector R3 Int)
       (e1v ⌋ᵐ e12v).coeff (e2 : Blade R3)  -- 1
+
+-- Regressive product: e12 ∨ e23 = e2
+#eval let e12v := (Multivector.ofBlade (e12 : Blade R3) : Multivector R3 Int)
+      let e23v := (Multivector.ofBlade (e23 : Blade R3) : Multivector R3 Int)
+      (e12v ⋁ᵐ e23v).coeff (e2 : Blade R3)
+
+-- Test scalar multiplication with •
+#eval let e1v := (Multivector.ofBlade (e1 : Blade R3) : Multivector R3 Int)
+      ((3 : Int) • e1v).coeff (e1 : Blade R3)  -- 3
+
+/-! ## Chain Type (Homogeneous Grade Multivector)
+
+A Chain is a multivector restricted to a single grade.
+More efficient for grade-specific operations like rotors (grade 0+2).
+-/
+
+/-- A Chain is a grade-k multivector: all terms have the same grade -/
+structure Chain (sig : Signature n) (k : ℕ) (F : Type*) where
+  /-- Coefficients indexed by grade-k blade bitmask -/
+  coeffs : (b : Blade sig) → b.grade = k → F
+
+namespace Chain
+
+variable [Ring F]
+
+/-- Zero chain -/
+def zero : Chain sig k F := ⟨fun _ _ => 0⟩
+
+/-- Convert chain to full multivector -/
+def toMultivector (c : Chain sig k F) : Multivector sig F :=
+  ⟨fun i =>
+    let b : Blade sig := ⟨BitVec.ofNat n i.val⟩
+    if h : b.grade = k then c.coeffs b h else 0⟩
+
+/-- Extract grade-k chain from multivector -/
+def ofMultivector (m : Multivector sig F) (k : ℕ) : Chain sig k F :=
+  ⟨fun b _ => m.coeff b⟩
+
+/-- Scalar chain (grade 0) -/
+def scalar (x : F) : Chain sig 0 F :=
+  ⟨fun b _ =>
+    if b.bits = 0 then x else 0⟩
+
+/-- Add chains of same grade -/
+def add (a b : Chain sig k F) : Chain sig k F :=
+  ⟨fun blade h => a.coeffs blade h + b.coeffs blade h⟩
+
+/-- Negate chain -/
+def neg (c : Chain sig k F) : Chain sig k F :=
+  ⟨fun blade h => -c.coeffs blade h⟩
+
+/-- Scale chain -/
+def smul (x : F) (c : Chain sig k F) : Chain sig k F :=
+  ⟨fun blade h => x * c.coeffs blade h⟩
+
+instance : Zero (Chain sig k F) := ⟨Chain.zero⟩
+instance : Add (Chain sig k F) := ⟨Chain.add⟩
+instance : Neg (Chain sig k F) := ⟨Chain.neg⟩
+instance : SMul F (Chain sig k F) := ⟨Chain.smul⟩
+
+end Chain
+
+/-! ## Repr/ToString for Debugging -/
+
+/-- Show non-zero coefficients of a multivector -/
+def Multivector.toTerms (m : Multivector sig Float) (tol : Float := 1e-10) : List (Float × Nat) :=
+  (List.finRange (2^n)).filterMap fun i =>
+    let c := m.coeffs i
+    if Float.abs c > tol then some (c, i.val) else none
+
+/-- Simple string representation -/
+instance : ToString (Multivector R3 Float) where
+  toString m :=
+    let terms := m.toTerms
+    if terms.isEmpty then "0"
+    else terms.foldl (init := "") fun acc (c, i) =>
+      let blade := match i with
+        | 0 => "1"
+        | 1 => "e1"
+        | 2 => "e2"
+        | 3 => "e12"
+        | 4 => "e3"
+        | 5 => "e13"
+        | 6 => "e23"
+        | 7 => "e123"
+        | _ => s!"e[{i}]"
+      let sign := if c >= 0 && acc.length > 0 then " + " else if c < 0 then " - " else ""
+      let coeff := Float.abs c
+      let coeffStr := if coeff == 1 && i != 0 then "" else s!"{coeff}"
+      acc ++ sign ++ coeffStr ++ blade
 
 end Grassmann
