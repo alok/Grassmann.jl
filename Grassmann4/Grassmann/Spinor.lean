@@ -82,6 +82,16 @@ instance : Sub (Spinor sig F) := ⟨Spinor.sub⟩
 instance : Neg (Spinor sig F) := ⟨Spinor.neg⟩
 instance : Mul (Spinor sig F) := ⟨Spinor.mul⟩
 
+/-! ### Coercion to Multivector
+
+Spinor → Multivector is a safe coercion (zero cost, just unwrapping).
+-/
+
+@[coe]
+def coeToMultivector (s : Spinor sig F) : Multivector sig F := s.mv
+
+instance : Coe (Spinor sig F) (Multivector sig F) := ⟨coeToMultivector⟩
+
 postfix:max "†ˢ" => Spinor.reverse
 
 /-! ## Rotor Operations -/
@@ -146,21 +156,53 @@ def slerp (s1 s2 : Spinor sig Float) (t : Float) : Spinor sig Float :=
 
 end Spinor
 
-/-! ## Rotor Constructors for R3 -/
+/-! ## Generic Rotor Constructors (n-dimensional) -/
+
+section GenericRotors
+
+variable {n : ℕ} {sig : Signature n}
+
+/-- Create a rotor for rotation in the plane of basis vectors i and j.
+    The rotation angle is given in radians. For orthonormal bases (Euclidean),
+    the bivector e_i ∧ e_j has norm 1 and squares to -1. -/
+def rotorInPlane (i j : Fin n) (angle : Float) : Spinor sig Float :=
+  let ei : Multivector sig Float := Multivector.ofBlade (Blade.basis i)
+  let ej : Multivector sig Float := Multivector.ofBlade (Blade.basis j)
+  let B := ei ⋀ᵐ ej
+  -- Normalize in case the basis is not orthonormal
+  Spinor.fromAxisAngle B.normalize angle
+
+/-- Create a rotor from a normalized bivector and angle.
+    Assumes the bivector B is normalized (B² = -1 for Euclidean signature). -/
+def rotorFromBivector (B : Multivector sig Float) (angle : Float) : Spinor sig Float :=
+  Spinor.fromAxisAngle B angle
+
+/-- Rotor that rotates vector a to vector b (generic version).
+    Works in any signature where the vectors are non-null. -/
+def rotorBetweenVectors (a b : Multivector sig Float) : Spinor sig Float :=
+  -- R = (1 + ba) / |1 + ba|
+  let ab := (b * a).evenPart
+  let one_plus_ab := (Multivector.one : Multivector sig Float).add ab
+  Spinor.ofEven one_plus_ab |>.normalize
+
+end GenericRotors
+
+/-! ## Rotor Constructors for R3 (convenience functions) -/
 
 section R3Rotors
 
-/-- Rotor for rotation around x-axis by angle -/
+/-- Rotor for rotation around x-axis by angle (rotation in yz-plane) -/
 def rotorX (angle : Float) : Spinor R3 Float :=
-  Spinor.fromAxisAngle (Multivector.ofBlade (e23 : Blade R3)) angle
+  rotorInPlane ⟨1, by omega⟩ ⟨2, by omega⟩ angle
 
-/-- Rotor for rotation around y-axis by angle -/
+/-- Rotor for rotation around y-axis by angle (rotation in xz-plane) -/
 def rotorY (angle : Float) : Spinor R3 Float :=
-  Spinor.fromAxisAngle (Multivector.ofBlade (e13 : Blade R3)) (-angle)
+  -- Note: e13 plane gives rotation in opposite direction to "around y"
+  rotorInPlane ⟨0, by omega⟩ ⟨2, by omega⟩ (-angle)
 
-/-- Rotor for rotation around z-axis by angle -/
+/-- Rotor for rotation around z-axis by angle (rotation in xy-plane) -/
 def rotorZ (angle : Float) : Spinor R3 Float :=
-  Spinor.fromAxisAngle (Multivector.ofBlade (e12 : Blade R3)) angle
+  rotorInPlane ⟨0, by omega⟩ ⟨1, by omega⟩ angle
 
 /-- Rotor from Euler angles (ZYX convention) -/
 def rotorFromEuler (roll pitch yaw : Float) : Spinor R3 Float :=
@@ -168,10 +210,7 @@ def rotorFromEuler (roll pitch yaw : Float) : Spinor R3 Float :=
 
 /-- Rotor that rotates vector a to vector b -/
 def rotorBetween (a b : Multivector R3 Float) : Spinor R3 Float :=
-  -- R = (1 + ba) / |1 + ba|
-  let ab := (b * a).evenPart
-  let one_plus_ab := (Multivector.one : Multivector R3 Float).add ab
-  Spinor.ofEven one_plus_ab |>.normalize
+  rotorBetweenVectors a b
 
 end R3Rotors
 
@@ -179,34 +218,38 @@ end R3Rotors
 
 section SpinorTests
 
-/-- Pi constant -/
 def pi : Float := 3.14159265358979323846
 
--- Test identity rotor (disabled: depends on Float Ring sorry)
--- #eval (Spinor.one : Spinor R3 Float).scalarPart  -- 1
+-- Test identity rotor
+#eval! (Spinor.one : Spinor R3 Float).scalarPart  -- 1
 
 -- Test rotor from axis-angle (90° around z)
--- #eval let R := rotorZ (pi / 2)
---       R.scalarPart  -- cos(π/4) ≈ 0.707
+#eval! let R := rotorZ (pi / 2)
+       R.scalarPart  -- cos(π/4) ≈ 0.707
 
 -- Test rotor composition
--- #eval let Rx := rotorX (pi / 4)
---       let Ry := rotorY (pi / 4)
---       let Rxy := Rx * Ry
---       Rxy.normSq  -- Should be ≈ 1
+#eval! let Rx := rotorX (pi / 4)
+       let Ry := rotorY (pi / 4)
+       let Rxy := Rx * Ry
+       Rxy.normSq  -- Should be ≈ 1
 
 -- Test rotation of e1 by 90° around z gives e2
--- #eval let R := rotorZ (pi / 2)
---       let e1v : Multivector R3 Float := Multivector.ofBlade (e1 : Blade R3)
---       let rotated := R.rotate e1v
---       (rotated.coeff (e1 : Blade R3), rotated.coeff (e2 : Blade R3))
+#eval! let R := rotorZ (pi / 2)
+       let e1v : Multivector R3 Float := Multivector.ofBlade (e1 : Blade R3)
+       let rotated := R.rotate e1v
+       (rotated.coeff (e1 : Blade R3), rotated.coeff (e2 : Blade R3))
 -- Expected: approximately (0, 1)
 
 -- Test slerp at t=0.5
--- #eval let R1 := (Spinor.one : Spinor R3 Float)
---       let R2 := rotorZ (pi / 2)
---       let Rmid := Spinor.slerp R1 R2 0.5
---       Rmid.toAngle  -- Should be approximately π/4
+#eval! let R1 := (Spinor.one : Spinor R3 Float)
+       let R2 := rotorZ (pi / 2)
+       let Rmid := Spinor.slerp R1 R2 0.5
+       Rmid.toAngle  -- Should be approximately π/4
+
+-- Test Spinor → Multivector coercion (zero cost)
+#eval! let R := rotorZ (pi / 4)
+       let mv : Multivector R3 Float := R  -- Coercion!
+       mv.scalarPart  -- cos(π/8) ≈ 0.924
 
 end SpinorTests
 

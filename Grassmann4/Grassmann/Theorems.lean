@@ -19,6 +19,130 @@ variable [Ring F] [Div F]
 
 open Multivector LinearAlgebra
 
+/-! ## Grade Projection Properties -/
+
+/-- Grade projection is idempotent: ⟨⟨a⟩ₖ⟩ₖ = ⟨a⟩ₖ -/
+theorem gradeProject_idem (a : Multivector sig F) (k : ℕ) :
+    (a.gradeProject k).gradeProject k = a.gradeProject k := by
+  ext i
+  simp only [Multivector.gradeProject]
+  split_ifs with h <;> simp [h]
+
+/-- Grade projection of different grades is zero: ⟨⟨a⟩ⱼ⟩ₖ = 0 for j ≠ k -/
+theorem gradeProject_orthogonal (a : Multivector sig F) (j k : ℕ) (hjk : j ≠ k) :
+    (a.gradeProject j).gradeProject k = 0 := by
+  ext i
+  simp only [Multivector.gradeProject, Multivector.zero]
+  split_ifs with h1 h2 <;> try rfl
+  · omega
+
+/-- Grade projection of zero is zero -/
+theorem gradeProject_zero (k : ℕ) : (0 : Multivector sig F).gradeProject k = 0 := by
+  ext i; simp only [Multivector.gradeProject, Multivector.zero]; split_ifs <;> rfl
+
+/-- Grade projection distributes over addition: ⟨a + b⟩ₖ = ⟨a⟩ₖ + ⟨b⟩ₖ -/
+theorem gradeProject_add (a b : Multivector sig F) (k : ℕ) :
+    (a + b).gradeProject k = a.gradeProject k + b.gradeProject k := by
+  ext i
+  simp only [Multivector.gradeProject, HAdd.hAdd, Multivector.add]
+  split_ifs with h <;> first | rfl | exact (add_zero 0).symm
+
+/-- Even part is idempotent -/
+theorem evenPart_idem (a : Multivector sig F) : a.evenPart.evenPart = a.evenPart := by
+  ext i; simp only [Multivector.evenPart]; split_ifs <;> rfl
+
+/-- Odd part is idempotent -/
+theorem oddPart_idem (a : Multivector sig F) : a.oddPart.oddPart = a.oddPart := by
+  ext i; simp only [Multivector.oddPart]; split_ifs <;> rfl
+
+/-- Even part of odd part is zero -/
+theorem evenPart_oddPart (a : Multivector sig F) : a.oddPart.evenPart = 0 := by
+  ext i; simp only [Multivector.evenPart, Multivector.oddPart, Multivector.zero]
+  split_ifs with h1 h2 <;> first | rfl | omega
+
+/-- Odd part of even part is zero -/
+theorem oddPart_evenPart (a : Multivector sig F) : a.evenPart.oddPart = 0 := by
+  ext i; simp only [Multivector.evenPart, Multivector.oddPart, Multivector.zero]
+  split_ifs with h1 h2 <;> first | rfl | omega
+
+/-- Even part distributes over addition -/
+theorem evenPart_add (a b : Multivector sig F) : (a + b).evenPart = a.evenPart + b.evenPart := by
+  ext i; simp only [Multivector.evenPart, HAdd.hAdd, Multivector.add]
+  split_ifs with h <;> first | rfl | exact (add_zero 0).symm
+
+/-- Odd part distributes over addition -/
+theorem oddPart_add (a b : Multivector sig F) : (a + b).oddPart = a.oddPart + b.oddPart := by
+  ext i; simp only [Multivector.oddPart, HAdd.hAdd, Multivector.add]
+  split_ifs with h <;> first | rfl | exact (add_zero 0).symm
+
+/-- Even and odd parts sum to original -/
+theorem evenPart_oddPart_sum (a : Multivector sig F) : a.evenPart + a.oddPart = a := by
+  ext i
+  simp only [HAdd.hAdd, Multivector.add, Multivector.evenPart, Multivector.oddPart]
+  by_cases he : grade (BitVec.ofNat n i.val) % 2 = 0
+  · simp only [he, ↓reduceIte, Nat.zero_ne_one]
+    exact add_zero _
+  · have ho : grade (BitVec.ofNat n i.val) % 2 = 1 := by omega
+    simp only [he, ho, ↓reduceIte]
+    exact zero_add _
+
+/-- Reverse of zero is zero -/
+theorem reverse_zero : (0 : Multivector sig F)† = 0 := by
+  ext i
+  simp only [Multivector.reverse, Multivector.zero]
+  split_ifs <;> first | rfl | exact neg_zero
+
+/-- Involute of zero is zero -/
+theorem involute_zero : (0 : Multivector sig F)ˆ = 0 := by
+  ext i
+  simp only [Multivector.involute, Multivector.zero]
+  split_ifs <;> first | rfl | exact neg_zero
+
+/-- Conjugate of zero is zero -/
+theorem conjugate_zero : (0 : Multivector sig F)‡ = 0 := by
+  ext i
+  simp only [Multivector.conjugate, Multivector.zero]
+  split_ifs <;> first | rfl | exact neg_zero
+
+/-- Reverse of scalar is scalar (grade 0) -/
+theorem reverse_scalar (x : F) : (Multivector.scalar x : Multivector sig F)† = Multivector.scalar x := by
+  ext i
+  simp only [Multivector.reverse, Multivector.scalar]
+  by_cases hi : i.val = 0
+  · -- At index 0, grade is 0, so k*(k-1)/2 = 0, no flip
+    simp only [hi, ↓reduceIte]
+    have hzero : grade (BitVec.ofNat n 0) = 0 := by simp [grade, popcount]
+    simp only [hzero, Nat.zero_sub, Nat.zero_mul, Nat.zero_div, Nat.zero_mod, ↓reduceIte]
+  · -- At non-zero index, scalar coefficient is 0
+    simp only [hi, ↓reduceIte]
+    split_ifs <;> simp only [neg_zero]
+
+/-- Involute of scalar is scalar (grade 0) -/
+theorem involute_scalar (x : F) : (Multivector.scalar x : Multivector sig F)ˆ = Multivector.scalar x := by
+  ext i
+  simp only [Multivector.involute, Multivector.scalar]
+  by_cases hi : i.val = 0
+  · -- At index 0, grade is 0, so grade % 2 = 0, no flip
+    simp only [hi, ↓reduceIte]
+    have hzero : grade (BitVec.ofNat n 0) = 0 := by simp [grade, popcount]
+    simp only [hzero, Nat.zero_mod, ↓reduceIte]
+  · -- At non-zero index, scalar coefficient is 0
+    simp only [hi, ↓reduceIte]
+    split_ifs <;> simp only [neg_zero]
+
+/-- Conjugate of scalar is scalar (grade 0) -/
+theorem conjugate_scalar (x : F) : (Multivector.scalar x : Multivector sig F)‡ = Multivector.scalar x := by
+  ext i
+  simp only [Multivector.conjugate, Multivector.scalar]
+  by_cases hi : i.val = 0
+  · -- At index 0, grade is 0, so k*(k+1)/2 = 0, no flip
+    simp only [hi, ↓reduceIte]
+    have hzero : grade (BitVec.ofNat n 0) = 0 := by simp [grade, popcount]
+    simp only [hzero, Nat.zero_add, Nat.zero_mul, Nat.zero_div, Nat.zero_mod, ↓reduceIte]
+  · -- At non-zero index, scalar coefficient is 0
+    simp only [hi, ↓reduceIte]
+    split_ifs <;> simp only [neg_zero]
+
 /-! ## Ring Structure
 
 The Clifford algebra Cl(sig) is an associative algebra over F.
@@ -69,13 +193,16 @@ theorem wedge_one (a : Multivector sig F) : a ⋀ᵐ 1 = a := sorry
 /-! ## Involution Properties -/
 
 /-- Reverse is an involution: (a†)† = a -/
-theorem reverse_reverse (a : Multivector sig F) : a†† = a := sorry
+theorem reverse_reverse (a : Multivector sig F) : a†† = a := by
+  ext i; simp only [Multivector.reverse]; split_ifs <;> simp
 
 /-- Involute is an involution: (aˆ)ˆ = a -/
-theorem involute_involute (a : Multivector sig F) : aˆˆ = a := sorry
+theorem involute_involute (a : Multivector sig F) : aˆˆ = a := by
+  ext i; simp only [Multivector.involute]; split_ifs <;> simp
 
 /-- Conjugate is an involution: (a‡)‡ = a -/
-theorem conjugate_conjugate (a : Multivector sig F) : a‡‡ = a := sorry
+theorem conjugate_conjugate (a : Multivector sig F) : a‡‡ = a := by
+  ext i; simp only [Multivector.conjugate]; split_ifs <;> simp
 
 /-- Reverse is an anti-automorphism: (ab)† = b† a† -/
 theorem reverse_mul (a b : Multivector sig F) : (a * b)† = b† * a† := sorry
@@ -87,7 +214,19 @@ theorem involute_mul (a b : Multivector sig F) : (a * b)ˆ = aˆ * bˆ := sorry
 theorem conjugate_mul (a b : Multivector sig F) : (a * b)‡ = b‡ * a‡ := sorry
 
 /-- Reverse preserves addition: (a + b)† = a† + b† -/
-theorem reverse_add (a b : Multivector sig F) : (a + b)† = a† + b† := sorry
+theorem reverse_add (a b : Multivector sig F) : (a + b)† = a† + b† := by
+  ext i; simp only [Multivector.reverse, HAdd.hAdd, Multivector.add]
+  split_ifs <;> first | rfl | exact neg_add _ _
+
+/-- Involute preserves addition: (a + b)ˆ = aˆ + bˆ -/
+theorem involute_add (a b : Multivector sig F) : (a + b)ˆ = aˆ + bˆ := by
+  ext i; simp only [Multivector.involute, HAdd.hAdd, Multivector.add]
+  split_ifs <;> first | rfl | exact neg_add _ _
+
+/-- Conjugate preserves addition: (a + b)‡ = a‡ + b‡ -/
+theorem conjugate_add (a b : Multivector sig F) : (a + b)‡ = a‡ + b‡ := by
+  ext i; simp only [Multivector.conjugate, HAdd.hAdd, Multivector.add]
+  split_ifs <;> first | rfl | exact neg_add _ _
 
 /-! ## Hodge Dual Properties -/
 
@@ -115,7 +254,7 @@ theorem one_leftContract (a : Multivector sig F) :
 
 /-- Regressive product is dual to wedge: a ∨ b = ⋆(⋆a ∧ ⋆b) -/
 theorem regressive_def (a b : Multivector sig F) :
-    a ⋁ᵐ b = ⋆ᵐ(⋆ᵐa ⋀ᵐ ⋆ᵐb) := sorry
+    a ⋁ᵐ b = ⋆ᵐ(⋆ᵐa ⋀ᵐ ⋆ᵐb) := rfl
 
 /-- Regressive product is associative -/
 theorem regressive_assoc (a b c : Multivector sig F) :
@@ -301,15 +440,63 @@ The grade automorphism (involute) negates odd-grade parts.
 
 /-- Grade automorphism on vectors: vˆ = -v -/
 theorem involute_vector (v : Multivector sig F) (hv : v = v.gradeProject 1) :
-    vˆ = -v := sorry
+    vˆ = -v := by
+  ext i
+  simp only [Multivector.involute]
+  have hcoeff : v.coeffs i = if grade (BitVec.ofNat n i.val) = 1 then v.coeffs i else 0 := by
+    conv_lhs => rw [hv]
+    simp only [Multivector.gradeProject]
+  split_ifs with h
+  · -- grade i is even, so grade ≠ 1, so v.coeffs i = 0
+    have h1 : grade (BitVec.ofNat n i.val) ≠ 1 := by omega
+    simp only [h1, ↓reduceIte] at hcoeff
+    -- hcoeff : v.coeffs i = 0, goal: v.coeffs i = (-v).coeffs i
+    rw [hcoeff]
+    change 0 = (Multivector.neg v).coeffs i
+    simp only [Multivector.neg, hcoeff, neg_zero]
+  · -- grade i is odd, -v.coeffs i = (-v).coeffs i
+    change -v.coeffs i = (Multivector.neg v).coeffs i
+    simp only [Multivector.neg]
 
 /-- Grade automorphism on bivectors: Bˆ = B -/
 theorem involute_bivector (B : Multivector sig F) (hB : B = B.gradeProject 2) :
-    Bˆ = B := sorry
+    Bˆ = B := by
+  ext i
+  simp only [Multivector.involute]
+  have hcoeff : B.coeffs i = if grade (BitVec.ofNat n i.val) = 2 then B.coeffs i else 0 := by
+    conv_lhs => rw [hB]
+    simp only [Multivector.gradeProject]
+  split_ifs with h
+  · -- grade i is even, B.coeffs i unchanged
+    rfl
+  · -- grade i is odd, so grade ≠ 2, so B.coeffs i = 0
+    have h2 : grade (BitVec.ofNat n i.val) ≠ 2 := by omega
+    simp only [h2, ↓reduceIte] at hcoeff
+    simp [hcoeff]
 
 /-- Grade automorphism on pseudoscalar depends on dimension parity -/
 theorem involute_pseudoscalar (I : Multivector sig F) (hI : I = I.gradeProject n) :
-    Iˆ = if n % 2 = 0 then I else -I := sorry
+    Iˆ = if n % 2 = 0 then I else -I := by
+  ext i
+  simp only [Multivector.involute]
+  have hcoeff : I.coeffs i = if grade (BitVec.ofNat n i.val) = n then I.coeffs i else 0 := by
+    conv_lhs => rw [hI]
+    simp only [Multivector.gradeProject]
+  split_ifs with h hn
+  · -- grade % 2 = 0 and n % 2 = 0: coefficient unchanged
+    rfl
+  · -- grade % 2 = 0 and n % 2 ≠ 0: grade ≠ n so I.coeffs i = 0
+    have hne : grade (BitVec.ofNat n i.val) ≠ n := by omega
+    simp only [hne, ↓reduceIte] at hcoeff
+    change I.coeffs i = (Multivector.neg I).coeffs i
+    simp only [Multivector.neg, hcoeff, neg_zero]
+  · -- grade % 2 ≠ 0 (odd) and n % 2 = 0: grade ≠ n so I.coeffs i = 0
+    have hne : grade (BitVec.ofNat n i.val) ≠ n := by omega
+    simp only [hne, ↓reduceIte] at hcoeff
+    simp [hcoeff]
+  · -- grade % 2 ≠ 0 (odd) and n % 2 ≠ 0: -I.coeffs i = (-I).coeffs i
+    change -I.coeffs i = (Multivector.neg I).coeffs i
+    simp only [Multivector.neg]
 
 /-! ## Metric Relations
 

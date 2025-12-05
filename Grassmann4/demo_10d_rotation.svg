@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="blue"/>
+    </marker>
+  </defs>
+  <rect width="100%" height="100%" fill="#f8f8f8"/>
+  <text x="10" y="25" font-family="monospace" font-size="14">4D vectors in 10D space, rotated, projected to 3D</text>
+  <text x="10" y="45" font-family="monospace" font-size="11" fill="#666">Green dots = original, Blue arrows = after rotation</text>
+  <!-- Axes -->
+  <line x1="250" y1="20" x2="250" y2="480" stroke="#ddd" stroke-width="1"/>
+  <line x1="20" y1="250" x2="480" y2="250" stroke="#ddd" stroke-width="1"/>
+  <line x1="316.582787" y1="129.934663" x2="250.123129" y2="154.677815" stroke="blue" stroke-width="2" marker-end="url(#arrow)"/>
+  <circle cx="316.582787" cy="129.934663" r="3" fill="green"/>
+  <line x1="276.510517" y1="171.009349" x2="228.141665" y2="199.133008" stroke="blue" stroke-width="2" marker-end="url(#arrow)"/>
+  <circle cx="276.510517" cy="171.009349" r="3" fill="green"/>
+  <line x1="387.745183" y1="327.837069" x2="428.941967" y2="254.986881" stroke="blue" stroke-width="2" marker-end="url(#arrow)"/>
+  <circle cx="387.745183" cy="327.837069" r="3" fill="green"/>
+  <line x1="360.923596" y1="212.126885" x2="345.862194" y2="164.495531" stroke="blue" stroke-width="2" marker-end="url(#arrow)"/>
+  <circle cx="360.923596" cy="212.126885" r="3" fill="green"/>
+  <line x1="83.971895" y1="227.566840" x2="95.099438" y2="273.714100" stroke="blue" stroke-width="2" marker-end="url(#arrow)"/>
+  <circle cx="83.971895" cy="227.566840" r="3" fill="green"/>
+  <line x1="139.346930" y1="393.201240" x2="195.982459" y2="384.313209" stroke="blue" stroke-width="2" marker-end="url(#arrow)"/>
+  <circle cx="139.346930" cy="393.201240" r="3" fill="green"/>
+  <line x1="112.126220" y1="385.339549" x2="184.232369" y2="365.070461" stroke="blue" stroke-width="2" marker-end="url(#arrow)"/>
+  <circle cx="112.126220" cy="385.339549" r="3" fill="green"/>
+  <line x1="122.376516" y1="415.472477" x2="169.771376" y2="416.221508" stroke="blue" stroke-width="2" marker-end="url(#arrow)"/>
+  <circle cx="122.376516" cy="415.472477" r="3" fill="green"/>
+  <line x1="153.000688" y1="199.900942" x2="133.857902" y2="263.164937" stroke="blue" stroke-width="2" marker-end="url(#arrow)"/>
+  <circle cx="153.000688" cy="199.900942" r="3" fill="green"/>
+  <line x1="412.750809" y1="213.509311" x2="395.556270" y2="172.505860" stroke="blue" stroke-width="2" marker-end="url(#arrow)"/>
+  <circle cx="412.750809" cy="213.509311" r="3" fill="green"/>
+  <line x1="240.953600" y1="152.093291" x2="218.938727" y2="161.144427" stroke="blue" stroke-width="2" marker-end="url(#arrow)"/>
+  <circle cx="240.953600" cy="152.093291" r="3" fill="green"/>
+  <line x1="368.630846" y1="309.937130" x2="392.033385" y2="250.815823" stroke="blue" stroke-width="2" marker-end="url(#arrow)"/>
+  <circle cx="368.630846" cy="309.937130" r="3" fill="green"/>
+  <line x1="149.919528" y1="141.715947" x2="120.734437" y2="189.294286" stroke="blue" stroke-width="2" marker-end="url(#arrow)"/>
+  <circle cx="149.919528" cy="141.715947" r="3" fill="green"/>
+  <line x1="366.288047" y1="292.481952" x2="361.427924" y2="243.380354" stroke="blue" stroke-width="2" marker-end="url(#arrow)"/>
+  <circle cx="366.288047" cy="292.481952" r="3" fill="green"/>
+  <line x1="100.030000" y1="270.655477" x2="121.719472" y2="306.021869" stroke="blue" stroke-width="2" marker-end="url(#arrow)"/>
+  <circle cx="100.030000" cy="270.655477" r="3" fill="green"/>
+</svg>

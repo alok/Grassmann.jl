@@ -9,9 +9,14 @@
   We represent this as an array of 2^n coefficients indexed by basis blade.
   The index of a blade is its bitmask interpreted as a natural number.
 
-  Scalars are over any Ring (using Mathlib's Ring typeclass).
+  Design:
+  - Multivector structure has NO constraint on scalar type F
+  - Operations are guarded by [Ring F], [Field F] etc.
+  - Float Ring instance is in Proof.lean with sorry_proof axioms
 -/
 import Grassmann.Products
+import Grassmann.Proof
+import Grassmann.GATypeclass
 import Mathlib.Algebra.Ring.Defs
 import Mathlib.Algebra.Group.Defs
 import Mathlib.Data.Int.Cast.Lemmas
@@ -35,6 +40,10 @@ structure Multivector (sig : Signature n) (F : Type*) where
 namespace Multivector
 
 variable [Ring F]
+
+@[ext]
+theorem ext {a b : Multivector sig F} (h : ∀ i, a.coeffs i = b.coeffs i) : a = b := by
+  cases a; cases b; simp only [mk.injEq]; funext i; exact h i
 
 /-! ### Constructors -/
 
@@ -179,59 +188,123 @@ private def allIndices (n : ℕ) : List (Fin (2^n)) :=
   List.finRange (2^n)
 
 /-- Geometric product of two multivectors.
-    This is O(4^n) but correct. -/
+    O(4^n) forward iteration: for each input pair (i,j), accumulate to output[i XOR j].
+    Results are computed once and cached in an Array for O(1) coefficient access. -/
 def geometricProduct (a b : Multivector sig F) : Multivector sig F :=
-  ⟨fun k =>
-    let indices := allIndices n
-    indices.foldl (init := (0 : F)) fun acc i =>
-      indices.foldl (init := acc) fun acc2 j =>
-        let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
-        let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
-        let resultBits := bi.bits ^^^ bj.bits
-        if resultBits.toNat = k.val then
-          let sign := geometricSign sig bi bj
+  let size := 2^n
+  let indices := allIndices n
+  -- Build result array in single O(4^n) pass
+  -- Handles degenerate (null) basis vectors: sign == 0 → skip contribution
+  let resultArray := indices.foldl (init := Array.replicate size (0 : F)) fun arr i =>
+    indices.foldl (init := arr) fun arr2 j =>
+      let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
+      let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
+      let sign := geometricSign sig bi bj
+      if sign == 0 then arr2  -- Degenerate case: no contribution
+      else
+        let resultIdx := (bi.bits ^^^ bj.bits).toNat
+        if resultIdx < size then
           let coeff := a.coeffs i * b.coeffs j
-          acc2 + (if sign < 0 then -coeff else coeff)
-        else acc2⟩
+          let contrib := if sign < 0 then -coeff else coeff
+          arr2.modify resultIdx (· + contrib)
+        else arr2
+  -- Wrap array lookup in Multivector function interface
+  ⟨fun k => resultArray.getD k.val 0⟩
 
-/-- Wedge product of two multivectors -/
+/-- Wedge product of two multivectors.
+    O(4^n) forward iteration: only contributes when blades share no basis vectors. -/
 def wedgeProduct (a b : Multivector sig F) : Multivector sig F :=
-  ⟨fun k =>
-    let indices := allIndices n
-    indices.foldl (init := (0 : F)) fun acc i =>
-      indices.foldl (init := acc) fun acc2 j =>
-        let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
-        let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
-        if (bi.bits &&& bj.bits) = 0 then
-          let resultBits := bi.bits ||| bj.bits
-          if resultBits.toNat = k.val then
-            let sign := wedgeSign sig bi bj
+  let size := 2^n
+  let indices := allIndices n
+  let resultArray := indices.foldl (init := Array.replicate size (0 : F)) fun arr i =>
+    indices.foldl (init := arr) fun arr2 j =>
+      let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
+      let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
+      if (bi.bits &&& bj.bits) = 0 then
+        let resultIdx := (bi.bits ||| bj.bits).toNat
+        if resultIdx < size then
+          let sign := wedgeSign sig bi bj
+          if sign ≠ 0 then
             let coeff := a.coeffs i * b.coeffs j
-            acc2 + (if sign < 0 then -coeff else if sign = 0 then 0 else coeff)
-          else acc2
-        else acc2⟩
+            let contrib := if sign < 0 then -coeff else coeff
+            arr2.modify resultIdx (· + contrib)
+          else arr2
+        else arr2
+      else arr2
+  ⟨fun k => resultArray.getD k.val 0⟩
 
-/-- Left contraction of a into b -/
+/-- Left contraction of a into b.
+    O(4^n) forward iteration: only contributes when first blade contained in second. -/
 def leftContract (a b : Multivector sig F) : Multivector sig F :=
-  ⟨fun k =>
-    let indices := allIndices n
-    indices.foldl (init := (0 : F)) fun acc i =>
-      indices.foldl (init := acc) fun acc2 j =>
-        let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
-        let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
-        if (bi.bits &&& bj.bits) = bi.bits && bi.grade ≤ bj.grade then
-          let resultBits := bi.bits ^^^ bj.bits
-          if resultBits.toNat = k.val then
-            let sign := geometricSign sig bi bj
+  let size := 2^n
+  let indices := allIndices n
+  let resultArray := indices.foldl (init := Array.replicate size (0 : F)) fun arr i =>
+    indices.foldl (init := arr) fun arr2 j =>
+      let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
+      let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
+      if (bi.bits &&& bj.bits) = bi.bits && bi.grade ≤ bj.grade then
+        let sign := geometricSign sig bi bj
+        if sign == 0 then arr2  -- Degenerate case
+        else
+          let resultIdx := (bi.bits ^^^ bj.bits).toNat
+          if resultIdx < size then
             let coeff := a.coeffs i * b.coeffs j
-            acc2 + (if sign < 0 then -coeff else coeff)
-          else acc2
-        else acc2⟩
+            let contrib := if sign < 0 then -coeff else coeff
+            arr2.modify resultIdx (· + contrib)
+          else arr2
+      else arr2
+  ⟨fun k => resultArray.getD k.val 0⟩
 
 instance : Mul (Multivector sig F) := ⟨Multivector.geometricProduct⟩
 
 infixl:65 " ⋀ᵐ " => Multivector.wedgeProduct  -- Use different symbol to avoid conflict
 infixl:65 " ⌋ᵐ " => Multivector.leftContract
+
+/-! ### Optimized Blade × Multivector Products
+
+These specialized products are O(2^n) instead of O(4^n) for full multivector products.
+Use HMul to dispatch to these when multiplying a blade with a multivector.
+-/
+
+/-- Left multiply by blade: b * m. O(2^n) - iterates only over m's indices. -/
+def bladeLeftMul (b : Blade sig) (m : Multivector sig F) : Multivector sig F :=
+  let size := 2^n
+  let indices := allIndices n
+  let resultArray := indices.foldl (init := Array.replicate size (0 : F)) fun arr j =>
+    let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
+    let sign := geometricSign sig b bj
+    if sign == 0 then arr
+    else
+      let resultIdx := (b.bits ^^^ bj.bits).toNat
+      if resultIdx < size then
+        let coeff := m.coeffs j
+        let contrib := if sign < 0 then -coeff else coeff
+        arr.modify resultIdx (· + contrib)
+      else arr
+  ⟨fun k => resultArray.getD k.val 0⟩
+
+/-- Right multiply by blade: m * b. O(2^n) - iterates only over m's indices. -/
+def bladeRightMul (m : Multivector sig F) (b : Blade sig) : Multivector sig F :=
+  let size := 2^n
+  let indices := allIndices n
+  let resultArray := indices.foldl (init := Array.replicate size (0 : F)) fun arr i =>
+    let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
+    let sign := geometricSign sig bi b
+    if sign == 0 then arr
+    else
+      let resultIdx := (bi.bits ^^^ b.bits).toNat
+      if resultIdx < size then
+        let coeff := m.coeffs i
+        let contrib := if sign < 0 then -coeff else coeff
+        arr.modify resultIdx (· + contrib)
+      else arr
+  ⟨fun k => resultArray.getD k.val 0⟩
+
+/-- HMul: Blade × Multivector → Multivector (O(2^n) specialized) -/
+instance : HMul (Blade sig) (Multivector sig F) (Multivector sig F) := ⟨bladeLeftMul⟩
+
+/-- HMul: Multivector × Blade → Multivector (O(2^n) specialized) -/
+instance : HMul (Multivector sig F) (Blade sig) (Multivector sig F) := ⟨bladeRightMul⟩
 
 /-! ### Hodge Dual -/
 
@@ -267,22 +340,27 @@ def scalarProduct (a b : Multivector sig F) : F :=
 
 /-! ### Right Contraction -/
 
-/-- Right contraction: a ⌊ b -/
+/-- Right contraction: a ⌊ b.
+    O(4^n) forward iteration: only contributes when second blade contained in first. -/
 def rightContract (a b : Multivector sig F) : Multivector sig F :=
-  ⟨fun k =>
-    let indices := allIndices n
-    indices.foldl (init := (0 : F)) fun acc i =>
-      indices.foldl (init := acc) fun acc2 j =>
-        let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
-        let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
-        if (bj.bits &&& bi.bits) = bj.bits && bj.grade ≤ bi.grade then
-          let resultBits := bi.bits ^^^ bj.bits
-          if resultBits.toNat = k.val then
-            let sign := geometricSign sig bi bj
+  let size := 2^n
+  let indices := allIndices n
+  let resultArray := indices.foldl (init := Array.replicate size (0 : F)) fun arr i =>
+    indices.foldl (init := arr) fun arr2 j =>
+      let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
+      let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
+      if (bj.bits &&& bi.bits) = bj.bits && bj.grade ≤ bi.grade then
+        let sign := geometricSign sig bi bj
+        if sign == 0 then arr2  -- Degenerate case
+        else
+          let resultIdx := (bi.bits ^^^ bj.bits).toNat
+          if resultIdx < size then
             let coeff := a.coeffs i * b.coeffs j
-            acc2 + (if sign < 0 then -coeff else coeff)
-          else acc2
-        else acc2⟩
+            let contrib := if sign < 0 then -coeff else coeff
+            arr2.modify resultIdx (· + contrib)
+          else arr2
+      else arr2
+  ⟨fun k => resultArray.getD k.val 0⟩
 
 infixl:65 " ⌊ᵐ " => Multivector.rightContract
 
@@ -332,51 +410,13 @@ end Multivector
 
 /-! ## Float-specific Operations
 
-Float doesn't have a Mathlib Ring instance (IEEE floats aren't exact),
-so we provide explicit instances for numerical computation.
+Float Ring/Field instances are defined in Grassmann.Proof with sorry_proof.
+Here we only define Float-specific computational operations.
 -/
 
 namespace Multivector
 
--- Float Ring instance for computational use
--- Note: Float arithmetic isn't exact, proofs are axiomatized
-instance : Ring Float where
-  add := Float.add
-  add_assoc := fun _ _ _ => sorry
-  zero := 0.0
-  zero_add := fun _ => sorry
-  add_zero := fun _ => sorry
-  nsmul := fun n x => Float.ofNat n * x
-  nsmul_zero := fun _ => sorry
-  nsmul_succ := fun _ _ => sorry
-  neg := Float.neg
-  zsmul := fun n x => Float.ofInt n * x
-  zsmul_zero' := fun _ => sorry
-  zsmul_succ' := fun _ _ => sorry
-  zsmul_neg' := fun _ _ => sorry
-  neg_add_cancel := fun _ => sorry
-  add_comm := fun _ _ => sorry
-  mul := Float.mul
-  left_distrib := fun _ _ _ => sorry
-  right_distrib := fun _ _ _ => sorry
-  zero_mul := fun _ => sorry
-  mul_zero := fun _ => sorry
-  mul_assoc := fun _ _ _ => sorry
-  one := 1.0
-  one_mul := fun _ => sorry
-  mul_one := fun _ => sorry
-  npow := fun n x => Float.pow x n.toFloat
-  npow_zero := fun _ => sorry
-  npow_succ := fun _ _ => sorry
-  natCast := Float.ofNat
-  natCast_zero := sorry
-  natCast_succ := fun _ => sorry
-  intCast := Float.ofInt
-  intCast_negSucc := fun _ => sorry
-  intCast_ofNat := fun _ => sorry
-  sub_eq_add_neg := fun _ _ => sorry
-
-instance : Div Float := ⟨Float.div⟩
+-- Float Ring/Field instance imported from Grassmann.Proof
 
 /-- Norm (magnitude) of a multivector: √(m m†) -/
 def norm (m : Multivector sig Float) : Float :=
@@ -419,15 +459,47 @@ end Multivector
 
 section Convenience
 
+variable {n : ℕ} {sig : Signature n}
 variable [Ring F]
 
-/-- Create a vector from components -/
+/-- Create a vector from an array of components (generic n-dimensional) -/
+def vectorFromArray (components : Array F) : Multivector sig F :=
+  (List.finRange n).foldl (init := Multivector.zero) fun acc i =>
+    let c := components.getD i.val 0
+    acc.add ((Multivector.basis i : Multivector sig F).smul c)
+
+/-- Create a vector from a function giving each component (generic n-dimensional) -/
+def vectorFromFn (f : Fin n → F) : Multivector sig F :=
+  (List.finRange n).foldl (init := Multivector.zero) fun acc i =>
+    acc.add ((Multivector.basis i : Multivector sig F).smul (f i))
+
+/-- Create a 2D vector from components -/
+def vector2 (x y : F) : Multivector R2 F :=
+  Multivector.basis ⟨0, by omega⟩ |>.smul x |>.add
+  (Multivector.basis ⟨1, by omega⟩ |>.smul y)
+
+/-- Create a 3D vector from components -/
 def vector3 (x y z : F) : Multivector R3 F :=
   Multivector.basis ⟨0, by omega⟩ |>.smul x |>.add
   (Multivector.basis ⟨1, by omega⟩ |>.smul y) |>.add
   (Multivector.basis ⟨2, by omega⟩ |>.smul z)
 
-/-- Create a bivector in R3 -/
+/-- Create a 4D vector from components -/
+def vector4 (x y z w : F) : Multivector (Signature.euclidean 4) F :=
+  Multivector.basis ⟨0, by omega⟩ |>.smul x |>.add
+  (Multivector.basis ⟨1, by omega⟩ |>.smul y) |>.add
+  (Multivector.basis ⟨2, by omega⟩ |>.smul z) |>.add
+  (Multivector.basis ⟨3, by omega⟩ |>.smul w)
+
+/-- Create a bivector from pairs of (basis indices, coefficient).
+    Each pair (i, j, c) contributes c * (eᵢ ∧ eⱼ) to the result. -/
+def bivectorFromPairs (pairs : List (Fin n × Fin n × F)) : Multivector sig F :=
+  pairs.foldl (init := Multivector.zero) fun acc (i, j, c) =>
+    let ei : Multivector sig F := Multivector.basis i
+    let ej : Multivector sig F := Multivector.basis j
+    acc.add ((ei ⋀ᵐ ej).smul c)
+
+/-- Create a bivector in R3 from coefficients (e12, e13, e23) -/
 def bivector3 (xy xz yz : F) : Multivector R3 F :=
   let e12 : Multivector R3 F := ⟨fun i => if i.val = 0b011 then 1 else 0⟩
   let e13 : Multivector R3 F := ⟨fun i => if i.val = 0b101 then 1 else 0⟩
@@ -435,6 +507,27 @@ def bivector3 (xy xz yz : F) : Multivector R3 F :=
   e12.smul xy |>.add (e13.smul xz) |>.add (e23.smul yz)
 
 end Convenience
+
+/-! ## GAlgebra Instance -/
+
+instance [Ring F] : GAlgebra sig (Multivector sig F) F where
+  basisVector := Multivector.basis
+  scalar := Multivector.scalar
+  zero := Multivector.zero
+  one := Multivector.one
+  blade bits := Multivector.ofBlade ⟨bits⟩
+  mul := Multivector.geometricProduct
+  wedge := Multivector.wedgeProduct
+  leftContract := Multivector.leftContract
+  rightContract := Multivector.rightContract
+  reverse := Multivector.reverse
+  involute := Multivector.involute
+  conjugate := Multivector.conjugate
+  scalarPart := Multivector.scalarPart
+  add := Multivector.add
+  neg := Multivector.neg
+  smul := Multivector.smul
+  gradeProject := Multivector.gradeProject
 
 /-! ## Tests -/
 
@@ -499,6 +592,16 @@ end Convenience
 #eval let e1v := (Multivector.ofBlade (e1 : Blade R3) : Multivector R3 Int)
       ((3 : Int) • e1v).coeff (e1 : Blade R3)  -- 3
 
+-- Test HMul: Blade × Multivector (O(2^n) specialized)
+#eval let mv : Multivector R3 Int := Multivector.ofBlade e1 + Multivector.ofBlade e2
+      let result := (e1 : Blade R3) * mv  -- Uses bladeLeftMul, O(2^n)
+      (result.coeff Blade.scalar, result.coeff e12)  -- (1, 1)
+
+-- Test HMul: Multivector × Blade (O(2^n) specialized)
+#eval let mv : Multivector R3 Int := Multivector.ofBlade e1 + Multivector.ofBlade e2
+      let result := mv * (e1 : Blade R3)  -- Uses bladeRightMul, O(2^n)
+      (result.coeff Blade.scalar, result.coeff e12)  -- (1, -1)
+
 /-! ## Chain Type (Homogeneous Grade Multivector)
 
 A Chain is a multivector restricted to a single grade.
@@ -551,6 +654,158 @@ instance : SMul F (Chain sig k F) := ⟨Chain.smul⟩
 
 end Chain
 
+/-! ## Tensor Operators
+
+Projector, Dyadic, and related tensor operator types from AbstractTensors.jl
+-/
+
+/-- A Projector represents a projection operator P where P² = P.
+    Geometrically: projects onto a subspace defined by a blade B.
+    P_B(x) = (x ⌋ B) ⌊ B⁻¹ -/
+structure Projector (sig : Signature n) (F : Type*) where
+  /-- The blade defining the subspace to project onto -/
+  blade : Blade sig
+  /-- Coefficient (usually 1 for unit projectors) -/
+  coeff : F
+
+namespace Projector
+
+variable {n : ℕ} {sig : Signature n} {F : Type*} [Ring F]
+
+/-- Create projector from a blade -/
+def ofBlade (b : Blade sig) : Projector sig F := ⟨b, 1⟩
+
+/-- Identity projector (onto full space) -/
+def identity : Projector sig F := ⟨⟨pseudoscalar⟩, 1⟩
+
+/-- Null projector (projects to zero) -/
+def null : Projector sig F := ⟨⟨0⟩, 0⟩
+
+/-- Rank of projector (grade of blade) -/
+def rank (p : Projector sig F) : Nat := p.blade.grade
+
+/-- Complement projector: I - P -/
+def complement (p : Projector sig F) : Projector sig F :=
+  ⟨p.blade.complement, p.coeff⟩
+
+end Projector
+
+/-- A Dyadic represents a tensor product of two vectors: a ⊗ b.
+    Acts on vectors v as: (a ⊗ b)(v) = a(b · v) -/
+structure Dyadic (sig : Signature n) (F : Type*) where
+  /-- Left vector -/
+  left : Multivector sig F
+  /-- Right vector -/
+  right : Multivector sig F
+
+namespace Dyadic
+
+variable {n : ℕ} {sig : Signature n} {F : Type*} [Ring F]
+
+/-- Create dyadic from two vectors -/
+def ofVectors (a b : Multivector sig F) : Dyadic sig F := ⟨a, b⟩
+
+/-- Apply dyadic to a vector: (a ⊗ b)(v) = a(b · v) -/
+def apply (d : Dyadic sig F) (v : Multivector sig F) : Multivector sig F :=
+  let dotProduct := (d.right ⌋ᵐ v).scalarPart
+  d.left.smul dotProduct
+
+/-- Add two dyadics -/
+def add (d1 d2 : Dyadic sig F) : List (Dyadic sig F) :=
+  [d1, d2]  -- Represent as list (full addition needs DyadicChain)
+
+/-- Scale a dyadic -/
+def smul (s : F) (d : Dyadic sig F) : Dyadic sig F :=
+  ⟨d.left.smul s, d.right⟩
+
+/-- Transpose: (a ⊗ b)ᵀ = b ⊗ a -/
+def transpose (d : Dyadic sig F) : Dyadic sig F :=
+  ⟨d.right, d.left⟩
+
+/-- Trace: Tr(a ⊗ b) = a · b -/
+def trace (d : Dyadic sig F) : F :=
+  (d.left ⌋ᵐ d.right).scalarPart
+
+/-- Frobenius norm squared: ||a ⊗ b||² = |a|²|b|² -/
+def normSq (d : Dyadic sig F) : F :=
+  d.left.normSq * d.right.normSq
+
+end Dyadic
+
+/-- Tensor product notation for dyadics -/
+infixl:70 " ⊗ᵈ " => Dyadic.ofVectors
+
+/-- A DyadicChain is a sum of dyadics (full rank-k tensor) -/
+structure DyadicChain (sig : Signature n) (F : Type*) where
+  terms : List (Dyadic sig F)
+
+namespace DyadicChain
+
+variable {n : ℕ} {sig : Signature n} {F : Type*} [Ring F]
+
+/-- Empty chain -/
+def empty : DyadicChain sig F := ⟨[]⟩
+
+/-- Single dyadic -/
+def single (d : Dyadic sig F) : DyadicChain sig F := ⟨[d]⟩
+
+/-- Add to chain -/
+def add (c : DyadicChain sig F) (d : Dyadic sig F) : DyadicChain sig F :=
+  ⟨d :: c.terms⟩
+
+/-- Apply chain to vector -/
+def apply (c : DyadicChain sig F) (v : Multivector sig F) : Multivector sig F :=
+  c.terms.foldl (init := Multivector.zero) fun acc d =>
+    acc.add (d.apply v)
+
+/-- Rank (number of terms) -/
+def rank (c : DyadicChain sig F) : Nat := c.terms.length
+
+end DyadicChain
+
+/-- Outermorphism: extends a linear map to act on all grades.
+    If f: V → W is linear, then Λf: ΛV → ΛW preserves grade and
+    Λf(a ∧ b) = Λf(a) ∧ Λf(b). -/
+structure Outermorphism (sig : Signature n) (F : Type*) where
+  /-- Matrix representation (action on basis vectors) -/
+  matrix : Fin n → Multivector sig F
+
+namespace Outermorphism
+
+variable {n : ℕ} {sig : Signature n} {F : Type*} [Ring F]
+
+/-- Identity outermorphism -/
+def identity : Outermorphism sig F :=
+  ⟨fun i => Multivector.basis i⟩
+
+/-- Apply to a vector -/
+def applyVector (o : Outermorphism sig F) (v : Multivector sig F) : Multivector sig F :=
+  (List.finRange n).foldl (init := Multivector.zero) fun acc i =>
+    let coeff := v.coeff (Blade.basis i)
+    acc.add ((o.matrix i).smul coeff)
+
+/-- Compose two outermorphisms -/
+def compose (o1 o2 : Outermorphism sig F) : Outermorphism sig F :=
+  ⟨fun i => o1.applyVector (o2.matrix i)⟩
+
+end Outermorphism
+
+/-! ## Tensor Operator Tests -/
+
+section TensorTests
+
+-- Projector test
+#eval let p : Projector R3 Float := Projector.ofBlade (e12 : Blade R3)
+      p.rank  -- 2
+
+-- Dyadic test
+#eval let v1 := vector3 1.0 0.0 0.0
+      let v2 := vector3 0.0 1.0 0.0
+      let d : Dyadic R3 Float := v1 ⊗ᵈ v2
+      d.trace  -- 0.0 (orthogonal vectors)
+
+end TensorTests
+
 /-! ## Repr/ToString for Debugging -/
 
 /-- Show non-zero coefficients of a multivector -/
@@ -579,5 +834,105 @@ instance : ToString (Multivector R3 Float) where
       let coeff := Float.abs c
       let coeffStr := if coeff == 1 && i != 0 then "" else s!"{coeff}"
       acc ++ sign ++ coeffStr ++ blade
+
+/-! ## Geometric Division ⊘
+
+Geometric division solves x = a·y for x given a and y:
+  x ⊘ y = x · y⁻¹ = x · y† / (y · y†)
+
+This is the right inverse operation: (a·b) ⊘ b = a when b is invertible.
+
+From Grassmann.jl: Used for solving geometric equations, finding rotors, etc.
+-/
+
+namespace Multivector
+
+/-- Right geometric division: a ⊘ b = a · b⁻¹
+    Solves for x in the equation x·b = a
+    Requires b to have non-zero norm. -/
+def geometricDivRight [Ring F] [Div F]
+    (a b : Multivector sig F) : Multivector sig F :=
+  let brev := b†
+  let normSq := (b * brev).scalarPart
+  (a * brev).smul (1 / normSq)
+
+/-- Left geometric division: a ⊘ₗ b = b⁻¹ · a
+    Solves for x in the equation b·x = a -/
+def geometricDivLeft [Ring F] [Div F]
+    (a b : Multivector sig F) : Multivector sig F :=
+  let brev := b†
+  let normSq := (brev * b).scalarPart
+  (brev * a).smul (1 / normSq)
+
+/-- Project multivector a onto blade/multivector B.
+    proj_B(a) = (a ⌋ B) · B⁻¹ -/
+def project [Ring F] [Div F]
+    (a B : Multivector sig F) : Multivector sig F :=
+  geometricDivRight (a ⌋ᵐ B) B
+
+/-- Reject multivector a from blade/multivector B.
+    rej_B(a) = a - proj_B(a) -/
+def reject [Ring F] [Div F]
+    (a B : Multivector sig F) : Multivector sig F :=
+  a.sub (project a B)
+
+end Multivector
+
+/-- Division operator (right division): a ⊘ b = a · b⁻¹ -/
+infixl:70 " ⊘ᵐ " => Multivector.geometricDivRight
+
+/-- Left division operator: a ⊘ₗ b = b⁻¹ · a -/
+infixl:70 " ⊘ₗᵐ " => Multivector.geometricDivLeft
+
+/-! ## Cross Product (3D specific) -/
+
+/-- Cross product in 3D: a × b = ⋆(a ∧ b).
+    Maps two vectors to a vector (the dual of their bivector). -/
+def crossProduct3D [Ring F]
+    (a b : Multivector R3 F) : Multivector R3 F :=
+  let wedge := a ⋀ᵐ b
+  -- Hodge dual in 3D maps bivectors to vectors
+  -- e12 → e3, e13 → -e2, e23 → e1
+  ⟨fun i =>
+    match i.val with
+    | 0 => wedge.coeffs ⟨6, by decide⟩   -- e1 ← e23
+    | 1 => -(wedge.coeffs ⟨5, by decide⟩)  -- e2 ← -e13
+    | 2 => wedge.coeffs ⟨3, by decide⟩   -- e3 ← e12
+    | _ => 0⟩
+
+infixl:70 " ×₃ " => crossProduct3D
+
+/-! ## Geometric Division Tests -/
+
+section GeometricDivisionTests
+
+-- Test geometric division: (a*b) ⊘ b should give a
+#eval! let a := vector3 1.0 2.0 3.0
+       let b := vector3 1.0 0.0 0.0
+       let prod := a * b
+       let recovered := prod ⊘ᵐ b
+       (recovered.coeff (e1 : Blade R3),
+        recovered.coeff (e2 : Blade R3),
+        recovered.coeff (e3 : Blade R3))
+-- Expected: approximately (1, 2, 3)
+
+-- Test projection
+#eval! let v := vector3 1.0 1.0 0.0
+       let u := vector3 1.0 0.0 0.0  -- x-axis
+       let proj := Multivector.project v u
+       (proj.coeff (e1 : Blade R3),
+        proj.coeff (e2 : Blade R3))
+-- Expected: (1, 0) - projection onto x-axis
+
+-- Test cross product
+#eval! let a := vector3 1.0 0.0 0.0  -- e1
+       let b := vector3 0.0 1.0 0.0  -- e2
+       let c := a ×₃ b               -- should be e3
+       (c.coeff (e1 : Blade R3),
+        c.coeff (e2 : Blade R3),
+        c.coeff (e3 : Blade R3))
+-- Expected: (0, 0, 1)
+
+end GeometricDivisionTests
 
 end Grassmann

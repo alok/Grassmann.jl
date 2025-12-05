@@ -201,32 +201,32 @@ section PGATests
 open PGA
 
 -- Test point construction
--- #eval let p := point (1 : Float) 2 3
---       (p.coeff e123, p.coeff e023, p.coeff e031, p.coeff e012)
---       -- Should be (1, 1, 2, 3)
+#eval! let p := point (1 : Float) 2 3
+       (p.coeff e123, p.coeff e023, p.coeff e031, p.coeff e012)
+       -- Should be (1, 1, 2, 3)
 
 -- Test plane construction
--- #eval let pi := plane (1 : Float) 0 0 5  -- x = 5 plane
---       (pi.coeff e1, pi.coeff e2, pi.coeff e3, pi.coeff e0)
---       -- Should be (1, 0, 0, 5)
+#eval! let pi := plane (1 : Float) 0 0 5  -- x = 5 plane
+       (pi.coeff e1, pi.coeff e2, pi.coeff e3, pi.coeff e0)
+       -- Should be (1, 0, 0, 5)
 
 -- Test origin
--- #eval let o := point (0 : Float) 0 0
---       (o.coeff e123, o.coeff e023, o.coeff e031, o.coeff e012)
---       -- Should be (1, 0, 0, 0)
+#eval! let o := point (0 : Float) 0 0
+       (o.coeff e123, o.coeff e023, o.coeff e031, o.coeff e012)
+       -- Should be (1, 0, 0, 0)
 
 -- Test meet of coordinate planes gives axis line
--- #eval let piX := plane (1 : Float) 0 0 0  -- x = 0 plane
---       let piY := plane 0 1 0 0            -- y = 0 plane
---       let zAxis := meetPlanes piX piY     -- Should give z-axis
---       zAxis.coeff e12  -- z-axis has e12 component
+#eval! let piX := plane (1 : Float) 0 0 0  -- x = 0 plane
+       let piY := plane 0 1 0 0            -- y = 0 plane
+       let zAxis := meetPlanes piX piY     -- Should give z-axis
+       zAxis.coeff e12  -- z-axis has e12 component
 
 -- Test translator
--- #eval let T := translator (1 : Float) 0 0  -- translate by (1, 0, 0)
---       let p := point 0 0 0                  -- origin
---       let p' := applyMotor T p              -- translated point
---       (p'.coeff e023, p'.coeff e031, p'.coeff e012)
---       -- Should move the point
+#eval! let T := translator (1 : Float) 0 0  -- translate by (1, 0, 0)
+       let p := point 0 0 0                  -- origin
+       let p' := applyMotor T p              -- translated point
+       (p'.coeff e023, p'.coeff e031, p'.coeff e012)
+       -- Should move the point
 
 end PGATests
 

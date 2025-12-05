@@ -27,20 +27,20 @@ section BladeNotation
 
 variable {n : ℕ} {sig : Signature n}
 
--- Wedge product of blades (use ⋀ to avoid conflict with ∧)
-infixl:65 " ⋀ " => wedgeProductBlades
+-- Wedge product of blades (use ᵇ subscript to avoid conflict with GAlgebra operations)
+infixl:65 " ⋀ᵇ " => wedgeProductBlades
 
 -- Geometric product of blades
-infixl:70 " ⊛ " => geometricProductBlades
+infixl:70 " ⊛ᵇ " => geometricProductBlades
 
--- Left contraction
-infixl:65 " ⌋ " => leftContractionBlades
+-- Left contraction of blades
+infixl:65 " ⌋ᵇ " => leftContractionBlades
 
--- Right contraction
-infixl:65 " ⌊ " => rightContractionBlades
+-- Right contraction of blades
+infixl:65 " ⌊ᵇ " => rightContractionBlades
 
--- Regressive product (meet)
-infixl:65 " ⋁ " => regressiveProductBlades
+-- Regressive product (meet) of blades
+infixl:65 " ⋁ᵇ " => regressiveProductBlades
 
 end BladeNotation
 
@@ -86,24 +86,24 @@ Note: ⋆ conflicts with HMul, use explicit complement function
 
 /-! ## Tests -/
 
--- Wedge product notation
-#eval (e1 : Blade R3) ⋀ (e2 : Blade R3)  -- e12
-#eval (e2 : Blade R3) ⋀ (e1 : Blade R3)  -- -e12
-#eval (e1 : Blade R3) ⋀ (e1 : Blade R3)  -- zero
+-- Wedge product notation (ᵇ subscript for blades to avoid conflict with GAlgebra operations)
+#eval (e1 : Blade R3) ⋀ᵇ (e2 : Blade R3)  -- e12
+#eval (e2 : Blade R3) ⋀ᵇ (e1 : Blade R3)  -- -e12
+#eval (e1 : Blade R3) ⋀ᵇ (e1 : Blade R3)  -- zero
 
 -- Geometric product notation
-#eval (e1 : Blade R3) ⊛ (e2 : Blade R3)  -- e12
-#eval (e1 : Blade R3) ⊛ (e1 : Blade R3)  -- scalar
+#eval (e1 : Blade R3) ⊛ᵇ (e2 : Blade R3)  -- e12
+#eval (e1 : Blade R3) ⊛ᵇ (e1 : Blade R3)  -- scalar
 
 -- Left contraction notation
-#eval (e1 : Blade R3) ⌋ (e12 : Blade R3)  -- e2
-#eval (e1 : Blade R3) ⌋ (e23 : Blade R3)  -- zero
+#eval (e1 : Blade R3) ⌋ᵇ (e12 : Blade R3)  -- e2
+#eval (e1 : Blade R3) ⌋ᵇ (e23 : Blade R3)  -- zero
 
 -- Regressive product notation
-#eval (e12 : Blade R3) ⋁ (e23 : Blade R3)  -- e2 (the meet)
+#eval (e12 : Blade R3) ⋁ᵇ (e23 : Blade R3)  -- e2 (the meet)
 
 -- Chained operations (note: products return BladeProduct, not Blade, so can't chain directly)
-#eval ((e1 : Blade R3) ⋀ (e2 : Blade R3))  -- e12
+#eval ((e1 : Blade R3) ⋀ᵇ (e2 : Blade R3))  -- e12
 
 -- To chain, we'd need to extract the blade from BladeProduct
 -- This will be handled by the Multivector type which tracks linear combinations

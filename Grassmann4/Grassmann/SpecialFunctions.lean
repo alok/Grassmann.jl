@@ -194,32 +194,32 @@ def nonZeroCoeffs [DecidableEq F] (m : Multivector sig F) : List (Blade sig × F
 
 section Tests
 
--- Complex number tests (disabled: depends on Float Ring sorry)
--- #eval let z := Complex.ofPair 3.0 4.0  -- 3 + 4i
---       (Complex.re z, Complex.im z)  -- (3, 4)
+-- Complex number tests
+#eval! let z := Complex.ofPair 3.0 4.0  -- 3 + 4i
+       (Complex.re z, Complex.im z)  -- (3, 4)
 
--- #eval let z := Complex.ofPair 3.0 4.0
---       Complex.normSq z  -- 9 + 16 = 25
+#eval! let z := Complex.ofPair 3.0 4.0
+       Complex.normSq z  -- 9 + 16 = 25
 
 -- Quaternion tests
--- #eval let q := Quaternion.ofComponents 1.0 2.0 3.0 4.0
---       (Quaternion.scalar q, Quaternion.i q, Quaternion.j q, Quaternion.k q)  -- (1, 2, 3, 4)
+#eval! let q := Quaternion.ofComponents 1.0 2.0 3.0 4.0
+       (Quaternion.scalar q, Quaternion.i q, Quaternion.j q, Quaternion.k q)  -- (1, 2, 3, 4)
 
--- #eval let q := Quaternion.ofComponents 1.0 0.0 0.0 0.0
---       Quaternion.normSq q  -- 1
+#eval! let q := Quaternion.ofComponents 1.0 0.0 0.0 0.0
+       Quaternion.normSq q  -- 1
 
 -- Verify i² = -1 in C_sig
--- #eval let i : Multivector C_sig Float := Multivector.basis ⟨0, by omega⟩
---       (i * i).scalarPart  -- -1
+#eval! let i : Multivector C_sig Float := Multivector.basis ⟨0, by omega⟩
+       (i * i).scalarPart  -- -1
 
 -- Verify j² = +1 in SplitC_sig
--- #eval let j : Multivector SplitC_sig Float := Multivector.basis ⟨0, by omega⟩
---       (j * j).scalarPart  -- +1
+#eval! let j : Multivector SplitC_sig Float := Multivector.basis ⟨0, by omega⟩
+       (j * j).scalarPart  -- +1
 
 -- Dual number test
--- #eval let x : Dual Float := ⟨3.0, 1.0⟩  -- x = 3 + ε (for f(x) = x at x=3)
---       let sq := x * x  -- x² = 9 + 6ε (derivative of x² is 2x = 6)
---       (sq.re, sq.du)  -- (9, 6)
+#eval! let x : Dual Float := ⟨3.0, 1.0⟩  -- x = 3 + ε (for f(x) = x at x=3)
+       let sq := x * x  -- x² = 9 + 6ε (derivative of x² is 2x = 6)
+       (sq.re, sq.du)  -- (9, 6)
 
 end Tests
 

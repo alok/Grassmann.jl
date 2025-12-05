@@ -56,6 +56,7 @@ we count how many transpositions are needed.
 
     Algorithm: For each bit in `a`, count how many bits in `b` are in positions
     that would require passing through. -/
+@[specialize]
 def countTranspositions (a b : ℕ) (dim : ℕ) : ℕ :=
   -- Get bits of a and cumulative sum of bits of (b shifted by 1)
   let aBits := bitsToList a dim
@@ -65,6 +66,7 @@ def countTranspositions (a b : ℕ) (dim : ℕ) : ℕ :=
 
 /-- Parity join without metric: returns true if sign flip needed.
     This handles just the permutation sign. -/
+@[specialize]
 def parityJoinBasic (a b : ℕ) (dim : ℕ) : Bool :=
   (countTranspositions a b dim) % 2 == 1
 
@@ -73,20 +75,41 @@ def parityJoinBasic (a b : ℕ) (dim : ℕ) : Bool :=
 
     For the geometric product, shared basis vectors (in both a and b)
     that square to -1 contribute additional sign flips. -/
+@[specialize]
 def parityJoin (a b : ℕ) (dim : ℕ) (metric : ℕ) : Bool :=
   let permutationSign := countTranspositions a b dim
   let sharedNegative := popcount ((a &&& b) &&& metric)
   (permutationSign + sharedNegative) % 2 == 1
 
+/-- Check if shared basis vectors include any degenerate (null) dimensions.
+    If so, the geometric product is zero. -/
+@[specialize]
+def hasSharedDegenerate (a b : ℕ) (degenerate : ℕ) : Bool :=
+  ((a &&& b) &&& degenerate) != 0
+
+/-- Parity join with full signature (metric + degenerate).
+    Returns `none` if the result is zero (shared degenerate basis vector).
+    Returns `some true` for sign flip, `some false` for no flip. -/
+@[specialize]
+def parityJoinFull (a b : ℕ) (dim : ℕ) (metric degenerate : ℕ) : Option Bool :=
+  if hasSharedDegenerate a b degenerate then
+    none  -- Result is zero
+  else
+    some (parityJoin a b dim metric)
+
 /-! ## Sign Computations for Blades -/
 
 /-- Sign when multiplying blade a by blade b (geometric product).
-    Returns 1 or -1. -/
+    Returns 1, -1, or 0 (when shared degenerate basis vectors cause cancellation). -/
+@[specialize]
 def geometricSign (sig : Signature n) (a b : Blade sig) : Int :=
-  if parityJoin a.bits.toNat b.bits.toNat n sig.metric.toNat then -1 else 1
+  -- Check for shared degenerate basis vectors (result is zero)
+  if hasSharedDegenerate a.bits.toNat b.bits.toNat sig.degenerate.toNat then 0
+  else if parityJoin a.bits.toNat b.bits.toNat n sig.metric.toNat then -1 else 1
 
 /-- Sign for wedge product (exterior product).
     Zero if blades share any basis vectors. -/
+@[specialize]
 def wedgeSign (sig : Signature n) (a b : Blade sig) : Int :=
   if (a.bits &&& b.bits) != 0 then 0
   else if parityJoinBasic a.bits.toNat b.bits.toNat n then -1 else 1

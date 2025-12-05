@@ -172,30 +172,47 @@ For exact computation, we note that:
 For now, integer tests verify algebraic identities directly.
 -/
 
-/-! ## Rotor Construction Helpers -/
+/-! ## Rotor Construction Helpers (generic n-dimensional) -/
 
 section RotorHelpers
+
+variable {n : ℕ} {sig : Signature n}
+
+/-- Create a rotation rotor in the plane of basis vectors i and j.
+    Returns cos(θ/2) + sin(θ/2)·(e_i ∧ e_j) where θ is the angle.
+    This is the generic version that works in any dimension. -/
+def rotorFromBasisPlane (i j : Fin n) (halfCos halfSin : Float) : Multivector sig Float :=
+  let scalar : Multivector sig Float := Multivector.scalar halfCos
+  let ei : Multivector sig Float := Multivector.ofBlade (Blade.basis i)
+  let ej : Multivector sig Float := Multivector.ofBlade (Blade.basis j)
+  let Bij := (ei ⋀ᵐ ej).normalize
+  scalar + Bij.smul halfSin
+
+/-- Create a rotor from angle directly (using cos and sin of half-angle) -/
+def rotorFromAngle (i j : Fin n) (angle : Float) : Multivector sig Float :=
+  let halfAngle := angle / 2
+  rotorFromBasisPlane i j (Float.cos halfAngle) (Float.sin halfAngle)
+
+end RotorHelpers
+
+/-! ## R3-Specific Rotor Helpers (convenience) -/
+
+section R3RotorHelpers
 
 /-- Create a rotation rotor in the e12 plane by angle θ.
     Returns cos(θ/2) + sin(θ/2)·e12 -/
 def rotor_e12 (halfCos halfSin : Float) : Multivector R3 Float :=
-  let scalar : Multivector R3 Float := Multivector.scalar halfCos
-  let e12mv : Multivector R3 Float := Multivector.ofBlade e12
-  scalar + e12mv.smul halfSin
+  rotorFromBasisPlane ⟨0, by omega⟩ ⟨1, by omega⟩ halfCos halfSin
 
 /-- Create a rotation rotor in the e13 plane -/
 def rotor_e13 (halfCos halfSin : Float) : Multivector R3 Float :=
-  let scalar : Multivector R3 Float := Multivector.scalar halfCos
-  let e13mv : Multivector R3 Float := Multivector.ofBlade e13
-  scalar + e13mv.smul halfSin
+  rotorFromBasisPlane ⟨0, by omega⟩ ⟨2, by omega⟩ halfCos halfSin
 
 /-- Create a rotation rotor in the e23 plane -/
 def rotor_e23 (halfCos halfSin : Float) : Multivector R3 Float :=
-  let scalar : Multivector R3 Float := Multivector.scalar halfCos
-  let e23mv : Multivector R3 Float := Multivector.ofBlade e23
-  scalar + e23mv.smul halfSin
+  rotorFromBasisPlane ⟨1, by omega⟩ ⟨2, by omega⟩ halfCos halfSin
 
-end RotorHelpers
+end R3RotorHelpers
 
 /-! ## Outermorphism
 
@@ -207,20 +224,39 @@ Every linear transformation on vectors extends uniquely to an outermorphism.
 
 /-- Apply a linear transformation (given by images of basis vectors) as outermorphism.
     For each basis blade, apply the transformation to each vector component
-    and wedge the results together. -/
+    and wedge the results together.
+
+    F(e_i ∧ e_j ∧ ... ∧ e_k) = F(e_i) ∧ F(e_j) ∧ ... ∧ F(e_k)
+
+    This extends any linear map on vectors to the full exterior algebra. -/
 def outermorphism (images : Fin n → Multivector sig Float)
     (m : Multivector sig Float) : Multivector sig Float :=
-  -- TODO: implement properly - for now just return input
-  let _ := images  -- suppress unused warning
-  m
+  let size := 2^n
+  let one : Multivector sig Float := Multivector.one
+  -- Iterate over all blade indices
+  let result := (List.finRange size).foldl (init := Multivector.zero) fun acc idx =>
+    let blade : Blade sig := ⟨BitVec.ofNat n idx.val⟩
+    let coeff := m.coeff blade
+    -- Skip zero coefficients
+    if coeff == 0 then acc
+    else
+      -- Get the indices of basis vectors in this blade
+      let basisIndices := indices blade.bits
+      -- Apply the linear map to each basis vector and wedge the results
+      let transformedBlade := basisIndices.foldl (init := one)
+        fun wedgeAcc basisIdx =>
+          wedgeAcc ⋀ᵐ (images basisIdx)
+      -- Add scaled result to accumulator
+      acc + transformedBlade.smul coeff
+  result
 
 /-! ## Tests -/
 
 section Tests
 
 -- Test rotor construction
--- #eval let R := rotor_e12 (Float.cos 0.5) (Float.sin 0.5)  -- 0.5 radian rotation
---       R.scalarPart  -- cos(0.5) ≈ 0.877
+#eval! let R := rotor_e12 (Float.cos 0.5) (Float.sin 0.5)  -- 0.5 radian rotation
+       R.scalarPart  -- cos(0.5) ≈ 0.877
 
 -- Test that rotor has unit norm (approximately)
 -- R R† should be scalar 1
@@ -264,6 +300,42 @@ section Tests
       (result.coeff e1, result.coeff e2, result.scalarPart)  -- (0, -2, 0)
 
 -- This matches! The unnormalized rotor (1 + e12) maps e1 to -2e2
+
+-- Outermorphism tests
+
+-- Test 1: Identity map - outermorphism of identity should be identity
+#eval! let identity : Fin 3 → Multivector R3 Float := fun i =>
+        Multivector.ofBlade (Blade.basis i : Blade R3)
+      let e12mv : Multivector R3 Float := Multivector.ofBlade e12
+      let result := outermorphism identity e12mv
+      (result.coeff e12, result.coeff e1, result.coeff e2)  -- (1, 0, 0)
+
+-- Test 2: Scaling map - scale e1 by 2, keep e2, e3 the same
+-- F(e1 ∧ e2) = F(e1) ∧ F(e2) = 2e1 ∧ e2 = 2·e12
+#eval! let scalingMap : Fin 3 → Multivector R3 Float := fun i =>
+        if i.val = 0 then (Multivector.ofBlade (e1 : Blade R3)).smul 2.0
+        else Multivector.ofBlade (Blade.basis i : Blade R3)
+      let e12mv : Multivector R3 Float := Multivector.ofBlade e12
+      let result := outermorphism scalingMap e12mv
+      result.coeff e12  -- 2.0
+
+-- Test 3: Swap e1 and e2 - should flip sign of e12
+-- F(e1 ∧ e2) = F(e1) ∧ F(e2) = e2 ∧ e1 = -e12
+#eval! let swapMap : Fin 3 → Multivector R3 Float := fun i =>
+        if i.val = 0 then Multivector.ofBlade (e2 : Blade R3)
+        else if i.val = 1 then Multivector.ofBlade (e1 : Blade R3)
+        else Multivector.ofBlade (Blade.basis i : Blade R3)
+      let e12mv : Multivector R3 Float := Multivector.ofBlade e12
+      let result := outermorphism swapMap e12mv
+      result.coeff e12  -- -1.0
+
+-- Test 4: Map on a trivector (pseudoscalar)
+-- If all vectors are scaled by 2, trivector is scaled by 2³ = 8
+#eval! let scale2 : Fin 3 → Multivector R3 Float := fun i =>
+        (Multivector.ofBlade (Blade.basis i : Blade R3)).smul 2.0
+      let e123mv : Multivector R3 Float := Multivector.ofBlade e123
+      let result := outermorphism scale2 e123mv
+      result.coeff e123  -- 8.0
 
 end Tests
 

@@ -378,10 +378,7 @@ try main()
 #eval computeSignTable R3
 
 -- Generate PGA signature (Projective Geometric Algebra)
--- R3,0,1: 3 positive, 0 negative, 1 zero (e0² = 0)
-def PGA3D : Signature 4 := ⟨0b0001⟩  -- e0 is degenerate (metric bit = 1 means -1)
-
--- Actually for PGA we need a different metric handling...
--- For now just show R3 works
+-- R3,0,1: 3 positive, 0 negative, 1 zero (e4² = 0)
+def PGA3D : Signature 4 := Signature.clr 3 0 1  -- e₁,e₂,e₃ positive, e₄ degenerate
 
 end Grassmann.Metal

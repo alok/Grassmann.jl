@@ -66,12 +66,15 @@ def set (m : MultivectorA sig F) (i : Fin (2^n)) (x : F) : MultivectorA sig F :=
 /-! ### Conversion -/
 
 /-- Convert to function-based Multivector -/
+@[coe]
 def toMultivector (m : MultivectorA sig F) : Multivector sig F :=
   ⟨fun i => m.get i⟩
 
 /-- Convert from function-based Multivector -/
 def ofMultivector (m : Multivector sig F) : MultivectorA sig F :=
   ⟨Vector.ofFn m.coeffs⟩
+
+instance : Coe (MultivectorA sig F) (Multivector sig F) := ⟨toMultivector⟩
 
 /-! ### Arithmetic -/
 
@@ -147,54 +150,72 @@ postfix:max "‡ₐ" => MultivectorA.conjugate
 
 /-! ### Products -/
 
-/-- Geometric product -/
+/-- Geometric product - O(4^n) forward iteration algorithm.
+    For each input pair (i, j), compute output index k = i XOR j and accumulate. -/
 def mul (a b : MultivectorA sig F) : MultivectorA sig F :=
-  ⟨Vector.ofFn fun k =>
-    let indices := List.finRange (2^n)
-    indices.foldl (init := (0 : F)) fun acc i =>
-      indices.foldl (init := acc) fun acc2 j =>
-        let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
-        let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
-        let resultBits := bi.bits ^^^ bj.bits
-        if resultBits.toNat = k.val then
+  let size := 2^n
+  let indices := List.finRange size
+  -- Start with zero vector, accumulate contributions in single O(4^n) pass
+  let result := indices.foldl (init := Vector.replicate size (0 : F)) fun arr i =>
+    indices.foldl (init := arr) fun arr2 j =>
+      let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
+      let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
+      let resultIdx := (bi.bits ^^^ bj.bits).toNat
+      -- Proof that resultIdx < size (XOR of n-bit values is n-bit)
+      if h : resultIdx < size then
+        let sign := geometricSign sig bi bj
+        let coeff := a.get i * b.get j
+        let contrib := if sign < 0 then -coeff else coeff
+        let oldVal := arr2.get ⟨resultIdx, h⟩
+        arr2.set resultIdx (oldVal + contrib) h
+      else arr2
+  ⟨result⟩
+
+/-- Wedge product - O(4^n) forward iteration algorithm.
+    Only contributes when input blades don't share basis vectors (AND = 0). -/
+def wedge (a b : MultivectorA sig F) : MultivectorA sig F :=
+  let size := 2^n
+  let indices := List.finRange size
+  let result := indices.foldl (init := Vector.replicate size (0 : F)) fun arr i =>
+    indices.foldl (init := arr) fun arr2 j =>
+      let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
+      let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
+      -- Wedge only non-zero when blades share no basis vectors
+      if (bi.bits &&& bj.bits) = 0 then
+        let resultIdx := (bi.bits ||| bj.bits).toNat
+        if h : resultIdx < size then
+          let sign := wedgeSign sig bi bj
+          if sign ≠ 0 then
+            let coeff := a.get i * b.get j
+            let contrib := if sign < 0 then -coeff else coeff
+            let oldVal := arr2.get ⟨resultIdx, h⟩
+            arr2.set resultIdx (oldVal + contrib) h
+          else arr2
+        else arr2
+      else arr2
+  ⟨result⟩
+
+/-- Left contraction - O(4^n) forward iteration algorithm.
+    Only contributes when first blade is contained in second. -/
+def leftContract (a b : MultivectorA sig F) : MultivectorA sig F :=
+  let size := 2^n
+  let indices := List.finRange size
+  let result := indices.foldl (init := Vector.replicate size (0 : F)) fun arr i =>
+    indices.foldl (init := arr) fun arr2 j =>
+      let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
+      let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
+      -- Left contraction: a ⌋ b only when a ⊆ b (as sets of basis vectors)
+      if (bi.bits &&& bj.bits) = bi.bits && bi.grade ≤ bj.grade then
+        let resultIdx := (bi.bits ^^^ bj.bits).toNat
+        if h : resultIdx < size then
           let sign := geometricSign sig bi bj
           let coeff := a.get i * b.get j
-          acc2 + (if sign < 0 then -coeff else coeff)
-        else acc2⟩
-
-/-- Wedge product -/
-def wedge (a b : MultivectorA sig F) : MultivectorA sig F :=
-  ⟨Vector.ofFn fun k =>
-    let indices := List.finRange (2^n)
-    indices.foldl (init := (0 : F)) fun acc i =>
-      indices.foldl (init := acc) fun acc2 j =>
-        let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
-        let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
-        if (bi.bits &&& bj.bits) = 0 then
-          let resultBits := bi.bits ||| bj.bits
-          if resultBits.toNat = k.val then
-            let sign := wedgeSign sig bi bj
-            let coeff := a.get i * b.get j
-            acc2 + (if sign < 0 then -coeff else if sign = 0 then 0 else coeff)
-          else acc2
-        else acc2⟩
-
-/-- Left contraction -/
-def leftContract (a b : MultivectorA sig F) : MultivectorA sig F :=
-  ⟨Vector.ofFn fun k =>
-    let indices := List.finRange (2^n)
-    indices.foldl (init := (0 : F)) fun acc i =>
-      indices.foldl (init := acc) fun acc2 j =>
-        let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
-        let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
-        if (bi.bits &&& bj.bits) = bi.bits && bi.grade ≤ bj.grade then
-          let resultBits := bi.bits ^^^ bj.bits
-          if resultBits.toNat = k.val then
-            let sign := geometricSign sig bi bj
-            let coeff := a.get i * b.get j
-            acc2 + (if sign < 0 then -coeff else coeff)
-          else acc2
-        else acc2⟩
+          let contrib := if sign < 0 then -coeff else coeff
+          let oldVal := arr2.get ⟨resultIdx, h⟩
+          arr2.set resultIdx (oldVal + contrib) h
+        else arr2
+      else arr2
+  ⟨result⟩
 
 instance : Mul (MultivectorA sig F) := ⟨MultivectorA.mul⟩
 
@@ -246,37 +267,37 @@ end MultivectorA
 
 section Tests
 
--- Test zero (disabled: depends on Float Ring sorry)
--- #eval (MultivectorA.zero : MultivectorA R3 Float).scalarPart  -- 0
+-- Test zero
+#eval! (MultivectorA.zero : MultivectorA R3 Float).scalarPart  -- 0
 
 -- Test scalar
--- #eval (MultivectorA.scalar 5 : MultivectorA R3 Float).scalarPart  -- 5
+#eval! (MultivectorA.scalar 5 : MultivectorA R3 Float).scalarPart  -- 5
 
 -- Test ofBlade
--- #eval (MultivectorA.ofBlade (e1 : Blade R3) : MultivectorA R3 Float).coeff (e1 : Blade R3)  -- 1
+#eval! (MultivectorA.ofBlade (e1 : Blade R3) : MultivectorA R3 Float).coeff (e1 : Blade R3)  -- 1
 
 -- Test add
--- #eval let a := (MultivectorA.scalar 1 : MultivectorA R3 Float)
---       let b := (MultivectorA.scalar 2 : MultivectorA R3 Float)
---       MultivectorA.scalarPart (a + b)  -- 3
+#eval! let a := (MultivectorA.scalar 1 : MultivectorA R3 Float)
+       let b := (MultivectorA.scalar 2 : MultivectorA R3 Float)
+       MultivectorA.scalarPart (a + b)  -- 3
 
 -- Test geometric product: e1 * e1 = 1
--- #eval let e1v := (MultivectorA.ofBlade (e1 : Blade R3) : MultivectorA R3 Float)
---       (e1v * e1v).scalarPart  -- 1
+#eval! let e1v := (MultivectorA.ofBlade (e1 : Blade R3) : MultivectorA R3 Float)
+       (e1v * e1v).scalarPart  -- 1
 
 -- Test geometric product: e1 * e2 = e12
--- #eval let e1v := (MultivectorA.ofBlade (e1 : Blade R3) : MultivectorA R3 Float)
---       let e2v := MultivectorA.ofBlade (e2 : Blade R3)
---       (e1v * e2v).coeff (e12 : Blade R3)  -- 1
+#eval! let e1v := (MultivectorA.ofBlade (e1 : Blade R3) : MultivectorA R3 Float)
+       let e2v := MultivectorA.ofBlade (e2 : Blade R3)
+       (e1v * e2v).coeff (e12 : Blade R3)  -- 1
 
 -- Test wedge: e1 ∧ e2 = e12
--- #eval let e1v := (MultivectorA.ofBlade (e1 : Blade R3) : MultivectorA R3 Float)
---       let e2v := MultivectorA.ofBlade (e2 : Blade R3)
---       (e1v ⋀ₐ e2v).coeff (e12 : Blade R3)  -- 1
+#eval! let e1v := (MultivectorA.ofBlade (e1 : Blade R3) : MultivectorA R3 Float)
+       let e2v := MultivectorA.ofBlade (e2 : Blade R3)
+       (e1v ⋀ₐ e2v).coeff (e12 : Blade R3)  -- 1
 
 -- Test conversion to/from Multivector
--- #eval let m := (MultivectorA.scalar 42 : MultivectorA R3 Float)
---       m.toMultivector.scalarPart  -- 42
+#eval! let m := (MultivectorA.scalar 42 : MultivectorA R3 Float)
+       m.toMultivector.scalarPart  -- 42
 
 end Tests
 

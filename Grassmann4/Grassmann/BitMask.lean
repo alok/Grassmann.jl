@@ -17,7 +17,8 @@
     e₁₂₃ = 0b111
 -/
 import Mathlib.Data.Nat.Choose.Basic
-import Mathlib.Data.Fin.Basic
+-- import Mathlib.Data.Fin.Basic  -- WORKAROUND: This causes runtime panic in v4.26.0-rc2
+-- Fin is available in Init.Data.Fin (prelude)
 
 namespace Grassmann
 

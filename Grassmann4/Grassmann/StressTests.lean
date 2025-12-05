@@ -290,7 +290,7 @@ def e4_4 : Blade R4 := ⟨BitVec.ofNat 4 0b1000⟩
       let R_total := R1 * R2
 
       -- Apply to e1 (in first rotation plane)
-      let rotated_e1 := R_total * e1 * R_total†
+      let rotated_e1 := R_total * e1 * Multivector.reverse R_total
 
       -- e1 should have component in e2 direction
       ((rotated_e1.coeff e4_1, rotated_e1.coeff e4_2))

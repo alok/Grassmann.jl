@@ -25,6 +25,72 @@ import Grassmann.Multivector
 
 namespace Grassmann
 
+/-! ## CGA Signature Configuration
+
+Port of Grassmann.jl's `hasinf`, `hasorigin` functions from DirectSum.jl.
+These predicates detect whether a signature has conformal null vectors.
+-/
+
+/-- Configuration for a conformal geometric algebra -/
+structure CGAConfig (n : Nat) where
+  /-- The base Euclidean dimension (e.g., 3 for CGA3) -/
+  euclideanDim : Nat
+  /-- Index of the positive extra basis (e₊) -/
+  ePlusIdx : Fin n
+  /-- Index of the negative extra basis (e₋) -/
+  eMinusIdx : Fin n
+  /-- Proof that we have exactly 2 extra dimensions -/
+  h_dim : n = euclideanDim + 2
+
+namespace CGAConfig
+
+/-- Standard CGA3 configuration -/
+def cga3 : CGAConfig 5 where
+  euclideanDim := 3
+  ePlusIdx := ⟨3, by omega⟩
+  eMinusIdx := ⟨4, by omega⟩
+  h_dim := rfl
+
+/-- Standard CGA2 configuration (for 2D conformal GA) -/
+def cga2 : CGAConfig 4 where
+  euclideanDim := 2
+  ePlusIdx := ⟨2, by omega⟩
+  eMinusIdx := ⟨3, by omega⟩
+  h_dim := rfl
+
+/-- Standard CGA4 configuration (for 4D conformal GA) -/
+def cga4 : CGAConfig 6 where
+  euclideanDim := 4
+  ePlusIdx := ⟨4, by omega⟩
+  eMinusIdx := ⟨5, by omega⟩
+  h_dim := rfl
+
+end CGAConfig
+
+/-- Check if a signature has the infinity point e∞ (conformal model).
+    Port of DirectSum.jl's `hasinf` function.
+    True if signature has both a positive and negative extra dimension
+    that can be combined into null vectors. -/
+def Signature.hasInf (sig : Signature n) : Bool :=
+  -- Check if we have at least one positive and one negative dimension
+  -- beyond what would be purely Euclidean or anti-Euclidean
+  sig.numPositive > 0 && sig.numNegative > 0
+
+/-- Check if a signature has the origin point e₀ (conformal model).
+    Port of DirectSum.jl's `hasorigin` function.
+    Same condition as hasInf since both null vectors exist together. -/
+def Signature.hasOrigin (sig : Signature n) : Bool := sig.hasInf
+
+/-- Check if this is a conformal geometric algebra signature.
+    True if it looks like Cl(p+1, 1) for some p ≥ 0. -/
+def Signature.isConformal (sig : Signature n) : Bool :=
+  sig.numNegative == 1 && sig.numPositive >= 1 && sig.numDegenerate == 0
+
+/-- Infer the base Euclidean dimension from a conformal signature.
+    For Cl(p+1, 1), the Euclidean dimension is p. -/
+def Signature.conformalBaseDim (sig : Signature n) : Nat :=
+  if sig.isConformal then sig.numPositive - 1 else 0
+
 /-! ## CGA Signature
 
 CGA3 has signature Cl(4,1): 4 positive, 1 negative dimension.
@@ -162,29 +228,199 @@ section CGATests
 open CGA
 
 -- Test point embedding
--- #eval let p := point (1 : Float) 2 3
---       (p.coeff e1, p.coeff e2, p.coeff e3)  -- (1, 2, 3)
+#eval! let p := point (1 : Float) 2 3
+       (p.coeff e1, p.coeff e2, p.coeff e3)  -- (1, 2, 3)
 
 -- Test e∞ · e₀ = -1 (they're dual null vectors)
--- #eval let ei := (einf : Multivector CGA3 Float)
---       let eo' := (eo : Multivector CGA3 Float)
---       (ei * eo').scalarPart  -- should be -1
+#eval! let ei := (einf : Multivector CGA3 Float)
+       let eo' := (eo : Multivector CGA3 Float)
+       (ei * eo').scalarPart  -- should be -1
 
 -- Test point is null: P · P = 0
--- #eval let p := point (1 : Float) 0 0
---       (p * p).scalarPart  -- should be 0 (or very close)
+#eval! let p := point (1 : Float) 0 0
+       (p * p).scalarPart  -- should be 0 (or very close)
 
 -- Test origin embedding
--- #eval let o := point (0 : Float) 0 0
---       (o.coeff e1, o.coeff e2, o.coeff e3)  -- (0, 0, 0)
+#eval! let o := point (0 : Float) 0 0
+       (o.coeff e1, o.coeff e2, o.coeff e3)  -- (0, 0, 0)
 
 -- Line through two points has grade 3
--- #eval let p1 := point (0 : Float) 0 0
---       let p2 := point 1 0 0
---       let l := line p1 p2
---       -- l should be a grade-3 blade (trivector)
---       l.scalarPart  -- 0 (no scalar part)
+#eval! let p1 := point (0 : Float) 0 0
+       let p2 := point 1 0 0
+       let l := line p1 p2
+       -- l should be a grade-3 blade (trivector)
+       l.scalarPart  -- 0 (no scalar part)
 
 end CGATests
+
+/-! ## Advanced CGA Operations
+
+Additional operations from Grassmann.jl for conformal geometry.
+-/
+
+namespace CGA
+
+/-! ### Null Vector Properties -/
+
+/-- Check if a CGA vector is null (P·P = 0).
+    Points in CGA are represented by null vectors. -/
+def isNull (p : Multivector CGA3 Float) (tol : Float := 1e-10) : Bool :=
+  let sq := (p * p).scalarPart
+  Float.abs sq < tol
+
+/-- Normalize a CGA point so that e∞ coefficient is 1.
+    Standard form: P = x + (x²/2)e∞ + e₀ with e∞ coeff = 1 -/
+def normalizePoint (p : Multivector CGA3 Float) : Multivector CGA3 Float :=
+  -- e∞ = e₊ + e₋, so coefficient is p[e₊] + p[e₋]
+  let einfCoeff := p.coeff eplus + p.coeff eminus
+  if Float.abs einfCoeff < 1e-10 then p
+  else p.smul (1.0 / einfCoeff)
+
+/-! ### Distances and Angles -/
+
+/-- Squared distance between two CGA points.
+    d²(P₁, P₂) = -2(P₁ · P₂) when points are normalized -/
+def squaredDistance (p1 p2 : Multivector CGA3 Float) : Float :=
+  let p1n := normalizePoint p1
+  let p2n := normalizePoint p2
+  ((-2.0) * (p1n ⌋ᵐ p2n).scalarPart)
+
+/-- Euclidean distance between two CGA points -/
+def distance (p1 p2 : Multivector CGA3 Float) : Float :=
+  let d2 := squaredDistance p1 p2
+  if d2 < 0 then 0.0 else Float.sqrt d2
+
+/-! ### Reflection Operations -/
+
+/-- Reflect a point through a plane.
+    reflection(P, Π) = Π · P · Π⁻¹ -/
+def reflectThroughPlane (p plane : Multivector CGA3 Float) : Multivector CGA3 Float :=
+  let planeSq := (plane * plane).scalarPart
+  if Float.abs planeSq < 1e-10 then p
+  else
+    let planeInv := plane.smul (1.0 / planeSq)
+    plane * p * planeInv
+
+/-- Reflect a point through a sphere.
+    Inversion in sphere S: S · P · S -/
+def invertInSphere (p sphere : Multivector CGA3 Float) : Multivector CGA3 Float :=
+  sphere * p * sphere
+
+/-! ### Circle and Sphere Properties -/
+
+/-- Extract center of a sphere (dual representation).
+    Given a sphere S as a grade-4 blade, extract its center. -/
+def sphereCenter (S : Multivector CGA3 Float) : Multivector CGA3 Float :=
+  -- The center is S ∧ e∞ projected back
+  let center := S ⋀ᵐ (einf : Multivector CGA3 Float)
+  normalizePoint center
+
+/-- Extract radius of a sphere.
+    r² = S·S / (S ∧ e∞)² for a sphere blade S -/
+def sphereRadius (S : Multivector CGA3 Float) : Float :=
+  let Ssq := (S * S).scalarPart
+  let Sinf := S ⋀ᵐ (einf : Multivector CGA3 Float)
+  let SinfSq := (Sinf * Sinf).scalarPart
+  if Float.abs SinfSq < 1e-10 then 0.0
+  else Float.sqrt (Float.abs (Ssq / SinfSq))
+
+/-! ### Flat and Round Discrimination -/
+
+/-- Check if a geometric object is "flat" (contains e∞).
+    Flats: lines, planes. Rounds: circles, spheres. -/
+def isFlat (obj : Multivector CGA3 Float) : Bool :=
+  -- Object is flat if obj ∧ e∞ = 0
+  let wedgeInf := obj ⋀ᵐ (einf : Multivector CGA3 Float)
+  -- Check if all coefficients are near zero
+  let maxCoeff := (List.finRange 32).foldl (init := 0.0) fun acc i =>
+    let c := Float.abs (wedgeInf.coeffs i)
+    if c > acc then c else acc
+  maxCoeff < 1e-10
+
+/-- Check if a geometric object is "round" (doesn't contain e∞).
+    Rounds: circles, spheres, point pairs. -/
+def isRound (obj : Multivector CGA3 Float) : Bool := !isFlat obj
+
+/-! ### Tangent Operations -/
+
+/-- Tangent vector at a point on a circle.
+    Given a point P on circle C, compute the tangent direction. -/
+def tangentAtPoint (P C : Multivector CGA3 Float) : Multivector CGA3 Float :=
+  -- Tangent is P ⌋ C (left contraction)
+  P ⌋ᵐ C
+
+/-! ### Motor (Rigid Body Motion) -/
+
+/-- A motor is a rotor + translator combined: M = T·R
+    Motors represent rigid body motions (rotations + translations). -/
+def motor (translation rotation : Multivector CGA3 Float) : Multivector CGA3 Float :=
+  translation * rotation
+
+/-- Decompose a motor into translation and rotation components.
+    Returns (translation_vector, rotation_rotor). -/
+def decomposeMotor (M : Multivector CGA3 Float) : Multivector CGA3 Float × Multivector CGA3 Float :=
+  -- The scalar + bivector part is the rotation
+  let R := (M.gradeProject 0).add (M.gradeProject 2)
+  -- T = M · R†
+  let T := M * R†
+  (T, R)
+
+end CGA
+
+/-! ## CGA Signature Tests -/
+
+section CGASignatureTests
+
+-- Test hasInf/hasOrigin
+#eval CGA3.hasInf     -- true (Cl(4,1) has both + and -)
+#eval CGA3.hasOrigin  -- true
+#eval R3.hasInf       -- false (pure Euclidean)
+#eval STA.hasInf      -- true (Cl(1,3) has both)
+
+-- Test isConformal
+#eval CGA3.isConformal        -- true (Cl(4,1) = Cl(3+1, 1))
+#eval R3.isConformal          -- false
+#eval (Signature.cl 3 1).isConformal  -- true (CGA2)
+
+-- Test conformalBaseDim
+#eval CGA3.conformalBaseDim   -- 3 (base Euclidean dim)
+#eval (Signature.cl 3 1).conformalBaseDim  -- 2
+
+end CGASignatureTests
+
+/-! ## Advanced CGA Tests -/
+
+section AdvancedCGATests
+
+open CGA
+
+-- Test distance between points
+#eval! let p1 := point (0 : Float) 0 0
+       let p2 := point 1 0 0
+       distance p1 p2  -- Expected: 1.0
+
+-- Test point normalization
+#eval! let p := point (1 : Float) 2 3
+       let pn := normalizePoint p
+       -- e∞ coefficient should be 1 after normalization
+       pn.coeff eplus + pn.coeff eminus
+
+-- Test isNull
+#eval! let p := point (1 : Float) 0 0
+       isNull p  -- Expected: true (points are null vectors)
+
+-- Test isFlat
+#eval! let p1 := point (0 : Float) 0 0
+       let p2 := point 1 0 0
+       let l := line p1 p2
+       isFlat l  -- Expected: true (lines are flat)
+
+#eval! let p1 := point (0 : Float) 0 0
+       let p2 := point 1 0 0
+       let p3 := point 0 1 0
+       let c := circle p1 p2 p3
+       isFlat c  -- Expected: false (circles are round)
+
+end AdvancedCGATests
 
 end Grassmann

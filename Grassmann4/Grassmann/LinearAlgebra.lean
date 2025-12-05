@@ -314,74 +314,55 @@ section Tests
 open LinearAlgebra
 
 -- Test generic determinant in R2
--- #eval let v1 : Multivector R2 Float := Multivector.ofBlade (e1 : Blade R2)
---       let v2 : Multivector R2 Float := Multivector.ofBlade (e2 : Blade R2)
---       det [v1, v2]  -- Should be 1 (identity)
+#eval! let v1 : Multivector R2 Float := Multivector.ofBlade (e1 : Blade R2)
+       let v2 : Multivector R2 Float := Multivector.ofBlade (e2 : Blade R2)
+       det [v1, v2]  -- Should be 1 (identity)
 
 -- Test generic determinant in R3
--- #eval let v1 : Multivector R3 Float := Multivector.ofBlade (e1 : Blade R3)
---       let v2 : Multivector R3 Float := Multivector.ofBlade (e2 : Blade R3)
---       let v3 : Multivector R3 Float := Multivector.ofBlade (e3 : Blade R3)
---       det [v1, v2, v3]  -- Should be 1 (identity)
-
--- Test generic determinant in R4
--- #eval let v1 : Multivector R4 Float := Multivector.ofBlade (e1 : Blade R4)
---       let v2 : Multivector R4 Float := Multivector.ofBlade (e2 : Blade R4)
---       let v3 : Multivector R4 Float := Multivector.ofBlade (e3 : Blade R4)
---       let v4 : Multivector R4 Float := Multivector.ofBlade (e4 : Blade R4)
---       det [v1, v2, v3, v4]  -- Should be 1 (identity)
+#eval! let v1 : Multivector R3 Float := Multivector.ofBlade (e1 : Blade R3)
+       let v2 : Multivector R3 Float := Multivector.ofBlade (e2 : Blade R3)
+       let v3 : Multivector R3 Float := Multivector.ofBlade (e3 : Blade R3)
+       det [v1, v2, v3]  -- Should be 1 (identity)
 
 -- Test swapping columns negates determinant (R3)
--- #eval let v1 : Multivector R3 Float := Multivector.ofBlade (e1 : Blade R3)
---       let v2 : Multivector R3 Float := Multivector.ofBlade (e2 : Blade R3)
---       let v3 : Multivector R3 Float := Multivector.ofBlade (e3 : Blade R3)
---       det [v2, v1, v3]  -- Should be -1 (one swap)
-
--- Test swapping columns negates determinant (R4)
--- #eval let v1 : Multivector R4 Float := Multivector.ofBlade (e1 : Blade R4)
---       let v2 : Multivector R4 Float := Multivector.ofBlade (e2 : Blade R4)
---       let v3 : Multivector R4 Float := Multivector.ofBlade (e3 : Blade R4)
---       let v4 : Multivector R4 Float := Multivector.ofBlade (e4 : Blade R4)
---       det [v2, v1, v3, v4]  -- Should be -1 (one swap)
+#eval! let v1 : Multivector R3 Float := Multivector.ofBlade (e1 : Blade R3)
+       let v2 : Multivector R3 Float := Multivector.ofBlade (e2 : Blade R3)
+       let v3 : Multivector R3 Float := Multivector.ofBlade (e3 : Blade R3)
+       det [v2, v1, v3]  -- Should be -1 (one swap)
 
 -- Test scaled diagonal determinant (R3)
--- #eval let v1 : Multivector R3 Float := (Multivector.ofBlade (e1 : Blade R3)).smul 2
---       let v2 : Multivector R3 Float := (Multivector.ofBlade (e2 : Blade R3)).smul 3
---       let v3 : Multivector R3 Float := (Multivector.ofBlade (e3 : Blade R3)).smul 4
---       det [v1, v2, v3]  -- Should be 24
+#eval! let v1 : Multivector R3 Float := (Multivector.ofBlade (e1 : Blade R3)).smul 2
+       let v2 : Multivector R3 Float := (Multivector.ofBlade (e2 : Blade R3)).smul 3
+       let v3 : Multivector R3 Float := (Multivector.ofBlade (e3 : Blade R3)).smul 4
+       det [v1, v2, v3]  -- Should be 24
 
--- Test LinearMap identity determinant (R3)
--- #eval (LinearMap.id : LinearMap R3 Float).det  -- Should be 1
-
--- Test LinearMap identity determinant (R4)
--- #eval (LinearMap.id : LinearMap R4 Float).det  -- Should be 1
-
--- Test LinearMap identity determinant (R2)
--- #eval (LinearMap.id : LinearMap R2 Float).det  -- Should be 1
+-- Test LinearMap identity determinant
+#eval! (LinearMap.id : LinearMap R3 Float).det  -- Should be 1
+#eval! (LinearMap.id : LinearMap R2 Float).det  -- Should be 1
 
 -- Test dot product
--- #eval let e1v : Multivector R3 Float := Multivector.ofBlade (e1 : Blade R3)
---       let e2v : Multivector R3 Float := Multivector.ofBlade (e2 : Blade R3)
---       (dot e1v e1v, dot e1v e2v)  -- Should be (1, 0)
+#eval! let e1v : Multivector R3 Float := Multivector.ofBlade (e1 : Blade R3)
+       let e2v : Multivector R3 Float := Multivector.ofBlade (e2 : Blade R3)
+       (dot e1v e1v, dot e1v e2v)  -- Should be (1, 0)
 
 -- Test cross product in R3: e1 × e2 = e3
--- #eval let e1v : Multivector R3 Float := Multivector.ofBlade (e1 : Blade R3)
---       let e2v : Multivector R3 Float := Multivector.ofBlade (e2 : Blade R3)
---       let c := cross e1v e2v
---       (c.coeff (e1 : Blade R3), c.coeff (e2 : Blade R3), c.coeff (e3 : Blade R3))
+#eval! let e1v : Multivector R3 Float := Multivector.ofBlade (e1 : Blade R3)
+       let e2v : Multivector R3 Float := Multivector.ofBlade (e2 : Blade R3)
+       let c := cross e1v e2v
+       (c.coeff (e1 : Blade R3), c.coeff (e2 : Blade R3), c.coeff (e3 : Blade R3))
 
 -- Test LinearMap apply (R3)
--- #eval let L : LinearMap R3 Float := LinearMap.id
---       let v : Multivector R3 Float := vector3 1 2 3
---       let Lv := L.apply v
---       (Lv.coeff (e1 : Blade R3), Lv.coeff (e2 : Blade R3), Lv.coeff (e3 : Blade R3))
+#eval! let L : LinearMap R3 Float := LinearMap.id
+       let v : Multivector R3 Float := vector3 1 2 3
+       let Lv := L.apply v
+       (Lv.coeff (e1 : Blade R3), Lv.coeff (e2 : Blade R3), Lv.coeff (e3 : Blade R3))
 
 -- Test Cramer's rule (R2)
--- #eval let L : LinearMap R2 Float := LinearMap.id
---       let b : Multivector R2 Float :=
---         (Multivector.ofBlade (e1 : Blade R2)).smul 3 |>.add
---         ((Multivector.ofBlade (e2 : Blade R2)).smul 4)
---       cramer L b  -- Should be [3, 4]
+#eval! let L : LinearMap R2 Float := LinearMap.id
+       let b : Multivector R2 Float :=
+         (Multivector.ofBlade (e1 : Blade R2)).smul 3 |>.add
+         ((Multivector.ofBlade (e2 : Blade R2)).smul 4)
+       cramer L b  -- Should be [3, 4]
 
 end Tests
 
