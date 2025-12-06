@@ -15,6 +15,18 @@
   - Count how many basis vectors in `a` need to pass through basis vectors in `b`
   - Each transposition contributes a factor of -1
   - Additionally, for shared basis vectors (in a·b), check if they square to -1
+
+  ## Performance Notes
+
+  Hot path analysis:
+  - `geometricSign` is called O(4^n) times per geometric product
+  - `countTranspositions` is the inner loop - uses optimized bit-only version
+
+  Optimization opportunities:
+  1. **Precomputed sign tables**: Use `MetalCodegen.computeSignTable` at compile
+     time for fixed signatures (R3, PGA3, CGA3). Trade O(4^n) memory for O(1) lookup.
+  2. **SIMD/parallel**: The 4^n sign computations are independent
+  3. **Sparse shortcuts**: Skip zero coefficients before computing signs
 -/
 import Grassmann.Blade
 
@@ -55,14 +67,29 @@ we count how many transpositions are needed.
     This is the Koszul sign exponent.
 
     Algorithm: For each bit in `a`, count how many bits in `b` are in positions
-    that would require passing through. -/
+    that would require passing through.
+
+    Original list-based version (for reference):
+    ```
+    let aBits := bitsToList a dim
+    let bBitsShifted := bitsToList (b <<< 1) dim
+    let bCumsum := cumsum bBitsShifted
+    dotProduct aBits bCumsum
+    ``` -/
 @[specialize]
 def countTranspositions (a b : ℕ) (dim : ℕ) : ℕ :=
-  -- Get bits of a and cumulative sum of bits of (b shifted by 1)
-  let aBits := bitsToList a dim
-  let bBitsShifted := bitsToList (b <<< 1) dim
-  let bCumsum := cumsum bBitsShifted
-  dotProduct aBits bCumsum
+  -- Optimized bit-only version: no list allocations
+  -- For each bit position i in a, count bits in b at positions < i
+  let rec loop (i : ℕ) (bBelow : ℕ) (acc : ℕ) : ℕ :=
+    if i >= dim then acc
+    else
+      -- bBelow tracks cumulative popcount of b at positions < i
+      let aBit := if a &&& (1 <<< i) != 0 then 1 else 0
+      let contribution := aBit * bBelow
+      let bBit := if b &&& (1 <<< i) != 0 then 1 else 0
+      loop (i + 1) (bBelow + bBit) (acc + contribution)
+  termination_by dim - i
+  loop 0 0 0
 
 /-- Parity join without metric: returns true if sign flip needed.
     This handles just the permutation sign. -/

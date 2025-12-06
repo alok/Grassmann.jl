@@ -4,7 +4,7 @@ keywords = ["math"]
 defaultTargets = ["Grassmann"]
 
 [leanOptions]
-pp.unicode.fun = true # pretty-prints `fun a ↦ b`
+pp.unicode.fun = true                 # pretty-prints `fun a ↦ b`
 relaxedAutoImplicit = false
 weak.linter.mathlibStandardSet = true
 maxSynthPendingDepth = 3
@@ -12,6 +12,48 @@ maxSynthPendingDepth = 3
 [[require]]
 name = "mathlib"
 scope = "leanprover-community"
+rev = "v4.26.0-rc2"
+
+[[require]]
+name = "LeanPlot"
+path = "/Users/alokbeniwal/leanplot"
 
 [[lean_lib]]
 name = "Grassmann"
+srcDir = "Grassmann4"
+
+[[lean_exe]]
+name = "genmetalshaders"
+root = "GenMetalShaders"
+srcDir = "Grassmann4"
+
+[[lean_exe]]
+name = "genvectorfield"
+root = "Grassmann.GenVectorField"
+srcDir = "Grassmann4"
+
+[[lean_exe]]
+name = "oracletests"
+root = "RunOracleTests"
+srcDir = "Grassmann4"
+
+[[lean_exe]]
+name = "propertytests"
+root = "RunPropertyTests"
+srcDir = "Grassmann4"
+
+
+# Note: Verso documentation setup is available but requires
+# additional build configuration. See Manual/ folder for content.
+# To enable: add verso dependency and uncomment Manual targets.
+# [[require]]
+# name = "verso"
+# git = "https://github.com/leanprover/verso"
+# rev = "main"
+
+# [[lean_lib]]
+# name = "Manual"
+
+# [[lean_exe]]
+# name = "manual"
+# root = "Manual.Main"

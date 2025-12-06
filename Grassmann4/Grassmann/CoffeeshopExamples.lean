@@ -444,18 +444,17 @@ open CoffeeshopExamples
 -- Iteration count gives coloring; here we output ASCII art
 
 def mandelbrotIterate (cx cy : Float) (maxIter : Nat := 40) : Nat :=
-  -- Use fuel-based iteration to avoid termination issues
-  let rec go : Nat → Float → Float → Nat
-    | 0, _, _ => 0
-    | n + 1, zr, zi =>
+  -- partial def allows us to write the loop naturally without proving termination
+  let rec go (n : Nat) (zr zi : Float) : Nat :=
+    if n >= maxIter then 0
+    else
       let mag2 := zr * zr + zi * zi
-      if mag2 > 4.0 then maxIter - (n + 1)
+      if mag2 > 4.0 then n
       else
-        -- z = z² + c: (zr + zi·i)² = zr² - zi² + 2·zr·zi·i
         let newZr := zr * zr - zi * zi + cx
         let newZi := 2.0 * zr * zi + cy
-        go n newZr newZi
-  go maxIter 0.0 0.0
+        go (n + 1) newZr newZi
+  go 0 0.0 0.0
 
 -- Color palette for Mandelbrot (classic blue-black-orange scheme)
 def mandelbrotColor (iter : Nat) (maxIter : Nat := 40) : RGB :=

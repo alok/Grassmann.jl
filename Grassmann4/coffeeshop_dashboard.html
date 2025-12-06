@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ganja.js Coffeeshop Examples in Lean</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+        }
+        .example-block {
+            margin-bottom: 40px;
+            padding: 20px;
+            background-color: #fafafa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .example-image {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ccc;
+            margin-top: 10px;
+            display: block;
+        }
+        .description {
+            font-style: italic;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        code {
+            background-color: #eee;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        .link-button {
+            display: inline-block;
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        .link-button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Ganja.js Coffeeshop Examples in Lean</h1>
+    <p>This page renders the geometric algebra examples ported from <a href="https://enkimute.github.io/ganja.js/examples/coffeeshop.html">Ganja.js</a> to Lean 4.</p>
+
+    <!-- Example: Quaternion Mandelbrot -->
+    <div class="example-block">
+        <h2>Quaternion Mandelbrot</h2>
+        <p class="description">Visualizing the Mandelbrot set using Quaternion algebra Cl(0,2). Calculated in Lean and rendered to PNG.</p>
+        <img src="mandelbrot_ga.png" alt="Quaternion Mandelbrot" class="example-image">
+    </div>
+
+    <!-- Example: Boundary Scatter Plot -->
+    <div class="example-block">
+        <h2>Mandelbrot Boundary</h2>
+        <p class="description">Scatter plot of the Mandelbrot set boundary points. Rendered to SVG using LeanPlot.</p>
+        <img src="mandelbrot_boundary.svg" alt="Mandelbrot Boundary" class="example-image">
+    </div>
+
+    <!-- Interactive Example: 3D Vector Field -->
+    <div class="example-block">
+        <h2>3D Vector Field</h2>
+        <p class="description">Interactive 3D visualization of a vector field using Three.js (generated data).</p>
+        <a href="vector_field_3d.html" class="link-button" target="_blank">Open Interactive 3D View</a>
+    </div>
+
+    <!-- Summary of Algebras -->
+    <div class="example-block">
+        <h2>Algebras Demonstrated</h2>
+        <ul>
+            <li><strong>Cl(0,1)</strong>: Complex numbers</li>
+            <li><strong>Cl(0,0,1)</strong>: Dual numbers (Automatic Differentiation)</li>
+            <li><strong>Cl(0,2)</strong>: Quaternions</li>
+            <li><strong>Cl(1,0)</strong>: Split-complex numbers</li>
+            <li><strong>R3 / Cl(3,0,0)</strong>: 3D Euclidean Geometric Algebra</li>
+            <li><strong>PGA3D / Cl(3,0,1)</strong>: 3D Projective Geometric Algebra</li>
+            <li><strong>STA / Cl(1,3)</strong>: Spacetime Algebra</li>
+            <li><strong>CGA / Cl(4,1)</strong>: Conformal Geometric Algebra</li>
+        </ul>
+    </div>
+
+</div>
+
+</body>
+</html>
