@@ -41,6 +41,11 @@ import Grassmann.Visualization
 import Grassmann.Theorems
 import Grassmann.AnchorTheorems
 
+-- Performance optimization
+import Grassmann.SignTables        -- Precomputed sign tables
+import Grassmann.GradeSet          -- Compile-time grade tracking
+import Grassmann.StaticOpt         -- Static optimization patterns
+
 -- Code generation
 import Grassmann.MetalCodegen
 import Grassmann.GANotation
