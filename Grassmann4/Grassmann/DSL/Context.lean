@@ -22,19 +22,20 @@
 import Lean
 import Grassmann.DSL.Subscript
 
+set_option doc.verso true
 open Lean Elab Meta Term Macro
 
 namespace Grassmann.DSL
 
 /-! ## Context Syntax -/
 
-/-- Cl(p,q,r) { body } for Clifford algebra context -/
+/-- `Cl(p,q,r) { body }` for Clifford algebra context -/
 syntax "Cl(" num "," num "," num ")" "{" term "}" : term
 
-/-- Cl(p,q) { body } shorthand (r = 0) -/
+/-- `Cl(p,q) { body }` shorthand (r = 0) -/
 syntax "Cl(" num "," num ")" "{" term "}" : term
 
-/-- Cl(n) { body } shorthand (q = r = 0, Euclidean) -/
+/-- `Cl(n) { body }` shorthand `(q = r = 0, Euclidean)` -/
 syntax "Cl(" num ")" "{" term "}" : term
 
 /-- Named algebra shortcuts -/

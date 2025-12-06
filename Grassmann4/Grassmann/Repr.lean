@@ -62,7 +62,9 @@ variable {n : ℕ} {sig : Signature n} {F : Type*}
 
 /-! ## Dense Representation Instance -/
 
-instance [Ring F] : MultivectorRepr (Multivector sig F) sig F where
+/-- Dense representation is the default (priority 1000 > default 100).
+    This ensures `Multivector` is preferred when typeclass inference is ambiguous. -/
+instance (priority := 1000) [Ring F] : MultivectorRepr (Multivector sig F) sig F where
   coeff m idx :=
     if h : idx < 2^n then m.coeffs ⟨idx, h⟩ else 0
   scalarPart := Multivector.scalarPart
@@ -77,7 +79,10 @@ instance [Ring F] : MultivectorRepr (Multivector sig F) sig F where
 
 /-! ## Sparse Representation Instance -/
 
-instance [Ring F] [BEq F] [DecidableEq F] : MultivectorRepr (MultivectorS sig F) sig F where
+/-- Sparse representation (priority 500, lower than Dense).
+    Use explicitly when working with high-dimensional sparse data. -/
+instance (priority := 500) [Ring F] [BEq F] [DecidableEq F] :
+    MultivectorRepr (MultivectorS sig F) sig F where
   coeff := MultivectorS.coeff
   scalarPart := MultivectorS.scalarPart
   zero := MultivectorS.zero
@@ -91,7 +96,9 @@ instance [Ring F] [BEq F] [DecidableEq F] : MultivectorRepr (MultivectorS sig F)
 
 /-! ## Truncated Representation Instance -/
 
-instance [Ring F] [BEq F] [DecidableEq F] {maxGrade : ℕ} :
+/-- Truncated representation (priority 200, lowest).
+    Use for very high dimensions when only low-grade components matter. -/
+instance (priority := 200) [Ring F] [BEq F] [DecidableEq F] {maxGrade : ℕ} :
     MultivectorRepr (TruncatedMV sig maxGrade F) sig F where
   coeff := TruncatedMV.coeff
   scalarPart := TruncatedMV.scalarPart
@@ -108,49 +115,101 @@ instance [Ring F] [BEq F] [DecidableEq F] {maxGrade : ℕ} :
 
 The MultivectorRepr typeclass enables writing generic algorithms.
 
+### Instance Priorities
+
+Instance priorities are set to prefer representations by typical use case:
+- Dense (Multivector):   priority 1000 — default for n ≤ 8
+- Sparse (MultivectorS): priority 500  — explicit opt-in for high-dim sparse
+- Truncated (TruncatedMV): priority 200 — for n >> 8, low-grade focus
+
 ### Known Limitation: Typeclass Inference with Dependent Types
 
 Due to Lean 4's typeclass inference behavior with dependent types like `Signature n`,
-generic functions over `MultivectorRepr` often fail to infer instances automatically.
+generic functions over `MultivectorRepr` sometimes fail to infer instances.
+The issue: when the type parameter `M` appears before `sig`, Lean cannot always
+unify `Signature ?n` during instance search.
 
 **Problem Example:**
 ```lean
--- This won't compile: Lean can't infer the MultivectorRepr instance
+-- May fail: Lean can't always infer MultivectorRepr when sig is implicit
 def genericNormSq [MultivectorRepr M sig F] (m : M) : F :=
   MultivectorRepr.scalarPart (MultivectorRepr.mul m (MultivectorRepr.reverse m))
 ```
 
-**Workaround Patterns:**
+**Working Patterns:**
 
-1. **Explicit Instance Passing**: Add `@` and pass instance explicitly
+1. **Signature-First Generic Functions**: Put `sig` early in the signature
 ```lean
-def normSq {M : Type*} (inst : MultivectorRepr M sig F) (m : M) : F :=
-  @MultivectorRepr.scalarPart _ _ _ _ inst
-    (@MultivectorRepr.mul _ _ _ _ inst m (@MultivectorRepr.reverse _ _ _ _ inst m))
+-- This works better - sig is explicit, M inferred from concrete type
+def normSqGeneric {n : ℕ} {sig : Signature n} {F : Type*} {M : Type*}
+    [Ring F] [MultivectorRepr M sig F] (m : M) : F :=
+  MultivectorRepr.scalarPart (MultivectorRepr.mul m (MultivectorRepr.reverse m))
 ```
 
 2. **Representation-Specific Functions**: Write specialized versions (current approach)
 ```lean
--- Use these directly instead of generic:
+-- Direct, no inference issues:
 Multivector.normSq    -- for Dense
 MultivectorS.normSq   -- for Sparse
 TruncatedMV.normSq    -- for Truncated
 ```
 
-3. **Local Instance Hints**: Use `haveI` for scoped inference
+3. **Local Instance Hints**: Use `haveI`/`letI` for scoped inference
 ```lean
 def foo (m : Multivector sig F) : F :=
   haveI : MultivectorRepr (Multivector sig F) sig F := inferInstance
   MultivectorRepr.scalarPart m
 ```
 
-**Current Recommendation:**
-Until Lean's typeclass resolution improves for dependent types,
-use representation-specific operations directly:
-- `Multivector.*`, `MultivectorS.*`, `TruncatedMV.*`
+4. **Explicit @ Application**: For one-off uses
+```lean
+#check @MultivectorRepr.scalarPart _ 3 R3 Float _ _ inferInstance
+```
 
-The typeclass infrastructure is in place for future generic algorithms
-and documents the shared interface between representations.
+**Current Recommendation:**
+- For library code: use representation-specific operations
+- For generic algorithms: put signature parameters early
+- Instance priorities ensure Dense is preferred when ambiguous
+-/
+
+/-! ## Working Generic Functions
+
+Examples of generic functions that work with typeclass inference.
+The `inst` parameter makes the instance explicit, avoiding resolution issues.
+-/
+
+/-- Generic norm squared - works across all representations.
+    Uses explicit instance parameter to avoid inference issues with dependent types. -/
+def normSqGeneric {n : ℕ} {sig : Signature n} {F : Type*} {M : Type*}
+    [Ring F] (inst : MultivectorRepr M sig F) (m : M) : F :=
+  inst.scalarPart (inst.mul m (inst.reverse m))
+
+/-- Generic scalar extraction. -/
+def scalarGeneric {n : ℕ} {sig : Signature n} {F : Type*} {M : Type*}
+    [Ring F] (inst : MultivectorRepr M sig F) (m : M) : F :=
+  inst.scalarPart m
+
+/-- Generic reverse involution. -/
+def reverseGeneric {n : ℕ} {sig : Signature n} {F : Type*} {M : Type*}
+    [Ring F] (inst : MultivectorRepr M sig F) (m : M) : M :=
+  inst.reverse m
+
+/-- Generic geometric product. -/
+def mulGeneric {n : ℕ} {sig : Signature n} {F : Type*} {M : Type*}
+    [Ring F] (inst : MultivectorRepr M sig F) (a b : M) : M :=
+  inst.mul a b
+
+/-! ### Usage Examples
+
+For concrete types, pass the instance explicitly or use `inferInstance`:
+
+```lean
+-- Explicit instance (most reliable):
+#check normSqGeneric (inst := inferInstance) (m : Multivector R3 Float)
+
+-- Or use the representation-specific versions directly:
+#check Multivector.normSq  -- These don't have inference issues
+```
 -/
 
 /-! ## Representation Selection
