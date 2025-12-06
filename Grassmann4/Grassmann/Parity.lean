@@ -134,6 +134,45 @@ def geometricSign (sig : Signature n) (a b : Blade sig) : Int :=
   if hasSharedDegenerate a.bits.toNat b.bits.toNat sig.degenerate.toNat then 0
   else if parityJoin a.bits.toNat b.bits.toNat n sig.metric.toNat then -1 else 1
 
+/-! ## Precomputed Sign Tables
+
+For small dimensions (n ≤ 5), we precompute the full sign table once and use
+O(1) lookups instead of O(n) computation per sign. The table has 4^n entries
+(2^n × 2^n), so memory is:
+- n=3: 64 entries (512 bytes as Int8)
+- n=4: 256 entries (2KB)
+- n=5: 1024 entries (8KB)
+-/
+
+/-- Precomputed sign table for a signature. Stores signs as Int8 (-1, 0, 1).
+    Table layout: signs[i * size + j] = geometricSign(blade_i, blade_j) -/
+structure SignTable (n : ℕ) where
+  signs : Array Int8
+  size : Nat := 2^n
+  deriving Repr
+
+/-- Build precomputed sign table for a signature -/
+def buildSignTable (sig : Signature n) : SignTable n :=
+  let size := 2^n
+  let signs := Array.ofFn (n := size * size) fun idx =>
+    let i := idx / size
+    let j := idx % size
+    let bi : Blade sig := ⟨BitVec.ofNat n i⟩
+    let bj : Blade sig := ⟨BitVec.ofNat n j⟩
+    let s := geometricSign sig bi bj
+    if s < 0 then (-1 : Int8) else if s > 0 then (1 : Int8) else (0 : Int8)
+  { signs, size }
+
+/-- Look up precomputed sign -/
+@[inline]
+def SignTable.lookup (table : SignTable n) (i j : Nat) : Int8 :=
+  table.signs.getD (i * table.size + j) 0
+
+/-- Geometric product using precomputed sign table (for n ≤ 5) -/
+def geometricSignFromTable (table : SignTable n) (i j : Nat) : Int :=
+  let s := table.lookup i j
+  if s < 0 then -1 else if s > 0 then 1 else 0
+
 /-- Sign for wedge product (exterior product).
     Zero if blades share any basis vectors. -/
 @[specialize]

@@ -283,6 +283,45 @@ def leftContract (a b : Multivector sig F) : Multivector sig F :=
 
 instance : Mul (Multivector sig F) := ⟨Multivector.geometricProduct⟩
 
+/-- Geometric product using precomputed sign table.
+    For n ≤ 5, this is faster than computing signs on-the-fly.
+    Build the table once with `buildSignTable sig`, then reuse for all products. -/
+def geometricProductWithTable (table : SignTable n) (a b : Multivector sig F) : Multivector sig F :=
+  let size := 2^n
+  let indices := allIndices n
+  let resultArray := indices.foldl (init := Array.replicate size (0 : F)) fun arr i =>
+    indices.foldl (init := arr) fun arr2 j =>
+      let sign := table.lookup i.val j.val
+      if sign == 0 then arr2
+      else
+        let resultIdx := i.val ^^^ j.val  -- XOR for result blade index
+        if resultIdx < size then
+          let coeff := a.coeffs i * b.coeffs j
+          let contrib := if sign < 0 then -coeff else coeff
+          arr2.modify resultIdx (· + contrib)
+        else arr2
+  ⟨fun k => resultArray.getD k.val 0⟩
+
+/-- Wedge product using precomputed sign table -/
+def wedgeProductWithTable (table : SignTable n) (a b : Multivector sig F) : Multivector sig F :=
+  let size := 2^n
+  let indices := allIndices n
+  let resultArray := indices.foldl (init := Array.replicate size (0 : F)) fun arr i =>
+    indices.foldl (init := arr) fun arr2 j =>
+      -- Wedge is zero if blades share any basis vector
+      if (i.val &&& j.val) != 0 then arr2
+      else
+        let sign := table.lookup i.val j.val
+        if sign == 0 then arr2
+        else
+          let resultIdx := i.val ^^^ j.val
+          if resultIdx < size then
+            let coeff := a.coeffs i * b.coeffs j
+            let contrib := if sign < 0 then -coeff else coeff
+            arr2.modify resultIdx (· + contrib)
+          else arr2
+  ⟨fun k => resultArray.getD k.val 0⟩
+
 infixl:65 " ⋀ᵐ " => Multivector.wedgeProduct  -- Use different symbol to avoid conflict
 infixl:65 " ⌋ᵐ " => Multivector.leftContract
 
