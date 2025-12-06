@@ -107,13 +107,50 @@ instance [Ring F] [BEq F] [DecidableEq F] {maxGrade : ℕ} :
 /-! ## Generic Operations
 
 The MultivectorRepr typeclass enables writing generic algorithms.
-Due to Lean's typeclass inference complexity with dependent types,
-generic functions require explicit type annotations at use sites.
 
-For now, use representation-specific operations directly:
-- Multivector.*, MultivectorS.*, TruncatedMV.*
+### Known Limitation: Typeclass Inference with Dependent Types
 
-The typeclass infrastructure is in place for future generic algorithms.
+Due to Lean 4's typeclass inference behavior with dependent types like `Signature n`,
+generic functions over `MultivectorRepr` often fail to infer instances automatically.
+
+**Problem Example:**
+```lean
+-- This won't compile: Lean can't infer the MultivectorRepr instance
+def genericNormSq [MultivectorRepr M sig F] (m : M) : F :=
+  MultivectorRepr.scalarPart (MultivectorRepr.mul m (MultivectorRepr.reverse m))
+```
+
+**Workaround Patterns:**
+
+1. **Explicit Instance Passing**: Add `@` and pass instance explicitly
+```lean
+def normSq {M : Type*} (inst : MultivectorRepr M sig F) (m : M) : F :=
+  @MultivectorRepr.scalarPart _ _ _ _ inst
+    (@MultivectorRepr.mul _ _ _ _ inst m (@MultivectorRepr.reverse _ _ _ _ inst m))
+```
+
+2. **Representation-Specific Functions**: Write specialized versions (current approach)
+```lean
+-- Use these directly instead of generic:
+Multivector.normSq    -- for Dense
+MultivectorS.normSq   -- for Sparse
+TruncatedMV.normSq    -- for Truncated
+```
+
+3. **Local Instance Hints**: Use `haveI` for scoped inference
+```lean
+def foo (m : Multivector sig F) : F :=
+  haveI : MultivectorRepr (Multivector sig F) sig F := inferInstance
+  MultivectorRepr.scalarPart m
+```
+
+**Current Recommendation:**
+Until Lean's typeclass resolution improves for dependent types,
+use representation-specific operations directly:
+- `Multivector.*`, `MultivectorS.*`, `TruncatedMV.*`
+
+The typeclass infrastructure is in place for future generic algorithms
+and documents the shared interface between representations.
 -/
 
 /-! ## Representation Selection

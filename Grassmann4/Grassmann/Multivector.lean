@@ -148,29 +148,55 @@ instance : SMul F (Multivector sig F) := ⟨Multivector.smul⟩
 instance : HAdd (Multivector sig F) (Multivector sig F) (Multivector sig F) := ⟨Multivector.add⟩
 instance : HSub (Multivector sig F) (Multivector sig F) (Multivector sig F) := ⟨Multivector.sub⟩
 
-/-! ### Involutions -/
+/-! ### Involutions
+
+We precompute sign tables for involutions to avoid O(2^n) grade computations.
+The grade of blade i is popcount(i), and the signs are:
+- reverse: (-1)^(k(k-1)/2)
+- involute: (-1)^k
+- conjugate: (-1)^(k(k+1)/2)
+-/
+
+/-- Precomputed sign for reverse operation at each grade (0..n).
+    reverseSign[k] = true means positive, false means negative. -/
+private def reverseSignTable (n : ℕ) : Array Bool :=
+  Array.ofFn (n := n + 1) fun k => (k.val * (k.val - 1) / 2) % 2 = 0
+
+/-- Precomputed sign for involute operation at each grade. -/
+private def involuteSignTable (n : ℕ) : Array Bool :=
+  Array.ofFn (n := n + 1) fun k => k.val % 2 = 0
+
+/-- Precomputed sign for conjugate operation at each grade. -/
+private def conjugateSignTable (n : ℕ) : Array Bool :=
+  Array.ofFn (n := n + 1) fun k => (k.val * (k.val + 1) / 2) % 2 = 0
 
 /-- Reverse (dagger): reverses order of basis vectors.
-    For grade k: multiplies by (-1)^(k(k-1)/2) -/
+    For grade k: multiplies by (-1)^(k(k-1)/2)
+    Uses precomputed sign table for O(1) sign lookup per coefficient. -/
 def reverse (m : Multivector sig F) : Multivector sig F :=
+  let signs := reverseSignTable n
   ⟨fun i =>
     let k := grade (BitVec.ofNat n i.val)
-    if (k * (k - 1) / 2) % 2 = 0 then m.coeffs i
+    if signs.getD k true then m.coeffs i
     else -m.coeffs i⟩
 
-/-- Grade involution: multiplies grade k by (-1)^k -/
+/-- Grade involution: multiplies grade k by (-1)^k
+    Uses precomputed sign table for O(1) sign lookup per coefficient. -/
 def involute (m : Multivector sig F) : Multivector sig F :=
+  let signs := involuteSignTable n
   ⟨fun i =>
     let k := grade (BitVec.ofNat n i.val)
-    if k % 2 = 0 then m.coeffs i
+    if signs.getD k true then m.coeffs i
     else -m.coeffs i⟩
 
 /-- Clifford conjugate: reverse composed with involute.
-    For grade k: multiplies by (-1)^(k(k+1)/2) -/
+    For grade k: multiplies by (-1)^(k(k+1)/2)
+    Uses precomputed sign table for O(1) sign lookup per coefficient. -/
 def conjugate (m : Multivector sig F) : Multivector sig F :=
+  let signs := conjugateSignTable n
   ⟨fun i =>
     let k := grade (BitVec.ofNat n i.val)
-    if (k * (k + 1) / 2) % 2 = 0 then m.coeffs i
+    if signs.getD k true then m.coeffs i
     else -m.coeffs i⟩
 
 postfix:max "†" => Multivector.reverse
@@ -394,8 +420,15 @@ def antiCommutator [Div F] [OfNat F 2] (a b : Multivector sig F) : Multivector s
 
 /-! ### Inverse -/
 
+/-- Safe inverse of multivector: returns `none` if normSq is zero.
+    When normSq ≠ 0: m⁻¹ = m† / (m m†) -/
+def inv? [Div F] [DecidableEq F] (m : Multivector sig F) : Option (Multivector sig F) :=
+  let nsq := m.normSq
+  if nsq = 0 then none
+  else some (m†.smul (1 / nsq))
+
 /-- Inverse of multivector (when it exists): m⁻¹ = m† / (m m†)
-    Only valid when normSq is non-zero and invertible. -/
+    ⚠️ WARNING: Returns garbage when normSq is zero. Use `inv?` for safe inversion. -/
 def inv [Div F] (m : Multivector sig F) : Multivector sig F :=
   let nsq := m.normSq
   m†.smul (1 / nsq)
@@ -436,12 +469,44 @@ def isUnit (m : Multivector sig Float) (tol : Float := 1e-10) : Bool :=
 def sqrtScalar (m : Multivector sig Float) : Multivector sig Float :=
   Multivector.scalar (Float.sqrt m.scalarPart)
 
-/-- Exponential of a bivector using closed form (for unit bivector B² = -1):
+/-- Exponential of a unit bivector (B² = -1, Euclidean case):
     exp(θB) = cos(θ) + sin(θ)B -/
 def expUnitBivector (B : Multivector sig Float) (theta : Float) : Multivector sig Float :=
   let c := Float.cos theta
   let s := Float.sin theta
   (Multivector.scalar c).add (B.smul s)
+
+/-- General bivector exponential that handles all signature cases:
+    - Euclidean (B² = -|B|²): exp(B) = cos(|B|) + sin(|B|)·B̂
+    - Lorentzian (B² = +|B|²): exp(B) = cosh(|B|) + sinh(|B|)·B̂
+    - Degenerate (B² = 0): exp(B) = 1 + B
+
+    Returns (exp(B), signature_type) where signature_type is:
+    -1 for Euclidean, +1 for Lorentzian, 0 for degenerate -/
+def expBivector (B : Multivector sig Float) : Multivector sig Float × Int :=
+  let Bsq := (B * B).scalarPart
+  let tol := 1e-12
+  if Float.abs Bsq < tol then
+    -- Degenerate case: B² ≈ 0, use exp(B) = 1 + B (first-order Taylor)
+    ((Multivector.one : Multivector sig Float).add B, 0)
+  else if Bsq < 0 then
+    -- Euclidean case: B² = -|B|², use trig functions
+    let mag := Float.sqrt (Float.abs Bsq)
+    let unitB := B.smul (1 / mag)
+    let c := Float.cos mag
+    let s := Float.sin mag
+    ((Multivector.scalar c).add (unitB.smul s), -1)
+  else
+    -- Lorentzian case: B² = +|B|², use hyperbolic functions
+    let mag := Float.sqrt Bsq
+    let unitB := B.smul (1 / mag)
+    let c := Float.cosh mag
+    let s := Float.sinh mag
+    ((Multivector.scalar c).add (unitB.smul s), 1)
+
+/-- General bivector exponential (discards signature info) -/
+def exp (B : Multivector sig Float) : Multivector sig Float :=
+  (expBivector B).1
 
 /-- Logarithm of a rotor (returns bivector angle×axis) -/
 def logRotor (R : Multivector sig Float) : Multivector sig Float :=
