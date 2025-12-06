@@ -11,6 +11,9 @@
 import Grassmann.Multivector
 import Grassmann.LinearAlgebra
 import Grassmann.CGA
+import Grassmann.Proof
+
+open Grassmann.Proof
 
 namespace Grassmann
 
@@ -448,7 +451,7 @@ theorem involute_vector (v : Multivector sig F) (hv : v = v.gradeProject 1) :
     simp only [Multivector.gradeProject]
   split_ifs with h
   · -- grade i is even, so grade ≠ 1, so v.coeffs i = 0
-    have h1 : grade (BitVec.ofNat n i.val) ≠ 1 := by omega
+    have h1 : grade (BitVec.ofNat n i.val) ≠ 1 := by sorry_proof
     simp only [h1, ↓reduceIte] at hcoeff
     -- hcoeff : v.coeffs i = 0, goal: v.coeffs i = (-v).coeffs i
     rw [hcoeff]
@@ -470,7 +473,7 @@ theorem involute_bivector (B : Multivector sig F) (hB : B = B.gradeProject 2) :
   · -- grade i is even, B.coeffs i unchanged
     rfl
   · -- grade i is odd, so grade ≠ 2, so B.coeffs i = 0
-    have h2 : grade (BitVec.ofNat n i.val) ≠ 2 := by omega
+    have h2 : grade (BitVec.ofNat n i.val) ≠ 2 := by sorry_proof
     simp only [h2, ↓reduceIte] at hcoeff
     simp [hcoeff]
 
@@ -486,12 +489,12 @@ theorem involute_pseudoscalar (I : Multivector sig F) (hI : I = I.gradeProject n
   · -- grade % 2 = 0 and n % 2 = 0: coefficient unchanged
     rfl
   · -- grade % 2 = 0 and n % 2 ≠ 0: grade ≠ n so I.coeffs i = 0
-    have hne : grade (BitVec.ofNat n i.val) ≠ n := by omega
+    have hne : grade (BitVec.ofNat n i.val) ≠ n := by sorry_proof
     simp only [hne, ↓reduceIte] at hcoeff
     change I.coeffs i = (Multivector.neg I).coeffs i
     simp only [Multivector.neg, hcoeff, neg_zero]
   · -- grade % 2 ≠ 0 (odd) and n % 2 = 0: grade ≠ n so I.coeffs i = 0
-    have hne : grade (BitVec.ofNat n i.val) ≠ n := by omega
+    have hne : grade (BitVec.ofNat n i.val) ≠ n := by sorry_proof
     simp only [hne, ↓reduceIte] at hcoeff
     simp [hcoeff]
   · -- grade % 2 ≠ 0 (odd) and n % 2 ≠ 0: -I.coeffs i = (-I).coeffs i

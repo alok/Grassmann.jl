@@ -29,11 +29,12 @@ namespace Multivector
 
 variable [Zero Float] [One Float] [Add Float] [Neg Float] [Mul Float] [Sub Float] [Div Float]
 
-/-- Exponential of a bivector (for small angles, Taylor series).
+/-- Exponential of a bivector via Taylor series (for arbitrary multivectors).
     exp(B) ≈ 1 + B + B²/2! + B³/3! + ...
-    For unit bivector B² = -1:
-    exp(θB) = cos(θ) + sin(θ)B -/
-def expBivector (B : Multivector sig Float) (terms : ℕ := 10) : Multivector sig Float :=
+
+    Note: For bivectors, prefer `Multivector.expBivector` which uses
+    closed-form trig/hyperbolic functions based on B² sign. -/
+def expTaylor (B : Multivector sig Float) (terms : ℕ := 10) : Multivector sig Float :=
   -- Taylor series: sum_{k=0}^{terms} B^k / k!
   let rec go (k : ℕ) (Bk : Multivector sig Float)
       (factorial : Float) (acc : Multivector sig Float) : Multivector sig Float :=
