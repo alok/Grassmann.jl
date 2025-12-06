@@ -45,6 +45,7 @@ import Grassmann.AnchorTheorems
 import Grassmann.SignTables        -- Precomputed sign tables
 import Grassmann.GradeSet          -- Compile-time grade tracking
 import Grassmann.StaticOpt         -- Static optimization patterns
+import Grassmann.BladeIndex        -- Sparse index iteration
 
 -- Code generation
 import Grassmann.MetalCodegen
