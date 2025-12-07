@@ -168,6 +168,59 @@ def crossProduct (v w : Multivector R3 Float) : Multivector R3 Float :=
 
 end R3Opt
 
+/-! ## Reflection and Rotation Combinators
+
+These provide compositional building blocks for geometric transformations.
+-/
+
+/-- Reflect through a hyperplane (given by unit normal vector n).
+    reflection_n(x) = -n * x * n
+
+    Properties:
+    - Vectors parallel to n are negated
+    - Vectors perpendicular to n are unchanged
+    - Bivectors are rotated by π around n -/
+def reflectHyperplane (n x : Multivector sig F) : Multivector sig F :=
+  -(n * x * n)
+
+/-- Compose two reflections to get a rotation.
+    Two reflections through planes with normals n1 and n2 give
+    a rotation by 2θ around the line of intersection, where θ
+    is the angle between the planes.
+
+    rotation = n2 * n1 (a rotor) -/
+def reflectionPairToRotor (n1 n2 : Multivector sig F) : Multivector sig F :=
+  n2 * n1
+
+/-- Apply a sequence of reflections using fold.
+    n reflections compose as: nₙ * ... * n₂ * n₁ * x * n₁ * n₂ * ... * nₙ
+    Even number of reflections → rotation
+    Odd number of reflections → rotoreflection -/
+def applyReflections (normals : List (Multivector sig F)) (x : Multivector sig F) :
+    Multivector sig F :=
+  normals.foldl (fun acc n => -(n * acc * n)) x
+
+/-- Build a rotor from cosine/sine of half-angle and a unit bivector.
+    R = cos(θ/2) + sin(θ/2) * B where B is a unit bivector.
+
+    Note: The bivector B should be normalized (B² = ±1). -/
+def buildRotorFromHalfAngle (bivector : Multivector sig F) (cosHalf sinHalf : F) :
+    Multivector sig F :=
+  -- R = cosHalf + sinHalf * B
+  Multivector.scalar cosHalf + bivector.smul sinHalf
+
+/-- Spherical linear interpolation (slerp) between two rotors.
+    Useful for smooth rotation interpolation.
+
+    slerp(R1, R2, t) = R1 * (R1† * R2)^t
+
+    For t=0 gives R1, t=1 gives R2. -/
+def slerpRotors (r1 r2 : Multivector sig Float) (t : Float) : Multivector sig Float :=
+  -- Simplified version: linear interpolation + renormalization
+  -- Full slerp would need log/exp which is more complex
+  let interp := r1.smul (1 - t) + r2.smul t
+  interp.normalize
+
 /-! ## Table-Accelerated Operations
 
 For dimensions ≤ 5, use precomputed sign tables.

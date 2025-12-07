@@ -207,6 +207,77 @@ def vectorWedge (v w : Multivector R3 Float) : Multivector R3 Float :=
 
 end R3Fast
 
+/-! ## PGA3-Specific Optimized Operations
+
+In PGA3 (Cl(3,0,1)):
+- e0 is the degenerate (null) basis vector (e0² = 0)
+- Motors (rigid transforms) are even-grade: scalar + bivector + pseudoscalar
+- Points are grade-3: p = e123 + x*e023 + y*e013 + z*e003
+- Lines are grade-2 bivectors
+- Planes are grade-1 vectors
+-/
+
+namespace PGA3Fast
+
+/-- PGA3 motor indices (even grades 0, 2, 4) -/
+private def pga3MotorIdx : List (Fin 16) := evenIndices 4
+
+/-- PGA3 point indices (grade 3): 4 components -/
+private def pga3PointIdx : List (Fin 16) := gradeIndices 4 3
+
+/-- PGA3 plane indices (grade 1): 4 components -/
+private def pga3PlaneIdx : List (Fin 16) := gradeIndices 4 1
+
+/-- PGA3 line indices (grade 2): 6 components -/
+private def pga3LineIdx : List (Fin 16) := gradeIndices 4 2
+
+/-- PGA3 motor × motor using sparse indices.
+    Motors are even (8 components), so 8×8 = 64 pairs instead of 256. -/
+def motorMul (m1 m2 : Multivector PGA3 Float) : Multivector PGA3 Float :=
+  geometricProductSparse m1 m2 pga3MotorIdx pga3MotorIdx
+
+/-- PGA3 motor × point sandwich: M * p * M̃
+    Motor is 8 indices, point is 4 indices.
+    M×p: 8×4 = 32 pairs → odd result
+    (M×p)×M̃: odd×even, iterate over odd×even indices -/
+def transformPoint (motor p : Multivector PGA3 Float) : Multivector PGA3 Float :=
+  let mp := geometricProductSparse motor p pga3MotorIdx pga3PointIdx
+  let oddIdx := oddIndices 4
+  geometricProductSparse mp (motor†) oddIdx pga3MotorIdx
+
+/-- PGA3 motor × plane sandwich: M * π * M̃
+    Similar structure to point transform. -/
+def transformPlane (motor plane : Multivector PGA3 Float) : Multivector PGA3 Float :=
+  let mp := geometricProductSparse motor plane pga3MotorIdx pga3PlaneIdx
+  let oddIdx := oddIndices 4
+  geometricProductSparse mp (motor†) oddIdx pga3MotorIdx
+
+/-- PGA3 motor × line sandwich: M * L * M̃
+    Line is grade 2 (6 components), motor is even (8). -/
+def transformLine (motor line : Multivector PGA3 Float) : Multivector PGA3 Float :=
+  let ml := geometricProductSparse motor line pga3MotorIdx pga3LineIdx
+  -- ml is even (line is grade 2, motor is even → even result)
+  geometricProductSparse ml (motor†) pga3MotorIdx pga3MotorIdx
+
+/-- PGA3 point ∨ point (regressive product via duality).
+    Two points define a line. -/
+def joinPoints (p1 p2 : Multivector PGA3 Float) : Multivector PGA3 Float :=
+  -- In PGA: p1 ∨ p2 = (p1* ∧ p2*)*
+  -- For now, use wedge of duals
+  let d1 := p1.hodgeDual
+  let d2 := p2.hodgeDual
+  (wedgeProductSparse d1 d2 pga3PlaneIdx pga3PlaneIdx).hodgeDual
+
+/-- PGA3 plane ∧ plane: two planes meet at a line -/
+def meetPlanes (π1 π2 : Multivector PGA3 Float) : Multivector PGA3 Float :=
+  wedgeProductSparse π1 π2 pga3PlaneIdx pga3PlaneIdx
+
+/-- PGA3 plane ∧ line: plane and line meet at a point -/
+def meetPlaneLine (plane line : Multivector PGA3 Float) : Multivector PGA3 Float :=
+  wedgeProductSparse plane line pga3PlaneIdx pga3LineIdx
+
+end PGA3Fast
+
 /-! ## Tests -/
 
 -- Verify index counts
@@ -239,5 +310,12 @@ end R3Fast
     else 0.0⟩
   let wedge := R3Fast.vectorWedge v w
   wedge.coeffs ⟨3, by decide⟩  -- e12, should be 1.0
+
+-- PGA3 index counts
+#eval PGA3EvenIdx.length      -- 8 (motor: scalar + 6 bivectors + pseudoscalar)
+#eval PGA3OddIdx.length       -- 8 (planes + points)
+#eval (gradeIndices 4 1).length  -- 4 (planes)
+#eval (gradeIndices 4 2).length  -- 6 (lines)
+#eval (gradeIndices 4 3).length  -- 4 (points)
 
 end Grassmann

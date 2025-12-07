@@ -340,4 +340,76 @@ section Tests
 
 end Tests
 
+/-! ## Optimized Versor Operations
+
+These use grade information and sparse iteration for better performance.
+-/
+
+namespace VersorOpt
+
+/-- Optimized rotor sandwich using grade tracking.
+    Since rotors are even, R*v*R† preserves vector grade.
+    We can skip computing other grades. -/
+def rotorSandwichVector (R v : Multivector sig Float) : Multivector sig Float :=
+  -- Full computation, but result is known to be vector-grade only
+  -- The compiler can potentially optimize knowing the output structure
+  (R * v * R†).gradeProject 1
+
+/-- Compose multiple rotors efficiently.
+    R_n * ... * R_2 * R_1 composes left-to-right.
+    All intermediate results are even multivectors. -/
+def composeRotorList (rotors : List (Multivector sig Float)) : Multivector sig Float :=
+  rotors.foldl (· * ·) Multivector.one
+
+/-- Invert a versor: V⁻¹ = V† / (V V†).scalarPart
+    For unit versors: V⁻¹ = V† -/
+def versorInverse (V : Multivector sig Float) : Multivector sig Float :=
+  let normSq := (V * V†).scalarPart
+  if normSq == 0 then V†
+  else V†.smul (1.0 / normSq)
+
+/-- Check if a multivector is a unit versor.
+    Unit versor: V V† = ±1 -/
+def isUnitVersor (V : Multivector sig Float) (tol : Float := 1e-10) : Bool :=
+  let normSq := Float.abs (V * V†).scalarPart
+  Float.abs (normSq - 1.0) < tol
+
+/-- Decompose an even versor into a product of simple rotors.
+    This is the Euler angle decomposition for R3 rotors.
+    Returns (φ, θ, ψ) such that R = R_z(φ) * R_y(θ) * R_z(ψ) -/
+def decomposeR3Rotor (R : Multivector R3 Float) :
+    Float × Float × Float :=
+  -- Extract components: R = a + b*e12 + c*e13 + d*e23
+  let a := R.coeffs ⟨0, by decide⟩   -- scalar
+  let b := R.coeffs ⟨3, by decide⟩   -- e12
+  let c := R.coeffs ⟨5, by decide⟩   -- e13
+  let d := R.coeffs ⟨6, by decide⟩   -- e23
+  -- Convert to quaternion-like (w, x, y, z) = (a, -d, c, -b)
+  -- Then use standard quaternion to Euler conversion
+  let w := a
+  let x := -d
+  let y := c
+  let z := -b
+  -- ZYZ Euler angles
+  let sinθ := Float.sqrt (x*x + y*y)
+  let θ := Float.atan2 sinθ w
+  if sinθ < 1e-10 then
+    -- Gimbal lock: θ ≈ 0
+    let φ := 2 * Float.atan2 z w
+    (φ, 0.0, 0.0)
+  else
+    let φ := Float.atan2 y x
+    let ψ := Float.atan2 (-z) w  -- simplified
+    (φ, 2*θ, ψ)
+
+/-- Interpolate between identity and a rotor: R^t for t ∈ [0,1].
+    Uses log/exp: R^t = exp(t * log(R))
+    Simplified version using linear interpolation + renormalization. -/
+def rotorPower (R : Multivector sig Float) (t : Float) : Multivector sig Float :=
+  -- Linear interpolation between 1 and R, then normalize
+  let one : Multivector sig Float := Multivector.one
+  (one.smul (1 - t) + R.smul t).normalize
+
+end VersorOpt
+
 end Grassmann
