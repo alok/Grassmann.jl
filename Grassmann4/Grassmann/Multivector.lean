@@ -48,16 +48,20 @@ theorem ext {a b : Multivector sig F} (h : ∀ i, a.coeffs i = b.coeffs i) : a =
 /-! ### Constructors -/
 
 /-- Zero multivector -/
+@[inline]
 def zero : Multivector sig F := ⟨fun _ => 0⟩
 
 /-- Scalar multivector -/
+@[inline]
 def scalar (x : F) : Multivector sig F :=
   ⟨fun i => if i.val = 0 then x else 0⟩
 
 /-- Unit scalar -/
+@[inline]
 def one : Multivector sig F := scalar 1
 
 /-- Basis vector e_i -/
+@[inline]
 def basis (i : Fin n) : Multivector sig F :=
   ⟨fun j => if j.val = 1 <<< i.val then 1 else 0⟩
 
@@ -72,6 +76,7 @@ def ofBlade (b : Blade sig) : Multivector sig F :=
 /-! ### Coefficient Access -/
 
 /-- Get coefficient of a specific blade -/
+@[inline]
 def coeff (m : Multivector sig F) (b : Blade sig) : F :=
   m.coeffs ⟨b.bits.toNat, by
     have h := b.bits.isLt
@@ -79,6 +84,7 @@ def coeff (m : Multivector sig F) (b : Blade sig) : F :=
     exact h⟩
 
 /-- Get scalar part (grade 0) -/
+@[inline]
 def scalarPart (m : Multivector sig F) : F :=
   m.coeffs ⟨0, Nat.two_pow_pos n⟩
 
@@ -91,27 +97,33 @@ def setCoeff (m : Multivector sig F) (b : Blade sig) (x : F) : Multivector sig F
 /-! ### Grade Operations -/
 
 /-- Extract grade-k part of a multivector -/
+@[inline]
 def gradeProject (m : Multivector sig F) (k : ℕ) : Multivector sig F :=
   ⟨fun i =>
     if grade (BitVec.ofNat n i.val) = k then m.coeffs i
     else 0⟩
 
 /-- Grade 0 (scalar) projection -/
+@[inline]
 def grade0 (m : Multivector sig F) : Multivector sig F := m.gradeProject 0
 
 /-- Grade 1 (vector) projection -/
+@[inline]
 def grade1 (m : Multivector sig F) : Multivector sig F := m.gradeProject 1
 
 /-- Grade 2 (bivector) projection -/
+@[inline]
 def grade2 (m : Multivector sig F) : Multivector sig F := m.gradeProject 2
 
 /-- Even part (grades 0, 2, 4, ...) -/
+@[inline]
 def evenPart (m : Multivector sig F) : Multivector sig F :=
   ⟨fun i =>
     if grade (BitVec.ofNat n i.val) % 2 = 0 then m.coeffs i
     else 0⟩
 
 /-- Odd part (grades 1, 3, 5, ...) -/
+@[inline]
 def oddPart (m : Multivector sig F) : Multivector sig F :=
   ⟨fun i =>
     if grade (BitVec.ofNat n i.val) % 2 = 1 then m.coeffs i
@@ -120,18 +132,22 @@ def oddPart (m : Multivector sig F) : Multivector sig F :=
 /-! ### Basic Algebra -/
 
 /-- Add two multivectors -/
+@[inline]
 def add (a b : Multivector sig F) : Multivector sig F :=
   ⟨fun i => a.coeffs i + b.coeffs i⟩
 
 /-- Subtract multivectors -/
+@[inline]
 def sub (a b : Multivector sig F) : Multivector sig F :=
   ⟨fun i => a.coeffs i - b.coeffs i⟩
 
 /-- Negate a multivector -/
+@[inline]
 def neg (m : Multivector sig F) : Multivector sig F :=
   ⟨fun i => -m.coeffs i⟩
 
 /-- Scale by a scalar -/
+@[inline]
 def smul (x : F) (m : Multivector sig F) : Multivector sig F :=
   ⟨fun i => x * m.coeffs i⟩
 
@@ -173,6 +189,7 @@ private def conjugateSignTable (n : ℕ) : Array Bool :=
 /-- Reverse (dagger): reverses order of basis vectors.
     For grade k: multiplies by (-1)^(k(k-1)/2)
     Uses precomputed sign table for O(1) sign lookup per coefficient. -/
+@[inline]
 def reverse (m : Multivector sig F) : Multivector sig F :=
   let signs := reverseSignTable n
   ⟨fun i =>
@@ -182,6 +199,7 @@ def reverse (m : Multivector sig F) : Multivector sig F :=
 
 /-- Grade involution: multiplies grade k by (-1)^k
     Uses precomputed sign table for O(1) sign lookup per coefficient. -/
+@[inline]
 def involute (m : Multivector sig F) : Multivector sig F :=
   let signs := involuteSignTable n
   ⟨fun i =>
@@ -192,6 +210,7 @@ def involute (m : Multivector sig F) : Multivector sig F :=
 /-- Clifford conjugate: reverse composed with involute.
     For grade k: multiplies by (-1)^(k(k+1)/2)
     Uses precomputed sign table for O(1) sign lookup per coefficient. -/
+@[inline]
 def conjugate (m : Multivector sig F) : Multivector sig F :=
   let signs := conjugateSignTable n
   ⟨fun i =>
@@ -216,6 +235,7 @@ private def allIndices (n : ℕ) : List (Fin (2^n)) :=
 /-- Geometric product of two multivectors.
     O(4^n) forward iteration: for each input pair (i,j), accumulate to output[i XOR j].
     Results are computed once and cached in an Array for O(1) coefficient access. -/
+@[specialize]
 def geometricProduct (a b : Multivector sig F) : Multivector sig F :=
   let size := 2^n
   let indices := allIndices n
@@ -229,16 +249,16 @@ def geometricProduct (a b : Multivector sig F) : Multivector sig F :=
       if sign == 0 then arr2  -- Degenerate case: no contribution
       else
         let resultIdx := (bi.bits ^^^ bj.bits).toNat
-        if resultIdx < size then
-          let coeff := a.coeffs i * b.coeffs j
-          let contrib := if sign < 0 then -coeff else coeff
-          arr2.modify resultIdx (· + contrib)
-        else arr2
+        let coeff := a.coeffs i * b.coeffs j
+        let contrib := if sign < 0 then -coeff else coeff
+        let old := arr2.getD resultIdx 0
+        arr2.set! resultIdx (old + contrib)
   -- Wrap array lookup in Multivector function interface
   ⟨fun k => resultArray.getD k.val 0⟩
 
 /-- Wedge product of two multivectors.
     O(4^n) forward iteration: only contributes when blades share no basis vectors. -/
+@[specialize]
 def wedgeProduct (a b : Multivector sig F) : Multivector sig F :=
   let size := 2^n
   let indices := allIndices n
@@ -248,19 +268,19 @@ def wedgeProduct (a b : Multivector sig F) : Multivector sig F :=
       let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
       if (bi.bits &&& bj.bits) = 0 then
         let resultIdx := (bi.bits ||| bj.bits).toNat
-        if resultIdx < size then
-          let sign := wedgeSign sig bi bj
-          if sign ≠ 0 then
-            let coeff := a.coeffs i * b.coeffs j
-            let contrib := if sign < 0 then -coeff else coeff
-            arr2.modify resultIdx (· + contrib)
-          else arr2
+        let sign := wedgeSign sig bi bj
+        if sign ≠ 0 then
+          let coeff := a.coeffs i * b.coeffs j
+          let contrib := if sign < 0 then -coeff else coeff
+          let old := arr2.getD resultIdx 0
+          arr2.set! resultIdx (old + contrib)
         else arr2
       else arr2
   ⟨fun k => resultArray.getD k.val 0⟩
 
 /-- Left contraction of a into b.
     O(4^n) forward iteration: only contributes when first blade contained in second. -/
+@[specialize]
 def leftContract (a b : Multivector sig F) : Multivector sig F :=
   let size := 2^n
   let indices := allIndices n
@@ -273,11 +293,10 @@ def leftContract (a b : Multivector sig F) : Multivector sig F :=
         if sign == 0 then arr2  -- Degenerate case
         else
           let resultIdx := (bi.bits ^^^ bj.bits).toNat
-          if resultIdx < size then
-            let coeff := a.coeffs i * b.coeffs j
-            let contrib := if sign < 0 then -coeff else coeff
-            arr2.modify resultIdx (· + contrib)
-          else arr2
+          let coeff := a.coeffs i * b.coeffs j
+          let contrib := if sign < 0 then -coeff else coeff
+          let old := arr2.getD resultIdx 0
+          arr2.set! resultIdx (old + contrib)
       else arr2
   ⟨fun k => resultArray.getD k.val 0⟩
 
@@ -286,6 +305,7 @@ instance : Mul (Multivector sig F) := ⟨Multivector.geometricProduct⟩
 /-- Geometric product using precomputed sign table.
     For n ≤ 5, this is faster than computing signs on-the-fly.
     Build the table once with `buildSignTable sig`, then reuse for all products. -/
+@[specialize]
 def geometricProductWithTable (table : SignTable n) (a b : Multivector sig F) : Multivector sig F :=
   let size := 2^n
   let indices := allIndices n
@@ -295,11 +315,10 @@ def geometricProductWithTable (table : SignTable n) (a b : Multivector sig F) : 
       if sign == 0 then arr2
       else
         let resultIdx := i.val ^^^ j.val  -- XOR for result blade index
-        if resultIdx < size then
-          let coeff := a.coeffs i * b.coeffs j
-          let contrib := if sign < 0 then -coeff else coeff
-          arr2.modify resultIdx (· + contrib)
-        else arr2
+        let coeff := a.coeffs i * b.coeffs j
+        let contrib := if sign < 0 then -coeff else coeff
+        let old := arr2.getD resultIdx 0
+        arr2.set! resultIdx (old + contrib)
   ⟨fun k => resultArray.getD k.val 0⟩
 
 /-- Wedge product using precomputed sign table -/
@@ -315,11 +334,10 @@ def wedgeProductWithTable (table : SignTable n) (a b : Multivector sig F) : Mult
         if sign == 0 then arr2
         else
           let resultIdx := i.val ^^^ j.val
-          if resultIdx < size then
-            let coeff := a.coeffs i * b.coeffs j
-            let contrib := if sign < 0 then -coeff else coeff
-            arr2.modify resultIdx (· + contrib)
-          else arr2
+          let coeff := a.coeffs i * b.coeffs j
+          let contrib := if sign < 0 then -coeff else coeff
+          let old := arr2.getD resultIdx 0
+          arr2.set! resultIdx (old + contrib)
   ⟨fun k => resultArray.getD k.val 0⟩
 
 infixl:65 " ⋀ᵐ " => Multivector.wedgeProduct  -- Use different symbol to avoid conflict
@@ -332,6 +350,7 @@ Use HMul to dispatch to these when multiplying a blade with a multivector.
 -/
 
 /-- Left multiply by blade: b * m. O(2^n) - iterates only over m's indices. -/
+@[specialize]
 def bladeLeftMul (b : Blade sig) (m : Multivector sig F) : Multivector sig F :=
   let size := 2^n
   let indices := allIndices n
@@ -341,14 +360,14 @@ def bladeLeftMul (b : Blade sig) (m : Multivector sig F) : Multivector sig F :=
     if sign == 0 then arr
     else
       let resultIdx := (b.bits ^^^ bj.bits).toNat
-      if resultIdx < size then
-        let coeff := m.coeffs j
-        let contrib := if sign < 0 then -coeff else coeff
-        arr.modify resultIdx (· + contrib)
-      else arr
+      let coeff := m.coeffs j
+      let contrib := if sign < 0 then -coeff else coeff
+      let old := arr.getD resultIdx 0
+      arr.set! resultIdx (old + contrib)
   ⟨fun k => resultArray.getD k.val 0⟩
 
 /-- Right multiply by blade: m * b. O(2^n) - iterates only over m's indices. -/
+@[specialize]
 def bladeRightMul (m : Multivector sig F) (b : Blade sig) : Multivector sig F :=
   let size := 2^n
   let indices := allIndices n
@@ -358,11 +377,10 @@ def bladeRightMul (m : Multivector sig F) (b : Blade sig) : Multivector sig F :=
     if sign == 0 then arr
     else
       let resultIdx := (bi.bits ^^^ b.bits).toNat
-      if resultIdx < size then
-        let coeff := m.coeffs i
-        let contrib := if sign < 0 then -coeff else coeff
-        arr.modify resultIdx (· + contrib)
-      else arr
+      let coeff := m.coeffs i
+      let contrib := if sign < 0 then -coeff else coeff
+      let old := arr.getD resultIdx 0
+      arr.set! resultIdx (old + contrib)
   ⟨fun k => resultArray.getD k.val 0⟩
 
 /-- HMul: Blade × Multivector → Multivector (O(2^n) specialized) -/
@@ -390,6 +408,7 @@ prefix:max "⋆ᵐ" => Multivector.hodgeDual
 /-! ### Norms -/
 
 /-- Squared norm: scalar part of m * m† -/
+@[inline]
 def normSq (m : Multivector sig F) : F :=
   (m * m†).scalarPart
 
@@ -400,6 +419,7 @@ def normSqRev (m : Multivector sig F) : F :=
 /-! ### Scalar Product -/
 
 /-- Scalar product of two multivectors: ⟨a†b⟩₀ -/
+@[inline]
 def scalarProduct (a b : Multivector sig F) : F :=
   (a† * b).scalarPart
 
@@ -419,11 +439,10 @@ def rightContract (a b : Multivector sig F) : Multivector sig F :=
         if sign == 0 then arr2  -- Degenerate case
         else
           let resultIdx := (bi.bits ^^^ bj.bits).toNat
-          if resultIdx < size then
-            let coeff := a.coeffs i * b.coeffs j
-            let contrib := if sign < 0 then -coeff else coeff
-            arr2.modify resultIdx (· + contrib)
-          else arr2
+          let coeff := a.coeffs i * b.coeffs j
+          let contrib := if sign < 0 then -coeff else coeff
+          let old := arr2.getD resultIdx 0
+          arr2.set! resultIdx (old + contrib)
       else arr2
   ⟨fun k => resultArray.getD k.val 0⟩
 
@@ -475,6 +494,7 @@ def inv [Div F] (m : Multivector sig F) : Multivector sig F :=
 /-! ### Sandwich Product -/
 
 /-- Sandwich product: a * x * a† (for rotations/reflections) -/
+@[inline]
 def sandwich (a x : Multivector sig F) : Multivector sig F :=
   a * x * a†
 

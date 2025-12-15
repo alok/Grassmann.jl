@@ -128,7 +128,7 @@ def parityJoinFull (a b : ℕ) (dim : ℕ) (metric degenerate : ℕ) : Option Bo
 
 /-- Sign when multiplying blade a by blade b (geometric product).
     Returns 1, -1, or 0 (when shared degenerate basis vectors cause cancellation). -/
-@[specialize]
+@[inline, specialize]
 def geometricSign (sig : Signature n) (a b : Blade sig) : Int :=
   -- Check for shared degenerate basis vectors (result is zero)
   if hasSharedDegenerate a.bits.toNat b.bits.toNat sig.degenerate.toNat then 0
@@ -175,7 +175,7 @@ def geometricSignFromTable (table : SignTable n) (i j : Nat) : Int :=
 
 /-- Sign for wedge product (exterior product).
     Zero if blades share any basis vectors. -/
-@[specialize]
+@[inline, specialize]
 def wedgeSign (sig : Signature n) (a b : Blade sig) : Int :=
   if (a.bits &&& b.bits) != 0 then 0
   else if parityJoinBasic a.bits.toNat b.bits.toNat n then -1 else 1

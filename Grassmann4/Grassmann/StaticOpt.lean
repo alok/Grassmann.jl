@@ -24,11 +24,37 @@
   | even * even      | O(4^n)     | O(4^(n-1))     | ~4x     |
 -/
 import Grassmann.GradeSet
+import Grassmann.BladeIndex
 import Grassmann.SignTables
 
 namespace Grassmann
 
 variable {n : ℕ} {sig : Signature n} {F : Type*} [Ring F]
+
+/-- Even‑left geometric product: assumes `a` has only even coefficients.
+    Skips all odd `i` indices (via cached grade-set index tables). -/
+@[specialize]
+def geometricProductEvenLeft (a b : Multivector sig F)
+    : Multivector sig F :=
+  let idxEven : Array (Fin (2 ^ n)) := gradeSetIndicesFastArray n (GradeSet.even n)
+  let idxAll : Array (Fin (2 ^ n)) := gradeSetIndicesFastArray n (GradeSet.full n)
+  geometricProductSparseArray (sig := sig) (n := n) a b idxEven idxAll
+
+/-- Even‑right geometric product: assumes `b` has only even coefficients.
+    Skips all odd `j` indices. Mirrors `geometricProductEvenLeft`. -/
+@[specialize]
+def geometricProductEvenRight (a b : Multivector sig F)
+    : Multivector sig F :=
+  let idxEven : Array (Fin (2 ^ n)) := gradeSetIndicesFastArray n (GradeSet.even n)
+  let idxAll : Array (Fin (2 ^ n)) := gradeSetIndicesFastArray n (GradeSet.full n)
+  geometricProductSparseArray (sig := sig) (n := n) a b idxAll idxEven
+
+/-- Even × even geometric product: skips odd rows and cols. -/
+@[specialize]
+def geometricProductEvenEven (a b : Multivector sig F)
+    : Multivector sig F :=
+  let idxEven : Array (Fin (2 ^ n)) := gradeSetIndicesFastArray n (GradeSet.even n)
+  geometricProductSparseArray (sig := sig) (n := n) a b idxEven idxEven
 
 /-! ## Optimized Sandwich Products
 
@@ -45,22 +71,26 @@ We provide optimized versions that skip unnecessary computations.
     - vector stays vector
     - bivector stays bivector
     This lets us skip half the computations. -/
+@[inline]
 def sandwichEvenOpt (a x : Multivector sig F) : Multivector sig F :=
-  -- For now, use the standard sandwich from Multivector
-  -- TODO: exploit grade preservation to skip odd*even blocks
-  a.sandwich x
+  let aEven := a.evenPart
+  let aRev := aEven.reverse
+  let ax := geometricProductEvenLeft (sig := sig) (n := n) aEven x
+  geometricProductEvenRight (sig := sig) (n := n) ax aRev
 
 /-- Reflection of x through hyperplane with unit normal n.
     Formula: -n * x * n (note the minus sign for proper reflection)
 
     For a vector v: reflects v in the plane perpendicular to n
     For a bivector B: rotates B by π around n -/
+@[inline]
 def reflectThrough (normal x : Multivector sig F) : Multivector sig F :=
   -(normal * x * normal)
 
 /-- Rotation of x by rotor R.
     Rotor is even: R = cos(θ/2) + sin(θ/2)B where B is unit bivector.
     Formula: R * x * R† -/
+@[inline]
 def rotateBy (rotor x : Multivector sig F) : Multivector sig F :=
   rotor.sandwich x
 
@@ -114,32 +144,11 @@ R₁ * R₂ is another rotor (even multivector).
     Since even * even = even, we can skip odd-grade computations.
 
     This is ~4x faster than full geometric product. -/
+@[specialize]
 def composeRotorsOpt (r1 r2 : Multivector sig F) : Multivector sig F :=
-  -- Use even × even optimization
-  let size := 2^n
-  let indices := List.finRange size
-  let resultArray := indices.foldl (init := Array.replicate size (0 : F)) fun arr i =>
-    -- Skip if r1[i] is in odd grade
-    let gi := grade (BitVec.ofNat n i.val)
-    if gi % 2 != 0 then arr
-    else
-      indices.foldl (init := arr) fun arr2 j =>
-        -- Skip if r2[j] is in odd grade
-        let gj := grade (BitVec.ofNat n j.val)
-        if gj % 2 != 0 then arr2
-        else
-          let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
-          let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
-          let sign := geometricSign sig bi bj
-          if sign == 0 then arr2
-          else
-            let resultIdx := (bi.bits ^^^ bj.bits).toNat
-            if resultIdx < size then
-              let coeff := r1.coeffs i * r2.coeffs j
-              let contrib := if sign < 0 then -coeff else coeff
-              arr2.modify resultIdx (· + contrib)
-            else arr2
-  ⟨fun k => resultArray.getD k.val 0⟩
+  let r1e := r1.evenPart
+  let r2e := r2.evenPart
+  geometricProductEvenEven (sig := sig) (n := n) r1e r2e
 
 /-! ## Pattern-Specific Functions for Common Signatures -/
 
@@ -147,21 +156,25 @@ namespace R3Opt
 
 /-- R3-specific rotation: rotate vector by rotor.
     Exploits: R3 rotors are scalar+bivector, vectors stay vectors. -/
+@[inline]
 def rotateVector (rotor v : Multivector R3 Float) : Multivector R3 Float :=
   rotateBy rotor v
 
 /-- R3 double rotation: apply two rotors as R2 * R1 * v * R1† * R2†.
     Equivalent to (R2 * R1) * v * (R2 * R1)† = R_combined * v * R_combined†. -/
+@[inline]
 def rotateVectorTwice (r1 r2 v : Multivector R3 Float) : Multivector R3 Float :=
   let r_combined := composeRotorsOpt r2 r1
   rotateBy r_combined v
 
 /-- R3 vector dot product via GA: v · w = ½(vw + wv) = scalar part of vw. -/
+@[inline]
 def dotProduct (v w : Multivector R3 Float) : Float :=
   (v * w).scalarPart
 
 /-- R3 vector cross product via GA: v × w = -dual(v ∧ w).
     Returns a vector (grade 1). -/
+@[inline]
 def crossProduct (v w : Multivector R3 Float) : Multivector R3 Float :=
   -- v ∧ w is a bivector, its Hodge dual is a vector
   -(v ⋀ᵐ w).hodgeDual
@@ -180,6 +193,7 @@ These provide compositional building blocks for geometric transformations.
     - Vectors parallel to n are negated
     - Vectors perpendicular to n are unchanged
     - Bivectors are rotated by π around n -/
+@[inline]
 def reflectHyperplane (n x : Multivector sig F) : Multivector sig F :=
   -(n * x * n)
 
@@ -189,6 +203,7 @@ def reflectHyperplane (n x : Multivector sig F) : Multivector sig F :=
     is the angle between the planes.
 
     rotation = n2 * n1 (a rotor) -/
+@[inline]
 def reflectionPairToRotor (n1 n2 : Multivector sig F) : Multivector sig F :=
   n2 * n1
 
@@ -196,6 +211,7 @@ def reflectionPairToRotor (n1 n2 : Multivector sig F) : Multivector sig F :=
     n reflections compose as: nₙ * ... * n₂ * n₁ * x * n₁ * n₂ * ... * nₙ
     Even number of reflections → rotation
     Odd number of reflections → rotoreflection -/
+@[inline]
 def applyReflections (normals : List (Multivector sig F)) (x : Multivector sig F) :
     Multivector sig F :=
   normals.foldl (fun acc n => -(n * acc * n)) x
@@ -204,6 +220,7 @@ def applyReflections (normals : List (Multivector sig F)) (x : Multivector sig F
     R = cos(θ/2) + sin(θ/2) * B where B is a unit bivector.
 
     Note: The bivector B should be normalized (B² = ±1). -/
+@[inline]
 def buildRotorFromHalfAngle (bivector : Multivector sig F) (cosHalf sinHalf : F) :
     Multivector sig F :=
   -- R = cosHalf + sinHalf * B
@@ -227,16 +244,19 @@ For dimensions ≤ 5, use precomputed sign tables.
 -/
 
 /-- Sandwich product with precomputed table -/
+@[inline]
 def sandwichWithTable (table : SignTable n)
     (a x : Multivector sig F) : Multivector sig F :=
   let ax := Multivector.geometricProductWithTable table a x
   Multivector.geometricProductWithTable table ax a†
 
 /-- R3 sandwich with precomputed table -/
+@[inline]
 def sandwichR3Table (a x : Multivector R3 Float) : Multivector R3 Float :=
   sandwichWithTable R3SignTable a x
 
 /-- PGA3 sandwich with precomputed table -/
+@[inline]
 def sandwichPGA3Table (a x : Multivector PGA3 Float) : Multivector PGA3 Float :=
   sandwichWithTable PGA3SignTable a x
 

@@ -20,6 +20,7 @@
   - Double cover of SO(3)
 -/
 import Grassmann.Multivector
+import Grassmann.EvenMV
 import Grassmann.Proof
 
 open Grassmann.Proof
@@ -29,104 +30,56 @@ namespace Grassmann
 /-! ## Spinor Type
 
 A spinor is the even part of a multivector.
-For efficiency, we could store only even-grade coefficients,
-but for simplicity we use full multivectors with odd part zero.
+We now store only even-grade coefficients in `EvenMV`,
+halving both memory and arithmetic costs.
 -/
 
 variable {n : ℕ} {sig : Signature n} {F : Type*}
 variable [Ring F] [Div F]
 
 /-- A spinor is an even-grade multivector.
-    The invariant `isEven` ensures mv.oddPart = 0. -/
+    The packed representation guarantees evenness by construction. -/
 structure Spinor (sig : Signature n) (F : Type*) [Ring F] where
   /-- The underlying even multivector -/
-  mv : Multivector sig F
-  /-- Proof that the multivector has no odd-grade components -/
-  isEven : mv.oddPart = Multivector.zero
+  mv : EvenMV sig F
 
 namespace Spinor
 
 /-- Convert spinor to multivector -/
-def toMultivector (s : Spinor sig F) : Multivector sig F := s.mv
-
-/-- Proof that evenPart has no odd components.
-    Computational verification: evenPart sets all odd-grade coeffs to 0,
-    so oddPart (which extracts odd-grade coeffs) returns 0. -/
-private theorem evenPart_isEven (m : Multivector sig F) :
-    m.evenPart.oddPart = Multivector.zero := by sorry_proof
-
-/-- Proof that scalar 1 is even.
-    Computational verification: scalar 1 has coefficient only at index 0,
-    which has grade 0 (even). -/
-private theorem one_isEven : (Multivector.one : Multivector sig F).oddPart = Multivector.zero := by
-  sorry_proof
-
-/-- Proof that zero is even.
-    Computational verification: zero has all coefficients 0. -/
-private theorem zero_isEven : (Multivector.zero : Multivector sig F).oddPart = Multivector.zero := by
-  sorry_proof
+def toMultivector (s : Spinor sig F) : Multivector sig F := s.mv.toMultivector
 
 /-- Create spinor from even multivector (projects to even part) -/
-def ofEven (m : Multivector sig F) : Spinor sig F := ⟨m.evenPart, evenPart_isEven m⟩
+def ofEven (m : Multivector sig F) : Spinor sig F :=
+  ⟨EvenMV.ofMultivectorEven (sig := sig) (n := n) m⟩
 
 /-- Identity spinor (scalar 1) -/
-def one : Spinor sig F := ⟨Multivector.one, one_isEven⟩
+def one : Spinor sig F := ⟨EvenMV.one (sig := sig) (n := n) (F := F)⟩
 
 /-- Zero spinor -/
-def zero : Spinor sig F := ⟨Multivector.zero, zero_isEven⟩
-
-/-- Proof that product of even elements is even.
-    evenPart projection ensures result is even. -/
-private theorem mul_isEven (a b : Spinor sig F) :
-    (a.mv * b.mv).evenPart.oddPart = Multivector.zero :=
-  evenPart_isEven _
-
-/-- Proof that reverse of even is even.
-    Reverse preserves grade parity. -/
-private theorem reverse_isEven (s : Spinor sig F) :
-    s.mv†.oddPart = Multivector.zero := by sorry_proof
-
-/-- Proof that sum of even elements is even.
-    Grade is determined by index, sum preserves this. -/
-private theorem add_isEven (a b : Spinor sig F) :
-    (a.mv.add b.mv).oddPart = Multivector.zero := by sorry_proof
-
-/-- Proof that difference of even elements is even.
-    Grade is determined by index, difference preserves this. -/
-private theorem sub_isEven (a b : Spinor sig F) :
-    (a.mv.sub b.mv).oddPart = Multivector.zero := by sorry_proof
-
-/-- Proof that scaled even element is even.
-    Scaling doesn't change which indices are non-zero. -/
-private theorem smul_isEven (x : F) (s : Spinor sig F) :
-    (s.mv.smul x).oddPart = Multivector.zero := by sorry_proof
-
-/-- Proof that negated even element is even.
-    Negation doesn't change which indices are non-zero. -/
-private theorem neg_isEven (s : Spinor sig F) :
-    s.mv.neg.oddPart = Multivector.zero := by sorry_proof
+def zero : Spinor sig F := ⟨EvenMV.zero (sig := sig) (n := n) (F := F)⟩
 
 /-- Spinor multiplication (geometric product of even elements is even) -/
 def mul (a b : Spinor sig F) : Spinor sig F :=
-  ⟨(a.mv * b.mv).evenPart, mul_isEven a b⟩
+  ⟨a.mv * b.mv⟩
 
 /-- Spinor reverse -/
-def reverse (s : Spinor sig F) : Spinor sig F := ⟨s.mv†, reverse_isEven s⟩
+def reverse (s : Spinor sig F) : Spinor sig F := ⟨s.mv†ᵉ⟩
 
 /-- Scalar part of spinor -/
-def scalarPart (s : Spinor sig F) : F := s.mv.scalarPart
+def scalarPart (s : Spinor sig F) : F :=
+  s.mv.coeffs ⟨0, Nat.two_pow_pos (n - 1)⟩
 
 /-- Add spinors -/
-def add (a b : Spinor sig F) : Spinor sig F := ⟨a.mv.add b.mv, add_isEven a b⟩
+def add (a b : Spinor sig F) : Spinor sig F := ⟨a.mv + b.mv⟩
 
 /-- Subtract spinors -/
-def sub (a b : Spinor sig F) : Spinor sig F := ⟨a.mv.sub b.mv, sub_isEven a b⟩
+def sub (a b : Spinor sig F) : Spinor sig F := ⟨a.mv - b.mv⟩
 
 /-- Scale spinor -/
-def smul (x : F) (s : Spinor sig F) : Spinor sig F := ⟨s.mv.smul x, smul_isEven x s⟩
+def smul (x : F) (s : Spinor sig F) : Spinor sig F := ⟨x • s.mv⟩
 
 /-- Negate spinor -/
-def neg (s : Spinor sig F) : Spinor sig F := ⟨s.mv.neg, neg_isEven s⟩
+def neg (s : Spinor sig F) : Spinor sig F := ⟨-s.mv⟩
 
 instance : Zero (Spinor sig F) := ⟨Spinor.zero⟩
 instance : One (Spinor sig F) := ⟨Spinor.one⟩
@@ -141,7 +94,7 @@ Spinor → Multivector is a safe coercion (zero cost, just unwrapping).
 -/
 
 @[coe]
-def coeToMultivector (s : Spinor sig F) : Multivector sig F := s.mv
+def coeToMultivector (s : Spinor sig F) : Multivector sig F := s.mv.toMultivector
 
 instance : Coe (Spinor sig F) (Multivector sig F) := ⟨coeToMultivector⟩
 
@@ -154,7 +107,15 @@ def normSq (s : Spinor sig F) : F := (s * s†ˢ).scalarPart
 
 /-- Apply spinor as rotation: v' = s v s̃ -/
 def rotate (s : Spinor sig F) (v : Multivector sig F) : Multivector sig F :=
-  s.mv * v * s.mv†
+  EvenMV.sandwich (sig := sig) (n := n) s.mv v
+
+/-- Fast path for rotating a *vector* by a spinor: v' = s v s̃.
+    This assumes `v` has only grade-1 coefficients (a vector).
+
+    For full multivectors, use `rotate` (which preserves all grades). -/
+@[inline]
+def rotateVectorFast (s : Spinor sig F) (v : Multivector sig F) : Multivector sig F :=
+  EvenMV.sandwichVectorFast (sig := sig) (n := n) s.mv v
 
 /-- Compose two rotations: s₁₂ = s₁ s₂ -/
 def compose (s1 s2 : Spinor sig F) : Spinor sig F := s1 * s2

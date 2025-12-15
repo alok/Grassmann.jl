@@ -75,19 +75,19 @@ def rotorFromAxisAngle (axis : Multivector R3 Float) (angle : Float) : Spinor R3
 def rotateAroundAxis (v : Multivector R3 Float) (axis : Multivector R3 Float)
     (angle : Float) : Multivector R3 Float :=
   let R := rotorFromAxisAngle axis angle
-  R.rotate v
+  R.rotateVectorFast v
 
 /-- Rotate a vector around the X-axis -/
 def rotateX (v : Multivector R3 Float) (angle : Float) : Multivector R3 Float :=
-  (rotorX angle).rotate v
+  (rotorX angle).rotateVectorFast v
 
 /-- Rotate a vector around the Y-axis -/
 def rotateY (v : Multivector R3 Float) (angle : Float) : Multivector R3 Float :=
-  (rotorY angle).rotate v
+  (rotorY angle).rotateVectorFast v
 
 /-- Rotate a vector around the Z-axis -/
 def rotateZ (v : Multivector R3 Float) (angle : Float) : Multivector R3 Float :=
-  (rotorZ angle).rotate v
+  (rotorZ angle).rotateVectorFast v
 
 /-! ## Projection Operations (using generic versions) -/
 

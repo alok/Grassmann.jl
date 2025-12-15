@@ -103,10 +103,21 @@ def geometricGradeSet (a b : GradeSet) (n : Nat) : GradeSet :=
   (List.range (n + 1)).foldl (init := 0) fun acc i =>
     (List.range (n + 1)).foldl (init := acc) fun acc2 j =>
       if a.contains i && b.contains j then
+        -- Grades that can appear in the geometric product of a grade-i and grade-j blade are
+        --   i + j, i + j - 2, i + j - 4, ...
+        -- equivalently the interval [|i-j|, min(i+j,n)] but only the parity class of (i+j).
+        --
+        -- Keeping parity here makes grade-tracking *useful* for performance: e.g. vector*vector
+        -- stays even (scalar+bivector), and even*even stays even, so sparse kernels skip the
+        -- odd grades entirely.
         let minGrade := if i ≥ j then i - j else j - i
-        let maxGrade := min (i + j) n
-        (List.range (maxGrade - minGrade + 1)).foldl (init := acc2) fun acc3 k =>
-          acc3 ||| (1 <<< (minGrade + k))
+        let maxGradeRaw := min (i + j) n
+        let maxGrade :=
+          if (maxGradeRaw % 2) = (minGrade % 2) then maxGradeRaw
+          else maxGradeRaw - 1
+        let count : Nat := (maxGrade - minGrade) / 2 + 1
+        (List.range count).foldl (init := acc2) fun acc3 t =>
+          acc3 ||| (1 <<< (minGrade + 2 * t))
       else acc2
 
 /-! ## Graded Multivector Type
@@ -175,6 +186,16 @@ def involute (gm : GradedMV sig F gs) : GradedMV sig F gs := ⟨gm.mvˆ⟩
 
 end GradedMV
 
+/-! ### Coercions
+
+`GradedMV` is a zero-cost wrapper around `Multivector` carrying extra
+compile-time grade metadata. Coercions keep the API ergonomic: you can pass a
+`GradedMV` anywhere a `Multivector` is expected without calling `.mv`. -/
+
+instance {n : ℕ} {sig : Signature n} {F : Type*} {gs : GradeSet} :
+    CoeTC (GradedMV sig F gs) (Multivector sig F) :=
+  ⟨fun gm => gm.mv⟩
+
 /-! ## Algebraic Identities with Grade Info
 
 Key identities that can be proven/used with grade tracking:
@@ -182,10 +203,10 @@ Key identities that can be proven/used with grade tracking:
 
 -- Vector squared produces scalar + bivector in the general case.
 -- In Euclidean R3, v² = scalar (but type system tracks upper bound).
-#eval geometricGradeSet GradeSet.vector GradeSet.vector 3  -- 7 = {0, 1, 2}
+#eval geometricGradeSet GradeSet.vector GradeSet.vector 3  -- 5 = {0, 2}
 
 -- Bivector squared produces grades 0, 2, 4 in general
-#eval geometricGradeSet GradeSet.bivector GradeSet.bivector 3  -- 15 = {0, 1, 2, 3}
+#eval geometricGradeSet GradeSet.bivector GradeSet.bivector 3  -- 5 = {0, 2}
 
 -- Even * even stays even
 #eval geometricGradeSet (GradeSet.even 3) (GradeSet.even 3) 3

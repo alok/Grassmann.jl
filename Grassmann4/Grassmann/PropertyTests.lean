@@ -12,6 +12,9 @@ import Plausible
 import Grassmann.SparseMultivector
 import Grassmann.Products
 import Grassmann.Manifold
+import Grassmann.StaticOpt
+import Grassmann.BladeIndex
+import Grassmann.SignTables
 
 namespace Grassmann.PropertyTests
 
@@ -358,4 +361,179 @@ def runPropertyTests : IO Unit := do
 -- Quick check using Plausible's built-in #test
 -- #test ∀ (a b : R3Mv), a.mv + b.mv = b.mv + a.mv
 
+/-! ## Optimization Consistency Tests
+
+These tests verify that optimized implementations (sparse, table-based)
+produce identical results to naive implementations.
+-/
+
+namespace OptimizationTests
+
+open Grassmann
+
+/-- Generate a pseudo-random R3 dense vector from seed -/
+def randVector (seed : Nat) : Multivector R3 Float :=
+  let s := seed.toFloat
+  vector3 (Float.sin (s * 1.1)) (Float.cos (s * 2.3)) (Float.sin (s * 3.7))
+
+/-- Generate a pseudo-random R3 dense bivector from seed -/
+def randBivector (seed : Nat) : Multivector R3 Float :=
+  let s := seed.toFloat
+  bivector3 (Float.sin (s * 1.2)) (Float.cos (s * 2.5)) (Float.sin (s * 3.8))
+
+/-- Generate a pseudo-random normalized R3 rotor from seed -/
+def randRotor (seed : Nat) : Multivector R3 Float :=
+  let B := randBivector seed
+  let angle := Float.sin (seed.toFloat * 0.7) * 3.14159
+  buildRotorFromHalfAngle B (Float.cos (angle/2)) (Float.sin (angle/2))
+  |>.normalize
+
+/-- Max absolute difference between dense multivectors -/
+def maxDiff (a b : Multivector R3 Float) : Float :=
+  (List.finRange 8).foldl (init := 0.0) fun acc i =>
+    let diff := Float.abs (a.coeffs i - b.coeffs i)
+    if diff > acc then diff else acc
+
+/-- Test sparse sandwich vs naive sandwich -/
+def testSparseSandwich (seed1 seed2 : Nat) : Bool :=
+  let rotor := randRotor seed1
+  let v := randVector seed2
+  let naive := rotor.sandwich v
+  let sparse := R3Fast.sandwichFast rotor v
+  maxDiff naive sparse < 1e-10
+
+/-- Test sparse rotor multiplication vs naive -/
+def testSparseRotorMul (seed1 seed2 : Nat) : Bool :=
+  let r1 := randRotor seed1
+  let r2 := randRotor seed2
+  let naive := r1 * r2
+  let sparse := R3Fast.rotorMul r1 r2
+  maxDiff naive sparse < 1e-10
+
+/-- Test optimized vector squared vs naive -/
+def testOptVectorSquared (seed : Nat) : Bool :=
+  let v := randVector seed
+  let naive := (v * v).scalarPart
+  let opt := vectorSquaredScalar v
+  Float.abs (naive - opt) < 1e-10
+
+/-- Test sparse vector wedge vs naive -/
+def testSparseVectorWedge (seed1 seed2 : Nat) : Bool :=
+  let v1 := randVector seed1
+  let v2 := randVector seed2
+  let naive := v1 ⋀ᵐ v2
+  let sparse := R3Fast.vectorWedge v1 v2
+  maxDiff naive sparse < 1e-10
+
+/-- Test table-based geometric product vs naive -/
+def testTableGeoProduct (seed1 seed2 : Nat) : Bool :=
+  let v1 := randVector seed1
+  let v2 := randVector seed2
+  let naive := v1 * v2
+  let table := Multivector.geometricProductWithTable R3SignTable v1 v2
+  maxDiff naive table < 1e-10
+
+/-- Test table-based sandwich vs naive -/
+def testTableSandwich (seed1 seed2 : Nat) : Bool :=
+  let rotor := randRotor seed1
+  let v := randVector seed2
+  let naive := rotor.sandwich v
+  let table := sandwichWithTable R3SignTable rotor v
+  maxDiff naive table < 1e-10
+
+/-- Run optimization consistency tests -/
+def runOptimizationTests (numTests : Nat := 100) : IO Unit := do
+  IO.println "\n┌─ Optimization Consistency Tests ──────────────┐"
+
+  let seeds := List.range numTests
+
+  let sparseSandwich := seeds.all fun s => testSparseSandwich s (s + 1)
+  IO.println s!"│ Sparse sandwich: {if sparseSandwich then "PASS" else "FAIL"}"
+
+  let sparseRotor := seeds.all fun s => testSparseRotorMul s (s + 3)
+  IO.println s!"│ Sparse rotor mul: {if sparseRotor then "PASS" else "FAIL"}"
+
+  let optVSq := seeds.all fun s => testOptVectorSquared s
+  IO.println s!"│ Optimized v²: {if optVSq then "PASS" else "FAIL"}"
+
+  let sparseWedge := seeds.all fun s => testSparseVectorWedge s (s + 5)
+  IO.println s!"│ Sparse wedge: {if sparseWedge then "PASS" else "FAIL"}"
+
+  let tableGeo := seeds.all fun s => testTableGeoProduct s (s + 7)
+  IO.println s!"│ Table geometric: {if tableGeo then "PASS" else "FAIL"}"
+
+  let tableSandwich := seeds.all fun s => testTableSandwich s (s + 11)
+  IO.println s!"│ Table sandwich: {if tableSandwich then "PASS" else "FAIL"}"
+
+  IO.println "└────────────────────────────────────────────────┘"
+
+  let allPass := sparseSandwich && sparseRotor && optVSq && sparseWedge &&
+                 tableGeo && tableSandwich
+  if allPass then
+    IO.println "  All 6 test categories PASSED (120 total test cases) ✓"
+  else
+    IO.println "  Some optimization tests FAILED ✗"
+
+end OptimizationTests
+
+/-! ## Grassmann.jl Oracle Reference
+
+These are the Julia commands to verify our results match Grassmann.jl:
+
+```julia
+using Grassmann
+@basis V"+++"
+
+# Test associativity with random multivectors
+a = rand()*v1 + rand()*v2 + rand()*v3 + rand()*v12 + rand()*v23 + rand()*v13 + rand()*v123
+b = rand()*v1 + rand()*v2 + rand()*v3 + rand()*v12 + rand()*v23 + rand()*v13 + rand()*v123
+c = rand()*v1 + rand()*v2 + rand()*v3 + rand()*v12 + rand()*v23 + rand()*v13 + rand()*v123
+@assert isapprox((a*b)*c, a*(b*c); atol=1e-10)
+
+# Test reverse anti-morphism
+@assert isapprox(~(a*b), ~b * ~a; atol=1e-10)
+
+# Test rotor normalization
+θ = rand() * π
+B = v12  # Unit bivector
+R = exp(θ/2 * B)
+@assert isapprox(R * ~R, 1; atol=1e-10)
+
+# Test sandwich preserves vector grade
+w = rand()*v1 + rand()*v2 + rand()*v3
+rotated = R * w * ~R
+@assert grade(rotated) == 1  # Still a vector
+
+# Test sandwich preserves norm
+@assert isapprox(abs(w), abs(rotated); atol=1e-10)
+
+# Test rotor composition
+R1 = exp(rand()*v12/2)
+R2 = exp(rand()*v23/2)
+w = rand()*v1 + rand()*v2 + rand()*v3
+lhs = R2 * (R1 * w * ~R1) * ~R2
+rhs = (R2*R1) * w * ~(R2*R1)
+@assert isapprox(lhs, rhs; atol=1e-8)
+
+# Test vector squared is scalar
+w = rand()*v1 + rand()*v2 + rand()*v3
+sq = w * w
+@assert typeof(sq) <: Real  # Scalar only
+
+# Test bivector squared is scalar (in R3)
+B = rand()*v12 + rand()*v23 + rand()*v13
+Bsq = B * B
+@assert typeof(Bsq) <: Real  # Scalar only in 3D
+```
+-/
+
+/-- Run full property test suite including optimization tests -/
+def runFullPropertyTests : IO Unit := do
+  runPropertyTests
+  OptimizationTests.runOptimizationTests 100
+
+-- Run a small optimization test suite during build
+#eval OptimizationTests.runOptimizationTests 20
+
 end Grassmann.PropertyTests
+

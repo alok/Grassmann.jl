@@ -40,25 +40,73 @@ def PGA3SignTable : SignTable 4 := buildSignTable PGA3
 /-- Precomputed sign table for CGA3 Cl(4,1) (32×32 = 1024 entries) -/
 def CGA3SignTable : SignTable 5 := buildSignTable CGA3
 
+/-! ## Cached Sign Table Selection
+
+We want fast defaults without users having to manually thread tables.
+This helper returns a precomputed table when `sig` is one of the canonical
+small signatures; otherwise it returns `none` and callers fall back to
+on‑the‑fly sign computation.
+-/
+
+variable {n : ℕ}
+
+/-- Lookup a cached sign table for common `Signature`s. -/
+@[inline]
+def cachedSignTable (sig : Signature n) : Option (SignTable n) :=
+  match n with
+  | 2 => if sig == R2 then some (R2SignTable) else none
+  | 3 => if sig == R3 then some (R3SignTable) else none
+  | 4 =>
+      if sig == R4 then some (R4SignTable)
+      else if sig == STA then some STASignTable
+      else if sig == PGA3 then some PGA3SignTable
+      else none
+  | 5 => if sig == CGA3 then some CGA3SignTable else none
+  | _ => none
+
+namespace Multivector
+
+variable {sig : Signature n} {F : Type*} [Ring F]
+
+/-- Geometric product that automatically uses cached sign tables when available. -/
+@[inline, specialize]
+def geometricProductFast (a b : Multivector sig F) : Multivector sig F :=
+  match cachedSignTable (n := n) sig with
+  | some table => Multivector.geometricProductWithTable table a b
+  | none => Multivector.geometricProduct a b
+
+end Multivector
+
+/-- Override the default `Mul` for dense multivectors with a table‑aware version.
+    This keeps APIs the same while making small canonical algebras fast by default. -/
+instance (priority := 1100) {n : ℕ} {sig : Signature n} {F : Type*} [Ring F] :
+    Mul (Multivector sig F) :=
+  ⟨Multivector.geometricProductFast (sig := sig) (n := n)⟩
+
 /-! ## Convenience Multiplication Functions -/
 
 /-- R3 geometric product with precomputed table -/
+@[inline]
 def mulR3 (a b : Multivector R3 Float) : Multivector R3 Float :=
   Multivector.geometricProductWithTable R3SignTable a b
 
 /-- R4 geometric product with precomputed table -/
+@[inline]
 def mulR4 (a b : Multivector R4 Float) : Multivector R4 Float :=
   Multivector.geometricProductWithTable R4SignTable a b
 
 /-- STA geometric product with precomputed table -/
+@[inline]
 def mulSTA (a b : Multivector STA Float) : Multivector STA Float :=
   Multivector.geometricProductWithTable STASignTable a b
 
 /-- PGA3 geometric product with precomputed table -/
+@[inline]
 def mulPGA3 (a b : Multivector PGA3 Float) : Multivector PGA3 Float :=
   Multivector.geometricProductWithTable PGA3SignTable a b
 
 /-- CGA3 geometric product with precomputed table -/
+@[inline]
 def mulCGA3 (a b : Multivector CGA3 Float) : Multivector CGA3 Float :=
   Multivector.geometricProductWithTable CGA3SignTable a b
 
