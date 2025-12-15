@@ -25,6 +25,7 @@ open Multivector LinearAlgebra
 /-! ## Grade Projection Properties -/
 
 /-- Grade projection is idempotent: ⟨⟨a⟩ₖ⟩ₖ = ⟨a⟩ₖ -/
+@[simp]
 theorem gradeProject_idem (a : Multivector sig F) (k : ℕ) :
     (a.gradeProject k).gradeProject k = a.gradeProject k := by
   ext i
@@ -40,6 +41,7 @@ theorem gradeProject_orthogonal (a : Multivector sig F) (j k : ℕ) (hjk : j ≠
   · omega
 
 /-- Grade projection of zero is zero -/
+@[simp]
 theorem gradeProject_zero (k : ℕ) : (0 : Multivector sig F).gradeProject k = 0 := by
   ext i; simp only [Multivector.gradeProject, Multivector.zero]; split_ifs <;> rfl
 
@@ -51,19 +53,23 @@ theorem gradeProject_add (a b : Multivector sig F) (k : ℕ) :
   split_ifs with h <;> first | rfl | exact (add_zero 0).symm
 
 /-- Even part is idempotent -/
+@[simp]
 theorem evenPart_idem (a : Multivector sig F) : a.evenPart.evenPart = a.evenPart := by
   ext i; simp only [Multivector.evenPart]; split_ifs <;> rfl
 
 /-- Odd part is idempotent -/
+@[simp]
 theorem oddPart_idem (a : Multivector sig F) : a.oddPart.oddPart = a.oddPart := by
   ext i; simp only [Multivector.oddPart]; split_ifs <;> rfl
 
 /-- Even part of odd part is zero -/
+@[simp]
 theorem evenPart_oddPart (a : Multivector sig F) : a.oddPart.evenPart = 0 := by
   ext i; simp only [Multivector.evenPart, Multivector.oddPart, Multivector.zero]
   split_ifs with h1 h2 <;> first | rfl | omega
 
 /-- Odd part of even part is zero -/
+@[simp]
 theorem oddPart_evenPart (a : Multivector sig F) : a.evenPart.oddPart = 0 := by
   ext i; simp only [Multivector.evenPart, Multivector.oddPart, Multivector.zero]
   split_ifs with h1 h2 <;> first | rfl | omega
@@ -90,18 +96,21 @@ theorem evenPart_oddPart_sum (a : Multivector sig F) : a.evenPart + a.oddPart = 
     exact zero_add _
 
 /-- Reverse of zero is zero -/
+@[simp]
 theorem reverse_zero : (0 : Multivector sig F)† = 0 := by
   ext i
   simp only [Multivector.reverse, Multivector.zero]
   split_ifs <;> first | rfl | exact neg_zero
 
 /-- Involute of zero is zero -/
+@[simp]
 theorem involute_zero : (0 : Multivector sig F)ˆ = 0 := by
   ext i
   simp only [Multivector.involute, Multivector.zero]
   split_ifs <;> first | rfl | exact neg_zero
 
 /-- Conjugate of zero is zero -/
+@[simp]
 theorem conjugate_zero : (0 : Multivector sig F)‡ = 0 := by
   ext i
   simp only [Multivector.conjugate, Multivector.zero]
@@ -197,14 +206,17 @@ theorem wedge_one (a : Multivector sig F) : a ⋀ᵐ 1 = a := sorry
 /-! ## Involution Properties -/
 
 /-- Reverse is an involution: (a†)† = a -/
+@[simp]
 theorem reverse_reverse (a : Multivector sig F) : a†† = a := by
   ext i; simp only [Multivector.reverse]; split_ifs <;> simp
 
 /-- Involute is an involution: (aˆ)ˆ = a -/
+@[simp]
 theorem involute_involute (a : Multivector sig F) : aˆˆ = a := by
   ext i; simp only [Multivector.involute]; split_ifs <;> simp
 
 /-- Conjugate is an involution: (a‡)‡ = a -/
+@[simp]
 theorem conjugate_conjugate (a : Multivector sig F) : a‡‡ = a := by
   ext i; simp only [Multivector.conjugate]; split_ifs <;> simp
 

@@ -147,6 +147,10 @@ end Couple
 /-- Complex numbers as Couple over Cl(0,1) with blade e₁ where e₁² = -1 -/
 abbrev Complex' (F : Type*) := Couple ℂ_sig (0b1 : BitVec 1) F
 
+/-- Complex numbers as the even subalgebra of R2 = Cl(2,0,0):
+    scalar + I where I = e₁₂ and I² = -1. -/
+abbrev ComplexR2 (F : Type*) := Couple R2 (0b11 : BitVec 2) F
+
 /-- Split-complex (hyperbolic) numbers: scalar + j where j² = +1 -/
 abbrev SplitComplex (F : Type*) := Couple R1 (0b1 : BitVec 1) F
 

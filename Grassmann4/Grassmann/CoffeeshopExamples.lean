@@ -29,41 +29,47 @@ end CoffeeshopExamples
 open CoffeeshopExamples
 
 /-! ═══════════════════════════════════════════════════════════════════════════
-    COMPLEX NUMBERS - Cl(0,1)
-    The simplest non-trivial Clifford algebra: i² = -1
+    COMPLEX NUMBERS - Even Subalgebra of Cl(2,0,0) (R2)
+    Complex numbers live naturally inside 2D Euclidean GA as scalars + bivectors.
+
+    In R², the unit bivector I = e₁₂ squares to -1, so:
+      z = a + b·I    behaves like a + b·i ∈ ℂ.
 ═══════════════════════════════════════════════════════════════════════════ -/
 
--- Complex number example: (2 + 3i) * (1 + 2i) = -4 + 7i
-#eval Cl(0,1) {
-  let z1 := MultivectorS.scalar 2.0 + e₁.smul 3.0  -- 2 + 3i
-  let z2 := MultivectorS.scalar 1.0 + e₁.smul 2.0  -- 1 + 2i
+-- Complex number example (in R2 even subalgebra): (2 + 3I) * (1 + 2I) = -4 + 7I
+#eval R2 {
+  let I := e₁₂
+  let z1 := MultivectorS.scalar 2.0 + I.smul 3.0  -- 2 + 3I
+  let z2 := MultivectorS.scalar 1.0 + I.smul 2.0  -- 1 + 2I
   let product := z1 * z2
   let real := product.scalarPart
-  let imag := product.coeff 1
-  s!"(2+3i)(1+2i) = {real} + {imag}i  (expect: -4 + 7i)"
+  let imag := product.coeff 3  -- e₁₂ component
+  s!"(2+3I)(1+2I) = {real} + {imag}I  (expect: -4 + 7I)"
 }
 
--- Euler's formula: e^(iθ) = cos(θ) + i·sin(θ)
-#eval Cl(0,1) {
-  -- For i² = -1, exp(θi) = cos(θ) + sin(θ)i
+-- Euler's formula: e^(Iθ) = cos(θ) + I·sin(θ)
+#eval R2 {
+  let I := e₁₂
+  -- For I² = -1, exp(θI) = cos(θ) + sin(θ)I
   let theta := pi / 4  -- 45 degrees
   let c := Float.cos theta
   let s := Float.sin theta
-  let euler := MultivectorS.scalar c + e₁.smul s
+  let euler := MultivectorS.scalar c + I.smul s
   -- Verify: euler² should rotate by 90 degrees
   let rotated := euler * euler
   let real := rotated.scalarPart
-  let imag := rotated.coeff 1
-  s!"e^(iπ/4) squared: {real} + {imag}i  (expect: 0 + 1i)"
+  let imag := rotated.coeff 3
+  s!"e^(Iπ/4) squared: {real} + {imag}I  (expect: 0 + 1I)"
 }
 
--- Complex magnitude: |3 + 4i| = 5
-#eval Cl(0,1) {
-  let z := MultivectorS.scalar 3.0 + e₁.smul 4.0  -- 3 + 4i
-  let zConj := MultivectorS.scalar 3.0 + e₁.smul (-4.0)  -- 3 - 4i
-  let magSq := (z * zConj).scalarPart
+-- Complex magnitude: |3 + 4I| = 5
+#eval R2 {
+  let I := e₁₂
+  let z := MultivectorS.scalar 3.0 + I.smul 4.0  -- 3 + 4I
+  -- For scalars+bivectors, reverse is the usual complex conjugation.
+  let magSq := (z * z.reverse).scalarPart
   let mag := Float.sqrt magSq
-  if approxEq mag 5.0 then "|3+4i| = 5 ✓" else s!"|3+4i| = {mag} ✗"
+  if approxEq mag 5.0 then "|3+4I| = 5 ✓" else s!"|3+4I| = {mag} ✗"
 }
 
 /-! ═══════════════════════════════════════════════════════════════════════════
@@ -440,99 +446,165 @@ open CoffeeshopExamples
     Port of Ganja.js quaternion_mandelbrot coffeeshop example
 ═══════════════════════════════════════════════════════════════════════════ -/
 
--- Quaternion Mandelbrot: z = z² + c with quaternion arithmetic
--- Iteration count gives coloring; here we output ASCII art
+/-!
+`example_quaternion_mandelbrot.html` in ganja.js uses **Cl(0,2)** (quaternions) for hue rotation.
+The Mandelbrot iteration itself lives in the complex subalgebra `⟨1, e₁₂⟩`:
 
-def mandelbrotIterate (cx cy : Float) (maxIter : Nat := 40) : Nat :=
-  -- partial def allows us to write the loop naturally without proving termination
-  let rec go (n : Nat) (zr zi : Float) : Nat :=
-    if n >= maxIter then 0
-    else
-      let mag2 := zr * zr + zi * zi
-      if mag2 > 4.0 then n
-      else
-        let newZr := zr * zr - zi * zi + cx
-        let newZi := 2.0 * zr * zi + cy
-        go (n + 1) newZr newZi
-  go 0 0.0 0.0
+`z = z² + c`, with `c = x*1.75 - 1 + y*e₁₂` for `(x,y) ∈ [-1,1]²`.
 
--- Color palette for Mandelbrot (classic blue-black-orange scheme)
-def mandelbrotColor (iter : Nat) (maxIter : Nat := 40) : RGB :=
-  if iter >= maxIter then RGB.black
-  else
-    -- Smooth coloring based on iteration count
-    let t := iter.toFloat / maxIter.toFloat
-    -- Classic Mandelbrot colors: black → blue → white → orange → black
-    if t < 0.25 then
-      let s := t * 4
-      ⟨(s * 50).toUInt8, (s * 100).toUInt8, (s * 200).toUInt8⟩  -- Black to blue
-    else if t < 0.5 then
-      let s := (t - 0.25) * 4
-      ⟨(50 + s * 205).toUInt8, (100 + s * 155).toUInt8, (200 + s * 55).toUInt8⟩  -- Blue to white
-    else if t < 0.75 then
-      let s := (t - 0.5) * 4
-      ⟨255, (255 - s * 128).toUInt8, (255 - s * 180).toUInt8⟩  -- White to orange
-    else
-      let s := (t - 0.75) * 4
-      ⟨(255 - s * 200).toUInt8, (127 - s * 100).toUInt8, (75 - s * 75).toUInt8⟩  -- Orange to dark
+Coloring follows the JS example:
+- start with "red" = `e₁`
+- rotate it around the `(1,1,1)` axis in quaternion space,
+  with an angle derived from a *smoothed* iteration count.
+- interpret the rotated coefficients as RGB channels.
+-/
 
--- Generate Mandelbrot as a bitmap
-def mandelbrotBitmap (width height : Nat) (maxIter : Nat := 100) : Bitmap := Id.run do
-  let mut bmp := Bitmap.create width height
-  for py in [:height] do
-    for px in [:width] do
-      -- Map pixel to complex plane: x ∈ [-2.5, 1], y ∈ [-1.2, 1.2]
-      let cx := (px.toFloat / width.toFloat) * 3.5 - 2.5
-      let cy := (py.toFloat / height.toFloat) * 2.4 - 1.2
-      let iter := mandelbrotIterate cx cy maxIter
-      let color := mandelbrotColor iter maxIter
-      bmp := bmp.setPixel px py color
-  bmp
+def clamp01 (x : Float) : Float :=
+  if x < 0 then 0 else if x > 1 then 1 else x
 
--- Save Mandelbrot to PNG file
-#eval do
-  let bmp := mandelbrotBitmap 800 600 100
-  PNG.writePNG "mandelbrot_ga.png" bmp
-  IO.println "Saved Mandelbrot set to mandelbrot_ga.png (800×600, 100 iterations)"
+def rgbOfUnit (r g b : Float) : RGB :=
+  ⟨(255.0 * clamp01 r).toUInt8, (255.0 * clamp01 g).toUInt8, (255.0 * clamp01 b).toUInt8⟩
 
--- Save boundary scatter plot to SVG
-#eval do
+/-- Convert an `Int` to `Float` (Lean core does not provide `Int.toFloat`). -/
+def intToFloat (z : Int) : Float :=
+  match z with
+  | .ofNat n => n.toFloat
+  | .negSucc n => -((n + 1).toFloat)
+
+/-- Quaternion-style norm² using Clifford conjugation: `q*q̄` (scalar part).
+This matches ganja.js' `Length` implementation. -/
+def conjNormSq {n : ℕ} {sig : Signature n} (q : MultivectorS sig Float) : Float :=
+  (q * q.conjugate).scalarPart
+
+/-- Quaternion-style length `√|q*q̄|` to match ganja.js' `Length` getter. -/
+def conjLength {n : ℕ} {sig : Signature n} (q : MultivectorS sig Float) : Float :=
+  Float.sqrt (Float.abs (conjNormSq q))
+
+/-- Normalize using the conjugation-based norm (safe for "quaternion vectors"). -/
+def conjNormalize {n : ℕ} {sig : Signature n} (q : MultivectorS sig Float) :
+    MultivectorS sig Float :=
+  let nsq := conjNormSq q
+  if nsq == 0 then q else q.smul (1.0 / Float.sqrt (Float.abs nsq))
+
+/-- Generate Mandelbrot bitmap (ganja.js quaternion_mandelbrot-style coloring)
+-/
+def mandelbrotBitmap (width height : Nat) (maxIter : Nat := 40) : Bitmap :=
+  Cl(0,2) {
+    let axis := conjNormalize (e₁ + e₂ + e₁₂) -- ≈ (1/√3)(i + j + k)
+    let red := e₁
+
+    let colorAt (x y : Float) : RGB := Id.run do
+      -- Match ganja.js:
+      --   n=40; z=0e12; c=x*1.75-1+y*1e12;
+      --   while (z < 4 && n--) z=z**2+c;
+      --   n += log2(log2(max(4,z.Length))) - atan2(y,x)*10;
+      let c := (MultivectorS.scalar (x * 1.75 - 1.0)) + e₁₂.smul y
+
+      let mut n : Int := maxIter
+      let mut z : MultivectorS _sig Float := MultivectorS.scalar 0.0
+
+      while (conjLength z < 4.0) && (n > 0) do
+        z := z * z + c
+        n := n - 1
+
+      -- JS `n--` decrements once more on the final failed check.
+      if (n == 0) && (conjLength z < 4.0) then
+        n := -1
+
+      let zLen := conjLength z
+      let zLen' := if zLen < 4.0 then 4.0 else zLen
+      let nSmooth : Float := intToFloat n +
+        Float.log2 (Float.log2 zLen') - (Float.atan2 y x) * 10.0
+
+      let theta := nSmooth / 20.0
+      let rot := (MultivectorS.scalar (Float.cos theta)) + axis.smul (Float.sin theta)
+
+      let rgbVec := rot * red * rot.conjugate
+      rgbOfUnit (rgbVec.coeff 1) (rgbVec.coeff 2) (rgbVec.coeff 3)
+
+    Id.run do
+      let mut bmp := Bitmap.create width height
+      let wDen := (width - 1).toFloat
+      let hDen := (height - 1).toFloat
+      for py in [:height] do
+        for px in [:width] do
+          -- Map pixel to ganja.js graph domain x,y ∈ [-1,1], with y pointing up.
+          let x := (px.toFloat / wDen) * 2.0 - 1.0
+          let y := 1.0 - (py.toFloat / hDen) * 2.0
+          bmp := bmp.setPixel px py (colorAt x y)
+      bmp
+  }
+
+def writeMandelbrotPNG : IO Unit := do
+  let path := "Grassmann4/mandelbrot_ga.png"
+  let bmp := mandelbrotBitmap 800 600 40
+  PNG.writePNG path bmp
+  IO.println s!"Saved Mandelbrot set to {path} (800×600, 40 iterations)"
+
+def writeMandelbrotBoundarySVG : IO Unit := do
   let pts : Array (Float × Float) := Id.run do
     let mut result := #[]
     for yi in [:100] do
       for xi in [:140] do
-        let cx := (xi.toFloat / 140.0) * 3.5 - 2.5
-        let cy := (yi.toFloat / 100.0) * 2.4 - 1.2
-        let iter := mandelbrotIterate cx cy 100
-        -- Only plot points near the boundary (20-80 iterations)
-        if iter > 20 && iter < 80 then
-          result := result.push (cx, cy)
+        let x := (xi.toFloat / 139.0) * 2.0 - 1.0
+        let y := 1.0 - (yi.toFloat / 99.0) * 2.0
+        -- Heuristic boundary: points that nearly escape within 40 steps.
+        -- (We re-run the same iteration but just record the remaining `n`.)
+        let remaining : Int := Cl(0,2) { Id.run do
+          let c := (MultivectorS.scalar (x * 1.75 - 1.0)) + e₁₂.smul y
+          let mut n : Int := 40
+          let mut z : MultivectorS _sig Float := MultivectorS.scalar 0.0
+          while (conjLength z < 4.0) && (n > 0) do
+            z := z * z + c
+            n := n - 1
+          if (n == 0) && (conjLength z < 4.0) then
+            n := -1
+          return n
+        }
+        -- Empirically: near-boundary tends to have small positive remaining counts.
+        if remaining > 0 && remaining < 15 then
+          result := result.push (x, y)
     result
   let g := scatter pts |>.title "Mandelbrot Set Boundary"
-  -- Use absolute path to ensure it's written in the right place
-  let svgPath := "/Users/alokbeniwal/Grassmann/Grassmann4/mandelbrot_boundary.svg"
+  let svgPath := "Grassmann4/mandelbrot_boundary.svg"
   g.saveSVG svgPath
   IO.println s!"Saved {pts.size} boundary points to {svgPath}"
 
--- Quaternion Mandelbrot computation using actual Cl(0,2) algebra
-#eval Cl(0,2) {
-  -- Sample a single point: c = -0.4 + 0.6i
-  let cx := -0.4
-  let cy := 0.6
-  let c := MultivectorS.scalar cx + e₁.smul cy
+/-!
+Uncomment to (re)generate the example outputs.
 
-  -- Simple iteration without recursion (loop unroll for #eval)
-  let z0 : MultivectorS _ Float := MultivectorS.scalar 0.0
-  let z1 := z0 * z0 + c
-  let z2 := z1 * z1 + c
-  let z3 := z2 * z2 + c
-  let z4 := z3 * z3 + c
-  let z5 := z4 * z4 + c
+⚠️ Note: use `#eval!` because this project uses `sorry_proof` for Float algebra instances.
+-/
+-- #eval! writeMandelbrotPNG
+-- #eval! writeMandelbrotBoundarySVG
 
-  let mag2 := (z5 * z5.reverse).scalarPart
-  let escaped := if mag2 > 4.0 then "true" else "false"
+-- Quick sanity check: reproduce the ganja.js color computation at a single sample.
+#eval Cl(0,2) { Id.run do
+  let x := -0.4
+  let y := 0.6
+  let axis := conjNormalize (e₁ + e₂ + e₁₂)
+  let red := e₁
 
-  s!"Mandelbrot at c=(-0.4+0.6i): 5 iterations, |z|²={mag2}, escaped={escaped}"
+  let c := (MultivectorS.scalar (x * 1.75 - 1.0)) + e₁₂.smul y
+  let mut n : Int := 40
+  let mut z : MultivectorS _sig Float := MultivectorS.scalar 0.0
+  while (conjLength z < 4.0) && (n > 0) do
+    z := z * z + c
+    n := n - 1
+  if (n == 0) && (conjLength z < 4.0) then
+    n := -1
+
+  let zLen := conjLength z
+  let zLen' := if zLen < 4.0 then 4.0 else zLen
+  let nSmooth : Float :=
+    intToFloat n + Float.log2 (Float.log2 zLen') - (Float.atan2 y x) * 10.0
+  let theta := nSmooth / 20.0
+  let rot := (MultivectorS.scalar (Float.cos theta)) + axis.smul (Float.sin theta)
+  let rgbVec := rot * red * rot.conjugate
+  let r := rgbVec.coeff 1
+  let g := rgbVec.coeff 2
+  let b := rgbVec.coeff 3
+  return s!"sample(x={x}, y={y}): n={n}, |z|={zLen}, color={r},{g},{b}"
 }
 
 /-! ═══════════════════════════════════════════════════════════════════════════
@@ -657,7 +729,7 @@ def mandelbrotBitmap (width height : Nat) (maxIter : Nat := 100) : Bitmap := Id.
 ║      Ganja.js Coffeeshop Examples in Lean 4 GA DSL          ║
 ╠══════════════════════════════════════════════════════════════╣
 ║ Algebras demonstrated:                                       ║
-║   • Cl(0,1)   - Complex numbers (i²=-1)                     ║
+║   • R2        - Complex numbers (even subalgebra)           ║
 ║   • Cl(0,0,1) - Dual numbers (ε²=0, autodiff)               ║
 ║   • Cl(0,2)   - Quaternions (i²=j²=k²=ijk=-1)               ║
 ║   • Cl(1,0)   - Split-complex (j²=+1)                       ║

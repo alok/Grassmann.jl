@@ -21,6 +21,7 @@
 -/
 import Lean
 import Grassmann.DSL.Subscript
+set_option doc.verso true
 
 set_option doc.verso true
 open Lean Elab Meta Term Macro
@@ -118,6 +119,38 @@ macro_rules
       let $sigIdent : $sigType $nLit := $sigClr $p $q $r
       $bodyWithBindings
     )
+/-! ## Performance Note: Array-of-Structs vs Struct-of-Arrays
+
+The DSL generates bindings that create many small MultivectorS values.
+This is an "Array-of-Structs" (AoS) pattern:
+
+  AoS (Current):
+  ┌─────────────┬─────────────┬─────────────┐
+  │ e₁: MV      │ e₂: MV      │ e₁₂: MV     │
+  │ ┌─────────┐ │ ┌─────────┐ │ ┌─────────┐ │
+  │ │ coeffs  │ │ │ coeffs  │ │ │ coeffs  │ │
+  │ │ TreeMap │ │ │ TreeMap │ │ │ TreeMap │ │
+  │ └─────────┘ │ └─────────┘ │ └─────────┘ │
+  └─────────────┴─────────────┴─────────────┘
+  Good for: Sparse operations, high dimensions (N > 8)
+  Cost: Allocation overhead per blade
+
+  SoA (Alternative - not implemented):
+  ┌──────────────────────────────────────────┐
+  │ All blades in one structure:             │
+  │ ┌──────────────────────────────────────┐ │
+  │ │ coeffs: TreeMap Nat F                │ │
+  │ │   0 → scalar                         │ │
+  │ │   1 → e₁                             │ │
+  │ │   2 → e₂                             │ │
+  │ │   3 → e₁₂                            │ │
+  │ └──────────────────────────────────────┘ │
+  └──────────────────────────────────────────┘
+  Good for: Dense operations, cache locality
+  Cost: Harder to express in DSL syntax
+
+For N ≤ 8, consider using MultivectorA (dense array) instead.
+-/
 
 /-- Cl(p,q) shorthand -/
 macro_rules
@@ -150,6 +183,9 @@ macro_rules
 macro_rules
   | `(CGA3 { $body }) => `(Cl(4, 1, 0) { $body })
 
+/--The Spacetime Algebra `Cl(1,3,0)`.
+
+It is a 4D algebra with a time-like basis vector and three space-like basis vectors. -/
 macro_rules
   | `(STA { $body }) => `(Cl(1, 3, 0) { $body })
 
