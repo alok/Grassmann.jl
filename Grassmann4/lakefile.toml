@@ -37,6 +37,11 @@ root = "RunOracleTests"
 name = "propertytests"
 root = "RunPropertyTests"
 
+[[lean_exe]]
+name = "bench"
+root = "Grassmann.Bench"
+precompileModules = false
+
 
 # Note: Verso documentation setup is available but requires
 # additional build configuration. See Manual/ folder for content.
