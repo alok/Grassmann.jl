@@ -1,6 +1,7 @@
 -- Root import file for Grassmann Algebra library
 -- Core infrastructure
 import Grassmann.Proof         -- SciLean-style sorry_proof, Float Ring/Field
+import Grassmann.Linearity     -- Debug helpers for exclusivity / in-place updates
 import Grassmann.BitMask
 import Grassmann.Manifold
 import Grassmann.Blade
@@ -14,6 +15,7 @@ import Grassmann.Multivector       -- Dense 2^n array
 import Grassmann.MultivectorArray
 import Grassmann.SparseMultivector -- Sparse TreeMap
 import Grassmann.TruncatedMV       -- Truncated grades for high-dim
+import Grassmann.EvenMV            -- Packed even multivectors (spinors/rotors)
 import Grassmann.Storage           -- Storage backend abstraction
 import Grassmann.Repr              -- MultivectorRepr typeclass
 import Grassmann.PrettyPrint       -- Unicode pretty-printing
@@ -56,9 +58,6 @@ import Grassmann.DSL
 import Grassmann.DSLDemo
 import Grassmann.GATypeclass
 
--- Tests
-import Grassmann.StressTests
-import Grassmann.Tests
-import Grassmann.OracleTests
-import Grassmann.DSLTests
-import Grassmann.CoffeeshopExamples
+-- NOTE: Development-time checks and `#eval`-heavy demo files live under
+-- `Grassmann.All` so that `import Grassmann` stays lightweight for downstream
+-- users and for compilation performance.

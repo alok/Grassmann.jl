@@ -1,1 +1,6 @@
 /.lake
+
+# Generated files
+coffeeshop_dashboard.html
+mandelbrot_boundary.svg
+mandelbrot_ga.png
