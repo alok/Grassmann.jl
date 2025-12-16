@@ -15,6 +15,7 @@ import Grassmann.DataArray        -- Float "plain data" buffers for hot paths
 import Grassmann.Multivector       -- Dense 2^n array
 import Grassmann.MultivectorArray
 import Grassmann.MultivectorDA     -- Dense Float multivectors backed by DataArray
+import Grassmann.GradedMVDA        -- Grade-tracked Float kernels on DataArray
 import Grassmann.SparseMultivector -- Sparse TreeMap
 import Grassmann.TruncatedMV       -- Truncated grades for high-dim
 import Grassmann.EvenMV            -- Packed even multivectors (spinors/rotors)

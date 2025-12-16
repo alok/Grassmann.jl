@@ -34,6 +34,7 @@ import Grassmann.BladeIndex
 import Grassmann.SignTables
 import Grassmann.EvenMV
 import Grassmann.EvenMVDA
+import Grassmann.GradedMVDA
 
 namespace Grassmann.Bench
 
@@ -414,6 +415,8 @@ def benchRotorComposition : IO Unit := do
     rotors.map (fun r => MultivectorDA.ofMultivector r)
   let rotorsPackedDA : Array (EvenMVDA R3) :=
     rotorsDA.map (fun r => EvenMVDA.ofMultivectorDAEven r)
+  let rotorsGradedDA : Array (GradedMVDA R3 (GradeSet.even 3)) :=
+    rotorsDA.map (fun r => ⟨r⟩)
 
   let _ ← timeit "Naive rotor mul" warmupIters iters fun i =>
     let idx := i % samples
@@ -446,6 +449,17 @@ def benchRotorComposition : IO Unit := do
       rotorsPackedDA.getD idx2
         (EvenMVDA.ofMultivectorDAEven (MultivectorDA.ofMultivector (testRotor 0.7)))
     EvenMVDA.scalarPart (r1 * r2)
+
+  let _ ← timeit "DA graded rotor mul" warmupIters iters fun i =>
+    let idx := i % samples
+    let idx2 := (idx + 1) % samples
+    let r1 :=
+      rotorsGradedDA.getD idx
+        (⟨MultivectorDA.ofMultivector (testRotor 0.3)⟩)
+    let r2 :=
+      rotorsGradedDA.getD idx2
+        (⟨MultivectorDA.ofMultivector (testRotor 0.7)⟩)
+    MultivectorDA.scalarPart (r1 * r2).mv
 
   let _ ← timeit "Sparse rotor" warmupIters iters fun i =>
     let idx := i % samples
