@@ -115,7 +115,7 @@ def rotate (s : Spinor sig F) (v : Multivector sig F) : Multivector sig F :=
     For full multivectors, use `rotate` (which preserves all grades). -/
 @[inline]
 def rotateVectorFast (s : Spinor sig F) (v : Multivector sig F) : Multivector sig F :=
-  EvenMV.sandwichVectorFast (sig := sig) (n := n) s.mv v
+  EvenMV.sandwichVectorGrade1Fast (sig := sig) (n := n) s.mv v
 
 /-- Compose two rotations: s₁₂ = s₁ s₂ -/
 def compose (s1 s2 : Spinor sig F) : Spinor sig F := s1 * s2

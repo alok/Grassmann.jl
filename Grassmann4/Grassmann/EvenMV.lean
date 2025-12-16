@@ -70,7 +70,14 @@ instance : Sub (EvenMV sig F) := ⟨sub⟩
 instance : Neg (EvenMV sig F) := ⟨neg⟩
 instance : SMul F (EvenMV sig F) := ⟨smul⟩
 
-/-! ### Even blade enumeration -/
+/-! ### Kernel tables
+
+This namespace contains the precomputed index/sign kernels used by the fast
+even-only algorithms. It is factored out so other backends (e.g. `DataArray`)
+can reuse the same tables without duplicating logic.
+-/
+
+namespace Kernel
 
 /-- Boolean test for even grade (runtime cheap). -/
 private def isEvenGrade (n : ℕ) (m : Nat) : Bool :=
@@ -116,7 +123,7 @@ private def fullIdx3 : Array Nat := Array.range (2 ^ 3)
 private def fullIdx4 : Array Nat := Array.range (2 ^ 4)
 private def fullIdx5 : Array Nat := Array.range (2 ^ 5)
 
-@[inline] private def evenMasksCached (n : ℕ) : Array Nat :=
+@[inline] def evenMasksCached (n : ℕ) : Array Nat :=
   match n with
   | 2 => evenMasks2
   | 3 => evenMasks3
@@ -124,7 +131,7 @@ private def fullIdx5 : Array Nat := Array.range (2 ^ 5)
   | 5 => evenMasks5
   | _ => evenMasksCompute n
 
-@[inline] private def evenIndexMapCached (n : ℕ) : Array Nat :=
+@[inline] def evenIndexMapCached (n : ℕ) : Array Nat :=
   match n with
   | 2 => evenIndexMap2
   | 3 => evenIndexMap3
@@ -133,7 +140,7 @@ private def fullIdx5 : Array Nat := Array.range (2 ^ 5)
   | _ => evenIndexMapCompute n
 
 /-- Cached packed index range `0..2^(n-1)-1` for small `n` (avoids allocating per product). -/
-@[inline] private def evenPackedIdxCached (n : ℕ) : Array Nat :=
+@[inline] def evenPackedIdxCached (n : ℕ) : Array Nat :=
   match n with
   | 2 => evenPackedIdx2
   | 3 => evenPackedIdx3
@@ -142,7 +149,7 @@ private def fullIdx5 : Array Nat := Array.range (2 ^ 5)
   | _ => Array.range (2 ^ (n - 1))
 
 /-- Cached full index range `0..2^n-1` for small `n`. -/
-@[inline] private def fullIdxCached (n : ℕ) : Array Nat :=
+@[inline] def fullIdxCached (n : ℕ) : Array Nat :=
   match n with
   | 2 => fullIdx2
   | 3 => fullIdx3
@@ -170,7 +177,7 @@ private def evenMulIdx3 : Array Nat := evenMulIdxCompute 3
 private def evenMulIdx4 : Array Nat := evenMulIdxCompute 4
 private def evenMulIdx5 : Array Nat := evenMulIdxCompute 5
 
-@[inline] private def evenMulIdxCached (n : ℕ) : Array Nat :=
+@[inline] def evenMulIdxCached (n : ℕ) : Array Nat :=
   match n with
   | 2 => evenMulIdx2
   | 3 => evenMulIdx3
@@ -198,7 +205,7 @@ private def evenMulSignPGA3 : Array Int8 := evenMulSignFromTable PGA3SignTable
 private def evenMulSignCGA3 : Array Int8 := evenMulSignFromTable CGA3SignTable
 
 /-- Cached even×even sign table restricted to even blades, for canonical signatures. -/
-@[inline] private def evenMulSignCached (s : Signature n) : Option (Array Int8) :=
+@[inline] def evenMulSignCached (s : Signature n) : Option (Array Int8) :=
   match n with
   | 2 => if s == R2 then some evenMulSignR2 else none
   | 3 => if s == R3 then some evenMulSignR3 else none
@@ -229,7 +236,7 @@ private def evenLeftMulIdx3 : Array Nat := evenLeftMulIdxCompute 3
 private def evenLeftMulIdx4 : Array Nat := evenLeftMulIdxCompute 4
 private def evenLeftMulIdx5 : Array Nat := evenLeftMulIdxCompute 5
 
-@[inline] private def evenLeftMulIdxCached (n : ℕ) : Array Nat :=
+@[inline] def evenLeftMulIdxCached (n : ℕ) : Array Nat :=
   match n with
   | 2 => evenLeftMulIdx2
   | 3 => evenLeftMulIdx3
@@ -254,7 +261,7 @@ private def evenRightMulIdx3 : Array Nat := evenRightMulIdxCompute 3
 private def evenRightMulIdx4 : Array Nat := evenRightMulIdxCompute 4
 private def evenRightMulIdx5 : Array Nat := evenRightMulIdxCompute 5
 
-@[inline] private def evenRightMulIdxCached (n : ℕ) : Array Nat :=
+@[inline] def evenRightMulIdxCached (n : ℕ) : Array Nat :=
   match n with
   | 2 => evenRightMulIdx2
   | 3 => evenRightMulIdx3
@@ -301,7 +308,7 @@ private def evenRightMulSignPGA3 : Array Int8 := evenRightMulSignFromTable PGA3S
 private def evenRightMulSignCGA3 : Array Int8 := evenRightMulSignFromTable CGA3SignTable
 
 /-- Cached even×full sign table restricted to left even blades, for canonical signatures. -/
-@[inline] private def evenLeftMulSignCached (s : Signature n) : Option (Array Int8) :=
+@[inline] def evenLeftMulSignCached (s : Signature n) : Option (Array Int8) :=
   match n with
   | 2 => if s == R2 then some evenLeftMulSignR2 else none
   | 3 => if s == R3 then some evenLeftMulSignR3 else none
@@ -314,7 +321,7 @@ private def evenRightMulSignCGA3 : Array Int8 := evenRightMulSignFromTable CGA3S
   | _ => none
 
 /-- Cached full×even sign table restricted to right even blades, for canonical signatures. -/
-@[inline] private def evenRightMulSignCached (s : Signature n) : Option (Array Int8) :=
+@[inline] def evenRightMulSignCached (s : Signature n) : Option (Array Int8) :=
   match n with
   | 2 => if s == R2 then some evenRightMulSignR2 else none
   | 3 => if s == R3 then some evenRightMulSignR3 else none
@@ -359,7 +366,7 @@ private def evenRightOutLeftIdx3 : Array Nat := evenRightOutLeftIdxCompute 3
 private def evenRightOutLeftIdx4 : Array Nat := evenRightOutLeftIdxCompute 4
 private def evenRightOutLeftIdx5 : Array Nat := evenRightOutLeftIdxCompute 5
 
-@[inline] private def evenRightOutLeftIdxCached (n : ℕ) : Array Nat :=
+@[inline] def evenRightOutLeftIdxCached (n : ℕ) : Array Nat :=
   match n with
   | 2 => evenRightOutLeftIdx2
   | 3 => evenRightOutLeftIdx3
@@ -390,7 +397,7 @@ private def evenRightOutSignPGA3 : Array Int8 := evenRightOutSignFromTable PGA3S
 private def evenRightOutSignCGA3 : Array Int8 := evenRightOutSignFromTable CGA3SignTable
 
 /-- Cached `RightAtIndices` sign table in output-major layout for canonical signatures. -/
-@[inline] private def evenRightOutSignCached (s : Signature n) : Option (Array Int8) :=
+@[inline] def evenRightOutSignCached (s : Signature n) : Option (Array Int8) :=
   match n with
   | 2 => if s == R2 then some evenRightOutSignR2 else none
   | 3 => if s == R3 then some evenRightOutSignR3 else none
@@ -412,6 +419,10 @@ private def packedToMask (i : Fin (2 ^ (n - 1))) : Nat :=
 private def maskToPacked (m : Nat) : Fin (2 ^ (n - 1)) :=
   let k := (evenIndexMapCached n).getD m 0
   ⟨k, by sorry_proof⟩
+
+end Kernel
+
+open Kernel
 
 /-! ### Conversions -/
 
@@ -927,6 +938,21 @@ def sandwichGradeSetFastOut (R : EvenMV sig F) (x : Multivector sig F)
 @[inline]
 def sandwichVectorFast (R : EvenMV sig F) (x : Multivector sig F) : Multivector sig F :=
   sandwichGradeSetFast (sig := sig) (n := n) (F := F) R x GradeSet.vector (GradeSet.odd n)
+
+/-- Even faster sandwich product specialized for *rotating vectors*.
+
+    This computes only the grade‑1 output of `R * x * R†`.
+
+    Assumes:
+    - `x` is a vector (grade 1)
+    - `R` is a *versor* (rotor/motor), so the sandwich preserves grade.
+
+    For arbitrary even elements (that may introduce a pseudoscalar part), use
+    `sandwichVectorFast`. -/
+@[inline]
+def sandwichVectorGrade1Fast (R : EvenMV sig F) (x : Multivector sig F) : Multivector sig F :=
+  sandwichGradeSetFastOut (sig := sig) (n := n) (F := F)
+    R x GradeSet.vector (GradeSet.odd n) GradeSet.vector
 
 end EvenMV
 

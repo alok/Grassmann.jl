@@ -11,11 +11,14 @@ import Grassmann.Products
 import Grassmann.Notation
 
 -- Multivector representations
+import Grassmann.DataArray        -- Float "plain data" buffers for hot paths
 import Grassmann.Multivector       -- Dense 2^n array
 import Grassmann.MultivectorArray
+import Grassmann.MultivectorDA     -- Dense Float multivectors backed by DataArray
 import Grassmann.SparseMultivector -- Sparse TreeMap
 import Grassmann.TruncatedMV       -- Truncated grades for high-dim
 import Grassmann.EvenMV            -- Packed even multivectors (spinors/rotors)
+import Grassmann.EvenMVDA          -- Packed even Float multivectors backed by DataArray
 import Grassmann.Storage           -- Storage backend abstraction
 import Grassmann.Repr              -- MultivectorRepr typeclass
 import Grassmann.PrettyPrint       -- Unicode pretty-printing

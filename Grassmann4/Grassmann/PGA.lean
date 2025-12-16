@@ -22,7 +22,9 @@
   - Motors (dual quaternions) for rigid transformations
 -/
 import Grassmann.Multivector
+import Grassmann.MultivectorDA
 import Grassmann.Spinor
+import Grassmann.EvenMVDA
 
 namespace Grassmann
 
@@ -382,6 +384,104 @@ def distanceSq (p1 p2 : Multivector PGA3 F) : F :=
   (l * l†).scalarPart
 
 end PGA
+
+/-! ## DataArray backend (Float hot path)
+
+This section provides a single "plain data" representation for real-time use.
+It is the recommended API surface for performance-critical code (e.g. an engine):
+- coefficients are stored contiguously (`DataArray`)
+- motors are stored packed (`EvenMVDA`)
+- transforms compute only the needed output grades (point/plane/line)
+- no on-the-fly representation churn inside inner loops
+-/
+
+namespace PGA.DA
+
+/-- Dense PGA3 multivector backed by `DataArray`. -/
+abbrev MV := MultivectorDA PGA3
+
+/-- Packed PGA3 motor (even element) backed by `DataArray`. -/
+abbrev Motor := EvenMVDA PGA3
+
+/-! ### Constructors (no closures) -/
+
+/-- Create a PGA3 point from Euclidean coordinates.
+
+Layout matches the scalar indices used throughout the library:
+`P = e123 + x·e023 + y·e031 + z·e012`. -/
+def point (x y z : Float) : MV := Id.run do
+  let mut out := DataArray.zeros 16
+  out := out.set! 7 1.0
+  out := out.set! 14 x
+  out := out.set! 13 y
+  out := out.set! 11 z
+  return ⟨out⟩
+
+/-- Create a PGA3 plane from normal (nx,ny,nz) and distance d. -/
+def plane (nx ny nz d : Float) : MV := Id.run do
+  let mut out := DataArray.zeros 16
+  out := out.set! 1 nx
+  out := out.set! 2 ny
+  out := out.set! 4 nz
+  out := out.set! 8 d
+  return ⟨out⟩
+
+/-- Create a PGA3 line from direction (dx,dy,dz) and moment (mx,my,mz). -/
+def lineFromDirMoment (dx dy dz mx my mz : Float) : MV := Id.run do
+  let mut out := DataArray.zeros 16
+  -- Direction: e23,e31,e12
+  out := out.set! 6 dx
+  out := out.set! 5 dy
+  out := out.set! 3 dz
+  -- Moment: e01,e02,e03
+  out := out.set! 9 mx
+  out := out.set! 10 my
+  out := out.set! 12 mz
+  return ⟨out⟩
+
+/-! ### Motors -/
+
+namespace Motor
+
+/-- Pack an (even) dense motor into the fast packed representation. -/
+@[inline]
+def pack (m : MV) : Motor := EvenMVDA.ofMultivectorDAEven (sig := PGA3) (n := 4) m
+
+/-- Compose two motors (rigid transforms). -/
+@[inline]
+def compose (m1 m2 : Motor) : Motor := m1 * m2
+
+/-- Apply a motor to a point, computing only grade‑3 output. -/
+@[inline]
+def applyPoint (m : Motor) (p : MV) : MV :=
+  EvenMVDA.sandwichGradeSetFastOut (sig := PGA3) (n := 4)
+    m p (GradeSet.singleton 3) (GradeSet.odd 4) (GradeSet.singleton 3)
+
+/-- Apply a motor to a plane, computing only grade‑1 output. -/
+@[inline]
+def applyPlane (m : Motor) (π : MV) : MV :=
+  EvenMVDA.sandwichGradeSetFastOut (sig := PGA3) (n := 4)
+    m π GradeSet.vector (GradeSet.odd 4) GradeSet.vector
+
+/-- Apply a motor to a line, computing only grade‑2 output. -/
+@[inline]
+def applyLine (m : Motor) (l : MV) : MV :=
+  EvenMVDA.sandwichGradeSetFastOut (sig := PGA3) (n := 4)
+    m l GradeSet.bivector (GradeSet.even 4) GradeSet.bivector
+
+end Motor
+
+/-! ### Utilities -/
+
+/-- Extract Euclidean coordinates from a DataArray-backed PGA3 point. -/
+def extractPoint (p : MV) : Float × Float × Float :=
+  let w := MultivectorDA.coeffIdx p 7
+  if w == 0 then
+    (0, 0, 0)
+  else
+    (MultivectorDA.coeffIdx p 14 / w, MultivectorDA.coeffIdx p 13 / w, MultivectorDA.coeffIdx p 11 / w)
+
+end PGA.DA
 
 /-! ## Tests -/
 

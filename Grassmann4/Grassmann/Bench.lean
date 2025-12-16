@@ -33,6 +33,7 @@ import Grassmann.StaticOpt
 import Grassmann.BladeIndex
 import Grassmann.SignTables
 import Grassmann.EvenMV
+import Grassmann.EvenMVDA
 
 namespace Grassmann.Bench
 
@@ -173,38 +174,71 @@ def verifyCorrectness : IO Unit := do
   let plane := testPlane 1.0
   let line := testLine 1.0
 
+  -- DataArray-backed test data (Float hot-path)
+  let vDA : MultivectorDA R3 := MultivectorDA.ofMultivector v
+  let rotorDA : MultivectorDA R3 := MultivectorDA.ofMultivector rotor
+  let r1DA : MultivectorDA R3 := MultivectorDA.ofMultivector r1
+  let r2DA : MultivectorDA R3 := MultivectorDA.ofMultivector r2
+  let rotorPackedDA : EvenMVDA R3 := EvenMVDA.ofMultivectorDAEven rotorDA
+  let r1PackedDA : EvenMVDA R3 := EvenMVDA.ofMultivectorDAEven r1DA
+  let r2PackedDA : EvenMVDA R3 := EvenMVDA.ofMultivectorDAEven r2DA
+
+  let m1DA : MultivectorDA PGA3 := MultivectorDA.ofMultivector m1
+  let m2DA : MultivectorDA PGA3 := MultivectorDA.ofMultivector m2
+  let motorDA : MultivectorDA PGA3 := MultivectorDA.ofMultivector motor
+  let m1PackedDA : EvenMVDA PGA3 := EvenMVDA.ofMultivectorDAEven m1DA
+  let m2PackedDA : EvenMVDA PGA3 := EvenMVDA.ofMultivectorDAEven m2DA
+  let motorPackedDA : EvenMVDA PGA3 := EvenMVDA.ofMultivectorDAEven motorDA
+
+  let pDA : MultivectorDA PGA3 := MultivectorDA.ofMultivector p
+  let planeDA : MultivectorDA PGA3 := MultivectorDA.ofMultivector plane
+  let lineDA : MultivectorDA PGA3 := MultivectorDA.ofMultivector line
+
   -- Sandwich
   let naive_sandwich := rotor.sandwich v
   let sparse_sandwich := R3Fast.sandwichFast rotor v
-  let packed_sandwich := EvenMV.sandwichVectorFast rotorPacked v
+  let packed_sandwich := EvenMV.sandwichVectorGrade1Fast rotorPacked v
+  let packed_sandwich_da : Multivector R3 Float :=
+    (EvenMVDA.sandwichVectorFast rotorPackedDA vDA).toMultivector
   let diff_sandwich := (List.finRange 8).foldl (init := 0.0) fun acc idx =>
     acc + Float.abs (naive_sandwich.coeffs idx - sparse_sandwich.coeffs idx)
   IO.println s!"Sandwich diff: {diff_sandwich}"
   let diff_packed_sandwich := (List.finRange 8).foldl (init := 0.0) fun acc idx =>
     acc + Float.abs (naive_sandwich.coeffs idx - packed_sandwich.coeffs idx)
   IO.println s!"Packed sandwich diff: {diff_packed_sandwich}"
+  let diff_packed_sandwich_da := (List.finRange 8).foldl (init := 0.0) fun acc idx =>
+    acc + Float.abs (naive_sandwich.coeffs idx - packed_sandwich_da.coeffs idx)
+  IO.println s!"DA packed sandwich diff: {diff_packed_sandwich_da}"
 
   -- Rotor mul
   let naive_rotor := r1 * r2
   let sparse_rotor := R3Fast.rotorMul r1 r2
   let packed_rotor := (r1Packed * r2Packed).toMultivector
+  let packed_rotor_da : Multivector R3 Float := (r1PackedDA * r2PackedDA).toMultivector
   let diff_rotor := (List.finRange 8).foldl (init := 0.0) fun acc idx =>
     acc + Float.abs (naive_rotor.coeffs idx - sparse_rotor.coeffs idx)
   IO.println s!"Rotor mul diff: {diff_rotor}"
   let diff_packed_rotor := (List.finRange 8).foldl (init := 0.0) fun acc idx =>
     acc + Float.abs (naive_rotor.coeffs idx - packed_rotor.coeffs idx)
   IO.println s!"Packed rotor diff: {diff_packed_rotor}"
+  let diff_packed_rotor_da := (List.finRange 8).foldl (init := 0.0) fun acc idx =>
+    acc + Float.abs (naive_rotor.coeffs idx - packed_rotor_da.coeffs idx)
+  IO.println s!"DA packed rotor diff: {diff_packed_rotor_da}"
 
   -- PGA3 motor mul
   let naive_motor := m1 * m2
   let sparse_motor := PGA3Fast.motorMul m1 m2
   let packed_motor := (m1Packed * m2Packed).toMultivector
+  let packed_motor_da : Multivector PGA3 Float := (m1PackedDA * m2PackedDA).toMultivector
   let diff_motor := (List.finRange 16).foldl (init := 0.0) fun acc idx =>
     acc + Float.abs (naive_motor.coeffs idx - sparse_motor.coeffs idx)
   IO.println s!"Motor mul diff: {diff_motor}"
   let diff_packed_motor := (List.finRange 16).foldl (init := 0.0) fun acc idx =>
     acc + Float.abs (naive_motor.coeffs idx - packed_motor.coeffs idx)
   IO.println s!"Packed motor diff: {diff_packed_motor}"
+  let diff_packed_motor_da := (List.finRange 16).foldl (init := 0.0) fun acc idx =>
+    acc + Float.abs (naive_motor.coeffs idx - packed_motor_da.coeffs idx)
+  IO.println s!"DA packed motor diff: {diff_packed_motor_da}"
 
   -- PGA3 point transform
   let naive_point := motor.sandwich p
@@ -215,6 +249,9 @@ def verifyCorrectness : IO Unit := do
   let packed_point_g3 :=
     EvenMV.sandwichGradeSetFastOut (sig := PGA3) (n := 4) (F := Float)
       motorPacked p (GradeSet.singleton 3) (GradeSet.odd 4) (GradeSet.singleton 3)
+  let packed_point_g3_da : Multivector PGA3 Float :=
+    (EvenMVDA.sandwichGradeSetFastOut (sig := PGA3) (n := 4)
+      motorPackedDA pDA (GradeSet.singleton 3) (GradeSet.odd 4) (GradeSet.singleton 3)).toMultivector
   let diff_point := (List.finRange 16).foldl (init := 0.0) fun acc idx =>
     acc + Float.abs (naive_point.coeffs idx - sparse_point.coeffs idx)
   IO.println s!"Point transform diff: {diff_point}"
@@ -224,6 +261,9 @@ def verifyCorrectness : IO Unit := do
   let diff_packed_point_g3 := (List.finRange 16).foldl (init := 0.0) fun acc idx =>
     acc + Float.abs (naive_point.coeffs idx - packed_point_g3.coeffs idx)
   IO.println s!"Packed point transform (grade3) diff: {diff_packed_point_g3}"
+  let diff_packed_point_g3_da := (List.finRange 16).foldl (init := 0.0) fun acc idx =>
+    acc + Float.abs (naive_point.coeffs idx - packed_point_g3_da.coeffs idx)
+  IO.println s!"DA packed point transform (grade3) diff: {diff_packed_point_g3_da}"
 
   -- PGA3 plane transform (grade 1)
   let naive_plane := motor.sandwich plane
@@ -234,6 +274,9 @@ def verifyCorrectness : IO Unit := do
   let packed_plane_g1 :=
     EvenMV.sandwichGradeSetFastOut (sig := PGA3) (n := 4) (F := Float)
       motorPacked plane GradeSet.vector (GradeSet.odd 4) GradeSet.vector
+  let packed_plane_g1_da : Multivector PGA3 Float :=
+    (EvenMVDA.sandwichGradeSetFastOut (sig := PGA3) (n := 4)
+      motorPackedDA planeDA GradeSet.vector (GradeSet.odd 4) GradeSet.vector).toMultivector
   let diff_plane := (List.finRange 16).foldl (init := 0.0) fun acc idx =>
     acc + Float.abs (naive_plane.coeffs idx - sparse_plane.coeffs idx)
   IO.println s!"Plane transform diff: {diff_plane}"
@@ -243,6 +286,9 @@ def verifyCorrectness : IO Unit := do
   let diff_packed_plane_g1 := (List.finRange 16).foldl (init := 0.0) fun acc idx =>
     acc + Float.abs (naive_plane.coeffs idx - packed_plane_g1.coeffs idx)
   IO.println s!"Packed plane transform (grade1) diff: {diff_packed_plane_g1}"
+  let diff_packed_plane_g1_da := (List.finRange 16).foldl (init := 0.0) fun acc idx =>
+    acc + Float.abs (naive_plane.coeffs idx - packed_plane_g1_da.coeffs idx)
+  IO.println s!"DA packed plane transform (grade1) diff: {diff_packed_plane_g1_da}"
 
   -- PGA3 line transform (grade 2)
   let naive_line := motor.sandwich line
@@ -253,6 +299,9 @@ def verifyCorrectness : IO Unit := do
   let packed_line_g2 :=
     EvenMV.sandwichGradeSetFastOut (sig := PGA3) (n := 4) (F := Float)
       motorPacked line GradeSet.bivector (GradeSet.even 4) GradeSet.bivector
+  let packed_line_g2_da : Multivector PGA3 Float :=
+    (EvenMVDA.sandwichGradeSetFastOut (sig := PGA3) (n := 4)
+      motorPackedDA lineDA GradeSet.bivector (GradeSet.even 4) GradeSet.bivector).toMultivector
   let diff_line := (List.finRange 16).foldl (init := 0.0) fun acc idx =>
     acc + Float.abs (naive_line.coeffs idx - sparse_line.coeffs idx)
   IO.println s!"Line transform diff: {diff_line}"
@@ -262,6 +311,9 @@ def verifyCorrectness : IO Unit := do
   let diff_packed_line_g2 := (List.finRange 16).foldl (init := 0.0) fun acc idx =>
     acc + Float.abs (naive_line.coeffs idx - packed_line_g2.coeffs idx)
   IO.println s!"Packed line transform (grade2) diff: {diff_packed_line_g2}"
+  let diff_packed_line_g2_da := (List.finRange 16).foldl (init := 0.0) fun acc idx =>
+    acc + Float.abs (naive_line.coeffs idx - packed_line_g2_da.coeffs idx)
+  IO.println s!"DA packed line transform (grade2) diff: {diff_packed_line_g2_da}"
 
   -- Vector squared
   let naive_vsq := (v * v).scalarPart
@@ -306,9 +358,15 @@ def benchSandwich : IO Unit := do
       testRotor (0.05 * Float.ofNat (k.val + 1))
   let rotorsPacked : Array (EvenMV R3 Float) :=
     rotors.map (fun r => EvenMV.ofMultivectorEven r)
+  let rotorsDA : Array (MultivectorDA R3) :=
+    rotors.map (fun r => MultivectorDA.ofMultivector r)
+  let rotorsPackedDA : Array (EvenMVDA R3) :=
+    rotorsDA.map (fun r => EvenMVDA.ofMultivectorDAEven r)
   let vecs : Array (Multivector R3 Float) :=
     Array.ofFn (n := samples) fun k =>
       testVector (Float.ofNat (k.val + 1))
+  let vecsDA : Array (MultivectorDA R3) :=
+    vecs.map (fun v => MultivectorDA.ofMultivector v)
 
   let _ ← timeit "Naive sandwich" warmupIters iters fun i =>
     let idx := i % samples
@@ -326,7 +384,15 @@ def benchSandwich : IO Unit := do
     let idx := i % samples
     let R := rotorsPacked.getD idx (EvenMV.ofMultivectorEven (testRotor 0.5))
     let v := vecs.getD idx (testVector 1.0)
-    (EvenMV.sandwichVectorFast R v).scalarPart
+    (EvenMV.sandwichVectorGrade1Fast R v).scalarPart
+
+  let _ ← timeit "DA packed sandwich" warmupIters iters fun i =>
+    let idx := i % samples
+    let R :=
+      rotorsPackedDA.getD idx
+        (EvenMVDA.ofMultivectorDAEven (MultivectorDA.ofMultivector (testRotor 0.5)))
+    let v := vecsDA.getD idx (MultivectorDA.ofMultivector (testVector 1.0))
+    MultivectorDA.scalarPart (EvenMVDA.sandwichVectorFast R v)
 
   let _ ← timeit "Sparse sandwich" warmupIters iters fun i =>
     let idx := i % samples
@@ -344,6 +410,10 @@ def benchRotorComposition : IO Unit := do
       testRotor (0.05 * Float.ofNat (k.val + 1))
   let rotorsPacked : Array (EvenMV R3 Float) :=
     rotors.map (fun r => EvenMV.ofMultivectorEven r)
+  let rotorsDA : Array (MultivectorDA R3) :=
+    rotors.map (fun r => MultivectorDA.ofMultivector r)
+  let rotorsPackedDA : Array (EvenMVDA R3) :=
+    rotorsDA.map (fun r => EvenMVDA.ofMultivectorDAEven r)
 
   let _ ← timeit "Naive rotor mul" warmupIters iters fun i =>
     let idx := i % samples
@@ -365,6 +435,17 @@ def benchRotorComposition : IO Unit := do
     let r1 := rotorsPacked.getD idx (EvenMV.ofMultivectorEven (testRotor 0.3))
     let r2 := rotorsPacked.getD idx2 (EvenMV.ofMultivectorEven (testRotor 0.7))
     (r1 * r2).scalarPart
+
+  let _ ← timeit "DA packed rotor mul" warmupIters iters fun i =>
+    let idx := i % samples
+    let idx2 := (idx + 1) % samples
+    let r1 :=
+      rotorsPackedDA.getD idx
+        (EvenMVDA.ofMultivectorDAEven (MultivectorDA.ofMultivector (testRotor 0.3)))
+    let r2 :=
+      rotorsPackedDA.getD idx2
+        (EvenMVDA.ofMultivectorDAEven (MultivectorDA.ofMultivector (testRotor 0.7)))
+    EvenMVDA.scalarPart (r1 * r2)
 
   let _ ← timeit "Sparse rotor" warmupIters iters fun i =>
     let idx := i % samples
@@ -425,15 +506,25 @@ def benchPGA3Operations : IO Unit := do
       testMotor (0.05 * Float.ofNat (k.val + 1))
   let motorsPacked : Array (EvenMV PGA3 Float) :=
     motors.map (fun m => EvenMV.ofMultivectorEven m)
+  let motorsDA : Array (MultivectorDA PGA3) :=
+    motors.map (fun m => MultivectorDA.ofMultivector m)
+  let motorsPackedDA : Array (EvenMVDA PGA3) :=
+    motorsDA.map (fun m => EvenMVDA.ofMultivectorDAEven m)
   let points : Array (Multivector PGA3 Float) :=
     Array.ofFn (n := samples) fun k =>
       testPoint (Float.ofNat (k.val + 1))
+  let pointsDA : Array (MultivectorDA PGA3) :=
+    points.map (fun p => MultivectorDA.ofMultivector p)
   let planes : Array (Multivector PGA3 Float) :=
     Array.ofFn (n := samples) fun k =>
       testPlane (Float.ofNat (k.val + 1))
+  let planesDA : Array (MultivectorDA PGA3) :=
+    planes.map (fun p => MultivectorDA.ofMultivector p)
   let lines : Array (Multivector PGA3 Float) :=
     Array.ofFn (n := samples) fun k =>
       testLine (Float.ofNat (k.val + 1))
+  let linesDA : Array (MultivectorDA PGA3) :=
+    lines.map (fun l => MultivectorDA.ofMultivector l)
 
   let _ ← timeit "Naive motor mul" warmupIters iters fun i =>
     let idx := i % samples
@@ -455,6 +546,17 @@ def benchPGA3Operations : IO Unit := do
     let m1 := motorsPacked.getD idx (EvenMV.ofMultivectorEven (testMotor 0.3))
     let m2 := motorsPacked.getD idx2 (EvenMV.ofMultivectorEven (testMotor 0.7))
     (m1 * m2).scalarPart
+
+  let _ ← timeit "DA packed motor mul" warmupIters iters fun i =>
+    let idx := i % samples
+    let idx2 := (idx + 1) % samples
+    let m1 :=
+      motorsPackedDA.getD idx
+        (EvenMVDA.ofMultivectorDAEven (MultivectorDA.ofMultivector (testMotor 0.3)))
+    let m2 :=
+      motorsPackedDA.getD idx2
+        (EvenMVDA.ofMultivectorDAEven (MultivectorDA.ofMultivector (testMotor 0.7)))
+    EvenMVDA.scalarPart (m1 * m2)
 
   let _ ← timeit "Naive point xform" warmupIters iters fun i =>
     let idx := i % samples
@@ -490,6 +592,18 @@ def benchPGA3Operations : IO Unit := do
         m p (GradeSet.singleton 3) (GradeSet.odd 4) (GradeSet.singleton 3)
     p'.coeffs ⟨14, by decide⟩
 
+  let _ ← timeit "DA packed point xform (g3)" warmupIters iters fun i =>
+    let idx := i % samples
+    let idx2 := (idx + 1) % samples
+    let m :=
+      motorsPackedDA.getD idx
+        (EvenMVDA.ofMultivectorDAEven (MultivectorDA.ofMultivector (testMotor 0.5)))
+    let p := pointsDA.getD idx2 (MultivectorDA.ofMultivector (testPoint 1.0))
+    let p' :=
+      EvenMVDA.sandwichGradeSetFastOut (sig := PGA3) (n := 4)
+        m p (GradeSet.singleton 3) (GradeSet.odd 4) (GradeSet.singleton 3)
+    MultivectorDA.coeffIdx p' 14
+
   let _ ← timeit "Naive plane xform" warmupIters iters fun i =>
     let idx := i % samples
     let idx2 := (idx + 1) % samples
@@ -514,6 +628,18 @@ def benchPGA3Operations : IO Unit := do
         m π GradeSet.vector (GradeSet.odd 4) GradeSet.vector
     π'.coeffs ⟨8, by decide⟩
 
+  let _ ← timeit "DA packed plane xform (g1)" warmupIters iters fun i =>
+    let idx := i % samples
+    let idx2 := (idx + 1) % samples
+    let m :=
+      motorsPackedDA.getD idx
+        (EvenMVDA.ofMultivectorDAEven (MultivectorDA.ofMultivector (testMotor 0.5)))
+    let π := planesDA.getD idx2 (MultivectorDA.ofMultivector (testPlane 1.0))
+    let π' :=
+      EvenMVDA.sandwichGradeSetFastOut (sig := PGA3) (n := 4)
+        m π GradeSet.vector (GradeSet.odd 4) GradeSet.vector
+    MultivectorDA.coeffIdx π' 8
+
   let _ ← timeit "Naive line xform" warmupIters iters fun i =>
     let idx := i % samples
     let idx2 := (idx + 1) % samples
@@ -537,6 +663,18 @@ def benchPGA3Operations : IO Unit := do
       EvenMV.sandwichGradeSetFastOut (sig := PGA3) (n := 4) (F := Float)
         m l GradeSet.bivector (GradeSet.even 4) GradeSet.bivector
     l'.coeffs ⟨9, by decide⟩
+
+  let _ ← timeit "DA packed line xform (g2)" warmupIters iters fun i =>
+    let idx := i % samples
+    let idx2 := (idx + 1) % samples
+    let m :=
+      motorsPackedDA.getD idx
+        (EvenMVDA.ofMultivectorDAEven (MultivectorDA.ofMultivector (testMotor 0.5)))
+    let l := linesDA.getD idx2 (MultivectorDA.ofMultivector (testLine 1.0))
+    let l' :=
+      EvenMVDA.sandwichGradeSetFastOut (sig := PGA3) (n := 4)
+        m l GradeSet.bivector (GradeSet.even 4) GradeSet.bivector
+    MultivectorDA.coeffIdx l' 9
 
   IO.println ""
 
@@ -626,7 +764,31 @@ def runPackedSandwich (iters : Nat := singleBenchIters) : IO Unit := do
     let idx := i % samples
     let R := rotorsPacked.getD idx (EvenMV.ofMultivectorEven (testRotor 0.5))
     let v := vecs.getD idx (testVector 1.0)
-    (EvenMV.sandwichVectorFast R v).scalarPart
+    (EvenMV.sandwichVectorGrade1Fast R v).scalarPart
+  blackhole result
+
+/-- Run DataArray-backed packed sandwich many times. -/
+def runDAPackedSandwich (iters : Nat := singleBenchIters) : IO Unit := do
+  let samples : Nat := 16
+  let rotors : Array (Multivector R3 Float) :=
+    Array.ofFn (n := samples) fun k =>
+      testRotor (0.05 * Float.ofNat (k.val + 1))
+  let rotorsDA : Array (MultivectorDA R3) :=
+    rotors.map (fun r => MultivectorDA.ofMultivector r)
+  let rotorsPackedDA : Array (EvenMVDA R3) :=
+    rotorsDA.map (fun r => EvenMVDA.ofMultivectorDAEven r)
+  let vecs : Array (Multivector R3 Float) :=
+    Array.ofFn (n := samples) fun k =>
+      testVector (Float.ofNat (k.val + 1))
+  let vecsDA : Array (MultivectorDA R3) :=
+    vecs.map (fun v => MultivectorDA.ofMultivector v)
+  let result := runN iters fun i =>
+    let idx := i % samples
+    let R :=
+      rotorsPackedDA.getD idx
+        (EvenMVDA.ofMultivectorDAEven (MultivectorDA.ofMultivector (testRotor 0.5)))
+    let v := vecsDA.getD idx (MultivectorDA.ofMultivector (testVector 1.0))
+    MultivectorDA.scalarPart (EvenMVDA.sandwichVectorFast R v)
   blackhole result
 
 /-- Run naive sandwich many times -/
@@ -673,6 +835,28 @@ def runPackedRotor (iters : Nat := singleBenchIters) : IO Unit := do
     let r1 := rotorsPacked.getD idx (EvenMV.ofMultivectorEven (testRotor 0.3))
     let r2 := rotorsPacked.getD idx2 (EvenMV.ofMultivectorEven (testRotor 0.7))
     (r1 * r2).scalarPart
+  blackhole result
+
+/-- Run DataArray-backed packed rotor mul many times. -/
+def runDAPackedRotor (iters : Nat := singleBenchIters) : IO Unit := do
+  let samples : Nat := 16
+  let rotors : Array (Multivector R3 Float) :=
+    Array.ofFn (n := samples) fun k =>
+      testRotor (0.05 * Float.ofNat (k.val + 1))
+  let rotorsDA : Array (MultivectorDA R3) :=
+    rotors.map (fun r => MultivectorDA.ofMultivector r)
+  let rotorsPackedDA : Array (EvenMVDA R3) :=
+    rotorsDA.map (fun r => EvenMVDA.ofMultivectorDAEven r)
+  let result := runN iters fun i =>
+    let idx := i % samples
+    let idx2 := (idx + 1) % samples
+    let r1 :=
+      rotorsPackedDA.getD idx
+        (EvenMVDA.ofMultivectorDAEven (MultivectorDA.ofMultivector (testRotor 0.3)))
+    let r2 :=
+      rotorsPackedDA.getD idx2
+        (EvenMVDA.ofMultivectorDAEven (MultivectorDA.ofMultivector (testRotor 0.7)))
+    EvenMVDA.scalarPart (r1 * r2)
   blackhole result
 
 /-- Run graded rotor mul many times (type-driven sparse kernel). -/
@@ -749,6 +933,28 @@ def runPackedMotor (iters : Nat := singleBenchIters) : IO Unit := do
     (m1 * m2).scalarPart
   blackhole result
 
+/-- Run DataArray-backed packed PGA3 motor mul many times. -/
+def runDAPackedMotor (iters : Nat := singleBenchIters) : IO Unit := do
+  let samples : Nat := 16
+  let motors : Array (Multivector PGA3 Float) :=
+    Array.ofFn (n := samples) fun k =>
+      testMotor (0.05 * Float.ofNat (k.val + 1))
+  let motorsDA : Array (MultivectorDA PGA3) :=
+    motors.map (fun m => MultivectorDA.ofMultivector m)
+  let motorsPackedDA : Array (EvenMVDA PGA3) :=
+    motorsDA.map (fun m => EvenMVDA.ofMultivectorDAEven m)
+  let result := runN iters fun i =>
+    let idx := i % samples
+    let idx2 := (idx + 1) % samples
+    let m1 :=
+      motorsPackedDA.getD idx
+        (EvenMVDA.ofMultivectorDAEven (MultivectorDA.ofMultivector (testMotor 0.3)))
+    let m2 :=
+      motorsPackedDA.getD idx2
+        (EvenMVDA.ofMultivectorDAEven (MultivectorDA.ofMultivector (testMotor 0.7)))
+    EvenMVDA.scalarPart (m1 * m2)
+  blackhole result
+
 /-- Run sparse PGA3 point transform many times. -/
 def runSparsePointXform (iters : Nat := singleBenchIters) : IO Unit := do
   let samples : Nat := 16
@@ -810,6 +1016,34 @@ def runPackedPointXformG3 (iters : Nat := singleBenchIters) : IO Unit := do
     p'.coeffs ⟨14, by decide⟩
   blackhole result
 
+/-- Run DataArray-backed packed PGA3 point transform many times (grade-3 output only). -/
+def runDAPackedPointXformG3 (iters : Nat := singleBenchIters) : IO Unit := do
+  let samples : Nat := 16
+  let motors : Array (Multivector PGA3 Float) :=
+    Array.ofFn (n := samples) fun k =>
+      testMotor (0.05 * Float.ofNat (k.val + 1))
+  let motorsDA : Array (MultivectorDA PGA3) :=
+    motors.map (fun m => MultivectorDA.ofMultivector m)
+  let motorsPackedDA : Array (EvenMVDA PGA3) :=
+    motorsDA.map (fun m => EvenMVDA.ofMultivectorDAEven m)
+  let points : Array (Multivector PGA3 Float) :=
+    Array.ofFn (n := samples) fun k =>
+      testPoint (Float.ofNat (k.val + 1))
+  let pointsDA : Array (MultivectorDA PGA3) :=
+    points.map (fun p => MultivectorDA.ofMultivector p)
+  let result := runN iters fun i =>
+    let idx := i % samples
+    let idx2 := (idx + 1) % samples
+    let m :=
+      motorsPackedDA.getD idx
+        (EvenMVDA.ofMultivectorDAEven (MultivectorDA.ofMultivector (testMotor 0.5)))
+    let p := pointsDA.getD idx2 (MultivectorDA.ofMultivector (testPoint 1.0))
+    let p' :=
+      EvenMVDA.sandwichGradeSetFastOut (sig := PGA3) (n := 4)
+        m p (GradeSet.singleton 3) (GradeSet.odd 4) (GradeSet.singleton 3)
+    MultivectorDA.coeffIdx p' 14
+  blackhole result
+
 /-- Run sparse PGA3 plane transform many times. -/
 def runSparsePlaneXform (iters : Nat := singleBenchIters) : IO Unit := do
   let samples : Nat := 16
@@ -847,6 +1081,34 @@ def runPackedPlaneXformG1 (iters : Nat := singleBenchIters) : IO Unit := do
       EvenMV.sandwichGradeSetFastOut (sig := PGA3) (n := 4) (F := Float)
         m π GradeSet.vector (GradeSet.odd 4) GradeSet.vector
     π'.coeffs ⟨8, by decide⟩
+  blackhole result
+
+/-- Run DataArray-backed packed PGA3 plane transform many times (grade-1 output only). -/
+def runDAPackedPlaneXformG1 (iters : Nat := singleBenchIters) : IO Unit := do
+  let samples : Nat := 16
+  let motors : Array (Multivector PGA3 Float) :=
+    Array.ofFn (n := samples) fun k =>
+      testMotor (0.05 * Float.ofNat (k.val + 1))
+  let motorsDA : Array (MultivectorDA PGA3) :=
+    motors.map (fun m => MultivectorDA.ofMultivector m)
+  let motorsPackedDA : Array (EvenMVDA PGA3) :=
+    motorsDA.map (fun m => EvenMVDA.ofMultivectorDAEven m)
+  let planes : Array (Multivector PGA3 Float) :=
+    Array.ofFn (n := samples) fun k =>
+      testPlane (Float.ofNat (k.val + 1))
+  let planesDA : Array (MultivectorDA PGA3) :=
+    planes.map (fun p => MultivectorDA.ofMultivector p)
+  let result := runN iters fun i =>
+    let idx := i % samples
+    let idx2 := (idx + 1) % samples
+    let m :=
+      motorsPackedDA.getD idx
+        (EvenMVDA.ofMultivectorDAEven (MultivectorDA.ofMultivector (testMotor 0.5)))
+    let π := planesDA.getD idx2 (MultivectorDA.ofMultivector (testPlane 1.0))
+    let π' :=
+      EvenMVDA.sandwichGradeSetFastOut (sig := PGA3) (n := 4)
+        m π GradeSet.vector (GradeSet.odd 4) GradeSet.vector
+    MultivectorDA.coeffIdx π' 8
   blackhole result
 
 /-- Run sparse PGA3 line transform many times. -/
@@ -888,6 +1150,34 @@ def runPackedLineXformG2 (iters : Nat := singleBenchIters) : IO Unit := do
     l'.coeffs ⟨9, by decide⟩
   blackhole result
 
+/-- Run DataArray-backed packed PGA3 line transform many times (grade-2 output only). -/
+def runDAPackedLineXformG2 (iters : Nat := singleBenchIters) : IO Unit := do
+  let samples : Nat := 16
+  let motors : Array (Multivector PGA3 Float) :=
+    Array.ofFn (n := samples) fun k =>
+      testMotor (0.05 * Float.ofNat (k.val + 1))
+  let motorsDA : Array (MultivectorDA PGA3) :=
+    motors.map (fun m => MultivectorDA.ofMultivector m)
+  let motorsPackedDA : Array (EvenMVDA PGA3) :=
+    motorsDA.map (fun m => EvenMVDA.ofMultivectorDAEven m)
+  let lines : Array (Multivector PGA3 Float) :=
+    Array.ofFn (n := samples) fun k =>
+      testLine (Float.ofNat (k.val + 1))
+  let linesDA : Array (MultivectorDA PGA3) :=
+    lines.map (fun l => MultivectorDA.ofMultivector l)
+  let result := runN iters fun i =>
+    let idx := i % samples
+    let idx2 := (idx + 1) % samples
+    let m :=
+      motorsPackedDA.getD idx
+        (EvenMVDA.ofMultivectorDAEven (MultivectorDA.ofMultivector (testMotor 0.5)))
+    let l := linesDA.getD idx2 (MultivectorDA.ofMultivector (testLine 1.0))
+    let l' :=
+      EvenMVDA.sandwichGradeSetFastOut (sig := PGA3) (n := 4)
+        m l GradeSet.bivector (GradeSet.even 4) GradeSet.bivector
+    MultivectorDA.coeffIdx l' 9
+  blackhole result
+
 end Grassmann.Bench
 
 /-- Main entry point with subcommands for hyperfine benchmarking -/
@@ -919,6 +1209,10 @@ def main (args : List String) : IO Unit := do
   | ["packed-sandwich", itersStr] =>
     let iters ← parseNatArg itersStr
     Grassmann.Bench.runPackedSandwich iters
+  | ["da-packed-sandwich"] => Grassmann.Bench.runDAPackedSandwich
+  | ["da-packed-sandwich", itersStr] =>
+    let iters ← parseNatArg itersStr
+    Grassmann.Bench.runDAPackedSandwich iters
   | ["naive-sandwich"] => Grassmann.Bench.runNaiveSandwich
   | ["naive-sandwich", itersStr] =>
     let iters ← parseNatArg itersStr
@@ -931,6 +1225,10 @@ def main (args : List String) : IO Unit := do
   | ["packed-rotor", itersStr] =>
     let iters ← parseNatArg itersStr
     Grassmann.Bench.runPackedRotor iters
+  | ["da-packed-rotor"] => Grassmann.Bench.runDAPackedRotor
+  | ["da-packed-rotor", itersStr] =>
+    let iters ← parseNatArg itersStr
+    Grassmann.Bench.runDAPackedRotor iters
   | ["graded-rotor"] => Grassmann.Bench.runGradedRotor
   | ["graded-rotor", itersStr] =>
     let iters ← parseNatArg itersStr
@@ -951,6 +1249,10 @@ def main (args : List String) : IO Unit := do
   | ["packed-motor", itersStr] =>
     let iters ← parseNatArg itersStr
     Grassmann.Bench.runPackedMotor iters
+  | ["da-packed-motor"] => Grassmann.Bench.runDAPackedMotor
+  | ["da-packed-motor", itersStr] =>
+    let iters ← parseNatArg itersStr
+    Grassmann.Bench.runDAPackedMotor iters
   | ["sparse-point"] => Grassmann.Bench.runSparsePointXform
   | ["sparse-point", itersStr] =>
     let iters ← parseNatArg itersStr
@@ -963,6 +1265,10 @@ def main (args : List String) : IO Unit := do
   | ["packed-point-g3", itersStr] =>
     let iters ← parseNatArg itersStr
     Grassmann.Bench.runPackedPointXformG3 iters
+  | ["da-packed-point-g3"] => Grassmann.Bench.runDAPackedPointXformG3
+  | ["da-packed-point-g3", itersStr] =>
+    let iters ← parseNatArg itersStr
+    Grassmann.Bench.runDAPackedPointXformG3 iters
   | ["sparse-plane"] => Grassmann.Bench.runSparsePlaneXform
   | ["sparse-plane", itersStr] =>
     let iters ← parseNatArg itersStr
@@ -971,6 +1277,10 @@ def main (args : List String) : IO Unit := do
   | ["packed-plane-g1", itersStr] =>
     let iters ← parseNatArg itersStr
     Grassmann.Bench.runPackedPlaneXformG1 iters
+  | ["da-packed-plane-g1"] => Grassmann.Bench.runDAPackedPlaneXformG1
+  | ["da-packed-plane-g1", itersStr] =>
+    let iters ← parseNatArg itersStr
+    Grassmann.Bench.runDAPackedPlaneXformG1 iters
   | ["sparse-line"] => Grassmann.Bench.runSparseLineXform
   | ["sparse-line", itersStr] =>
     let iters ← parseNatArg itersStr
@@ -979,6 +1289,10 @@ def main (args : List String) : IO Unit := do
   | ["packed-line-g2", itersStr] =>
     let iters ← parseNatArg itersStr
     Grassmann.Bench.runPackedLineXformG2 iters
+  | ["da-packed-line-g2"] => Grassmann.Bench.runDAPackedLineXformG2
+  | ["da-packed-line-g2", itersStr] =>
+    let iters ← parseNatArg itersStr
+    Grassmann.Bench.runDAPackedLineXformG2 iters
   | _ => do
     IO.println "Usage: bench [command]"
     IO.println ""
@@ -989,21 +1303,27 @@ def main (args : List String) : IO Unit := do
     IO.println "  table-geo [iters]       Run table geometric product (for hyperfine)"
     IO.println "  sparse-sandwich [iters] Run sparse sandwich (for hyperfine)"
     IO.println "  packed-sandwich [iters] Run packed (EvenMV) sandwich (for hyperfine)"
+    IO.println "  da-packed-sandwich [iters] Run DataArray packed sandwich (for hyperfine)"
     IO.println "  naive-sandwich [iters]  Run naive sandwich (for hyperfine)"
     IO.println "  sparse-rotor [iters]    Run sparse rotor mul (for hyperfine)"
     IO.println "  packed-rotor [iters]    Run packed (EvenMV) rotor mul (for hyperfine)"
+    IO.println "  da-packed-rotor [iters] Run DataArray packed rotor mul (for hyperfine)"
     IO.println "  graded-rotor [iters]    Run graded rotor mul (for hyperfine)"
     IO.println "  graded-rotor-direct [iters] Run graded rotor mul (direct, for debugging)"
     IO.println "  opt-vsq [iters]         Run optimized v² (for hyperfine)"
     IO.println "  sparse-motor [iters]    Run sparse PGA3 motor mul (for hyperfine)"
     IO.println "  packed-motor [iters]    Run packed (EvenMV) PGA3 motor mul (for hyperfine)"
+    IO.println "  da-packed-motor [iters] Run DataArray packed PGA3 motor mul (for hyperfine)"
     IO.println "  sparse-point [iters]    Run sparse PGA3 point transform"
     IO.println "  packed-point [iters]    Run packed PGA3 point transform"
     IO.println "  packed-point-g3 [iters] Run packed PGA3 point transform (grade-3 only)"
+    IO.println "  da-packed-point-g3 [iters] Run DataArray packed PGA3 point transform (grade-3 only)"
     IO.println "  sparse-plane [iters]    Run sparse PGA3 plane transform"
     IO.println "  packed-plane-g1 [iters] Run packed PGA3 plane transform (grade-1 only)"
+    IO.println "  da-packed-plane-g1 [iters] Run DataArray packed PGA3 plane transform (grade-1 only)"
     IO.println "  sparse-line [iters]     Run sparse PGA3 line transform"
     IO.println "  packed-line-g2 [iters]  Run packed PGA3 line transform (grade-2 only)"
+    IO.println "  da-packed-line-g2 [iters] Run DataArray packed PGA3 line transform (grade-2 only)"
     IO.println ""
     IO.println "Example with hyperfine:"
     IO.println "  hyperfine '.lake/build/bin/bench naive-geo 200000' '.lake/build/bin/bench table-geo 200000'"
