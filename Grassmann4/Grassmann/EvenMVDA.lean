@@ -233,6 +233,63 @@ def geometricProductLeftSparse (a : EvenMVDA sig) (b : MultivectorDA sig)
       return ⟨out⟩
 
 /-- Right multiply a dense `DataArray` multivector by a packed even element,
+    iterating only over the provided left indices. -/
+def geometricProductRightSparse (a : MultivectorDA sig) (aIdx : Array (Fin (2 ^ n)))
+    (b : EvenMVDA sig) : MultivectorDA sig := Id.run do
+  let idxEven := EvenMV.Kernel.evenPackedIdxCached n
+  let sizeEven := 2 ^ (n - 1)
+  let mut out : DataArray := DataArray.zeros (sizeFull n)
+  match EvenMV.Kernel.evenRightMulSignCached (sig := sig) (n := n) sig with
+  | some signs =>
+      let mulIdx := EvenMV.Kernel.evenRightMulIdxCached n
+      for i in aIdx do
+        let ai := a.coeffs.get! i.val
+        let base := i.val * sizeEven
+        for j in idxEven do
+          let sign := signs.getD (base + j) 0
+          if sign != 0 then
+            let resIdx := mulIdx.getD (base + j) 0
+            let bj := b.coeffs.get! j
+            let coeff := ai * bj
+            let contrib := if sign < 0 then -coeff else coeff
+            let old := out.get! resIdx
+            out := out.set! resIdx (old + contrib)
+      return ⟨out⟩
+  | none =>
+      let masks := EvenMV.Kernel.evenMasksCached n
+      let table? : Option (SignTable n) := Grassmann.cachedSignTable (n := n) sig
+      match table? with
+      | some table =>
+          for i in aIdx do
+            let ai := a.coeffs.get! i.val
+            for j in idxEven do
+              let mj := masks.getD j 0
+              let sign := table.lookup i.val mj
+              if sign != 0 then
+                let resIdx := i.val ^^^ mj
+                let bj := b.coeffs.get! j
+                let coeff := ai * bj
+                let contrib := if sign < 0 then -coeff else coeff
+                let old := out.get! resIdx
+                out := out.set! resIdx (old + contrib)
+      | none =>
+          for i in aIdx do
+            let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
+            let ai := a.coeffs.get! i.val
+            for j in idxEven do
+              let mj := masks.getD j 0
+              let bjBlade : Blade sig := ⟨BitVec.ofNat n mj⟩
+              let sign := geometricSign sig bi bjBlade
+              if sign != 0 then
+                let resIdx := i.val ^^^ mj
+                let bj := b.coeffs.get! j
+                let coeff := ai * bj
+                let contrib := if sign < 0 then -coeff else coeff
+                let old := out.get! resIdx
+                out := out.set! resIdx (old + contrib)
+      return ⟨out⟩
+
+/-- Right multiply a dense `DataArray` multivector by a packed even element,
     computing only the requested output indices (others are zero). -/
 def geometricProductRightAtIndices (a : MultivectorDA sig) (b : EvenMVDA sig)
     (outIdx : Array (Fin (2 ^ n))) : MultivectorDA sig := Id.run do
@@ -320,12 +377,7 @@ def sandwichGradeSetFast (R : EvenMVDA sig) (x : MultivectorDA sig)
   let xIdx : Array (Fin (2 ^ n)) := gradeSetIndicesFastArray n xGs
   let midIdx : Array (Fin (2 ^ n)) := gradeSetIndicesFastArray n midGs
   let Rx := geometricProductLeftSparse (sig := sig) (n := n) R x xIdx
-  -- No output restriction here; compute full then sparsify by the index list.
-  let full := (EvenMVDA.geometricProductRightAtIndices (sig := sig) (n := n) (a := Rx) (b := Rrev)
-    (outIdx := Array.ofFn (n := 2 ^ n) fun i => i))
-  -- Keep only the grade-set upper bound (others are already 0 by construction for small midGs).
-  let _ := midIdx
-  full
+  geometricProductRightSparse (sig := sig) (n := n) Rx midIdx Rrev
 
 /-- Fast sandwich specialized by grade sets, computing only requested output grades. -/
 @[inline]
