@@ -46,6 +46,7 @@ theorem gradeProject_zero (k : ℕ) : (0 : Multivector sig F).gradeProject k = 0
   ext i; simp only [Multivector.gradeProject, Multivector.zero]; split_ifs <;> rfl
 
 /-- Grade projection distributes over addition: ⟨a + b⟩ₖ = ⟨a⟩ₖ + ⟨b⟩ₖ -/
+@[simp]
 theorem gradeProject_add (a b : Multivector sig F) (k : ℕ) :
     (a + b).gradeProject k = a.gradeProject k + b.gradeProject k := by
   ext i
@@ -75,11 +76,13 @@ theorem oddPart_evenPart (a : Multivector sig F) : a.evenPart.oddPart = 0 := by
   split_ifs with h1 h2 <;> first | rfl | omega
 
 /-- Even part distributes over addition -/
+@[simp]
 theorem evenPart_add (a b : Multivector sig F) : (a + b).evenPart = a.evenPart + b.evenPart := by
   ext i; simp only [Multivector.evenPart, HAdd.hAdd, Multivector.add]
   split_ifs with h <;> first | rfl | exact (add_zero 0).symm
 
 /-- Odd part distributes over addition -/
+@[simp]
 theorem oddPart_add (a b : Multivector sig F) : (a + b).oddPart = a.oddPart + b.oddPart := by
   ext i; simp only [Multivector.oddPart, HAdd.hAdd, Multivector.add]
   split_ifs with h <;> first | rfl | exact (add_zero 0).symm
@@ -230,16 +233,19 @@ theorem involute_mul (a b : Multivector sig F) : (a * b)ˆ = aˆ * bˆ := sorry
 theorem conjugate_mul (a b : Multivector sig F) : (a * b)‡ = b‡ * a‡ := sorry
 
 /-- Reverse preserves addition: (a + b)† = a† + b† -/
+@[simp]
 theorem reverse_add (a b : Multivector sig F) : (a + b)† = a† + b† := by
   ext i; simp only [Multivector.reverse, HAdd.hAdd, Multivector.add]
   split_ifs <;> first | rfl | exact neg_add _ _
 
 /-- Involute preserves addition: (a + b)ˆ = aˆ + bˆ -/
+@[simp]
 theorem involute_add (a b : Multivector sig F) : (a + b)ˆ = aˆ + bˆ := by
   ext i; simp only [Multivector.involute, HAdd.hAdd, Multivector.add]
   split_ifs <;> first | rfl | exact neg_add _ _
 
 /-- Conjugate preserves addition: (a + b)‡ = a‡ + b‡ -/
+@[simp]
 theorem conjugate_add (a b : Multivector sig F) : (a + b)‡ = a‡ + b‡ := by
   ext i; simp only [Multivector.conjugate, HAdd.hAdd, Multivector.add]
   split_ifs <;> first | rfl | exact neg_add _ _
@@ -454,6 +460,7 @@ theorem wedge_anticomm_vectors' (a b : Multivector sig F)
 The grade automorphism (involute) negates odd-grade parts.
 -/
 
+omit [Div F] in
 /-- Grade automorphism on vectors: vˆ = -v -/
 theorem involute_vector (v : Multivector sig F) (hv : v = v.gradeProject 1) :
     vˆ = -v := by
@@ -474,6 +481,7 @@ theorem involute_vector (v : Multivector sig F) (hv : v = v.gradeProject 1) :
     change -v.coeffs i = (Multivector.neg v).coeffs i
     simp only [Multivector.neg]
 
+omit [Div F] in
 /-- Grade automorphism on bivectors: Bˆ = B -/
 theorem involute_bivector (B : Multivector sig F) (hB : B = B.gradeProject 2) :
     Bˆ = B := by
@@ -490,6 +498,7 @@ theorem involute_bivector (B : Multivector sig F) (hB : B = B.gradeProject 2) :
     simp only [h2, ↓reduceIte] at hcoeff
     simp [hcoeff]
 
+omit [Div F] in
 /-- Grade automorphism on pseudoscalar depends on dimension parity -/
 theorem involute_pseudoscalar (I : Multivector sig F) (hI : I = I.gradeProject n) :
     Iˆ = if n % 2 = 0 then I else -I := by
