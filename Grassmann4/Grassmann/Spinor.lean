@@ -46,9 +46,11 @@ structure Spinor (sig : Signature n) (F : Type*) [Ring F] where
 namespace Spinor
 
 /-- Convert spinor to multivector -/
+@[inline]
 def toMultivector (s : Spinor sig F) : Multivector sig F := s.mv.toMultivector
 
 /-- Create spinor from even multivector (projects to even part) -/
+@[inline]
 def ofEven (m : Multivector sig F) : Spinor sig F :=
   ⟨EvenMV.ofMultivectorEven (sig := sig) (n := n) m⟩
 
@@ -59,26 +61,33 @@ def one : Spinor sig F := ⟨EvenMV.one (sig := sig) (n := n) (F := F)⟩
 def zero : Spinor sig F := ⟨EvenMV.zero (sig := sig) (n := n) (F := F)⟩
 
 /-- Spinor multiplication (geometric product of even elements is even) -/
+@[inline]
 def mul (a b : Spinor sig F) : Spinor sig F :=
   ⟨a.mv * b.mv⟩
 
 /-- Spinor reverse -/
+@[inline]
 def reverse (s : Spinor sig F) : Spinor sig F := ⟨s.mv†ᵉ⟩
 
 /-- Scalar part of spinor -/
+@[inline]
 def scalarPart (s : Spinor sig F) : F :=
   s.mv.coeffs ⟨0, Nat.two_pow_pos (n - 1)⟩
 
 /-- Add spinors -/
+@[inline]
 def add (a b : Spinor sig F) : Spinor sig F := ⟨a.mv + b.mv⟩
 
 /-- Subtract spinors -/
+@[inline]
 def sub (a b : Spinor sig F) : Spinor sig F := ⟨a.mv - b.mv⟩
 
 /-- Scale spinor -/
+@[inline]
 def smul (x : F) (s : Spinor sig F) : Spinor sig F := ⟨x • s.mv⟩
 
 /-- Negate spinor -/
+@[inline]
 def neg (s : Spinor sig F) : Spinor sig F := ⟨-s.mv⟩
 
 instance : Zero (Spinor sig F) := ⟨Spinor.zero⟩
@@ -103,9 +112,11 @@ postfix:max "†ˢ" => Spinor.reverse
 /-! ## Rotor Operations -/
 
 /-- Squared norm of spinor: s s̃ -/
+@[inline]
 def normSq (s : Spinor sig F) : F := (s * s†ˢ).scalarPart
 
 /-- Apply spinor as rotation: v' = s v s̃ -/
+@[inline]
 def rotate (s : Spinor sig F) (v : Multivector sig F) : Multivector sig F :=
   EvenMV.sandwich (sig := sig) (n := n) s.mv v
 
@@ -118,6 +129,7 @@ def rotateVectorFast (s : Spinor sig F) (v : Multivector sig F) : Multivector si
   EvenMV.sandwichVectorGrade1Fast (sig := sig) (n := n) s.mv v
 
 /-- Compose two rotations: s₁₂ = s₁ s₂ -/
+@[inline]
 def compose (s1 s2 : Spinor sig F) : Spinor sig F := s1 * s2
 
 end Spinor
@@ -127,15 +139,18 @@ end Spinor
 namespace Spinor
 
 /-- Norm of a spinor -/
+@[inline]
 def norm (s : Spinor sig Float) : Float :=
   Float.sqrt s.normSq
 
 /-- Normalize a spinor to unit norm -/
+@[inline]
 def normalize (s : Spinor sig Float) : Spinor sig Float :=
   let n := s.norm
   if n == 0 then s else s.smul (1 / n)
 
 /-- Check if spinor is a valid rotor (unit norm) -/
+@[inline]
 def isRotor (s : Spinor sig Float) (tol : Float := 1e-10) : Bool :=
   Float.abs (s.normSq - 1) < tol
 
