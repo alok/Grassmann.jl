@@ -49,6 +49,7 @@ def expTaylor (B : Multivector sig Float) (terms : ℕ := 10) : Multivector sig 
 /-- Create a rotor from axis (bivector) and angle.
     R = exp(angle/2 * axis) = cos(angle/2) + sin(angle/2) * axis
     Assumes axis is a unit bivector (axis² = -1). -/
+@[inline]
 def rotor (axis : Multivector sig Float) (angle : Float) : Multivector sig Float :=
   let halfAngle := angle / 2.0
   let c := Float.cos halfAngle
@@ -56,11 +57,13 @@ def rotor (axis : Multivector sig Float) (angle : Float) : Multivector sig Float
   Multivector.scalar c + axis.smul s
 
 /-- Apply rotation: v' = R * v * R† -/
+@[inline]
 def rotate (R v : Multivector sig Float) : Multivector sig Float :=
   R * v * R†
 
 /-- Apply reflection through hyperplane with normal n: v' = -n * v * n
     (assumes n is a unit vector, n² = 1) -/
+@[inline]
 def reflect (normal v : Multivector sig Float) : Multivector sig Float :=
   (normal * v * normal).neg
 
@@ -73,10 +76,12 @@ namespace Reflection
 /-- Reflect a multivector through hyperplane with unit normal n.
     For a vector v: v' = -n v n = v - 2(n·v)n
     For general multivector: applies grade-by-grade -/
+@[inline]
 def throughPlane (normal m : Multivector sig Float) : Multivector sig Float :=
   -(normal * m * normal)
 
 /-- Reflect through the origin (negate all vectors) -/
+@[inline]
 def throughOrigin (m : Multivector sig Float) : Multivector sig Float :=
   m.involute
 
@@ -103,6 +108,7 @@ namespace Orthogonal
 /-- Apply an orthogonal transformation via versor
     T(x) = V x V† where V is a product of vectors
     Even versor = rotation, odd versor = includes reflection -/
+@[inline]
 def apply (versor x : Multivector sig Float) : Multivector sig Float :=
   -- Check if versor is even (all odd-grade components are zero)
   let isEven := (versor.evenPart - versor).normSq < 1e-10
@@ -141,12 +147,14 @@ end Orthogonal
 namespace Projective
 
 /-- Project vector a onto vector b: (a·b/b·b)b -/
+@[inline]
 def projectVector (a b : Multivector sig Float) : Multivector sig Float :=
   let ab := (a * b).scalarPart
   let bb := (b * b).scalarPart
   if bb == 0 then Multivector.zero else b.smul (ab / bb)
 
 /-- Reject a from b: a - proj_b(a) = component perpendicular to b -/
+@[inline]
 def rejectVector (a b : Multivector sig Float) : Multivector sig Float :=
   a - projectVector a b
 
@@ -350,6 +358,7 @@ namespace VersorOpt
 /-- Optimized rotor sandwich using grade tracking.
     Since rotors are even, R*v*R† preserves vector grade.
     We can skip computing other grades. -/
+@[inline]
 def rotorSandwichVector (R v : Multivector sig Float) : Multivector sig Float :=
   -- Full computation, but result is known to be vector-grade only
   -- The compiler can potentially optimize knowing the output structure
@@ -363,6 +372,7 @@ def composeRotorList (rotors : List (Multivector sig Float)) : Multivector sig F
 
 /-- Invert a versor: V⁻¹ = V† / (V V†).scalarPart
     For unit versors: V⁻¹ = V† -/
+@[inline]
 def versorInverse (V : Multivector sig Float) : Multivector sig Float :=
   let normSq := (V * V†).scalarPart
   if normSq == 0 then V†
@@ -370,6 +380,7 @@ def versorInverse (V : Multivector sig Float) : Multivector sig Float :=
 
 /-- Check if a multivector is a unit versor.
     Unit versor: V V† = ±1 -/
+@[inline]
 def isUnitVersor (V : Multivector sig Float) (tol : Float := 1e-10) : Bool :=
   let normSq := Float.abs (V * V†).scalarPart
   Float.abs (normSq - 1.0) < tol
