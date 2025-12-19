@@ -1,4 +1,5 @@
 -- Root import file for Grassmann Algebra library
+
 -- Core infrastructure
 import Grassmann.Proof         -- SciLean-style sorry_proof, Float Ring/Field
 import Grassmann.Linearity     -- Debug helpers for exclusivity / in-place updates
@@ -12,26 +13,24 @@ import Grassmann.Notation
 
 -- Multivector representations
 import Grassmann.DataArray        -- Float "plain data" buffers for hot paths
-import Grassmann.Multivector       -- Dense 2^n array
+import Grassmann.Multivector      -- Dense 2^n array (proof-friendly)
+import Grassmann.MV               -- Unified DataArray-backed multivector (recommended)
 import Grassmann.MultivectorArray
-import Grassmann.MultivectorDA     -- Dense Float multivectors backed by DataArray
-import Grassmann.GradedMVDA        -- Grade-tracked Float kernels on DataArray
 import Grassmann.SparseMultivector -- Sparse TreeMap
 import Grassmann.TruncatedMV       -- Truncated grades for high-dim
-import Grassmann.EvenMV            -- Packed even multivectors (spinors/rotors)
-import Grassmann.EvenMVDA          -- Packed even Float multivectors backed by DataArray
+import Grassmann.EvenMV            -- Kernel tables for even-grade operations
 import Grassmann.Storage           -- Storage backend abstraction
 import Grassmann.Repr              -- MultivectorRepr typeclass
 import Grassmann.PrettyPrint       -- Unicode pretty-printing
 
 -- Algebraic structures
 import Grassmann.Versor
-import Grassmann.Spinor
+import Grassmann.Spinor            -- Spinors (MV-backed)
 import Grassmann.RotorExp
 
 -- Geometric algebras
 import Grassmann.CGA              -- Conformal GA (hardcoded 5D)
-import Grassmann.PGA              -- Projective GA
+import Grassmann.PGA              -- Projective GA (MV-backed)
 import Grassmann.CGAGen           -- Generic n-dimensional CGA
 import Grassmann.SignatureGen     -- Signature generation
 
@@ -65,3 +64,8 @@ import Grassmann.GATypeclass
 -- NOTE: Development-time checks and `#eval`-heavy demo files live under
 -- `Grassmann.All` so that `import Grassmann` stays lightweight for downstream
 -- users and for compilation performance.
+
+-- DEPRECATED: The following files are no longer imported and will be removed:
+-- - Grassmann.MultivectorDA   (use Grassmann.MV instead)
+-- - Grassmann.GradedMVDA      (use Grassmann.MV with Parity instead)
+-- - Grassmann.EvenMVDA        (use Grassmann.MV sig .even instead)

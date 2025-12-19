@@ -9,10 +9,14 @@ relaxedAutoImplicit = false
 weak.linter.mathlibStandardSet = true
 maxSynthPendingDepth = 3
 
+# Build in release mode for optimizations
+[buildOptions]
+release = true
+
+# SciLean brings in mathlib, so we don't need to specify it separately
 [[require]]
-name = "mathlib"
-scope = "leanprover-community"
-rev = "v4.26.0-rc2"
+name = "scilean"
+path = "/Users/alokbeniwal/scilean"
 
 [[require]]
 name = "LeanPlot"
@@ -41,6 +45,8 @@ root = "RunPropertyTests"
 name = "bench"
 root = "Grassmann.Bench"
 precompileModules = false
+# BLAS linking for SciLean-backed DataArray operations
+moreLinkArgs = ["-L/opt/homebrew/opt/openblas/lib", "-lblas"]
 
 
 # Note: Verso documentation setup is available but requires

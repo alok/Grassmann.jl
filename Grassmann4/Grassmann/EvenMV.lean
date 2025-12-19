@@ -25,7 +25,10 @@ namespace Grassmann
 
 variable {n : ℕ} {sig : Signature n} {F : Type*} [Ring F]
 
-/-- Packed even multivector: coefficients for even-grade blades only. -/
+/-- Packed even multivector: coefficients for even-grade blades only.
+
+**DEPRECATED**: Use `MV sig .even` from `Grassmann.MV` instead. The unified MV type
+provides a cleaner API with automatic grade tracking. -/
 structure EvenMV (sig : Signature n) (F : Type*) where
   /-- Coefficients indexed over the 2^(n-1) even blades. -/
   coeffs : Fin (2 ^ (n - 1)) → F
@@ -172,10 +175,12 @@ private def evenMulIdxCompute (n : ℕ) : Array Nat :=
     let mj := masks.getD j 0
     map.getD (mi ^^^ mj) 0
 
-private def evenMulIdx2 : Array Nat := evenMulIdxCompute 2
-private def evenMulIdx3 : Array Nat := evenMulIdxCompute 3
-private def evenMulIdx4 : Array Nat := evenMulIdxCompute 4
-private def evenMulIdx5 : Array Nat := evenMulIdxCompute 5
+-- Precomputed even×even index tables (dimension-only, signature-independent)
+-- Made public for typeclass-based compile-time dispatch
+def evenMulIdx2 : Array Nat := evenMulIdxCompute 2
+def evenMulIdx3 : Array Nat := evenMulIdxCompute 3
+def evenMulIdx4 : Array Nat := evenMulIdxCompute 4
+def evenMulIdx5 : Array Nat := evenMulIdxCompute 5
 
 @[inline] def evenMulIdxCached (n : ℕ) : Array Nat :=
   match n with
@@ -197,12 +202,14 @@ private def evenMulSignFromTable {n : ℕ} (table : SignTable n) : Array Int8 :=
     let mj := masks.getD j 0
     table.lookup mi mj
 
-private def evenMulSignR2 : Array Int8 := evenMulSignFromTable R2SignTable
-private def evenMulSignR3 : Array Int8 := evenMulSignFromTable R3SignTable
-private def evenMulSignR4 : Array Int8 := evenMulSignFromTable R4SignTable
-private def evenMulSignSTA : Array Int8 := evenMulSignFromTable STASignTable
-private def evenMulSignPGA3 : Array Int8 := evenMulSignFromTable PGA3SignTable
-private def evenMulSignCGA3 : Array Int8 := evenMulSignFromTable CGA3SignTable
+-- Precomputed even×even sign tables for canonical signatures
+-- Made public for typeclass-based compile-time dispatch
+def evenMulSignR2 : Array Int8 := evenMulSignFromTable R2SignTable
+def evenMulSignR3 : Array Int8 := evenMulSignFromTable R3SignTable
+def evenMulSignR4 : Array Int8 := evenMulSignFromTable R4SignTable
+def evenMulSignSTA : Array Int8 := evenMulSignFromTable STASignTable
+def evenMulSignPGA3 : Array Int8 := evenMulSignFromTable PGA3SignTable
+def evenMulSignCGA3 : Array Int8 := evenMulSignFromTable CGA3SignTable
 
 /-- Cached even×even sign table restricted to even blades, for canonical signatures. -/
 @[inline] def evenMulSignCached (s : Signature n) : Option (Array Int8) :=

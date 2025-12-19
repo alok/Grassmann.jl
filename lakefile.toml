@@ -12,7 +12,11 @@ maxSynthPendingDepth = 3
 [[require]]
 name = "mathlib"
 scope = "leanprover-community"
-rev = "v4.26.0-rc2"
+rev = "master"
+
+[[require]]
+name = "SciLean"
+path = "/Users/alokbeniwal/scilean"
 
 [[require]]
 name = "LeanPlot"

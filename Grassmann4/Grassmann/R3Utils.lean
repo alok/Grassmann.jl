@@ -59,7 +59,7 @@ def distance (a b : Multivector R3 Float) : Float := VectorUtils.distance a b
 /-! ## Rotation Operations -/
 
 /-- Create a rotor for rotation around an axis by an angle (radians) -/
-def rotorFromAxisAngle (axis : Multivector R3 Float) (angle : Float) : Spinor R3 Float :=
+def rotorFromAxisAngle (axis : Multivector R3 Float) (angle : Float) : Spinor R3 :=
   -- Normalize axis and create bivector plane
   let n := axis.normalize
   let halfAngle := angle / 2
@@ -75,19 +75,19 @@ def rotorFromAxisAngle (axis : Multivector R3 Float) (angle : Float) : Spinor R3
 def rotateAroundAxis (v : Multivector R3 Float) (axis : Multivector R3 Float)
     (angle : Float) : Multivector R3 Float :=
   let R := rotorFromAxisAngle axis angle
-  R.rotateVectorFast v
+  VectorUtils.rotateWithRotor R v
 
 /-- Rotate a vector around the X-axis -/
 def rotateX (v : Multivector R3 Float) (angle : Float) : Multivector R3 Float :=
-  (rotorX angle).rotateVectorFast v
+  VectorUtils.rotateWithRotor (rotorX angle) v
 
 /-- Rotate a vector around the Y-axis -/
 def rotateY (v : Multivector R3 Float) (angle : Float) : Multivector R3 Float :=
-  (rotorY angle).rotateVectorFast v
+  VectorUtils.rotateWithRotor (rotorY angle) v
 
 /-- Rotate a vector around the Z-axis -/
 def rotateZ (v : Multivector R3 Float) (angle : Float) : Multivector R3 Float :=
-  (rotorZ angle).rotateVectorFast v
+  VectorUtils.rotateWithRotor (rotorZ angle) v
 
 /-! ## Projection Operations (using generic versions) -/
 

@@ -113,19 +113,24 @@ def areCollinear (a b c : Multivector sig Float) (eps : Float := 1e-10) : Bool :
   let v2 := c.sub a
   (v1 ⋀ᵐ v2).normSq < eps * eps
 
-/-! ## Rotor Operations (generic) -/
+/-! ## Rotor Operations (generic)
+
+Note: Spinor is now Float-only (MV-backed). For generic F, use Multivector directly.
+-/
 
 /-- Create a rotor for rotation in a bivector plane by an angle (radians).
     The bivector should be normalized (B² = -1 for Euclidean signature). -/
-def rotorInPlane (bivector : Multivector sig Float) (angle : Float) : Spinor sig Float :=
+def rotorInPlane (bivector : Multivector sig Float) (angle : Float) : Spinor sig :=
   Spinor.fromAxisAngle bivector angle
 
-/-- Rotate a vector using a rotor -/
-def rotateWithRotor (R : Spinor sig Float) (v : Multivector sig Float) : Multivector sig Float :=
-  R.rotate v
+/-- Rotate a vector using a rotor (returns Multivector via toMultivector) -/
+def rotateWithRotor (R : Spinor sig) (v : Multivector sig Float) : Multivector sig Float :=
+  -- Convert v to MV .odd, rotate, convert back
+  let vMV := MV.ofMultivector v .odd
+  (R.rotate vMV).toMultivector
 
 /-- Compose two rotations -/
-def composeRotations (R1 R2 : Spinor sig Float) : Spinor sig Float :=
+def composeRotations (R1 R2 : Spinor sig) : Spinor sig :=
   R1.mul R2
 
 /-! ## Basis Vector Utilities -/
@@ -143,7 +148,7 @@ def basisBivector (i j : Fin n) : Multivector sig Float :=
 
 /-- Create a rotor for rotation in the plane spanned by basis vectors i and j.
     Assumes i ≠ j (otherwise the bivector is zero and this gives identity). -/
-def rotorInBasisPlane (i j : Fin n) (angle : Float) : Spinor sig Float :=
+def rotorInBasisPlane (i j : Fin n) (angle : Float) : Spinor sig :=
   let B := basisBivector (sig := sig) i j
   -- Normalize the bivector (it should have norm 1 for orthonormal bases)
   let Bnorm := B.normalize

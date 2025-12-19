@@ -126,7 +126,10 @@ A multivector annotated with compile-time grade information.
 -/
 
 /-- A multivector with compile-time known grade set.
-    The grade set is an upper bound: actual grades present may be fewer. -/
+    The grade set is an upper bound: actual grades present may be fewer.
+
+**DEPRECATED**: Use `MV sig p` from `Grassmann.MV` instead with `p ∈ {.even, .odd, .full}`.
+The unified MV type provides a cleaner API with simpler parity tracking. -/
 structure GradedMV (sig : Signature n) (F : Type*) (grades : GradeSet) where
   mv : Multivector sig F
 

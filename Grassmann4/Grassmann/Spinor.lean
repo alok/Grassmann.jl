@@ -1,10 +1,8 @@
 /-
-  Grassmann/Spinor.lean - Spinors and Rotors
+  Grassmann/Spinor.lean - Spinors and Rotors (DataArray-backed)
 
-  Port of Grassmann.jl's spinor operations.
-
-  A spinor is an even-grade multivector that represents rotations
-  more efficiently than the full Clifford algebra.
+  A spinor is an even-grade multivector that represents rotations.
+  This implementation wraps `MV sig .even` for fast Float operations.
 
   In Cl(p,q):
   - Spin(p,q) = {s ∈ Cl⁺(p,q) | s s̃ = ±1}
@@ -19,8 +17,7 @@
   - Spinors ≅ unit quaternions ≅ SU(2)
   - Double cover of SO(3)
 -/
-import Grassmann.Multivector
-import Grassmann.EvenMV
+import Grassmann.MV
 import Grassmann.Proof
 
 open Grassmann.Proof
@@ -30,82 +27,83 @@ namespace Grassmann
 /-! ## Spinor Type
 
 A spinor is the even part of a multivector.
-We now store only even-grade coefficients in `EvenMV`,
+We store only even-grade coefficients via `MV sig .even`,
 halving both memory and arithmetic costs.
 -/
 
-variable {n : ℕ} {sig : Signature n} {F : Type*}
-variable [Ring F] [Div F]
+variable {n : ℕ} {sig : Signature n}
 
-/-- A spinor is an even-grade multivector.
+/-- A spinor is an even-grade multivector (Float-backed via DataArray).
     The packed representation guarantees evenness by construction. -/
-structure Spinor (sig : Signature n) (F : Type*) [Ring F] where
+structure Spinor (sig : Signature n) where
   /-- The underlying even multivector -/
-  mv : EvenMV sig F
+  mv : MV sig .even
 
 namespace Spinor
 
-/-- Convert spinor to multivector -/
+/-- Convert spinor to proof-friendly multivector -/
 @[inline]
-def toMultivector (s : Spinor sig F) : Multivector sig F := s.mv.toMultivector
+def toMultivector (s : Spinor sig) : Multivector sig Float := s.mv.toMultivector
 
 /-- Create spinor from even multivector (projects to even part) -/
 @[inline]
-def ofEven (m : Multivector sig F) : Spinor sig F :=
-  ⟨EvenMV.ofMultivectorEven (sig := sig) (n := n) m⟩
+def ofMultivector (m : Multivector sig Float) : Spinor sig :=
+  ⟨MV.ofMultivector m .even⟩
+
+/-- Create spinor from MV -/
+@[inline]
+def ofMV (m : MV sig .even) : Spinor sig := ⟨m⟩
 
 /-- Identity spinor (scalar 1) -/
-def one : Spinor sig F := ⟨EvenMV.one (sig := sig) (n := n) (F := F)⟩
+@[inline]
+def one : Spinor sig := ⟨MV.one sig⟩
 
 /-- Zero spinor -/
-def zero : Spinor sig F := ⟨EvenMV.zero (sig := sig) (n := n) (F := F)⟩
+@[inline]
+def zero : Spinor sig := ⟨MV.zero sig .even⟩
 
 /-- Spinor multiplication (geometric product of even elements is even) -/
 @[inline]
-def mul (a b : Spinor sig F) : Spinor sig F :=
+def mul (a b : Spinor sig) : Spinor sig :=
   ⟨a.mv * b.mv⟩
 
-/-- Spinor reverse -/
+/-- Spinor reverse (dagger) -/
 @[inline]
-def reverse (s : Spinor sig F) : Spinor sig F := ⟨s.mv†ᵉ⟩
+def reverse (s : Spinor sig) : Spinor sig := ⟨MV.rev s.mv⟩
 
-/-- Scalar part of spinor -/
+/-- Scalar part of spinor (packed index 0). -/
 @[inline]
-def scalarPart (s : Spinor sig F) : F :=
-  s.mv.coeffs ⟨0, Nat.two_pow_pos (n - 1)⟩
+def scalarPart (s : Spinor sig) : Float := s.mv.scalarPart
 
 /-- Add spinors -/
 @[inline]
-def add (a b : Spinor sig F) : Spinor sig F := ⟨a.mv + b.mv⟩
+def add (a b : Spinor sig) : Spinor sig := ⟨a.mv + b.mv⟩
 
 /-- Subtract spinors -/
 @[inline]
-def sub (a b : Spinor sig F) : Spinor sig F := ⟨a.mv - b.mv⟩
+def sub (a b : Spinor sig) : Spinor sig := ⟨a.mv + (-b.mv)⟩
 
 /-- Scale spinor -/
 @[inline]
-def smul (x : F) (s : Spinor sig F) : Spinor sig F := ⟨x • s.mv⟩
+def smul (x : Float) (s : Spinor sig) : Spinor sig := ⟨MV.smul x s.mv⟩
 
 /-- Negate spinor -/
 @[inline]
-def neg (s : Spinor sig F) : Spinor sig F := ⟨-s.mv⟩
+def neg (s : Spinor sig) : Spinor sig := ⟨-s.mv⟩
 
-instance : Zero (Spinor sig F) := ⟨Spinor.zero⟩
-instance : One (Spinor sig F) := ⟨Spinor.one⟩
-instance : Add (Spinor sig F) := ⟨Spinor.add⟩
-instance : Sub (Spinor sig F) := ⟨Spinor.sub⟩
-instance : Neg (Spinor sig F) := ⟨Spinor.neg⟩
-instance : Mul (Spinor sig F) := ⟨Spinor.mul⟩
+instance : Zero (Spinor sig) := ⟨Spinor.zero⟩
+instance : One (Spinor sig) := ⟨Spinor.one⟩
+instance : Add (Spinor sig) := ⟨Spinor.add⟩
+instance : Neg (Spinor sig) := ⟨Spinor.neg⟩
+instance : Mul (Spinor sig) := ⟨Spinor.mul⟩
 
-/-! ### Coercion to Multivector
-
-Spinor → Multivector is a safe coercion (zero cost, just unwrapping).
--/
+/-! ### Coercion to Multivector -/
 
 @[coe]
-def coeToMultivector (s : Spinor sig F) : Multivector sig F := s.mv.toMultivector
+def coeToMultivector (s : Spinor sig) : Multivector sig Float := s.toMultivector
 
-instance : Coe (Spinor sig F) (Multivector sig F) := ⟨coeToMultivector⟩
+instance : Coe (Spinor sig) (Multivector sig Float) := ⟨coeToMultivector⟩
+instance : Coe (Spinor sig) (MV sig .even) := ⟨fun s => s.mv⟩
 
 postfix:max "†ˢ" => Spinor.reverse
 
@@ -113,24 +111,23 @@ postfix:max "†ˢ" => Spinor.reverse
 
 /-- Squared norm of spinor: s s̃ -/
 @[inline]
-def normSq (s : Spinor sig F) : F := (s * s†ˢ).scalarPart
+def normSq (s : Spinor sig) : Float := (s * s†ˢ).scalarPart
 
 /-- Apply spinor as rotation: v' = s v s̃ -/
 @[inline]
-def rotate (s : Spinor sig F) (v : Multivector sig F) : Multivector sig F :=
-  EvenMV.sandwich (sig := sig) (n := n) s.mv v
+def rotate (s : Spinor sig) (v : MV sig .odd) : MV sig .odd :=
+  -- s * v gives even × odd = odd
+  -- (s * v) * s† gives odd × even = odd
+  mvSandwich s.mv v
 
-/-- Fast path for rotating a *vector* by a spinor: v' = s v s̃.
-    This assumes `v` has only grade-1 coefficients (a vector).
-
-    For full multivectors, use `rotate` (which preserves all grades). -/
+/-- Rotate a full multivector by a spinor: v' = s v s̃ -/
 @[inline]
-def rotateVectorFast (s : Spinor sig F) (v : Multivector sig F) : Multivector sig F :=
-  EvenMV.sandwichVectorGrade1Fast (sig := sig) (n := n) s.mv v
+def rotateFull (s : Spinor sig) (v : MV sig .full) : MV sig .full :=
+  mvSandwich s.mv v
 
 /-- Compose two rotations: s₁₂ = s₁ s₂ -/
 @[inline]
-def compose (s1 s2 : Spinor sig F) : Spinor sig F := s1 * s2
+def compose (s1 s2 : Spinor sig) : Spinor sig := s1 * s2
 
 end Spinor
 
@@ -140,23 +137,23 @@ namespace Spinor
 
 /-- Norm of a spinor -/
 @[inline]
-def norm (s : Spinor sig Float) : Float :=
-  Float.sqrt s.normSq
+def norm (s : Spinor sig) : Float :=
+  Float.sqrt (Float.abs s.normSq)
 
 /-- Normalize a spinor to unit norm -/
 @[inline]
-def normalize (s : Spinor sig Float) : Spinor sig Float :=
+def normalize (s : Spinor sig) : Spinor sig :=
   let n := s.norm
   if n == 0 then s else s.smul (1 / n)
 
 /-- Check if spinor is a valid rotor (unit norm) -/
 @[inline]
-def isRotor (s : Spinor sig Float) (tol : Float := 1e-10) : Bool :=
+def isRotor (s : Spinor sig) (tol : Float := 1e-10) : Bool :=
   Float.abs (s.normSq - 1) < tol
 
 /-- Create rotor from axis (bivector) and angle.
     Result is cos(θ/2) + sin(θ/2)·B̂ where B̂ is the normalized axis. -/
-def fromAxisAngle (axis : Multivector sig Float) (angle : Float) : Spinor sig Float :=
+def fromAxisAngle (axis : Multivector sig Float) (angle : Float) : Spinor sig :=
   let halfAngle := angle / 2
   let c := Float.cos halfAngle
   let s := Float.sin halfAngle
@@ -165,14 +162,14 @@ def fromAxisAngle (axis : Multivector sig Float) (angle : Float) : Spinor sig Fl
   let axisNorm := Float.sqrt (Float.abs axisSq)
   let unitAxis := if axisNorm == 0 then axis else axis.smul (1 / axisNorm)
   -- Result is scalar + bivector, which is even
-  ofEven ((Multivector.scalar c).add (unitAxis.smul s))
+  ofMultivector ((Multivector.scalar c).add (unitAxis.smul s))
 
 /-- Extract angle from a rotor -/
-def toAngle (s : Spinor sig Float) : Float :=
+def toAngle (s : Spinor sig) : Float :=
   2 * Float.acos s.scalarPart
 
 /-- Spherical linear interpolation between two rotors -/
-def slerp (s1 s2 : Spinor sig Float) (t : Float) : Spinor sig Float :=
+def slerp (s1 s2 : Spinor sig) (t : Float) : Spinor sig :=
   -- Compute angle between rotors
   let cosTheta := (s1 * s2†ˢ).scalarPart
   if Float.abs cosTheta > 0.9999 then
@@ -194,27 +191,22 @@ section GenericRotors
 variable {n : ℕ} {sig : Signature n}
 
 /-- Create a rotor for rotation in the plane of basis vectors i and j.
-    The rotation angle is given in radians. For orthonormal bases (Euclidean),
-    the bivector e_i ∧ e_j has norm 1 and squares to -1. -/
-def rotorInPlane (i j : Fin n) (angle : Float) : Spinor sig Float :=
+    The rotation angle is given in radians. -/
+def rotorInPlane (i j : Fin n) (angle : Float) : Spinor sig :=
   let ei : Multivector sig Float := Multivector.ofBlade (Blade.basis i)
   let ej : Multivector sig Float := Multivector.ofBlade (Blade.basis j)
   let B := ei ⋀ᵐ ej
-  -- Normalize in case the basis is not orthonormal
   Spinor.fromAxisAngle B.normalize angle
 
-/-- Create a rotor from a normalized bivector and angle.
-    Assumes the bivector B is normalized (B² = -1 for Euclidean signature). -/
-def rotorFromBivector (B : Multivector sig Float) (angle : Float) : Spinor sig Float :=
+/-- Create a rotor from a normalized bivector and angle. -/
+def rotorFromBivector (B : Multivector sig Float) (angle : Float) : Spinor sig :=
   Spinor.fromAxisAngle B angle
 
-/-- Rotor that rotates vector a to vector b (generic version).
-    Works in any signature where the vectors are non-null. -/
-def rotorBetweenVectors (a b : Multivector sig Float) : Spinor sig Float :=
-  -- R = (1 + ba) / |1 + ba|
+/-- Rotor that rotates vector a to vector b (generic version). -/
+def rotorBetweenVectors (a b : Multivector sig Float) : Spinor sig :=
   let ab := (b * a).evenPart
   let one_plus_ab := (Multivector.one : Multivector sig Float).add ab
-  Spinor.ofEven one_plus_ab |>.normalize
+  Spinor.ofMultivector one_plus_ab |>.normalize
 
 end GenericRotors
 
@@ -223,64 +215,37 @@ end GenericRotors
 section R3Rotors
 
 /-- Rotor for rotation around x-axis by angle (rotation in yz-plane) -/
-def rotorX (angle : Float) : Spinor R3 Float :=
+def rotorX (angle : Float) : Spinor R3 :=
   rotorInPlane ⟨1, by omega⟩ ⟨2, by omega⟩ angle
 
 /-- Rotor for rotation around y-axis by angle (rotation in xz-plane) -/
-def rotorY (angle : Float) : Spinor R3 Float :=
-  -- Note: e13 plane gives rotation in opposite direction to "around y"
+def rotorY (angle : Float) : Spinor R3 :=
   rotorInPlane ⟨0, by omega⟩ ⟨2, by omega⟩ (-angle)
 
 /-- Rotor for rotation around z-axis by angle (rotation in xy-plane) -/
-def rotorZ (angle : Float) : Spinor R3 Float :=
+def rotorZ (angle : Float) : Spinor R3 :=
   rotorInPlane ⟨0, by omega⟩ ⟨1, by omega⟩ angle
 
 /-- Rotor from Euler angles (ZYX convention) -/
-def rotorFromEuler (roll pitch yaw : Float) : Spinor R3 Float :=
+def rotorFromEuler (roll pitch yaw : Float) : Spinor R3 :=
   rotorZ yaw * rotorY pitch * rotorX roll
 
 /-- Rotor that rotates vector a to vector b -/
-def rotorBetween (a b : Multivector R3 Float) : Spinor R3 Float :=
+def rotorBetween (a b : Multivector R3 Float) : Spinor R3 :=
   rotorBetweenVectors a b
 
 end R3Rotors
 
-/-! ## Tests -/
+/-! ## Type Checks (runtime tests moved to Bench.lean) -/
 
 section SpinorTests
 
-def pi : Float := 3.14159265358979323846
-
--- Test identity rotor
-#eval! (Spinor.one : Spinor R3 Float).scalarPart  -- 1
-
--- Test rotor from axis-angle (90° around z)
-#eval! let R := rotorZ (pi / 2)
-       R.scalarPart  -- cos(π/4) ≈ 0.707
-
--- Test rotor composition
-#eval! let Rx := rotorX (pi / 4)
-       let Ry := rotorY (pi / 4)
-       let Rxy := Rx * Ry
-       Rxy.normSq  -- Should be ≈ 1
-
--- Test rotation of e1 by 90° around z gives e2
-#eval! let R := rotorZ (pi / 2)
-       let e1v : Multivector R3 Float := Multivector.ofBlade (e1 : Blade R3)
-       let rotated := R.rotate e1v
-       (rotated.coeff (e1 : Blade R3), rotated.coeff (e2 : Blade R3))
--- Expected: approximately (0, 1)
-
--- Test slerp at t=0.5
-#eval! let R1 := (Spinor.one : Spinor R3 Float)
-       let R2 := rotorZ (pi / 2)
-       let Rmid := Spinor.slerp R1 R2 0.5
-       Rmid.toAngle  -- Should be approximately π/4
-
--- Test Spinor → Multivector coercion (zero cost)
-#eval! let R := rotorZ (pi / 4)
-       let mv : Multivector R3 Float := R  -- Coercion!
-       mv.scalarPart  -- cos(π/8) ≈ 0.924
+-- Type checking for API consistency
+#check (Spinor.one : Spinor R3)
+#check (rotorZ 0.5 : Spinor R3)
+#check (rotorX 0.5 * rotorY 0.5 : Spinor R3)
+#check (Spinor.slerp (Spinor.one : Spinor R3) (rotorZ 0.5) 0.5)
+#check ((rotorZ 0.5 : Spinor R3) : Multivector R3 Float)  -- Coercion
 
 end SpinorTests
 
