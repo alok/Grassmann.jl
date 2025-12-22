@@ -12,4 +12,5 @@ import Grassmann.OracleTests
 import Grassmann.DSLTests
 import Grassmann.CoffeeshopExamples
 import Grassmann.PropertyTests
+import Grassmann.CurveShortening
 
