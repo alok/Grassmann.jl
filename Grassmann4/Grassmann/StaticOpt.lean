@@ -315,7 +315,7 @@ end GradedMV
   composed.scalarPart  -- Should be ~0.5
 
 -- Grade tracking for sandwich
-#eval toString (geometricGradeSet
+#eval GradeSet.toString (geometricGradeSet
   (geometricGradeSet (GradeSet.even 3) GradeSet.vector 3) (GradeSet.even 3) 3)
 -- Shows that even * vector * even can produce various grades
 -- But the actual result is always vector for rotors

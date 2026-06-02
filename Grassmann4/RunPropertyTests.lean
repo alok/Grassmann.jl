@@ -3,4 +3,4 @@
 -/
 import Grassmann.PropertyTests
 
-def main : IO Unit := Grassmann.PropertyTests.runPropertyTests
+def main : IO Unit := Grassmann.PropertyTests.runFullPropertyTests

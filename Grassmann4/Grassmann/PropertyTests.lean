@@ -233,7 +233,7 @@ instance : ToString PropTestResult where
   toString r :=
     let status := if r.passed then "PASS" else "FAIL"
     let msg := if r.message.isEmpty then "" else s!" ({r.message})"
-    s!"[{status}] {r.name} ({r.numTests} tests){msg}"
+    s!"[{status}] {r.name} ({Nat.repr r.numTests} tests){msg}"
 
 /-- Run a Bool property multiple times -/
 def runBoolProp (name : String) (prop : Bool) : PropTestResult :=
@@ -248,7 +248,7 @@ def runRandomProp (name : String) (prop : R3Mv → Bool)
     let mv ← Gen.run Arbitrary.arbitrary (i * 2)
     if !prop mv then
       passed := false
-      failMsg := s!"Failed on test {i}"
+      failMsg := s!"Failed on test {Nat.repr i}"
       break
   return { name := name, passed := passed, numTests := numTests, message := failMsg }
 
@@ -262,7 +262,7 @@ def runRandomProp2 (name : String) (prop : R3Mv → R3Mv → Bool)
     let b ← Gen.run Arbitrary.arbitrary (i * 2 + 1)
     if !prop a b then
       passed := false
-      failMsg := s!"Failed on test {i}"
+      failMsg := s!"Failed on test {Nat.repr i}"
       break
   return { name := name, passed := passed, numTests := numTests, message := failMsg }
 
@@ -277,7 +277,7 @@ def runRandomProp3 (name : String) (prop : R3Mv → R3Mv → R3Mv → Bool)
     let c ← Gen.run Arbitrary.arbitrary (i * 3 + 2)
     if !prop a b c then
       passed := false
-      failMsg := s!"Failed on test {i}"
+      failMsg := s!"Failed on test {Nat.repr i}"
       break
   return { name, passed, numTests, message := failMsg }
 
@@ -289,7 +289,7 @@ def runGenProp (name : String) (prop : Gen Bool) (numTests : Nat := 100) : IO Pr
     let result ← Gen.run prop (i * 2)
     if !result then
       passed := false
-      failMsg := s!"Failed on test {i}"
+      failMsg := s!"Failed on test {Nat.repr i}"
       break
   return { name := name, passed := passed, numTests := numTests, message := failMsg }
 
@@ -355,7 +355,7 @@ def runPropertyTests : IO Unit := do
 
   IO.println ""
   IO.println "╔══════════════════════════════════════════════╗"
-  IO.println s!"║  Summary: {totalPass}/{total} property tests passed          ║"
+  IO.println s!"║  Summary: {Nat.repr totalPass}/{Nat.repr total} property tests passed          ║"
   IO.println "╚══════════════════════════════════════════════╝"
 
 -- Quick check using Plausible's built-in #test
@@ -470,7 +470,7 @@ def runOptimizationTests (numTests : Nat := 100) : IO Unit := do
   let allPass := sparseSandwich && sparseRotor && optVSq && sparseWedge &&
                  tableGeo && tableSandwich
   if allPass then
-    IO.println "  All 6 test categories PASSED (120 total test cases) ✓"
+    IO.println s!"  All 6 test categories PASSED ({Nat.repr (6 * numTests)} total test cases) ✓"
   else
     IO.println "  Some optimization tests FAILED ✗"
 
@@ -536,4 +536,3 @@ def runFullPropertyTests : IO Unit := do
 #eval OptimizationTests.runOptimizationTests 20
 
 end Grassmann.PropertyTests
-

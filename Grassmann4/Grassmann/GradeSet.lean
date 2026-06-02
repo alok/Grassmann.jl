@@ -69,8 +69,12 @@ def inter (a b : GradeSet) : GradeSet := a &&& b
 def toList (gs : GradeSet) (maxGrade : Nat := 16) : List Nat :=
   (List.range (maxGrade + 1)).filter (gs.contains ·)
 
-instance : ToString GradeSet where
-  toString gs := s!"\{{String.intercalate ", " (gs.toList.map toString)}}"
+/-- Pretty-print as a set of grade numbers.
+
+Do not make this a `ToString GradeSet` instance: `GradeSet` is an abbrev for `Nat`,
+so such an instance would globally change `Nat` string interpolation. -/
+def toString (gs : GradeSet) : String :=
+  s!"\{{String.intercalate ", " (gs.toList.map Nat.repr)}}"
 
 instance : BEq GradeSet := inferInstanceAs (BEq Nat)
 instance : Repr GradeSet := inferInstanceAs (Repr Nat)
@@ -220,19 +224,19 @@ Key identities that can be proven/used with grade tracking:
 /-! ## Tests -/
 
 -- Grade set tests
-#eval toString (GradeSet.vector : GradeSet)  -- {1}
-#eval toString (GradeSet.even 3 : GradeSet)  -- {0, 2}
-#eval toString (GradeSet.odd 3 : GradeSet)   -- {1, 3}
-#eval toString (GradeSet.full 3 : GradeSet)  -- {0, 1, 2, 3}
+#eval GradeSet.toString (GradeSet.vector : GradeSet)  -- {1}
+#eval GradeSet.toString (GradeSet.even 3 : GradeSet)  -- {0, 2}
+#eval GradeSet.toString (GradeSet.odd 3 : GradeSet)   -- {1, 3}
+#eval GradeSet.toString (GradeSet.full 3 : GradeSet)  -- {0, 1, 2, 3}
 
 -- Product grade bounds
-#eval toString (wedgeGradeSet GradeSet.vector GradeSet.vector 3)  -- {2}
-#eval toString (geometricGradeSet GradeSet.vector GradeSet.vector 3)  -- {0, 2}
-#eval toString (geometricGradeSet (GradeSet.even 3) (GradeSet.even 3) 3)  -- {0, 2}
-#eval toString (leftContractGradeSet GradeSet.vector GradeSet.bivector 3)  -- {1}
+#eval GradeSet.toString (wedgeGradeSet GradeSet.vector GradeSet.vector 3)  -- {2}
+#eval GradeSet.toString (geometricGradeSet GradeSet.vector GradeSet.vector 3)  -- {0, 2}
+#eval GradeSet.toString (geometricGradeSet (GradeSet.even 3) (GradeSet.even 3) 3)  -- {0, 2}
+#eval GradeSet.toString (leftContractGradeSet GradeSet.vector GradeSet.bivector 3)  -- {1}
 
 -- Rotor * rotor stays even
-#eval toString (geometricGradeSet (GradeSet.scalar ||| GradeSet.bivector)
+#eval GradeSet.toString (geometricGradeSet (GradeSet.scalar ||| GradeSet.bivector)
                          (GradeSet.scalar ||| GradeSet.bivector) 3)  -- {0, 2}
 
 end Grassmann

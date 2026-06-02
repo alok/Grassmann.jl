@@ -86,6 +86,7 @@ def callOracle (args : List String) : IO OracleResult := do
               s!"HOME={home}",
               s!"PATH={path}",
               s!"JULIA_DEPOT_PATH={juliaDepot}",
+              "JULIA_PKG_PRECOMPILE_AUTO=0",
               "julia", "--startup-file=no", s!"--project={grassmannProject}",
               oraclePath] ++ args.toArray
     stdout := .piped
@@ -97,8 +98,8 @@ def callOracle (args : List String) : IO OracleResult := do
   let exitCode ← child.wait
   return {
     success := exitCode == 0
-    stdout := stdout.trim
-    stderr := stderr.trim
+    stdout := stdout.trimAscii.toString
+    stderr := stderr.trimAscii.toString
   }
 
 /-! ## Test Results -/
