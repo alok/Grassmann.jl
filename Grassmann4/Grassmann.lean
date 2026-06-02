@@ -13,6 +13,7 @@ import Grassmann.Notation
 
 -- Multivector representations
 import Grassmann.DataArray        -- Float "plain data" buffers for hot paths
+import Grassmann.NativeVector     -- Lean Vector-backed starter representation
 import Grassmann.Multivector      -- Dense 2^n array (proof-friendly)
 import Grassmann.MV               -- Unified DataArray-backed multivector (recommended)
 import Grassmann.MultivectorArray

@@ -1,0 +1,228 @@
+/-
+  Grassmann/NativeVector.lean - Native Lean Vector-backed multivectors
+
+  This is the intentionally simple starter representation for the Lean 4 port:
+  coefficients live in Lean's built-in `Vector` type, indexed by blade bitmask.
+  It is not the fastest backend; it is the small, inspectable baseline that is
+  easy to plot, test, and compare against the Julia-era implementation.
+-/
+import Grassmann.Products
+
+namespace Grassmann
+
+/-- Full multivector with coefficients stored in Lean's native `Vector`.
+
+The coefficient at index `k` is the coefficient of the basis blade whose bitmask
+is `k`. For example, in R3: `0` is scalar, `1` is e1, `2` is e2, `3` is e12,
+and `7` is e123.
+-/
+structure NativeMV (sig : Signature n) where
+  coeffs : Vector Float (2 ^ n)
+  deriving Repr
+
+namespace NativeMV
+
+variable {n : Nat} {sig : Signature n}
+
+/-- Zero multivector. -/
+@[inline]
+def zero (sig : Signature n) : NativeMV sig :=
+  ⟨Vector.replicate (2 ^ n) 0.0⟩
+
+/-- Scalar multivector. -/
+@[inline]
+def scalar (sig : Signature n) (x : Float) : NativeMV sig :=
+  ⟨Vector.ofFn fun i => if i.val = 0 then x else 0.0⟩
+
+/-- Unit scalar. -/
+@[inline]
+def one (sig : Signature n) : NativeMV sig := scalar sig 1.0
+
+/-- Get a coefficient by blade bitmask. Out-of-range masks read as zero. -/
+@[inline]
+def coeff (m : NativeMV sig) (bladeMask : Nat) : Float :=
+  if h : bladeMask < 2 ^ n then
+    m.coeffs.get ⟨bladeMask, h⟩
+  else
+    0.0
+
+/-- Set a coefficient by blade bitmask. Out-of-range masks are ignored. -/
+@[inline]
+def setCoeff (m : NativeMV sig) (bladeMask : Nat) (x : Float) : NativeMV sig :=
+  if h : bladeMask < 2 ^ n then
+    ⟨m.coeffs.set bladeMask x h⟩
+  else
+    m
+
+/-- Basis blade with coefficient 1. -/
+@[inline]
+def blade (sig : Signature n) (bladeMask : Nat) : NativeMV sig :=
+  (zero sig).setCoeff bladeMask 1.0
+
+/-- Basis vector e_i. -/
+@[inline]
+def basisVector (sig : Signature n) (i : Fin n) : NativeMV sig :=
+  blade sig (1 <<< i.val)
+
+/-- Build from `(bladeMask, coefficient)` pairs. -/
+@[inline]
+def ofPairs (sig : Signature n) (pairs : List (Nat × Float)) : NativeMV sig :=
+  pairs.foldl (init := zero sig) fun acc (mask, x) => acc.setCoeff mask x
+
+/-- Convert to an ordinary array for debugging and export. -/
+@[inline]
+def toArray (m : NativeMV sig) : Array Float := m.coeffs.toArray
+
+/-- Add two multivectors. -/
+@[inline]
+def add (a b : NativeMV sig) : NativeMV sig :=
+  ⟨Vector.zipWith (fun x y => x + y) a.coeffs b.coeffs⟩
+
+/-- Negate a multivector. -/
+@[inline]
+def neg (m : NativeMV sig) : NativeMV sig :=
+  ⟨Vector.map (fun x => -x) m.coeffs⟩
+
+/-- Subtract two multivectors. -/
+@[inline]
+def sub (a b : NativeMV sig) : NativeMV sig := add a (neg b)
+
+/-- Scalar multiplication. -/
+@[inline]
+def smul (x : Float) (m : NativeMV sig) : NativeMV sig :=
+  ⟨Vector.map (fun c => x * c) m.coeffs⟩
+
+/-- Reverse operation. Grade `k` gets sign `(-1)^(k*(k-1)/2)`. -/
+@[inline]
+def reverse (m : NativeMV sig) : NativeMV sig :=
+  ⟨Vector.ofFn fun i =>
+    let k := popcount i.val
+    let sign := if (k * (k - 1) / 2) % 2 = 0 then 1.0 else -1.0
+    sign * m.coeffs.get i⟩
+
+/-- Grade projection. -/
+@[inline]
+def gradeProject (m : NativeMV sig) (gradeTarget : Nat) : NativeMV sig :=
+  ⟨Vector.ofFn fun i =>
+    if popcount i.val = gradeTarget then m.coeffs.get i else 0.0⟩
+
+/-- Even-grade projection. -/
+@[inline]
+def evenPart (m : NativeMV sig) : NativeMV sig :=
+  ⟨Vector.ofFn fun i =>
+    if popcount i.val % 2 = 0 then m.coeffs.get i else 0.0⟩
+
+/-- Odd-grade projection. -/
+@[inline]
+def oddPart (m : NativeMV sig) : NativeMV sig :=
+  ⟨Vector.ofFn fun i =>
+    if popcount i.val % 2 = 1 then m.coeffs.get i else 0.0⟩
+
+private def allBladeIndices (n : Nat) : List (Fin (2 ^ n)) :=
+  List.finRange (2 ^ n)
+
+/-- Coefficient of `a * b` at output blade mask `outMask`. -/
+@[inline]
+def geometricCoeffAt (sig : Signature n) (a b : NativeMV sig) (outMask : Nat) : Float :=
+  (allBladeIndices n).foldl (init := 0.0) fun acc i =>
+    (allBladeIndices n).foldl (init := acc) fun acc j =>
+      let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
+      let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
+      let sign := geometricSign sig bi bj
+      let resultMask := i.val ^^^ j.val
+      if sign = 0 || resultMask != outMask then
+        acc
+      else
+        acc + Float.ofInt sign * a.coeffs.get i * b.coeffs.get j
+
+/-- Geometric product using the straightforward O(4^n) native-vector baseline. -/
+@[inline]
+def geometricProduct (a b : NativeMV sig) : NativeMV sig :=
+  ⟨Vector.ofFn fun out => geometricCoeffAt sig a b out.val⟩
+
+/-- Coefficient of `a wedge b` at output blade mask `outMask`. -/
+@[inline]
+def wedgeCoeffAt (sig : Signature n) (a b : NativeMV sig) (outMask : Nat) : Float :=
+  (allBladeIndices n).foldl (init := 0.0) fun acc i =>
+    (allBladeIndices n).foldl (init := acc) fun acc j =>
+      if (i.val &&& j.val) != 0 then
+        acc
+      else
+        let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
+        let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
+        let resultMask := i.val ||| j.val
+        if resultMask != outMask then
+          acc
+        else
+          acc + Float.ofInt (wedgeSign sig bi bj) * a.coeffs.get i * b.coeffs.get j
+
+/-- Exterior product using the same native-vector baseline style. -/
+@[inline]
+def wedge (a b : NativeMV sig) : NativeMV sig :=
+  ⟨Vector.ofFn fun out => wedgeCoeffAt sig a b out.val⟩
+
+/-- Sandwich action `r * x * reverse r`, useful for rotor demos. -/
+@[inline]
+def sandwich (r x : NativeMV sig) : NativeMV sig :=
+  geometricProduct (geometricProduct r x) r.reverse
+
+/-- Convert a coordinate vector into a grade-1 multivector. -/
+@[inline]
+def fromVector (sig : Signature n) (coords : Vector Float n) : NativeMV sig :=
+  (List.finRange n).foldl (init := zero sig) fun acc i =>
+    acc.setCoeff (1 <<< i.val) (coords.get i)
+
+/-- Extract grade-1 coordinates into a native Lean `Vector`. -/
+@[inline]
+def toVector (m : NativeMV sig) : Vector Float n :=
+  Vector.ofFn fun i => m.coeff (1 <<< i.val)
+
+/-- Native coordinate vector `(x, y)`. -/
+@[inline]
+def coords2 (x y : Float) : Vector Float 2 :=
+  Vector.ofFn fun i => if i.val = 0 then x else y
+
+/-- R2 vector from coordinates. -/
+@[inline]
+def vec2 (sig : Signature 2) (x y : Float) : NativeMV sig :=
+  fromVector sig (coords2 x y)
+
+/-- Native coordinate vector `(x, y, z)`. -/
+@[inline]
+def coords3 (x y z : Float) : Vector Float 3 :=
+  Vector.ofFn fun i =>
+    match i.val with
+    | 0 => x
+    | 1 => y
+    | _ => z
+
+/-- R3 vector from coordinates. -/
+@[inline]
+def vec3 (sig : Signature 3) (x y z : Float) : NativeMV sig :=
+  fromVector sig (coords3 x y z)
+
+instance : Zero (NativeMV sig) := ⟨zero sig⟩
+instance : One (NativeMV sig) := ⟨one sig⟩
+instance : Add (NativeMV sig) := ⟨add⟩
+instance : Sub (NativeMV sig) := ⟨sub⟩
+instance : Neg (NativeMV sig) := ⟨neg⟩
+instance : Mul (NativeMV sig) := ⟨geometricProduct⟩
+instance : SMul Float (NativeMV sig) := ⟨smul⟩
+
+postfix:max "†ᵥ" => NativeMV.reverse
+infixl:65 " ⋀ᵥ " => NativeMV.wedge
+
+/-! ## Small executable checks -/
+
+section Checks
+
+#eval (NativeMV.basisVector R3 ⟨0, by omega⟩ * NativeMV.basisVector R3 ⟨0, by omega⟩).coeff 0
+#eval (NativeMV.basisVector R3 ⟨0, by omega⟩ * NativeMV.basisVector R3 ⟨1, by omega⟩).coeff 3
+#eval (NativeMV.basisVector R3 ⟨1, by omega⟩ * NativeMV.basisVector R3 ⟨0, by omega⟩).coeff 3
+#eval (NativeMV.vec3 R3 1.0 2.0 3.0).toVector.toArray
+
+end Checks
+
+end NativeMV
+
+end Grassmann
