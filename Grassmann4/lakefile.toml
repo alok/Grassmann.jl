@@ -34,6 +34,10 @@ name = "genvectorfield"
 root = "Grassmann.GenVectorField"
 
 [[lean_exe]]
+name = "jlexamples"
+root = "RunJuliaExamples"
+
+[[lean_exe]]
 name = "oracletests"
 root = "RunOracleTests"
 

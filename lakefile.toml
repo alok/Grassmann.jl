@@ -51,6 +51,11 @@ name = "bench"
 root = "Grassmann.Bench"
 srcDir = "Grassmann4"
 
+[[lean_exe]]
+name = "jlexamples"
+root = "RunJuliaExamples"
+srcDir = "Grassmann4"
+
 
 # Note: Verso documentation setup is available but requires
 # additional build configuration. See Manual/ folder for content.
