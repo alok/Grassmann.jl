@@ -614,14 +614,12 @@ def runPropertyTests : IO Unit := do
   IO.println "║  Grassmann Algebra Property Tests (Plausible) ║"
   IO.println "╚══════════════════════════════════════════════╝"
   IO.println ""
-
   -- Basis properties (deterministic)
   IO.println "┌─ Basis Properties ────────────────────────────┐"
   IO.println s!"│ {runBoolProp "R3 basis vectors square to 1" prop_R3_basis_squares}"
   IO.println s!"│ {runBoolProp "R3 basis anticommute" prop_R3_basis_anticommute}"
   IO.println s!"│ {runBoolProp "CGA3 signature correct" prop_CGA3_signature}"
   IO.println "└────────────────────────────────────────────────┘"
-
   -- Additive properties
   IO.println "\n┌─ Addition Properties ─────────────────────────┐"
   let r1 ← runRandomProp2 "Addition commutes" prop_add_comm
@@ -633,7 +631,6 @@ def runPropertyTests : IO Unit := do
   let r4 ← runRandomProp "Negation inverts" prop_add_neg
   IO.println s!"│ {r4}"
   IO.println "└────────────────────────────────────────────────┘"
-
   -- Multiplicative properties
   IO.println "\n┌─ Multiplication Properties ───────────────────┐"
   let r5 ← runRandomProp3 "Multiplication associates" prop_mul_assoc 30
@@ -645,7 +642,6 @@ def runPropertyTests : IO Unit := do
   let r8 ← runRandomProp3 "Right distributivity" prop_right_distrib 30
   IO.println s!"│ {r8}"
   IO.println "└────────────────────────────────────────────────┘"
-
   -- Wedge and involutions
   IO.println "\n┌─ Wedge & Involution Properties ───────────────┐"
   let r9 ← runGenProp "Wedge anticommutes (vectors)" prop_wedge_anticomm_grade1
@@ -659,7 +655,6 @@ def runPropertyTests : IO Unit := do
   let r13 ← runRandomProp "Conjugate involutive" prop_conjugate_involutive
   IO.println s!"│ {r13}"
   IO.println "└────────────────────────────────────────────────┘"
-
   -- Packed MV vs dense reference
   IO.println "\n┌─ Packed MV vs Dense Reference ────────────────┐"
   let r14 ← runGenProp "MV full round-trip" prop_mv_full_roundtrip
@@ -747,7 +742,6 @@ def runPropertyTests : IO Unit := do
                    then 3 else 0
   let total := allResults.length + 3
   let totalPass := passCount + basisPass
-
   IO.println ""
   IO.println "╔══════════════════════════════════════════════╗"
   IO.println s!"║  Summary: {Nat.repr totalPass}/{Nat.repr total} property tests passed          ║"
@@ -839,29 +833,20 @@ def testTableSandwich (seed1 seed2 : Nat) : Bool :=
 /-- Run optimization consistency tests -/
 def runOptimizationTests (numTests : Nat := 100) : IO Unit := do
   IO.println "\n┌─ Optimization Consistency Tests ──────────────┐"
-
   let seeds := List.range numTests
-
   let sparseSandwich := seeds.all fun s => testSparseSandwich s (s + 1)
   IO.println s!"│ Sparse sandwich: {if sparseSandwich then "PASS" else "FAIL"}"
-
   let sparseRotor := seeds.all fun s => testSparseRotorMul s (s + 3)
   IO.println s!"│ Sparse rotor mul: {if sparseRotor then "PASS" else "FAIL"}"
-
   let optVSq := seeds.all fun s => testOptVectorSquared s
   IO.println s!"│ Optimized v²: {if optVSq then "PASS" else "FAIL"}"
-
   let sparseWedge := seeds.all fun s => testSparseVectorWedge s (s + 5)
   IO.println s!"│ Sparse wedge: {if sparseWedge then "PASS" else "FAIL"}"
-
   let tableGeo := seeds.all fun s => testTableGeoProduct s (s + 7)
   IO.println s!"│ Table geometric: {if tableGeo then "PASS" else "FAIL"}"
-
   let tableSandwich := seeds.all fun s => testTableSandwich s (s + 11)
   IO.println s!"│ Table sandwich: {if tableSandwich then "PASS" else "FAIL"}"
-
   IO.println "└────────────────────────────────────────────────┘"
-
   let allPass := sparseSandwich && sparseRotor && optVSq && sparseWedge &&
                  tableGeo && tableSandwich
   if allPass then
