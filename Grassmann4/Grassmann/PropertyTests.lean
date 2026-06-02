@@ -13,6 +13,7 @@ import Grassmann.SparseMultivector
 import Grassmann.Products
 import Grassmann.Manifold
 import Grassmann.StaticOpt
+import Grassmann.MV
 import Grassmann.BladeIndex
 import Grassmann.SignTables
 
@@ -116,6 +117,112 @@ instance : BEq R3Mv where
 
 instance : BEq CGA3Mv where
   beq a b := mvApproxEq a.mv b.mv
+
+/-! ## Dense Reference Multivectors for MV Parity Tests -/
+
+/-- Wrapper for dense R3 multivectors used as the reference for packed `MV`. -/
+structure R3DenseMv where
+  mv : Multivector R3 Float
+
+/-- Build a dense R3 multivector by summing duplicate blade entries. -/
+def R3DenseMv.ofList (coeffs : List (Nat × Float)) : R3DenseMv :=
+  ⟨⟨fun i =>
+    coeffs.foldl (init := 0.0) fun acc (idx, coeff) =>
+      if idx == i.val then acc + coeff else acc⟩⟩
+
+/-- Generator for dense R3 multivectors. -/
+def genR3DenseMv : Gen R3DenseMv := do
+  let coeffs ← genSparseCoeffs 7 6
+  return R3DenseMv.ofList coeffs
+
+/-- Compare dense multivectors coefficient-wise. -/
+def denseMvApproxEq {n : Nat} {sig : Signature n} (a b : Multivector sig Float)
+    (tol : Float := 1e-9) : Bool :=
+  (List.finRange (2 ^ n)).all fun i =>
+    approxEq (a.coeffs i) (b.coeffs i) tol
+
+/-- Compare a packed `MV` result against its dense reference. -/
+def packedMatchesDense {n : Nat} {sig : Signature n} {p : Parity}
+    (packed : MV sig p) (dense : Multivector sig Float) (tol : Float := 1e-9) : Bool :=
+  denseMvApproxEq (MV.toMultivector packed) dense tol
+
+/-- Full packed `MV` round-trip preserves all dense coefficients. -/
+def prop_mv_full_roundtrip : Gen Bool := do
+  let a ← genR3DenseMv
+  let packed : MV R3 .full := MV.ofMultivector a.mv .full
+  return packedMatchesDense packed a.mv
+
+/-- Even and odd packed projections match dense even/odd projection. -/
+def prop_mv_parity_projection : Gen Bool := do
+  let a ← genR3DenseMv
+  let evenPacked : MV R3 .even := MV.ofMultivector a.mv .even
+  let oddPacked : MV R3 .odd := MV.ofMultivector a.mv .odd
+  return packedMatchesDense evenPacked a.mv.evenPart &&
+    packedMatchesDense oddPacked a.mv.oddPart
+
+/-- Packed full multiplication agrees with dense multiplication. -/
+def prop_mv_full_mul_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let b ← genR3DenseMv
+  let packedA : MV R3 .full := MV.ofMultivector a.mv .full
+  let packedB : MV R3 .full := MV.ofMultivector b.mv .full
+  return packedMatchesDense (packedA * packedB) (a.mv * b.mv) (tol := 1e-6)
+
+/-- Packed even × even multiplication agrees with dense multiplication. -/
+def prop_mv_even_mul_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let b ← genR3DenseMv
+  let denseA := a.mv.evenPart
+  let denseB := b.mv.evenPart
+  let packedA : MV R3 .even := MV.ofMultivector denseA .even
+  let packedB : MV R3 .even := MV.ofMultivector denseB .even
+  return packedMatchesDense (packedA * packedB) (denseA * denseB) (tol := 1e-6)
+
+/-- Packed even × odd multiplication agrees with dense multiplication. -/
+def prop_mv_even_odd_mul_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let b ← genR3DenseMv
+  let denseA := a.mv.evenPart
+  let denseB := b.mv.oddPart
+  let packedA : MV R3 .even := MV.ofMultivector denseA .even
+  let packedB : MV R3 .odd := MV.ofMultivector denseB .odd
+  return packedMatchesDense (packedA * packedB) (denseA * denseB) (tol := 1e-6)
+
+/-- Packed odd × even multiplication agrees with dense multiplication. -/
+def prop_mv_odd_even_mul_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let b ← genR3DenseMv
+  let denseA := a.mv.oddPart
+  let denseB := b.mv.evenPart
+  let packedA : MV R3 .odd := MV.ofMultivector denseA .odd
+  let packedB : MV R3 .even := MV.ofMultivector denseB .even
+  return packedMatchesDense (packedA * packedB) (denseA * denseB) (tol := 1e-6)
+
+/-- Packed odd × odd multiplication agrees with dense multiplication. -/
+def prop_mv_odd_mul_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let b ← genR3DenseMv
+  let denseA := a.mv.oddPart
+  let denseB := b.mv.oddPart
+  let packedA : MV R3 .odd := MV.ofMultivector denseA .odd
+  let packedB : MV R3 .odd := MV.ofMultivector denseB .odd
+  return packedMatchesDense (packedA * packedB) (denseA * denseB) (tol := 1e-6)
+
+/-- Packed reverse agrees with dense reverse. -/
+def prop_mv_reverse_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let packed : MV R3 .full := MV.ofMultivector a.mv .full
+  return packedMatchesDense (MV.rev packed) a.mv.reverse
+
+/-- Packed sandwich product agrees with dense sandwich product for even versors. -/
+def prop_mv_sandwich_dense : Gen Bool := do
+  let r ← genR3DenseMv
+  let x ← genR3DenseMv
+  let denseR := r.mv.evenPart
+  let denseX := x.mv.oddPart
+  let packedR : MV R3 .even := MV.ofMultivector denseR .even
+  let packedX : MV R3 .odd := MV.ofMultivector denseX .odd
+  return packedMatchesDense (mvSandwich packedR packedX) (denseR.sandwich denseX) (tol := 1e-6)
 
 /-! ## Algebraic Properties -/
 
@@ -345,8 +452,31 @@ def runPropertyTests : IO Unit := do
   IO.println s!"│ {r13}"
   IO.println "└────────────────────────────────────────────────┘"
 
+  -- Packed MV vs dense reference
+  IO.println "\n┌─ Packed MV vs Dense Reference ────────────────┐"
+  let r14 ← runGenProp "MV full round-trip" prop_mv_full_roundtrip
+  IO.println s!"│ {r14}"
+  let r15 ← runGenProp "MV parity projection" prop_mv_parity_projection
+  IO.println s!"│ {r15}"
+  let r16 ← runGenProp "MV full multiplication" prop_mv_full_mul_dense
+  IO.println s!"│ {r16}"
+  let r17 ← runGenProp "MV even*even multiplication" prop_mv_even_mul_dense
+  IO.println s!"│ {r17}"
+  let r18 ← runGenProp "MV even*odd multiplication" prop_mv_even_odd_mul_dense
+  IO.println s!"│ {r18}"
+  let r19 ← runGenProp "MV odd*even multiplication" prop_mv_odd_even_mul_dense
+  IO.println s!"│ {r19}"
+  let r20 ← runGenProp "MV odd*odd multiplication" prop_mv_odd_mul_dense
+  IO.println s!"│ {r20}"
+  let r21 ← runGenProp "MV reverse" prop_mv_reverse_dense
+  IO.println s!"│ {r21}"
+  let r22 ← runGenProp "MV sandwich" prop_mv_sandwich_dense 50
+  IO.println s!"│ {r22}"
+  IO.println "└────────────────────────────────────────────────┘"
+
   -- Summary
-  let allResults := [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13]
+  let allResults := [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13,
+                     r14, r15, r16, r17, r18, r19, r20, r21, r22]
   let passCount := allResults.filter (·.passed) |>.length
   let basisPass := if prop_R3_basis_squares && prop_R3_basis_anticommute && prop_CGA3_signature
                    then 3 else 0
