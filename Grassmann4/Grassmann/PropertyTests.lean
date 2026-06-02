@@ -272,6 +272,44 @@ def prop_sparse_gradeProject_dense : Gen Bool := do
   let k ← Gen.choose Nat 0 3 (by omega)
   return sparseMatchesDense (a.mv.gradeProject k.val) ((sparseToDenseRef a.mv).gradeProject k.val)
 
+/-! ## CGA3 Sparse Reference Tests -/
+
+/-- CGA3 sparse addition agrees with dense addition. -/
+def prop_sparse_cga3_add_dense (a b : CGA3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (a.mv + b.mv) (denseA + denseB)
+
+/-- CGA3 sparse geometric multiplication agrees with dense multiplication. -/
+def prop_sparse_cga3_mul_dense (a b : CGA3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (a.mv * b.mv) (denseA * denseB) (tol := 1e-6)
+
+/-- CGA3 sparse wedge product agrees with dense wedge product. -/
+def prop_sparse_cga3_wedge_dense (a b : CGA3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (a.mv ⋀ₛ b.mv) (denseA ⋀ᵐ denseB) (tol := 1e-6)
+
+/-- CGA3 sparse reverse agrees with dense reverse. -/
+def prop_sparse_cga3_reverse_dense (a : CGA3Mv) : Bool :=
+  sparseMatchesDense a.mv.reverse (sparseToDenseRef a.mv).reverse
+
+/-- CGA3 sparse involute agrees with dense involute. -/
+def prop_sparse_cga3_involute_dense (a : CGA3Mv) : Bool :=
+  sparseMatchesDense a.mv.involute (sparseToDenseRef a.mv).involute
+
+/-- CGA3 sparse conjugate agrees with dense conjugate. -/
+def prop_sparse_cga3_conjugate_dense (a : CGA3Mv) : Bool :=
+  sparseMatchesDense a.mv.conjugate (sparseToDenseRef a.mv).conjugate
+
+/-- CGA3 sparse grade projection agrees with dense grade projection. -/
+def prop_sparse_cga3_gradeProject_dense : Gen Bool := do
+  let a : CGA3Mv ← Arbitrary.arbitrary
+  let k ← Gen.choose Nat 0 5 (by omega)
+  return sparseMatchesDense (a.mv.gradeProject k.val) ((sparseToDenseRef a.mv).gradeProject k.val)
+
 /-! ## Algebraic Properties -/
 
 /-- Commutativity of addition -/
@@ -436,6 +474,33 @@ def runRandomProp3 (name : String) (prop : R3Mv → R3Mv → R3Mv → Bool)
       break
   return { name, passed, numTests, message := failMsg }
 
+/-- Run a randomized CGA3 property test. -/
+def runRandomCGA3Prop (name : String) (prop : CGA3Mv → Bool)
+    (numTests : Nat := 100) : IO PropTestResult := do
+  let mut passed := true
+  let mut failMsg := ""
+  for i in [0:numTests] do
+    let mv : CGA3Mv ← Gen.run Arbitrary.arbitrary (i * 2)
+    if !prop mv then
+      passed := false
+      failMsg := s!"Failed on test {Nat.repr i}"
+      break
+  return { name := name, passed := passed, numTests := numTests, message := failMsg }
+
+/-- Run a randomized CGA3 property test with two arguments. -/
+def runRandomCGA3Prop2 (name : String) (prop : CGA3Mv → CGA3Mv → Bool)
+    (numTests : Nat := 100) : IO PropTestResult := do
+  let mut passed := true
+  let mut failMsg := ""
+  for i in [0:numTests] do
+    let a : CGA3Mv ← Gen.run Arbitrary.arbitrary (i * 2)
+    let b : CGA3Mv ← Gen.run Arbitrary.arbitrary (i * 2 + 1)
+    if !prop a b then
+      passed := false
+      failMsg := s!"Failed on test {Nat.repr i}"
+      break
+  return { name := name, passed := passed, numTests := numTests, message := failMsg }
+
 /-- Run a Gen Bool property -/
 def runGenProp (name : String) (prop : Gen Bool) (numTests : Nat := 100) : IO PropTestResult := do
   let mut passed := true
@@ -538,10 +603,28 @@ def runPropertyTests : IO Unit := do
   let r29 ← runGenProp "Sparse grade projection" prop_sparse_gradeProject_dense
   IO.println s!"│ {r29}"
   IO.println "└────────────────────────────────────────────────┘"
+  -- CGA3 sparse vs dense reference
+  IO.println "\n┌─ CGA3 Sparse vs Dense Reference ──────────────┐"
+  let r30 ← runRandomCGA3Prop2 "CGA3 sparse addition" prop_sparse_cga3_add_dense
+  IO.println s!"│ {r30}"
+  let r31 ← runRandomCGA3Prop2 "CGA3 sparse multiplication" prop_sparse_cga3_mul_dense
+  IO.println s!"│ {r31}"
+  let r32 ← runRandomCGA3Prop2 "CGA3 sparse wedge" prop_sparse_cga3_wedge_dense
+  IO.println s!"│ {r32}"
+  let r33 ← runRandomCGA3Prop "CGA3 sparse reverse" prop_sparse_cga3_reverse_dense
+  IO.println s!"│ {r33}"
+  let r34 ← runRandomCGA3Prop "CGA3 sparse involute" prop_sparse_cga3_involute_dense
+  IO.println s!"│ {r34}"
+  let r35 ← runRandomCGA3Prop "CGA3 sparse conjugate" prop_sparse_cga3_conjugate_dense
+  IO.println s!"│ {r35}"
+  let r36 ← runGenProp "CGA3 sparse grade projection" prop_sparse_cga3_gradeProject_dense
+  IO.println s!"│ {r36}"
+  IO.println "└────────────────────────────────────────────────┘"
   -- Summary
   let allResults := [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13,
                      r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24,
-                     r25, r26, r27, r28, r29]
+                     r25, r26, r27, r28, r29, r30, r31, r32, r33, r34, r35,
+                     r36]
   let passCount := allResults.filter (·.passed) |>.length
   let basisPass := if prop_R3_basis_squares && prop_R3_basis_anticommute && prop_CGA3_signature
                    then 3 else 0
