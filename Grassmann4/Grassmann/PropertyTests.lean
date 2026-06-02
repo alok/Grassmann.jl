@@ -141,6 +141,16 @@ def denseMvApproxEq {n : Nat} {sig : Signature n} (a b : Multivector sig Float)
   (List.finRange (2 ^ n)).all fun i =>
     approxEq (a.coeffs i) (b.coeffs i) tol
 
+/-- Convert sparse multivectors to the dense reference representation. -/
+def sparseToDenseRef {n : Nat} {sig : Signature n} (m : MultivectorS sig Float) :
+    Multivector sig Float :=
+  ⟨fun i => m.coeff i.val⟩
+
+/-- Compare sparse results against dense reference results coefficient-wise. -/
+def sparseMatchesDense {n : Nat} {sig : Signature n} (sparse : MultivectorS sig Float)
+    (dense : Multivector sig Float) (tol : Float := 1e-9) : Bool :=
+  denseMvApproxEq (sparseToDenseRef sparse) dense tol
+
 /-- Compare a packed `MV` result against its dense reference. -/
 def packedMatchesDense {n : Nat} {sig : Signature n} {p : Parity}
     (packed : MV sig p) (dense : Multivector sig Float) (tol : Float := 1e-9) : Bool :=
@@ -223,6 +233,44 @@ def prop_mv_sandwich_dense : Gen Bool := do
   let packedR : MV R3 .even := MV.ofMultivector denseR .even
   let packedX : MV R3 .odd := MV.ofMultivector denseX .odd
   return packedMatchesDense (mvSandwich packedR packedX) (denseR.sandwich denseX) (tol := 1e-6)
+
+/-! ## Sparse Reference Tests -/
+
+/-- Sparse addition agrees with dense addition. -/
+def prop_sparse_add_dense (a b : R3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (a.mv + b.mv) (denseA + denseB)
+
+/-- Sparse geometric multiplication agrees with dense multiplication. -/
+def prop_sparse_mul_dense (a b : R3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (a.mv * b.mv) (denseA * denseB) (tol := 1e-6)
+
+/-- Sparse wedge product agrees with dense wedge product. -/
+def prop_sparse_wedge_dense (a b : R3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (a.mv ⋀ₛ b.mv) (denseA ⋀ᵐ denseB) (tol := 1e-6)
+
+/-- Sparse reverse agrees with dense reverse. -/
+def prop_sparse_reverse_dense (a : R3Mv) : Bool :=
+  sparseMatchesDense a.mv.reverse (sparseToDenseRef a.mv).reverse
+
+/-- Sparse involute agrees with dense involute. -/
+def prop_sparse_involute_dense (a : R3Mv) : Bool :=
+  sparseMatchesDense a.mv.involute (sparseToDenseRef a.mv).involute
+
+/-- Sparse conjugate agrees with dense conjugate. -/
+def prop_sparse_conjugate_dense (a : R3Mv) : Bool :=
+  sparseMatchesDense a.mv.conjugate (sparseToDenseRef a.mv).conjugate
+
+/-- Sparse grade projection agrees with dense grade projection. -/
+def prop_sparse_gradeProject_dense : Gen Bool := do
+  let a : R3Mv ← Arbitrary.arbitrary
+  let k ← Gen.choose Nat 0 3 (by omega)
+  return sparseMatchesDense (a.mv.gradeProject k.val) ((sparseToDenseRef a.mv).gradeProject k.val)
 
 /-! ## Algebraic Properties -/
 
@@ -473,10 +521,27 @@ def runPropertyTests : IO Unit := do
   let r22 ← runGenProp "MV sandwich" prop_mv_sandwich_dense 50
   IO.println s!"│ {r22}"
   IO.println "└────────────────────────────────────────────────┘"
-
+  -- Sparse vs dense reference
+  IO.println "\n┌─ Sparse vs Dense Reference ───────────────────┐"
+  let r23 ← runRandomProp2 "Sparse addition" prop_sparse_add_dense
+  IO.println s!"│ {r23}"
+  let r24 ← runRandomProp2 "Sparse multiplication" prop_sparse_mul_dense
+  IO.println s!"│ {r24}"
+  let r25 ← runRandomProp2 "Sparse wedge" prop_sparse_wedge_dense
+  IO.println s!"│ {r25}"
+  let r26 ← runRandomProp "Sparse reverse" prop_sparse_reverse_dense
+  IO.println s!"│ {r26}"
+  let r27 ← runRandomProp "Sparse involute" prop_sparse_involute_dense
+  IO.println s!"│ {r27}"
+  let r28 ← runRandomProp "Sparse conjugate" prop_sparse_conjugate_dense
+  IO.println s!"│ {r28}"
+  let r29 ← runGenProp "Sparse grade projection" prop_sparse_gradeProject_dense
+  IO.println s!"│ {r29}"
+  IO.println "└────────────────────────────────────────────────┘"
   -- Summary
   let allResults := [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13,
-                     r14, r15, r16, r17, r18, r19, r20, r21, r22]
+                     r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24,
+                     r25, r26, r27, r28, r29]
   let passCount := allResults.filter (·.passed) |>.length
   let basisPass := if prop_R3_basis_squares && prop_R3_basis_anticommute && prop_CGA3_signature
                    then 3 else 0
