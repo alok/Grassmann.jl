@@ -159,6 +159,40 @@ def verifyGeometricProduct (sig : String) (bladeA bladeB : String)
       message := s!"Parse failed: {result.stdout}"
     }
 
+/-- Verify one target blade coefficient against Julia -/
+def verifyBladeCoefficient (sig operation : String) (bladeA bladeB targetBlade : String)
+    (leanResult : Float) : IO TestResult := do
+  let result ← callOracle ["blade_coefficient", sig, operation, bladeA, bladeB, targetBlade]
+  let testName := s!"coeff({sig},{operation},{bladeA},{bladeB},{targetBlade})"
+  if !result.success then
+    return {
+      name := testName
+      passed := false
+      leanValue := leanResult
+      juliaValue := 0.0
+      difference := 0.0
+      message := s!"Oracle error: {result.stderr}"
+    }
+  match parseJson result.stdout >>= fun j => getJsonFloat j "coefficient" with
+  | some juliaCoeff =>
+    let diff := (leanResult - juliaCoeff).abs
+    return {
+      name := testName
+      passed := floatsMatch leanResult juliaCoeff
+      leanValue := leanResult
+      juliaValue := juliaCoeff
+      difference := diff
+    }
+  | none =>
+    return {
+      name := testName
+      passed := false
+      leanValue := leanResult
+      juliaValue := 0.0
+      difference := 0.0
+      message := s!"Parse failed: {result.stdout}"
+    }
+
 /-- Verify signature basis squares -/
 def verifySignature (sigName : String) (leanSquares : Array Float) : IO TestResult := do
   let result ← callOracle ["signature_check", sigName]
@@ -288,7 +322,6 @@ def testR3Products : IO (Array TestResult) := do
   let e3 := r3e 2
   let e12 := e1 * e2
   let e123 := e1 * e2 * e3
-
   let r1 ← verifyGeometricProduct "R3" "e1" "e1" (e1 * e1).scalarPart
   let r2 ← verifyGeometricProduct "R3" "e2" "e2" (e2 * e2).scalarPart
   let r3 ← verifyGeometricProduct "R3" "e3" "e3" (e3 * e3).scalarPart
@@ -296,6 +329,36 @@ def testR3Products : IO (Array TestResult) := do
   let r5 ← verifyGeometricProduct "R3" "e12" "e12" (e12 * e12).scalarPart
   let r6 ← verifyGeometricProduct "R3" "e123" "e123" (e123 * e123).scalarPart
   return #[r1, r2, r3, r4, r5, r6]
+
+/-- Test target blade coefficients instead of just scalar parts -/
+def testBladeCoefficients : IO (Array TestResult) := do
+  let e1 := r3e 0
+  let e2 := r3e 1
+  let e3 := r3e 2
+  let e12 := e1 * e2
+  let w1 := cga3e 0
+  let w2 := cga3e 1
+  let w4 := cga3e 3
+  let w5 := cga3e 4
+  let r1 ← verifyBladeCoefficient "R3" "geometric_product" "e1" "e2" "e12"
+    ((e1 * e2).coeff 3)
+  let r2 ← verifyBladeCoefficient "R3" "geometric_product" "e2" "e1" "e12"
+    ((e2 * e1).coeff 3)
+  let r3 ← verifyBladeCoefficient "R3" "wedge_product" "e2" "e1" "e12"
+    ((e2 ⋀ₛ e1).coeff 3)
+  let r4 ← verifyBladeCoefficient "R3" "wedge_product" "e3" "e12" "e123"
+    ((e3 ⋀ₛ e12).coeff 7)
+  let r5 ← verifyBladeCoefficient "CGA3" "geometric_product" "e1" "e2" "e12"
+    ((w1 * w2).coeff 3)
+  let r6 ← verifyBladeCoefficient "CGA3" "geometric_product" "e2" "e1" "e12"
+    ((w2 * w1).coeff 3)
+  let r7 ← verifyBladeCoefficient "CGA3" "geometric_product" "e4" "e5" "e45"
+    ((w4 * w5).coeff 24)
+  let r8 ← verifyBladeCoefficient "CGA3" "geometric_product" "e5" "e4" "e45"
+    ((w5 * w4).coeff 24)
+  let r9 ← verifyBladeCoefficient "CGA3" "wedge_product" "e5" "e4" "e45"
+    ((w5 ⋀ₛ w4).coeff 24)
+  return #[r1, r2, r3, r4, r5, r6, r7, r8, r9]
 
 /-- Test signature verification -/
 def testSignatures : IO (Array TestResult) := do
@@ -311,15 +374,12 @@ def testCGANullVectors : IO (Array TestResult) := do
   let w3 := cga3e 2
   let w4 := cga3e 3  -- e+ (squares to +1)
   let w5 := cga3e 4  -- e- (squares to -1)
-
   let einf := w4 + w5
   let e0 := (w5 + w4.smul (-1.0)).smul 0.5
-
   -- CGA null basis tests
   let einfSq := (einf * einf).scalarPart
   let e0Sq := (e0 * e0).scalarPart
   let inner := ((einf * e0 + e0 * einf).scalarPart) / 2.0
-
   let r1 : TestResult := {
     name := "CGA e∞²=0"
     passed := floatsMatch einfSq 0.0
@@ -341,14 +401,12 @@ def testCGANullVectors : IO (Array TestResult) := do
     juliaValue := -1.0
     difference := (inner + 1.0).abs
   }
-
   -- Point embeddings
   let mkPoint (x y z : Float) : Float :=
     let p := w1.smul x + w2.smul y + w3.smul z
     let pSq := x*x + y*y + z*z
     let P := p + einf.smul (pSq / 2.0) + e0
     (P * P).scalarPart
-
   let r4 ← verifyCGAPoint 0.0 0.0 0.0 (mkPoint 0.0 0.0 0.0)
   let r5 ← verifyCGAPoint 1.0 0.0 0.0 (mkPoint 1.0 0.0 0.0)
   let r6 ← verifyCGAPoint 1.0 2.0 3.0 (mkPoint 1.0 2.0 3.0)
@@ -359,10 +417,8 @@ def testRotors : IO (Array TestResult) := do
   let e1 := r3e 0
   let e2 := r3e 1
   let B := e1 * e2
-
   let piOver4 : Float := 0.7853981633974483
   let piOver2 : Float := 1.5707963267948966
-
   let r1 ← verifyRotor "R3" 0.0 (expBivector (MultivectorS.zero : MultivectorS R3 Float)).scalarPart
   let r2 ← verifyRotor "R3" (piOver4 * 2.0) (expBivector (B.smul piOver4)).scalarPart
   let r3 ← verifyRotor "R3" (piOver2 * 2.0) (expBivector (B.smul piOver2)).scalarPart
@@ -376,36 +432,35 @@ def runAllTests : IO Unit := do
   IO.println "║  Grassmann.jl Oracle Verification Suite  ║"
   IO.println "╚══════════════════════════════════════════╝"
   IO.println ""
-
   -- R3 products
   IO.println "┌─ R3 Geometric Products ─────────────────┐"
   let r3Results ← testR3Products
   for r in r3Results do IO.println s!"│ {r}"
   IO.println "└──────────────────────────────────────────┘"
-
+  -- Blade coefficients
+  IO.println "\n┌─ Blade Coefficients ─────────────────────┐"
+  let coeffResults ← testBladeCoefficients
+  for r in coeffResults do IO.println s!"│ {r}"
+  IO.println "└──────────────────────────────────────────┘"
   -- Signatures
   IO.println "\n┌─ Signature Verification ─────────────────┐"
   let sigResults ← testSignatures
   for r in sigResults do IO.println s!"│ {r}"
   IO.println "└──────────────────────────────────────────┘"
-
   -- CGA
   IO.println "\n┌─ CGA Null Vectors ───────────────────────┐"
   let cgaResults ← testCGANullVectors
   for r in cgaResults do IO.println s!"│ {r}"
   IO.println "└──────────────────────────────────────────┘"
-
   -- Rotors
   IO.println "\n┌─ Rotor Exponentials ─────────────────────┐"
   let rotorResults ← testRotors
   for r in rotorResults do IO.println s!"│ {r}"
   IO.println "└──────────────────────────────────────────┘"
-
   -- Summary
-  let all := r3Results ++ sigResults ++ cgaResults ++ rotorResults
+  let all := r3Results ++ coeffResults ++ sigResults ++ cgaResults ++ rotorResults
   let passed := all.filter (·.passed)
   let failed := all.filter (!·.passed)
-
   IO.println "\n╔══════════════════════════════════════════╗"
   IO.println s!"║  Summary: {passed.size}/{all.size} tests passed                  ║"
   if failed.size > 0 then
@@ -414,6 +469,8 @@ def runAllTests : IO Unit := do
     for r in failed do
       IO.println s!"║    {r.name}: {r.message}"
   IO.println "╚══════════════════════════════════════════╝"
+  if failed.size > 0 then
+    throw <| IO.userError s!"{failed.size} oracle tests failed"
 
 /-- Quick connection check -/
 def quickCheck : IO Bool := do

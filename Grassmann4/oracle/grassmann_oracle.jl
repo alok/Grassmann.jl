@@ -63,6 +63,33 @@ function parse_blade(s::String, alg)
 end
 
 """
+Extract the coefficient of a non-null target blade from a multivector.
+
+For basis blade B, scalar(x * ~B) / scalar(B * ~B) gives the coefficient of B.
+This intentionally rejects null blades, where that projection is singular.
+"""
+function blade_coefficient(x, blade)
+    denom = scalar(blade * ~blade)
+    if abs(Float64(denom)) < 1e-12
+        error("Cannot extract coefficient for null blade")
+    end
+    return Float64(scalar(x * ~blade) / denom)
+end
+
+"""
+Compute a binary Grassmann operation by command name.
+"""
+function binary_operation(op::String, a, b)
+    if op == "geometric_product"
+        return a * b
+    elseif op == "wedge_product"
+        return a ∧ b
+    else
+        error("Unsupported coefficient operation: $op")
+    end
+end
+
+"""
 Interactive test mode: verify common identities.
 """
 function run_tests()
@@ -215,6 +242,36 @@ function cmd_left_contraction(sig_name::String, blade_a::String, blade_b::String
 end
 
 """
+Compute one target blade coefficient for a binary operation.
+"""
+function cmd_blade_coefficient(
+    sig_name::String,
+    operation::String,
+    blade_a::String,
+    blade_b::String,
+    target_blade::String,
+)
+    alg = get_algebra(sig_name)
+
+    a = parse_blade(blade_a, alg)
+    b = parse_blade(blade_b, alg)
+    target = parse_blade(target_blade, alg)
+    result = binary_operation(operation, a, b)
+    coeff = blade_coefficient(result, target)
+
+    return Dict(
+        "operation" => "blade_coefficient",
+        "binary_operation" => operation,
+        "signature" => sig_name,
+        "a" => blade_a,
+        "b" => blade_b,
+        "target_blade" => target_blade,
+        "result" => string(result),
+        "coefficient" => coeff,
+    )
+end
+
+"""
 Run CGA point embedding test.
 """
 function cmd_point_embedding(x::Float64, y::Float64, z::Float64)
@@ -320,6 +377,8 @@ function main()
             cmd_wedge_product(ARGS[2], ARGS[3], ARGS[4])
         elseif cmd == "left_contraction" && length(ARGS) >= 4
             cmd_left_contraction(ARGS[2], ARGS[3], ARGS[4])
+        elseif cmd == "blade_coefficient" && length(ARGS) >= 6
+            cmd_blade_coefficient(ARGS[2], ARGS[3], ARGS[4], ARGS[5], ARGS[6])
         elseif cmd == "point_embedding" && length(ARGS) >= 4
             cmd_point_embedding(parse(Float64, ARGS[2]),
                               parse(Float64, ARGS[3]),
@@ -338,6 +397,8 @@ function main()
   geometric_product <sig> <a> <b>       - Compute a*b
   wedge_product <sig> <a> <b>           - Compute a∧b
   left_contraction <sig> <a> <b>        - Compute a⌋b
+  blade_coefficient <sig> <op> <a> <b> <target>
+                                        - Coefficient of target in op(a,b)
   point_embedding <x> <y> <z>           - CGA point embedding
   verify_rotor <sig> <angle>            - Verify rotor
   signature_check <sig>                 - Check basis squares
