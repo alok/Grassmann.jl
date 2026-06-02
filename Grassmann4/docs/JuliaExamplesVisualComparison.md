@@ -35,6 +35,23 @@ lake exe jlexamples
 Nested runs write to `Grassmann4/.generated/`, which is ignored by
 `Grassmann4/.gitignore`.
 
+For a single reproducible visual audit, run:
+
+```bash
+cd Grassmann4
+scripts/compare_julia_examples.sh
+```
+
+That command regenerates the Lean SVGs, downloads the canonical Julia/Makie PNG
+references, renders the Lean SVGs to PNG, and writes a side-by-side contact
+sheet:
+
+```text
+.generated/julia-examples/contact-sheet/contact.png
+```
+
+It requires `curl`, `rsvg-convert`, and ImageMagick's `magick` command.
+
 ## Julia Reference Images
 
 The local Julia project can load `Grassmann` with automatic precompile disabled:
@@ -66,6 +83,7 @@ plot palette as the Julia/Makie references.
 
 Open `.generated/julia-examples/index.html` after regeneration to visually
 inspect every Lean SVG next to its canonical Julia reference image.
+The contact-sheet script provides the same comparison in one local image.
 
 | Example set | Lean status | Notes |
 | --- | --- | --- |
@@ -89,3 +107,13 @@ manifest.
 The CGA smoke check also ran using the exact conformal basis syntax from
 `docs/src/algebra.md`; the command is not repeated here because it contains the
 non-ASCII infinity basis character.
+
+These commands were also run successfully from `Grassmann4`:
+
+```bash
+lake exe jlexamples
+scripts/compare_julia_examples.sh
+```
+
+The browser comparison page reported `12` example sections and `24/24` loaded
+images: one Lean SVG and one Julia/Makie reference PNG for each example.
