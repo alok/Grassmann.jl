@@ -119,44 +119,40 @@ theorem conjugate_zero : (0 : Multivector sig F)‡ = 0 := by
   simp only [Multivector.conjugate, Multivector.zero]
   split_ifs <;> first | rfl | exact neg_zero
 
-/-- Reverse of scalar is scalar (grade 0).
-    The proof requires reasoning about the private reverseSignTable which doesn't unfold. -/
-theorem reverse_scalar (x : F) : (Multivector.scalar x : Multivector sig F)† = Multivector.scalar x := by
+omit [Div F] in
+/-- Reverse of scalar is scalar (grade 0). -/
+theorem reverse_scalar (x : F) :
+    (Multivector.scalar x : Multivector sig F)† = Multivector.scalar x := by
   ext i
   simp only [Multivector.reverse, Multivector.scalar]
   by_cases hi : i.val = 0
-  · -- At index 0, grade is 0, so sign is positive
-    simp only [hi, ↓reduceIte]
-    -- Sign table at grade 0: (0*(0-1)/2) % 2 = 0 → true → no flip
-    sorry_proof
-  · -- At non-zero index, scalar coefficient is 0
-    simp only [hi, ↓reduceIte]
+  · simp only [hi, ↓reduceIte]
+    simp [Grassmann.grade, popcount, Multivector.reverseSignTable]
+  · simp only [hi, ↓reduceIte]
     split_ifs <;> simp only [neg_zero]
 
+omit [Div F] in
 /-- Involute of scalar is scalar (grade 0) -/
-theorem involute_scalar (x : F) : (Multivector.scalar x : Multivector sig F)ˆ = Multivector.scalar x := by
+theorem involute_scalar (x : F) :
+    (Multivector.scalar x : Multivector sig F)ˆ = Multivector.scalar x := by
   ext i
   simp only [Multivector.involute, Multivector.scalar]
   by_cases hi : i.val = 0
-  · -- At index 0, grade is 0, so sign is positive
-    simp only [hi, ↓reduceIte]
-    -- Sign table at grade 0: 0 % 2 = 0 → true → no flip
-    sorry_proof
-  · -- At non-zero index, scalar coefficient is 0
-    simp only [hi, ↓reduceIte]
+  · simp only [hi, ↓reduceIte]
+    simp [Grassmann.grade, popcount, Multivector.involuteSignTable]
+  · simp only [hi, ↓reduceIte]
     split_ifs <;> simp only [neg_zero]
 
+omit [Div F] in
 /-- Conjugate of scalar is scalar (grade 0) -/
-theorem conjugate_scalar (x : F) : (Multivector.scalar x : Multivector sig F)‡ = Multivector.scalar x := by
+theorem conjugate_scalar (x : F) :
+    (Multivector.scalar x : Multivector sig F)‡ = Multivector.scalar x := by
   ext i
   simp only [Multivector.conjugate, Multivector.scalar]
   by_cases hi : i.val = 0
-  · -- At index 0, grade is 0, so sign is positive
-    simp only [hi, ↓reduceIte]
-    -- Sign table at grade 0: (0*(0+1)/2) % 2 = 0 → true → no flip
-    sorry_proof
-  · -- At non-zero index, scalar coefficient is 0
-    simp only [hi, ↓reduceIte]
+  · simp only [hi, ↓reduceIte]
+    simp [Grassmann.grade, popcount, Multivector.conjugateSignTable]
+  · simp only [hi, ↓reduceIte]
     split_ifs <;> simp only [neg_zero]
 
 /-! ## Ring Structure

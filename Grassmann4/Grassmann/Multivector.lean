@@ -173,18 +173,30 @@ The grade of blade i is popcount(i), and the signs are:
 - conjugate: (-1)^(k(k+1)/2)
 -/
 
-/-- Precomputed sign for reverse operation at each grade (0..n).
+/-- Internal precomputed sign for reverse operation at each grade (0..n).
     reverseSign[k] = true means positive, false means negative. -/
-private def reverseSignTable (n : ℕ) : Array Bool :=
+def reverseSignTable (n : ℕ) : Array Bool :=
   Array.ofFn (n := n + 1) fun k => (k.val * (k.val - 1) / 2) % 2 = 0
 
-/-- Precomputed sign for involute operation at each grade. -/
-private def involuteSignTable (n : ℕ) : Array Bool :=
+@[simp] theorem reverseSignTable_getD_zero (n : ℕ) :
+    (reverseSignTable n).getD 0 true = true := by
+  simp [reverseSignTable]
+
+/-- Internal precomputed sign for involute operation at each grade. -/
+def involuteSignTable (n : ℕ) : Array Bool :=
   Array.ofFn (n := n + 1) fun k => k.val % 2 = 0
 
-/-- Precomputed sign for conjugate operation at each grade. -/
-private def conjugateSignTable (n : ℕ) : Array Bool :=
+@[simp] theorem involuteSignTable_getD_zero (n : ℕ) :
+    (involuteSignTable n).getD 0 true = true := by
+  simp [involuteSignTable]
+
+/-- Internal precomputed sign for conjugate operation at each grade. -/
+def conjugateSignTable (n : ℕ) : Array Bool :=
   Array.ofFn (n := n + 1) fun k => (k.val * (k.val + 1) / 2) % 2 = 0
+
+@[simp] theorem conjugateSignTable_getD_zero (n : ℕ) :
+    (conjugateSignTable n).getD 0 true = true := by
+  simp [conjugateSignTable]
 
 /-- Reverse (dagger): reverses order of basis vectors.
     For grade k: multiplies by (-1)^(k(k-1)/2)
