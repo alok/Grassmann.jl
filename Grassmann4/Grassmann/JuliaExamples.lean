@@ -321,12 +321,110 @@ def vectorFieldExamples : List (Prod String String) :=
 def allExamples : List (Prod String String) :=
   planeExamples ++ curveExamples ++ vectorFieldExamples
 
-def outputDir : System.FilePath := ".generated" / "julia-examples" / "lean"
+def comparisonRoot : System.FilePath := ".generated" / "julia-examples"
+
+def outputDir : System.FilePath := comparisonRoot / "lean"
+
+def juliaReferenceBase : String :=
+  "https://raw.githubusercontent.com/chakravala/Grassmann.jl/master/paper/img/"
+
+def referenceName (filename : String) : String :=
+  match filename with
+  | "plane-1.svg" => "plane-1"
+  | "plane-2.svg" => "plane-2"
+  | "plane-3.svg" => "plane-3"
+  | "plane-4.svg" => "plane-4"
+  | "plane-5.svg" => "plane-5"
+  | "plane-6.svg" => "plane-6"
+  | "torus.svg" => "torus"
+  | "helix.svg" => "helix"
+  | "orbit-2.svg" => "orbit-2"
+  | "orbit-4.svg" => "orbit-4"
+  | "orb.svg" => "orb"
+  | "wave.svg" => "wave"
+  | other => other
+
+def juliaReferenceUrl (filename : String) : String :=
+  juliaReferenceBase ++ referenceName filename ++ ".png"
+
+def joinWith (sep : String) : List String -> String
+  | [] => ""
+  | x :: xs => xs.foldl (fun acc y => acc ++ sep ++ y) x
+
+def manifestEntry (ex : Prod String String) : String :=
+  let name := ex.1
+  "    {\"name\":\"" ++ referenceName name ++
+    "\",\"lean\":\"lean/" ++ name ++
+    "\",\"julia\":\"" ++ juliaReferenceUrl name ++ "\"}"
+
+def manifestJson : String :=
+  "{\n" ++
+  "  \"source\":\"Grassmann.jl docs/src/algebra.md plot examples\",\n" ++
+  "  \"examples\":[\n" ++
+  joinWith ",\n" (allExamples.map manifestEntry) ++ "\n" ++
+  "  ]\n" ++
+  "}\n"
+
+def comparisonCard (ex : Prod String String) : String :=
+  let name := ex.1
+  let label := referenceName name
+  let leanPath := "lean/" ++ name
+  let juliaUrl := juliaReferenceUrl name
+  "    <section class=\"example\">\n" ++
+  s!"      <h2>{label}</h2>\n" ++
+  "      <div class=\"frames\">\n" ++
+  "        <figure>\n" ++
+  s!"          <img src=\"{leanPath}\" alt=\"Lean generated {label}\" />\n" ++
+  "          <figcaption>Lean SVG</figcaption>\n" ++
+  "        </figure>\n" ++
+  "        <figure>\n" ++
+  s!"          <img src=\"{juliaUrl}\" alt=\"Julia reference {label}\" />\n" ++
+  "          <figcaption>Julia/Makie PNG</figcaption>\n" ++
+  "        </figure>\n" ++
+  "      </div>\n" ++
+  "    </section>\n"
+
+def comparisonHtml : String :=
+  "<!doctype html>\n" ++
+  "<html lang=\"en\">\n" ++
+  "<head>\n" ++
+  "  <meta charset=\"utf-8\" />\n" ++
+  "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n" ++
+  "  <link rel=\"icon\" href=\"data:,\" />\n" ++
+  "  <title>Grassmann.jl Examples: Lean Comparison</title>\n" ++
+  "  <style>\n" ++
+  "    :root { color-scheme: light; font-family: Inter, Helvetica, Arial, sans-serif; }\n" ++
+  "    body { margin: 0; background: #f5f5f4; color: #202020; }\n" ++
+  "    main { max-width: 1180px; margin: 0 auto; padding: 24px; }\n" ++
+  "    h1 { font-size: 24px; font-weight: 650; margin: 0 0 6px; }\n" ++
+  "    p { margin: 0 0 18px; color: #555; line-height: 1.45; }\n" ++
+  "    .example { border-top: 1px solid #d7d7d4; padding: 18px 0 24px; }\n" ++
+  "    h2 { font-size: 16px; font-weight: 650; margin: 0 0 12px; }\n" ++
+  "    .frames { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }\n" ++
+  "    figure { margin: 0; background: #fff; border: 1px solid #d8d8d5; padding: 10px; }\n" ++
+  "    img { display: block; width: 100%; height: 360px; object-fit: contain; background: #fff; }\n" ++
+  "    figcaption { margin-top: 8px; font-size: 12px; color: #666; }\n" ++
+  "    @media (max-width: 760px) { .frames { grid-template-columns: 1fr; } }\n" ++
+  "  </style>\n" ++
+  "</head>\n" ++
+  "<body>\n" ++
+  "  <main>\n" ++
+  "    <h1>Grassmann.jl Plot Examples: Lean Comparison</h1>\n" ++
+  "    <p>Lean-generated SVGs are paired with canonical Grassmann.jl/Makie PNGs.</p>\n" ++
+  joinWith "" (allExamples.map comparisonCard) ++
+  "  </main>\n" ++
+  "</body>\n" ++
+  "</html>\n"
 
 def writeAll : IO Unit := do
+  let manifestPath := comparisonRoot / "manifest.json"
+  let indexPath := comparisonRoot / "index.html"
   IO.FS.createDirAll outputDir
   for (name, body) in allExamples do
     IO.FS.writeFile (outputDir / name) body
+  IO.FS.writeFile manifestPath manifestJson
+  IO.FS.writeFile indexPath comparisonHtml
   IO.println s!"wrote {allExamples.length} Lean visualizations to {outputDir}"
+  IO.println s!"wrote comparison index to {indexPath}"
 
 end Grassmann.JuliaExamples

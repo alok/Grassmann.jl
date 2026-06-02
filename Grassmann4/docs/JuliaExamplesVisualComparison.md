@@ -17,6 +17,14 @@ This writes Lean-generated SVGs to:
 .generated/julia-examples/lean/
 ```
 
+It also writes a side-by-side visual comparison page and a machine-readable
+manifest:
+
+```text
+.generated/julia-examples/index.html
+.generated/julia-examples/manifest.json
+```
+
 The same executable is also available from the nested Lean package:
 
 ```bash
@@ -56,6 +64,9 @@ torus helix orb wave orbit-2 orbit-4
 The Lean generator emits twelve visualizations with the same grayscale/white
 plot palette as the Julia/Makie references.
 
+Open `.generated/julia-examples/index.html` after regeneration to visually
+inspect every Lean SVG next to its canonical Julia reference image.
+
 | Example set | Lean status | Notes |
 | --- | --- | --- |
 | `plane-1` through `plane-6` | Direct linear-field counterparts | Euclidean rotations/reflections and hyperbolic boosts match the reference topology. Arrow glyphs and line density are approximate Makie-style matches. |
@@ -71,6 +82,9 @@ These commands were run successfully from the repository root:
 lake exe jlexamples
 JULIA_PKG_PRECOMPILE_AUTO=0 julia --project=. --startup-file=no -e 'using Grassmann; basis"2"; println(exp(pi*v12/2)); @basis S"+-"; println(exp((pi/8)*v12/2))'
 ```
+
+The generator wrote `12` Lean visualizations plus the comparison index and
+manifest.
 
 The CGA smoke check also ran using the exact conformal basis syntax from
 `docs/src/algebra.md`; the command is not repeated here because it contains the
