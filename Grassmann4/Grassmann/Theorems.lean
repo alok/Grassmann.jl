@@ -467,7 +467,14 @@ theorem involute_vector (v : Multivector sig F) (hv : v = v.gradeProject 1) :
     simp only [Multivector.gradeProject]
   split_ifs with h
   · -- grade i is even, so grade ≠ 1, so v.coeffs i = 0
-    have h1 : grade (BitVec.ofNat n i.val) ≠ 1 := by sorry_proof
+    have h1 : grade (BitVec.ofNat n i.val) ≠ 1 := by
+      intro hg
+      cases n with
+      | zero =>
+          simp [Grassmann.grade, popcount] at hg
+      | succ n' =>
+          rw [hg] at h
+          simp [Multivector.involuteSignTable] at h
     simp only [h1, ↓reduceIte] at hcoeff
     -- hcoeff : v.coeffs i = 0, goal: v.coeffs i = (-v).coeffs i
     rw [hcoeff]
@@ -490,7 +497,18 @@ theorem involute_bivector (B : Multivector sig F) (hB : B = B.gradeProject 2) :
   · -- grade i is even, B.coeffs i unchanged
     rfl
   · -- grade i is odd, so grade ≠ 2, so B.coeffs i = 0
-    have h2 : grade (BitVec.ofNat n i.val) ≠ 2 := by sorry_proof
+    have h2 : grade (BitVec.ofNat n i.val) ≠ 2 := by
+      intro hg
+      rw [hg] at h
+      cases n with
+      | zero =>
+          simp [Multivector.involuteSignTable] at h
+      | succ n' =>
+          cases n' with
+          | zero =>
+              simp [Multivector.involuteSignTable] at h
+          | succ n'' =>
+              simp [Multivector.involuteSignTable] at h
     simp only [h2, ↓reduceIte] at hcoeff
     simp [hcoeff]
 
@@ -507,12 +525,20 @@ theorem involute_pseudoscalar (I : Multivector sig F) (hI : I = I.gradeProject n
   · -- grade % 2 = 0 and n % 2 = 0: coefficient unchanged
     rfl
   · -- grade % 2 = 0 and n % 2 ≠ 0: grade ≠ n so I.coeffs i = 0
-    have hne : grade (BitVec.ofNat n i.val) ≠ n := by sorry_proof
+    have hne : grade (BitVec.ofNat n i.val) ≠ n := by
+      intro hg
+      rw [hg] at h
+      simp [Multivector.involuteSignTable] at h
+      omega
     simp only [hne, ↓reduceIte] at hcoeff
     change I.coeffs i = (Multivector.neg I).coeffs i
     simp only [Multivector.neg, hcoeff, neg_zero]
   · -- grade % 2 ≠ 0 (odd) and n % 2 = 0: grade ≠ n so I.coeffs i = 0
-    have hne : grade (BitVec.ofNat n i.val) ≠ n := by sorry_proof
+    have hne : grade (BitVec.ofNat n i.val) ≠ n := by
+      intro hg
+      rw [hg] at h
+      simp [Multivector.involuteSignTable] at h
+      omega
     simp only [hne, ↓reduceIte] at hcoeff
     simp [hcoeff]
   · -- grade % 2 ≠ 0 (odd) and n % 2 ≠ 0: -I.coeffs i = (-I).coeffs i
