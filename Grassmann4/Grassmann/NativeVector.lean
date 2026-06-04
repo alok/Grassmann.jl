@@ -212,6 +212,91 @@ instance : SMul Float (NativeMV sig) := ⟨smul⟩
 postfix:max "†ᵥ" => NativeMV.reverse
 infixl:65 " ⋀ᵥ " => NativeMV.wedge
 
+/-! ## Basic Theorems -/
+
+@[ext]
+theorem ext {a b : NativeMV sig} (h : ∀ mask, a.coeff mask = b.coeff mask) : a = b := by
+  cases a with
+  | mk ac =>
+  cases b with
+  | mk bc =>
+    congr
+    apply Vector.ext
+    intro i hi
+    have hcoeff := h i
+    simpa [coeff, hi] using hcoeff
+
+@[simp]
+theorem coeff_zero (mask : Nat) :
+    (zero sig).coeff mask = 0.0 := by
+  unfold coeff zero
+  split
+  · simp only [Vector.get, Vector.replicate, Array.getElem_replicate]
+  · rfl
+
+@[simp]
+theorem coeff_scalar_zero (x : Float) :
+    (scalar sig x).coeff 0 = x := by
+  unfold coeff scalar
+  split
+  · simp only [Vector.get, Vector.ofFn, Array.getElem_ofFn]
+    rfl
+  · have hpow : 0 < 2 ^ n := Nat.pow_pos (by decide : 0 < 2)
+    contradiction
+
+@[simp]
+theorem coeff_scalar_of_ne_zero (x : Float) {mask : Nat} (hmask : mask ≠ 0) :
+    (scalar sig x).coeff mask = 0.0 := by
+  unfold coeff scalar
+  split
+  · simp only [Vector.get, Vector.ofFn, Array.getElem_ofFn]
+    simp [hmask]
+  · rfl
+
+theorem coeff_gradeProject (m : NativeMV sig) (k mask : Nat) :
+    (m.gradeProject k).coeff mask = if popcount mask = k then m.coeff mask else 0.0 := by
+  unfold coeff gradeProject
+  split
+  · simp only [Vector.get, Vector.ofFn, Array.getElem_ofFn]
+    rfl
+  · simp
+
+theorem coeff_evenPart (m : NativeMV sig) (mask : Nat) :
+    m.evenPart.coeff mask = if popcount mask % 2 = 0 then m.coeff mask else 0.0 := by
+  unfold coeff evenPart
+  split
+  · simp only [Vector.get, Vector.ofFn, Array.getElem_ofFn]
+    rfl
+  · simp
+
+theorem coeff_oddPart (m : NativeMV sig) (mask : Nat) :
+    m.oddPart.coeff mask = if popcount mask % 2 = 1 then m.coeff mask else 0.0 := by
+  unfold coeff oddPart
+  split
+  · simp only [Vector.get, Vector.ofFn, Array.getElem_ofFn]
+    rfl
+  · simp
+
+@[simp]
+theorem gradeProject_idem (m : NativeMV sig) (k : Nat) :
+    (m.gradeProject k).gradeProject k = m.gradeProject k := by
+  ext mask
+  rw [coeff_gradeProject, coeff_gradeProject]
+  by_cases h : popcount mask = k
+  · simp [h]
+  · simp [h]
+
+theorem gradeProject_orthogonal (m : NativeMV sig) {j k : Nat} (hjk : j ≠ k) :
+    (m.gradeProject j).gradeProject k = zero sig := by
+  ext mask
+  rw [coeff_gradeProject, coeff_zero, coeff_gradeProject]
+  by_cases hk : popcount mask = k
+  · simp only [hk, ↓reduceIte]
+    by_cases hkj : k = j
+    · exact False.elim (hjk hkj.symm)
+    · simp only [hkj, ↓reduceIte]
+  · simp only [hk, ↓reduceIte]
+
 /-! ## Small executable checks -/
 
 section Checks
