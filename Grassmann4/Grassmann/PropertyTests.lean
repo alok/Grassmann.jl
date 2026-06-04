@@ -13,6 +13,7 @@ import Grassmann.SparseMultivector
 import Grassmann.NativeVector
 import Grassmann.Products
 import Grassmann.Manifold
+import Grassmann.LinearAlgebra
 import Grassmann.StaticOpt
 import Grassmann.MV
 import Grassmann.BladeIndex
@@ -752,6 +753,114 @@ def prop_PGA3_signature : Bool :=
   approxEq (e3 * e3).scalarPart 1.0 &&
   approxEq (e0 * e0).scalarPart 0.0
 
+/-! ## High-Dimensional Exact Stress Tests -/
+
+/-- Five-dimensional Euclidean signature used by exact stress checks. -/
+abbrev R5Stress : Signature 5 := Signature.euclidean 5
+
+/-- R4 blade from a bit mask for exact stress checks. -/
+def stressBlade4 (mask : Nat) : Blade R4 :=
+  ⟨BitVec.ofNat 4 mask⟩
+
+/-- R5 blade from a bit mask for exact stress checks. -/
+def stressBlade5 (mask : Nat) : Blade R5Stress :=
+  ⟨BitVec.ofNat 5 mask⟩
+
+/-- R4 basis blade as an exact dense integer multivector. -/
+def stressMv4 (mask : Nat) : Multivector R4 Int :=
+  Multivector.ofBlade (stressBlade4 mask)
+
+/-- R5 basis blade as an exact dense integer multivector. -/
+def stressMv5 (mask : Nat) : Multivector R5Stress Int :=
+  Multivector.ofBlade (stressBlade5 mask)
+
+/-- Exact coefficient-wise equality for dense integer multivectors. -/
+def denseIntEq {n : Nat} {sig : Signature n} (a b : Multivector sig Int) : Bool :=
+  (List.finRange (2 ^ n)).all fun i => a.coeffs i == b.coeffs i
+
+/-- R5 exact basis, anticommutation, and wedge checks. -/
+def prop_R5_exact_basis_wedge : Bool :=
+  let e1 := stressMv5 0b00001
+  let e2 := stressMv5 0b00010
+  let e3 := stressMv5 0b00100
+  let e4 := stressMv5 0b01000
+  let e5 := stressMv5 0b10000
+  let e14 := stressBlade5 0b01001
+  let ps := stressBlade5 0b11111
+  let wedgeAll := ((((e1 ⋀ᵐ e2) ⋀ᵐ e3) ⋀ᵐ e4) ⋀ᵐ e5)
+  (e1 * e1).scalarPart == 1 &&
+  (e5 * e5).scalarPart == 1 &&
+  denseIntEq (e1 * e2 + e2 * e1) (0 : Multivector R5Stress Int) &&
+  wedgeAll.coeff ps == 1 &&
+  denseIntEq (e3 ⋀ᵐ e3) (0 : Multivector R5Stress Int) &&
+  (e1 ⋀ᵐ e4).coeff e14 == 1 &&
+  (e4 ⋀ᵐ e1).coeff e14 == -1
+
+/-- R5 exact unnormalized rotor and contraction checks. -/
+def prop_R5_exact_rotor_contraction : Bool :=
+  let e1 := stressMv5 0b00001
+  let e2 := stressMv5 0b00010
+  let e3 := stressMv5 0b00100
+  let b12 := e1 * e2
+  let one : Multivector R5Stress Int := Multivector.one
+  let r := one + b12
+  let rinv := one - b12
+  let rotE1 := r * e1 * r†
+  let rotE3 := r * e3 * r†
+  let e12 := e1 ⋀ᵐ e2
+  (b12 * b12).scalarPart == -1 &&
+  denseIntEq (r * rinv) (Multivector.scalar 2 : Multivector R5Stress Int) &&
+  rotE1.coeff (stressBlade5 0b00001) == 0 &&
+  rotE1.coeff (stressBlade5 0b00010) == -2 &&
+  rotE3.coeff (stressBlade5 0b00001) == 0 &&
+  rotE3.coeff (stressBlade5 0b00010) == 0 &&
+  rotE3.coeff (stressBlade5 0b00100) == 2 &&
+  denseIntEq (e1 ⌋ᵐ e12) e2 &&
+  denseIntEq (e3 ⌋ᵐ e12) (0 : Multivector R5Stress Int)
+
+/-- R4 exact Hodge dual and determinant checks. -/
+def prop_R4_exact_hodge_det : Bool :=
+  let e1 := stressMv4 0b0001
+  let e2 := stressMv4 0b0010
+  let e3 := stressMv4 0b0100
+  let e4 := stressMv4 0b1000
+  let ps := stressBlade4 0b1111
+  let e234 := stressBlade4 0b1110
+  let scaled1 := e1.smul 2
+  let scaled2 := e2.smul 3
+  let scaled3 := e3.smul 5
+  let scaled4 := e4.smul 7
+  (⋆ᵐ(Multivector.one : Multivector R4 Int)).coeff ps == 1 &&
+  (⋆ᵐe1).coeff e234 == 1 &&
+  LinearAlgebra.det [e1, e2, e3, e4] == 1 &&
+  LinearAlgebra.det [e2, e1, e3, e4] == -1 &&
+  LinearAlgebra.det [scaled1, scaled2, scaled3, scaled4] == 210
+
+/-- R4 exact rotor composition and identity checks. -/
+def prop_R4_exact_composition_identity : Bool :=
+  let e1 := stressMv4 0b0001
+  let e2 := stressMv4 0b0010
+  let e3 := stressMv4 0b0100
+  let e4 := stressMv4 0b1000
+  let r12 := (Multivector.one : Multivector R4 Int) + e1 * e2
+  let r34 := (Multivector.one : Multivector R4 Int) + e3 * e4
+  let r := r12 * r34
+  let rotE1 := r * e1 * r†
+  let a := e1 + e2
+  let b := e2 + e3
+  let reverseDiff := (a * b)† - b† * a†
+  let mv := (Multivector.one : Multivector R4 Int) + e1 + e1 * e2
+  let involuteDiff := (mvˆ)ˆ - mv
+  let v := e1.smul 3 + e4.smul 4
+  let vSq := v * v
+  rotE1.coeff (stressBlade4 0b0001) == 0 &&
+  rotE1.coeff (stressBlade4 0b0010) == -4 &&
+  denseIntEq reverseDiff (0 : Multivector R4 Int) &&
+  denseIntEq involuteDiff (0 : Multivector R4 Int) &&
+  vSq.scalarPart == 25 &&
+  vSq.coeff (stressBlade4 0b0001) == 0 &&
+  vSq.coeff (stressBlade4 0b1000) == 0
+
 /-! ## Test Runner -/
 
 /-- Result of a property test -/
@@ -1043,6 +1152,20 @@ def runCGA3SparseReferenceTests : IO (List PropTestResult) := do
   IO.println "└────────────────────────────────────────────────┘"
   return [r30, r31, r32, r33, r34, r35, r36]
 
+/-- Run high-dimensional exact dense stress checks. -/
+def runHighDimStressTests : IO (List PropTestResult) := do
+  IO.println "\n┌─ High-D Exact Stress Checks ──────────────────┐"
+  let s1 := runBoolProp "R5 basis and wedge" prop_R5_exact_basis_wedge
+  IO.println s!"│ {s1}"
+  let s2 := runBoolProp "R5 rotor and contraction" prop_R5_exact_rotor_contraction
+  IO.println s!"│ {s2}"
+  let s3 := runBoolProp "R4 Hodge and determinant" prop_R4_exact_hodge_det
+  IO.println s!"│ {s3}"
+  let s4 := runBoolProp "R4 composition and identities" prop_R4_exact_composition_identity
+  IO.println s!"│ {s4}"
+  IO.println "└────────────────────────────────────────────────┘"
+  return [s1, s2, s3, s4]
+
 /-- Run all property tests -/
 def runPropertyTests : IO Unit := do
   IO.println "╔══════════════════════════════════════════════╗"
@@ -1099,6 +1222,7 @@ def runPropertyTests : IO Unit := do
   let sparseResults ← runSparseReferenceTests
   let pgaSparseResults ← runPGA3SparseReferenceTests
   let cgaSparseResults ← runCGA3SparseReferenceTests
+  let stressResults ← runHighDimStressTests
   -- Summary
   let coreResults := [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13]
   let countPassed (results : List PropTestResult) := results.filter (·.passed) |>.length
@@ -1111,14 +1235,15 @@ def runPropertyTests : IO Unit := do
     countPassed cgaPackedResults +
     countPassed sparseResults +
     countPassed pgaSparseResults +
-    countPassed cgaSparseResults
+    countPassed cgaSparseResults +
+    countPassed stressResults
   let basisProps := [prop_R3_basis_squares, prop_R3_basis_anticommute, prop_CGA3_signature,
     prop_PGA3_signature]
   let basisPass := basisProps.filter id |>.length
   let total :=
     coreResults.length + nativeResults.length + signTableResults.length + packedResults.length +
     pgaPackedResults.length + cgaPackedResults.length + sparseResults.length +
-    pgaSparseResults.length + cgaSparseResults.length + basisProps.length
+    pgaSparseResults.length + cgaSparseResults.length + stressResults.length + basisProps.length
   let totalPass := passCount + basisPass
   IO.println ""
   IO.println "╔══════════════════════════════════════════════╗"
