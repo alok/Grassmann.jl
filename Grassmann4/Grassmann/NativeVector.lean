@@ -277,6 +277,24 @@ theorem coeff_oddPart (m : NativeMV sig) (mask : Nat) :
     rfl
   · simp
 
+/-- Setting an in-range native-vector coefficient updates that blade mask. -/
+theorem coeff_setCoeff_same (m : NativeMV sig) {mask : Nat} (x : Float)
+    (hmask : mask < 2 ^ n) :
+    (m.setCoeff mask x).coeff mask = x := by
+  unfold setCoeff coeff
+  simp only [hmask, ↓reduceDIte]
+  simp only [Vector.get, Vector.set]
+  simp
+
+/-- Setting one in-range native-vector coefficient leaves other in-range masks unchanged. -/
+theorem coeff_setCoeff_ne (m : NativeMV sig) {setMask queryMask : Nat} (x : Float)
+    (hset : setMask < 2 ^ n) (hquery : queryMask < 2 ^ n) (hne : setMask ≠ queryMask) :
+    (m.setCoeff setMask x).coeff queryMask = m.coeff queryMask := by
+  unfold setCoeff coeff
+  simp only [hset, hquery, ↓reduceDIte]
+  simp only [Vector.get, Vector.set]
+  simp [Array.getElem_set, hne]
+
 /-- Coefficient of a native-vector sum at an in-range blade mask. -/
 theorem coeff_add (a b : NativeMV sig) {mask : Nat} (hmask : mask < 2 ^ n) :
     (a + b).coeff mask = a.coeff mask + b.coeff mask := by
