@@ -125,12 +125,22 @@ instance : BEq CGA3Mv where
 structure R3DenseMv where
   mv : Multivector R3 Float
 
+/-- Wrapper for dense PGA3 multivectors used as the reference for packed `MV`. -/
+structure PGA3DenseMv where
+  mv : Multivector PGA3 Float
+
 /-- Wrapper for dense CGA3 multivectors used as the reference for packed `MV`. -/
 structure CGA3DenseMv where
   mv : Multivector CGA3 Float
 
 /-- Build a dense R3 multivector by summing duplicate blade entries. -/
 def R3DenseMv.ofList (coeffs : List (Nat × Float)) : R3DenseMv :=
+  ⟨⟨fun i =>
+    coeffs.foldl (init := 0.0) fun acc (idx, coeff) =>
+      if idx == i.val then acc + coeff else acc⟩⟩
+
+/-- Build a dense PGA3 multivector by summing duplicate blade entries. -/
+def PGA3DenseMv.ofList (coeffs : List (Nat × Float)) : PGA3DenseMv :=
   ⟨⟨fun i =>
     coeffs.foldl (init := 0.0) fun acc (idx, coeff) =>
       if idx == i.val then acc + coeff else acc⟩⟩
@@ -145,6 +155,11 @@ def CGA3DenseMv.ofList (coeffs : List (Nat × Float)) : CGA3DenseMv :=
 def genR3DenseMv : Gen R3DenseMv := do
   let coeffs ← genSparseCoeffs 7 6
   return R3DenseMv.ofList coeffs
+
+/-- Generator for dense PGA3 multivectors. -/
+def genPGA3DenseMv : Gen PGA3DenseMv := do
+  let coeffs ← genSparseCoeffs 15 5
+  return PGA3DenseMv.ofList coeffs
 
 /-- Generator for dense CGA3 multivectors. -/
 def genCGA3DenseMv : Gen CGA3DenseMv := do
@@ -299,6 +314,86 @@ def prop_mv_sandwich_dense : Gen Bool := do
   let denseX := x.mv.oddPart
   let packedR : MV R3 .even := MV.ofMultivector denseR .even
   let packedX : MV R3 .odd := MV.ofMultivector denseX .odd
+  return packedMatchesDense (mvSandwich packedR packedX) (denseR.sandwich denseX) (tol := 1e-6)
+
+/-! ## PGA3 Packed MV Reference Tests -/
+
+/-- PGA3 packed full `MV` round-trip preserves all dense coefficients. -/
+def prop_mv_pga3_full_roundtrip : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let packed : MV PGA3 .full := MV.ofMultivector a.mv .full
+  return packedMatchesDense packed a.mv
+
+/-- PGA3 even and odd packed projections match dense even/odd projection. -/
+def prop_mv_pga3_parity_projection : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let evenPacked : MV PGA3 .even := MV.ofMultivector a.mv .even
+  let oddPacked : MV PGA3 .odd := MV.ofMultivector a.mv .odd
+  return packedMatchesDense evenPacked a.mv.evenPart &&
+    packedMatchesDense oddPacked a.mv.oddPart
+
+/-- PGA3 packed full multiplication agrees with dense multiplication. -/
+def prop_mv_pga3_full_mul_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let b ← genPGA3DenseMv
+  let packedA : MV PGA3 .full := MV.ofMultivector a.mv .full
+  let packedB : MV PGA3 .full := MV.ofMultivector b.mv .full
+  return packedMatchesDense (packedA * packedB) (a.mv * b.mv) (tol := 1e-6)
+
+/-- PGA3 packed even × even multiplication agrees with dense multiplication. -/
+def prop_mv_pga3_even_mul_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let b ← genPGA3DenseMv
+  let denseA := a.mv.evenPart
+  let denseB := b.mv.evenPart
+  let packedA : MV PGA3 .even := MV.ofMultivector denseA .even
+  let packedB : MV PGA3 .even := MV.ofMultivector denseB .even
+  return packedMatchesDense (packedA * packedB) (denseA * denseB) (tol := 1e-6)
+
+/-- PGA3 packed even × odd multiplication agrees with dense multiplication. -/
+def prop_mv_pga3_even_odd_mul_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let b ← genPGA3DenseMv
+  let denseA := a.mv.evenPart
+  let denseB := b.mv.oddPart
+  let packedA : MV PGA3 .even := MV.ofMultivector denseA .even
+  let packedB : MV PGA3 .odd := MV.ofMultivector denseB .odd
+  return packedMatchesDense (packedA * packedB) (denseA * denseB) (tol := 1e-6)
+
+/-- PGA3 packed odd × even multiplication agrees with dense multiplication. -/
+def prop_mv_pga3_odd_even_mul_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let b ← genPGA3DenseMv
+  let denseA := a.mv.oddPart
+  let denseB := b.mv.evenPart
+  let packedA : MV PGA3 .odd := MV.ofMultivector denseA .odd
+  let packedB : MV PGA3 .even := MV.ofMultivector denseB .even
+  return packedMatchesDense (packedA * packedB) (denseA * denseB) (tol := 1e-6)
+
+/-- PGA3 packed odd × odd multiplication agrees with dense multiplication. -/
+def prop_mv_pga3_odd_mul_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let b ← genPGA3DenseMv
+  let denseA := a.mv.oddPart
+  let denseB := b.mv.oddPart
+  let packedA : MV PGA3 .odd := MV.ofMultivector denseA .odd
+  let packedB : MV PGA3 .odd := MV.ofMultivector denseB .odd
+  return packedMatchesDense (packedA * packedB) (denseA * denseB) (tol := 1e-6)
+
+/-- PGA3 packed reverse agrees with dense reverse. -/
+def prop_mv_pga3_reverse_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let packed : MV PGA3 .full := MV.ofMultivector a.mv .full
+  return packedMatchesDense (MV.rev packed) a.mv.reverse
+
+/-- PGA3 packed sandwich product agrees with dense sandwich product for even versors. -/
+def prop_mv_pga3_sandwich_dense : Gen Bool := do
+  let r ← genPGA3DenseMv
+  let x ← genPGA3DenseMv
+  let denseR := r.mv.evenPart
+  let denseX := x.mv.oddPart
+  let packedR : MV PGA3 .even := MV.ofMultivector denseR .even
+  let packedX : MV PGA3 .odd := MV.ofMultivector denseX .odd
   return packedMatchesDense (mvSandwich packedR packedX) (denseR.sandwich denseX) (tol := 1e-6)
 
 /-! ## CGA3 Packed MV Reference Tests -/
@@ -678,6 +773,118 @@ def runNativeReferenceTests : IO (List PropTestResult) := do
   IO.println "└────────────────────────────────────────────────┘"
   return [native1, native2, native3, native4, native5, native6]
 
+/-- Run R3 packed-MV baseline checks against dense reference results. -/
+def runPackedReferenceTests : IO (List PropTestResult) := do
+  IO.println "\n┌─ Packed MV vs Dense Reference ────────────────┐"
+  let r14 ← runGenProp "MV full round-trip" prop_mv_full_roundtrip
+  IO.println s!"│ {r14}"
+  let r15 ← runGenProp "MV parity projection" prop_mv_parity_projection
+  IO.println s!"│ {r15}"
+  let r16 ← runGenProp "MV full multiplication" prop_mv_full_mul_dense
+  IO.println s!"│ {r16}"
+  let r17 ← runGenProp "MV even*even multiplication" prop_mv_even_mul_dense
+  IO.println s!"│ {r17}"
+  let r18 ← runGenProp "MV even*odd multiplication" prop_mv_even_odd_mul_dense
+  IO.println s!"│ {r18}"
+  let r19 ← runGenProp "MV odd*even multiplication" prop_mv_odd_even_mul_dense
+  IO.println s!"│ {r19}"
+  let r20 ← runGenProp "MV odd*odd multiplication" prop_mv_odd_mul_dense
+  IO.println s!"│ {r20}"
+  let r21 ← runGenProp "MV reverse" prop_mv_reverse_dense
+  IO.println s!"│ {r21}"
+  let r22 ← runGenProp "MV sandwich" prop_mv_sandwich_dense 50
+  IO.println s!"│ {r22}"
+  IO.println "└────────────────────────────────────────────────┘"
+  return [r14, r15, r16, r17, r18, r19, r20, r21, r22]
+
+/-- Run PGA3 packed-MV baseline checks against dense reference results. -/
+def runPGA3PackedReferenceTests : IO (List PropTestResult) := do
+  IO.println "\n┌─ PGA3 Packed MV vs Dense Reference ───────────┐"
+  let pgaMv1 ← runGenProp "PGA3 MV full round-trip" prop_mv_pga3_full_roundtrip
+  IO.println s!"│ {pgaMv1}"
+  let pgaMv2 ← runGenProp "PGA3 MV parity projection" prop_mv_pga3_parity_projection
+  IO.println s!"│ {pgaMv2}"
+  let pgaMv3 ← runGenProp "PGA3 MV full multiplication" prop_mv_pga3_full_mul_dense
+  IO.println s!"│ {pgaMv3}"
+  let pgaMv4 ← runGenProp "PGA3 MV even*even multiplication" prop_mv_pga3_even_mul_dense
+  IO.println s!"│ {pgaMv4}"
+  let pgaMv5 ← runGenProp "PGA3 MV even*odd multiplication" prop_mv_pga3_even_odd_mul_dense
+  IO.println s!"│ {pgaMv5}"
+  let pgaMv6 ← runGenProp "PGA3 MV odd*even multiplication" prop_mv_pga3_odd_even_mul_dense
+  IO.println s!"│ {pgaMv6}"
+  let pgaMv7 ← runGenProp "PGA3 MV odd*odd multiplication" prop_mv_pga3_odd_mul_dense
+  IO.println s!"│ {pgaMv7}"
+  let pgaMv8 ← runGenProp "PGA3 MV reverse" prop_mv_pga3_reverse_dense
+  IO.println s!"│ {pgaMv8}"
+  let pgaMv9 ← runGenProp "PGA3 MV sandwich" prop_mv_pga3_sandwich_dense 50
+  IO.println s!"│ {pgaMv9}"
+  IO.println "└────────────────────────────────────────────────┘"
+  return [pgaMv1, pgaMv2, pgaMv3, pgaMv4, pgaMv5, pgaMv6, pgaMv7, pgaMv8, pgaMv9]
+
+/-- Run CGA3 packed-MV baseline checks against dense reference results. -/
+def runCGA3PackedReferenceTests : IO (List PropTestResult) := do
+  IO.println "\n┌─ CGA3 Packed MV vs Dense Reference ───────────┐"
+  let cgaMv1 ← runGenProp "CGA3 MV full round-trip" prop_mv_cga3_full_roundtrip
+  IO.println s!"│ {cgaMv1}"
+  let cgaMv2 ← runGenProp "CGA3 MV parity projection" prop_mv_cga3_parity_projection
+  IO.println s!"│ {cgaMv2}"
+  let cgaMv3 ← runGenProp "CGA3 MV full multiplication" prop_mv_cga3_full_mul_dense
+  IO.println s!"│ {cgaMv3}"
+  let cgaMv4 ← runGenProp "CGA3 MV even*even multiplication" prop_mv_cga3_even_mul_dense
+  IO.println s!"│ {cgaMv4}"
+  let cgaMv5 ← runGenProp "CGA3 MV even*odd multiplication" prop_mv_cga3_even_odd_mul_dense
+  IO.println s!"│ {cgaMv5}"
+  let cgaMv6 ← runGenProp "CGA3 MV odd*even multiplication" prop_mv_cga3_odd_even_mul_dense
+  IO.println s!"│ {cgaMv6}"
+  let cgaMv7 ← runGenProp "CGA3 MV odd*odd multiplication" prop_mv_cga3_odd_mul_dense
+  IO.println s!"│ {cgaMv7}"
+  let cgaMv8 ← runGenProp "CGA3 MV reverse" prop_mv_cga3_reverse_dense
+  IO.println s!"│ {cgaMv8}"
+  let cgaMv9 ← runGenProp "CGA3 MV sandwich" prop_mv_cga3_sandwich_dense 50
+  IO.println s!"│ {cgaMv9}"
+  IO.println "└────────────────────────────────────────────────┘"
+  return [cgaMv1, cgaMv2, cgaMv3, cgaMv4, cgaMv5, cgaMv6, cgaMv7, cgaMv8, cgaMv9]
+
+/-- Run sparse-MV baseline checks against dense reference results. -/
+def runSparseReferenceTests : IO (List PropTestResult) := do
+  IO.println "\n┌─ Sparse vs Dense Reference ───────────────────┐"
+  let r23 ← runRandomProp2 "Sparse addition" prop_sparse_add_dense
+  IO.println s!"│ {r23}"
+  let r24 ← runRandomProp2 "Sparse multiplication" prop_sparse_mul_dense
+  IO.println s!"│ {r24}"
+  let r25 ← runRandomProp2 "Sparse wedge" prop_sparse_wedge_dense
+  IO.println s!"│ {r25}"
+  let r26 ← runRandomProp "Sparse reverse" prop_sparse_reverse_dense
+  IO.println s!"│ {r26}"
+  let r27 ← runRandomProp "Sparse involute" prop_sparse_involute_dense
+  IO.println s!"│ {r27}"
+  let r28 ← runRandomProp "Sparse conjugate" prop_sparse_conjugate_dense
+  IO.println s!"│ {r28}"
+  let r29 ← runGenProp "Sparse grade projection" prop_sparse_gradeProject_dense
+  IO.println s!"│ {r29}"
+  IO.println "└────────────────────────────────────────────────┘"
+  return [r23, r24, r25, r26, r27, r28, r29]
+
+/-- Run CGA3 sparse-MV baseline checks against dense reference results. -/
+def runCGA3SparseReferenceTests : IO (List PropTestResult) := do
+  IO.println "\n┌─ CGA3 Sparse vs Dense Reference ──────────────┐"
+  let r30 ← runRandomCGA3Prop2 "CGA3 sparse addition" prop_sparse_cga3_add_dense
+  IO.println s!"│ {r30}"
+  let r31 ← runRandomCGA3Prop2 "CGA3 sparse multiplication" prop_sparse_cga3_mul_dense
+  IO.println s!"│ {r31}"
+  let r32 ← runRandomCGA3Prop2 "CGA3 sparse wedge" prop_sparse_cga3_wedge_dense
+  IO.println s!"│ {r32}"
+  let r33 ← runRandomCGA3Prop "CGA3 sparse reverse" prop_sparse_cga3_reverse_dense
+  IO.println s!"│ {r33}"
+  let r34 ← runRandomCGA3Prop "CGA3 sparse involute" prop_sparse_cga3_involute_dense
+  IO.println s!"│ {r34}"
+  let r35 ← runRandomCGA3Prop "CGA3 sparse conjugate" prop_sparse_cga3_conjugate_dense
+  IO.println s!"│ {r35}"
+  let r36 ← runGenProp "CGA3 sparse grade projection" prop_sparse_cga3_gradeProject_dense
+  IO.println s!"│ {r36}"
+  IO.println "└────────────────────────────────────────────────┘"
+  return [r30, r31, r32, r33, r34, r35, r36]
+
 /-- Run all property tests -/
 def runPropertyTests : IO Unit := do
   IO.println "╔══════════════════════════════════════════════╗"
@@ -726,101 +933,27 @@ def runPropertyTests : IO Unit := do
   IO.println s!"│ {r13}"
   IO.println "└────────────────────────────────────────────────┘"
   let nativeResults ← runNativeReferenceTests
-  -- Packed MV vs dense reference
-  IO.println "\n┌─ Packed MV vs Dense Reference ────────────────┐"
-  let r14 ← runGenProp "MV full round-trip" prop_mv_full_roundtrip
-  IO.println s!"│ {r14}"
-  let r15 ← runGenProp "MV parity projection" prop_mv_parity_projection
-  IO.println s!"│ {r15}"
-  let r16 ← runGenProp "MV full multiplication" prop_mv_full_mul_dense
-  IO.println s!"│ {r16}"
-  let r17 ← runGenProp "MV even*even multiplication" prop_mv_even_mul_dense
-  IO.println s!"│ {r17}"
-  let r18 ← runGenProp "MV even*odd multiplication" prop_mv_even_odd_mul_dense
-  IO.println s!"│ {r18}"
-  let r19 ← runGenProp "MV odd*even multiplication" prop_mv_odd_even_mul_dense
-  IO.println s!"│ {r19}"
-  let r20 ← runGenProp "MV odd*odd multiplication" prop_mv_odd_mul_dense
-  IO.println s!"│ {r20}"
-  let r21 ← runGenProp "MV reverse" prop_mv_reverse_dense
-  IO.println s!"│ {r21}"
-  let r22 ← runGenProp "MV sandwich" prop_mv_sandwich_dense 50
-  IO.println s!"│ {r22}"
-  IO.println "└────────────────────────────────────────────────┘"
-  -- CGA3 packed MV vs dense reference
-  IO.println "\n┌─ CGA3 Packed MV vs Dense Reference ───────────┐"
-  let cgaMv1 ← runGenProp "CGA3 MV full round-trip" prop_mv_cga3_full_roundtrip
-  IO.println s!"│ {cgaMv1}"
-  let cgaMv2 ← runGenProp "CGA3 MV parity projection" prop_mv_cga3_parity_projection
-  IO.println s!"│ {cgaMv2}"
-  let cgaMv3 ← runGenProp "CGA3 MV full multiplication" prop_mv_cga3_full_mul_dense
-  IO.println s!"│ {cgaMv3}"
-  let cgaMv4 ← runGenProp "CGA3 MV even*even multiplication" prop_mv_cga3_even_mul_dense
-  IO.println s!"│ {cgaMv4}"
-  let cgaMv5 ← runGenProp "CGA3 MV even*odd multiplication" prop_mv_cga3_even_odd_mul_dense
-  IO.println s!"│ {cgaMv5}"
-  let cgaMv6 ← runGenProp "CGA3 MV odd*even multiplication" prop_mv_cga3_odd_even_mul_dense
-  IO.println s!"│ {cgaMv6}"
-  let cgaMv7 ← runGenProp "CGA3 MV odd*odd multiplication" prop_mv_cga3_odd_mul_dense
-  IO.println s!"│ {cgaMv7}"
-  let cgaMv8 ← runGenProp "CGA3 MV reverse" prop_mv_cga3_reverse_dense
-  IO.println s!"│ {cgaMv8}"
-  let cgaMv9 ← runGenProp "CGA3 MV sandwich" prop_mv_cga3_sandwich_dense 50
-  IO.println s!"│ {cgaMv9}"
-  IO.println "└────────────────────────────────────────────────┘"
-  -- Sparse vs dense reference
-  IO.println "\n┌─ Sparse vs Dense Reference ───────────────────┐"
-  let r23 ← runRandomProp2 "Sparse addition" prop_sparse_add_dense
-  IO.println s!"│ {r23}"
-  let r24 ← runRandomProp2 "Sparse multiplication" prop_sparse_mul_dense
-  IO.println s!"│ {r24}"
-  let r25 ← runRandomProp2 "Sparse wedge" prop_sparse_wedge_dense
-  IO.println s!"│ {r25}"
-  let r26 ← runRandomProp "Sparse reverse" prop_sparse_reverse_dense
-  IO.println s!"│ {r26}"
-  let r27 ← runRandomProp "Sparse involute" prop_sparse_involute_dense
-  IO.println s!"│ {r27}"
-  let r28 ← runRandomProp "Sparse conjugate" prop_sparse_conjugate_dense
-  IO.println s!"│ {r28}"
-  let r29 ← runGenProp "Sparse grade projection" prop_sparse_gradeProject_dense
-  IO.println s!"│ {r29}"
-  IO.println "└────────────────────────────────────────────────┘"
-  -- CGA3 sparse vs dense reference
-  IO.println "\n┌─ CGA3 Sparse vs Dense Reference ──────────────┐"
-  let r30 ← runRandomCGA3Prop2 "CGA3 sparse addition" prop_sparse_cga3_add_dense
-  IO.println s!"│ {r30}"
-  let r31 ← runRandomCGA3Prop2 "CGA3 sparse multiplication" prop_sparse_cga3_mul_dense
-  IO.println s!"│ {r31}"
-  let r32 ← runRandomCGA3Prop2 "CGA3 sparse wedge" prop_sparse_cga3_wedge_dense
-  IO.println s!"│ {r32}"
-  let r33 ← runRandomCGA3Prop "CGA3 sparse reverse" prop_sparse_cga3_reverse_dense
-  IO.println s!"│ {r33}"
-  let r34 ← runRandomCGA3Prop "CGA3 sparse involute" prop_sparse_cga3_involute_dense
-  IO.println s!"│ {r34}"
-  let r35 ← runRandomCGA3Prop "CGA3 sparse conjugate" prop_sparse_cga3_conjugate_dense
-  IO.println s!"│ {r35}"
-  let r36 ← runGenProp "CGA3 sparse grade projection" prop_sparse_cga3_gradeProject_dense
-  IO.println s!"│ {r36}"
-  IO.println "└────────────────────────────────────────────────┘"
+  let packedResults ← runPackedReferenceTests
+  let pgaPackedResults ← runPGA3PackedReferenceTests
+  let cgaPackedResults ← runCGA3PackedReferenceTests
+  let sparseResults ← runSparseReferenceTests
+  let cgaSparseResults ← runCGA3SparseReferenceTests
   -- Summary
   let coreResults := [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13]
-  let packedResults := [r14, r15, r16, r17, r18, r19, r20, r21, r22]
-  let cgaPackedResults := [cgaMv1, cgaMv2, cgaMv3, cgaMv4, cgaMv5, cgaMv6, cgaMv7, cgaMv8, cgaMv9]
-  let sparseResults := [r23, r24, r25, r26, r27, r28, r29]
-  let cgaSparseResults := [r30, r31, r32, r33, r34, r35, r36]
   let countPassed (results : List PropTestResult) := results.filter (·.passed) |>.length
   let passCount :=
     countPassed coreResults +
     countPassed nativeResults +
     countPassed packedResults +
+    countPassed pgaPackedResults +
     countPassed cgaPackedResults +
     countPassed sparseResults +
     countPassed cgaSparseResults
   let basisPass := if prop_R3_basis_squares && prop_R3_basis_anticommute && prop_CGA3_signature
                    then 3 else 0
   let total :=
-    coreResults.length + nativeResults.length + packedResults.length + cgaPackedResults.length +
-    sparseResults.length + cgaSparseResults.length + 3
+    coreResults.length + nativeResults.length + packedResults.length + pgaPackedResults.length +
+    cgaPackedResults.length + sparseResults.length + cgaSparseResults.length + 3
   let totalPass := passCount + basisPass
   IO.println ""
   IO.println "╔══════════════════════════════════════════════╗"
