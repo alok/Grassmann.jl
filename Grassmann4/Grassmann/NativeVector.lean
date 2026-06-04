@@ -433,6 +433,63 @@ theorem gradeProject_orthogonal (m : NativeMV sig) {j k : Nat} (hjk : j ≠ k) :
   · simp only [hk, ↓reduceIte]
 
 @[simp]
+theorem gradeProject_zero (k : Nat) :
+    (zero sig).gradeProject k = zero sig := by
+  ext mask
+  rw [coeff_gradeProject, coeff_zero]
+  by_cases h : popcount mask = k
+  · simp [h]
+  · simp [h]
+
+@[simp]
+theorem evenPart_zero : (zero sig).evenPart = zero sig := by
+  ext mask
+  rw [coeff_evenPart, coeff_zero]
+  by_cases h : popcount mask % 2 = 0
+  · simp [h]
+  · simp [h]
+
+@[simp]
+theorem oddPart_zero : (zero sig).oddPart = zero sig := by
+  ext mask
+  rw [coeff_oddPart, coeff_zero]
+  by_cases h : popcount mask % 2 = 1
+  · simp [h]
+  · simp [h]
+
+theorem gradeProject_evenPart (m : NativeMV sig) (k : Nat) :
+    m.evenPart.gradeProject k = if k % 2 = 0 then m.gradeProject k else zero sig := by
+  ext mask
+  rw [coeff_gradeProject, coeff_evenPart]
+  by_cases hmask : mask < 2 ^ n
+  · by_cases hk : popcount mask = k
+    · subst k
+      by_cases he : popcount mask % 2 = 0
+      · simp [he, coeff_gradeProject]
+      · simp [he]
+    · by_cases he : k % 2 = 0
+      · simp [hk, he, coeff_gradeProject]
+      · simp [hk, he, coeff_zero]
+  · unfold coeff
+    simp [hmask]
+
+theorem gradeProject_oddPart (m : NativeMV sig) (k : Nat) :
+    m.oddPart.gradeProject k = if k % 2 = 1 then m.gradeProject k else zero sig := by
+  ext mask
+  rw [coeff_gradeProject, coeff_oddPart]
+  by_cases hmask : mask < 2 ^ n
+  · by_cases hk : popcount mask = k
+    · subst k
+      by_cases ho : popcount mask % 2 = 1
+      · simp [ho, coeff_gradeProject]
+      · simp [ho]
+    · by_cases ho : k % 2 = 1
+      · simp [hk, ho, coeff_gradeProject]
+      · simp [hk, ho, coeff_zero]
+  · unfold coeff
+    simp [hmask]
+
+@[simp]
 theorem evenPart_idem (m : NativeMV sig) :
     m.evenPart.evenPart = m.evenPart := by
   ext mask
