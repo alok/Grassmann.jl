@@ -557,6 +557,60 @@ def prop_mv_pga3_parity_projection : Gen Bool := do
   return packedMatchesDense evenPacked a.mv.evenPart &&
     packedMatchesDense oddPacked a.mv.oddPart
 
+/-- PGA3 full packed `MV` linear operations agree with dense references. -/
+def prop_mv_pga3_full_linear_ops_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let b ← genPGA3DenseMv
+  let packedA : MV PGA3 .full := MV.ofMultivector a.mv .full
+  let packedB : MV PGA3 .full := MV.ofMultivector b.mv .full
+  let scale : Float := 1.75
+  return packedMatchesDense (packedA + packedB) (a.mv + b.mv) &&
+    packedMatchesDense (-packedA) (-a.mv) &&
+    packedMatchesDense (scale * packedA) (a.mv.smul scale)
+
+/-- PGA3 even packed `MV` linear operations agree with dense references. -/
+def prop_mv_pga3_even_linear_ops_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let b ← genPGA3DenseMv
+  let denseA := a.mv.evenPart
+  let denseB := b.mv.evenPart
+  let packedA : MV PGA3 .even := MV.ofMultivector denseA .even
+  let packedB : MV PGA3 .even := MV.ofMultivector denseB .even
+  let scale : Float := -2.25
+  return packedMatchesDense (packedA + packedB) (denseA + denseB) &&
+    packedMatchesDense (-packedA) (-denseA) &&
+    packedMatchesDense (scale * packedA) (denseA.smul scale)
+
+/-- PGA3 odd packed `MV` linear operations agree with dense references. -/
+def prop_mv_pga3_odd_linear_ops_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let b ← genPGA3DenseMv
+  let denseA := a.mv.oddPart
+  let denseB := b.mv.oddPart
+  let packedA : MV PGA3 .odd := MV.ofMultivector denseA .odd
+  let packedB : MV PGA3 .odd := MV.ofMultivector denseB .odd
+  let scale : Float := 0.5
+  return packedMatchesDense (packedA + packedB) (denseA + denseB) &&
+    packedMatchesDense (-packedA) (-denseA) &&
+    packedMatchesDense (scale * packedA) (denseA.smul scale)
+
+/-- PGA3 full packed `MV` projectors agree with dense even/odd projection. -/
+def prop_mv_pga3_full_projectors_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let packed : MV PGA3 .full := MV.ofMultivector a.mv .full
+  return packedMatchesDense (MV.evenPart packed) a.mv.evenPart &&
+    packedMatchesDense (MV.oddPart packed) a.mv.oddPart
+
+/-- PGA3 packed even/odd widening into full storage agrees with dense references. -/
+def prop_mv_pga3_widen_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let evenPacked : MV PGA3 .even := MV.ofMultivector a.mv.evenPart .even
+  let oddPacked : MV PGA3 .odd := MV.ofMultivector a.mv.oddPart .odd
+  let evenFull : MV PGA3 .full := evenPacked
+  let oddFull : MV PGA3 .full := oddPacked
+  return packedMatchesDense evenFull a.mv.evenPart &&
+    packedMatchesDense oddFull a.mv.oddPart
+
 /-- PGA3 packed full multiplication agrees with dense multiplication. -/
 def prop_mv_pga3_full_mul_dense : Gen Bool := do
   let a ← genPGA3DenseMv
@@ -712,6 +766,60 @@ def prop_mv_cga3_parity_projection : Gen Bool := do
   let oddPacked : MV CGA3 .odd := MV.ofMultivector a.mv .odd
   return packedMatchesDense evenPacked a.mv.evenPart &&
     packedMatchesDense oddPacked a.mv.oddPart
+
+/-- CGA3 full packed `MV` linear operations agree with dense references. -/
+def prop_mv_cga3_full_linear_ops_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let b ← genCGA3DenseMv
+  let packedA : MV CGA3 .full := MV.ofMultivector a.mv .full
+  let packedB : MV CGA3 .full := MV.ofMultivector b.mv .full
+  let scale : Float := 1.75
+  return packedMatchesDense (packedA + packedB) (a.mv + b.mv) &&
+    packedMatchesDense (-packedA) (-a.mv) &&
+    packedMatchesDense (scale * packedA) (a.mv.smul scale)
+
+/-- CGA3 even packed `MV` linear operations agree with dense references. -/
+def prop_mv_cga3_even_linear_ops_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let b ← genCGA3DenseMv
+  let denseA := a.mv.evenPart
+  let denseB := b.mv.evenPart
+  let packedA : MV CGA3 .even := MV.ofMultivector denseA .even
+  let packedB : MV CGA3 .even := MV.ofMultivector denseB .even
+  let scale : Float := -2.25
+  return packedMatchesDense (packedA + packedB) (denseA + denseB) &&
+    packedMatchesDense (-packedA) (-denseA) &&
+    packedMatchesDense (scale * packedA) (denseA.smul scale)
+
+/-- CGA3 odd packed `MV` linear operations agree with dense references. -/
+def prop_mv_cga3_odd_linear_ops_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let b ← genCGA3DenseMv
+  let denseA := a.mv.oddPart
+  let denseB := b.mv.oddPart
+  let packedA : MV CGA3 .odd := MV.ofMultivector denseA .odd
+  let packedB : MV CGA3 .odd := MV.ofMultivector denseB .odd
+  let scale : Float := 0.5
+  return packedMatchesDense (packedA + packedB) (denseA + denseB) &&
+    packedMatchesDense (-packedA) (-denseA) &&
+    packedMatchesDense (scale * packedA) (denseA.smul scale)
+
+/-- CGA3 full packed `MV` projectors agree with dense even/odd projection. -/
+def prop_mv_cga3_full_projectors_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let packed : MV CGA3 .full := MV.ofMultivector a.mv .full
+  return packedMatchesDense (MV.evenPart packed) a.mv.evenPart &&
+    packedMatchesDense (MV.oddPart packed) a.mv.oddPart
+
+/-- CGA3 packed even/odd widening into full storage agrees with dense references. -/
+def prop_mv_cga3_widen_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let evenPacked : MV CGA3 .even := MV.ofMultivector a.mv.evenPart .even
+  let oddPacked : MV CGA3 .odd := MV.ofMultivector a.mv.oddPart .odd
+  let evenFull : MV CGA3 .full := evenPacked
+  let oddFull : MV CGA3 .full := oddPacked
+  return packedMatchesDense evenFull a.mv.evenPart &&
+    packedMatchesDense oddFull a.mv.oddPart
 
 /-- CGA3 packed full multiplication agrees with dense multiplication. -/
 def prop_mv_cga3_full_mul_dense : Gen Bool := do
@@ -1414,6 +1522,16 @@ def runPGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {pgaMv1}"
   let pgaMv2 ← runGenProp "PGA3 MV parity projection" prop_mv_pga3_parity_projection
   IO.println s!"│ {pgaMv2}"
+  let pgaMv2a ← runGenProp "PGA3 MV full linear ops" prop_mv_pga3_full_linear_ops_dense
+  IO.println s!"│ {pgaMv2a}"
+  let pgaMv2b ← runGenProp "PGA3 MV even linear ops" prop_mv_pga3_even_linear_ops_dense
+  IO.println s!"│ {pgaMv2b}"
+  let pgaMv2c ← runGenProp "PGA3 MV odd linear ops" prop_mv_pga3_odd_linear_ops_dense
+  IO.println s!"│ {pgaMv2c}"
+  let pgaMv2d ← runGenProp "PGA3 MV full projectors" prop_mv_pga3_full_projectors_dense
+  IO.println s!"│ {pgaMv2d}"
+  let pgaMv2e ← runGenProp "PGA3 MV parity widening" prop_mv_pga3_widen_dense
+  IO.println s!"│ {pgaMv2e}"
   let pgaMv3 ← runGenProp "PGA3 MV full multiplication" prop_mv_pga3_full_mul_dense
   IO.println s!"│ {pgaMv3}"
   let pgaMv4 ← runGenProp "PGA3 MV even*even multiplication" prop_mv_pga3_even_mul_dense
@@ -1431,8 +1549,8 @@ def runPGA3PackedReferenceTests : IO (List PropTestResult) := do
   let pgaMv9 ← runGenProp "PGA3 MV sandwich" prop_mv_pga3_sandwich_dense 50
   IO.println s!"│ {pgaMv9}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [pgaMv1, pgaMv2, pgaMv3, pgaMv4, pgaMv5, pgaMv6, pgaMv7, pgaMv8,
-    pgaMv8a, pgaMv9]
+  return [pgaMv1, pgaMv2, pgaMv2a, pgaMv2b, pgaMv2c, pgaMv2d, pgaMv2e, pgaMv3,
+    pgaMv4, pgaMv5, pgaMv6, pgaMv7, pgaMv8, pgaMv8a, pgaMv9]
 
 /-- Run user-facing PGA3 point-cloud transform checks. -/
 def runPGA3PointCloudTransformTests : IO (List PropTestResult) := do
@@ -1459,6 +1577,16 @@ def runCGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {cgaMv1}"
   let cgaMv2 ← runGenProp "CGA3 MV parity projection" prop_mv_cga3_parity_projection
   IO.println s!"│ {cgaMv2}"
+  let cgaMv2a ← runGenProp "CGA3 MV full linear ops" prop_mv_cga3_full_linear_ops_dense
+  IO.println s!"│ {cgaMv2a}"
+  let cgaMv2b ← runGenProp "CGA3 MV even linear ops" prop_mv_cga3_even_linear_ops_dense
+  IO.println s!"│ {cgaMv2b}"
+  let cgaMv2c ← runGenProp "CGA3 MV odd linear ops" prop_mv_cga3_odd_linear_ops_dense
+  IO.println s!"│ {cgaMv2c}"
+  let cgaMv2d ← runGenProp "CGA3 MV full projectors" prop_mv_cga3_full_projectors_dense
+  IO.println s!"│ {cgaMv2d}"
+  let cgaMv2e ← runGenProp "CGA3 MV parity widening" prop_mv_cga3_widen_dense
+  IO.println s!"│ {cgaMv2e}"
   let cgaMv3 ← runGenProp "CGA3 MV full multiplication" prop_mv_cga3_full_mul_dense
   IO.println s!"│ {cgaMv3}"
   let cgaMv4 ← runGenProp "CGA3 MV even*even multiplication" prop_mv_cga3_even_mul_dense
@@ -1476,8 +1604,8 @@ def runCGA3PackedReferenceTests : IO (List PropTestResult) := do
   let cgaMv9 ← runGenProp "CGA3 MV sandwich" prop_mv_cga3_sandwich_dense 50
   IO.println s!"│ {cgaMv9}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [cgaMv1, cgaMv2, cgaMv3, cgaMv4, cgaMv5, cgaMv6, cgaMv7, cgaMv8,
-    cgaMv8a, cgaMv9]
+  return [cgaMv1, cgaMv2, cgaMv2a, cgaMv2b, cgaMv2c, cgaMv2d, cgaMv2e, cgaMv3,
+    cgaMv4, cgaMv5, cgaMv6, cgaMv7, cgaMv8, cgaMv8a, cgaMv9]
 
 /-- Run sparse-MV baseline checks against dense reference results. -/
 def runSparseReferenceTests : IO (List PropTestResult) := do
