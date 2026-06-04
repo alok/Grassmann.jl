@@ -852,6 +852,20 @@ def prop_pga3_composed_motor_point_cloud_dense : Bool :=
     (PGA.Motor.compose packedB packedA)
     (denseB * denseA)
 
+/-- Packed motor composition matches sequential point-cloud application. -/
+def prop_pga3_composed_motor_point_cloud_sequential : Bool :=
+  let θ₁ := pga3TestPi / 4.0
+  let θ₂ := pga3TestPi / 3.0
+  let packedA := PGA.motor3 0.0 0.0 1.0 θ₁
+  let packedB := PGA.motor3 1.0 0.0 0.0 θ₂
+  let composed := PGA.Motor.compose packedB packedA
+  pga3PointCloud.all fun c =>
+    let point := PGA.point3 c.1 c.2.1 c.2.2
+    let sequential :=
+      PGA.Motor.transformPoint packedB (PGA.Motor.transformPoint packedA point)
+    let composedPoint := PGA.Motor.transformPoint composed point
+    coordsApproxEq (PGA.extractPoint3 composedPoint) (PGA.extractPoint3 sequential)
+
 /-! ## CGA3 Point-Cloud Transform Tests -/
 
 /-- Deterministic translations used to check the CGA translator path. -/
@@ -1851,8 +1865,11 @@ def runPGA3PointCloudTransformTests : IO (List PropTestResult) := do
   let pointCloud4 := runBoolProp "PGA3 composed motor point cloud vs dense"
     prop_pga3_composed_motor_point_cloud_dense
   IO.println s!"│ {pointCloud4}"
+  let pointCloud5 := runBoolProp "PGA3 composed motor point cloud sequential"
+    prop_pga3_composed_motor_point_cloud_sequential
+  IO.println s!"│ {pointCloud5}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [pointCloud1, pointCloud2, pointCloud3, pointCloud4]
+  return [pointCloud1, pointCloud2, pointCloud3, pointCloud4, pointCloud5]
 
 /-- Run user-facing CGA3 point-cloud transform checks. -/
 def runCGA3PointCloudTransformTests : IO (List PropTestResult) := do
