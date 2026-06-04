@@ -264,6 +264,88 @@ def prop_native_reverse_dense : Gen Bool := do
   let a ← genR3DenseMv
   return nativeMatchesDense (nativeOfDense a.mv).reverse a.mv.reverse
 
+/-! ## PGA3 Native Vector Reference Tests -/
+
+/-- PGA3 native-vector round-trip preserves all dense coefficients. -/
+def prop_native_pga3_full_roundtrip : Gen Bool := do
+  let a ← genPGA3DenseMv
+  return nativeMatchesDense (nativeOfDense a.mv) a.mv
+
+/-- PGA3 native-vector grade projection agrees with dense grade projection. -/
+def prop_native_pga3_grade_projection_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let k ← Gen.choose Nat 0 4 (by omega)
+  let native := nativeOfDense a.mv
+  return nativeMatchesDense (native.gradeProject k.val) (a.mv.gradeProject k.val)
+
+/-- PGA3 native-vector even and odd projections agree with dense projections. -/
+def prop_native_pga3_parity_projection_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let native := nativeOfDense a.mv
+  return nativeMatchesDense native.evenPart a.mv.evenPart &&
+    nativeMatchesDense native.oddPart a.mv.oddPart
+
+/-- PGA3 native-vector geometric multiplication agrees with dense multiplication. -/
+def prop_native_pga3_mul_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let b ← genPGA3DenseMv
+  let nativeA := nativeOfDense a.mv
+  let nativeB := nativeOfDense b.mv
+  return nativeMatchesDense (nativeA * nativeB) (a.mv * b.mv) (tol := 1e-6)
+
+/-- PGA3 native-vector wedge product agrees with dense wedge product. -/
+def prop_native_pga3_wedge_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let b ← genPGA3DenseMv
+  return nativeMatchesDense (NativeMV.wedge (nativeOfDense a.mv) (nativeOfDense b.mv))
+    (a.mv ⋀ᵐ b.mv) (tol := 1e-6)
+
+/-- PGA3 native-vector reverse agrees with dense reverse. -/
+def prop_native_pga3_reverse_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  return nativeMatchesDense (nativeOfDense a.mv).reverse a.mv.reverse
+
+/-! ## CGA3 Native Vector Reference Tests -/
+
+/-- CGA3 native-vector round-trip preserves all dense coefficients. -/
+def prop_native_cga3_full_roundtrip : Gen Bool := do
+  let a ← genCGA3DenseMv
+  return nativeMatchesDense (nativeOfDense a.mv) a.mv
+
+/-- CGA3 native-vector grade projection agrees with dense grade projection. -/
+def prop_native_cga3_grade_projection_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let k ← Gen.choose Nat 0 5 (by omega)
+  let native := nativeOfDense a.mv
+  return nativeMatchesDense (native.gradeProject k.val) (a.mv.gradeProject k.val)
+
+/-- CGA3 native-vector even and odd projections agree with dense projections. -/
+def prop_native_cga3_parity_projection_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let native := nativeOfDense a.mv
+  return nativeMatchesDense native.evenPart a.mv.evenPart &&
+    nativeMatchesDense native.oddPart a.mv.oddPart
+
+/-- CGA3 native-vector geometric multiplication agrees with dense multiplication. -/
+def prop_native_cga3_mul_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let b ← genCGA3DenseMv
+  let nativeA := nativeOfDense a.mv
+  let nativeB := nativeOfDense b.mv
+  return nativeMatchesDense (nativeA * nativeB) (a.mv * b.mv) (tol := 1e-6)
+
+/-- CGA3 native-vector wedge product agrees with dense wedge product. -/
+def prop_native_cga3_wedge_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let b ← genCGA3DenseMv
+  return nativeMatchesDense (NativeMV.wedge (nativeOfDense a.mv) (nativeOfDense b.mv))
+    (a.mv ⋀ᵐ b.mv) (tol := 1e-6)
+
+/-- CGA3 native-vector reverse agrees with dense reverse. -/
+def prop_native_cga3_reverse_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  return nativeMatchesDense (nativeOfDense a.mv).reverse a.mv.reverse
+
 /-! ## Sign Table Reference Tests -/
 
 /-- R3 precomputed sign-table multiplication agrees with generic dense multiplication. -/
@@ -1244,8 +1326,33 @@ def runNativeReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {native5}"
   let native6 ← runGenProp "Native reverse" prop_native_reverse_dense
   IO.println s!"│ {native6}"
+  let native7 ← runGenProp "PGA3 native full round-trip" prop_native_pga3_full_roundtrip
+  IO.println s!"│ {native7}"
+  let native8 ← runGenProp "PGA3 native grade projection" prop_native_pga3_grade_projection_dense
+  IO.println s!"│ {native8}"
+  let native9 ← runGenProp "PGA3 native parity projection" prop_native_pga3_parity_projection_dense
+  IO.println s!"│ {native9}"
+  let native10 ← runGenProp "PGA3 native multiplication" prop_native_pga3_mul_dense
+  IO.println s!"│ {native10}"
+  let native11 ← runGenProp "PGA3 native wedge" prop_native_pga3_wedge_dense
+  IO.println s!"│ {native11}"
+  let native12 ← runGenProp "PGA3 native reverse" prop_native_pga3_reverse_dense
+  IO.println s!"│ {native12}"
+  let native13 ← runGenProp "CGA3 native full round-trip" prop_native_cga3_full_roundtrip
+  IO.println s!"│ {native13}"
+  let native14 ← runGenProp "CGA3 native grade projection" prop_native_cga3_grade_projection_dense
+  IO.println s!"│ {native14}"
+  let native15 ← runGenProp "CGA3 native parity projection" prop_native_cga3_parity_projection_dense
+  IO.println s!"│ {native15}"
+  let native16 ← runGenProp "CGA3 native multiplication" prop_native_cga3_mul_dense
+  IO.println s!"│ {native16}"
+  let native17 ← runGenProp "CGA3 native wedge" prop_native_cga3_wedge_dense
+  IO.println s!"│ {native17}"
+  let native18 ← runGenProp "CGA3 native reverse" prop_native_cga3_reverse_dense
+  IO.println s!"│ {native18}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [native1, native2, native3, native4, native5, native6]
+  return [native1, native2, native3, native4, native5, native6, native7, native8, native9,
+    native10, native11, native12, native13, native14, native15, native16, native17, native18]
 
 /-- Run sign-table fast-path checks against generic dense multiplication. -/
 def runSignTableReferenceTests : IO (List PropTestResult) := do
