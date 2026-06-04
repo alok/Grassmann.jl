@@ -253,6 +253,20 @@ theorem coeff_scalar_of_ne_zero (x : Float) {mask : Nat} (hmask : mask ≠ 0) :
     simp [hmask]
   · rfl
 
+/-- Coefficient formula for native-vector scalars. -/
+theorem coeff_scalar (x : Float) (mask : Nat) :
+    (scalar sig x).coeff mask = if mask = 0 then x else 0.0 := by
+  by_cases hmask : mask = 0
+  · subst mask
+    simp [coeff_scalar_zero]
+  · simp [hmask, coeff_scalar_of_ne_zero]
+
+@[simp]
+theorem coeff_one (mask : Nat) :
+    (one sig).coeff mask = if mask = 0 then 1.0 else 0.0 := by
+  unfold one
+  exact coeff_scalar 1.0 mask
+
 theorem coeff_gradeProject (m : NativeMV sig) (k mask : Nat) :
     (m.gradeProject k).coeff mask = if popcount mask = k then m.coeff mask else 0.0 := by
   unfold coeff gradeProject
@@ -340,6 +354,22 @@ theorem coeff_blade_ne {setMask queryMask : Nat} (hset : setMask < 2 ^ n)
   rw [coeff_setCoeff_ne (hset := hset) (hquery := hquery) (hne := hne)]
   exact coeff_zero queryMask
 
+/-- Coefficient formula for native basis blades. -/
+theorem coeff_blade (setMask queryMask : Nat) :
+    (blade sig setMask).coeff queryMask =
+      if _ : setMask < 2 ^ n then
+        if queryMask = setMask then 1.0 else 0.0
+      else
+        0.0 := by
+  unfold blade
+  rw [coeff_setCoeff]
+  by_cases hset : setMask < 2 ^ n
+  · by_cases hq : queryMask = setMask
+    · subst queryMask
+      simp [hset]
+    · simp [hset, hq, coeff_zero]
+  · simp [hset, coeff_zero]
+
 /-- A native basis vector has coefficient 1 at its own blade mask. -/
 theorem coeff_basisVector_same (i : Fin n) :
     (basisVector sig i).coeff (1 <<< i.val) = 1.0 := by
@@ -352,6 +382,14 @@ theorem coeff_basisVector_ne {i : Fin n} {queryMask : Nat}
     (basisVector sig i).coeff queryMask = 0.0 := by
   unfold basisVector
   exact coeff_blade_ne (basisVector_mask_lt i) hquery hne
+
+/-- Coefficient formula for native basis vectors. -/
+theorem coeff_basisVector (i : Fin n) (queryMask : Nat) :
+    (basisVector sig i).coeff queryMask =
+      if queryMask = 1 <<< i.val then 1.0 else 0.0 := by
+  unfold basisVector
+  rw [coeff_blade]
+  simp [basisVector_mask_lt i]
 
 /-- Coefficients extracted by `toVector` are exactly the grade-1 blade coefficients. -/
 theorem coeff_toVector (m : NativeMV sig) (i : Fin n) :
