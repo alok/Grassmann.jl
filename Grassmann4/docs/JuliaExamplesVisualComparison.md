@@ -69,6 +69,11 @@ check for blank or badly framed images, not as an exact visual oracle; several
 examples are qualitative Lean counterparts rather than exact Grassmann.jl
 renderings.
 
+The generated `summary.json` repeats the gate thresholds and records the
+observed extrema for the run: minimum Lean frame standard deviation, minimum
+Julia frame standard deviation, maximum normalized RMSE, and maximum CGA witness
+difference.
+
 It requires `curl`, `rsvg-convert`, and ImageMagick's `magick` command.
 
 ## Julia Reference Images

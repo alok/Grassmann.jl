@@ -41,6 +41,10 @@ numeric_le() {
   awk -v actual="$1" -v expected="$2" 'BEGIN { exit(actual <= expected ? 0 : 1) }'
 }
 
+numeric_gt() {
+  awk -v actual="$1" -v expected="$2" 'BEGIN { exit(actual > expected ? 0 : 1) }'
+}
+
 report_failures() {
   printf 'visual comparison smoke checks failed:\n' >&2
   for failure in "${failures[@]}"; do
@@ -54,6 +58,9 @@ lean_paths=()
 julia_urls=()
 cga_witness_count=0
 cga_witness_max_diff=0.0
+min_lean_stddev=""
+min_julia_stddev=""
+max_rmse_normalized=""
 
 cd "$pkg_root"
 rm -rf "$out_root/lean" "$out_root/index.html" "$out_root/manifest.json"
@@ -199,6 +206,16 @@ SVG
   julia_stddev="$(magick "$julia_frame" -colorspace Gray -format '%[standard-deviation]' info:)"
   rmse="$(magick compare -metric RMSE "$lean_frame" "$julia_frame" null: 2>&1 || true)"
   rmse_normalized="$(printf '%s\n' "$rmse" | awk -F '[()]' '{print $2}')"
+  if [[ -z "$min_lean_stddev" ]] || numeric_le "$lean_stddev" "$min_lean_stddev"; then
+    min_lean_stddev="$lean_stddev"
+  fi
+  if [[ -z "$min_julia_stddev" ]] || numeric_le "$julia_stddev" "$min_julia_stddev"; then
+    min_julia_stddev="$julia_stddev"
+  fi
+  if [[ -n "$rmse_normalized" ]] &&
+      { [[ -z "$max_rmse_normalized" ]] || numeric_gt "$rmse_normalized" "$max_rmse_normalized"; }; then
+    max_rmse_normalized="$rmse_normalized"
+  fi
   printf '%s\t%s\t%s\t%s\t%s\n' "$name" "$lean_stddev" "$julia_stddev" "$rmse_normalized" "$rmse" >> "$metrics"
   rmse_json="null"
   if [[ -n "$rmse_normalized" ]]; then
@@ -234,6 +251,9 @@ fi
   printf '  "example_count":%s,\n' "${#names[@]}"
   printf '  "minimum_frame_stddev":%s,\n' "$minimum_frame_stddev"
   printf '  "maximum_rmse_normalized":%s,\n' "$maximum_rmse_normalized"
+  printf '  "min_lean_stddev":%s,\n' "${min_lean_stddev:-null}"
+  printf '  "min_julia_stddev":%s,\n' "${min_julia_stddev:-null}"
+  printf '  "max_rmse_normalized_observed":%s,\n' "${max_rmse_normalized:-null}"
   printf '  "maximum_cga_witness_diff":%s,\n' "$maximum_cga_witness_diff"
   printf '  "cga_witness_count":%s,\n' "$cga_witness_count"
   printf '  "cga_witness_max_diff":%s,\n' "$cga_witness_max_diff"
@@ -261,5 +281,7 @@ printf 'wrote diagnostic image metrics to %s\n' "$metrics"
 printf 'wrote diagnostic summary to %s\n' "$summary"
 printf 'visual smoke checks passed: %s examples, frame stddev >= %s, normalized RMSE <= %s\n' \
   "${#names[@]}" "$minimum_frame_stddev" "$maximum_rmse_normalized"
+printf 'observed visual extrema: min Lean stddev %s, min Julia stddev %s, max normalized RMSE %s\n' \
+  "$min_lean_stddev" "$min_julia_stddev" "$max_rmse_normalized"
 printf 'CGA witness checks passed: %s samples, max_abs_diff <= %s (observed %s)\n' \
   "$cga_witness_count" "$maximum_cga_witness_diff" "$cga_witness_max_diff"
