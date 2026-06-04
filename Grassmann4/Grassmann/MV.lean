@@ -538,6 +538,17 @@ def oddPart (m : MV sig .full) : MV sig .odd :=
     let mask := unpackIdx n .odd pi
     m.coeffs.get! mask)⟩
 
+/-- Project to a single grade while preserving the packed parity storage.
+
+For `.even` or `.odd`, projecting to a grade outside the parity simply produces
+zero because every packed index already has the opposite parity filtered out. -/
+@[inline]
+def gradeProject (m : MV sig p) (k : Nat) : MV sig p :=
+  let sz := storageSize n p
+  ⟨DataArray.ofArray ((Array.range sz).map fun pi =>
+    let mask := unpackIdx n p pi
+    if popcount mask == k then m.coeffs.get! pi else 0.0)⟩
+
 /-! ### Conversions -/
 
 /-- Widen even to full (unpacks even storage into full storage) -/
