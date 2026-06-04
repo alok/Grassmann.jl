@@ -48,6 +48,10 @@ def runSparseReferenceOnly : IO Unit := do
   let cga3Results ← Grassmann.PropertyTests.runCGA3SparseReferenceTests
   requireAllPassed "sparse MV reference" (r3Results ++ pga3Results ++ cga3Results)
 
+def runTruncatedReferenceOnly : IO Unit := do
+  let results ← Grassmann.PropertyTests.runTruncatedReferenceTests
+  requireAllPassed "truncated MV reference" results
+
 def runReprConversionOnly : IO Unit := do
   let results ← Grassmann.PropertyTests.runReprConversionTests
   requireAllPassed "representation conversion" results
@@ -59,7 +63,7 @@ def runHighDimStressOnly : IO Unit := do
 def usage : String :=
   "Usage: propertytests [cga-point-cloud|pga-point-cloud|mv-dispatch|" ++
     "rotor-exp|native-reference|blade-reference|sign-table|packed-reference|" ++
-    "sparse-reference|repr|stress]"
+    "sparse-reference|truncated-reference|repr|stress]"
 
 def main (args : List String) : IO Unit := do
   match args with
@@ -73,6 +77,7 @@ def main (args : List String) : IO Unit := do
   | ["sign-table"] => runSignTableReferenceOnly
   | ["packed-reference"] => runPackedReferenceOnly
   | ["sparse-reference"] => runSparseReferenceOnly
+  | ["truncated-reference"] => runTruncatedReferenceOnly
   | ["repr"] => runReprConversionOnly
   | ["stress"] => runHighDimStressOnly
   | _ =>

@@ -221,6 +221,28 @@ def sparseDenseRoundtripMatches {n : Nat} {sig : Signature n} (sparse : Multivec
     (tol : Float := 1e-9) : Bool :=
   mvApproxEq (denseToSparse (sparseToDense sparse)) sparse tol
 
+/-- Dense reference with all grades above `maxGrade` discarded. -/
+def truncateDenseToGrade {n : Nat} {sig : Signature n} (maxGrade : Nat)
+    (dense : Multivector sig Float) : Multivector sig Float :=
+  ⟨fun i =>
+    if grade (BitVec.ofNat n i.val) ≤ maxGrade then dense.coeffs i else 0.0⟩
+
+/-- Convert a dense reference multivector to a truncated representation. -/
+def truncatedOfDense {n : Nat} {sig : Signature n} {maxGrade : Nat}
+    (dense : Multivector sig Float) : TruncatedMV sig maxGrade Float :=
+  TruncatedMV.ofSparse (denseToSparse dense)
+
+/-- Dense view of a truncated multivector, using public coefficient access. -/
+def truncatedToDenseRef {n : Nat} {sig : Signature n} {maxGrade : Nat}
+    (truncated : TruncatedMV sig maxGrade Float) : Multivector sig Float :=
+  ⟨fun i => truncated.coeff i.val⟩
+
+/-- Compare a truncated result against a dense reference after applying truncation. -/
+def truncatedMatchesDense {n : Nat} {sig : Signature n} {maxGrade : Nat}
+    (truncated : TruncatedMV sig maxGrade Float) (dense : Multivector sig Float)
+    (tol : Float := 1e-9) : Bool :=
+  denseMvApproxEq (truncatedToDenseRef truncated) (truncateDenseToGrade maxGrade dense) tol
+
 /-- Compare a packed `MV` result against its dense reference. -/
 def packedMatchesDense {n : Nat} {sig : Signature n} {p : Parity}
     (packed : MV sig p) (dense : Multivector sig Float) (tol : Float := 1e-9) : Bool :=
@@ -2018,6 +2040,77 @@ def prop_sparse_cga3_gradeProject_orthogonal (a : CGA3Mv) : Bool :=
 def prop_sparse_cga3_gradeProject_decomposition (a : CGA3Mv) : Bool :=
   sparseGradeProjectDecomposition 5 a.mv
 
+/-! ## Truncated MV Reference Tests -/
+
+/-- Truncated `GAlgebra` operations agree with dense references after truncation. -/
+def truncatedGAlgebraOpsMatchDense {n : Nat} {sig : Signature n} {maxGrade : Nat}
+    (a b : Multivector sig Float) (k : Nat) (scale : Float)
+    (tol : Float := 1e-6) : Bool :=
+  let inst := (inferInstance : GAlgebra sig (TruncatedMV sig maxGrade Float) Float)
+  let truncA := truncatedOfDense (maxGrade := maxGrade) a
+  let truncB := truncatedOfDense (maxGrade := maxGrade) b
+  let denseA := truncateDenseToGrade maxGrade a
+  let denseB := truncateDenseToGrade maxGrade b
+  let basisOk :=
+    (List.finRange n).all fun i =>
+      truncatedMatchesDense (inst.basisVector i) (Multivector.basis i) tol
+  let bladeOk :=
+    (List.range (2 ^ n)).all fun mask =>
+      truncatedMatchesDense
+        (inst.blade (BitVec.ofNat n mask))
+        (Multivector.ofBlade ⟨BitVec.ofNat n mask⟩ : Multivector sig Float)
+        tol
+  truncatedMatchesDense inst.zero Multivector.zero tol &&
+    truncatedMatchesDense inst.one Multivector.one tol &&
+    truncatedMatchesDense (inst.scalar scale) (Multivector.scalar scale) tol &&
+    basisOk &&
+    bladeOk &&
+    truncatedMatchesDense (inst.add truncA truncB) (denseA + denseB) tol &&
+    truncatedMatchesDense (inst.neg truncA) (-denseA) tol &&
+    truncatedMatchesDense (inst.smul scale truncA) (denseA.smul scale) tol &&
+    truncatedMatchesDense (inst.mul truncA truncB) (denseA * denseB) tol &&
+    truncatedMatchesDense (inst.wedge truncA truncB) (denseA ⋀ᵐ denseB) tol &&
+    truncatedMatchesDense (inst.leftContract truncA truncB) (denseA ⌋ᵐ denseB) tol &&
+    truncatedMatchesDense (inst.rightContract truncA truncB) (denseA ⌊ᵐ denseB) tol &&
+    truncatedMatchesDense (inst.reverse truncA) denseA.reverse tol &&
+    truncatedMatchesDense (inst.involute truncA) denseA.involute tol &&
+    truncatedMatchesDense (inst.conjugate truncA) denseA.conjugate tol &&
+    truncatedMatchesDense (inst.gradeProject truncA k) (denseA.gradeProject k) tol &&
+    approxEq (inst.scalarPart truncA) denseA.scalarPart tol
+
+/-- PGA3 truncated multiplication preserves the null projective basis square. -/
+def prop_truncated_pga3_null_basis_square : Bool :=
+  let e0T : TruncatedMV PGA3 2 Float := TruncatedMV.basis ⟨3, by omega⟩
+  let e0Dense : Multivector PGA3 Float := Multivector.basis ⟨3, by omega⟩
+  truncatedMatchesDense (e0T * e0T) (e0Dense * e0Dense) (tol := 1e-9)
+
+/-- R3 truncated `GAlgebra` operations agree with dense references up to grade 2. -/
+def prop_truncated_r3_galgebra_ops_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let b ← genR3DenseMv
+  let k ← Gen.choose Nat 0 3 (by omega)
+  let scale ← genSmallFloat
+  return truncatedGAlgebraOpsMatchDense (sig := R3) (maxGrade := 2)
+    a.mv b.mv k.val scale
+
+/-- PGA3 truncated `GAlgebra` operations agree with dense references up to grade 2. -/
+def prop_truncated_pga3_galgebra_ops_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let b ← genPGA3DenseMv
+  let k ← Gen.choose Nat 0 4 (by omega)
+  let scale ← genSmallFloat
+  return truncatedGAlgebraOpsMatchDense (sig := PGA3) (maxGrade := 2)
+    a.mv b.mv k.val scale
+
+/-- CGA3 truncated `GAlgebra` operations agree with dense references up to grade 2. -/
+def prop_truncated_cga3_galgebra_ops_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let b ← genCGA3DenseMv
+  let k ← Gen.choose Nat 0 5 (by omega)
+  let scale ← genSmallFloat
+  return truncatedGAlgebraOpsMatchDense (sig := CGA3) (maxGrade := 2)
+    a.mv b.mv k.val scale
+
 /-! ## Representation Conversion Tests -/
 
 /-- R3 dense → sparse → dense round-trip preserves coefficients. -/
@@ -3066,6 +3159,24 @@ def runCGA3SparseReferenceTests : IO (List PropTestResult) := do
   return [r30, r31, r32, r32a, r32b, r32c, r32d, r32e, r32f, r33, r34, r35,
     r36, r36ops, r37, r38, r39]
 
+/-- Run truncated-MV checks against dense references after dropping high grades. -/
+def runTruncatedReferenceTests : IO (List PropTestResult) := do
+  IO.println "\n┌─ Truncated MV vs Dense Reference ─────────────┐"
+  let t1 := runBoolProp "PGA3 truncated null basis square"
+    prop_truncated_pga3_null_basis_square
+  IO.println s!"│ {t1}"
+  let t2 ← runGenProp "R3 truncated GAlgebra operations"
+    prop_truncated_r3_galgebra_ops_dense 50
+  IO.println s!"│ {t2}"
+  let t3 ← runGenProp "PGA3 truncated GAlgebra operations"
+    prop_truncated_pga3_galgebra_ops_dense 40
+  IO.println s!"│ {t3}"
+  let t4 ← runGenProp "CGA3 truncated GAlgebra operations"
+    prop_truncated_cga3_galgebra_ops_dense 20
+  IO.println s!"│ {t4}"
+  IO.println "└────────────────────────────────────────────────┘"
+  return [t1, t2, t3, t4]
+
 /-- Run public dense/sparse representation conversion checks. -/
 def runReprConversionTests : IO (List PropTestResult) := do
   IO.println "\n┌─ Representation Conversion ───────────────────┐"
@@ -3190,6 +3301,7 @@ def runPropertyTests : IO Unit := do
   let sparseResults ← runSparseReferenceTests
   let pgaSparseResults ← runPGA3SparseReferenceTests
   let cgaSparseResults ← runCGA3SparseReferenceTests
+  let truncatedResults ← runTruncatedReferenceTests
   let reprResults ← runReprConversionTests
   let stressResults ← runHighDimStressTests
   let rotorExpResults ← runRotorExpReferenceTests
@@ -3211,6 +3323,7 @@ def runPropertyTests : IO Unit := do
     countPassed sparseResults +
     countPassed pgaSparseResults +
     countPassed cgaSparseResults +
+    countPassed truncatedResults +
     countPassed reprResults +
     countPassed stressResults +
     countPassed rotorExpResults
@@ -3231,6 +3344,7 @@ def runPropertyTests : IO Unit := do
     sparseResults.length +
     pgaSparseResults.length +
     cgaSparseResults.length +
+    truncatedResults.length +
     reprResults.length +
     stressResults.length +
     rotorExpResults.length +

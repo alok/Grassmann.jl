@@ -165,13 +165,15 @@ def geometricProduct [Ring F] [BEq F] [DecidableEq F]
           let resultGrade := grade (BitVec.ofNat n resultIdx)
           if h : resultGrade ≤ maxGrade then
             let sign := geometricSign sig bladeA bladeB
-            let contrib := if sign < 0 then -(coeffA * coeffB) else coeffA * coeffB
-            let gradeMap := acc4.gradeData ⟨resultGrade, by omega⟩
-            let oldVal := gradeMap.get? resultIdx |>.getD 0
-            let newVal := oldVal + contrib
-            let newGradeMap := if newVal == 0 then gradeMap.erase resultIdx
-                               else gradeMap.insert resultIdx newVal
-            ⟨fun k => if k.val = resultGrade then newGradeMap else acc4.gradeData k⟩
+            if sign == 0 then acc4
+            else
+              let contrib := if sign < 0 then -(coeffA * coeffB) else coeffA * coeffB
+              let gradeMap := acc4.gradeData ⟨resultGrade, by omega⟩
+              let oldVal := gradeMap.get? resultIdx |>.getD 0
+              let newVal := oldVal + contrib
+              let newGradeMap :=
+                if newVal == 0 then gradeMap.erase resultIdx else gradeMap.insert resultIdx newVal
+              ⟨fun k => if k.val = resultGrade then newGradeMap else acc4.gradeData k⟩
           else acc4
   result
 
@@ -257,13 +259,15 @@ def leftContract [Ring F] [BEq F] [DecidableEq F]
             let resultGrade := grade (BitVec.ofNat n resultIdx)
             if h : resultGrade ≤ maxGrade then
               let sign := leftContractionSign sig bladeA bladeB
-              let contrib := if sign < 0 then -(coeffA * coeffB) else coeffA * coeffB
-              let gradeMap := acc4.gradeData ⟨resultGrade, by omega⟩
-              let oldVal := gradeMap.get? resultIdx |>.getD 0
-              let newVal := oldVal + contrib
-              let newGradeMap := if newVal == 0 then gradeMap.erase resultIdx
-                                 else gradeMap.insert resultIdx newVal
-              ⟨fun k => if k.val = resultGrade then newGradeMap else acc4.gradeData k⟩
+              if sign == 0 then acc4
+              else
+                let contrib := if sign < 0 then -(coeffA * coeffB) else coeffA * coeffB
+                let gradeMap := acc4.gradeData ⟨resultGrade, by omega⟩
+                let oldVal := gradeMap.get? resultIdx |>.getD 0
+                let newVal := oldVal + contrib
+                let newGradeMap :=
+                  if newVal == 0 then gradeMap.erase resultIdx else gradeMap.insert resultIdx newVal
+                ⟨fun k => if k.val = resultGrade then newGradeMap else acc4.gradeData k⟩
             else acc4
           else acc4
   result
@@ -284,13 +288,15 @@ def rightContract [Ring F] [BEq F] [DecidableEq F]
             let resultGrade := grade (BitVec.ofNat n resultIdx)
             if h : resultGrade ≤ maxGrade then
               let sign := geometricSign sig bladeA bladeB
-              let contrib := if sign < 0 then -(coeffA * coeffB) else coeffA * coeffB
-              let gradeMap := acc4.gradeData ⟨resultGrade, by omega⟩
-              let oldVal := gradeMap.get? resultIdx |>.getD 0
-              let newVal := oldVal + contrib
-              let newGradeMap := if newVal == 0 then gradeMap.erase resultIdx
-                                 else gradeMap.insert resultIdx newVal
-              ⟨fun k => if k.val = resultGrade then newGradeMap else acc4.gradeData k⟩
+              if sign == 0 then acc4
+              else
+                let contrib := if sign < 0 then -(coeffA * coeffB) else coeffA * coeffB
+                let gradeMap := acc4.gradeData ⟨resultGrade, by omega⟩
+                let oldVal := gradeMap.get? resultIdx |>.getD 0
+                let newVal := oldVal + contrib
+                let newGradeMap :=
+                  if newVal == 0 then gradeMap.erase resultIdx else gradeMap.insert resultIdx newVal
+                ⟨fun k => if k.val = resultGrade then newGradeMap else acc4.gradeData k⟩
             else acc4
           else acc4
   result
