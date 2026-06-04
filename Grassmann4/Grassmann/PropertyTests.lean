@@ -16,6 +16,7 @@ import Grassmann.Manifold
 import Grassmann.LinearAlgebra
 import Grassmann.StaticOpt
 import Grassmann.MV
+import Grassmann.PGA
 import Grassmann.BladeIndex
 import Grassmann.SignTables
 
@@ -552,6 +553,67 @@ def prop_mv_pga3_sandwich_dense : Gen Bool := do
   let packedR : MV PGA3 .even := MV.ofMultivector denseR .even
   let packedX : MV PGA3 .odd := MV.ofMultivector denseX .odd
   return packedMatchesDense (mvSandwich packedR packedX) (denseR.sandwich denseX) (tol := 1e-6)
+
+/-! ## PGA3 Point-Cloud Transform Tests -/
+
+/-- A small deterministic point cloud with axis-aligned and mixed coordinates. -/
+def pga3PointCloud : List (Float × Float × Float) :=
+  [ (0.0, 0.0, 0.0),
+    (1.0, 0.0, 0.0),
+    (0.0, 1.0, 0.0),
+    (0.0, 0.0, 1.0),
+    (1.5, -2.0, 0.25),
+    (-3.0, 0.5, 2.0) ]
+
+/-- Local test constant for angle-based PGA3 motors. -/
+def pga3TestPi : Float := 3.14159265358979323846
+
+/-- Approximate equality for extracted 3D coordinates. -/
+def coordsApproxEq (a b : Float × Float × Float) (tol : Float := 1e-6) : Bool :=
+  approxEq a.1 b.1 tol &&
+    approxEq a.2.1 b.2.1 tol &&
+    approxEq a.2.2 b.2.2 tol
+
+/-- Packed PGA point constructors round-trip through coordinate extraction. -/
+def prop_pga3_point3_extract_point_cloud : Bool :=
+  pga3PointCloud.all fun c =>
+    coordsApproxEq (PGA.extractPoint3 (PGA.point3 c.1 c.2.1 c.2.2)) c
+
+/-- The identity packed motor preserves every point in the deterministic cloud. -/
+def prop_pga3_identity_motor_point_cloud : Bool :=
+  let identity := PGA.Motor.identity PGA3
+  pga3PointCloud.all fun c =>
+    let p := PGA.point3 c.1 c.2.1 c.2.2
+    coordsApproxEq (PGA.extractPoint3 (PGA.Motor.transformPoint identity p)) c
+
+/-- Packed point transforms agree with the dense PGA reference on a fixed cloud. -/
+def pga3PackedMotorMatchesDensePointCloud
+    (packedMotor : PGA.Motor PGA3) (denseMotor : Multivector PGA3 Float) : Bool :=
+  pga3PointCloud.all fun c =>
+    let packedPoint := PGA.point3 c.1 c.2.1 c.2.2
+    let densePoint := PGA.Proof.point c.1 c.2.1 c.2.2
+    let packedCoords := PGA.extractPoint3 (PGA.Motor.transformPoint packedMotor packedPoint)
+    let denseCoords := PGA.Proof.extractPoint (PGA.Proof.applyMotor denseMotor densePoint)
+    coordsApproxEq packedCoords denseCoords
+
+/-- Z-axis rotor point-cloud transforms use the same convention as the dense reference. -/
+def prop_pga3_z_rotor_point_cloud_dense : Bool :=
+  let θ := pga3TestPi / 2.0
+  pga3PackedMotorMatchesDensePointCloud
+    (PGA.motor3 0.0 0.0 1.0 θ)
+    (PGA.Proof.rotor 0.0 0.0 1.0 θ)
+
+/-- Composed packed motors transform point clouds like composed dense motors. -/
+def prop_pga3_composed_motor_point_cloud_dense : Bool :=
+  let θ₁ := pga3TestPi / 4.0
+  let θ₂ := pga3TestPi / 3.0
+  let packedA := PGA.motor3 0.0 0.0 1.0 θ₁
+  let packedB := PGA.motor3 1.0 0.0 0.0 θ₂
+  let denseA := PGA.Proof.rotor 0.0 0.0 1.0 θ₁
+  let denseB := PGA.Proof.rotor 1.0 0.0 0.0 θ₂
+  pga3PackedMotorMatchesDensePointCloud
+    (PGA.Motor.compose packedB packedA)
+    (denseB * denseA)
 
 /-! ## CGA3 Packed MV Reference Tests -/
 
@@ -1265,6 +1327,24 @@ def runPGA3PackedReferenceTests : IO (List PropTestResult) := do
   return [pgaMv1, pgaMv2, pgaMv3, pgaMv4, pgaMv5, pgaMv6, pgaMv7, pgaMv8,
     pgaMv8a, pgaMv9]
 
+/-- Run user-facing PGA3 point-cloud transform checks. -/
+def runPGA3PointCloudTransformTests : IO (List PropTestResult) := do
+  IO.println "\n┌─ PGA3 Point-Cloud Motor Transforms ───────────┐"
+  let pointCloud1 := runBoolProp "PGA3 point constructor/extractor"
+    prop_pga3_point3_extract_point_cloud
+  IO.println s!"│ {pointCloud1}"
+  let pointCloud2 := runBoolProp "PGA3 identity motor point cloud"
+    prop_pga3_identity_motor_point_cloud
+  IO.println s!"│ {pointCloud2}"
+  let pointCloud3 := runBoolProp "PGA3 z-rotor point cloud vs dense"
+    prop_pga3_z_rotor_point_cloud_dense
+  IO.println s!"│ {pointCloud3}"
+  let pointCloud4 := runBoolProp "PGA3 composed motor point cloud vs dense"
+    prop_pga3_composed_motor_point_cloud_dense
+  IO.println s!"│ {pointCloud4}"
+  IO.println "└────────────────────────────────────────────────┘"
+  return [pointCloud1, pointCloud2, pointCloud3, pointCloud4]
+
 /-- Run CGA3 packed-MV baseline checks against dense reference results. -/
 def runCGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println "\n┌─ CGA3 Packed MV vs Dense Reference ───────────┐"
@@ -1443,6 +1523,7 @@ def runPropertyTests : IO Unit := do
   let signTableResults ← runSignTableReferenceTests
   let packedResults ← runPackedReferenceTests
   let pgaPackedResults ← runPGA3PackedReferenceTests
+  let pgaPointCloudResults ← runPGA3PointCloudTransformTests
   let cgaPackedResults ← runCGA3PackedReferenceTests
   let sparseResults ← runSparseReferenceTests
   let pgaSparseResults ← runPGA3SparseReferenceTests
@@ -1457,6 +1538,7 @@ def runPropertyTests : IO Unit := do
     countPassed signTableResults +
     countPassed packedResults +
     countPassed pgaPackedResults +
+    countPassed pgaPointCloudResults +
     countPassed cgaPackedResults +
     countPassed sparseResults +
     countPassed pgaSparseResults +
@@ -1466,9 +1548,18 @@ def runPropertyTests : IO Unit := do
     prop_PGA3_signature]
   let basisPass := basisProps.filter id |>.length
   let total :=
-    coreResults.length + nativeResults.length + signTableResults.length + packedResults.length +
-    pgaPackedResults.length + cgaPackedResults.length + sparseResults.length +
-    pgaSparseResults.length + cgaSparseResults.length + stressResults.length + basisProps.length
+    coreResults.length +
+    nativeResults.length +
+    signTableResults.length +
+    packedResults.length +
+    pgaPackedResults.length +
+    pgaPointCloudResults.length +
+    cgaPackedResults.length +
+    sparseResults.length +
+    pgaSparseResults.length +
+    cgaSparseResults.length +
+    stressResults.length +
+    basisProps.length
   let totalPass := passCount + basisPass
   IO.println ""
   IO.println "╔══════════════════════════════════════════════╗"

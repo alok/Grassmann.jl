@@ -212,11 +212,12 @@ def motor3 (dx dy dz theta : Float) : Motor PGA3 :=
 
 /-- Extract Euclidean coordinates from a DataArray-backed PGA3 point. -/
 def extractPoint3 (p : Point PGA3) : Float × Float × Float :=
-  let w := p.toMV.coeffs.get! 7  -- e123 coefficient
+  let mv := p.toMV
+  let w := mv.coeff 7  -- e123 coefficient
   if w == 0 then
     (0, 0, 0)
   else
-    (p.toMV.coeffs.get! 14 / w, p.toMV.coeffs.get! 13 / w, p.toMV.coeffs.get! 11 / w)
+    (mv.coeff 14 / w, mv.coeff 13 / w, mv.coeff 11 / w)
 
 end PGA
 
