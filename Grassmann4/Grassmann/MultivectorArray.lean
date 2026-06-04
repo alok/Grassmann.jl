@@ -208,7 +208,7 @@ def leftContract (a b : MultivectorA sig F) : MultivectorA sig F :=
       if (bi.bits &&& bj.bits) = bi.bits && bi.grade ≤ bj.grade then
         let resultIdx := (bi.bits ^^^ bj.bits).toNat
         if h : resultIdx < size then
-          let sign := geometricSign sig bi bj
+          let sign := leftContractionSign sig bi bj
           let coeff := a.get i * b.get j
           let contrib := if sign < 0 then -coeff else coeff
           let oldVal := arr2.get ⟨resultIdx, h⟩

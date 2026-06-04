@@ -610,6 +610,7 @@ def testBladeCoefficients : IO (Array TestResult) := do
   let e2 := r3e 1
   let e3 := r3e 2
   let e12 := e1 * e2
+  let e123 := e12 * e3
   let w1 := cga3e 0
   let w2 := cga3e 1
   let w4 := cga3e 3
@@ -632,7 +633,15 @@ def testBladeCoefficients : IO (Array TestResult) := do
     ((w5 * w4).coeff 24)
   let r9 ← verifyBladeCoefficient "CGA3" "wedge_product" "e5" "e4" "e45"
     ((w5 ⋀ₛ w4).coeff 24)
-  return #[r1, r2, r3, r4, r5, r6, r7, r8, r9]
+  let r10 ← verifyBladeCoefficient "R3" "left_contraction" "e1" "e12" "e2"
+    ((MultivectorS.leftContract e1 e12).coeff 2)
+  let r11 ← verifyBladeCoefficient "R3" "left_contraction" "e2" "e12" "e1"
+    ((MultivectorS.leftContract e2 e12).coeff 1)
+  let r12 ← verifyBladeCoefficient "R3" "left_contraction" "e1" "e123" "e23"
+    ((MultivectorS.leftContract e1 e123).coeff 6)
+  let r13 ← verifyBladeCoefficient "R3" "left_contraction" "e12" "e123" "e3"
+    ((MultivectorS.leftContract e12 e123).coeff 4)
+  return #[r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13]
 
 /-- Test signature verification -/
 def testSignatures : IO (Array TestResult) := do

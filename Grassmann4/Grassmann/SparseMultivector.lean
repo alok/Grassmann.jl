@@ -185,7 +185,7 @@ def leftContract (a b : MultivectorS sig F) : MultivectorS sig F :=
       let bi : Blade sig := ⟨BitVec.ofNat n i⟩
       let bladeJ : Blade sig := ⟨BitVec.ofNat n j⟩
       if (bi.bits &&& bladeJ.bits) == bi.bits && bi.grade ≤ bladeJ.grade then
-        let sign := geometricSign sig bi bladeJ
+        let sign := leftContractionSign sig bi bladeJ
         if sign == 0 then acc2  -- Degenerate case
         else
           let resultIdx := (bi.bits ^^^ bladeJ.bits).toNat

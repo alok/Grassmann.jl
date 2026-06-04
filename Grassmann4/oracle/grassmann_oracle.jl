@@ -84,6 +84,8 @@ function binary_operation(op::String, a, b)
         return a * b
     elseif op == "wedge_product"
         return a ∧ b
+    elseif op == "left_contraction"
+        return a < b
     else
         error("Unsupported coefficient operation: $op")
     end
@@ -229,7 +231,7 @@ function cmd_left_contraction(sig_name::String, blade_a::String, blade_b::String
 
     a = parse_blade(blade_a, alg)
     b = parse_blade(blade_b, alg)
-    result = a ⋅ b  # Left contraction in Grassmann.jl
+    result = a < b
 
     return Dict(
         "operation" => "left_contraction",

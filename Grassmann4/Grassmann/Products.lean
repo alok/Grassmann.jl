@@ -89,6 +89,13 @@ def wedgeProductBlades (a b : Blade sig) : BladeProduct sig :=
     let sign := wedgeSign sig a b
     .nonzero sign ⟨resultBits⟩
 
+/-- Sign for left contraction of basis blades.
+    This is the geometric-product sign after reversing the left blade. -/
+@[inline, specialize]
+def leftContractionSign (sig : Signature n) (a b : Blade sig) : Int :=
+  let sign := geometricSign sig a b
+  if sign == 0 then 0 else reverseSign a.grade * sign
+
 /-! ## Left Contraction (Interior Product)
 
 Left contraction a⌋b contracts a into b:
@@ -106,7 +113,7 @@ def leftContractionBlades (a b : Blade sig) : BladeProduct sig :=
   else if a.grade > b.grade then
     .zero  -- Grade condition
   else
-    let sign := geometricSign sig a b
+    let sign := leftContractionSign sig a b
     if sign == 0 then .zero  -- Degenerate basis vectors cancel
     else
       let resultBits := a.bits ^^^ b.bits  -- Remove a's vectors from b

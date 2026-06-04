@@ -256,7 +256,7 @@ def leftContract [Ring F] [BEq F] [DecidableEq F]
             let resultIdx := (bladeA.bits ^^^ bladeB.bits).toNat
             let resultGrade := grade (BitVec.ofNat n resultIdx)
             if h : resultGrade ≤ maxGrade then
-              let sign := geometricSign sig bladeA bladeB
+              let sign := leftContractionSign sig bladeA bladeB
               let contrib := if sign < 0 then -(coeffA * coeffB) else coeffA * coeffB
               let gradeMap := acc4.gradeData ⟨resultGrade, by omega⟩
               let oldVal := gradeMap.get? resultIdx |>.getD 0

@@ -1547,6 +1547,7 @@ def prop_R5_exact_rotor_contraction : Bool :=
   let rotE1 := r * e1 * r†
   let rotE3 := r * e3 * r†
   let e12 := e1 ⋀ᵐ e2
+  let e123 := e12 ⋀ᵐ e3
   (b12 * b12).scalarPart == -1 &&
   denseIntEq (r * rinv) (Multivector.scalar 2 : Multivector R5Stress Int) &&
   rotE1.coeff (stressBlade5 0b00001) == 0 &&
@@ -1555,7 +1556,8 @@ def prop_R5_exact_rotor_contraction : Bool :=
   rotE3.coeff (stressBlade5 0b00010) == 0 &&
   rotE3.coeff (stressBlade5 0b00100) == 2 &&
   denseIntEq (e1 ⌋ᵐ e12) e2 &&
-  denseIntEq (e3 ⌋ᵐ e12) (0 : Multivector R5Stress Int)
+  denseIntEq (e3 ⌋ᵐ e12) (0 : Multivector R5Stress Int) &&
+  denseIntEq (e12 ⌋ᵐ e123) e3
 
 /-- R4 exact Hodge dual and determinant checks. -/
 def prop_R4_exact_hodge_det : Bool :=
