@@ -20,6 +20,7 @@ import Grassmann.PGA
 import Grassmann.CGA
 import Grassmann.BladeIndex
 import Grassmann.SignTables
+import Grassmann.Repr
 
 namespace Grassmann.PropertyTests
 
@@ -208,6 +209,16 @@ def sparseToDenseRef {n : Nat} {sig : Signature n} (m : MultivectorS sig Float) 
 def sparseMatchesDense {n : Nat} {sig : Signature n} (sparse : MultivectorS sig Float)
     (dense : Multivector sig Float) (tol : Float := 1e-9) : Bool :=
   denseMvApproxEq (sparseToDenseRef sparse) dense tol
+
+/-- Public dense → sparse → dense conversion preserves dense coefficients. -/
+def denseSparseRoundtripMatches {n : Nat} {sig : Signature n} (dense : Multivector sig Float)
+    (tol : Float := 1e-9) : Bool :=
+  denseMvApproxEq (sparseToDense (denseToSparse dense)) dense tol
+
+/-- Public sparse → dense → sparse conversion preserves sparse coefficients. -/
+def sparseDenseRoundtripMatches {n : Nat} {sig : Signature n} (sparse : MultivectorS sig Float)
+    (tol : Float := 1e-9) : Bool :=
+  mvApproxEq (denseToSparse (sparseToDense sparse)) sparse tol
 
 /-- Compare a packed `MV` result against its dense reference. -/
 def packedMatchesDense {n : Nat} {sig : Signature n} {p : Parity}
@@ -1131,6 +1142,35 @@ def prop_sparse_cga3_gradeProject_orthogonal (a : CGA3Mv) : Bool :=
 def prop_sparse_cga3_gradeProject_decomposition (a : CGA3Mv) : Bool :=
   sparseGradeProjectDecomposition 5 a.mv
 
+/-! ## Representation Conversion Tests -/
+
+/-- R3 dense → sparse → dense round-trip preserves coefficients. -/
+def prop_repr_r3_dense_sparse_roundtrip : Gen Bool := do
+  let a ← genR3DenseMv
+  return denseSparseRoundtripMatches a.mv
+
+/-- R3 sparse → dense → sparse round-trip preserves coefficients. -/
+def prop_repr_r3_sparse_dense_roundtrip (a : R3Mv) : Bool :=
+  sparseDenseRoundtripMatches a.mv
+
+/-- PGA3 dense → sparse → dense round-trip preserves coefficients. -/
+def prop_repr_pga3_dense_sparse_roundtrip : Gen Bool := do
+  let a ← genPGA3DenseMv
+  return denseSparseRoundtripMatches a.mv
+
+/-- PGA3 sparse → dense → sparse round-trip preserves coefficients. -/
+def prop_repr_pga3_sparse_dense_roundtrip (a : PGA3Mv) : Bool :=
+  sparseDenseRoundtripMatches a.mv
+
+/-- CGA3 dense → sparse → dense round-trip preserves coefficients. -/
+def prop_repr_cga3_dense_sparse_roundtrip : Gen Bool := do
+  let a ← genCGA3DenseMv
+  return denseSparseRoundtripMatches a.mv
+
+/-- CGA3 sparse → dense → sparse round-trip preserves coefficients. -/
+def prop_repr_cga3_sparse_dense_roundtrip (a : CGA3Mv) : Bool :=
+  sparseDenseRoundtripMatches a.mv
+
 /-! ## Algebraic Properties -/
 
 /-- Commutativity of addition -/
@@ -1786,6 +1826,26 @@ def runCGA3SparseReferenceTests : IO (List PropTestResult) := do
   IO.println "└────────────────────────────────────────────────┘"
   return [r30, r31, r32, r33, r34, r35, r36, r37, r38, r39]
 
+/-- Run public dense/sparse representation conversion checks. -/
+def runReprConversionTests : IO (List PropTestResult) := do
+  IO.println "\n┌─ Representation Conversion ───────────────────┐"
+  let repr1 ← runGenProp "R3 dense-sparse round-trip" prop_repr_r3_dense_sparse_roundtrip
+  IO.println s!"│ {repr1}"
+  let repr2 ← runRandomProp "R3 sparse-dense round-trip" prop_repr_r3_sparse_dense_roundtrip
+  IO.println s!"│ {repr2}"
+  let repr3 ← runGenProp "PGA3 dense-sparse round-trip" prop_repr_pga3_dense_sparse_roundtrip
+  IO.println s!"│ {repr3}"
+  let repr4 ← runRandomPGA3Prop "PGA3 sparse-dense round-trip"
+    prop_repr_pga3_sparse_dense_roundtrip
+  IO.println s!"│ {repr4}"
+  let repr5 ← runGenProp "CGA3 dense-sparse round-trip" prop_repr_cga3_dense_sparse_roundtrip
+  IO.println s!"│ {repr5}"
+  let repr6 ← runRandomCGA3Prop "CGA3 sparse-dense round-trip"
+    prop_repr_cga3_sparse_dense_roundtrip
+  IO.println s!"│ {repr6}"
+  IO.println "└────────────────────────────────────────────────┘"
+  return [repr1, repr2, repr3, repr4, repr5, repr6]
+
 /-- Run high-dimensional exact dense stress checks. -/
 def runHighDimStressTests : IO (List PropTestResult) := do
   IO.println "\n┌─ High-D Exact Stress Checks ──────────────────┐"
@@ -1864,6 +1924,7 @@ def runPropertyTests : IO Unit := do
   let sparseResults ← runSparseReferenceTests
   let pgaSparseResults ← runPGA3SparseReferenceTests
   let cgaSparseResults ← runCGA3SparseReferenceTests
+  let reprResults ← runReprConversionTests
   let stressResults ← runHighDimStressTests
   -- Summary
   let coreResults := [r1, r2, r3, r4, r5, r6, r7, r8, r9, r9a, r9b, r9c, r10, r11,
@@ -1881,6 +1942,7 @@ def runPropertyTests : IO Unit := do
     countPassed sparseResults +
     countPassed pgaSparseResults +
     countPassed cgaSparseResults +
+    countPassed reprResults +
     countPassed stressResults
   let basisProps := [prop_R3_basis_squares, prop_R3_basis_anticommute, prop_CGA3_signature,
     prop_PGA3_signature]
@@ -1897,6 +1959,7 @@ def runPropertyTests : IO Unit := do
     sparseResults.length +
     pgaSparseResults.length +
     cgaSparseResults.length +
+    reprResults.length +
     stressResults.length +
     basisProps.length
   let totalPass := passCount + basisPass
