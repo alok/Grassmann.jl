@@ -357,6 +357,18 @@ def prop_native_reverse_dense : Gen Bool := do
   let a ← genR3DenseMv
   return nativeMatchesDense (nativeOfDense a.mv).reverse a.mv.reverse
 
+/-- Native-vector scalar extraction agrees with dense scalar extraction. -/
+def prop_native_scalar_part_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  return approxEq (nativeOfDense a.mv).scalarPart a.mv.scalarPart
+
+/-- Native-vector grade involution and Clifford conjugate agree with dense involutions. -/
+def prop_native_involutions_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let native := nativeOfDense a.mv
+  return nativeMatchesDense native.involute a.mv.involute &&
+    nativeMatchesDense native.conjugate a.mv.conjugate
+
 /-- Native-vector left contraction agrees with dense left contraction. -/
 def prop_native_left_contract_dense : Gen Bool := do
   let a ← genR3DenseMv
@@ -382,6 +394,24 @@ def prop_native_regressive_dense : Gen Bool := do
   let b ← genR3DenseMv
   return nativeMatchesDense ((nativeOfDense a.mv) ⋁ᵥ (nativeOfDense b.mv))
     (a.mv ⋁ᵐ b.mv) (tol := 1e-6)
+
+/-- Native-vector `GAlgebra` instance dispatch agrees with direct dense sandwiching. -/
+def prop_native_galgebra_sandwich_dense : Gen Bool := do
+  let r ← genR3DenseMv
+  let x ← genR3DenseMv
+  let nativeR := nativeOfDense r.mv
+  let nativeX := nativeOfDense x.mv
+  let generic :=
+    Grassmann.sandwich (sig := R3) (M := NativeMV R3) (F := Float) nativeR nativeX
+  return nativeMatchesDense generic (r.mv.sandwich x.mv) (tol := 1e-6)
+
+/-- Native-vector `GAlgebra` normSq agrees with dense normSq. -/
+def prop_native_galgebra_normSq_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let native := nativeOfDense a.mv
+  return approxEq
+    (Grassmann.normSq (sig := R3) (M := NativeMV R3) (F := Float) native)
+    a.mv.normSq (tol := 1e-6)
 
 /-! ## PGA3 Native Vector Reference Tests -/
 
@@ -424,6 +454,18 @@ def prop_native_pga3_reverse_dense : Gen Bool := do
   let a ← genPGA3DenseMv
   return nativeMatchesDense (nativeOfDense a.mv).reverse a.mv.reverse
 
+/-- PGA3 native-vector scalar extraction agrees with dense scalar extraction. -/
+def prop_native_pga3_scalar_part_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  return approxEq (nativeOfDense a.mv).scalarPart a.mv.scalarPart
+
+/-- PGA3 native-vector grade involution and Clifford conjugate agree with dense involutions. -/
+def prop_native_pga3_involutions_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let native := nativeOfDense a.mv
+  return nativeMatchesDense native.involute a.mv.involute &&
+    nativeMatchesDense native.conjugate a.mv.conjugate
+
 /-- PGA3 native-vector left contraction agrees with dense left contraction. -/
 def prop_native_pga3_left_contract_dense : Gen Bool := do
   let a ← genPGA3DenseMv
@@ -449,6 +491,24 @@ def prop_native_pga3_regressive_dense : Gen Bool := do
   let b ← genPGA3DenseMv
   return nativeMatchesDense ((nativeOfDense a.mv) ⋁ᵥ (nativeOfDense b.mv))
     (a.mv ⋁ᵐ b.mv) (tol := 1e-6)
+
+/-- PGA3 native-vector `GAlgebra` instance dispatch agrees with direct dense sandwiching. -/
+def prop_native_pga3_galgebra_sandwich_dense : Gen Bool := do
+  let r ← genPGA3DenseMv
+  let x ← genPGA3DenseMv
+  let nativeR := nativeOfDense r.mv
+  let nativeX := nativeOfDense x.mv
+  let generic :=
+    Grassmann.sandwich (sig := PGA3) (M := NativeMV PGA3) (F := Float) nativeR nativeX
+  return nativeMatchesDense generic (r.mv.sandwich x.mv) (tol := 1e-6)
+
+/-- PGA3 native-vector `GAlgebra` normSq agrees with dense normSq. -/
+def prop_native_pga3_galgebra_normSq_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let native := nativeOfDense a.mv
+  return approxEq
+    (Grassmann.normSq (sig := PGA3) (M := NativeMV PGA3) (F := Float) native)
+    a.mv.normSq (tol := 1e-6)
 
 /-! ## CGA3 Native Vector Reference Tests -/
 
@@ -491,6 +551,18 @@ def prop_native_cga3_reverse_dense : Gen Bool := do
   let a ← genCGA3DenseMv
   return nativeMatchesDense (nativeOfDense a.mv).reverse a.mv.reverse
 
+/-- CGA3 native-vector scalar extraction agrees with dense scalar extraction. -/
+def prop_native_cga3_scalar_part_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  return approxEq (nativeOfDense a.mv).scalarPart a.mv.scalarPart
+
+/-- CGA3 native-vector grade involution and Clifford conjugate agree with dense involutions. -/
+def prop_native_cga3_involutions_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let native := nativeOfDense a.mv
+  return nativeMatchesDense native.involute a.mv.involute &&
+    nativeMatchesDense native.conjugate a.mv.conjugate
+
 /-- CGA3 native-vector left contraction agrees with dense left contraction. -/
 def prop_native_cga3_left_contract_dense : Gen Bool := do
   let a ← genCGA3DenseMv
@@ -516,6 +588,24 @@ def prop_native_cga3_regressive_dense : Gen Bool := do
   let b ← genCGA3DenseMv
   return nativeMatchesDense ((nativeOfDense a.mv) ⋁ᵥ (nativeOfDense b.mv))
     (a.mv ⋁ᵐ b.mv) (tol := 1e-6)
+
+/-- CGA3 native-vector `GAlgebra` instance dispatch agrees with direct dense sandwiching. -/
+def prop_native_cga3_galgebra_sandwich_dense : Gen Bool := do
+  let r ← genCGA3DenseMv
+  let x ← genCGA3DenseMv
+  let nativeR := nativeOfDense r.mv
+  let nativeX := nativeOfDense x.mv
+  let generic :=
+    Grassmann.sandwich (sig := CGA3) (M := NativeMV CGA3) (F := Float) nativeR nativeX
+  return nativeMatchesDense generic (r.mv.sandwich x.mv) (tol := 1e-6)
+
+/-- CGA3 native-vector `GAlgebra` normSq agrees with dense normSq. -/
+def prop_native_cga3_galgebra_normSq_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let native := nativeOfDense a.mv
+  return approxEq
+    (Grassmann.normSq (sig := CGA3) (M := NativeMV CGA3) (F := Float) native)
+    a.mv.normSq (tol := 1e-6)
 
 /-! ## Sign Table Reference Tests -/
 
@@ -2253,6 +2343,10 @@ def runNativeReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {native5}"
   let native6 ← runGenProp "Native reverse" prop_native_reverse_dense
   IO.println s!"│ {native6}"
+  let native6s ← runGenProp "Native scalar part" prop_native_scalar_part_dense
+  IO.println s!"│ {native6s}"
+  let native6i ← runGenProp "Native involutions" prop_native_involutions_dense
+  IO.println s!"│ {native6i}"
   let native6a ← runGenProp "Native left contraction" prop_native_left_contract_dense
   IO.println s!"│ {native6a}"
   let native6b ← runGenProp "Native right contraction" prop_native_right_contract_dense
@@ -2261,6 +2355,10 @@ def runNativeReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {native6c}"
   let native6d ← runGenProp "Native regressive product" prop_native_regressive_dense
   IO.println s!"│ {native6d}"
+  let native6g ← runGenProp "Native GAlgebra sandwich" prop_native_galgebra_sandwich_dense
+  IO.println s!"│ {native6g}"
+  let native6n ← runGenProp "Native GAlgebra normSq" prop_native_galgebra_normSq_dense
+  IO.println s!"│ {native6n}"
   let native7 ← runGenProp "PGA3 native full round-trip" prop_native_pga3_full_roundtrip
   IO.println s!"│ {native7}"
   let native8 ← runGenProp "PGA3 native grade projection" prop_native_pga3_grade_projection_dense
@@ -2273,6 +2371,10 @@ def runNativeReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {native11}"
   let native12 ← runGenProp "PGA3 native reverse" prop_native_pga3_reverse_dense
   IO.println s!"│ {native12}"
+  let native12s ← runGenProp "PGA3 native scalar part" prop_native_pga3_scalar_part_dense
+  IO.println s!"│ {native12s}"
+  let native12i ← runGenProp "PGA3 native involutions" prop_native_pga3_involutions_dense
+  IO.println s!"│ {native12i}"
   let native12a ← runGenProp "PGA3 native left contraction" prop_native_pga3_left_contract_dense
   IO.println s!"│ {native12a}"
   let native12b ← runGenProp "PGA3 native right contraction" prop_native_pga3_right_contract_dense
@@ -2281,6 +2383,12 @@ def runNativeReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {native12c}"
   let native12d ← runGenProp "PGA3 native regressive product" prop_native_pga3_regressive_dense
   IO.println s!"│ {native12d}"
+  let native12g ← runGenProp "PGA3 native GAlgebra sandwich"
+    prop_native_pga3_galgebra_sandwich_dense
+  IO.println s!"│ {native12g}"
+  let native12n ← runGenProp "PGA3 native GAlgebra normSq"
+    prop_native_pga3_galgebra_normSq_dense
+  IO.println s!"│ {native12n}"
   let native13 ← runGenProp "CGA3 native full round-trip" prop_native_cga3_full_roundtrip
   IO.println s!"│ {native13}"
   let native14 ← runGenProp "CGA3 native grade projection" prop_native_cga3_grade_projection_dense
@@ -2293,6 +2401,10 @@ def runNativeReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {native17}"
   let native18 ← runGenProp "CGA3 native reverse" prop_native_cga3_reverse_dense
   IO.println s!"│ {native18}"
+  let native18s ← runGenProp "CGA3 native scalar part" prop_native_cga3_scalar_part_dense
+  IO.println s!"│ {native18s}"
+  let native18i ← runGenProp "CGA3 native involutions" prop_native_cga3_involutions_dense
+  IO.println s!"│ {native18i}"
   let native18a ← runGenProp "CGA3 native left contraction" prop_native_cga3_left_contract_dense
   IO.println s!"│ {native18a}"
   let native18b ← runGenProp "CGA3 native right contraction" prop_native_cga3_right_contract_dense
@@ -2301,12 +2413,20 @@ def runNativeReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {native18c}"
   let native18d ← runGenProp "CGA3 native regressive product" prop_native_cga3_regressive_dense
   IO.println s!"│ {native18d}"
+  let native18g ← runGenProp "CGA3 native GAlgebra sandwich"
+    prop_native_cga3_galgebra_sandwich_dense
+  IO.println s!"│ {native18g}"
+  let native18n ← runGenProp "CGA3 native GAlgebra normSq"
+    prop_native_cga3_galgebra_normSq_dense
+  IO.println s!"│ {native18n}"
   IO.println "└────────────────────────────────────────────────┘"
   return [
-    native1, native2, native3, native4, native5, native6, native6a, native6b,
-    native6c, native6d, native7, native8, native9, native10, native11, native12,
-    native12a, native12b, native12c, native12d, native13, native14, native15, native16,
-    native17, native18, native18a, native18b, native18c, native18d]
+    native1, native2, native3, native4, native5, native6, native6s, native6i,
+    native6a, native6b, native6c, native6d, native6g, native6n, native7, native8,
+    native9, native10, native11, native12, native12s, native12i, native12a, native12b,
+    native12c, native12d, native12g, native12n, native13, native14, native15, native16,
+    native17, native18, native18s, native18i, native18a, native18b, native18c, native18d,
+    native18g, native18n]
 
 /-- Run sign-table fast-path checks against generic dense multiplication. -/
 def runSignTableReferenceTests : IO (List PropTestResult) := do

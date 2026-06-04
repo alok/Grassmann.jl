@@ -7,6 +7,7 @@
   easy to plot, test, and compare against the Julia-era implementation.
 -/
 import Grassmann.Products
+import Grassmann.GATypeclass
 
 namespace Grassmann
 
@@ -92,12 +93,33 @@ def sub (a b : NativeMV sig) : NativeMV sig := add a (neg b)
 def smul (x : Float) (m : NativeMV sig) : NativeMV sig :=
   ⟨Vector.map (fun c => x * c) m.coeffs⟩
 
+/-- Scalar part, the coefficient of the grade-0 basis blade. -/
+@[inline]
+def scalarPart (m : NativeMV sig) : Float :=
+  m.coeff 0
+
 /-- Reverse operation. Grade `k` gets sign `(-1)^(k*(k-1)/2)`. -/
 @[inline]
 def reverse (m : NativeMV sig) : NativeMV sig :=
   ⟨Vector.ofFn fun i =>
     let k := popcount i.val
     let sign := if (k * (k - 1) / 2) % 2 = 0 then 1.0 else -1.0
+    sign * m.coeffs.get i⟩
+
+/-- Grade involution. Grade `k` gets sign `(-1)^k`. -/
+@[inline]
+def involute (m : NativeMV sig) : NativeMV sig :=
+  ⟨Vector.ofFn fun i =>
+    let k := popcount i.val
+    let sign := if k % 2 = 0 then 1.0 else -1.0
+    sign * m.coeffs.get i⟩
+
+/-- Clifford conjugate. Grade `k` gets sign `(-1)^(k*(k+1)/2)`. -/
+@[inline]
+def conjugate (m : NativeMV sig) : NativeMV sig :=
+  ⟨Vector.ofFn fun i =>
+    let k := popcount i.val
+    let sign := if (k * (k + 1) / 2) % 2 = 0 then 1.0 else -1.0
     sign * m.coeffs.get i⟩
 
 /-- Grade projection. -/
@@ -270,11 +292,32 @@ instance : Mul (NativeMV sig) := ⟨geometricProduct⟩
 instance : SMul Float (NativeMV sig) := ⟨smul⟩
 
 postfix:max "†ᵥ" => NativeMV.reverse
+postfix:max "ˆᵥ" => NativeMV.involute
+postfix:max "‡ᵥ" => NativeMV.conjugate
 infixl:65 " ⋀ᵥ " => NativeMV.wedge
 infixl:65 " ⌋ᵥ " => NativeMV.leftContract
 infixl:65 " ⌊ᵥ " => NativeMV.rightContract
 prefix:max "⋆ᵥ" => NativeMV.hodgeDual
 infixl:65 " ⋁ᵥ " => NativeMV.regressiveProduct
+
+instance : GAlgebra sig (NativeMV sig) Float where
+  basisVector := basisVector sig
+  scalar := scalar sig
+  zero := zero sig
+  one := one sig
+  blade bits := blade sig bits.toNat
+  mul := geometricProduct
+  wedge := wedge
+  leftContract := leftContract
+  rightContract := rightContract
+  reverse := reverse
+  involute := involute
+  conjugate := conjugate
+  scalarPart := scalarPart
+  add := add
+  neg := neg
+  smul := smul
+  gradeProject := gradeProject
 
 /-! ## Basic Theorems -/
 
@@ -583,6 +626,11 @@ theorem coeff_smul_total (x : Float) (m : NativeMV sig) (mask : Nat) :
   · unfold coeff
     simp [hmask]
 
+/-- Native scalar part is the coefficient of the scalar blade. -/
+@[simp]
+theorem scalarPart_eq_coeff_zero (m : NativeMV sig) :
+    m.scalarPart = m.coeff 0 := rfl
+
 /-- Coefficient of native-vector reverse at an in-range blade mask. -/
 theorem coeff_reverse (m : NativeMV sig) {mask : Nat} (hmask : mask < 2 ^ n) :
     m.reverse.coeff mask =
@@ -605,6 +653,54 @@ theorem coeff_reverse_total (m : NativeMV sig) (mask : Nat) :
   by_cases hmask : mask < 2 ^ n
   · simp [hmask, coeff_reverse]
   · unfold coeff reverse
+    simp [hmask]
+
+/-- Coefficient of native-vector grade involution at an in-range blade mask. -/
+theorem coeff_involute (m : NativeMV sig) {mask : Nat} (hmask : mask < 2 ^ n) :
+    m.involute.coeff mask =
+      (let k := popcount mask
+       let sign := if k % 2 = 0 then 1.0 else -1.0
+       sign * m.coeff mask) := by
+  unfold coeff involute
+  simp only [hmask, ↓reduceDIte, Vector.get, Vector.ofFn, Array.getElem_ofFn]
+  rfl
+
+/-- Total coefficient formula for native-vector grade involution. -/
+theorem coeff_involute_total (m : NativeMV sig) (mask : Nat) :
+    m.involute.coeff mask =
+      if _ : mask < 2 ^ n then
+        (let k := popcount mask
+         let sign := if k % 2 = 0 then 1.0 else -1.0
+         sign * m.coeff mask)
+      else
+        0.0 := by
+  by_cases hmask : mask < 2 ^ n
+  · simp [hmask, coeff_involute]
+  · unfold coeff involute
+    simp [hmask]
+
+/-- Coefficient of native-vector Clifford conjugate at an in-range blade mask. -/
+theorem coeff_conjugate (m : NativeMV sig) {mask : Nat} (hmask : mask < 2 ^ n) :
+    m.conjugate.coeff mask =
+      (let k := popcount mask
+       let sign := if (k * (k + 1) / 2) % 2 = 0 then 1.0 else -1.0
+       sign * m.coeff mask) := by
+  unfold coeff conjugate
+  simp only [hmask, ↓reduceDIte, Vector.get, Vector.ofFn, Array.getElem_ofFn]
+  rfl
+
+/-- Total coefficient formula for native-vector Clifford conjugate. -/
+theorem coeff_conjugate_total (m : NativeMV sig) (mask : Nat) :
+    m.conjugate.coeff mask =
+      if _ : mask < 2 ^ n then
+        (let k := popcount mask
+         let sign := if (k * (k + 1) / 2) % 2 = 0 then 1.0 else -1.0
+         sign * m.coeff mask)
+      else
+        0.0 := by
+  by_cases hmask : mask < 2 ^ n
+  · simp [hmask, coeff_conjugate]
+  · unfold coeff conjugate
     simp [hmask]
 
 /-- Coefficient formula for native-vector geometric product at an in-range blade mask. -/
@@ -819,9 +915,9 @@ theorem evenPart_oddPart (m : NativeMV sig) :
 
 section Checks
 
-#eval (NativeMV.basisVector R3 ⟨0, by omega⟩ * NativeMV.basisVector R3 ⟨0, by omega⟩).coeff 0
-#eval (NativeMV.basisVector R3 ⟨0, by omega⟩ * NativeMV.basisVector R3 ⟨1, by omega⟩).coeff 3
-#eval (NativeMV.basisVector R3 ⟨1, by omega⟩ * NativeMV.basisVector R3 ⟨0, by omega⟩).coeff 3
+#eval! (NativeMV.basisVector R3 ⟨0, by omega⟩ * NativeMV.basisVector R3 ⟨0, by omega⟩).coeff 0
+#eval! (NativeMV.basisVector R3 ⟨0, by omega⟩ * NativeMV.basisVector R3 ⟨1, by omega⟩).coeff 3
+#eval! (NativeMV.basisVector R3 ⟨1, by omega⟩ * NativeMV.basisVector R3 ⟨0, by omega⟩).coeff 3
 #eval (NativeMV.vec3 R3 1.0 2.0 3.0).toVector.toArray
 
 end Checks
