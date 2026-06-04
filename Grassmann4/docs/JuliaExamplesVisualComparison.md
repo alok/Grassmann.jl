@@ -111,6 +111,43 @@ The contact-sheet script provides the same comparison in one local image.
 | `orb`, `wave` | Qualitative vector-field counterparts | Uses deterministic Lean vector fields styled to match Makie. Exact CGA streamplot parity remains future work. |
 | `orbit-2`, `orbit-4` | CGA-checked orbit counterparts | The plotted translation leg uses the fast closed-form coordinates and the manifest records sample checks against Lean `CGA.point`/`CGA.translator`/`CGA.transform`; `orbit-4` applies an explicit Euclidean `z` rotation after translation. Exact pointwise parity against the full Grassmann.jl CGA plotting pipeline remains future work. |
 
+## 2026-06-04 Audit
+
+The comparison harness was rerun from `Grassmann4` and covered all twelve
+documented Julia plot images. The smoke gate passed with every rendered Lean and
+Julia frame above the `1200` grayscale standard-deviation floor, every
+normalized RMSE at or below `0.25`, and all ten CGA orbit witnesses within
+`1e-6` max absolute difference.
+
+The observed normalized RMSE values were:
+
+| Example | Normalized RMSE |
+| --- | ---: |
+| `plane-1` | `0.109350` |
+| `plane-2` | `0.121803` |
+| `plane-3` | `0.111175` |
+| `plane-4` | `0.105751` |
+| `plane-5` | `0.121607` |
+| `plane-6` | `0.129301` |
+| `torus` | `0.106073` |
+| `helix` | `0.099739` |
+| `orbit-2` | `0.087348` |
+| `orbit-4` | `0.108997` |
+| `orb` | `0.151953` |
+| `wave` | `0.120565` |
+
+Exact pointwise torus parity is still intentionally not claimed. A direct local
+Julia oracle for the documented conformal torus expression loads and returns
+finite coordinate samples, but the Lean generator currently keeps the torus as a
+qualitative parametric counterpart. The existing closed-form `Multivector`
+bivector exponential is not valid for the mixed conformal torus generator,
+because that generator does not square to a scalar. A dense Taylor/scaling
+attempt was too slow for plot generation, and importing the packed `MV`
+implementation into `jlexamples` currently pulls LeanBLAS/SciLean linkage into
+the executable, which fails without configured CBLAS symbols. A future exact
+port should use a small standalone CGA motor exponential kernel or fix the
+LeanBLAS link path before replacing the qualitative torus/helix plots.
+
 ## Verified Commands
 
 These commands were run successfully from the repository root:
