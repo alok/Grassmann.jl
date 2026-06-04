@@ -225,6 +225,11 @@ def packedMatchesDense {n : Nat} {sig : Signature n} {p : Parity}
     (packed : MV sig p) (dense : Multivector sig Float) (tol : Float := 1e-9) : Bool :=
   denseMvApproxEq (MV.toMultivector packed) dense tol
 
+/-- Compare two packed `MV` values through the dense reference view. -/
+def packedApproxEq {n : Nat} {sig : Signature n} {p : Parity}
+    (a b : MV sig p) (tol : Float := 1e-9) : Bool :=
+  denseMvApproxEq (MV.toMultivector a) (MV.toMultivector b) tol
+
 /-! ## Native Vector Reference Tests -/
 
 /-- Convert a dense reference multivector to the native-vector baseline. -/
@@ -565,6 +570,56 @@ def prop_mv_sandwich_dense : Gen Bool := do
   let packedR : MV R3 .even := MV.ofMultivector denseR .even
   let packedX : MV R3 .odd := MV.ofMultivector denseX .odd
   return packedMatchesDense (mvSandwich packedR packedX) (denseR.sandwich denseX) (tol := 1e-6)
+
+/-! ## Packed MV Dispatch Equivalence Tests -/
+
+/-- R3 direct-dispatch multiplication and typeclass multiplication agree. -/
+def prop_mv_r3_dispatch_mul_equivalence : Gen Bool := do
+  let a ← genR3DenseMv
+  let b ← genR3DenseMv
+  let fullA : MV R3 .full := MV.ofMultivector a.mv .full
+  let fullB : MV R3 .full := MV.ofMultivector b.mv .full
+  let evenA : MV R3 .even := MV.ofMultivector a.mv.evenPart .even
+  let evenB : MV R3 .even := MV.ofMultivector b.mv.evenPart .even
+  let oddA : MV R3 .odd := MV.ofMultivector a.mv.oddPart .odd
+  let oddB : MV R3 .odd := MV.ofMultivector b.mv.oddPart .odd
+  return packedApproxEq (MV.mulDirect fullA fullB) (MV.mulTC fullA fullB) (tol := 1e-6) &&
+    packedApproxEq (MV.mulDirect evenA evenB) (MV.mulTC evenA evenB) (tol := 1e-6) &&
+    packedApproxEq (MV.mulDirect evenA oddB) (MV.mulTC evenA oddB) (tol := 1e-6) &&
+    packedApproxEq (MV.mulDirect oddA evenB) (MV.mulTC oddA evenB) (tol := 1e-6) &&
+    packedApproxEq (MV.mulDirect oddA oddB) (MV.mulTC oddA oddB) (tol := 1e-6)
+
+/-- PGA3 direct-dispatch multiplication and typeclass multiplication agree. -/
+def prop_mv_pga3_dispatch_mul_equivalence : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let b ← genPGA3DenseMv
+  let fullA : MV PGA3 .full := MV.ofMultivector a.mv .full
+  let fullB : MV PGA3 .full := MV.ofMultivector b.mv .full
+  let evenA : MV PGA3 .even := MV.ofMultivector a.mv.evenPart .even
+  let evenB : MV PGA3 .even := MV.ofMultivector b.mv.evenPart .even
+  let oddA : MV PGA3 .odd := MV.ofMultivector a.mv.oddPart .odd
+  let oddB : MV PGA3 .odd := MV.ofMultivector b.mv.oddPart .odd
+  return packedApproxEq (MV.mulDirect fullA fullB) (MV.mulTC fullA fullB) (tol := 1e-6) &&
+    packedApproxEq (MV.mulDirect evenA evenB) (MV.mulTC evenA evenB) (tol := 1e-6) &&
+    packedApproxEq (MV.mulDirect evenA oddB) (MV.mulTC evenA oddB) (tol := 1e-6) &&
+    packedApproxEq (MV.mulDirect oddA evenB) (MV.mulTC oddA evenB) (tol := 1e-6) &&
+    packedApproxEq (MV.mulDirect oddA oddB) (MV.mulTC oddA oddB) (tol := 1e-6)
+
+/-- CGA3 direct-dispatch multiplication and typeclass multiplication agree. -/
+def prop_mv_cga3_dispatch_mul_equivalence : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let b ← genCGA3DenseMv
+  let fullA : MV CGA3 .full := MV.ofMultivector a.mv .full
+  let fullB : MV CGA3 .full := MV.ofMultivector b.mv .full
+  let evenA : MV CGA3 .even := MV.ofMultivector a.mv.evenPart .even
+  let evenB : MV CGA3 .even := MV.ofMultivector b.mv.evenPart .even
+  let oddA : MV CGA3 .odd := MV.ofMultivector a.mv.oddPart .odd
+  let oddB : MV CGA3 .odd := MV.ofMultivector b.mv.oddPart .odd
+  return packedApproxEq (MV.mulDirect fullA fullB) (MV.mulTC fullA fullB) (tol := 1e-6) &&
+    packedApproxEq (MV.mulDirect evenA evenB) (MV.mulTC evenA evenB) (tol := 1e-6) &&
+    packedApproxEq (MV.mulDirect evenA oddB) (MV.mulTC evenA oddB) (tol := 1e-6) &&
+    packedApproxEq (MV.mulDirect oddA evenB) (MV.mulTC oddA evenB) (tol := 1e-6) &&
+    packedApproxEq (MV.mulDirect oddA oddB) (MV.mulTC oddA oddB) (tol := 1e-6)
 
 /-! ## PGA3 Packed MV Reference Tests -/
 
@@ -1664,6 +1719,21 @@ def runPackedReferenceTests : IO (List PropTestResult) := do
   return [r14, r15, r15p, r15a, r15b, r15c, r15d, r15e, r15f, r15g, r16, r17, r18,
     r19, r20, r21, r21a, r22]
 
+/-- Run direct-dispatch vs typeclass-dispatch multiplication checks. -/
+def runMVDispatchReferenceTests : IO (List PropTestResult) := do
+  IO.println "\n┌─ Packed MV Dispatch Equivalence ──────────────┐"
+  let dispatch1 ← runGenProp "R3 MV direct/typeclass multiplication"
+    prop_mv_r3_dispatch_mul_equivalence 40
+  IO.println s!"│ {dispatch1}"
+  let dispatch2 ← runGenProp "PGA3 MV direct/typeclass multiplication"
+    prop_mv_pga3_dispatch_mul_equivalence 30
+  IO.println s!"│ {dispatch2}"
+  let dispatch3 ← runGenProp "CGA3 MV direct/typeclass multiplication"
+    prop_mv_cga3_dispatch_mul_equivalence 20
+  IO.println s!"│ {dispatch3}"
+  IO.println "└────────────────────────────────────────────────┘"
+  return [dispatch1, dispatch2, dispatch3]
+
 /-- Run PGA3 packed-MV baseline checks against dense reference results. -/
 def runPGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println "\n┌─ PGA3 Packed MV vs Dense Reference ───────────┐"
@@ -1951,6 +2021,7 @@ def runPropertyTests : IO Unit := do
   let nativeResults ← runNativeReferenceTests
   let signTableResults ← runSignTableReferenceTests
   let packedResults ← runPackedReferenceTests
+  let dispatchResults ← runMVDispatchReferenceTests
   let pgaPackedResults ← runPGA3PackedReferenceTests
   let pgaPointCloudResults ← runPGA3PointCloudTransformTests
   let cgaPointCloudResults ← runCGA3PointCloudTransformTests
@@ -1969,6 +2040,7 @@ def runPropertyTests : IO Unit := do
     countPassed nativeResults +
     countPassed signTableResults +
     countPassed packedResults +
+    countPassed dispatchResults +
     countPassed pgaPackedResults +
     countPassed pgaPointCloudResults +
     countPassed cgaPointCloudResults +
@@ -1986,6 +2058,7 @@ def runPropertyTests : IO Unit := do
     nativeResults.length +
     signTableResults.length +
     packedResults.length +
+    dispatchResults.length +
     pgaPackedResults.length +
     pgaPointCloudResults.length +
     cgaPointCloudResults.length +
