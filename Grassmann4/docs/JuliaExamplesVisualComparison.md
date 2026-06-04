@@ -59,12 +59,14 @@ source. The same run also writes diagnostic raster metrics:
 
 The metrics file records grayscale standard deviation for each rendered Lean and
 Julia frame plus ImageMagick RMSE diagnostics. The script now enforces a
-conservative visual smoke gate: all twelve expected Lean SVGs must be generated,
-the manifest must list every expected example, each Lean and Julia frame must
-have grayscale standard deviation of at least `1200`, and the normalized RMSE
-must stay at or below `0.25`. Treat the RMSE bound as a sanity check for blank or
-badly framed images, not as an exact visual oracle; several examples are
-qualitative Lean counterparts rather than exact Grassmann.jl renderings.
+conservative visual smoke gate: all documented `paper/img/*.png` examples in
+`docs/src/algebra.md` must be covered, all twelve expected Lean SVGs must be
+generated, the manifest must list every expected example, each Lean and Julia
+frame must have grayscale standard deviation of at least `1200`, and the
+normalized RMSE must stay at or below `0.25`. Treat the RMSE bound as a sanity
+check for blank or badly framed images, not as an exact visual oracle; several
+examples are qualitative Lean counterparts rather than exact Grassmann.jl
+renderings.
 
 It requires `curl`, `rsvg-convert`, and ImageMagick's `magick` command.
 

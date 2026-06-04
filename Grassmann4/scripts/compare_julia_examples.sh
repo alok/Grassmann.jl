@@ -3,8 +3,9 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 pkg_root="$(cd "$script_dir/.." && pwd)"
+repo_root="$(cd "$pkg_root/.." && pwd)"
 
-for tool in lake curl rsvg-convert magick; do
+for tool in lake curl rsvg-convert magick rg; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     printf 'missing required tool: %s\n' "$tool" >&2
     exit 1
@@ -20,8 +21,20 @@ reference_base="https://raw.githubusercontent.com/chakravala/Grassmann.jl/master
 out_root="$pkg_root/.generated/julia-examples"
 work_dir="$out_root/contact-sheet"
 metrics="$work_dir/metrics.tsv"
+julia_docs="$repo_root/docs/src/algebra.md"
 minimum_frame_stddev=1200
 maximum_rmse_normalized=0.25
+
+contains_name() {
+  local needle="$1"
+  shift
+  for candidate in "$@"; do
+    if [[ "$candidate" == "$needle" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
 
 numeric_ge() {
   awk -v actual="$1" -v expected="$2" 'BEGIN { exit(actual >= expected ? 0 : 1) }'
@@ -40,6 +53,32 @@ for ((i = 0; i < ${#names[@]}; i++)); do
     fi
   done
 done
+
+if [[ ! -s "$julia_docs" ]]; then
+  failures+=("missing Julia docs source: $julia_docs")
+else
+  doc_names=()
+  while IFS= read -r name; do
+    doc_names+=("$name")
+  done < <(
+    rg -o 'paper/img/[A-Za-z0-9_-]+\.png' "$julia_docs" |
+      while IFS= read -r path; do
+        base="${path##*/}"
+        printf '%s\n' "${base%.png}"
+      done |
+      sort -u
+  )
+  for name in "${doc_names[@]}"; do
+    if ! contains_name "$name" "${names[@]}"; then
+      failures+=("docs/src/algebra.md references an untested plot example: $name")
+    fi
+  done
+  for name in "${names[@]}"; do
+    if ! contains_name "$name" "${doc_names[@]}"; then
+      failures+=("expected example is not referenced by docs/src/algebra.md: $name")
+    fi
+  done
+fi
 
 cd "$pkg_root"
 rm -rf "$out_root/lean" "$out_root/index.html" "$out_root/manifest.json"
