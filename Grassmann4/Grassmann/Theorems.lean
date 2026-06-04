@@ -358,8 +358,11 @@ theorem hodge_wedge_regressive (a b : Multivector sig F) :
 /-! ## Projection/Rejection -/
 
 /-- Projection + rejection = identity: proj_b(a) + rej_b(a) = a -/
-theorem proj_rej_sum (a b : Multivector sig F) (hb : LinearAlgebra.dot b b ≠ 0) :
-    (LinearAlgebra.projectOnto a b) + (LinearAlgebra.rejectFrom a b) = a := sorry
+theorem proj_rej_sum (a b : Multivector sig F) (_hb : LinearAlgebra.dot b b ≠ 0) :
+    (LinearAlgebra.projectOnto a b) + (LinearAlgebra.rejectFrom a b) = a := by
+  ext i
+  simp only [HAdd.hAdd, Multivector.add, LinearAlgebra.rejectFrom, Multivector.sub]
+  exact add_sub_cancel ((LinearAlgebra.projectOnto a b).coeffs i) (a.coeffs i)
 
 /-- Projection is idempotent: proj_b(proj_b(a)) = proj_b(a) -/
 theorem proj_idempotent (a b : Multivector sig F) (hb : LinearAlgebra.dot b b ≠ 0) :
