@@ -161,6 +161,66 @@ def wedgeCoeffAt (sig : Signature n) (a b : NativeMV sig) (outMask : Nat) : Floa
 def wedge (a b : NativeMV sig) : NativeMV sig :=
   ⟨Vector.ofFn fun out => wedgeCoeffAt sig a b out.val⟩
 
+/-- Coefficient of the left contraction `a ⌋ b` at output blade mask `outMask`. -/
+@[inline]
+def leftContractCoeffAt (sig : Signature n) (a b : NativeMV sig) (outMask : Nat) : Float :=
+  (allBladeIndices n).foldl (init := 0.0) fun acc i =>
+    (allBladeIndices n).foldl (init := acc) fun acc j =>
+      let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
+      let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
+      let resultMask := i.val ^^^ j.val
+      if (bi.bits &&& bj.bits) != bi.bits || bi.grade > bj.grade || resultMask != outMask then
+        acc
+      else
+        let sign := leftContractionSign sig bi bj
+        if sign = 0 then
+          acc
+        else
+          acc + Float.ofInt sign * a.coeffs.get i * b.coeffs.get j
+
+/-- Left contraction using the straightforward O(4^n) native-vector baseline. -/
+@[inline]
+def leftContract (a b : NativeMV sig) : NativeMV sig :=
+  ⟨Vector.ofFn fun out => leftContractCoeffAt sig a b out.val⟩
+
+/-- Coefficient of the right contraction `a ⌊ b` at output blade mask `outMask`. -/
+@[inline]
+def rightContractCoeffAt (sig : Signature n) (a b : NativeMV sig) (outMask : Nat) : Float :=
+  (allBladeIndices n).foldl (init := 0.0) fun acc i =>
+    (allBladeIndices n).foldl (init := acc) fun acc j =>
+      let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
+      let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
+      let resultMask := i.val ^^^ j.val
+      if (bj.bits &&& bi.bits) != bj.bits || bj.grade > bi.grade || resultMask != outMask then
+        acc
+      else
+        let sign := geometricSign sig bi bj
+        if sign = 0 then
+          acc
+        else
+          acc + Float.ofInt sign * a.coeffs.get i * b.coeffs.get j
+
+/-- Right contraction using the straightforward O(4^n) native-vector baseline. -/
+@[inline]
+def rightContract (a b : NativeMV sig) : NativeMV sig :=
+  ⟨Vector.ofFn fun out => rightContractCoeffAt sig a b out.val⟩
+
+/-- Hodge dual, matching the proof-friendly dense multivector convention. -/
+@[inline]
+def hodgeDual (m : NativeMV sig) : NativeMV sig :=
+  ⟨Vector.ofFn fun out =>
+    let outBlade : Blade sig := ⟨BitVec.ofNat n out.val⟩
+    let dualBits := outBlade.bits ^^^ pseudoscalar
+    let dualIdx := dualBits.toNat
+    let sign := leftComplementSign sig ⟨dualBits⟩
+    let coeff := m.coeff dualIdx
+    if sign < 0 then -coeff else coeff⟩
+
+/-- Regressive product / meet, defined by dualizing the exterior product. -/
+@[inline]
+def regressiveProduct (a b : NativeMV sig) : NativeMV sig :=
+  hodgeDual (wedge (hodgeDual a) (hodgeDual b))
+
 /-- Sandwich action `r * x * reverse r`, useful for rotor demos. -/
 @[inline]
 def sandwich (r x : NativeMV sig) : NativeMV sig :=
@@ -211,6 +271,10 @@ instance : SMul Float (NativeMV sig) := ⟨smul⟩
 
 postfix:max "†ᵥ" => NativeMV.reverse
 infixl:65 " ⋀ᵥ " => NativeMV.wedge
+infixl:65 " ⌋ᵥ " => NativeMV.leftContract
+infixl:65 " ⌊ᵥ " => NativeMV.rightContract
+prefix:max "⋆ᵥ" => NativeMV.hodgeDual
+infixl:65 " ⋁ᵥ " => NativeMV.regressiveProduct
 
 /-! ## Basic Theorems -/
 
@@ -573,6 +637,68 @@ theorem coeff_wedge_total (a b : NativeMV sig) (mask : Nat) :
       if _ : mask < 2 ^ n then wedgeCoeffAt sig a b mask else 0.0 := by
   by_cases hmask : mask < 2 ^ n
   · simp [hmask, coeff_wedge]
+  · unfold coeff
+    simp [hmask]
+
+/-- Coefficient formula for native-vector left contraction at an in-range blade mask. -/
+theorem coeff_leftContract (a b : NativeMV sig) {mask : Nat} (hmask : mask < 2 ^ n) :
+    (a ⌋ᵥ b).coeff mask = leftContractCoeffAt sig a b mask := by
+  unfold coeff leftContract
+  simp only [hmask, ↓reduceDIte, Vector.get, Vector.ofFn, Array.getElem_ofFn]
+  rfl
+
+/-- Total coefficient formula for native-vector left contraction. -/
+theorem coeff_leftContract_total (a b : NativeMV sig) (mask : Nat) :
+    (a ⌋ᵥ b).coeff mask =
+      if _ : mask < 2 ^ n then leftContractCoeffAt sig a b mask else 0.0 := by
+  by_cases hmask : mask < 2 ^ n
+  · simp [hmask, coeff_leftContract]
+  · unfold coeff
+    simp [hmask]
+
+/-- Coefficient formula for native-vector right contraction at an in-range blade mask. -/
+theorem coeff_rightContract (a b : NativeMV sig) {mask : Nat} (hmask : mask < 2 ^ n) :
+    (a ⌊ᵥ b).coeff mask = rightContractCoeffAt sig a b mask := by
+  unfold coeff rightContract
+  simp only [hmask, ↓reduceDIte, Vector.get, Vector.ofFn, Array.getElem_ofFn]
+  rfl
+
+/-- Total coefficient formula for native-vector right contraction. -/
+theorem coeff_rightContract_total (a b : NativeMV sig) (mask : Nat) :
+    (a ⌊ᵥ b).coeff mask =
+      if _ : mask < 2 ^ n then rightContractCoeffAt sig a b mask else 0.0 := by
+  by_cases hmask : mask < 2 ^ n
+  · simp [hmask, coeff_rightContract]
+  · unfold coeff
+    simp [hmask]
+
+/-- Coefficient formula for native-vector Hodge dual at an in-range blade mask. -/
+theorem coeff_hodgeDual (m : NativeMV sig) {mask : Nat} (hmask : mask < 2 ^ n) :
+    (⋆ᵥm).coeff mask =
+      (let outBlade : Blade sig := ⟨BitVec.ofNat n mask⟩
+       let dualBits := outBlade.bits ^^^ pseudoscalar
+       let dualIdx := dualBits.toNat
+       let sign := leftComplementSign sig ⟨dualBits⟩
+       let coeff := m.coeff dualIdx
+       if sign < 0 then -coeff else coeff) := by
+  unfold coeff hodgeDual
+  simp only [hmask, ↓reduceDIte, Vector.get, Vector.ofFn, Array.getElem_ofFn]
+  rfl
+
+/-- Total coefficient formula for native-vector Hodge dual. -/
+theorem coeff_hodgeDual_total (m : NativeMV sig) (mask : Nat) :
+    (⋆ᵥm).coeff mask =
+      if _ : mask < 2 ^ n then
+        (let outBlade : Blade sig := ⟨BitVec.ofNat n mask⟩
+         let dualBits := outBlade.bits ^^^ pseudoscalar
+         let dualIdx := dualBits.toNat
+         let sign := leftComplementSign sig ⟨dualBits⟩
+         let coeff := m.coeff dualIdx
+         if sign < 0 then -coeff else coeff)
+      else
+        0.0 := by
+  by_cases hmask : mask < 2 ^ n
+  · simp [hmask, coeff_hodgeDual]
   · unfold coeff
     simp [hmask]
 

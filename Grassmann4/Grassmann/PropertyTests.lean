@@ -357,6 +357,32 @@ def prop_native_reverse_dense : Gen Bool := do
   let a ← genR3DenseMv
   return nativeMatchesDense (nativeOfDense a.mv).reverse a.mv.reverse
 
+/-- Native-vector left contraction agrees with dense left contraction. -/
+def prop_native_left_contract_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let b ← genR3DenseMv
+  return nativeMatchesDense ((nativeOfDense a.mv) ⌋ᵥ (nativeOfDense b.mv))
+    (a.mv ⌋ᵐ b.mv) (tol := 1e-6)
+
+/-- Native-vector right contraction agrees with dense right contraction. -/
+def prop_native_right_contract_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let b ← genR3DenseMv
+  return nativeMatchesDense ((nativeOfDense a.mv) ⌊ᵥ (nativeOfDense b.mv))
+    (a.mv ⌊ᵐ b.mv) (tol := 1e-6)
+
+/-- Native-vector Hodge dual agrees with dense Hodge dual. -/
+def prop_native_hodge_dual_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  return nativeMatchesDense (⋆ᵥ(nativeOfDense a.mv)) (⋆ᵐa.mv) (tol := 1e-6)
+
+/-- Native-vector regressive product agrees with dense regressive product. -/
+def prop_native_regressive_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let b ← genR3DenseMv
+  return nativeMatchesDense ((nativeOfDense a.mv) ⋁ᵥ (nativeOfDense b.mv))
+    (a.mv ⋁ᵐ b.mv) (tol := 1e-6)
+
 /-! ## PGA3 Native Vector Reference Tests -/
 
 /-- PGA3 native-vector round-trip preserves all dense coefficients. -/
@@ -398,6 +424,32 @@ def prop_native_pga3_reverse_dense : Gen Bool := do
   let a ← genPGA3DenseMv
   return nativeMatchesDense (nativeOfDense a.mv).reverse a.mv.reverse
 
+/-- PGA3 native-vector left contraction agrees with dense left contraction. -/
+def prop_native_pga3_left_contract_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let b ← genPGA3DenseMv
+  return nativeMatchesDense ((nativeOfDense a.mv) ⌋ᵥ (nativeOfDense b.mv))
+    (a.mv ⌋ᵐ b.mv) (tol := 1e-6)
+
+/-- PGA3 native-vector right contraction agrees with dense right contraction. -/
+def prop_native_pga3_right_contract_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let b ← genPGA3DenseMv
+  return nativeMatchesDense ((nativeOfDense a.mv) ⌊ᵥ (nativeOfDense b.mv))
+    (a.mv ⌊ᵐ b.mv) (tol := 1e-6)
+
+/-- PGA3 native-vector Hodge dual agrees with dense Hodge dual. -/
+def prop_native_pga3_hodge_dual_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  return nativeMatchesDense (⋆ᵥ(nativeOfDense a.mv)) (⋆ᵐa.mv) (tol := 1e-6)
+
+/-- PGA3 native-vector regressive product agrees with dense regressive product. -/
+def prop_native_pga3_regressive_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let b ← genPGA3DenseMv
+  return nativeMatchesDense ((nativeOfDense a.mv) ⋁ᵥ (nativeOfDense b.mv))
+    (a.mv ⋁ᵐ b.mv) (tol := 1e-6)
+
 /-! ## CGA3 Native Vector Reference Tests -/
 
 /-- CGA3 native-vector round-trip preserves all dense coefficients. -/
@@ -438,6 +490,32 @@ def prop_native_cga3_wedge_dense : Gen Bool := do
 def prop_native_cga3_reverse_dense : Gen Bool := do
   let a ← genCGA3DenseMv
   return nativeMatchesDense (nativeOfDense a.mv).reverse a.mv.reverse
+
+/-- CGA3 native-vector left contraction agrees with dense left contraction. -/
+def prop_native_cga3_left_contract_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let b ← genCGA3DenseMv
+  return nativeMatchesDense ((nativeOfDense a.mv) ⌋ᵥ (nativeOfDense b.mv))
+    (a.mv ⌋ᵐ b.mv) (tol := 1e-6)
+
+/-- CGA3 native-vector right contraction agrees with dense right contraction. -/
+def prop_native_cga3_right_contract_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let b ← genCGA3DenseMv
+  return nativeMatchesDense ((nativeOfDense a.mv) ⌊ᵥ (nativeOfDense b.mv))
+    (a.mv ⌊ᵐ b.mv) (tol := 1e-6)
+
+/-- CGA3 native-vector Hodge dual agrees with dense Hodge dual. -/
+def prop_native_cga3_hodge_dual_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  return nativeMatchesDense (⋆ᵥ(nativeOfDense a.mv)) (⋆ᵐa.mv) (tol := 1e-6)
+
+/-- CGA3 native-vector regressive product agrees with dense regressive product. -/
+def prop_native_cga3_regressive_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let b ← genCGA3DenseMv
+  return nativeMatchesDense ((nativeOfDense a.mv) ⋁ᵥ (nativeOfDense b.mv))
+    (a.mv ⋁ᵐ b.mv) (tol := 1e-6)
 
 /-! ## Sign Table Reference Tests -/
 
@@ -2175,6 +2253,14 @@ def runNativeReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {native5}"
   let native6 ← runGenProp "Native reverse" prop_native_reverse_dense
   IO.println s!"│ {native6}"
+  let native6a ← runGenProp "Native left contraction" prop_native_left_contract_dense
+  IO.println s!"│ {native6a}"
+  let native6b ← runGenProp "Native right contraction" prop_native_right_contract_dense
+  IO.println s!"│ {native6b}"
+  let native6c ← runGenProp "Native Hodge dual" prop_native_hodge_dual_dense
+  IO.println s!"│ {native6c}"
+  let native6d ← runGenProp "Native regressive product" prop_native_regressive_dense
+  IO.println s!"│ {native6d}"
   let native7 ← runGenProp "PGA3 native full round-trip" prop_native_pga3_full_roundtrip
   IO.println s!"│ {native7}"
   let native8 ← runGenProp "PGA3 native grade projection" prop_native_pga3_grade_projection_dense
@@ -2187,6 +2273,14 @@ def runNativeReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {native11}"
   let native12 ← runGenProp "PGA3 native reverse" prop_native_pga3_reverse_dense
   IO.println s!"│ {native12}"
+  let native12a ← runGenProp "PGA3 native left contraction" prop_native_pga3_left_contract_dense
+  IO.println s!"│ {native12a}"
+  let native12b ← runGenProp "PGA3 native right contraction" prop_native_pga3_right_contract_dense
+  IO.println s!"│ {native12b}"
+  let native12c ← runGenProp "PGA3 native Hodge dual" prop_native_pga3_hodge_dual_dense
+  IO.println s!"│ {native12c}"
+  let native12d ← runGenProp "PGA3 native regressive product" prop_native_pga3_regressive_dense
+  IO.println s!"│ {native12d}"
   let native13 ← runGenProp "CGA3 native full round-trip" prop_native_cga3_full_roundtrip
   IO.println s!"│ {native13}"
   let native14 ← runGenProp "CGA3 native grade projection" prop_native_cga3_grade_projection_dense
@@ -2199,9 +2293,20 @@ def runNativeReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {native17}"
   let native18 ← runGenProp "CGA3 native reverse" prop_native_cga3_reverse_dense
   IO.println s!"│ {native18}"
+  let native18a ← runGenProp "CGA3 native left contraction" prop_native_cga3_left_contract_dense
+  IO.println s!"│ {native18a}"
+  let native18b ← runGenProp "CGA3 native right contraction" prop_native_cga3_right_contract_dense
+  IO.println s!"│ {native18b}"
+  let native18c ← runGenProp "CGA3 native Hodge dual" prop_native_cga3_hodge_dual_dense
+  IO.println s!"│ {native18c}"
+  let native18d ← runGenProp "CGA3 native regressive product" prop_native_cga3_regressive_dense
+  IO.println s!"│ {native18d}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [native1, native2, native3, native4, native5, native6, native7, native8, native9,
-    native10, native11, native12, native13, native14, native15, native16, native17, native18]
+  return [
+    native1, native2, native3, native4, native5, native6, native6a, native6b,
+    native6c, native6d, native7, native8, native9, native10, native11, native12,
+    native12a, native12b, native12c, native12d, native13, native14, native15, native16,
+    native17, native18, native18a, native18b, native18c, native18d]
 
 /-- Run sign-table fast-path checks against generic dense multiplication. -/
 def runSignTableReferenceTests : IO (List PropTestResult) := do
