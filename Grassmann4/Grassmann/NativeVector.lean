@@ -295,6 +295,25 @@ theorem coeff_setCoeff_ne (m : NativeMV sig) {setMask queryMask : Nat} (x : Floa
   simp only [Vector.get, Vector.set]
   simp [Array.getElem_set, hne]
 
+/-- Coefficient law for native-vector writes, including ignored out-of-range writes. -/
+theorem coeff_setCoeff (m : NativeMV sig) (setMask queryMask : Nat) (x : Float) :
+    (m.setCoeff setMask x).coeff queryMask =
+      if _ : setMask < 2 ^ n then
+        if queryMask = setMask then x else m.coeff queryMask
+      else
+        m.coeff queryMask := by
+  by_cases hset : setMask < 2 ^ n
+  · by_cases hq : queryMask = setMask
+    · subst queryMask
+      simp [hset, coeff_setCoeff_same]
+    · by_cases hquery : queryMask < 2 ^ n
+      · have hne : setMask ≠ queryMask := fun h => hq h.symm
+        simp [hset, hq, coeff_setCoeff_ne (hset := hset) (hquery := hquery) (hne := hne)]
+      · unfold coeff setCoeff
+        simp [hset, hquery, hq]
+  · unfold setCoeff
+    simp [hset]
+
 /-- The blade mask used by a native basis vector is in coefficient range. -/
 theorem basisVector_mask_lt (i : Fin n) : 1 <<< i.val < 2 ^ n := by
   rw [Nat.one_shiftLeft]

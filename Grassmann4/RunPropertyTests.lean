@@ -18,12 +18,18 @@ def runRotorExpOnly : IO Unit := do
   unless results.all (fun r => r.passed) do
     throw <| IO.userError "rotor exponential property tests failed"
 
+def runNativeReferenceOnly : IO Unit := do
+  let results ← Grassmann.PropertyTests.runNativeReferenceTests
+  unless results.all (fun r => r.passed) do
+    throw <| IO.userError "native-vector reference property tests failed"
+
 def main (args : List String) : IO Unit := do
   match args with
   | [] => Grassmann.PropertyTests.runFullPropertyTests
   | ["cga-point-cloud"] => runCGA3PointCloudOnly
   | ["mv-dispatch"] => runMVDispatchOnly
   | ["rotor-exp"] => runRotorExpOnly
+  | ["native-reference"] => runNativeReferenceOnly
   | _ =>
       throw <| IO.userError
-        "Usage: propertytests [cga-point-cloud|mv-dispatch|rotor-exp]"
+        "Usage: propertytests [cga-point-cloud|mv-dispatch|rotor-exp|native-reference]"
