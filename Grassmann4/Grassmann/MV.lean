@@ -243,6 +243,40 @@ def setCoeff (m : MV sig p) (bladeMask : Nat) (x : Float) : MV sig p :=
     else m
   else m
 
+/-! ### Basic Theorems -/
+
+@[simp]
+theorem coeff_of_not_lt (m : MV sig p) {bladeMask : Nat}
+    (hmask : ¬ bladeMask < 2 ^ n) :
+    m.coeff bladeMask = 0.0 := by
+  unfold coeff
+  simp [hmask]
+
+@[simp]
+theorem coeff_of_wrong_parity (m : MV sig p) {bladeMask : Nat}
+    (hparity : Parity.containsMask p bladeMask = false) :
+    m.coeff bladeMask = 0.0 := by
+  unfold coeff
+  by_cases hmask : bladeMask < 2 ^ n
+  · simp [hmask, hparity]
+  · simp [hmask]
+
+@[simp]
+theorem setCoeff_of_not_lt (m : MV sig p) {bladeMask : Nat} (x : Float)
+    (hmask : ¬ bladeMask < 2 ^ n) :
+    m.setCoeff bladeMask x = m := by
+  unfold setCoeff
+  simp [hmask]
+
+@[simp]
+theorem setCoeff_of_wrong_parity (m : MV sig p) {bladeMask : Nat} (x : Float)
+    (hparity : Parity.containsMask p bladeMask = false) :
+    m.setCoeff bladeMask x = m := by
+  unfold setCoeff
+  by_cases hmask : bladeMask < 2 ^ n
+  · simp [hmask, hparity]
+  · simp [hmask]
+
 /-- Build an MV from a list of (bladeMask, coefficient) pairs. -/
 @[inline]
 def ofPairs (sig : Signature n) (p : Parity) (pairs : List (Nat × Float)) : MV sig p :=
