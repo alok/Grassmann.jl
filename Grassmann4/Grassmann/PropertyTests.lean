@@ -1400,6 +1400,24 @@ def prop_PGA3_signature : Bool :=
   approxEq (e3 * e3).scalarPart 1.0 &&
   approxEq (e0 * e0).scalarPart 0.0
 
+/-- Specialized R3 cross product agrees with the generic Hodge-dual construction. -/
+def prop_R3_crossProduct3D_matches_hodge_cross : Bool :=
+  let e1v : Multivector R3 Float := vector3 1.0 0.0 0.0
+  let e2v : Multivector R3 Float := vector3 0.0 1.0 0.0
+  let e3v : Multivector R3 Float := vector3 0.0 0.0 1.0
+  let samples : List (Multivector R3 Float × Multivector R3 Float) := [
+    (e1v, e2v),
+    (e2v, e3v),
+    (e3v, e1v),
+    (vector3 1.0 2.0 3.0, vector3 (-4.0) 0.5 2.0),
+    (vector3 0.25 (-0.75) 1.5, vector3 2.0 3.0 (-1.0))
+  ]
+  denseMvApproxEq (e1v ×₃ e2v) e3v &&
+    denseMvApproxEq (e2v ×₃ e3v) e1v &&
+    denseMvApproxEq (e3v ×₃ e1v) e2v &&
+    samples.all fun pair =>
+      denseMvApproxEq (pair.1 ×₃ pair.2) (LinearAlgebra.cross pair.1 pair.2) (tol := 1e-9)
+
 /-! ## Rotor Exponential Properties -/
 
 /-- Unit R3 bivector used to cross-check the closed-form rotor exponential. -/
@@ -2053,8 +2071,11 @@ def runHighDimStressTests : IO (List PropTestResult) := do
   IO.println s!"│ {s3}"
   let s4 := runBoolProp "R4 composition and identities" prop_R4_exact_composition_identity
   IO.println s!"│ {s4}"
+  let s5 := runBoolProp "R3 cross product matches Hodge cross"
+    prop_R3_crossProduct3D_matches_hodge_cross
+  IO.println s!"│ {s5}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [s1, s2, s3, s4]
+  return [s1, s2, s3, s4, s5]
 
 /-- Run rotor exponential checks against generic series and known CGA preconditions. -/
 def runRotorExpReferenceTests : IO (List PropTestResult) := do
