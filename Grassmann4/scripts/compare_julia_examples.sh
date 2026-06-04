@@ -15,6 +15,7 @@ done
 out_root="$pkg_root/.generated/julia-examples"
 work_dir="$out_root/contact-sheet"
 metrics="$work_dir/metrics.tsv"
+summary="$work_dir/summary.json"
 manifest="$out_root/manifest.json"
 julia_docs="$repo_root/docs/src/algebra.md"
 minimum_frame_stddev=1200
@@ -135,6 +136,7 @@ if [[ ${#names[@]} -eq 0 ]]; then
 fi
 
 pair_paths=()
+metric_entries=()
 for i in "${!names[@]}"; do
   name="${names[$i]}"
   lean_svg="$out_root/${lean_paths[$i]}"
@@ -173,6 +175,11 @@ SVG
   rmse="$(magick compare -metric RMSE "$lean_frame" "$julia_frame" null: 2>&1 || true)"
   rmse_normalized="$(printf '%s\n' "$rmse" | awk -F '[()]' '{print $2}')"
   printf '%s\t%s\t%s\t%s\t%s\n' "$name" "$lean_stddev" "$julia_stddev" "$rmse_normalized" "$rmse" >> "$metrics"
+  rmse_json="null"
+  if [[ -n "$rmse_normalized" ]]; then
+    rmse_json="$rmse_normalized"
+  fi
+  metric_entries+=("    {\"name\":\"$name\",\"lean_stddev\":$lean_stddev,\"julia_stddev\":$julia_stddev,\"rmse_normalized\":$rmse_json}")
 
   if ! numeric_ge "$lean_stddev" "$minimum_frame_stddev"; then
     failures+=("$name Lean frame standard deviation $lean_stddev below $minimum_frame_stddev")
@@ -192,12 +199,37 @@ done
 contact="$work_dir/contact.png"
 magick "${pair_paths[@]}" -append "$contact"
 
+passed=false
+if [[ ${#failures[@]} -eq 0 ]]; then
+  passed=true
+fi
+{
+  printf '{\n'
+  printf '  "passed":%s,\n' "$passed"
+  printf '  "example_count":%s,\n' "${#names[@]}"
+  printf '  "minimum_frame_stddev":%s,\n' "$minimum_frame_stddev"
+  printf '  "maximum_rmse_normalized":%s,\n' "$maximum_rmse_normalized"
+  printf '  "metrics_tsv":"%s",\n' "$metrics"
+  printf '  "contact_sheet":"%s",\n' "$contact"
+  printf '  "examples":[\n'
+  for i in "${!metric_entries[@]}"; do
+    if [[ "$i" -gt 0 ]]; then
+      printf ',\n'
+    fi
+    printf '%s' "${metric_entries[$i]}"
+  done
+  printf '\n  ]\n'
+  printf '}\n'
+} > "$summary"
+
 if [[ ${#failures[@]} -ne 0 ]]; then
+  printf 'wrote diagnostic summary to %s\n' "$summary" >&2
   report_failures
   exit 1
 fi
 
 printf 'wrote visual comparison contact sheet to %s\n' "$contact"
 printf 'wrote diagnostic image metrics to %s\n' "$metrics"
+printf 'wrote diagnostic summary to %s\n' "$summary"
 printf 'visual smoke checks passed: %s examples, frame stddev >= %s, normalized RMSE <= %s\n' \
   "${#names[@]}" "$minimum_frame_stddev" "$maximum_rmse_normalized"

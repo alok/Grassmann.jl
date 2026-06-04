@@ -360,6 +360,8 @@ def manifestEntry (ex : Prod String String) : String :=
 def manifestJson : String :=
   "{\n" ++
   "  \"source\":\"Grassmann.jl docs/src/algebra.md plot examples\",\n" ++
+  s!"  \"reference_base\":\"{juliaReferenceBase}\",\n" ++
+  s!"  \"example_count\":{allExamples.length},\n" ++
   "  \"examples\":[\n" ++
   joinWith ",\n" (allExamples.map manifestEntry) ++ "\n" ++
   "  ]\n" ++
