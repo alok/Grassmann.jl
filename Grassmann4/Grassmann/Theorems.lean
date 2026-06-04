@@ -316,9 +316,9 @@ theorem pseudoscalar_sq_R3 :
 
 /-- exp(θB) for unit bivector B² = -1 gives cos(θ) + sin(θ)B -/
 theorem exp_unit_bivector (B : Multivector sig Float) (θ : Float)
-    (hB : B = B.gradeProject 2) (hBsq : (B * B).scalarPart = -1) :
+    (_hB : B = B.gradeProject 2) (_hBsq : (B * B).scalarPart = -1) :
     Multivector.expUnitBivector B θ =
-      (Multivector.scalar (Float.cos θ)) + (B.smul (Float.sin θ)) := sorry
+      (Multivector.scalar (Float.cos θ)) + (B.smul (Float.sin θ)) := rfl
 
 /-- Rotor from angle θ and bivector plane B: R = exp(θB/2) has unit norm -/
 theorem rotor_from_exp (B : Multivector sig Float) (θ : Float)
@@ -423,9 +423,10 @@ Blades are simple k-vectors (wedge product of k vectors).
 theorem blade_sq_scalar (B : Multivector sig F) (k : ℕ) (hB : B = B.gradeProject k) :
     (B * B) = (B * B).grade0 := sorry
 
+omit [Div F] in
 /-- Blade norm squared via reverse: |B|² = B B† for simple blade -/
-theorem blade_normSq_reverse (B : Multivector sig F) (k : ℕ) (hB : B = B.gradeProject k) :
-    B.normSq = (B * B†).scalarPart := sorry
+theorem blade_normSq_reverse (B : Multivector sig F) (k : ℕ) (_hB : B = B.gradeProject k) :
+    B.normSq = (B * B†).scalarPart := rfl
 
 /-- Blade projection formula: proj_B(a) = (a ⌋ B) ⌊ B⁻¹ -/
 theorem blade_projection [DecidableEq F] (a B : Multivector sig F) (hB : B.normSq ≠ 0) :
