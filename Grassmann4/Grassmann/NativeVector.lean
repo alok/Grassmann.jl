@@ -364,6 +364,42 @@ theorem gradeProject_orthogonal (m : NativeMV sig) {j k : Nat} (hjk : j ≠ k) :
     · simp only [hkj, ↓reduceIte]
   · simp only [hk, ↓reduceIte]
 
+@[simp]
+theorem evenPart_idem (m : NativeMV sig) :
+    m.evenPart.evenPart = m.evenPart := by
+  ext mask
+  rw [coeff_evenPart, coeff_evenPart]
+  by_cases h : popcount mask % 2 = 0
+  · simp [h]
+  · simp [h]
+
+@[simp]
+theorem oddPart_idem (m : NativeMV sig) :
+    m.oddPart.oddPart = m.oddPart := by
+  ext mask
+  rw [coeff_oddPart, coeff_oddPart]
+  by_cases h : popcount mask % 2 = 1
+  · simp [h]
+  · simp [h]
+
+@[simp]
+theorem oddPart_evenPart (m : NativeMV sig) :
+    m.evenPart.oddPart = zero sig := by
+  ext mask
+  rw [coeff_oddPart, coeff_zero, coeff_evenPart]
+  by_cases hOdd : popcount mask % 2 = 1
+  · simp [hOdd]
+  · simp [hOdd]
+
+@[simp]
+theorem evenPart_oddPart (m : NativeMV sig) :
+    m.oddPart.evenPart = zero sig := by
+  ext mask
+  rw [coeff_evenPart, coeff_zero, coeff_oddPart]
+  by_cases hEven : popcount mask % 2 = 0
+  · simp [hEven]
+  · simp [hEven]
+
 /-! ## Small executable checks -/
 
 section Checks
