@@ -238,6 +238,31 @@ def prop_native_reverse_dense : Gen Bool := do
   let a ← genR3DenseMv
   return nativeMatchesDense (nativeOfDense a.mv).reverse a.mv.reverse
 
+/-! ## Sign Table Reference Tests -/
+
+/-- R3 precomputed sign-table multiplication agrees with generic dense multiplication. -/
+def prop_sign_table_r3_mul_generic : Gen Bool := do
+  let a ← genR3DenseMv
+  let b ← genR3DenseMv
+  return denseMvApproxEq (mulR3 a.mv b.mv) (Multivector.geometricProduct a.mv b.mv)
+    (tol := 1e-6)
+
+/-- PGA3 precomputed sign-table multiplication agrees with generic dense multiplication. -/
+def prop_sign_table_pga3_mul_generic : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let b ← genPGA3DenseMv
+  return denseMvApproxEq (mulPGA3 a.mv b.mv) (Multivector.geometricProduct a.mv b.mv)
+    (tol := 1e-6)
+
+/-- CGA3 precomputed sign-table multiplication agrees with generic dense multiplication. -/
+def prop_sign_table_cga3_mul_generic : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let b ← genCGA3DenseMv
+  return denseMvApproxEq (mulCGA3 a.mv b.mv) (Multivector.geometricProduct a.mv b.mv)
+    (tol := 1e-6)
+
+/-! ## Packed MV Reference Tests -/
+
 /-- Full packed `MV` round-trip preserves all dense coefficients. -/
 def prop_mv_full_roundtrip : Gen Bool := do
   let a ← genR3DenseMv
@@ -773,6 +798,18 @@ def runNativeReferenceTests : IO (List PropTestResult) := do
   IO.println "└────────────────────────────────────────────────┘"
   return [native1, native2, native3, native4, native5, native6]
 
+/-- Run sign-table fast-path checks against generic dense multiplication. -/
+def runSignTableReferenceTests : IO (List PropTestResult) := do
+  IO.println "\n┌─ SignTable vs Generic Multiplication ─────────┐"
+  let table1 ← runGenProp "R3 table multiplication" prop_sign_table_r3_mul_generic
+  IO.println s!"│ {table1}"
+  let table2 ← runGenProp "PGA3 table multiplication" prop_sign_table_pga3_mul_generic
+  IO.println s!"│ {table2}"
+  let table3 ← runGenProp "CGA3 table multiplication" prop_sign_table_cga3_mul_generic
+  IO.println s!"│ {table3}"
+  IO.println "└────────────────────────────────────────────────┘"
+  return [table1, table2, table3]
+
 /-- Run R3 packed-MV baseline checks against dense reference results. -/
 def runPackedReferenceTests : IO (List PropTestResult) := do
   IO.println "\n┌─ Packed MV vs Dense Reference ────────────────┐"
@@ -933,6 +970,7 @@ def runPropertyTests : IO Unit := do
   IO.println s!"│ {r13}"
   IO.println "└────────────────────────────────────────────────┘"
   let nativeResults ← runNativeReferenceTests
+  let signTableResults ← runSignTableReferenceTests
   let packedResults ← runPackedReferenceTests
   let pgaPackedResults ← runPGA3PackedReferenceTests
   let cgaPackedResults ← runCGA3PackedReferenceTests
@@ -944,6 +982,7 @@ def runPropertyTests : IO Unit := do
   let passCount :=
     countPassed coreResults +
     countPassed nativeResults +
+    countPassed signTableResults +
     countPassed packedResults +
     countPassed pgaPackedResults +
     countPassed cgaPackedResults +
@@ -952,8 +991,9 @@ def runPropertyTests : IO Unit := do
   let basisPass := if prop_R3_basis_squares && prop_R3_basis_anticommute && prop_CGA3_signature
                    then 3 else 0
   let total :=
-    coreResults.length + nativeResults.length + packedResults.length + pgaPackedResults.length +
-    cgaPackedResults.length + sparseResults.length + cgaSparseResults.length + 3
+    coreResults.length + nativeResults.length + signTableResults.length + packedResults.length +
+    pgaPackedResults.length + cgaPackedResults.length + sparseResults.length +
+    cgaSparseResults.length + 3
   let totalPass := passCount + basisPass
   IO.println ""
   IO.println "╔══════════════════════════════════════════════╗"
