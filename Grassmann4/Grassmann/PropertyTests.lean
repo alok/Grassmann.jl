@@ -849,6 +849,24 @@ def prop_mv_sandwich_dense : Gen Bool := do
   let packedX : MV R3 .odd := MV.ofMultivector denseX .odd
   return packedMatchesDense (mvSandwich packedR packedX) (denseR.sandwich denseX) (tol := 1e-6)
 
+/-- Packed full `MV` `GAlgebra` dispatch agrees with dense sandwiching. -/
+def prop_mv_galgebra_sandwich_dense : Gen Bool := do
+  let r ← genR3DenseMv
+  let x ← genR3DenseMv
+  let packedR : MV R3 .full := MV.ofMultivector r.mv .full
+  let packedX : MV R3 .full := MV.ofMultivector x.mv .full
+  let generic :=
+    Grassmann.sandwich (sig := R3) (M := MV R3 .full) (F := Float) packedR packedX
+  return packedMatchesDense generic (r.mv.sandwich x.mv) (tol := 1e-6)
+
+/-- Packed full `MV` `GAlgebra` normSq agrees with dense normSq. -/
+def prop_mv_galgebra_normSq_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let packed : MV R3 .full := MV.ofMultivector a.mv .full
+  return approxEq
+    (Grassmann.normSq (sig := R3) (M := MV R3 .full) (F := Float) packed)
+    a.mv.normSq (tol := 1e-6)
+
 /-! ## Packed MV Dispatch Equivalence Tests -/
 
 /-- R3 direct-dispatch multiplication and typeclass multiplication agree. -/
@@ -1094,6 +1112,24 @@ def prop_mv_pga3_sandwich_dense : Gen Bool := do
   let packedR : MV PGA3 .even := MV.ofMultivector denseR .even
   let packedX : MV PGA3 .odd := MV.ofMultivector denseX .odd
   return packedMatchesDense (mvSandwich packedR packedX) (denseR.sandwich denseX) (tol := 1e-6)
+
+/-- PGA3 packed full `MV` `GAlgebra` dispatch agrees with dense sandwiching. -/
+def prop_mv_pga3_galgebra_sandwich_dense : Gen Bool := do
+  let r ← genPGA3DenseMv
+  let x ← genPGA3DenseMv
+  let packedR : MV PGA3 .full := MV.ofMultivector r.mv .full
+  let packedX : MV PGA3 .full := MV.ofMultivector x.mv .full
+  let generic :=
+    Grassmann.sandwich (sig := PGA3) (M := MV PGA3 .full) (F := Float) packedR packedX
+  return packedMatchesDense generic (r.mv.sandwich x.mv) (tol := 1e-6)
+
+/-- PGA3 packed full `MV` `GAlgebra` normSq agrees with dense normSq. -/
+def prop_mv_pga3_galgebra_normSq_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let packed : MV PGA3 .full := MV.ofMultivector a.mv .full
+  return approxEq
+    (Grassmann.normSq (sig := PGA3) (M := MV PGA3 .full) (F := Float) packed)
+    a.mv.normSq (tol := 1e-6)
 
 /-! ## PGA3 Point-Cloud Transform Tests -/
 
@@ -1496,6 +1532,24 @@ def prop_mv_cga3_sandwich_dense : Gen Bool := do
   let packedR : MV CGA3 .even := MV.ofMultivector denseR .even
   let packedX : MV CGA3 .odd := MV.ofMultivector denseX .odd
   return packedMatchesDense (mvSandwich packedR packedX) (denseR.sandwich denseX) (tol := 1e-6)
+
+/-- CGA3 packed full `MV` `GAlgebra` dispatch agrees with dense sandwiching. -/
+def prop_mv_cga3_galgebra_sandwich_dense : Gen Bool := do
+  let r ← genCGA3DenseMv
+  let x ← genCGA3DenseMv
+  let packedR : MV CGA3 .full := MV.ofMultivector r.mv .full
+  let packedX : MV CGA3 .full := MV.ofMultivector x.mv .full
+  let generic :=
+    Grassmann.sandwich (sig := CGA3) (M := MV CGA3 .full) (F := Float) packedR packedX
+  return packedMatchesDense generic (r.mv.sandwich x.mv) (tol := 1e-6)
+
+/-- CGA3 packed full `MV` `GAlgebra` normSq agrees with dense normSq. -/
+def prop_mv_cga3_galgebra_normSq_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let packed : MV CGA3 .full := MV.ofMultivector a.mv .full
+  return approxEq
+    (Grassmann.normSq (sig := CGA3) (M := MV CGA3 .full) (F := Float) packed)
+    a.mv.normSq (tol := 1e-6)
 
 /-! ## Sparse Reference Tests -/
 
@@ -2487,9 +2541,13 @@ def runPackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {r21a}"
   let r22 ← runGenProp "MV sandwich" prop_mv_sandwich_dense 50
   IO.println s!"│ {r22}"
+  let r22a ← runGenProp "MV GAlgebra sandwich" prop_mv_galgebra_sandwich_dense 50
+  IO.println s!"│ {r22a}"
+  let r22b ← runGenProp "MV GAlgebra normSq" prop_mv_galgebra_normSq_dense 50
+  IO.println s!"│ {r22b}"
   IO.println "└────────────────────────────────────────────────┘"
   return [r14, r15, r15p, r15a, r15b, r15c, r15d, r15e, r15f, r15g, r15h, r16,
-    r17, r18, r19, r20, r20a, r20b, r20c, r21, r21a, r22]
+    r17, r18, r19, r20, r20a, r20b, r20c, r21, r21a, r22, r22a, r22b]
 
 /-- Run direct-dispatch vs typeclass-dispatch multiplication checks. -/
 def runMVDispatchReferenceTests : IO (List PropTestResult) := do
@@ -2549,10 +2607,16 @@ def runPGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {pgaMv8a}"
   let pgaMv9 ← runGenProp "PGA3 MV sandwich" prop_mv_pga3_sandwich_dense 50
   IO.println s!"│ {pgaMv9}"
+  let pgaMv9a ← runGenProp "PGA3 MV GAlgebra sandwich"
+    prop_mv_pga3_galgebra_sandwich_dense 40
+  IO.println s!"│ {pgaMv9a}"
+  let pgaMv9b ← runGenProp "PGA3 MV GAlgebra normSq"
+    prop_mv_pga3_galgebra_normSq_dense 40
+  IO.println s!"│ {pgaMv9b}"
   IO.println "└────────────────────────────────────────────────┘"
   return [pgaMv1, pgaMv2, pgaMv2p, pgaMv2a, pgaMv2b, pgaMv2c, pgaMv2d, pgaMv2e,
     pgaMv2f, pgaMv3, pgaMv4, pgaMv5, pgaMv6, pgaMv7, pgaMv7a, pgaMv7b, pgaMv7c,
-    pgaMv8, pgaMv8a, pgaMv9]
+    pgaMv8, pgaMv8a, pgaMv9, pgaMv9a, pgaMv9b]
 
 /-- Run user-facing PGA3 point-cloud transform checks. -/
 def runPGA3PointCloudTransformTests : IO (List PropTestResult) := do
@@ -2656,10 +2720,16 @@ def runCGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {cgaMv8a}"
   let cgaMv9 ← runGenProp "CGA3 MV sandwich" prop_mv_cga3_sandwich_dense 50
   IO.println s!"│ {cgaMv9}"
+  let cgaMv9a ← runGenProp "CGA3 MV GAlgebra sandwich"
+    prop_mv_cga3_galgebra_sandwich_dense 20
+  IO.println s!"│ {cgaMv9a}"
+  let cgaMv9b ← runGenProp "CGA3 MV GAlgebra normSq"
+    prop_mv_cga3_galgebra_normSq_dense 20
+  IO.println s!"│ {cgaMv9b}"
   IO.println "└────────────────────────────────────────────────┘"
   return [cgaMv1, cgaMv2, cgaMv2p, cgaMv2a, cgaMv2b, cgaMv2c, cgaMv2d, cgaMv2e,
     cgaMv2f, cgaMv3, cgaMv4, cgaMv5, cgaMv6, cgaMv7, cgaMv7a, cgaMv7b, cgaMv7c,
-    cgaMv8, cgaMv8a, cgaMv9]
+    cgaMv8, cgaMv8a, cgaMv9, cgaMv9a, cgaMv9b]
 
 /-- Run sparse-MV baseline checks against dense reference results. -/
 def runSparseReferenceTests : IO (List PropTestResult) := do

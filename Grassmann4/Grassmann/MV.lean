@@ -793,6 +793,30 @@ instance instCoeEvenToMV : Coe (MV sig .even) (Multivector sig Float) := ⟨toMu
 instance instCoeOddToMV : Coe (MV sig .odd) (Multivector sig Float) := ⟨toMultivector⟩
 instance instCoeFullToMV : Coe (MV sig .full) (Multivector sig Float) := ⟨toMultivector⟩
 
+/-- Full packed `MV` supports the generic `GAlgebra` API.
+
+Parity-indexed `.even` and `.odd` values cannot implement this single-carrier
+typeclass because products may change parity. Full storage can represent every
+grade, so it is the right packed target for polymorphic algorithms. -/
+instance instGAlgebraFull : GAlgebra sig (MV sig .full) Float where
+  basisVector i := ofPairs sig .full [(1 <<< i.val, 1.0)]
+  scalar x := ofPairs sig .full [(0, x)]
+  zero := zero sig .full
+  one := ofPairs sig .full [(0, 1.0)]
+  blade bits := ofPairs sig .full [(bits.toNat, 1.0)]
+  mul := fun a b => mulDirect a b
+  wedge := fun a b => wedge a b
+  leftContract := fun a b => leftContract a b
+  rightContract := fun a b => rightContract a b
+  reverse := rev
+  involute := involute
+  conjugate := conjugate
+  scalarPart := scalarPart
+  add := add
+  neg := neg
+  smul := smul
+  gradeProject := gradeProject
+
 end MV
 
 /-! ## Convenient Aliases -/
