@@ -264,12 +264,17 @@ def regressiveProduct (a b : MultivectorS sig F) : MultivectorS sig F :=
         -- Dual back
         let resultBits := wedgeBits ^^^ BitVec.ofNat n ps
         let resultIdx := resultBits.toNat
-        -- Sign computation (simplified - full version needs more care)
-        let sign := wedgeSign sig ⟨aDualBits⟩ ⟨bDualBits⟩
-        let contrib := if sign < 0 then -(ai * bj) else ai * bj
-        let oldVal := acc2.get? resultIdx |>.getD 0
-        let newVal := oldVal + contrib
-        if newVal == 0 then acc2.erase resultIdx else acc2.insert resultIdx newVal
+        let sign :=
+          leftComplementSign sig bi *
+          leftComplementSign sig bladeJ *
+          wedgeSign sig ⟨aDualBits⟩ ⟨bDualBits⟩ *
+          leftComplementSign sig ⟨wedgeBits⟩
+        if sign == 0 then acc2
+        else
+          let contrib := if sign < 0 then -(ai * bj) else ai * bj
+          let oldVal := acc2.get? resultIdx |>.getD 0
+          let newVal := oldVal + contrib
+          if newVal == 0 then acc2.erase resultIdx else acc2.insert resultIdx newVal
       else acc2⟩
 
 /-- Commutator product: [a,b] = (ab - ba)/2 -/

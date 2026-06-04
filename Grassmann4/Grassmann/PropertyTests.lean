@@ -1349,6 +1349,47 @@ def prop_sparse_wedge_dense (a b : R3Mv) : Bool :=
   let denseB := sparseToDenseRef b.mv
   sparseMatchesDense (a.mv ⋀ₛ b.mv) (denseA ⋀ᵐ denseB) (tol := 1e-6)
 
+/-- Sparse left contraction agrees with dense left contraction. -/
+def prop_sparse_leftContract_dense (a b : R3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (MultivectorS.leftContract a.mv b.mv) (denseA ⌋ᵐ denseB)
+    (tol := 1e-6)
+
+/-- Sparse right contraction agrees with dense right contraction. -/
+def prop_sparse_rightContract_dense (a b : R3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (MultivectorS.rightContract a.mv b.mv) (denseA ⌊ᵐ denseB)
+    (tol := 1e-6)
+
+/-- Sparse scalar product agrees with dense scalar product. -/
+def prop_sparse_scalarProduct_dense (a b : R3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  approxEq (MultivectorS.scalarProduct a.mv b.mv) (denseA.scalarProduct denseB)
+    (tol := 1e-6)
+
+/-- Sparse regressive product agrees with dense regressive product. -/
+def prop_sparse_regressive_dense (a b : R3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (a.mv ∨ₛ b.mv) (denseA ⋁ᵐ denseB) (tol := 1e-6)
+
+/-- Sparse commutator agrees with dense commutator. -/
+def prop_sparse_commutator_dense (a b : R3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (MultivectorS.commutatorProduct a.mv b.mv)
+    (Multivector.commutator denseA denseB) (tol := 1e-6)
+
+/-- Sparse anticommutator agrees with dense anticommutator. -/
+def prop_sparse_anticommutator_dense (a b : R3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (MultivectorS.anticommutatorProduct a.mv b.mv)
+    (Multivector.antiCommutator denseA denseB) (tol := 1e-6)
+
 /-- Sparse reverse agrees with dense reverse. -/
 def prop_sparse_reverse_dense (a : R3Mv) : Bool :=
   sparseMatchesDense a.mv.reverse (sparseToDenseRef a.mv).reverse
@@ -1419,6 +1460,47 @@ def prop_sparse_pga3_wedge_dense (a b : PGA3Mv) : Bool :=
   let denseB := sparseToDenseRef b.mv
   sparseMatchesDense (a.mv ⋀ₛ b.mv) (denseA ⋀ᵐ denseB) (tol := 1e-6)
 
+/-- PGA3 sparse left contraction agrees with dense left contraction. -/
+def prop_sparse_pga3_leftContract_dense (a b : PGA3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (MultivectorS.leftContract a.mv b.mv) (denseA ⌋ᵐ denseB)
+    (tol := 1e-6)
+
+/-- PGA3 sparse right contraction agrees with dense right contraction. -/
+def prop_sparse_pga3_rightContract_dense (a b : PGA3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (MultivectorS.rightContract a.mv b.mv) (denseA ⌊ᵐ denseB)
+    (tol := 1e-6)
+
+/-- PGA3 sparse scalar product agrees with dense scalar product. -/
+def prop_sparse_pga3_scalarProduct_dense (a b : PGA3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  approxEq (MultivectorS.scalarProduct a.mv b.mv) (denseA.scalarProduct denseB)
+    (tol := 1e-6)
+
+/-- PGA3 sparse regressive product agrees with dense regressive product. -/
+def prop_sparse_pga3_regressive_dense (a b : PGA3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (a.mv ∨ₛ b.mv) (denseA ⋁ᵐ denseB) (tol := 1e-6)
+
+/-- PGA3 sparse commutator agrees with dense commutator. -/
+def prop_sparse_pga3_commutator_dense (a b : PGA3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (MultivectorS.commutatorProduct a.mv b.mv)
+    (Multivector.commutator denseA denseB) (tol := 1e-6)
+
+/-- PGA3 sparse anticommutator agrees with dense anticommutator. -/
+def prop_sparse_pga3_anticommutator_dense (a b : PGA3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (MultivectorS.anticommutatorProduct a.mv b.mv)
+    (Multivector.antiCommutator denseA denseB) (tol := 1e-6)
+
 /-- PGA3 sparse reverse agrees with dense reverse. -/
 def prop_sparse_pga3_reverse_dense (a : PGA3Mv) : Bool :=
   sparseMatchesDense a.mv.reverse (sparseToDenseRef a.mv).reverse
@@ -1468,6 +1550,47 @@ def prop_sparse_cga3_wedge_dense (a b : CGA3Mv) : Bool :=
   let denseA := sparseToDenseRef a.mv
   let denseB := sparseToDenseRef b.mv
   sparseMatchesDense (a.mv ⋀ₛ b.mv) (denseA ⋀ᵐ denseB) (tol := 1e-6)
+
+/-- CGA3 sparse left contraction agrees with dense left contraction. -/
+def prop_sparse_cga3_leftContract_dense (a b : CGA3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (MultivectorS.leftContract a.mv b.mv) (denseA ⌋ᵐ denseB)
+    (tol := 1e-6)
+
+/-- CGA3 sparse right contraction agrees with dense right contraction. -/
+def prop_sparse_cga3_rightContract_dense (a b : CGA3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (MultivectorS.rightContract a.mv b.mv) (denseA ⌊ᵐ denseB)
+    (tol := 1e-6)
+
+/-- CGA3 sparse scalar product agrees with dense scalar product. -/
+def prop_sparse_cga3_scalarProduct_dense (a b : CGA3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  approxEq (MultivectorS.scalarProduct a.mv b.mv) (denseA.scalarProduct denseB)
+    (tol := 1e-6)
+
+/-- CGA3 sparse regressive product agrees with dense regressive product. -/
+def prop_sparse_cga3_regressive_dense (a b : CGA3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (a.mv ∨ₛ b.mv) (denseA ⋁ᵐ denseB) (tol := 1e-6)
+
+/-- CGA3 sparse commutator agrees with dense commutator. -/
+def prop_sparse_cga3_commutator_dense (a b : CGA3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (MultivectorS.commutatorProduct a.mv b.mv)
+    (Multivector.commutator denseA denseB) (tol := 1e-6)
+
+/-- CGA3 sparse anticommutator agrees with dense anticommutator. -/
+def prop_sparse_cga3_anticommutator_dense (a b : CGA3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (MultivectorS.anticommutatorProduct a.mv b.mv)
+    (Multivector.antiCommutator denseA denseB) (tol := 1e-6)
 
 /-- CGA3 sparse reverse agrees with dense reverse. -/
 def prop_sparse_cga3_reverse_dense (a : CGA3Mv) : Bool :=
@@ -2274,6 +2397,18 @@ def runSparseReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {r24}"
   let r25 ← runRandomProp2 "Sparse wedge" prop_sparse_wedge_dense
   IO.println s!"│ {r25}"
+  let r25a ← runRandomProp2 "Sparse left contraction" prop_sparse_leftContract_dense
+  IO.println s!"│ {r25a}"
+  let r25b ← runRandomProp2 "Sparse right contraction" prop_sparse_rightContract_dense
+  IO.println s!"│ {r25b}"
+  let r25c ← runRandomProp2 "Sparse scalar product" prop_sparse_scalarProduct_dense
+  IO.println s!"│ {r25c}"
+  let r25d ← runRandomProp2 "Sparse regressive product" prop_sparse_regressive_dense
+  IO.println s!"│ {r25d}"
+  let r25e ← runRandomProp2 "Sparse commutator" prop_sparse_commutator_dense
+  IO.println s!"│ {r25e}"
+  let r25f ← runRandomProp2 "Sparse anticommutator" prop_sparse_anticommutator_dense
+  IO.println s!"│ {r25f}"
   let r26 ← runRandomProp "Sparse reverse" prop_sparse_reverse_dense
   IO.println s!"│ {r26}"
   let r27 ← runRandomProp "Sparse involute" prop_sparse_involute_dense
@@ -2289,7 +2424,8 @@ def runSparseReferenceTests : IO (List PropTestResult) := do
   let r29c ← runRandomProp "Sparse grade decomposition" prop_sparse_gradeProject_decomposition
   IO.println s!"│ {r29c}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [r23, r24, r25, r26, r27, r28, r29, r29a, r29b, r29c]
+  return [r23, r24, r25, r25a, r25b, r25c, r25d, r25e, r25f, r26, r27, r28,
+    r29, r29a, r29b, r29c]
 
 /-- Run PGA3 sparse-MV baseline checks against dense reference results. -/
 def runPGA3SparseReferenceTests : IO (List PropTestResult) := do
@@ -2300,6 +2436,24 @@ def runPGA3SparseReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {pgaSparse2}"
   let pgaSparse3 ← runRandomPGA3Prop2 "PGA3 sparse wedge" prop_sparse_pga3_wedge_dense
   IO.println s!"│ {pgaSparse3}"
+  let pgaSparse3a ← runRandomPGA3Prop2 "PGA3 sparse left contraction"
+    prop_sparse_pga3_leftContract_dense
+  IO.println s!"│ {pgaSparse3a}"
+  let pgaSparse3b ← runRandomPGA3Prop2 "PGA3 sparse right contraction"
+    prop_sparse_pga3_rightContract_dense
+  IO.println s!"│ {pgaSparse3b}"
+  let pgaSparse3c ← runRandomPGA3Prop2 "PGA3 sparse scalar product"
+    prop_sparse_pga3_scalarProduct_dense
+  IO.println s!"│ {pgaSparse3c}"
+  let pgaSparse3d ← runRandomPGA3Prop2 "PGA3 sparse regressive product"
+    prop_sparse_pga3_regressive_dense
+  IO.println s!"│ {pgaSparse3d}"
+  let pgaSparse3e ← runRandomPGA3Prop2 "PGA3 sparse commutator"
+    prop_sparse_pga3_commutator_dense
+  IO.println s!"│ {pgaSparse3e}"
+  let pgaSparse3f ← runRandomPGA3Prop2 "PGA3 sparse anticommutator"
+    prop_sparse_pga3_anticommutator_dense
+  IO.println s!"│ {pgaSparse3f}"
   let pgaSparse4 ← runRandomPGA3Prop "PGA3 sparse reverse" prop_sparse_pga3_reverse_dense
   IO.println s!"│ {pgaSparse4}"
   let pgaSparse5 ← runRandomPGA3Prop "PGA3 sparse involute" prop_sparse_pga3_involute_dense
@@ -2318,8 +2472,9 @@ def runPGA3SparseReferenceTests : IO (List PropTestResult) := do
     prop_sparse_pga3_gradeProject_decomposition
   IO.println s!"│ {pgaSparse10}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [pgaSparse1, pgaSparse2, pgaSparse3, pgaSparse4, pgaSparse5, pgaSparse6,
-    pgaSparse7, pgaSparse8, pgaSparse9, pgaSparse10]
+  return [pgaSparse1, pgaSparse2, pgaSparse3, pgaSparse3a, pgaSparse3b,
+    pgaSparse3c, pgaSparse3d, pgaSparse3e, pgaSparse3f, pgaSparse4, pgaSparse5,
+    pgaSparse6, pgaSparse7, pgaSparse8, pgaSparse9, pgaSparse10]
 
 /-- Run CGA3 sparse-MV baseline checks against dense reference results. -/
 def runCGA3SparseReferenceTests : IO (List PropTestResult) := do
@@ -2330,6 +2485,24 @@ def runCGA3SparseReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {r31}"
   let r32 ← runRandomCGA3Prop2 "CGA3 sparse wedge" prop_sparse_cga3_wedge_dense
   IO.println s!"│ {r32}"
+  let r32a ← runRandomCGA3Prop2 "CGA3 sparse left contraction"
+    prop_sparse_cga3_leftContract_dense
+  IO.println s!"│ {r32a}"
+  let r32b ← runRandomCGA3Prop2 "CGA3 sparse right contraction"
+    prop_sparse_cga3_rightContract_dense
+  IO.println s!"│ {r32b}"
+  let r32c ← runRandomCGA3Prop2 "CGA3 sparse scalar product"
+    prop_sparse_cga3_scalarProduct_dense
+  IO.println s!"│ {r32c}"
+  let r32d ← runRandomCGA3Prop2 "CGA3 sparse regressive product"
+    prop_sparse_cga3_regressive_dense
+  IO.println s!"│ {r32d}"
+  let r32e ← runRandomCGA3Prop2 "CGA3 sparse commutator"
+    prop_sparse_cga3_commutator_dense
+  IO.println s!"│ {r32e}"
+  let r32f ← runRandomCGA3Prop2 "CGA3 sparse anticommutator"
+    prop_sparse_cga3_anticommutator_dense
+  IO.println s!"│ {r32f}"
   let r33 ← runRandomCGA3Prop "CGA3 sparse reverse" prop_sparse_cga3_reverse_dense
   IO.println s!"│ {r33}"
   let r34 ← runRandomCGA3Prop "CGA3 sparse involute" prop_sparse_cga3_involute_dense
@@ -2348,7 +2521,8 @@ def runCGA3SparseReferenceTests : IO (List PropTestResult) := do
     prop_sparse_cga3_gradeProject_decomposition
   IO.println s!"│ {r39}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [r30, r31, r32, r33, r34, r35, r36, r37, r38, r39]
+  return [r30, r31, r32, r32a, r32b, r32c, r32d, r32e, r32f, r33, r34, r35,
+    r36, r37, r38, r39]
 
 /-- Run public dense/sparse representation conversion checks. -/
 def runReprConversionTests : IO (List PropTestResult) := do
