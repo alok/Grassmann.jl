@@ -47,6 +47,12 @@ root = "RunPropertyTests"
 moreLinkArgs = ["-L/opt/homebrew/opt/openblas/lib", "-lblas"]
 
 [[lean_exe]]
+name = "packedmvbench"
+root = "RunPackedMVBench"
+precompileModules = false
+moreLinkArgs = ["-L/opt/homebrew/opt/openblas/lib", "-lblas"]
+
+[[lean_exe]]
 name = "bench"
 root = "Grassmann.Bench"
 precompileModules = false
