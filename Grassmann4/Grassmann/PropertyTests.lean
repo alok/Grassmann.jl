@@ -1688,6 +1688,48 @@ def prop_sparse_gradeProject_dense : Gen Bool := do
   let k ← Gen.choose Nat 0 3 (by omega)
   return sparseMatchesDense (a.mv.gradeProject k.val) ((sparseToDenseRef a.mv).gradeProject k.val)
 
+/-- Sparse `GAlgebra` operations agree with dense references through the polymorphic API. -/
+def sparseGAlgebraOpsMatchDense {n : Nat} {sig : Signature n}
+    (a b : MultivectorS sig Float) (k : Nat) (scale : Float)
+    (tol : Float := 1e-6) : Bool :=
+  let inst := (inferInstance : GAlgebra sig (MultivectorS sig Float) Float)
+  let denseA := sparseToDenseRef a
+  let denseB := sparseToDenseRef b
+  let basisOk :=
+    (List.finRange n).all fun i =>
+      sparseMatchesDense (inst.basisVector i) (Multivector.basis i) tol
+  let bladeOk :=
+    (List.range (2 ^ n)).all fun mask =>
+      sparseMatchesDense
+        (inst.blade (BitVec.ofNat n mask))
+        (Multivector.ofBlade ⟨BitVec.ofNat n mask⟩ : Multivector sig Float)
+        tol
+  sparseMatchesDense inst.zero Multivector.zero tol &&
+    sparseMatchesDense inst.one Multivector.one tol &&
+    sparseMatchesDense (inst.scalar scale) (Multivector.scalar scale) tol &&
+    basisOk &&
+    bladeOk &&
+    sparseMatchesDense (inst.add a b) (denseA + denseB) tol &&
+    sparseMatchesDense (inst.neg a) (-denseA) tol &&
+    sparseMatchesDense (inst.smul scale a) (denseA.smul scale) tol &&
+    sparseMatchesDense (inst.mul a b) (denseA * denseB) tol &&
+    sparseMatchesDense (inst.wedge a b) (denseA ⋀ᵐ denseB) tol &&
+    sparseMatchesDense (inst.leftContract a b) (denseA ⌋ᵐ denseB) tol &&
+    sparseMatchesDense (inst.rightContract a b) (denseA ⌊ᵐ denseB) tol &&
+    sparseMatchesDense (inst.reverse a) denseA.reverse tol &&
+    sparseMatchesDense (inst.involute a) denseA.involute tol &&
+    sparseMatchesDense (inst.conjugate a) denseA.conjugate tol &&
+    sparseMatchesDense (inst.gradeProject a k) (denseA.gradeProject k) tol &&
+    approxEq (inst.scalarPart a) denseA.scalarPart tol
+
+/-- R3 sparse `GAlgebra` operations agree with dense references. -/
+def prop_sparse_galgebra_ops_dense : Gen Bool := do
+  let a : R3Mv ← Arbitrary.arbitrary
+  let b : R3Mv ← Arbitrary.arbitrary
+  let k ← Gen.choose Nat 0 3 (by omega)
+  let scale ← genSmallFloat
+  return sparseGAlgebraOpsMatchDense (sig := R3) a.mv b.mv k.val scale
+
 /-- Sparse grade projection is idempotent for all grades up to `maxGrade`. -/
 def sparseGradeProjectIdempotent {n : Nat} {sig : Signature n} (maxGrade : Nat)
     (m : MultivectorS sig Float) : Bool :=
@@ -1799,6 +1841,14 @@ def prop_sparse_pga3_gradeProject_dense : Gen Bool := do
   let k ← Gen.choose Nat 0 4 (by omega)
   return sparseMatchesDense (a.mv.gradeProject k.val) ((sparseToDenseRef a.mv).gradeProject k.val)
 
+/-- PGA3 sparse `GAlgebra` operations agree with dense references. -/
+def prop_sparse_pga3_galgebra_ops_dense : Gen Bool := do
+  let a : PGA3Mv ← Arbitrary.arbitrary
+  let b : PGA3Mv ← Arbitrary.arbitrary
+  let k ← Gen.choose Nat 0 4 (by omega)
+  let scale ← genSmallFloat
+  return sparseGAlgebraOpsMatchDense (sig := PGA3) a.mv b.mv k.val scale
+
 /-- PGA3 sparse grade projections are idempotent. -/
 def prop_sparse_pga3_gradeProject_idempotent (a : PGA3Mv) : Bool :=
   sparseGradeProjectIdempotent 4 a.mv
@@ -1889,6 +1939,14 @@ def prop_sparse_cga3_gradeProject_dense : Gen Bool := do
   let a : CGA3Mv ← Arbitrary.arbitrary
   let k ← Gen.choose Nat 0 5 (by omega)
   return sparseMatchesDense (a.mv.gradeProject k.val) ((sparseToDenseRef a.mv).gradeProject k.val)
+
+/-- CGA3 sparse `GAlgebra` operations agree with dense references. -/
+def prop_sparse_cga3_galgebra_ops_dense : Gen Bool := do
+  let a : CGA3Mv ← Arbitrary.arbitrary
+  let b : CGA3Mv ← Arbitrary.arbitrary
+  let k ← Gen.choose Nat 0 5 (by omega)
+  let scale ← genSmallFloat
+  return sparseGAlgebraOpsMatchDense (sig := CGA3) a.mv b.mv k.val scale
 
 /-- CGA3 sparse grade projections are idempotent. -/
 def prop_sparse_cga3_gradeProject_idempotent (a : CGA3Mv) : Bool :=
@@ -2826,6 +2884,8 @@ def runSparseReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {r28}"
   let r29 ← runGenProp "Sparse grade projection" prop_sparse_gradeProject_dense
   IO.println s!"│ {r29}"
+  let r29ops ← runGenProp "Sparse GAlgebra operations" prop_sparse_galgebra_ops_dense 50
+  IO.println s!"│ {r29ops}"
   let r29a ← runRandomProp "Sparse grade idempotence" prop_sparse_gradeProject_idempotent
   IO.println s!"│ {r29a}"
   let r29b ← runRandomProp "Sparse grade orthogonality" prop_sparse_gradeProject_orthogonal
@@ -2834,7 +2894,7 @@ def runSparseReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {r29c}"
   IO.println "└────────────────────────────────────────────────┘"
   return [r23, r24, r25, r25a, r25b, r25c, r25d, r25e, r25f, r26, r27, r28,
-    r29, r29a, r29b, r29c]
+    r29, r29ops, r29a, r29b, r29c]
 
 /-- Run PGA3 sparse-MV baseline checks against dense reference results. -/
 def runPGA3SparseReferenceTests : IO (List PropTestResult) := do
@@ -2871,6 +2931,9 @@ def runPGA3SparseReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {pgaSparse6}"
   let pgaSparse7 ← runGenProp "PGA3 sparse grade projection" prop_sparse_pga3_gradeProject_dense
   IO.println s!"│ {pgaSparse7}"
+  let pgaSparse7ops ← runGenProp "PGA3 sparse GAlgebra operations"
+    prop_sparse_pga3_galgebra_ops_dense 40
+  IO.println s!"│ {pgaSparse7ops}"
   let pgaSparse8 ← runRandomPGA3Prop "PGA3 sparse grade idempotence"
     prop_sparse_pga3_gradeProject_idempotent
   IO.println s!"│ {pgaSparse8}"
@@ -2883,7 +2946,7 @@ def runPGA3SparseReferenceTests : IO (List PropTestResult) := do
   IO.println "└────────────────────────────────────────────────┘"
   return [pgaSparse1, pgaSparse2, pgaSparse3, pgaSparse3a, pgaSparse3b,
     pgaSparse3c, pgaSparse3d, pgaSparse3e, pgaSparse3f, pgaSparse4, pgaSparse5,
-    pgaSparse6, pgaSparse7, pgaSparse8, pgaSparse9, pgaSparse10]
+    pgaSparse6, pgaSparse7, pgaSparse7ops, pgaSparse8, pgaSparse9, pgaSparse10]
 
 /-- Run CGA3 sparse-MV baseline checks against dense reference results. -/
 def runCGA3SparseReferenceTests : IO (List PropTestResult) := do
@@ -2920,6 +2983,9 @@ def runCGA3SparseReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {r35}"
   let r36 ← runGenProp "CGA3 sparse grade projection" prop_sparse_cga3_gradeProject_dense
   IO.println s!"│ {r36}"
+  let r36ops ← runGenProp "CGA3 sparse GAlgebra operations"
+    prop_sparse_cga3_galgebra_ops_dense 20
+  IO.println s!"│ {r36ops}"
   let r37 ← runRandomCGA3Prop "CGA3 sparse grade idempotence"
     prop_sparse_cga3_gradeProject_idempotent
   IO.println s!"│ {r37}"
@@ -2931,7 +2997,7 @@ def runCGA3SparseReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {r39}"
   IO.println "└────────────────────────────────────────────────┘"
   return [r30, r31, r32, r32a, r32b, r32c, r32d, r32e, r32f, r33, r34, r35,
-    r36, r37, r38, r39]
+    r36, r36ops, r37, r38, r39]
 
 /-- Run public dense/sparse representation conversion checks. -/
 def runReprConversionTests : IO (List PropTestResult) := do
