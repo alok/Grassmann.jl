@@ -10,6 +10,7 @@
 -/
 import Plausible
 import Grassmann.SparseMultivector
+import Grassmann.NativeVector
 import Grassmann.Products
 import Grassmann.Manifold
 import Grassmann.StaticOpt
@@ -170,6 +171,57 @@ def sparseMatchesDense {n : Nat} {sig : Signature n} (sparse : MultivectorS sig 
 def packedMatchesDense {n : Nat} {sig : Signature n} {p : Parity}
     (packed : MV sig p) (dense : Multivector sig Float) (tol : Float := 1e-9) : Bool :=
   denseMvApproxEq (MV.toMultivector packed) dense tol
+
+/-! ## Native Vector Reference Tests -/
+
+/-- Convert a dense reference multivector to the native-vector baseline. -/
+def nativeOfDense {n : Nat} {sig : Signature n} (m : Multivector sig Float) : NativeMV sig :=
+  ⟨Vector.ofFn fun i => m.coeffs i⟩
+
+/-- Compare a native-vector result against its dense reference coefficient-wise. -/
+def nativeMatchesDense {n : Nat} {sig : Signature n} (native : NativeMV sig)
+    (dense : Multivector sig Float) (tol : Float := 1e-9) : Bool :=
+  (List.finRange (2 ^ n)).all fun i =>
+    approxEq (native.coeff i.val) (dense.coeffs i) tol
+
+/-- Native-vector round-trip preserves all dense coefficients. -/
+def prop_native_full_roundtrip : Gen Bool := do
+  let a ← genR3DenseMv
+  return nativeMatchesDense (nativeOfDense a.mv) a.mv
+
+/-- Native-vector grade projection agrees with dense grade projection. -/
+def prop_native_grade_projection_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let k ← Gen.choose Nat 0 3 (by omega)
+  let native := nativeOfDense a.mv
+  return nativeMatchesDense (native.gradeProject k.val) (a.mv.gradeProject k.val)
+
+/-- Native-vector even and odd projections agree with dense projections. -/
+def prop_native_parity_projection_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let native := nativeOfDense a.mv
+  return nativeMatchesDense native.evenPart a.mv.evenPart &&
+    nativeMatchesDense native.oddPart a.mv.oddPart
+
+/-- Native-vector geometric multiplication agrees with dense multiplication. -/
+def prop_native_mul_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let b ← genR3DenseMv
+  let nativeA := nativeOfDense a.mv
+  let nativeB := nativeOfDense b.mv
+  return nativeMatchesDense (nativeA * nativeB) (a.mv * b.mv) (tol := 1e-6)
+
+/-- Native-vector wedge product agrees with dense wedge product. -/
+def prop_native_wedge_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let b ← genR3DenseMv
+  return nativeMatchesDense (NativeMV.wedge (nativeOfDense a.mv) (nativeOfDense b.mv))
+    (a.mv ⋀ᵐ b.mv) (tol := 1e-6)
+
+/-- Native-vector reverse agrees with dense reverse. -/
+def prop_native_reverse_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  return nativeMatchesDense (nativeOfDense a.mv).reverse a.mv.reverse
 
 /-- Full packed `MV` round-trip preserves all dense coefficients. -/
 def prop_mv_full_roundtrip : Gen Bool := do
@@ -608,6 +660,24 @@ def runGenProp (name : String) (prop : Gen Bool) (numTests : Nat := 100) : IO Pr
       break
   return { name := name, passed := passed, numTests := numTests, message := failMsg }
 
+/-- Run native-vector baseline checks against dense reference results. -/
+def runNativeReferenceTests : IO (List PropTestResult) := do
+  IO.println "\n┌─ Native Vector vs Dense Reference ───────────┐"
+  let native1 ← runGenProp "Native full round-trip" prop_native_full_roundtrip
+  IO.println s!"│ {native1}"
+  let native2 ← runGenProp "Native grade projection" prop_native_grade_projection_dense
+  IO.println s!"│ {native2}"
+  let native3 ← runGenProp "Native parity projection" prop_native_parity_projection_dense
+  IO.println s!"│ {native3}"
+  let native4 ← runGenProp "Native multiplication" prop_native_mul_dense
+  IO.println s!"│ {native4}"
+  let native5 ← runGenProp "Native wedge" prop_native_wedge_dense
+  IO.println s!"│ {native5}"
+  let native6 ← runGenProp "Native reverse" prop_native_reverse_dense
+  IO.println s!"│ {native6}"
+  IO.println "└────────────────────────────────────────────────┘"
+  return [native1, native2, native3, native4, native5, native6]
+
 /-- Run all property tests -/
 def runPropertyTests : IO Unit := do
   IO.println "╔══════════════════════════════════════════════╗"
@@ -655,6 +725,7 @@ def runPropertyTests : IO Unit := do
   let r13 ← runRandomProp "Conjugate involutive" prop_conjugate_involutive
   IO.println s!"│ {r13}"
   IO.println "└────────────────────────────────────────────────┘"
+  let nativeResults ← runNativeReferenceTests
   -- Packed MV vs dense reference
   IO.println "\n┌─ Packed MV vs Dense Reference ────────────────┐"
   let r14 ← runGenProp "MV full round-trip" prop_mv_full_roundtrip
@@ -732,15 +803,24 @@ def runPropertyTests : IO Unit := do
   IO.println s!"│ {r36}"
   IO.println "└────────────────────────────────────────────────┘"
   -- Summary
-  let allResults := [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13,
-                     r14, r15, r16, r17, r18, r19, r20, r21, r22, cgaMv1,
-                     cgaMv2, cgaMv3, cgaMv4, cgaMv5, cgaMv6, cgaMv7, cgaMv8,
-                     cgaMv9, r23, r24, r25, r26, r27, r28, r29, r30, r31, r32,
-                     r33, r34, r35, r36]
-  let passCount := allResults.filter (·.passed) |>.length
+  let coreResults := [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13]
+  let packedResults := [r14, r15, r16, r17, r18, r19, r20, r21, r22]
+  let cgaPackedResults := [cgaMv1, cgaMv2, cgaMv3, cgaMv4, cgaMv5, cgaMv6, cgaMv7, cgaMv8, cgaMv9]
+  let sparseResults := [r23, r24, r25, r26, r27, r28, r29]
+  let cgaSparseResults := [r30, r31, r32, r33, r34, r35, r36]
+  let countPassed (results : List PropTestResult) := results.filter (·.passed) |>.length
+  let passCount :=
+    countPassed coreResults +
+    countPassed nativeResults +
+    countPassed packedResults +
+    countPassed cgaPackedResults +
+    countPassed sparseResults +
+    countPassed cgaSparseResults
   let basisPass := if prop_R3_basis_squares && prop_R3_basis_anticommute && prop_CGA3_signature
                    then 3 else 0
-  let total := allResults.length + 3
+  let total :=
+    coreResults.length + nativeResults.length + packedResults.length + cgaPackedResults.length +
+    sparseResults.length + cgaSparseResults.length + 3
   let totalPass := passCount + basisPass
   IO.println ""
   IO.println "╔══════════════════════════════════════════════╗"
