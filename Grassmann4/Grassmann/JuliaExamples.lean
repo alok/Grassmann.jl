@@ -1,3 +1,5 @@
+import Grassmann.CGA
+
 /-
   Grassmann/JuliaExamples.lean
 
@@ -238,9 +240,26 @@ def translationVector (t : Float) : Vec3 :=
     y := 7.0 * Float.cos (2.0 * t),
     z := -4.0 * Float.sin (5.0 * t) }
 
+def vec3FromNested (coords : Float × Float × Float) : Vec3 :=
+  { x := coords.1, y := coords.2.1, z := coords.2.2 }
+
+def translatePointCGA (p delta : Vec3) : Vec3 :=
+  let point := CGA.point p.x p.y p.z
+  let translator := CGA.translator delta.x delta.y delta.z
+  vec3FromNested (CGA.extractPoint (CGA.transform translator point))
+
+def baseOrbitPoint : Vec3 :=
+  { x := 1.0, y := 1.0, z := -1.0 }
+
+def orbitTranslatedPoint (scale t : Float) : Vec3 :=
+  let delta := Vec3.smul (scale * t) (translationVector t)
+  Vec3.add baseOrbitPoint delta
+
+def orbitTranslatedPointCGA (scale t : Float) : Vec3 :=
+  translatePointCGA baseOrbitPoint (Vec3.smul (scale * t) (translationVector t))
+
 def orbit2Point (t : Float) : Vec3 :=
-  let a := translationVector t
-  { x := 1.0 + t * a.x, y := 1.0 + t * a.y, z := -1.0 + t * a.z }
+  orbitTranslatedPoint 1.0 t
 
 def rotateZ (theta : Float) (p : Vec3) : Vec3 :=
   let c := Float.cos theta
@@ -248,10 +267,7 @@ def rotateZ (theta : Float) (p : Vec3) : Vec3 :=
   { x := c * p.x - s * p.y, y := s * p.x + c * p.y, z := p.z }
 
 def orbit4Point (t : Float) : Vec3 :=
-  let a := translationVector t
-  let translated := { x := 1.0 + 0.07 * t * a.x,
-                      y := 1.0 + 0.07 * t * a.y,
-                      z := -1.0 + 0.07 * t * a.z }
+  let translated := orbitTranslatedPoint 0.07 t
   rotateZ t translated
 
 def curveExamples : List (Prod String String) :=
@@ -351,6 +367,29 @@ def joinWith (sep : String) : List String -> String
   | [] => ""
   | x :: xs => xs.foldl (fun acc y => acc ++ sep ++ y) x
 
+def vec3MaxAbsDiff (a b : Vec3) : Float :=
+  fmax (Float.abs (a.x - b.x))
+    (fmax (Float.abs (a.y - b.y)) (Float.abs (a.z - b.z)))
+
+def orbitWitnessSamples : List Float :=
+  [(-2.0 * pi), (-pi), 0.0, pi, 2.0 * pi]
+
+def orbitWitnessEntry (label : String) (scale t : Float) : String :=
+  let fast := orbitTranslatedPoint scale t
+  let cga := orbitTranslatedPointCGA scale t
+  let maxDiff := vec3MaxAbsDiff fast cga
+  "    {\"example\":\"" ++ label ++
+    "\",\"t\":" ++ toString t ++
+    ",\"max_abs_diff\":" ++ toString maxDiff ++
+    ",\"fast\":[" ++ toString fast.x ++ "," ++ toString fast.y ++ "," ++
+      toString fast.z ++
+    "],\"cga\":[" ++ toString cga.x ++ "," ++ toString cga.y ++ "," ++
+      toString cga.z ++ "]}"
+
+def orbitWitnessEntries : List String :=
+  (orbitWitnessSamples.map (orbitWitnessEntry "orbit-2" 1.0)) ++
+  (orbitWitnessSamples.map (orbitWitnessEntry "orbit-4" 0.07))
+
 def manifestEntry (ex : Prod String String) : String :=
   let name := ex.1
   "    {\"name\":\"" ++ referenceName name ++
@@ -364,6 +403,9 @@ def manifestJson : String :=
   s!"  \"example_count\":{allExamples.length},\n" ++
   "  \"examples\":[\n" ++
   joinWith ",\n" (allExamples.map manifestEntry) ++ "\n" ++
+  "  ],\n" ++
+  "  \"cga_orbit_translation_witnesses\":[\n" ++
+  joinWith ",\n" orbitWitnessEntries ++ "\n" ++
   "  ]\n" ++
   "}\n"
 

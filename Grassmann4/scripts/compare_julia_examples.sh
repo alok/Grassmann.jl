@@ -20,6 +20,7 @@ manifest="$out_root/manifest.json"
 julia_docs="$repo_root/docs/src/algebra.md"
 minimum_frame_stddev=1200
 maximum_rmse_normalized=0.25
+maximum_cga_witness_diff=1e-6
 
 contains_name() {
   local needle="$1"
@@ -51,6 +52,8 @@ failures=()
 names=()
 lean_paths=()
 julia_urls=()
+cga_witness_count=0
+cga_witness_max_diff=0.0
 
 cd "$pkg_root"
 rm -rf "$out_root/lean" "$out_root/index.html" "$out_root/manifest.json"
@@ -83,6 +86,28 @@ fi
 
 if [[ ${#names[@]} -eq 0 ]]; then
   failures+=("generated manifest did not list any examples")
+fi
+
+if [[ -s "$manifest" ]]; then
+  while IFS= read -r line; do
+    if [[ "$line" != *'"max_abs_diff":'* ]]; then
+      continue
+    fi
+
+    witness_diff="${line#*\"max_abs_diff\":}"
+    witness_diff="${witness_diff%%,*}"
+    cga_witness_count=$((cga_witness_count + 1))
+    if numeric_ge "$witness_diff" "$cga_witness_max_diff"; then
+      cga_witness_max_diff="$witness_diff"
+    fi
+    if ! numeric_le "$witness_diff" "$maximum_cga_witness_diff"; then
+      failures+=("CGA orbit witness max_abs_diff $witness_diff above $maximum_cga_witness_diff")
+    fi
+  done < "$manifest"
+fi
+
+if [[ "$cga_witness_count" -eq 0 ]]; then
+  failures+=("generated manifest did not list CGA orbit translation witnesses")
 fi
 
 for ((i = 0; i < ${#names[@]}; i++)); do
@@ -156,7 +181,7 @@ for i in "${!names[@]}"; do
   fi
 
   rsvg-convert "$lean_svg" > "$lean_png"
-  curl -fsSL "$julia_url" -o "$julia_png"
+  curl --connect-timeout 10 --max-time 30 --retry 2 -fsSL "$julia_url" -o "$julia_png"
 
   magick "$lean_png" -resize 620x440 -background white -gravity center -extent 620x440 "$lean_frame"
   magick "$julia_png" -resize 620x440 -background white -gravity center -extent 620x440 "$julia_frame"
@@ -209,6 +234,9 @@ fi
   printf '  "example_count":%s,\n' "${#names[@]}"
   printf '  "minimum_frame_stddev":%s,\n' "$minimum_frame_stddev"
   printf '  "maximum_rmse_normalized":%s,\n' "$maximum_rmse_normalized"
+  printf '  "maximum_cga_witness_diff":%s,\n' "$maximum_cga_witness_diff"
+  printf '  "cga_witness_count":%s,\n' "$cga_witness_count"
+  printf '  "cga_witness_max_diff":%s,\n' "$cga_witness_max_diff"
   printf '  "metrics_tsv":"%s",\n' "$metrics"
   printf '  "contact_sheet":"%s",\n' "$contact"
   printf '  "examples":[\n'
@@ -233,3 +261,5 @@ printf 'wrote diagnostic image metrics to %s\n' "$metrics"
 printf 'wrote diagnostic summary to %s\n' "$summary"
 printf 'visual smoke checks passed: %s examples, frame stddev >= %s, normalized RMSE <= %s\n' \
   "${#names[@]}" "$minimum_frame_stddev" "$maximum_rmse_normalized"
+printf 'CGA witness checks passed: %s samples, max_abs_diff <= %s (observed %s)\n' \
+  "$cga_witness_count" "$maximum_cga_witness_diff" "$cga_witness_max_diff"

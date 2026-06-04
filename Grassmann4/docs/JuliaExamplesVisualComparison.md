@@ -18,7 +18,8 @@ This writes Lean-generated SVGs to:
 ```
 
 It also writes a side-by-side visual comparison page and a machine-readable
-manifest:
+manifest. The manifest includes CGA witness samples for the orbit translation
+path, comparing the fast plotted coordinates against Lean's `CGA.transform`:
 
 ```text
 .generated/julia-examples/index.html
@@ -108,7 +109,7 @@ The contact-sheet script provides the same comparison in one local image.
 | `plane-1` through `plane-6` | Direct linear-field counterparts | Euclidean rotations/reflections and hyperbolic boosts match the reference topology. Arrow glyphs and line density are approximate Makie-style matches. |
 | `torus`, `helix` | Parametric counterparts | Captures the same 3D line-plot style and broad geometry, but not a proof of identical Grassmann.jl conformal motor output. |
 | `orb`, `wave` | Qualitative vector-field counterparts | Uses deterministic Lean vector fields styled to match Makie. Exact CGA streamplot parity remains future work. |
-| `orbit-2`, `orbit-4` | Qualitative orbit counterparts | Mirrors the documented translation/rotation intent with explicit parametric curves. Exact pointwise parity against Grassmann.jl CGA output remains future work. |
+| `orbit-2`, `orbit-4` | CGA-checked orbit counterparts | The plotted translation leg uses the fast closed-form coordinates and the manifest records sample checks against Lean `CGA.point`/`CGA.translator`/`CGA.transform`; `orbit-4` applies an explicit Euclidean `z` rotation after translation. Exact pointwise parity against the full Grassmann.jl CGA plotting pipeline remains future work. |
 
 ## Verified Commands
 
