@@ -417,12 +417,29 @@ def testRotors : IO (Array TestResult) := do
   let e1 := r3e 0
   let e2 := r3e 1
   let B := e1 * e2
+  let e12Dense : Multivector R3 Float := Multivector.ofBlade ⟨BitVec.ofNat 3 3⟩
   let piOver4 : Float := 0.7853981633974483
   let piOver2 : Float := 1.5707963267948966
   let r1 ← verifyRotor "R3" 0.0 (expBivector (MultivectorS.zero : MultivectorS R3 Float)).scalarPart
   let r2 ← verifyRotor "R3" (piOver4 * 2.0) (expBivector (B.smul piOver4)).scalarPart
   let r3 ← verifyRotor "R3" (piOver2 * 2.0) (expBivector (B.smul piOver2)).scalarPart
-  return #[r1, r2, r3]
+  let denseR := expBivectorDense (e12Dense.smul piOver4)
+  let sparseR := expBivector (B.smul piOver4)
+  let r4Base ← verifyRotor "R3" (piOver4 * 2.0) denseR.scalarPart
+  let r4 := { r4Base with name := "dense expBivector scalar(R3,e12,π/4)" }
+  let denseCoeff := denseR.coeff ⟨BitVec.ofNat 3 3⟩
+  let sparseCoeff := sparseR.coeff 3
+  let coeffDiff := (denseCoeff - sparseCoeff).abs
+  let coeffPass := floatsMatch denseCoeff sparseCoeff (tol := 1e-6)
+  let r5 : TestResult := {
+    name := "dense expBivector coeff(R3,e12,π/4)"
+    passed := coeffPass
+    leanValue := denseCoeff
+    juliaValue := sparseCoeff
+    difference := coeffDiff
+    message := if coeffPass then "Dense matches sparse oracle path" else "Dense/sparse mismatch"
+  }
+  return #[r1, r2, r3, r4, r5]
 
 /-! ## Main Test Runner -/
 

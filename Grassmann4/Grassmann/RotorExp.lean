@@ -220,14 +220,8 @@ Port of Grassmann.jl's exp function for Multivector type (not just sparse).
 
 /-- Exponential of a bivector in dense Multivector representation.
     Uses the closed-form formula based on B². -/
-def expBivectorDense [Ring F] [Div F]
-    (B : Multivector sig F) : Multivector sig Float :=
-  -- Get bivector part (grade 2)
-  let B2 := B.gradeProject 2
-  -- Compute B²
-  let B2sq := (B2 * B2).scalarPart
-  -- Convert to float for transcendentals
-  sorry  -- Need Float instance for F
+def expBivectorDense (B : Multivector sig Float) : Multivector sig Float :=
+  (Multivector.expBivector (B.gradeProject 2)).1
 
 /-- Full exponential for dense Multivector (Float only).
     Handles mixed even/odd parts via series. -/
