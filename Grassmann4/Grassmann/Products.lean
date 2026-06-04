@@ -96,6 +96,14 @@ def leftContractionSign (sig : Signature n) (a b : Blade sig) : Int :=
   let sign := geometricSign sig a b
   if sign == 0 then 0 else reverseSign a.grade * sign
 
+/-- Sign for right contraction of basis blades.
+    This is the geometric-product sign in the opposite blade order, after
+    reversing the right blade. -/
+@[inline, specialize]
+def rightContractionSign (sig : Signature n) (a b : Blade sig) : Int :=
+  let sign := geometricSign sig b a
+  if sign == 0 then 0 else reverseSign b.grade * sign
+
 /-! ## Left Contraction (Interior Product)
 
 Left contraction a⌋b contracts a into b:
@@ -127,7 +135,7 @@ def rightContractionBlades (a b : Blade sig) : BladeProduct sig :=
   else if b.grade > a.grade then
     .zero
   else
-    let sign := geometricSign sig a b
+    let sign := rightContractionSign sig a b
     if sign == 0 then .zero  -- Degenerate basis vectors cancel
     else
       let resultBits := a.bits ^^^ b.bits

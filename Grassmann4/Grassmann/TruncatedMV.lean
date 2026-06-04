@@ -287,7 +287,7 @@ def rightContract [Ring F] [BEq F] [DecidableEq F]
             let resultIdx := (bladeA.bits ^^^ bladeB.bits).toNat
             let resultGrade := grade (BitVec.ofNat n resultIdx)
             if h : resultGrade ≤ maxGrade then
-              let sign := geometricSign sig bladeA bladeB
+              let sign := rightContractionSign sig bladeA bladeB
               if sign == 0 then acc4
               else
                 let contrib := if sign < 0 then -(coeffA * coeffB) else coeffA * coeffB

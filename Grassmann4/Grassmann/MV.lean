@@ -439,11 +439,13 @@ def rightContractKernelGeneric (sig : Signature n) (p1 p2 : Parity)
           let mj := unpackIdx n p2 pj
           let bj := b.get! pj
           if bj != 0.0 && (mj &&& mi) == mj && popcount mj <= popcount mi then
-            let sign := table.lookup mi mj
+            let sign := table.lookup mj mi
             if sign != 0 then
               let mk := mi ^^^ mj
               let pk := packIdx n pOut mk
-              let contrib := if sign < 0 then -ai * bj else ai * bj
+              let reverseNeg := reverseSign (popcount mj) < 0
+              let geometricNeg := sign < 0
+              let contrib := if reverseNeg != geometricNeg then -ai * bj else ai * bj
               out := out.set! pk (out.get! pk + contrib)
     out
   | none =>
@@ -457,7 +459,7 @@ def rightContractKernelGeneric (sig : Signature n) (p1 p2 : Parity)
           let bj := b.get! pj
           if bj != 0.0 && (mj &&& mi) == mj && popcount mj <= popcount mi then
             let bjBlade : Blade sig := ⟨BitVec.ofNat n mj⟩
-            let sign := geometricSign sig bi bjBlade
+            let sign := rightContractionSign sig bi bjBlade
             if sign != 0 then
               let mk := mi ^^^ mj
               let pk := packIdx n pOut mk

@@ -86,6 +86,8 @@ function binary_operation(op::String, a, b)
         return a ∧ b
     elseif op == "left_contraction"
         return a < b
+    elseif op == "right_contraction"
+        return a > b
     else
         error("Unsupported coefficient operation: $op")
     end
@@ -235,6 +237,26 @@ function cmd_left_contraction(sig_name::String, blade_a::String, blade_b::String
 
     return Dict(
         "operation" => "left_contraction",
+        "signature" => sig_name,
+        "a" => blade_a,
+        "b" => blade_b,
+        "result" => string(result),
+        "scalar_part" => Float64(scalar(result))
+    )
+end
+
+"""
+Compute right contraction.
+"""
+function cmd_right_contraction(sig_name::String, blade_a::String, blade_b::String)
+    alg = get_algebra(sig_name)
+
+    a = parse_blade(blade_a, alg)
+    b = parse_blade(blade_b, alg)
+    result = a > b
+
+    return Dict(
+        "operation" => "right_contraction",
         "signature" => sig_name,
         "a" => blade_a,
         "b" => blade_b,
@@ -590,6 +612,8 @@ function main()
             cmd_wedge_product(ARGS[2], ARGS[3], ARGS[4])
         elseif cmd == "left_contraction" && length(ARGS) >= 4
             cmd_left_contraction(ARGS[2], ARGS[3], ARGS[4])
+        elseif cmd == "right_contraction" && length(ARGS) >= 4
+            cmd_right_contraction(ARGS[2], ARGS[3], ARGS[4])
         elseif cmd == "blade_coefficient" && length(ARGS) >= 6
             cmd_blade_coefficient(ARGS[2], ARGS[3], ARGS[4], ARGS[5], ARGS[6])
         elseif cmd == "point_embedding" && length(ARGS) >= 4
@@ -648,6 +672,7 @@ function main()
   geometric_product <sig> <a> <b>       - Compute a*b
   wedge_product <sig> <a> <b>           - Compute a∧b
   left_contraction <sig> <a> <b>        - Compute a⌋b
+  right_contraction <sig> <a> <b>       - Compute a⌊b
   blade_coefficient <sig> <op> <a> <b> <target>
                                         - Coefficient of target in op(a,b)
   point_embedding <x> <y> <z>           - CGA point embedding

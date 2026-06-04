@@ -216,7 +216,7 @@ def rightContractCoeffAt (sig : Signature n) (a b : NativeMV sig) (outMask : Nat
       if (bj.bits &&& bi.bits) != bj.bits || bj.grade > bi.grade || resultMask != outMask then
         acc
       else
-        let sign := geometricSign sig bi bj
+        let sign := rightContractionSign sig bi bj
         if sign = 0 then
           acc
         else

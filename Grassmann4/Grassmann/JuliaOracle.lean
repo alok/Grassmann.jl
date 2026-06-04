@@ -694,7 +694,17 @@ def testBladeCoefficients : IO (Array TestResult) := do
     ((MultivectorS.leftContract e1 e123).coeff 6)
   let r13 ← verifyBladeCoefficient "R3" "left_contraction" "e12" "e123" "e3"
     ((MultivectorS.leftContract e12 e123).coeff 4)
-  return #[r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13]
+  let r14 ← verifyBladeCoefficient "R3" "right_contraction" "e12" "e1" "e2"
+    ((MultivectorS.rightContract e12 e1).coeff 2)
+  let r15 ← verifyBladeCoefficient "R3" "right_contraction" "e12" "e2" "e1"
+    ((MultivectorS.rightContract e12 e2).coeff 1)
+  let r16 ← verifyBladeCoefficient "R3" "right_contraction" "e123" "e1" "e23"
+    ((MultivectorS.rightContract e123 e1).coeff 6)
+  let r17 ← verifyBladeCoefficient "R3" "right_contraction" "e123" "e12" "e3"
+    ((MultivectorS.rightContract e123 e12).coeff 4)
+  return #[
+    r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17
+  ]
 
 /-- Test signature verification -/
 def testSignatures : IO (Array TestResult) := do

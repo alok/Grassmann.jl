@@ -202,7 +202,7 @@ def rightContract (a b : MultivectorS sig F) : MultivectorS sig F :=
       let bi : Blade sig := ⟨BitVec.ofNat n i⟩
       let bladeJ : Blade sig := ⟨BitVec.ofNat n j⟩
       if (bladeJ.bits &&& bi.bits) == bladeJ.bits && bladeJ.grade ≤ bi.grade then
-        let sign := geometricSign sig bi bladeJ
+        let sign := rightContractionSign sig bi bladeJ
         if sign == 0 then acc2  -- Degenerate case
         else
           let resultIdx := (bi.bits ^^^ bladeJ.bits).toNat
