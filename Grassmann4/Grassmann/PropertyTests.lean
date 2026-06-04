@@ -17,6 +17,7 @@ import Grassmann.LinearAlgebra
 import Grassmann.StaticOpt
 import Grassmann.MV
 import Grassmann.PGA
+import Grassmann.CGA
 import Grassmann.BladeIndex
 import Grassmann.SignTables
 
@@ -776,6 +777,27 @@ def prop_pga3_composed_motor_point_cloud_dense : Bool :=
   pga3PackedMotorMatchesDensePointCloud
     (PGA.Motor.compose packedB packedA)
     (denseB * denseA)
+
+/-! ## CGA3 Point-Cloud Transform Tests -/
+
+/-- Deterministic translations used to check the CGA translator path. -/
+def cga3TranslationCloud : List (Float × Float × Float) :=
+  [ (0.5, 0.25, -0.75),
+    (-1.0, 2.0, 0.5),
+    (3.0, -1.5, 0.0) ]
+
+/-- Apply a CGA translator and extract Euclidean coordinates. -/
+def cga3TranslateCoords (point delta : Float × Float × Float) : Float × Float × Float :=
+  let p := CGA.point point.1 point.2.1 point.2.2
+  let translator := CGA.translator delta.1 delta.2.1 delta.2.2
+  CGA.extractPoint (CGA.transform translator p)
+
+/-- CGA translators shift embedded Euclidean points by their translation vector. -/
+def prop_cga3_translator_point_cloud : Bool :=
+  pga3PointCloud.all fun point =>
+    cga3TranslationCloud.all fun delta =>
+      let expected := (point.1 + delta.1, point.2.1 + delta.2.1, point.2.2 + delta.2.2)
+      coordsApproxEq (cga3TranslateCoords point delta) expected
 
 /-! ## CGA3 Packed MV Reference Tests -/
 
@@ -1613,6 +1635,15 @@ def runPGA3PointCloudTransformTests : IO (List PropTestResult) := do
   IO.println "└────────────────────────────────────────────────┘"
   return [pointCloud1, pointCloud2, pointCloud3, pointCloud4]
 
+/-- Run user-facing CGA3 point-cloud transform checks. -/
+def runCGA3PointCloudTransformTests : IO (List PropTestResult) := do
+  IO.println "\n┌─ CGA3 Point-Cloud Translations ───────────────┐"
+  let pointCloud1 := runBoolProp "CGA3 translator point cloud"
+    prop_cga3_translator_point_cloud
+  IO.println s!"│ {pointCloud1}"
+  IO.println "└────────────────────────────────────────────────┘"
+  return [pointCloud1]
+
 /-- Run CGA3 packed-MV baseline checks against dense reference results. -/
 def runCGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println "\n┌─ CGA3 Packed MV vs Dense Reference ───────────┐"
@@ -1804,6 +1835,7 @@ def runPropertyTests : IO Unit := do
   let packedResults ← runPackedReferenceTests
   let pgaPackedResults ← runPGA3PackedReferenceTests
   let pgaPointCloudResults ← runPGA3PointCloudTransformTests
+  let cgaPointCloudResults ← runCGA3PointCloudTransformTests
   let cgaPackedResults ← runCGA3PackedReferenceTests
   let sparseResults ← runSparseReferenceTests
   let pgaSparseResults ← runPGA3SparseReferenceTests
@@ -1819,6 +1851,7 @@ def runPropertyTests : IO Unit := do
     countPassed packedResults +
     countPassed pgaPackedResults +
     countPassed pgaPointCloudResults +
+    countPassed cgaPointCloudResults +
     countPassed cgaPackedResults +
     countPassed sparseResults +
     countPassed pgaSparseResults +
@@ -1834,6 +1867,7 @@ def runPropertyTests : IO Unit := do
     packedResults.length +
     pgaPackedResults.length +
     pgaPointCloudResults.length +
+    cgaPointCloudResults.length +
     cgaPackedResults.length +
     sparseResults.length +
     pgaSparseResults.length +
