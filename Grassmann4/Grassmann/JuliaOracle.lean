@@ -330,6 +330,68 @@ def verifyCGATranslator (x y z tx ty tz : Float) : IO (Array TestResult) := do
       message := s!"Parse failed: {result.stdout}"
     }]
 
+/-- Verify CGA point distances against Grassmann.jl. -/
+def verifyCGADistance (x1 y1 z1 x2 y2 z2 : Float) : IO (Array TestResult) := do
+  let p1 := CGA.point x1 y1 z1
+  let p2 := CGA.point x2 y2 z2
+  let leanSquared := CGA.squaredDistance p1 p2
+  let leanDistance := CGA.distance p1 p2
+  let result ← callOracle [
+    "cga_point_distance",
+    toString x1, toString y1, toString z1,
+    toString x2, toString y2, toString z2
+  ]
+  let baseName := s!"cga_distance(({x1},{y1},{z1}),({x2},{y2},{z2}))"
+  if !result.success then
+    return #[{
+      name := baseName
+      passed := false
+      leanValue := 0.0
+      juliaValue := 0.0
+      difference := 0.0
+      message := s!"Oracle error: {result.stderr}"
+    }]
+  match parseJson result.stdout with
+  | some json =>
+      match getJsonFloat json "squared_distance", getJsonFloat json "distance" with
+      | some juliaSquared, some juliaDistance =>
+          let squaredDiff := (leanSquared - juliaSquared).abs
+          let distanceDiff := (leanDistance - juliaDistance).abs
+          return #[
+            {
+              name := s!"{baseName}.squared"
+              passed := floatsMatch leanSquared juliaSquared (tol := 1e-6)
+              leanValue := leanSquared
+              juliaValue := juliaSquared
+              difference := squaredDiff
+            },
+            {
+              name := s!"{baseName}.distance"
+              passed := floatsMatch leanDistance juliaDistance (tol := 1e-6)
+              leanValue := leanDistance
+              juliaValue := juliaDistance
+              difference := distanceDiff
+            }
+          ]
+      | _, _ =>
+          return #[{
+            name := baseName
+            passed := false
+            leanValue := 0.0
+            juliaValue := 0.0
+            difference := 0.0
+            message := s!"Parse failed: {result.stdout}"
+          }]
+  | none =>
+      return #[{
+        name := baseName
+        passed := false
+        leanValue := 0.0
+        juliaValue := 0.0
+        difference := 0.0
+        message := s!"Parse failed: {result.stdout}"
+      }]
+
 /-- Verify rotor scalar part -/
 def verifyRotor (sigName : String) (angle : Float) (leanScalar : Float) : IO TestResult := do
   let result ← callOracle ["verify_rotor", sigName, toString angle]
@@ -477,6 +539,13 @@ def testCGATranslators : IO (Array TestResult) := do
   let r2 ← verifyCGATranslator (-2.0) 0.5 3.0 1.25 0.0 (-2.5)
   return r1 ++ r2
 
+/-- Test CGA point distances against Grassmann.jl. -/
+def testCGADistances : IO (Array TestResult) := do
+  let r1 ← verifyCGADistance 0.0 0.0 0.0 1.0 0.0 0.0
+  let r2 ← verifyCGADistance 1.0 2.0 3.0 (-2.0) 0.5 4.5
+  let r3 ← verifyCGADistance 0.25 (-0.5) 1.75 0.25 (-0.5) 1.75
+  return r1 ++ r2 ++ r3
+
 /-- Test rotors -/
 def testRotors : IO (Array TestResult) := do
   let e1 := r3e 0
@@ -534,6 +603,11 @@ def runAllTests : IO Unit := do
   let cgaResults ← testCGANullVectors
   for r in cgaResults do IO.println s!"│ {r}"
   IO.println "└──────────────────────────────────────────┘"
+  -- CGA distances
+  IO.println "\n┌─ CGA Distances ──────────────────────────┐"
+  let cgaDistanceResults ← testCGADistances
+  for r in cgaDistanceResults do IO.println s!"│ {r}"
+  IO.println "└──────────────────────────────────────────┘"
   -- CGA translations
   IO.println "\n┌─ CGA Translators ────────────────────────┐"
   let cgaTranslatorResults ← testCGATranslators
@@ -546,7 +620,7 @@ def runAllTests : IO Unit := do
   IO.println "└──────────────────────────────────────────┘"
   -- Summary
   let all := r3Results ++ coeffResults ++ sigResults ++ cgaResults ++
-    cgaTranslatorResults ++ rotorResults
+    cgaDistanceResults ++ cgaTranslatorResults ++ rotorResults
   let passed := all.filter (·.passed)
   let failed := all.filter (!·.passed)
   IO.println "\n╔══════════════════════════════════════════╗"

@@ -268,13 +268,13 @@ def isNull (p : Multivector CGA3 Float) (tol : Float := 1e-10) : Bool :=
   let sq := (p * p).scalarPart
   Float.abs sq < tol
 
-/-- Normalize a CGA point so that e∞ coefficient is 1.
-    Standard form: P = x + (x²/2)e∞ + e₀ with e∞ coeff = 1 -/
+/-- Normalize a CGA point so that the homogeneous e₀ weight is 1.
+    Standard form: P = x + (x²/2)e∞ + e₀ with e₀ weight = 1. -/
 def normalizePoint (p : Multivector CGA3 Float) : Multivector CGA3 Float :=
-  -- e∞ = e₊ + e₋, so coefficient is p[e₊] + p[e₋]
-  let einfCoeff := p.coeff eplus + p.coeff eminus
-  if Float.abs einfCoeff < 1e-10 then p
-  else p.smul (1.0 / einfCoeff)
+  -- For a*e₊ + b*e₋, the e₀ weight is b - a because e₀ = (e₋ - e₊)/2.
+  let originWeight := p.coeff eminus - p.coeff eplus
+  if Float.abs originWeight < 1e-10 then p
+  else p.smul (1.0 / originWeight)
 
 /-! ### Distances and Angles -/
 

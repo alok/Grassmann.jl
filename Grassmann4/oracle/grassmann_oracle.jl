@@ -299,6 +299,43 @@ function cmd_point_embedding(x::Float64, y::Float64, z::Float64)
 end
 
 """
+Compute the squared Euclidean distance and distance between two normalized CGA points.
+"""
+function cmd_cga_point_distance(
+    x1::Float64,
+    y1::Float64,
+    z1::Float64,
+    x2::Float64,
+    y2::Float64,
+    z2::Float64,
+)
+    alg = get_algebra("CGA3")
+    w1 = basis_vector(alg, 1)
+    w2 = basis_vector(alg, 2)
+    w3 = basis_vector(alg, 3)
+    w4 = basis_vector(alg, 4)
+    w5 = basis_vector(alg, 5)
+
+    einf = w4 + w5
+    e0 = (w5 - w4) / 2
+
+    p1 = x1*w1 + y1*w2 + z1*w3 + ((x1^2 + y1^2 + z1^2) / 2)*einf + e0
+    p2 = x2*w1 + y2*w2 + z2*w3 + ((x2^2 + y2^2 + z2^2) / 2)*einf + e0
+    inner = Float64(scalar(p1*p2 + p2*p1) / 2)
+    squared_distance = -2.0 * inner
+    distance = squared_distance < 0.0 ? 0.0 : sqrt(squared_distance)
+
+    return Dict(
+        "operation" => "cga_point_distance",
+        "point1" => [x1, y1, z1],
+        "point2" => [x2, y2, z2],
+        "inner" => inner,
+        "squared_distance" => squared_distance,
+        "distance" => distance,
+    )
+end
+
+"""
 Translate a CGA point by a Euclidean vector and return down-projected coordinates.
 """
 function cmd_cga_translate_point(
@@ -424,6 +461,13 @@ function main()
             cmd_point_embedding(parse(Float64, ARGS[2]),
                               parse(Float64, ARGS[3]),
                               parse(Float64, ARGS[4]))
+        elseif cmd == "cga_point_distance" && length(ARGS) >= 7
+            cmd_cga_point_distance(parse(Float64, ARGS[2]),
+                                   parse(Float64, ARGS[3]),
+                                   parse(Float64, ARGS[4]),
+                                   parse(Float64, ARGS[5]),
+                                   parse(Float64, ARGS[6]),
+                                   parse(Float64, ARGS[7]))
         elseif cmd == "cga_translate_point" && length(ARGS) >= 7
             cmd_cga_translate_point(parse(Float64, ARGS[2]),
                                     parse(Float64, ARGS[3]),
@@ -448,6 +492,8 @@ function main()
   blade_coefficient <sig> <op> <a> <b> <target>
                                         - Coefficient of target in op(a,b)
   point_embedding <x> <y> <z>           - CGA point embedding
+  cga_point_distance <x1> <y1> <z1> <x2> <y2> <z2>
+                                        - CGA point distance
   cga_translate_point <x> <y> <z> <tx> <ty> <tz>
                                         - Translate a CGA point
   verify_rotor <sig> <angle>            - Verify rotor
