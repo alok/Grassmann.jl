@@ -12,6 +12,7 @@ import Lean.Data.Json
 import Grassmann.SparseMultivector
 import Grassmann.Products
 import Grassmann.RotorExp
+import Grassmann.LinearAlgebra
 import Grassmann.Manifold
 import Grassmann.CGA
 
@@ -486,6 +487,92 @@ def verifyRotor (sigName : String) (angle : Float) (leanScalar : Float) : IO Tes
       message := "Parse failed"
     }
 
+/-- Verify an R3 cross product against Grassmann.jl coordinate output. -/
+def verifyR3Cross (bladeA bladeB : String) (leanCoords : Array Float) :
+    IO (Array TestResult) := do
+  let result ← callOracle ["r3_cross", bladeA, bladeB]
+  let baseName := s!"r3_cross({bladeA},{bladeB})"
+  if !result.success then
+    return #[{
+      name := baseName
+      passed := false
+      leanValue := 0.0
+      juliaValue := 0.0
+      difference := 0.0
+      message := s!"Oracle error: {result.stderr}"
+    }]
+  match parseJson result.stdout >>= fun j => getJsonFloatArray j "coords" with
+  | some juliaCoords =>
+    if leanCoords.size != 3 || juliaCoords.size != 3 then
+      return #[{
+        name := baseName
+        passed := false
+        leanValue := leanCoords.size.toFloat
+        juliaValue := juliaCoords.size.toFloat
+        difference := 0.0
+        message := "Coordinate count mismatch"
+      }]
+    let mkCoordResult (axis : String) (i : Nat) : TestResult :=
+      let leanValue := leanCoords.getD i 0.0
+      let juliaValue := juliaCoords.getD i 0.0
+      let diff := (leanValue - juliaValue).abs
+      {
+        name := s!"{baseName}.{axis}"
+        passed := floatsMatch leanValue juliaValue (tol := 1e-6)
+        leanValue := leanValue
+        juliaValue := juliaValue
+        difference := diff
+      }
+    return #[
+      mkCoordResult "x" 0,
+      mkCoordResult "y" 1,
+      mkCoordResult "z" 2
+    ]
+  | none =>
+    return #[{
+      name := baseName
+      passed := false
+      leanValue := 0.0
+      juliaValue := 0.0
+      difference := 0.0
+      message := s!"Parse failed: {result.stdout}"
+    }]
+
+/-- Verify an R3 determinant against Grassmann.jl exterior-algebra determinant. -/
+def verifyR3Det (name : String) (columns : Array (Float × Float × Float))
+    (leanDet : Float) : IO TestResult := do
+  let args := columns.toList.flatMap fun c =>
+    [toString c.1, toString c.2.1, toString c.2.2]
+  let result ← callOracle ("r3_det" :: args)
+  if !result.success then
+    return {
+      name := name
+      passed := false
+      leanValue := leanDet
+      juliaValue := 0.0
+      difference := 0.0
+      message := s!"Oracle error: {result.stderr}"
+    }
+  match parseJson result.stdout >>= fun j => getJsonFloat j "determinant" with
+  | some juliaDet =>
+    let diff := (leanDet - juliaDet).abs
+    return {
+      name := name
+      passed := floatsMatch leanDet juliaDet (tol := 1e-6)
+      leanValue := leanDet
+      juliaValue := juliaDet
+      difference := diff
+    }
+  | none =>
+    return {
+      name := name
+      passed := false
+      leanValue := leanDet
+      juliaValue := 0.0
+      difference := 0.0
+      message := s!"Parse failed: {result.stdout}"
+    }
+
 /-! ## Lean Computation Helpers -/
 
 /-- R3 basis vector -/
@@ -495,6 +582,10 @@ def r3e (i : Nat) (h : i < 3 := by omega) : MultivectorS R3 Float :=
 /-- CGA3 basis vector -/
 def cga3e (i : Nat) (h : i < 5 := by omega) : MultivectorS CGA3 Float :=
   MultivectorS.basis ⟨i, h⟩
+
+/-- R3 dense vector coordinates in basis order. -/
+def r3DenseCoords (m : Multivector R3 Float) : Array Float :=
+  #[m.coeff (e1 : Blade R3), m.coeff (e2 : Blade R3), m.coeff (e3 : Blade R3)]
 
 /-! ## Test Suites -/
 
@@ -641,6 +732,28 @@ def testRotors : IO (Array TestResult) := do
   }
   return #[r1, r2, r3, r4, r5]
 
+/-- Test R3 linear-algebra operations against Grassmann.jl. -/
+def testR3LinearAlgebra : IO (Array TestResult) := do
+  let e1v : Multivector R3 Float := vector3 1.0 0.0 0.0
+  let e2v : Multivector R3 Float := vector3 0.0 1.0 0.0
+  let e3v : Multivector R3 Float := vector3 0.0 0.0 1.0
+  let r1 ← verifyR3Cross "e1" "e2" (r3DenseCoords (e1v ×₃ e2v))
+  let r2 ← verifyR3Cross "e2" "e3" (r3DenseCoords (e2v ×₃ e3v))
+  let r3 ← verifyR3Cross "e3" "e1" (r3DenseCoords (e3v ×₃ e1v))
+  let detId ← verifyR3Det "r3_det(identity)"
+    #[(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)]
+    (LinearAlgebra.det [e1v, e2v, e3v])
+  let detSwap ← verifyR3Det "r3_det(swapped columns)"
+    #[(0.0, 1.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, 1.0)]
+    (LinearAlgebra.det [e2v, e1v, e3v])
+  let d1 : Multivector R3 Float := vector3 2.0 0.0 0.0
+  let d2 : Multivector R3 Float := vector3 0.0 3.0 0.0
+  let d3 : Multivector R3 Float := vector3 0.0 0.0 4.0
+  let detScaled ← verifyR3Det "r3_det(scaled diagonal)"
+    #[(2.0, 0.0, 0.0), (0.0, 3.0, 0.0), (0.0, 0.0, 4.0)]
+    (LinearAlgebra.det [d1, d2, d3])
+  return r1 ++ r2 ++ r3 ++ #[detId, detSwap, detScaled]
+
 /-! ## Main Test Runner -/
 
 /-- Run all tests -/
@@ -684,9 +797,14 @@ def runAllTests : IO Unit := do
   let rotorResults ← testRotors
   for r in rotorResults do IO.println s!"│ {r}"
   IO.println "└──────────────────────────────────────────┘"
+  -- R3 linear algebra
+  IO.println "\n┌─ R3 Linear Algebra ──────────────────────┐"
+  let linearResults ← testR3LinearAlgebra
+  for r in linearResults do IO.println s!"│ {r}"
+  IO.println "└──────────────────────────────────────────┘"
   -- Summary
   let all := r3Results ++ coeffResults ++ sigResults ++ cgaResults ++
-    cgaDistanceResults ++ cgaTranslatorResults ++ rotorResults
+    cgaDistanceResults ++ cgaTranslatorResults ++ rotorResults ++ linearResults
   let passed := all.filter (·.passed)
   let failed := all.filter (!·.passed)
   IO.println "\n╔══════════════════════════════════════════╗"

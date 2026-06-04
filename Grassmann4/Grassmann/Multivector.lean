@@ -1031,9 +1031,9 @@ def crossProduct3D [Ring F]
   -- e12 → e3, e13 → -e2, e23 → e1
   ⟨fun i =>
     match i.val with
-    | 0 => wedge.coeffs ⟨6, by decide⟩   -- e1 ← e23
-    | 1 => -(wedge.coeffs ⟨5, by decide⟩)  -- e2 ← -e13
-    | 2 => wedge.coeffs ⟨3, by decide⟩   -- e3 ← e12
+    | 1 => wedge.coeffs ⟨6, by decide⟩   -- e1 ← e23
+    | 2 => -(wedge.coeffs ⟨5, by decide⟩)  -- e2 ← -e13
+    | 4 => wedge.coeffs ⟨3, by decide⟩   -- e3 ← e12
     | _ => 0⟩
 
 infixl:70 " ×₃ " => crossProduct3D

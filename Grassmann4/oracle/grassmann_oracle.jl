@@ -488,6 +488,69 @@ function cmd_bivector_exp(sig_name::String, i::Int, j::Int, angle::Float64)
     )
 end
 
+"""
+Compute the R3 cross product coordinates using the Grassmann algebra identity
+`a × b = ⋆(a ∧ b)` with the standard right-handed orientation.
+"""
+function cmd_r3_cross(blade_a::String, blade_b::String)
+    alg = get_algebra("R3")
+    e1 = basis_vector(alg, 1)
+    e2 = basis_vector(alg, 2)
+    e3 = basis_vector(alg, 3)
+
+    a = parse_blade(blade_a, alg)
+    b = parse_blade(blade_b, alg)
+    wedge = a ∧ b
+
+    e12 = e1 * e2
+    e13 = e1 * e3
+    e23 = e2 * e3
+    coords = [
+        blade_coefficient(wedge, e23),
+        -blade_coefficient(wedge, e13),
+        blade_coefficient(wedge, e12),
+    ]
+
+    return Dict(
+        "operation" => "r3_cross",
+        "a" => blade_a,
+        "b" => blade_b,
+        "coords" => coords,
+    )
+end
+
+"""
+Compute the determinant of three R3 column vectors via exterior algebra.
+"""
+function cmd_r3_det(
+    x1::Float64,
+    y1::Float64,
+    z1::Float64,
+    x2::Float64,
+    y2::Float64,
+    z2::Float64,
+    x3::Float64,
+    y3::Float64,
+    z3::Float64,
+)
+    alg = get_algebra("R3")
+    e1 = basis_vector(alg, 1)
+    e2 = basis_vector(alg, 2)
+    e3 = basis_vector(alg, 3)
+
+    v1 = x1*e1 + y1*e2 + z1*e3
+    v2 = x2*e1 + y2*e2 + z2*e3
+    v3 = x3*e1 + y3*e2 + z3*e3
+    pseudoscalar = e1 * e2 * e3
+    determinant = blade_coefficient(v1 ∧ v2 ∧ v3, pseudoscalar)
+
+    return Dict(
+        "operation" => "r3_det",
+        "columns" => [[x1, y1, z1], [x2, y2, z2], [x3, y3, z3]],
+        "determinant" => determinant,
+    )
+end
+
 # Main
 function main()
     if length(ARGS) == 0 || ARGS[1] == "test"
@@ -541,6 +604,18 @@ function main()
         elseif cmd == "bivector_exp" && length(ARGS) >= 5
             cmd_bivector_exp(ARGS[2], parse(Int, ARGS[3]),
                            parse(Int, ARGS[4]), parse(Float64, ARGS[5]))
+        elseif cmd == "r3_cross" && length(ARGS) >= 3
+            cmd_r3_cross(ARGS[2], ARGS[3])
+        elseif cmd == "r3_det" && length(ARGS) >= 10
+            cmd_r3_det(parse(Float64, ARGS[2]),
+                       parse(Float64, ARGS[3]),
+                       parse(Float64, ARGS[4]),
+                       parse(Float64, ARGS[5]),
+                       parse(Float64, ARGS[6]),
+                       parse(Float64, ARGS[7]),
+                       parse(Float64, ARGS[8]),
+                       parse(Float64, ARGS[9]),
+                       parse(Float64, ARGS[10]))
         else
             Dict("error" => "Unknown command: $cmd",
                  "usage" => """Commands:
@@ -560,6 +635,9 @@ function main()
   verify_rotor <sig> <angle>            - Verify rotor
   signature_check <sig>                 - Check basis squares
   bivector_exp <sig> <i> <j> <angle>    - exp(angle*eij)
+  r3_cross <a> <b>                       - R3 cross product coordinates
+  r3_det <c1x> <c1y> <c1z> <c2x> <c2y> <c2z> <c3x> <c3y> <c3z>
+                                        - R3 determinant from column vectors
 
 Signatures: R2, R3, R4, PGA2, PGA3, CGA2, CGA3, STA""")
         end
