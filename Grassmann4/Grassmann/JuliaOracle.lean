@@ -834,6 +834,14 @@ def testJuliaPlotExampleSamples : IO (Array TestResult) := do
     let point := Grassmann.JuliaExamples.documentedProjectiveTorusPoint t
     let sampleResults ← verifyJuliaExamplePoint "projective_torus" t point
     results := results ++ sampleResults
+  for t in samples do
+    let point := Grassmann.JuliaExamples.documentedProjectiveOrbit2Point t
+    let sampleResults ← verifyJuliaExamplePoint "projective_orbit_2" t point
+    results := results ++ sampleResults
+  for t in samples do
+    let point := Grassmann.JuliaExamples.documentedProjectiveOrbit4Point t
+    let sampleResults ← verifyJuliaExamplePoint "projective_orbit_4" t point
+    results := results ++ sampleResults
   return results
 
 /-! ## Main Test Runner -/

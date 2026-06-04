@@ -116,6 +116,13 @@ The contact-sheet script provides the same comparison in one local image.
 | `orb`, `wave` | Qualitative vector-field counterparts | Uses deterministic Lean vector fields styled to match Makie. Exact CGA streamplot parity remains future work. |
 | `orbit-2`, `orbit-4` | CGA-checked orbit counterparts | The plotted translation leg uses the fast closed-form coordinates and the manifest records sample checks against Lean `CGA.point`/`CGA.translator`/`CGA.transform`; `orbit-4` applies an explicit Euclidean `z` rotation after translation. Exact pointwise parity against the full Grassmann.jl CGA plotting pipeline remains future work. |
 
+Separately from the fast SVG generator, `lake exe oracletests` now checks exact
+sample coordinates for the documented `S"∞+++"` projective formulas for
+`torus`, `orbit-2`, and `orbit-4` against Grassmann.jl. Those oracle-backed
+evaluators live in `Grassmann.JuliaExamples` and intentionally avoid replacing
+the SVG paths until plot-time performance is acceptable over the full sample
+range.
+
 ## 2026-06-04 Audit
 
 The comparison harness was rerun from `Grassmann4` and covered all twelve
@@ -180,3 +187,7 @@ The browser comparison page reported `12` example sections and `24/24` loaded
 images: one Lean SVG and one Julia/Makie reference PNG for each example.
 The contact-sheet script additionally passed the automated coverage and visual
 smoke checks for the same twelve examples.
+
+The Julia oracle suite was later extended with exact `S"∞+++"` projective
+samples for `orbit-2` and `orbit-4`, in addition to the existing torus samples.
+It passed with `109/109` checks.

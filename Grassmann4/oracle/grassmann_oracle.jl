@@ -591,6 +591,28 @@ function cmd_julia_example_point(example_name::String, t::Float64)
             "t" => t,
             "coords" => [Float64(vals[2]), Float64(vals[3]), Float64(vals[4])],
         )
+    elseif example_name == "projective_orbit_2"
+        @basis S"∞+++"
+        y = ↓(exp(t * v∞ * (sin(3t) * 3v1 + cos(2t) * 7v2 - sin(5t) * 4v3) / 2) >>> ↑(v1 + v2 - v3))
+        vals = value(y)
+
+        return Dict(
+            "operation" => "julia_example_point",
+            "example" => example_name,
+            "t" => t,
+            "coords" => [Float64(vals[2]), Float64(vals[3]), Float64(vals[4])],
+        )
+    elseif example_name == "projective_orbit_4"
+        @basis S"∞+++"
+        y = ↓(exp(t * (v12 + 0.07v∞ * (sin(3t) * 3v1 + cos(2t) * 7v2 - sin(5t) * 4v3) / 2)) >>> ↑(v1 + v2 - v3))
+        vals = value(y)
+
+        return Dict(
+            "operation" => "julia_example_point",
+            "example" => example_name,
+            "t" => t,
+            "coords" => [Float64(vals[2]), Float64(vals[3]), Float64(vals[4])],
+        )
     else
         error("Unsupported Julia example point: $example_name")
     end

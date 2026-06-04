@@ -85,9 +85,29 @@ def projectiveDown (omega : ProjectiveMV) : Vec3 :=
 def projectiveTorusGenerator : ProjectiveMV :=
   MultivectorS.smul (3.0 / 7.0) (projE1 * projE2) + projInf * projE3
 
+def projectiveOrbitBasePoint : Vec3 :=
+  { x := 1.0, y := 1.0, z := -1.0 }
+
 def documentedProjectiveTorusPoint (t : Float) : Vec3 :=
   let rotor := expTaylorMV (MultivectorS.smul (pi * t) projectiveTorusGenerator) 40
   projectiveDown (rotor * projectiveUp { x := 1.0, y := 1.0, z := 1.0 } * rotor†ₛ)
+
+def projectiveOrbitVector (t : Float) : ProjectiveMV :=
+  MultivectorS.smul (3.0 * Float.sin (3.0 * t)) projE1 +
+    MultivectorS.smul (7.0 * Float.cos (2.0 * t)) projE2 +
+    MultivectorS.smul (-4.0 * Float.sin (5.0 * t)) projE3
+
+def documentedProjectiveOrbit2Point (t : Float) : Vec3 :=
+  let generator := MultivectorS.smul (t / 2.0) (projInf * projectiveOrbitVector t)
+  let motor := expTaylorMV generator 40
+  projectiveDown (motor * projectiveUp projectiveOrbitBasePoint * motor†ₛ)
+
+def documentedProjectiveOrbit4Point (t : Float) : Vec3 :=
+  let generator :=
+    projE1 * projE2 +
+      MultivectorS.smul (0.07 / 2.0) (projInf * projectiveOrbitVector t)
+  let motor := expTaylorMV (MultivectorS.smul t generator) 40
+  projectiveDown (motor * projectiveUp projectiveOrbitBasePoint * motor†ₛ)
 
 @[inline] def fmin (a b : Float) : Float := if a <= b then a else b
 @[inline] def fmax (a b : Float) : Float := if a >= b then a else b
@@ -300,7 +320,7 @@ def translatePointCGA (p delta : Vec3) : Vec3 :=
   vec3FromNested (CGA.extractPoint (CGA.transform translator point))
 
 def baseOrbitPoint : Vec3 :=
-  { x := 1.0, y := 1.0, z := -1.0 }
+  projectiveOrbitBasePoint
 
 def orbitTranslatedPoint (scale t : Float) : Vec3 :=
   let delta := Vec3.smul (scale * t) (translationVector t)
