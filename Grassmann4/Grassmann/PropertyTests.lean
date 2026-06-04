@@ -302,6 +302,60 @@ def prop_mv_parity_projection : Gen Bool := do
   return packedMatchesDense evenPacked a.mv.evenPart &&
     packedMatchesDense oddPacked a.mv.oddPart
 
+/-- Full packed `MV` linear operations agree with dense references. -/
+def prop_mv_full_linear_ops_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let b ← genR3DenseMv
+  let packedA : MV R3 .full := MV.ofMultivector a.mv .full
+  let packedB : MV R3 .full := MV.ofMultivector b.mv .full
+  let scale : Float := 2.5
+  return packedMatchesDense (packedA + packedB) (a.mv + b.mv) &&
+    packedMatchesDense (-packedA) (-a.mv) &&
+    packedMatchesDense (scale * packedA) (a.mv.smul scale)
+
+/-- Even packed `MV` linear operations agree with dense references. -/
+def prop_mv_even_linear_ops_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let b ← genR3DenseMv
+  let denseA := a.mv.evenPart
+  let denseB := b.mv.evenPart
+  let packedA : MV R3 .even := MV.ofMultivector denseA .even
+  let packedB : MV R3 .even := MV.ofMultivector denseB .even
+  let scale : Float := -3.0
+  return packedMatchesDense (packedA + packedB) (denseA + denseB) &&
+    packedMatchesDense (-packedA) (-denseA) &&
+    packedMatchesDense (scale * packedA) (denseA.smul scale)
+
+/-- Odd packed `MV` linear operations agree with dense references. -/
+def prop_mv_odd_linear_ops_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let b ← genR3DenseMv
+  let denseA := a.mv.oddPart
+  let denseB := b.mv.oddPart
+  let packedA : MV R3 .odd := MV.ofMultivector denseA .odd
+  let packedB : MV R3 .odd := MV.ofMultivector denseB .odd
+  let scale : Float := 0.25
+  return packedMatchesDense (packedA + packedB) (denseA + denseB) &&
+    packedMatchesDense (-packedA) (-denseA) &&
+    packedMatchesDense (scale * packedA) (denseA.smul scale)
+
+/-- Full packed `MV` projectors agree with dense even/odd projection. -/
+def prop_mv_full_projectors_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let packed : MV R3 .full := MV.ofMultivector a.mv .full
+  return packedMatchesDense (MV.evenPart packed) a.mv.evenPart &&
+    packedMatchesDense (MV.oddPart packed) a.mv.oddPart
+
+/-- Packed even/odd widening into full storage agrees with dense references. -/
+def prop_mv_widen_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let evenPacked : MV R3 .even := MV.ofMultivector a.mv.evenPart .even
+  let oddPacked : MV R3 .odd := MV.ofMultivector a.mv.oddPart .odd
+  let evenFull : MV R3 .full := evenPacked
+  let oddFull : MV R3 .full := oddPacked
+  return packedMatchesDense evenFull a.mv.evenPart &&
+    packedMatchesDense oddFull a.mv.oddPart
+
 /-- Packed `MV` user-facing coefficient access respects the parity tag. -/
 def prop_mv_parity_guard_coeff : Bool :=
   let evenScalar := MV.scalar R3 7.0
@@ -1049,10 +1103,20 @@ def runPackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {r14}"
   let r15 ← runGenProp "MV parity projection" prop_mv_parity_projection
   IO.println s!"│ {r15}"
-  let r15a := runBoolProp "MV parity guarded coeff" prop_mv_parity_guard_coeff
+  let r15a ← runGenProp "MV full linear ops" prop_mv_full_linear_ops_dense
   IO.println s!"│ {r15a}"
-  let r15b := runBoolProp "MV parity guarded setCoeff" prop_mv_parity_guard_setCoeff
+  let r15b ← runGenProp "MV even linear ops" prop_mv_even_linear_ops_dense
   IO.println s!"│ {r15b}"
+  let r15c ← runGenProp "MV odd linear ops" prop_mv_odd_linear_ops_dense
+  IO.println s!"│ {r15c}"
+  let r15d ← runGenProp "MV full projectors" prop_mv_full_projectors_dense
+  IO.println s!"│ {r15d}"
+  let r15e ← runGenProp "MV parity widening" prop_mv_widen_dense
+  IO.println s!"│ {r15e}"
+  let r15f := runBoolProp "MV parity guarded coeff" prop_mv_parity_guard_coeff
+  IO.println s!"│ {r15f}"
+  let r15g := runBoolProp "MV parity guarded setCoeff" prop_mv_parity_guard_setCoeff
+  IO.println s!"│ {r15g}"
   let r16 ← runGenProp "MV full multiplication" prop_mv_full_mul_dense
   IO.println s!"│ {r16}"
   let r17 ← runGenProp "MV even*even multiplication" prop_mv_even_mul_dense
@@ -1068,7 +1132,8 @@ def runPackedReferenceTests : IO (List PropTestResult) := do
   let r22 ← runGenProp "MV sandwich" prop_mv_sandwich_dense 50
   IO.println s!"│ {r22}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [r14, r15, r15a, r15b, r16, r17, r18, r19, r20, r21, r22]
+  return [r14, r15, r15a, r15b, r15c, r15d, r15e, r15f, r15g, r16, r17, r18, r19,
+    r20, r21, r22]
 
 /-- Run PGA3 packed-MV baseline checks against dense reference results. -/
 def runPGA3PackedReferenceTests : IO (List PropTestResult) := do
