@@ -101,12 +101,14 @@ def cosh (x : Float) : Float := (Float.exp x + Float.exp (-x)) / 2.0
 def sinh (x : Float) : Float := (Float.exp x - Float.exp (-x)) / 2.0
 
 def svgOpen (width height : Nat) : String :=
-  s!"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}\" height=\"{height}\" viewBox=\"0 0 {width} {height}\">\n" ++
+  "<svg xmlns=\"http://www.w3.org/2000/svg\" " ++
+  s!"width=\"{width}\" height=\"{height}\" viewBox=\"0 0 {width} {height}\">\n" ++
   "  <rect width=\"100%\" height=\"100%\" fill=\"#ffffff\"/>\n"
 
 def arrowDef : String :=
   "  <defs>\n" ++
-  "    <marker id=\"arrow\" markerWidth=\"6\" markerHeight=\"6\" refX=\"5\" refY=\"3\" orient=\"auto\" markerUnits=\"strokeWidth\">\n" ++
+  "    <marker id=\"arrow\" markerWidth=\"6\" markerHeight=\"6\" " ++
+  "refX=\"5\" refY=\"3\" orient=\"auto\" markerUnits=\"strokeWidth\">\n" ++
   "      <path d=\"M0,0 L0,6 L5,3 z\" fill=\"#8a8a8a\"/>\n" ++
   "    </marker>\n" ++
   "  </defs>\n"
@@ -153,7 +155,8 @@ def streamPath2D (field : Vec2 -> Vec2) (width height : Nat) (range : Float) (se
   let d := path2D width height range pts
   if d.isEmpty then ""
   else
-    s!"  <path d=\"{d}\" fill=\"none\" stroke=\"#6f6f6f\" stroke-width=\"0.82\" stroke-opacity=\"0.38\"/>\n"
+    s!"  <path d=\"{d}\" fill=\"none\" stroke=\"#6f6f6f\" " ++
+    "stroke-width=\"0.82\" stroke-opacity=\"0.38\"/>\n"
 
 def arrowGlyph2D (field : Vec2 -> Vec2) (width height : Nat) (range : Float) (seed : Vec2) :
     String :=
@@ -168,7 +171,10 @@ def arrowGlyph2D (field : Vec2 -> Vec2) (width height : Nat) (range : Float) (se
     let y1 := p.2 - 0.5 * dy
     let x2 := p.1 + 0.5 * dx
     let y2 := p.2 + 0.5 * dy
-    s!"  <line x1=\"{fmt x1}\" y1=\"{fmt y1}\" x2=\"{fmt x2}\" y2=\"{fmt y2}\" stroke=\"#808080\" stroke-width=\"0.65\" stroke-opacity=\"0.34\" marker-end=\"url(#arrow)\"/>\n"
+    s!"  <line x1=\"{fmt x1}\" y1=\"{fmt y1}\" " ++
+    s!"x2=\"{fmt x2}\" y2=\"{fmt y2}\" " ++
+    "stroke=\"#808080\" stroke-width=\"0.65\" stroke-opacity=\"0.34\" " ++
+    "marker-end=\"url(#arrow)\"/>\n"
 
 def seeds2D (count : Nat) (range : Float) : List Vec2 :=
   let step := 2.0 * range / (count.toFloat - 1.0)
@@ -257,7 +263,9 @@ def curveSvg3D (pts : List Vec3) (width height : Nat) (scale : Float) (offset : 
   let curve := path3D width height scale offset pts
   svgOpen width height ++
     grid3D width height scale offset gridRange ++
-    s!"  <path d=\"{curve}\" fill=\"none\" stroke=\"#6b6b6b\" stroke-width=\"1.15\" stroke-opacity=\"0.78\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>\n" ++
+    s!"  <path d=\"{curve}\" fill=\"none\" stroke=\"#6b6b6b\" " ++
+    "stroke-width=\"1.15\" stroke-opacity=\"0.78\" " ++
+    "stroke-linecap=\"round\" stroke-linejoin=\"round\"/>\n" ++
     "</svg>\n"
 
 def sampleCurve (samples : Nat) (t0 t1 : Float) (f : Float -> Vec3) : List Vec3 :=
@@ -314,10 +322,22 @@ def orbit4Point (t : Float) : Vec3 :=
   rotateZ t translated
 
 def curveExamples : List (Prod String String) :=
-  [ ("torus.svg", curveSvg3D (sampleCurve 1800 (-2.0 * pi) (2.0 * pi) torusPoint) 360 250 86.0 (0.0, 0.0) 1.8),
-    ("helix.svg", curveSvg3D (sampleCurve 1200 (-2.0 * pi) (2.0 * pi) helixPoint) 360 250 84.0 (0.0, 0.0) 1.8),
-    ("orbit-2.svg", curveSvg3D (sampleCurve 1800 (-2.0 * pi) (2.0 * pi) orbit2Point) 510 550 14.0 (20.0, 15.0) 8.0),
-    ("orbit-4.svg", curveSvg3D (sampleCurve 1600 (-2.0 * pi) (2.0 * pi) orbit4Point) 680 395 78.0 (0.0, 10.0) 2.0) ]
+  [ ("torus.svg",
+      curveSvg3D
+        (sampleCurve 1800 (-2.0 * pi) (2.0 * pi) torusPoint)
+        360 250 86.0 (0.0, 0.0) 1.8),
+    ("helix.svg",
+      curveSvg3D
+        (sampleCurve 1200 (-2.0 * pi) (2.0 * pi) helixPoint)
+        360 250 84.0 (0.0, 0.0) 1.8),
+    ("orbit-2.svg",
+      curveSvg3D
+        (sampleCurve 1800 (-2.0 * pi) (2.0 * pi) orbit2Point)
+        510 550 14.0 (20.0, 15.0) 8.0),
+    ("orbit-4.svg",
+      curveSvg3D
+        (sampleCurve 1600 (-2.0 * pi) (2.0 * pi) orbit4Point)
+        680 395 78.0 (0.0, 10.0) 2.0) ]
 
 def inRange3D (range : Float) (p : Vec3) : Bool :=
   Float.abs p.x <= range && Float.abs p.y <= range && Float.abs p.z <= range
@@ -342,7 +362,8 @@ def streamPath3D (field : Vec3 -> Vec3) (width height : Nat) (scale : Float) (of
   let d := path3D width height scale offset pts
   if d.isEmpty then ""
   else
-    s!"  <path d=\"{d}\" fill=\"none\" stroke=\"#595959\" stroke-width=\"0.8\" stroke-opacity=\"0.36\" stroke-linecap=\"round\"/>\n"
+    s!"  <path d=\"{d}\" fill=\"none\" stroke=\"#595959\" " ++
+    "stroke-width=\"0.8\" stroke-opacity=\"0.36\" stroke-linecap=\"round\"/>\n"
 
 def seeds3D (countXY countZ : Nat) (range : Float) : List Vec3 :=
   let stepXY := 2.0 * range / (countXY.toFloat - 1.0)
@@ -489,7 +510,8 @@ def comparisonHtml : String :=
   "    h2 { font-size: 16px; font-weight: 650; margin: 0 0 12px; }\n" ++
   "    .frames { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }\n" ++
   "    figure { margin: 0; background: #fff; border: 1px solid #d8d8d5; padding: 10px; }\n" ++
-  "    img { display: block; width: 100%; height: 360px; object-fit: contain; background: #fff; }\n" ++
+  "    img { display: block; width: 100%; height: 360px; " ++
+  "object-fit: contain; background: #fff; }\n" ++
   "    figcaption { margin-top: 8px; font-size: 12px; color: #666; }\n" ++
   "    @media (max-width: 760px) { .frames { grid-template-columns: 1fr; } }\n" ++
   "  </style>\n" ++
