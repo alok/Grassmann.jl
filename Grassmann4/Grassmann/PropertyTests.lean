@@ -959,6 +959,21 @@ def prop_pga3_point3_extract_point_cloud : Bool :=
   pga3PointCloud.all fun c =>
     coordsApproxEq (PGA.extractPoint3 (PGA.point3 c.1 c.2.1 c.2.2)) c
 
+/-- Generated packed PGA points match the dense proof-friendly constructor. -/
+def prop_pga3_generated_point3_dense : Gen Bool := do
+  let c ← genCoord3 4.0
+  return packedMatchesDense
+    (PGA.point3 c.1 c.2.1 c.2.2)
+    (PGA.Proof.point c.1 c.2.1 c.2.2)
+
+/-- Generated packed PGA rotation motors match the dense proof-friendly constructor. -/
+def prop_pga3_generated_motor3_dense : Gen Bool := do
+  let axis ← genCoord3 1.0
+  let θ ← genFloat pga3TestPi
+  return packedMatchesDense
+    (PGA.motor3 axis.1 axis.2.1 axis.2.2 θ)
+    (PGA.Proof.rotor axis.1 axis.2.1 axis.2.2 θ)
+
 /-- The identity packed motor preserves every point in the deterministic cloud. -/
 def prop_pga3_identity_motor_point_cloud : Bool :=
   let identity := PGA.Motor.identity PGA3
@@ -975,6 +990,21 @@ def pga3PackedMotorMatchesDensePointCloud
     let packedCoords := PGA.extractPoint3 (PGA.Motor.transformPoint packedMotor packedPoint)
     let denseCoords := PGA.Proof.extractPoint (PGA.Proof.applyMotor denseMotor densePoint)
     coordsApproxEq packedCoords denseCoords
+
+/-- Generated packed point transforms agree with the dense PGA reference. -/
+def prop_pga3_generated_motor_point_dense : Gen Bool := do
+  let c ← genCoord3 2.0
+  let axis ← genCoord3 1.0
+  let θ ← genFloat pga3TestPi
+  let packedMotor := PGA.motor3 axis.1 axis.2.1 axis.2.2 θ
+  let denseMotor := PGA.Proof.rotor axis.1 axis.2.1 axis.2.2 θ
+  let packedPoint := PGA.point3 c.1 c.2.1 c.2.2
+  let densePoint := PGA.Proof.point c.1 c.2.1 c.2.2
+  let packedResult := PGA.Motor.transformPoint packedMotor packedPoint
+  let denseResult := PGA.Proof.applyMotor denseMotor densePoint
+  return packedMatchesDense packedResult denseResult (tol := 1e-6) &&
+    coordsApproxEq (PGA.extractPoint3 packedResult) (PGA.Proof.extractPoint denseResult)
+      (tol := 1e-5)
 
 /-- Z-axis rotor point-cloud transforms use the same convention as the dense reference. -/
 def prop_pga3_z_rotor_point_cloud_dense : Bool :=
@@ -2082,6 +2112,12 @@ def runPGA3PointCloudTransformTests : IO (List PropTestResult) := do
   let pointCloud1 := runBoolProp "PGA3 point constructor/extractor"
     prop_pga3_point3_extract_point_cloud
   IO.println s!"│ {pointCloud1}"
+  let pointCloud1a ← runGenProp "PGA3 generated point constructor vs dense"
+    prop_pga3_generated_point3_dense
+  IO.println s!"│ {pointCloud1a}"
+  let pointCloud1b ← runGenProp "PGA3 generated motor constructor vs dense"
+    prop_pga3_generated_motor3_dense
+  IO.println s!"│ {pointCloud1b}"
   let pointCloud2 := runBoolProp "PGA3 identity motor point cloud"
     prop_pga3_identity_motor_point_cloud
   IO.println s!"│ {pointCloud2}"
@@ -2094,8 +2130,12 @@ def runPGA3PointCloudTransformTests : IO (List PropTestResult) := do
   let pointCloud5 := runBoolProp "PGA3 composed motor point cloud sequential"
     prop_pga3_composed_motor_point_cloud_sequential
   IO.println s!"│ {pointCloud5}"
+  let pointCloud6 ← runGenProp "PGA3 generated motor point transform vs dense"
+    prop_pga3_generated_motor_point_dense 50
+  IO.println s!"│ {pointCloud6}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [pointCloud1, pointCloud2, pointCloud3, pointCloud4, pointCloud5]
+  return [pointCloud1, pointCloud1a, pointCloud1b, pointCloud2, pointCloud3, pointCloud4,
+    pointCloud5, pointCloud6]
 
 /-- Run user-facing CGA3 point-cloud transform checks. -/
 def runCGA3PointCloudTransformTests : IO (List PropTestResult) := do
