@@ -79,9 +79,30 @@ structure CGA3Mv where
   mv : MultivectorS CGA3 Float
   deriving Repr
 
+/-- Wrapper for PGA3 multivectors. -/
+structure PGA3Mv where
+  mv : MultivectorS PGA3 Float
+  deriving Repr
+
 /-- Create CGA3Mv from coefficient list -/
 def CGA3Mv.ofList (coeffs : List (Nat × Float)) : CGA3Mv :=
   ⟨MultivectorS.ofList coeffs⟩
+
+/-- Create PGA3Mv from coefficient list. -/
+def PGA3Mv.ofList (coeffs : List (Nat × Float)) : PGA3Mv :=
+  ⟨MultivectorS.ofList coeffs⟩
+
+/-- Generator for PGA3 multivectors (2⁴ = 16 basis elements). -/
+instance : Arbitrary PGA3Mv where
+  arbitrary := do
+    let coeffs ← genSparseCoeffs 15 4
+    return PGA3Mv.ofList coeffs
+
+instance : Shrinkable PGA3Mv where
+  shrink mv :=
+    let terms := mv.mv.toList
+    terms.mapIdx fun i _ =>
+      PGA3Mv.ofList (terms.eraseIdx i)
 
 /-- Generator for CGA3 multivectors (2⁵ = 32 basis elements) -/
 instance : Arbitrary CGA3Mv where
@@ -114,6 +135,9 @@ def mvApproxEq {n : Nat} {sig : Signature n} (a b : MultivectorS sig Float)
     approxEq (a.coeff i) (b.coeff i) tol
 
 instance : BEq R3Mv where
+  beq a b := mvApproxEq a.mv b.mv
+
+instance : BEq PGA3Mv where
   beq a b := mvApproxEq a.mv b.mv
 
 instance : BEq CGA3Mv where
@@ -539,6 +563,44 @@ def prop_sparse_gradeProject_dense : Gen Bool := do
   let k ← Gen.choose Nat 0 3 (by omega)
   return sparseMatchesDense (a.mv.gradeProject k.val) ((sparseToDenseRef a.mv).gradeProject k.val)
 
+/-! ## PGA3 Sparse Reference Tests -/
+
+/-- PGA3 sparse addition agrees with dense addition. -/
+def prop_sparse_pga3_add_dense (a b : PGA3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (a.mv + b.mv) (denseA + denseB)
+
+/-- PGA3 sparse geometric multiplication agrees with dense multiplication. -/
+def prop_sparse_pga3_mul_dense (a b : PGA3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (a.mv * b.mv) (denseA * denseB) (tol := 1e-6)
+
+/-- PGA3 sparse wedge product agrees with dense wedge product. -/
+def prop_sparse_pga3_wedge_dense (a b : PGA3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (a.mv ⋀ₛ b.mv) (denseA ⋀ᵐ denseB) (tol := 1e-6)
+
+/-- PGA3 sparse reverse agrees with dense reverse. -/
+def prop_sparse_pga3_reverse_dense (a : PGA3Mv) : Bool :=
+  sparseMatchesDense a.mv.reverse (sparseToDenseRef a.mv).reverse
+
+/-- PGA3 sparse involute agrees with dense involute. -/
+def prop_sparse_pga3_involute_dense (a : PGA3Mv) : Bool :=
+  sparseMatchesDense a.mv.involute (sparseToDenseRef a.mv).involute
+
+/-- PGA3 sparse conjugate agrees with dense conjugate. -/
+def prop_sparse_pga3_conjugate_dense (a : PGA3Mv) : Bool :=
+  sparseMatchesDense a.mv.conjugate (sparseToDenseRef a.mv).conjugate
+
+/-- PGA3 sparse grade projection agrees with dense grade projection. -/
+def prop_sparse_pga3_gradeProject_dense : Gen Bool := do
+  let a : PGA3Mv ← Arbitrary.arbitrary
+  let k ← Gen.choose Nat 0 4 (by omega)
+  return sparseMatchesDense (a.mv.gradeProject k.val) ((sparseToDenseRef a.mv).gradeProject k.val)
+
 /-! ## CGA3 Sparse Reference Tests -/
 
 /-- CGA3 sparse addition agrees with dense addition. -/
@@ -679,6 +741,17 @@ def prop_CGA3_signature : Bool :=
   approxEq (w4 * w4).scalarPart 1.0 &&
   approxEq (w5 * w5).scalarPart (-1.0)
 
+/-- PGA3 signature verification, including the degenerate projective basis vector. -/
+def prop_PGA3_signature : Bool :=
+  let e1 : MultivectorS PGA3 Float := MultivectorS.basis ⟨0, by omega⟩
+  let e2 : MultivectorS PGA3 Float := MultivectorS.basis ⟨1, by omega⟩
+  let e3 : MultivectorS PGA3 Float := MultivectorS.basis ⟨2, by omega⟩
+  let e0 : MultivectorS PGA3 Float := MultivectorS.basis ⟨3, by omega⟩
+  approxEq (e1 * e1).scalarPart 1.0 &&
+  approxEq (e2 * e2).scalarPart 1.0 &&
+  approxEq (e3 * e3).scalarPart 1.0 &&
+  approxEq (e0 * e0).scalarPart 0.0
+
 /-! ## Test Runner -/
 
 /-- Result of a property test -/
@@ -740,6 +813,33 @@ def runRandomProp3 (name : String) (prop : R3Mv → R3Mv → R3Mv → Bool)
       failMsg := s!"Failed on test {Nat.repr i}"
       break
   return { name, passed, numTests, message := failMsg }
+
+/-- Run a randomized PGA3 property test. -/
+def runRandomPGA3Prop (name : String) (prop : PGA3Mv → Bool)
+    (numTests : Nat := 100) : IO PropTestResult := do
+  let mut passed := true
+  let mut failMsg := ""
+  for i in [0:numTests] do
+    let mv : PGA3Mv ← Gen.run Arbitrary.arbitrary (i * 2)
+    if !prop mv then
+      passed := false
+      failMsg := s!"Failed on test {Nat.repr i}"
+      break
+  return { name := name, passed := passed, numTests := numTests, message := failMsg }
+
+/-- Run a randomized PGA3 property test with two arguments. -/
+def runRandomPGA3Prop2 (name : String) (prop : PGA3Mv → PGA3Mv → Bool)
+    (numTests : Nat := 100) : IO PropTestResult := do
+  let mut passed := true
+  let mut failMsg := ""
+  for i in [0:numTests] do
+    let a : PGA3Mv ← Gen.run Arbitrary.arbitrary (i * 2)
+    let b : PGA3Mv ← Gen.run Arbitrary.arbitrary (i * 2 + 1)
+    if !prop a b then
+      passed := false
+      failMsg := s!"Failed on test {Nat.repr i}"
+      break
+  return { name := name, passed := passed, numTests := numTests, message := failMsg }
 
 /-- Run a randomized CGA3 property test. -/
 def runRandomCGA3Prop (name : String) (prop : CGA3Mv → Bool)
@@ -902,6 +1002,27 @@ def runSparseReferenceTests : IO (List PropTestResult) := do
   IO.println "└────────────────────────────────────────────────┘"
   return [r23, r24, r25, r26, r27, r28, r29]
 
+/-- Run PGA3 sparse-MV baseline checks against dense reference results. -/
+def runPGA3SparseReferenceTests : IO (List PropTestResult) := do
+  IO.println "\n┌─ PGA3 Sparse vs Dense Reference ──────────────┐"
+  let pgaSparse1 ← runRandomPGA3Prop2 "PGA3 sparse addition" prop_sparse_pga3_add_dense
+  IO.println s!"│ {pgaSparse1}"
+  let pgaSparse2 ← runRandomPGA3Prop2 "PGA3 sparse multiplication" prop_sparse_pga3_mul_dense
+  IO.println s!"│ {pgaSparse2}"
+  let pgaSparse3 ← runRandomPGA3Prop2 "PGA3 sparse wedge" prop_sparse_pga3_wedge_dense
+  IO.println s!"│ {pgaSparse3}"
+  let pgaSparse4 ← runRandomPGA3Prop "PGA3 sparse reverse" prop_sparse_pga3_reverse_dense
+  IO.println s!"│ {pgaSparse4}"
+  let pgaSparse5 ← runRandomPGA3Prop "PGA3 sparse involute" prop_sparse_pga3_involute_dense
+  IO.println s!"│ {pgaSparse5}"
+  let pgaSparse6 ← runRandomPGA3Prop "PGA3 sparse conjugate" prop_sparse_pga3_conjugate_dense
+  IO.println s!"│ {pgaSparse6}"
+  let pgaSparse7 ← runGenProp "PGA3 sparse grade projection" prop_sparse_pga3_gradeProject_dense
+  IO.println s!"│ {pgaSparse7}"
+  IO.println "└────────────────────────────────────────────────┘"
+  return [pgaSparse1, pgaSparse2, pgaSparse3, pgaSparse4, pgaSparse5, pgaSparse6,
+    pgaSparse7]
+
 /-- Run CGA3 sparse-MV baseline checks against dense reference results. -/
 def runCGA3SparseReferenceTests : IO (List PropTestResult) := do
   IO.println "\n┌─ CGA3 Sparse vs Dense Reference ──────────────┐"
@@ -933,6 +1054,7 @@ def runPropertyTests : IO Unit := do
   IO.println s!"│ {runBoolProp "R3 basis vectors square to 1" prop_R3_basis_squares}"
   IO.println s!"│ {runBoolProp "R3 basis anticommute" prop_R3_basis_anticommute}"
   IO.println s!"│ {runBoolProp "CGA3 signature correct" prop_CGA3_signature}"
+  IO.println s!"│ {runBoolProp "PGA3 signature correct" prop_PGA3_signature}"
   IO.println "└────────────────────────────────────────────────┘"
   -- Additive properties
   IO.println "\n┌─ Addition Properties ─────────────────────────┐"
@@ -975,6 +1097,7 @@ def runPropertyTests : IO Unit := do
   let pgaPackedResults ← runPGA3PackedReferenceTests
   let cgaPackedResults ← runCGA3PackedReferenceTests
   let sparseResults ← runSparseReferenceTests
+  let pgaSparseResults ← runPGA3SparseReferenceTests
   let cgaSparseResults ← runCGA3SparseReferenceTests
   -- Summary
   let coreResults := [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13]
@@ -987,13 +1110,15 @@ def runPropertyTests : IO Unit := do
     countPassed pgaPackedResults +
     countPassed cgaPackedResults +
     countPassed sparseResults +
+    countPassed pgaSparseResults +
     countPassed cgaSparseResults
-  let basisPass := if prop_R3_basis_squares && prop_R3_basis_anticommute && prop_CGA3_signature
-                   then 3 else 0
+  let basisProps := [prop_R3_basis_squares, prop_R3_basis_anticommute, prop_CGA3_signature,
+    prop_PGA3_signature]
+  let basisPass := basisProps.filter id |>.length
   let total :=
     coreResults.length + nativeResults.length + signTableResults.length + packedResults.length +
     pgaPackedResults.length + cgaPackedResults.length + sparseResults.length +
-    cgaSparseResults.length + 3
+    pgaSparseResults.length + cgaSparseResults.length + basisProps.length
   let totalPass := passCount + basisPass
   IO.println ""
   IO.println "╔══════════════════════════════════════════════╗"
