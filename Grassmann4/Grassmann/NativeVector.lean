@@ -295,6 +295,38 @@ theorem coeff_setCoeff_ne (m : NativeMV sig) {setMask queryMask : Nat} (x : Floa
   simp only [Vector.get, Vector.set]
   simp [Array.getElem_set, hne]
 
+/-- The blade mask used by a native basis vector is in coefficient range. -/
+theorem basisVector_mask_lt (i : Fin n) : 1 <<< i.val < 2 ^ n := by
+  rw [Nat.one_shiftLeft]
+  exact Nat.pow_lt_pow_right (by decide : 1 < 2) i.isLt
+
+/-- A native basis blade has coefficient 1 at its own in-range mask. -/
+theorem coeff_blade_same (mask : Nat) (hmask : mask < 2 ^ n) :
+    (blade sig mask).coeff mask = 1.0 := by
+  unfold blade
+  exact coeff_setCoeff_same (zero sig) 1.0 hmask
+
+/-- A native basis blade has coefficient 0 at every other in-range mask. -/
+theorem coeff_blade_ne {setMask queryMask : Nat} (hset : setMask < 2 ^ n)
+    (hquery : queryMask < 2 ^ n) (hne : setMask ≠ queryMask) :
+    (blade sig setMask).coeff queryMask = 0.0 := by
+  unfold blade
+  rw [coeff_setCoeff_ne (hset := hset) (hquery := hquery) (hne := hne)]
+  exact coeff_zero queryMask
+
+/-- A native basis vector has coefficient 1 at its own blade mask. -/
+theorem coeff_basisVector_same (i : Fin n) :
+    (basisVector sig i).coeff (1 <<< i.val) = 1.0 := by
+  unfold basisVector
+  exact coeff_blade_same (1 <<< i.val) (basisVector_mask_lt i)
+
+/-- A native basis vector has coefficient 0 at every other in-range mask. -/
+theorem coeff_basisVector_ne {i : Fin n} {queryMask : Nat}
+    (hquery : queryMask < 2 ^ n) (hne : 1 <<< i.val ≠ queryMask) :
+    (basisVector sig i).coeff queryMask = 0.0 := by
+  unfold basisVector
+  exact coeff_blade_ne (basisVector_mask_lt i) hquery hne
+
 /-- Coefficient of a native-vector sum at an in-range blade mask. -/
 theorem coeff_add (a b : NativeMV sig) {mask : Nat} (hmask : mask < 2 ^ n) :
     (a + b).coeff mask = a.coeff mask + b.coeff mask := by
