@@ -1158,6 +1158,24 @@ def prop_mul_assoc (a b c : R3Mv) : Bool :=
 def prop_mul_one (a : R3Mv) : Bool :=
   mvApproxEq (a.mv * 1) a.mv && mvApproxEq (1 * a.mv) a.mv
 
+/-- The scalar unit is a two-sided identity for the sparse wedge product. -/
+def sparseWedgeOneIdentity {n : Nat} {sig : Signature n}
+    (m : MultivectorS sig Float) : Bool :=
+  let one : MultivectorS sig Float := 1
+  mvApproxEq (one ⋀ₛ m) m && mvApproxEq (m ⋀ₛ one) m
+
+/-- R3 sparse wedge has scalar one as a two-sided identity. -/
+def prop_wedge_one_identity (a : R3Mv) : Bool :=
+  sparseWedgeOneIdentity a.mv
+
+/-- PGA3 sparse wedge has scalar one as a two-sided identity. -/
+def prop_pga3_wedge_one_identity (a : PGA3Mv) : Bool :=
+  sparseWedgeOneIdentity a.mv
+
+/-- CGA3 sparse wedge has scalar one as a two-sided identity. -/
+def prop_cga3_wedge_one_identity (a : CGA3Mv) : Bool :=
+  sparseWedgeOneIdentity a.mv
+
 /-- Left distributivity -/
 def prop_left_distrib (a b c : R3Mv) : Bool :=
   mvApproxEq (a.mv * (b.mv + c.mv)) (a.mv * b.mv + a.mv * c.mv) (tol := 1e-6)
@@ -1821,6 +1839,12 @@ def runPropertyTests : IO Unit := do
   IO.println "\n┌─ Wedge & Involution Properties ───────────────┐"
   let r9 ← runGenProp "Wedge anticommutes (vectors)" prop_wedge_anticomm_grade1
   IO.println s!"│ {r9}"
+  let r9a ← runRandomProp "Wedge one identity" prop_wedge_one_identity
+  IO.println s!"│ {r9a}"
+  let r9b ← runRandomPGA3Prop "PGA3 wedge one identity" prop_pga3_wedge_one_identity
+  IO.println s!"│ {r9b}"
+  let r9c ← runRandomCGA3Prop "CGA3 wedge one identity" prop_cga3_wedge_one_identity
+  IO.println s!"│ {r9c}"
   let r10 ← runRandomProp2 "Reverse anti-morphism" prop_reverse_antimorphism
   IO.println s!"│ {r10}"
   let r11 ← runRandomProp "Reverse involutive" prop_reverse_involutive
@@ -1842,7 +1866,8 @@ def runPropertyTests : IO Unit := do
   let cgaSparseResults ← runCGA3SparseReferenceTests
   let stressResults ← runHighDimStressTests
   -- Summary
-  let coreResults := [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13]
+  let coreResults := [r1, r2, r3, r4, r5, r6, r7, r8, r9, r9a, r9b, r9c, r10, r11,
+    r12, r13]
   let countPassed (results : List PropTestResult) := results.filter (·.passed) |>.length
   let passCount :=
     countPassed coreResults +
