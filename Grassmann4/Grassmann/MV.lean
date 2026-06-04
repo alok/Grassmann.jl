@@ -11,7 +11,6 @@
 import Grassmann.DataArray
 import Grassmann.Parity
 import Grassmann.SignTables
-import Grassmann.Proof  -- for sorry_proof
 import Grassmann.EvenMV  -- for Kernel tables (fast even×even path)
 
 namespace Grassmann
@@ -612,7 +611,10 @@ def ofMultivector (m : Multivector sig Float) (p : Parity) : MV sig p :=
   let sz := storageSize n p
   ⟨DataArray.ofArray ((Array.range sz).map fun pi =>
     let mask := unpackIdx n p pi
-    m.coeffs ⟨mask, Proof.sorryProofAxiom⟩)⟩
+    if hmask : mask < 2 ^ n then
+      m.coeffs ⟨mask, hmask⟩
+    else
+      0.0)⟩
 
 /-! ### Typeclass Instances -/
 
