@@ -300,6 +300,13 @@ theorem basisVector_mask_lt (i : Fin n) : 1 <<< i.val < 2 ^ n := by
   rw [Nat.one_shiftLeft]
   exact Nat.pow_lt_pow_right (by decide : 1 < 2) i.isLt
 
+/-- Distinct native basis vectors have distinct blade masks. -/
+theorem basisVector_mask_ne {i j : Fin n} (hij : i ≠ j) :
+    1 <<< i.val ≠ 1 <<< j.val := by
+  rw [Nat.one_shiftLeft, Nat.one_shiftLeft]
+  have hval : i.val ≠ j.val := fun h => hij (Fin.ext h)
+  exact (Nat.pow_right_injective (by decide : 2 ≤ 2)).ne hval
+
 /-- A native basis blade has coefficient 1 at its own in-range mask. -/
 theorem coeff_blade_same (mask : Nat) (hmask : mask < 2 ^ n) :
     (blade sig mask).coeff mask = 1.0 := by
@@ -327,6 +334,25 @@ theorem coeff_basisVector_ne {i : Fin n} {queryMask : Nat}
   unfold basisVector
   exact coeff_blade_ne (basisVector_mask_lt i) hquery hne
 
+/-- Coefficients extracted by `toVector` are exactly the grade-1 blade coefficients. -/
+theorem coeff_toVector (m : NativeMV sig) (i : Fin n) :
+    m.toVector.get i = m.coeff (1 <<< i.val) := by
+  unfold toVector
+  simp only [Vector.get, Vector.ofFn, Array.getElem_ofFn]
+  rfl
+
+/-- The native coordinate vector of a basis vector has coefficient 1 in its own slot. -/
+theorem toVector_basisVector_same (i : Fin n) :
+    ((basisVector sig i).toVector).get i = 1.0 := by
+  rw [coeff_toVector]
+  exact coeff_basisVector_same i
+
+/-- The native coordinate vector of a basis vector has coefficient 0 in other slots. -/
+theorem toVector_basisVector_ne {i j : Fin n} (hij : i ≠ j) :
+    ((basisVector sig i).toVector).get j = 0.0 := by
+  rw [coeff_toVector]
+  exact coeff_basisVector_ne (basisVector_mask_lt j) (basisVector_mask_ne hij)
+
 /-- Coefficient of a native-vector sum at an in-range blade mask. -/
 theorem coeff_add (a b : NativeMV sig) {mask : Nat} (hmask : mask < 2 ^ n) :
     (a + b).coeff mask = a.coeff mask + b.coeff mask := by
@@ -341,6 +367,16 @@ theorem coeff_neg (m : NativeMV sig) {mask : Nat} (hmask : mask < 2 ^ n) :
   change (NativeMV.neg m).coeff mask = -m.coeff mask
   unfold coeff NativeMV.neg
   simp only [hmask, ↓reduceDIte, Vector.get, Vector.map, Array.getElem_map]
+  rfl
+
+/-- Coefficient of native-vector subtraction at an in-range blade mask.
+    This is stated in executable `add`/`neg` form to avoid assuming exact Float ring laws. -/
+theorem coeff_sub_add_neg (a b : NativeMV sig) {mask : Nat} (hmask : mask < 2 ^ n) :
+    (a - b).coeff mask = a.coeff mask + -b.coeff mask := by
+  change (NativeMV.sub a b).coeff mask = a.coeff mask + -b.coeff mask
+  unfold NativeMV.sub NativeMV.add NativeMV.neg coeff
+  simp only [hmask, ↓reduceDIte, Vector.get, Vector.zipWith, Array.getElem_zipWith,
+    Vector.map, Array.getElem_map]
   rfl
 
 /-- Coefficient of native-vector scalar multiplication at an in-range blade mask. -/
