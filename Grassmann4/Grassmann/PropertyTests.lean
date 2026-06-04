@@ -231,6 +231,64 @@ def packedApproxEq {n : Nat} {sig : Signature n} {p : Parity}
     (a b : MV sig p) (tol : Float := 1e-9) : Bool :=
   denseMvApproxEq (MV.toMultivector a) (MV.toMultivector b) tol
 
+/-- Packed wedge agrees with dense wedge for full and parity-packed inputs. -/
+def packedWedgeMatchesDense {n : Nat} {sig : Signature n} (a b : Multivector sig Float)
+    (tol : Float := 1e-6) : Bool :=
+  let denseAEven := a.evenPart
+  let denseAOdd := a.oddPart
+  let denseBEven := b.evenPart
+  let denseBOdd := b.oddPart
+  let fullA : MV sig .full := MV.ofMultivector a .full
+  let fullB : MV sig .full := MV.ofMultivector b .full
+  let evenA : MV sig .even := MV.ofMultivector denseAEven .even
+  let oddA : MV sig .odd := MV.ofMultivector denseAOdd .odd
+  let evenB : MV sig .even := MV.ofMultivector denseBEven .even
+  let oddB : MV sig .odd := MV.ofMultivector denseBOdd .odd
+  packedMatchesDense (MV.wedge fullA fullB) (a ⋀ᵐ b) tol &&
+    packedMatchesDense (MV.wedge evenA evenB) (denseAEven ⋀ᵐ denseBEven) tol &&
+    packedMatchesDense (MV.wedge evenA oddB) (denseAEven ⋀ᵐ denseBOdd) tol &&
+    packedMatchesDense (MV.wedge oddA evenB) (denseAOdd ⋀ᵐ denseBEven) tol &&
+    packedMatchesDense (MV.wedge oddA oddB) (denseAOdd ⋀ᵐ denseBOdd) tol
+
+/-- Packed left contraction agrees with dense left contraction for full and parity-packed inputs. -/
+def packedLeftContractMatchesDense {n : Nat} {sig : Signature n}
+    (a b : Multivector sig Float) (tol : Float := 1e-6) : Bool :=
+  let denseAEven := a.evenPart
+  let denseAOdd := a.oddPart
+  let denseBEven := b.evenPart
+  let denseBOdd := b.oddPart
+  let fullA : MV sig .full := MV.ofMultivector a .full
+  let fullB : MV sig .full := MV.ofMultivector b .full
+  let evenA : MV sig .even := MV.ofMultivector denseAEven .even
+  let oddA : MV sig .odd := MV.ofMultivector denseAOdd .odd
+  let evenB : MV sig .even := MV.ofMultivector denseBEven .even
+  let oddB : MV sig .odd := MV.ofMultivector denseBOdd .odd
+  packedMatchesDense (MV.leftContract fullA fullB) (a ⌋ᵐ b) tol &&
+    packedMatchesDense (MV.leftContract evenA evenB) (denseAEven ⌋ᵐ denseBEven) tol &&
+    packedMatchesDense (MV.leftContract evenA oddB) (denseAEven ⌋ᵐ denseBOdd) tol &&
+    packedMatchesDense (MV.leftContract oddA evenB) (denseAOdd ⌋ᵐ denseBEven) tol &&
+    packedMatchesDense (MV.leftContract oddA oddB) (denseAOdd ⌋ᵐ denseBOdd) tol
+
+/-- Packed right contraction agrees with dense right contraction for full and
+parity-packed inputs. -/
+def packedRightContractMatchesDense {n : Nat} {sig : Signature n}
+    (a b : Multivector sig Float) (tol : Float := 1e-6) : Bool :=
+  let denseAEven := a.evenPart
+  let denseAOdd := a.oddPart
+  let denseBEven := b.evenPart
+  let denseBOdd := b.oddPart
+  let fullA : MV sig .full := MV.ofMultivector a .full
+  let fullB : MV sig .full := MV.ofMultivector b .full
+  let evenA : MV sig .even := MV.ofMultivector denseAEven .even
+  let oddA : MV sig .odd := MV.ofMultivector denseAOdd .odd
+  let evenB : MV sig .even := MV.ofMultivector denseBEven .even
+  let oddB : MV sig .odd := MV.ofMultivector denseBOdd .odd
+  packedMatchesDense (MV.rightContract fullA fullB) (a ⌊ᵐ b) tol &&
+    packedMatchesDense (MV.rightContract evenA evenB) (denseAEven ⌊ᵐ denseBEven) tol &&
+    packedMatchesDense (MV.rightContract evenA oddB) (denseAEven ⌊ᵐ denseBOdd) tol &&
+    packedMatchesDense (MV.rightContract oddA evenB) (denseAOdd ⌊ᵐ denseBEven) tol &&
+    packedMatchesDense (MV.rightContract oddA oddB) (denseAOdd ⌊ᵐ denseBOdd) tol
+
 /-! ## Native Vector Reference Tests -/
 
 /-- Convert a dense reference multivector to the native-vector baseline. -/
@@ -541,6 +599,24 @@ def prop_mv_odd_mul_dense : Gen Bool := do
   let packedB : MV R3 .odd := MV.ofMultivector denseB .odd
   return packedMatchesDense (packedA * packedB) (denseA * denseB) (tol := 1e-6)
 
+/-- Packed wedge agrees with dense wedge across full/even/odd storage. -/
+def prop_mv_wedge_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let b ← genR3DenseMv
+  return packedWedgeMatchesDense a.mv b.mv
+
+/-- Packed left contraction agrees with dense left contraction across full/even/odd storage. -/
+def prop_mv_left_contract_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let b ← genR3DenseMv
+  return packedLeftContractMatchesDense a.mv b.mv
+
+/-- Packed right contraction agrees with dense right contraction across full/even/odd storage. -/
+def prop_mv_right_contract_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let b ← genR3DenseMv
+  return packedRightContractMatchesDense a.mv b.mv
+
 /-- Packed reverse agrees with dense reverse. -/
 def prop_mv_reverse_dense : Gen Bool := do
   let a ← genR3DenseMv
@@ -752,6 +828,24 @@ def prop_mv_pga3_odd_mul_dense : Gen Bool := do
   let packedA : MV PGA3 .odd := MV.ofMultivector denseA .odd
   let packedB : MV PGA3 .odd := MV.ofMultivector denseB .odd
   return packedMatchesDense (packedA * packedB) (denseA * denseB) (tol := 1e-6)
+
+/-- PGA3 packed wedge agrees with dense wedge across full/even/odd storage. -/
+def prop_mv_pga3_wedge_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let b ← genPGA3DenseMv
+  return packedWedgeMatchesDense a.mv b.mv
+
+/-- PGA3 packed left contraction agrees with dense left contraction across storage tags. -/
+def prop_mv_pga3_left_contract_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let b ← genPGA3DenseMv
+  return packedLeftContractMatchesDense a.mv b.mv
+
+/-- PGA3 packed right contraction agrees with dense right contraction across storage tags. -/
+def prop_mv_pga3_right_contract_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let b ← genPGA3DenseMv
+  return packedRightContractMatchesDense a.mv b.mv
 
 /-- PGA3 packed reverse agrees with dense reverse. -/
 def prop_mv_pga3_reverse_dense : Gen Bool := do
@@ -1038,6 +1132,24 @@ def prop_mv_cga3_odd_mul_dense : Gen Bool := do
   let packedA : MV CGA3 .odd := MV.ofMultivector denseA .odd
   let packedB : MV CGA3 .odd := MV.ofMultivector denseB .odd
   return packedMatchesDense (packedA * packedB) (denseA * denseB) (tol := 1e-6)
+
+/-- CGA3 packed wedge agrees with dense wedge across full/even/odd storage. -/
+def prop_mv_cga3_wedge_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let b ← genCGA3DenseMv
+  return packedWedgeMatchesDense a.mv b.mv
+
+/-- CGA3 packed left contraction agrees with dense left contraction across storage tags. -/
+def prop_mv_cga3_left_contract_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let b ← genCGA3DenseMv
+  return packedLeftContractMatchesDense a.mv b.mv
+
+/-- CGA3 packed right contraction agrees with dense right contraction across storage tags. -/
+def prop_mv_cga3_right_contract_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let b ← genCGA3DenseMv
+  return packedRightContractMatchesDense a.mv b.mv
 
 /-- CGA3 packed reverse agrees with dense reverse. -/
 def prop_mv_cga3_reverse_dense : Gen Bool := do
@@ -1818,6 +1930,12 @@ def runPackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {r19}"
   let r20 ← runGenProp "MV odd*odd multiplication" prop_mv_odd_mul_dense
   IO.println s!"│ {r20}"
+  let r20a ← runGenProp "MV wedge" prop_mv_wedge_dense
+  IO.println s!"│ {r20a}"
+  let r20b ← runGenProp "MV left contraction" prop_mv_left_contract_dense
+  IO.println s!"│ {r20b}"
+  let r20c ← runGenProp "MV right contraction" prop_mv_right_contract_dense
+  IO.println s!"│ {r20c}"
   let r21 ← runGenProp "MV reverse" prop_mv_reverse_dense
   IO.println s!"│ {r21}"
   let r21a ← runGenProp "MV involutions" prop_mv_involutions_dense
@@ -1826,7 +1944,7 @@ def runPackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {r22}"
   IO.println "└────────────────────────────────────────────────┘"
   return [r14, r15, r15p, r15a, r15b, r15c, r15d, r15e, r15f, r15g, r16, r17, r18,
-    r19, r20, r21, r21a, r22]
+    r19, r20, r20a, r20b, r20c, r21, r21a, r22]
 
 /-- Run direct-dispatch vs typeclass-dispatch multiplication checks. -/
 def runMVDispatchReferenceTests : IO (List PropTestResult) := do
@@ -1872,6 +1990,12 @@ def runPGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {pgaMv6}"
   let pgaMv7 ← runGenProp "PGA3 MV odd*odd multiplication" prop_mv_pga3_odd_mul_dense
   IO.println s!"│ {pgaMv7}"
+  let pgaMv7a ← runGenProp "PGA3 MV wedge" prop_mv_pga3_wedge_dense
+  IO.println s!"│ {pgaMv7a}"
+  let pgaMv7b ← runGenProp "PGA3 MV left contraction" prop_mv_pga3_left_contract_dense
+  IO.println s!"│ {pgaMv7b}"
+  let pgaMv7c ← runGenProp "PGA3 MV right contraction" prop_mv_pga3_right_contract_dense
+  IO.println s!"│ {pgaMv7c}"
   let pgaMv8 ← runGenProp "PGA3 MV reverse" prop_mv_pga3_reverse_dense
   IO.println s!"│ {pgaMv8}"
   let pgaMv8a ← runGenProp "PGA3 MV involutions" prop_mv_pga3_involutions_dense
@@ -1880,7 +2004,8 @@ def runPGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {pgaMv9}"
   IO.println "└────────────────────────────────────────────────┘"
   return [pgaMv1, pgaMv2, pgaMv2p, pgaMv2a, pgaMv2b, pgaMv2c, pgaMv2d, pgaMv2e,
-    pgaMv3, pgaMv4, pgaMv5, pgaMv6, pgaMv7, pgaMv8, pgaMv8a, pgaMv9]
+    pgaMv3, pgaMv4, pgaMv5, pgaMv6, pgaMv7, pgaMv7a, pgaMv7b, pgaMv7c, pgaMv8,
+    pgaMv8a, pgaMv9]
 
 /-- Run user-facing PGA3 point-cloud transform checks. -/
 def runPGA3PointCloudTransformTests : IO (List PropTestResult) := do
@@ -1947,6 +2072,12 @@ def runCGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {cgaMv6}"
   let cgaMv7 ← runGenProp "CGA3 MV odd*odd multiplication" prop_mv_cga3_odd_mul_dense
   IO.println s!"│ {cgaMv7}"
+  let cgaMv7a ← runGenProp "CGA3 MV wedge" prop_mv_cga3_wedge_dense
+  IO.println s!"│ {cgaMv7a}"
+  let cgaMv7b ← runGenProp "CGA3 MV left contraction" prop_mv_cga3_left_contract_dense
+  IO.println s!"│ {cgaMv7b}"
+  let cgaMv7c ← runGenProp "CGA3 MV right contraction" prop_mv_cga3_right_contract_dense
+  IO.println s!"│ {cgaMv7c}"
   let cgaMv8 ← runGenProp "CGA3 MV reverse" prop_mv_cga3_reverse_dense
   IO.println s!"│ {cgaMv8}"
   let cgaMv8a ← runGenProp "CGA3 MV involutions" prop_mv_cga3_involutions_dense
@@ -1955,7 +2086,8 @@ def runCGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {cgaMv9}"
   IO.println "└────────────────────────────────────────────────┘"
   return [cgaMv1, cgaMv2, cgaMv2p, cgaMv2a, cgaMv2b, cgaMv2c, cgaMv2d, cgaMv2e,
-    cgaMv3, cgaMv4, cgaMv5, cgaMv6, cgaMv7, cgaMv8, cgaMv8a, cgaMv9]
+    cgaMv3, cgaMv4, cgaMv5, cgaMv6, cgaMv7, cgaMv7a, cgaMv7b, cgaMv7c, cgaMv8,
+    cgaMv8a, cgaMv9]
 
 /-- Run sparse-MV baseline checks against dense reference results. -/
 def runSparseReferenceTests : IO (List PropTestResult) := do

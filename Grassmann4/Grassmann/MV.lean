@@ -330,6 +330,141 @@ def mulKernelGeneric (sig : Signature n) (p1 p2 : Parity) (a b : DataArray) : Da
             out := out.set! pk (out.get! pk + contrib)
     out
 
+/-- Generic packed wedge-product kernel.
+    Only disjoint blades contribute, and the output parity is the grade-sum parity. -/
+@[inline]
+def wedgeKernelGeneric (sig : Signature n) (p1 p2 : Parity)
+    (a b : DataArray) : DataArray := Id.run do
+  let pOut := p1 * p2
+  let size1 := storageSize n p1
+  let size2 := storageSize n p2
+  let mut out := DataArray.zeros (storageSize n pOut)
+  match cachedSignTable (n := n) sig with
+  | some table =>
+    for pi in [:size1] do
+      let mi := unpackIdx n p1 pi
+      let ai := a.get! pi
+      if ai != 0.0 then
+        for pj in [:size2] do
+          let mj := unpackIdx n p2 pj
+          let bj := b.get! pj
+          if bj != 0.0 && (mi &&& mj) == 0 then
+            let sign := table.lookup mi mj
+            if sign != 0 then
+              let mk := mi ||| mj
+              let pk := packIdx n pOut mk
+              let contrib := if sign < 0 then -ai * bj else ai * bj
+              out := out.set! pk (out.get! pk + contrib)
+    out
+  | none =>
+    for pi in [:size1] do
+      let mi := unpackIdx n p1 pi
+      let ai := a.get! pi
+      if ai != 0.0 then
+        let bi : Blade sig := ⟨BitVec.ofNat n mi⟩
+        for pj in [:size2] do
+          let mj := unpackIdx n p2 pj
+          let bj := b.get! pj
+          if bj != 0.0 && (mi &&& mj) == 0 then
+            let bjBlade : Blade sig := ⟨BitVec.ofNat n mj⟩
+            let sign := wedgeSign sig bi bjBlade
+            if sign != 0 then
+              let mk := mi ||| mj
+              let pk := packIdx n pOut mk
+              let contrib := if sign < 0 then -ai * bj else ai * bj
+              out := out.set! pk (out.get! pk + contrib)
+    out
+
+/-- Generic packed left-contraction kernel. -/
+@[inline]
+def leftContractKernelGeneric (sig : Signature n) (p1 p2 : Parity)
+    (a b : DataArray) : DataArray := Id.run do
+  let pOut := p1 * p2
+  let size1 := storageSize n p1
+  let size2 := storageSize n p2
+  let mut out := DataArray.zeros (storageSize n pOut)
+  match cachedSignTable (n := n) sig with
+  | some table =>
+    for pi in [:size1] do
+      let mi := unpackIdx n p1 pi
+      let ai := a.get! pi
+      if ai != 0.0 then
+        for pj in [:size2] do
+          let mj := unpackIdx n p2 pj
+          let bj := b.get! pj
+          if bj != 0.0 && (mi &&& mj) == mi && popcount mi <= popcount mj then
+            let sign := table.lookup mi mj
+            if sign != 0 then
+              let mk := mi ^^^ mj
+              let pk := packIdx n pOut mk
+              let reverseNeg := reverseSign (popcount mi) < 0
+              let geometricNeg := sign < 0
+              let contrib := if reverseNeg != geometricNeg then -ai * bj else ai * bj
+              out := out.set! pk (out.get! pk + contrib)
+    out
+  | none =>
+    for pi in [:size1] do
+      let mi := unpackIdx n p1 pi
+      let ai := a.get! pi
+      if ai != 0.0 then
+        let bi : Blade sig := ⟨BitVec.ofNat n mi⟩
+        for pj in [:size2] do
+          let mj := unpackIdx n p2 pj
+          let bj := b.get! pj
+          if bj != 0.0 && (mi &&& mj) == mi && popcount mi <= popcount mj then
+            let bjBlade : Blade sig := ⟨BitVec.ofNat n mj⟩
+            let sign := leftContractionSign sig bi bjBlade
+            if sign != 0 then
+              let mk := mi ^^^ mj
+              let pk := packIdx n pOut mk
+              let contrib := if sign < 0 then -ai * bj else ai * bj
+              out := out.set! pk (out.get! pk + contrib)
+    out
+
+/-- Generic packed right-contraction kernel. -/
+@[inline]
+def rightContractKernelGeneric (sig : Signature n) (p1 p2 : Parity)
+    (a b : DataArray) : DataArray := Id.run do
+  let pOut := p1 * p2
+  let size1 := storageSize n p1
+  let size2 := storageSize n p2
+  let mut out := DataArray.zeros (storageSize n pOut)
+  match cachedSignTable (n := n) sig with
+  | some table =>
+    for pi in [:size1] do
+      let mi := unpackIdx n p1 pi
+      let ai := a.get! pi
+      if ai != 0.0 then
+        for pj in [:size2] do
+          let mj := unpackIdx n p2 pj
+          let bj := b.get! pj
+          if bj != 0.0 && (mj &&& mi) == mj && popcount mj <= popcount mi then
+            let sign := table.lookup mi mj
+            if sign != 0 then
+              let mk := mi ^^^ mj
+              let pk := packIdx n pOut mk
+              let contrib := if sign < 0 then -ai * bj else ai * bj
+              out := out.set! pk (out.get! pk + contrib)
+    out
+  | none =>
+    for pi in [:size1] do
+      let mi := unpackIdx n p1 pi
+      let ai := a.get! pi
+      if ai != 0.0 then
+        let bi : Blade sig := ⟨BitVec.ofNat n mi⟩
+        for pj in [:size2] do
+          let mj := unpackIdx n p2 pj
+          let bj := b.get! pj
+          if bj != 0.0 && (mj &&& mi) == mj && popcount mj <= popcount mi then
+            let bjBlade : Blade sig := ⟨BitVec.ofNat n mj⟩
+            let sign := geometricSign sig bi bjBlade
+            if sign != 0 then
+              let mk := mi ^^^ mj
+              let pk := packIdx n pOut mk
+              let contrib := if sign < 0 then -ai * bj else ai * bj
+              out := out.set! pk (out.get! pk + contrib)
+    out
+
 /-- Fast path even×even kernel using EvenMV.Kernel's precomputed tables.
     Matches EvenMVDA.geometricProduct exactly. -/
 @[inline, always_inline, specialize]
@@ -462,6 +597,20 @@ def mulDirect (a : MV sig p1) (b : MV sig p2) : MV sig (p1 * p2) :=
 def mulKernel (sig : Signature n) (p1 p2 : Parity) [inst : MVMulKernel n sig p1 p2]
     (a b : DataArray) : DataArray :=
   inst.kernel a b
+
+/-! ### Exterior and Interior Products -/
+
+@[inline]
+def wedge (a : MV sig p1) (b : MV sig p2) : MV sig (p1 * p2) :=
+  ⟨wedgeKernelGeneric sig p1 p2 a.coeffs b.coeffs⟩
+
+@[inline]
+def leftContract (a : MV sig p1) (b : MV sig p2) : MV sig (p1 * p2) :=
+  ⟨leftContractKernelGeneric sig p1 p2 a.coeffs b.coeffs⟩
+
+@[inline]
+def rightContract (a : MV sig p1) (b : MV sig p2) : MV sig (p1 * p2) :=
+  ⟨rightContractKernelGeneric sig p1 p2 a.coeffs b.coeffs⟩
 
 /-! ### Scalar Multiplication -/
 
