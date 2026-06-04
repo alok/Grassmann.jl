@@ -12,15 +12,10 @@ for tool in lake curl rsvg-convert magick rg; do
   fi
 done
 
-names=(
-  plane-1 plane-2 plane-3 plane-4 plane-5 plane-6
-  torus helix orbit-2 orbit-4 orb wave
-)
-
-reference_base="https://raw.githubusercontent.com/chakravala/Grassmann.jl/master/paper/img"
 out_root="$pkg_root/.generated/julia-examples"
 work_dir="$out_root/contact-sheet"
 metrics="$work_dir/metrics.tsv"
+manifest="$out_root/manifest.json"
 julia_docs="$repo_root/docs/src/algebra.md"
 minimum_frame_stddev=1200
 maximum_rmse_normalized=0.25
@@ -44,7 +39,50 @@ numeric_le() {
   awk -v actual="$1" -v expected="$2" 'BEGIN { exit(actual <= expected ? 0 : 1) }'
 }
 
+report_failures() {
+  printf 'visual comparison smoke checks failed:\n' >&2
+  for failure in "${failures[@]}"; do
+    printf '  - %s\n' "$failure" >&2
+  done
+}
+
 failures=()
+names=()
+lean_paths=()
+julia_urls=()
+
+cd "$pkg_root"
+rm -rf "$out_root/lean" "$out_root/index.html" "$out_root/manifest.json"
+lake exe jlexamples
+
+if [[ ! -s "$manifest" ]]; then
+  failures+=("missing generated manifest: $manifest")
+else
+  while IFS= read -r line; do
+    if [[ "$line" != *'"name":"'* ]]; then
+      continue
+    fi
+
+    name="${line#*\"name\":\"}"
+    name="${name%%\"*}"
+    lean_path="${line#*\"lean\":\"}"
+    lean_path="${lean_path%%\"*}"
+    julia_url="${line#*\"julia\":\"}"
+    julia_url="${julia_url%%\"*}"
+
+    if [[ -z "$name" || -z "$lean_path" || -z "$julia_url" ]]; then
+      failures+=("malformed generated manifest entry: $line")
+    else
+      names+=("$name")
+      lean_paths+=("$lean_path")
+      julia_urls+=("$julia_url")
+    fi
+  done < "$manifest"
+fi
+
+if [[ ${#names[@]} -eq 0 ]]; then
+  failures+=("generated manifest did not list any examples")
+fi
 
 for ((i = 0; i < ${#names[@]}; i++)); do
   for ((j = i + 1; j < ${#names[@]}; j++)); do
@@ -80,25 +118,9 @@ else
   done
 fi
 
-cd "$pkg_root"
-rm -rf "$out_root/lean" "$out_root/index.html" "$out_root/manifest.json"
-lake exe jlexamples
-
 rm -rf "$work_dir"
 mkdir -p "$work_dir"
 printf 'name\tlean_stddev\tjulia_stddev\trmse_normalized\trmse_diagnostic\n' > "$metrics"
-
-manifest="$out_root/manifest.json"
-if [[ ! -s "$manifest" ]]; then
-  failures+=("missing generated manifest: $manifest")
-else
-  manifest_body="$(< "$manifest")"
-  for name in "${names[@]}"; do
-    if [[ "$manifest_body" != *"\"name\":\"$name\""* ]]; then
-      failures+=("manifest missing expected example: $name")
-    fi
-  done
-fi
 
 shopt -s nullglob
 generated_svgs=("$out_root/lean"/*.svg)
@@ -107,9 +129,16 @@ if [[ ${#generated_svgs[@]} -ne ${#names[@]} ]]; then
   failures+=("expected ${#names[@]} generated Lean SVGs, found ${#generated_svgs[@]}")
 fi
 
+if [[ ${#names[@]} -eq 0 ]]; then
+  report_failures
+  exit 1
+fi
+
 pair_paths=()
-for name in "${names[@]}"; do
-  lean_svg="$out_root/lean/$name.svg"
+for i in "${!names[@]}"; do
+  name="${names[$i]}"
+  lean_svg="$out_root/${lean_paths[$i]}"
+  julia_url="${julia_urls[$i]}"
   lean_png="$work_dir/$name-lean.png"
   julia_png="$work_dir/$name-julia.png"
   lean_frame="$work_dir/$name-lean-frame.png"
@@ -125,7 +154,7 @@ for name in "${names[@]}"; do
   fi
 
   rsvg-convert "$lean_svg" > "$lean_png"
-  curl -fsSL "$reference_base/$name.png" -o "$julia_png"
+  curl -fsSL "$julia_url" -o "$julia_png"
 
   magick "$lean_png" -resize 620x440 -background white -gravity center -extent 620x440 "$lean_frame"
   magick "$julia_png" -resize 620x440 -background white -gravity center -extent 620x440 "$julia_frame"
@@ -164,10 +193,7 @@ contact="$work_dir/contact.png"
 magick "${pair_paths[@]}" -append "$contact"
 
 if [[ ${#failures[@]} -ne 0 ]]; then
-  printf 'visual comparison smoke checks failed:\n' >&2
-  for failure in "${failures[@]}"; do
-    printf '  - %s\n' "$failure" >&2
-  done
+  report_failures
   exit 1
 fi
 
