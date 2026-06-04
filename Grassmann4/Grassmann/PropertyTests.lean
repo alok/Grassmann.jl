@@ -748,6 +748,13 @@ def coordsApproxEq (a b : Float × Float × Float) (tol : Float := 1e-6) : Bool 
     approxEq a.2.1 b.2.1 tol &&
     approxEq a.2.2 b.2.2 tol
 
+/-- Generate bounded 3D coordinates for user-facing transform checks. -/
+def genCoord3 (scale : Float := 3.0) : Gen (Float × Float × Float) := do
+  let x ← genFloat scale
+  let y ← genFloat scale
+  let z ← genFloat scale
+  return (x, y, z)
+
 /-- Packed PGA point constructors round-trip through coordinate extraction. -/
 def prop_pga3_point3_extract_point_cloud : Bool :=
   pga3PointCloud.all fun c =>
@@ -809,6 +816,27 @@ def prop_cga3_translator_point_cloud : Bool :=
     cga3TranslationCloud.all fun delta =>
       let expected := (point.1 + delta.1, point.2.1 + delta.2.1, point.2.2 + delta.2.2)
       coordsApproxEq (cga3TranslateCoords point delta) expected
+
+/-- Generated CGA translators shift generated Euclidean points by the same vector. -/
+def prop_cga3_generated_translator_point : Gen Bool := do
+  let point ← genCoord3 3.0
+  let delta ← genCoord3 2.0
+  let expected := (point.1 + delta.1, point.2.1 + delta.2.1, point.2.2 + delta.2.2)
+  return coordsApproxEq (cga3TranslateCoords point delta) expected (tol := 1e-5)
+
+/-- Composed CGA translators add their Euclidean translation vectors on points. -/
+def prop_cga3_translator_composition_point : Gen Bool := do
+  let point ← genCoord3 2.0
+  let delta₁ ← genCoord3 1.5
+  let delta₂ ← genCoord3 1.5
+  let p := CGA.point point.1 point.2.1 point.2.2
+  let t₁ := CGA.translator delta₁.1 delta₁.2.1 delta₁.2.2
+  let t₂ := CGA.translator delta₂.1 delta₂.2.1 delta₂.2.2
+  let expected :=
+    ( point.1 + delta₁.1 + delta₂.1,
+      point.2.1 + delta₁.2.1 + delta₂.2.1,
+      point.2.2 + delta₁.2.2 + delta₂.2.2 )
+  return coordsApproxEq (CGA.extractPoint (CGA.transform (t₂ * t₁) p)) expected (tol := 1e-5)
 
 /-! ## CGA3 Packed MV Reference Tests -/
 
@@ -1699,8 +1727,14 @@ def runCGA3PointCloudTransformTests : IO (List PropTestResult) := do
   let pointCloud1 := runBoolProp "CGA3 translator point cloud"
     prop_cga3_translator_point_cloud
   IO.println s!"│ {pointCloud1}"
+  let pointCloud2 ← runGenProp "CGA3 generated translator point"
+    prop_cga3_generated_translator_point 5
+  IO.println s!"│ {pointCloud2}"
+  let pointCloud3 ← runGenProp "CGA3 translator composition point"
+    prop_cga3_translator_composition_point 5
+  IO.println s!"│ {pointCloud3}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [pointCloud1]
+  return [pointCloud1, pointCloud2, pointCloud3]
 
 /-- Run CGA3 packed-MV baseline checks against dense reference results. -/
 def runCGA3PackedReferenceTests : IO (List PropTestResult) := do
