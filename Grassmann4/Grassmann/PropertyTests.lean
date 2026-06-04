@@ -686,6 +686,38 @@ def prop_sparse_gradeProject_dense : Gen Bool := do
   let k ← Gen.choose Nat 0 3 (by omega)
   return sparseMatchesDense (a.mv.gradeProject k.val) ((sparseToDenseRef a.mv).gradeProject k.val)
 
+/-- Sparse grade projection is idempotent for all grades up to `maxGrade`. -/
+def sparseGradeProjectIdempotent {n : Nat} {sig : Signature n} (maxGrade : Nat)
+    (m : MultivectorS sig Float) : Bool :=
+  (List.range (maxGrade + 1)).all fun k =>
+    mvApproxEq ((m.gradeProject k).gradeProject k) (m.gradeProject k)
+
+/-- Distinct sparse grade projections are orthogonal. -/
+def sparseGradeProjectOrthogonal {n : Nat} {sig : Signature n} (maxGrade : Nat)
+    (m : MultivectorS sig Float) : Bool :=
+  (List.range (maxGrade + 1)).all fun j =>
+    (List.range (maxGrade + 1)).all fun k =>
+      j == k || mvApproxEq ((m.gradeProject j).gradeProject k) (0 : MultivectorS sig Float)
+
+/-- Summing all sparse grade projections reconstructs the multivector. -/
+def sparseGradeProjectDecomposition {n : Nat} {sig : Signature n} (maxGrade : Nat)
+    (m : MultivectorS sig Float) : Bool :=
+  let projected := (List.range (maxGrade + 1)).foldl
+    (init := (0 : MultivectorS sig Float)) fun acc k => acc + m.gradeProject k
+  mvApproxEq projected m
+
+/-- R3 sparse grade projections are idempotent. -/
+def prop_sparse_gradeProject_idempotent (a : R3Mv) : Bool :=
+  sparseGradeProjectIdempotent 3 a.mv
+
+/-- R3 distinct sparse grade projections are orthogonal. -/
+def prop_sparse_gradeProject_orthogonal (a : R3Mv) : Bool :=
+  sparseGradeProjectOrthogonal 3 a.mv
+
+/-- R3 sparse grade projections decompose the multivector. -/
+def prop_sparse_gradeProject_decomposition (a : R3Mv) : Bool :=
+  sparseGradeProjectDecomposition 3 a.mv
+
 /-! ## PGA3 Sparse Reference Tests -/
 
 /-- PGA3 sparse addition agrees with dense addition. -/
@@ -724,6 +756,18 @@ def prop_sparse_pga3_gradeProject_dense : Gen Bool := do
   let k ← Gen.choose Nat 0 4 (by omega)
   return sparseMatchesDense (a.mv.gradeProject k.val) ((sparseToDenseRef a.mv).gradeProject k.val)
 
+/-- PGA3 sparse grade projections are idempotent. -/
+def prop_sparse_pga3_gradeProject_idempotent (a : PGA3Mv) : Bool :=
+  sparseGradeProjectIdempotent 4 a.mv
+
+/-- PGA3 distinct sparse grade projections are orthogonal. -/
+def prop_sparse_pga3_gradeProject_orthogonal (a : PGA3Mv) : Bool :=
+  sparseGradeProjectOrthogonal 4 a.mv
+
+/-- PGA3 sparse grade projections decompose the multivector. -/
+def prop_sparse_pga3_gradeProject_decomposition (a : PGA3Mv) : Bool :=
+  sparseGradeProjectDecomposition 4 a.mv
+
 /-! ## CGA3 Sparse Reference Tests -/
 
 /-- CGA3 sparse addition agrees with dense addition. -/
@@ -761,6 +805,18 @@ def prop_sparse_cga3_gradeProject_dense : Gen Bool := do
   let a : CGA3Mv ← Arbitrary.arbitrary
   let k ← Gen.choose Nat 0 5 (by omega)
   return sparseMatchesDense (a.mv.gradeProject k.val) ((sparseToDenseRef a.mv).gradeProject k.val)
+
+/-- CGA3 sparse grade projections are idempotent. -/
+def prop_sparse_cga3_gradeProject_idempotent (a : CGA3Mv) : Bool :=
+  sparseGradeProjectIdempotent 5 a.mv
+
+/-- CGA3 distinct sparse grade projections are orthogonal. -/
+def prop_sparse_cga3_gradeProject_orthogonal (a : CGA3Mv) : Bool :=
+  sparseGradeProjectOrthogonal 5 a.mv
+
+/-- CGA3 sparse grade projections decompose the multivector. -/
+def prop_sparse_cga3_gradeProject_decomposition (a : CGA3Mv) : Bool :=
+  sparseGradeProjectDecomposition 5 a.mv
 
 /-! ## Algebraic Properties -/
 
@@ -1253,8 +1309,14 @@ def runSparseReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {r28}"
   let r29 ← runGenProp "Sparse grade projection" prop_sparse_gradeProject_dense
   IO.println s!"│ {r29}"
+  let r29a ← runRandomProp "Sparse grade idempotence" prop_sparse_gradeProject_idempotent
+  IO.println s!"│ {r29a}"
+  let r29b ← runRandomProp "Sparse grade orthogonality" prop_sparse_gradeProject_orthogonal
+  IO.println s!"│ {r29b}"
+  let r29c ← runRandomProp "Sparse grade decomposition" prop_sparse_gradeProject_decomposition
+  IO.println s!"│ {r29c}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [r23, r24, r25, r26, r27, r28, r29]
+  return [r23, r24, r25, r26, r27, r28, r29, r29a, r29b, r29c]
 
 /-- Run PGA3 sparse-MV baseline checks against dense reference results. -/
 def runPGA3SparseReferenceTests : IO (List PropTestResult) := do
@@ -1273,9 +1335,18 @@ def runPGA3SparseReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {pgaSparse6}"
   let pgaSparse7 ← runGenProp "PGA3 sparse grade projection" prop_sparse_pga3_gradeProject_dense
   IO.println s!"│ {pgaSparse7}"
+  let pgaSparse8 ← runRandomPGA3Prop "PGA3 sparse grade idempotence"
+    prop_sparse_pga3_gradeProject_idempotent
+  IO.println s!"│ {pgaSparse8}"
+  let pgaSparse9 ← runRandomPGA3Prop "PGA3 sparse grade orthogonality"
+    prop_sparse_pga3_gradeProject_orthogonal
+  IO.println s!"│ {pgaSparse9}"
+  let pgaSparse10 ← runRandomPGA3Prop "PGA3 sparse grade decomposition"
+    prop_sparse_pga3_gradeProject_decomposition
+  IO.println s!"│ {pgaSparse10}"
   IO.println "└────────────────────────────────────────────────┘"
   return [pgaSparse1, pgaSparse2, pgaSparse3, pgaSparse4, pgaSparse5, pgaSparse6,
-    pgaSparse7]
+    pgaSparse7, pgaSparse8, pgaSparse9, pgaSparse10]
 
 /-- Run CGA3 sparse-MV baseline checks against dense reference results. -/
 def runCGA3SparseReferenceTests : IO (List PropTestResult) := do
@@ -1294,8 +1365,17 @@ def runCGA3SparseReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {r35}"
   let r36 ← runGenProp "CGA3 sparse grade projection" prop_sparse_cga3_gradeProject_dense
   IO.println s!"│ {r36}"
+  let r37 ← runRandomCGA3Prop "CGA3 sparse grade idempotence"
+    prop_sparse_cga3_gradeProject_idempotent
+  IO.println s!"│ {r37}"
+  let r38 ← runRandomCGA3Prop "CGA3 sparse grade orthogonality"
+    prop_sparse_cga3_gradeProject_orthogonal
+  IO.println s!"│ {r38}"
+  let r39 ← runRandomCGA3Prop "CGA3 sparse grade decomposition"
+    prop_sparse_cga3_gradeProject_decomposition
+  IO.println s!"│ {r39}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [r30, r31, r32, r33, r34, r35, r36]
+  return [r30, r31, r32, r33, r34, r35, r36, r37, r38, r39]
 
 /-- Run high-dimensional exact dense stress checks. -/
 def runHighDimStressTests : IO (List PropTestResult) := do
