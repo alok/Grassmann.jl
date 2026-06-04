@@ -3,13 +3,6 @@
  "packages":
  [{"type": "path",
    "scope": "",
-   "name": "LeanPlot",
-   "manifestFile": "lake-manifest.json",
-   "inherited": false,
-   "dir": "/Users/alokbeniwal/leanplot",
-   "configFile": "lakefile.toml"},
-  {"type": "path",
-   "scope": "",
    "name": "SciLean",
    "manifestFile": "lake-manifest.json",
    "inherited": false,

@@ -18,9 +18,10 @@ rev = "master"
 name = "SciLean"
 path = "/Users/alokbeniwal/scilean"
 
-[[require]]
-name = "LeanPlot"
-path = "/Users/alokbeniwal/leanplot"
+# Temporarily disabled - Verso dependency issues
+# [[require]]
+# name = "LeanPlot"
+# path = "/Users/alokbeniwal/leanplot"
 
 [[lean_lib]]
 name = "Grassmann"
