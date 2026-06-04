@@ -330,6 +330,68 @@ def verifyCGATranslator (x y z tx ty tz : Float) : IO (Array TestResult) := do
       message := s!"Parse failed: {result.stdout}"
     }]
 
+/-- Verify composed CGA point translations against Grassmann.jl. -/
+def verifyCGATranslatorComposition
+    (x y z tx1 ty1 tz1 tx2 ty2 tz2 : Float) : IO (Array TestResult) := do
+  let point := CGA.point x y z
+  let translator1 := CGA.translator tx1 ty1 tz1
+  let translator2 := CGA.translator tx2 ty2 tz2
+  let coords := CGA.extractPoint (CGA.transform (translator2 * translator1) point)
+  let leanCoords := #[coords.1, coords.2.1, coords.2.2]
+  let result ← callOracle [
+    "cga_translate_point_composed",
+    toString x, toString y, toString z,
+    toString tx1, toString ty1, toString tz1,
+    toString tx2, toString ty2, toString tz2
+  ]
+  let baseName :=
+    s!"cga_translate_composed({x},{y},{z};{tx1},{ty1},{tz1};{tx2},{ty2},{tz2})"
+  if !result.success then
+    return #[{
+      name := baseName
+      passed := false
+      leanValue := 0.0
+      juliaValue := 0.0
+      difference := 0.0
+      message := s!"Oracle error: {result.stderr}"
+    }]
+  match parseJson result.stdout >>= fun j => getJsonFloatArray j "coords" with
+  | some juliaCoords =>
+    if juliaCoords.size != 3 then
+      return #[{
+        name := baseName
+        passed := false
+        leanValue := leanCoords.size.toFloat
+        juliaValue := juliaCoords.size.toFloat
+        difference := 0.0
+        message := "Coordinate count mismatch"
+      }]
+    let mkCoordResult (axis : String) (i : Nat) : TestResult :=
+      let leanValue := leanCoords.getD i 0.0
+      let juliaValue := juliaCoords.getD i 0.0
+      let diff := (leanValue - juliaValue).abs
+      {
+        name := s!"{baseName}.{axis}"
+        passed := floatsMatch leanValue juliaValue (tol := 1e-6)
+        leanValue := leanValue
+        juliaValue := juliaValue
+        difference := diff
+      }
+    return #[
+      mkCoordResult "x" 0,
+      mkCoordResult "y" 1,
+      mkCoordResult "z" 2
+    ]
+  | none =>
+    return #[{
+      name := baseName
+      passed := false
+      leanValue := 0.0
+      juliaValue := 0.0
+      difference := 0.0
+      message := s!"Parse failed: {result.stdout}"
+    }]
+
 /-- Verify CGA point distances against Grassmann.jl. -/
 def verifyCGADistance (x1 y1 z1 x2 y2 z2 : Float) : IO (Array TestResult) := do
   let p1 := CGA.point x1 y1 z1
@@ -537,7 +599,11 @@ def testCGANullVectors : IO (Array TestResult) := do
 def testCGATranslators : IO (Array TestResult) := do
   let r1 ← verifyCGATranslator 1.0 2.0 (-0.5) 0.25 (-0.75) 1.5
   let r2 ← verifyCGATranslator (-2.0) 0.5 3.0 1.25 0.0 (-2.5)
-  return r1 ++ r2
+  let r3 ← verifyCGATranslatorComposition
+    0.25 (-0.5) 1.75
+    1.0 0.5 (-0.25)
+    (-0.75) 1.25 0.5
+  return r1 ++ r2 ++ r3
 
 /-- Test CGA point distances against Grassmann.jl. -/
 def testCGADistances : IO (Array TestResult) := do

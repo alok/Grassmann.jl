@@ -377,6 +377,55 @@ function cmd_cga_translate_point(
 end
 
 """
+Compose two CGA translators, apply them to a point, and return coordinates.
+The composition order matches Lean's `CGA.transform (t₂ * t₁) p`, meaning
+translation one is applied first and translation two second.
+"""
+function cmd_cga_translate_point_composed(
+    x::Float64,
+    y::Float64,
+    z::Float64,
+    tx1::Float64,
+    ty1::Float64,
+    tz1::Float64,
+    tx2::Float64,
+    ty2::Float64,
+    tz2::Float64,
+)
+    alg = get_algebra("CGA3")
+    w1 = basis_vector(alg, 1)
+    w2 = basis_vector(alg, 2)
+    w3 = basis_vector(alg, 3)
+    w4 = basis_vector(alg, 4)
+    w5 = basis_vector(alg, 5)
+
+    einf = w4 + w5
+    e0 = (w5 - w4) / 2
+
+    p = x*w1 + y*w2 + z*w3 + ((x^2 + y^2 + z^2) / 2)*einf + e0
+    delta1 = tx1*w1 + ty1*w2 + tz1*w3
+    delta2 = tx2*w1 + ty2*w2 + tz2*w3
+    translator1 = exp(-0.5 * delta1 * einf)
+    translator2 = exp(-0.5 * delta2 * einf)
+    translated = (translator2 * translator1) >>> p
+
+    coords = [
+        blade_coefficient(translated, w1),
+        blade_coefficient(translated, w2),
+        blade_coefficient(translated, w3),
+    ]
+
+    return Dict(
+        "operation" => "cga_translate_point_composed",
+        "point" => [x, y, z],
+        "translation1" => [tx1, ty1, tz1],
+        "translation2" => [tx2, ty2, tz2],
+        "coords" => coords,
+        "point_squared" => Float64(scalar(translated * translated)),
+    )
+end
+
+"""
 Verify rotor normalization and action.
 """
 function cmd_verify_rotor(sig_name::String, angle::Float64)
@@ -475,6 +524,16 @@ function main()
                                     parse(Float64, ARGS[5]),
                                     parse(Float64, ARGS[6]),
                                     parse(Float64, ARGS[7]))
+        elseif cmd == "cga_translate_point_composed" && length(ARGS) >= 10
+            cmd_cga_translate_point_composed(parse(Float64, ARGS[2]),
+                                             parse(Float64, ARGS[3]),
+                                             parse(Float64, ARGS[4]),
+                                             parse(Float64, ARGS[5]),
+                                             parse(Float64, ARGS[6]),
+                                             parse(Float64, ARGS[7]),
+                                             parse(Float64, ARGS[8]),
+                                             parse(Float64, ARGS[9]),
+                                             parse(Float64, ARGS[10]))
         elseif cmd == "verify_rotor" && length(ARGS) >= 3
             cmd_verify_rotor(ARGS[2], parse(Float64, ARGS[3]))
         elseif cmd == "signature_check" && length(ARGS) >= 2
@@ -496,6 +555,8 @@ function main()
                                         - CGA point distance
   cga_translate_point <x> <y> <z> <tx> <ty> <tz>
                                         - Translate a CGA point
+  cga_translate_point_composed <x> <y> <z> <tx1> <ty1> <tz1> <tx2> <ty2> <tz2>
+                                        - Compose two CGA translations
   verify_rotor <sig> <angle>            - Verify rotor
   signature_check <sig>                 - Check basis squares
   bivector_exp <sig> <i> <j> <angle>    - exp(angle*eij)
