@@ -576,8 +576,8 @@ def mvSandwich {n : ℕ} {sig : Signature n} {p : Parity}
     (R : MV sig .even) (x : MV sig p) : MV sig p :=
   -- R * x gives parity (even * p) = p
   -- (R * x) * R† gives parity (p * even) = p
-  let Rx : MV sig p := ⟨MV.mulKernel sig .even p R.coeffs x.coeffs⟩
-  ⟨MV.mulKernel sig p .even Rx.coeffs (MV.rev R).coeffs⟩
+  let Rx : MV sig p := ⟨MV.mulKernelDirect sig .even p R.coeffs x.coeffs⟩
+  ⟨MV.mulKernelDirect sig p .even Rx.coeffs (MV.rev R).coeffs⟩
 
 /-! ## PGA Subtypes
 
@@ -602,7 +602,7 @@ variable {n : ℕ} {sig : Signature n}
 
 /-- Compose two motors. -/
 @[inline] def compose (m1 m2 : Motor sig) : Motor sig :=
-  MV.mul m1 m2
+  MV.mulDirect m1 m2
 
 instance : Mul (Motor sig) where mul := compose
 
