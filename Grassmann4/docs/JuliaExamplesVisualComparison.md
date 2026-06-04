@@ -50,6 +50,18 @@ sheet:
 .generated/julia-examples/contact-sheet/contact.png
 ```
 
+Each row in the contact sheet is labeled with the example name and left/right
+source. The same run also writes diagnostic raster metrics:
+
+```text
+.generated/julia-examples/contact-sheet/metrics.tsv
+```
+
+The metrics file records grayscale standard deviation for each rendered Lean and
+Julia frame plus an ImageMagick RMSE value. Treat RMSE as a sanity check for
+blank or badly framed images, not as a pass/fail visual oracle; several examples
+are qualitative Lean counterparts rather than exact Grassmann.jl renderings.
+
 It requires `curl`, `rsvg-convert`, and ImageMagick's `magick` command.
 
 ## Julia Reference Images
