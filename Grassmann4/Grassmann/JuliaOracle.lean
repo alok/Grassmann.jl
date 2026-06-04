@@ -13,6 +13,7 @@ import Grassmann.SparseMultivector
 import Grassmann.Products
 import Grassmann.RotorExp
 import Grassmann.Manifold
+import Grassmann.CGA
 
 namespace Grassmann.JuliaOracle
 
@@ -271,6 +272,64 @@ def verifyCGAPoint (x y z : Float) (leanSq : Float) : IO TestResult := do
       message := "Parse failed"
     }
 
+/-- Verify CGA point translation coordinates against Grassmann.jl. -/
+def verifyCGATranslator (x y z tx ty tz : Float) : IO (Array TestResult) := do
+  let point := CGA.point x y z
+  let translator := CGA.translator tx ty tz
+  let coords := CGA.extractPoint (CGA.transform translator point)
+  let leanCoords := #[coords.1, coords.2.1, coords.2.2]
+  let result ← callOracle [
+    "cga_translate_point",
+    toString x, toString y, toString z,
+    toString tx, toString ty, toString tz
+  ]
+  let baseName := s!"cga_translate({x},{y},{z};{tx},{ty},{tz})"
+  if !result.success then
+    return #[{
+      name := baseName
+      passed := false
+      leanValue := 0.0
+      juliaValue := 0.0
+      difference := 0.0
+      message := s!"Oracle error: {result.stderr}"
+    }]
+  match parseJson result.stdout >>= fun j => getJsonFloatArray j "coords" with
+  | some juliaCoords =>
+    if juliaCoords.size != 3 then
+      return #[{
+        name := baseName
+        passed := false
+        leanValue := leanCoords.size.toFloat
+        juliaValue := juliaCoords.size.toFloat
+        difference := 0.0
+        message := "Coordinate count mismatch"
+      }]
+    let mkCoordResult (axis : String) (i : Nat) : TestResult :=
+      let leanValue := leanCoords.getD i 0.0
+      let juliaValue := juliaCoords.getD i 0.0
+      let diff := (leanValue - juliaValue).abs
+      {
+        name := s!"{baseName}.{axis}"
+        passed := floatsMatch leanValue juliaValue (tol := 1e-6)
+        leanValue := leanValue
+        juliaValue := juliaValue
+        difference := diff
+      }
+    return #[
+      mkCoordResult "x" 0,
+      mkCoordResult "y" 1,
+      mkCoordResult "z" 2
+    ]
+  | none =>
+    return #[{
+      name := baseName
+      passed := false
+      leanValue := 0.0
+      juliaValue := 0.0
+      difference := 0.0
+      message := s!"Parse failed: {result.stdout}"
+    }]
+
 /-- Verify rotor scalar part -/
 def verifyRotor (sigName : String) (angle : Float) (leanScalar : Float) : IO TestResult := do
   let result ← callOracle ["verify_rotor", sigName, toString angle]
@@ -412,6 +471,12 @@ def testCGANullVectors : IO (Array TestResult) := do
   let r6 ← verifyCGAPoint 1.0 2.0 3.0 (mkPoint 1.0 2.0 3.0)
   return #[r1, r2, r3, r4, r5, r6]
 
+/-- Test CGA translators against the Grassmann.jl conformal sandwich action. -/
+def testCGATranslators : IO (Array TestResult) := do
+  let r1 ← verifyCGATranslator 1.0 2.0 (-0.5) 0.25 (-0.75) 1.5
+  let r2 ← verifyCGATranslator (-2.0) 0.5 3.0 1.25 0.0 (-2.5)
+  return r1 ++ r2
+
 /-- Test rotors -/
 def testRotors : IO (Array TestResult) := do
   let e1 := r3e 0
@@ -469,13 +534,19 @@ def runAllTests : IO Unit := do
   let cgaResults ← testCGANullVectors
   for r in cgaResults do IO.println s!"│ {r}"
   IO.println "└──────────────────────────────────────────┘"
+  -- CGA translations
+  IO.println "\n┌─ CGA Translators ────────────────────────┐"
+  let cgaTranslatorResults ← testCGATranslators
+  for r in cgaTranslatorResults do IO.println s!"│ {r}"
+  IO.println "└──────────────────────────────────────────┘"
   -- Rotors
   IO.println "\n┌─ Rotor Exponentials ─────────────────────┐"
   let rotorResults ← testRotors
   for r in rotorResults do IO.println s!"│ {r}"
   IO.println "└──────────────────────────────────────────┘"
   -- Summary
-  let all := r3Results ++ coeffResults ++ sigResults ++ cgaResults ++ rotorResults
+  let all := r3Results ++ coeffResults ++ sigResults ++ cgaResults ++
+    cgaTranslatorResults ++ rotorResults
   let passed := all.filter (·.passed)
   let failed := all.filter (!·.passed)
   IO.println "\n╔══════════════════════════════════════════╗"

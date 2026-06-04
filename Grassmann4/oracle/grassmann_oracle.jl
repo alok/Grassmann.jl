@@ -299,6 +299,47 @@ function cmd_point_embedding(x::Float64, y::Float64, z::Float64)
 end
 
 """
+Translate a CGA point by a Euclidean vector and return down-projected coordinates.
+"""
+function cmd_cga_translate_point(
+    x::Float64,
+    y::Float64,
+    z::Float64,
+    tx::Float64,
+    ty::Float64,
+    tz::Float64,
+)
+    alg = get_algebra("CGA3")
+    w1 = basis_vector(alg, 1)
+    w2 = basis_vector(alg, 2)
+    w3 = basis_vector(alg, 3)
+    w4 = basis_vector(alg, 4)
+    w5 = basis_vector(alg, 5)
+
+    einf = w4 + w5
+    e0 = (w5 - w4) / 2
+
+    p = x*w1 + y*w2 + z*w3 + ((x^2 + y^2 + z^2) / 2)*einf + e0
+    t = tx*w1 + ty*w2 + tz*w3
+    translator = exp(-0.5 * t * einf)
+    translated = translator >>> p
+
+    coords = [
+        blade_coefficient(translated, w1),
+        blade_coefficient(translated, w2),
+        blade_coefficient(translated, w3),
+    ]
+
+    return Dict(
+        "operation" => "cga_translate_point",
+        "point" => [x, y, z],
+        "translation" => [tx, ty, tz],
+        "coords" => coords,
+        "point_squared" => Float64(scalar(translated * translated)),
+    )
+end
+
+"""
 Verify rotor normalization and action.
 """
 function cmd_verify_rotor(sig_name::String, angle::Float64)
@@ -383,6 +424,13 @@ function main()
             cmd_point_embedding(parse(Float64, ARGS[2]),
                               parse(Float64, ARGS[3]),
                               parse(Float64, ARGS[4]))
+        elseif cmd == "cga_translate_point" && length(ARGS) >= 7
+            cmd_cga_translate_point(parse(Float64, ARGS[2]),
+                                    parse(Float64, ARGS[3]),
+                                    parse(Float64, ARGS[4]),
+                                    parse(Float64, ARGS[5]),
+                                    parse(Float64, ARGS[6]),
+                                    parse(Float64, ARGS[7]))
         elseif cmd == "verify_rotor" && length(ARGS) >= 3
             cmd_verify_rotor(ARGS[2], parse(Float64, ARGS[3]))
         elseif cmd == "signature_check" && length(ARGS) >= 2
@@ -400,6 +448,8 @@ function main()
   blade_coefficient <sig> <op> <a> <b> <target>
                                         - Coefficient of target in op(a,b)
   point_embedding <x> <y> <z>           - CGA point embedding
+  cga_translate_point <x> <y> <z> <tx> <ty> <tz>
+                                        - Translate a CGA point
   verify_rotor <sig> <angle>            - Verify rotor
   signature_check <sig>                 - Check basis squares
   bivector_exp <sig> <i> <j> <angle>    - exp(angle*eij)
