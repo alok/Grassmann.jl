@@ -18,6 +18,7 @@ import Grassmann.StaticOpt
 import Grassmann.MV
 import Grassmann.PGA
 import Grassmann.CGA
+import Grassmann.RotorExp
 import Grassmann.BladeIndex
 import Grassmann.SignTables
 import Grassmann.Repr
@@ -1385,6 +1386,68 @@ def prop_PGA3_signature : Bool :=
   approxEq (e3 * e3).scalarPart 1.0 &&
   approxEq (e0 * e0).scalarPart 0.0
 
+/-! ## Rotor Exponential Properties -/
+
+/-- Unit R3 bivector used to cross-check the closed-form rotor exponential. -/
+def r3E12Sparse : MultivectorS R3 Float :=
+  let e1 : MultivectorS R3 Float := MultivectorS.basis ⟨0, by omega⟩
+  let e2 : MultivectorS R3 Float := MultivectorS.basis ⟨1, by omega⟩
+  e1 * e2
+
+/-- Unit CGA3 bivector with positive square for hyperbolic exponential checks. -/
+def cga3EPlusEMinusSparse : MultivectorS CGA3 Float :=
+  let eplus : MultivectorS CGA3 Float := MultivectorS.basis ⟨3, by omega⟩
+  let eminus : MultivectorS CGA3 Float := MultivectorS.basis ⟨4, by omega⟩
+  eplus * eminus
+
+/-- Representative half-angle samples for rotor exponential checks. -/
+def rotorExpSampleAngles : List Float :=
+  [(-1.2), (-0.75), 0.0, 0.375, 0.7853981633974483, 1.2]
+
+/-- Scalar Taylor helpers agree with Lean's runtime Float transcendental functions. -/
+def prop_scalar_taylor_functions_match_float : Bool :=
+  rotorExpSampleAngles.all fun x =>
+    approxEq (expTaylor x 24) (Float.exp x) (tol := 1e-9) &&
+    approxEq (sinTaylor x 18) (Float.sin x) (tol := 1e-9) &&
+    approxEq (cosTaylor x 18) (Float.cos x) (tol := 1e-9) &&
+    approxEq (sinhTaylor x 18) (Float.sinh x) (tol := 1e-9) &&
+    approxEq (coshTaylor x 18) (Float.cosh x) (tol := 1e-9)
+
+/-- R3 `expBivector` agrees with the generic sparse Taylor series on a unit bivector. -/
+def prop_expBivector_r3_e12_matches_series : Bool :=
+  rotorExpSampleAngles.all fun θ =>
+    let B := r3E12Sparse.smul θ
+    mvApproxEq (expBivector B) (expTaylorMV B 24) (tol := 1e-5)
+
+/-- Hyperbolic `expBivector` agrees with the generic sparse Taylor series. -/
+def prop_expBivector_cga3_ePlusEMinus_matches_series : Bool :=
+  rotorExpSampleAngles.all fun θ =>
+    let B := cga3EPlusEMinusSparse.smul θ
+    mvApproxEq (expBivector B) (expTaylorMV B 24) (tol := 1e-5)
+
+/-- Return true when a sparse multivector has any non-scalar coefficient. -/
+def sparseHasNonScalarPart {n : Nat} {sig : Signature n}
+    (m : MultivectorS sig Float) : Bool :=
+  !(mvApproxEq m (m.gradeProject 0) (tol := 1e-9))
+
+/--
+The mixed conformal generator from the documented Grassmann.jl torus example does
+not square to a scalar, so the scalar-square `expBivector` shortcut is not a
+valid exact port path for that example.
+-/
+def prop_cga3_torus_generator_square_non_scalar : Bool :=
+  let e1 : MultivectorS CGA3 Float := MultivectorS.basis ⟨0, by omega⟩
+  let e2 : MultivectorS CGA3 Float := MultivectorS.basis ⟨1, by omega⟩
+  let e3 : MultivectorS CGA3 Float := MultivectorS.basis ⟨2, by omega⟩
+  let eplus : MultivectorS CGA3 Float := MultivectorS.basis ⟨3, by omega⟩
+  let eminus : MultivectorS CGA3 Float := MultivectorS.basis ⟨4, by omega⟩
+  let e12 := e1 * e2
+  let einf3 := (eplus + eminus) ⋀ₛ e3
+  let generator := e12.smul (3.0 / 7.0) + einf3
+  let square := generator * generator
+  sparseHasNonScalarPart square &&
+    approxEq square.scalarPart (-((3.0 / 7.0) * (3.0 / 7.0))) (tol := 1e-9)
+
 /-! ## High-Dimensional Exact Stress Tests -/
 
 /-- Five-dimensional Euclidean signature used by exact stress checks. -/
@@ -1964,6 +2027,24 @@ def runHighDimStressTests : IO (List PropTestResult) := do
   IO.println "└────────────────────────────────────────────────┘"
   return [s1, s2, s3, s4]
 
+/-- Run rotor exponential checks against generic series and known CGA preconditions. -/
+def runRotorExpReferenceTests : IO (List PropTestResult) := do
+  IO.println "\n┌─ Rotor Exponential Reference Checks ──────────┐"
+  let r1 := runBoolProp "scalar Taylor helpers match Float"
+    prop_scalar_taylor_functions_match_float
+  IO.println s!"│ {r1}"
+  let r2 := runBoolProp "R3 expBivector matches sparse series"
+    prop_expBivector_r3_e12_matches_series
+  IO.println s!"│ {r2}"
+  let r3 := runBoolProp "CGA3 hyperbolic expBivector matches series"
+    prop_expBivector_cga3_ePlusEMinus_matches_series
+  IO.println s!"│ {r3}"
+  let r4 := runBoolProp "CGA3 torus generator square non-scalar"
+    prop_cga3_torus_generator_square_non_scalar
+  IO.println s!"│ {r4}"
+  IO.println "└────────────────────────────────────────────────┘"
+  return [r1, r2, r3, r4]
+
 /-- Run all property tests -/
 def runPropertyTests : IO Unit := do
   IO.println "╔══════════════════════════════════════════════╗"
@@ -2031,6 +2112,7 @@ def runPropertyTests : IO Unit := do
   let cgaSparseResults ← runCGA3SparseReferenceTests
   let reprResults ← runReprConversionTests
   let stressResults ← runHighDimStressTests
+  let rotorExpResults ← runRotorExpReferenceTests
   -- Summary
   let coreResults := [r1, r2, r3, r4, r5, r6, r7, r8, r9, r9a, r9b, r9c, r10, r11,
     r12, r13]
@@ -2049,7 +2131,8 @@ def runPropertyTests : IO Unit := do
     countPassed pgaSparseResults +
     countPassed cgaSparseResults +
     countPassed reprResults +
-    countPassed stressResults
+    countPassed stressResults +
+    countPassed rotorExpResults
   let basisProps := [prop_R3_basis_squares, prop_R3_basis_anticommute, prop_CGA3_signature,
     prop_PGA3_signature]
   let basisPass := basisProps.filter id |>.length
@@ -2068,6 +2151,7 @@ def runPropertyTests : IO Unit := do
     cgaSparseResults.length +
     reprResults.length +
     stressResults.length +
+    rotorExpResults.length +
     basisProps.length
   let totalPass := passCount + basisPass
   IO.println ""

@@ -22,13 +22,13 @@ def factorial : Nat → Float
 
 /-- Taylor series for exp: Σ xⁿ/n! -/
 def expTaylor (x : Float) (terms : Nat := 15) : Float :=
-  let rec go (n : Nat) (xn : Float) (acc : Float) : Float :=
-    match n with
+  let rec go (remaining k : Nat) (xn acc : Float) : Float :=
+    match remaining with
     | 0 => acc
-    | n + 1 =>
-      let term := xn / factorial (terms - n)
-      go n (xn * x) (acc + term)
-  go terms 1.0 0.0
+    | remaining + 1 =>
+      let term := xn / factorial k
+      go remaining (k + 1) (xn * x) (acc + term)
+  go terms 0 1.0 0.0
 
 /-- Taylor series for sin: Σ (-1)ⁿx^(2n+1)/(2n+1)! -/
 def sinTaylor (x : Float) (terms : Nat := 12) : Float :=
@@ -53,26 +53,24 @@ def cosTaylor (x : Float) (terms : Nat := 12) : Float :=
 /-- sinh(x) = (exp(x) - exp(-x))/2 via Taylor -/
 def sinhTaylor (x : Float) (terms : Nat := 10) : Float :=
   let x2 := x * x
-  let rec go (n : Nat) (xn : Float) (acc : Float) : Float :=
-    match n with
+  let rec go (remaining k : Nat) (xn acc : Float) : Float :=
+    match remaining with
     | 0 => acc
-    | n + 1 =>
-      let k := terms - n
-      let term := xn * x / factorial (2 * k + 1)
-      go n (xn * x2) (acc + term)
-  go terms 1.0 0.0
+    | remaining + 1 =>
+      let term := xn / factorial (2 * k + 1)
+      go remaining (k + 1) (xn * x2) (acc + term)
+  go terms 0 x 0.0
 
 /-- cosh(x) = (exp(x) + exp(-x))/2 via Taylor -/
 def coshTaylor (x : Float) (terms : Nat := 10) : Float :=
   let x2 := x * x
-  let rec go (n : Nat) (xn : Float) (acc : Float) : Float :=
-    match n with
+  let rec go (remaining k : Nat) (xn acc : Float) : Float :=
+    match remaining with
     | 0 => acc
-    | n + 1 =>
-      let k := terms - n
+    | remaining + 1 =>
       let term := xn / factorial (2 * k)
-      go n (xn * x2) (acc + term)
-  go terms 1.0 0.0
+      go remaining (k + 1) (xn * x2) (acc + term)
+  go terms 0 1.0 0.0
 
 /-! ## Exponential of Bivector -/
 
@@ -112,15 +110,14 @@ def expBivector (B : MultivectorS sig Float) : MultivectorS sig Float :=
     exp(M) = Σ Mⁿ/n!
     Use for non-bivector elements or when the bivector formula isn't applicable. -/
 def expTaylorMV (M : MultivectorS sig Float) (terms : Nat := 12) : MultivectorS sig Float :=
-  let rec go (n : Nat) (Mn : MultivectorS sig Float) (acc : MultivectorS sig Float) : MultivectorS sig Float :=
-    match n with
+  let rec go (remaining k : Nat) (Mn acc : MultivectorS sig Float) : MultivectorS sig Float :=
+    match remaining with
     | 0 => acc
-    | n + 1 =>
-      let k := terms - n
+    | remaining + 1 =>
       let fact := factorial k
       let term := Mn.smul (1.0 / fact)
-      go n (Mn * M) (acc + term)
-  go terms (MultivectorS.scalar 1.0) MultivectorS.zero
+      go remaining (k + 1) (Mn * M) (acc + term)
+  go terms 0 (MultivectorS.scalar 1.0) MultivectorS.zero
 
 /-! ## Logarithm of Rotor -/
 
@@ -252,15 +249,14 @@ def expMultivector (M : Multivector sig Float) : Multivector sig Float :=
 /-- Exponential series for general multivector (when closed form doesn't apply).
     exp(M) = Σ Mⁿ/n! -/
 def expSeries (M : Multivector sig Float) (terms : Nat := 15) : Multivector sig Float :=
-  let rec go (n : Nat) (Mn : Multivector sig Float) (acc : Multivector sig Float) : Multivector sig Float :=
-    match n with
+  let rec go (remaining k : Nat) (Mn acc : Multivector sig Float) : Multivector sig Float :=
+    match remaining with
     | 0 => acc
-    | n + 1 =>
-      let k := terms - n
+    | remaining + 1 =>
       let fact := factorial k
       let term := Mn.smul (1.0 / fact)
-      go n (Mn * M) (acc.add term)
-  go terms Multivector.one Multivector.zero
+      go remaining (k + 1) (Mn * M) (acc.add term)
+  go terms 0 Multivector.one Multivector.zero
 
 /-- Logarithm of a unit rotor (dense representation).
     log(R) = θ·B where R = cos(θ) + sin(θ)·B -/
