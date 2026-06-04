@@ -80,15 +80,37 @@ variable {n : ℕ} {sig : Signature n}
 def bivectorSquare (B : MultivectorS sig Float) : Float :=
   (B * B).scalarPart
 
+/-- Return true when a sparse multivector has any non-scalar coefficient above tolerance. -/
+def hasNonScalarPart (M : MultivectorS sig Float) (tol : Float := 1e-10) : Bool :=
+  M.coeffs.foldl (init := false) fun acc idx coeff =>
+    acc || (!(idx == 0) && !(coeff.abs < tol))
+
+/-- Exponential of a general multivector via Taylor series.
+    exp(M) = Σ Mⁿ/n!
+    Use for non-bivector elements or when the bivector closed form is not applicable. -/
+def expTaylorMV (M : MultivectorS sig Float) (terms : Nat := 12) : MultivectorS sig Float :=
+  let rec go (remaining k : Nat) (Mn acc : MultivectorS sig Float) : MultivectorS sig Float :=
+    match remaining with
+    | 0 => acc
+    | remaining + 1 =>
+      let fact := factorial k
+      let term := Mn.smul (1.0 / fact)
+      go remaining (k + 1) (Mn * M) (acc + term)
+  go terms 0 (MultivectorS.scalar 1.0) MultivectorS.zero
+
 /-- Exponential of a pure bivector.
     Uses the appropriate formula based on B²:
     - B² < 0 (Euclidean): exp(B) = cos(|B|) + sin(|B|)·B/|B|
     - B² > 0 (hyperbolic): exp(B) = cosh(|B|) + sinh(|B|)·B/|B|
     - B² = 0 (degenerate): exp(B) = 1 + B -/
 def expBivector (B : MultivectorS sig Float) : MultivectorS sig Float :=
-  let B2 := bivectorSquare B
+  let square := B * B
+  let B2 := square.scalarPart
   let epsilon := 1e-10
-  if B2.abs < epsilon then
+  if hasNonScalarPart square epsilon then
+    -- The scalar-square closed form only applies when B² is scalar.
+    expTaylorMV B 24
+  else if B2.abs < epsilon then
     -- B² ≈ 0: exp(B) = 1 + B (nilpotent case)
     MultivectorS.scalar 1.0 + B
   else if B2 < 0 then
@@ -105,19 +127,6 @@ def expBivector (B : MultivectorS sig Float) : MultivectorS sig Float :=
     let sh := sinhTaylor norm
     let Bnorm := B.smul (sh / norm)
     MultivectorS.scalar ch + Bnorm
-
-/-- Exponential of a general multivector via Taylor series.
-    exp(M) = Σ Mⁿ/n!
-    Use for non-bivector elements or when the bivector formula isn't applicable. -/
-def expTaylorMV (M : MultivectorS sig Float) (terms : Nat := 12) : MultivectorS sig Float :=
-  let rec go (remaining k : Nat) (Mn acc : MultivectorS sig Float) : MultivectorS sig Float :=
-    match remaining with
-    | 0 => acc
-    | remaining + 1 =>
-      let fact := factorial k
-      let term := Mn.smul (1.0 / fact)
-      go remaining (k + 1) (Mn * M) (acc + term)
-  go terms 0 (MultivectorS.scalar 1.0) MultivectorS.zero
 
 /-! ## Logarithm of Rotor -/
 

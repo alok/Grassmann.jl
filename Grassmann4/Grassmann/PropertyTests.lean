@@ -1444,12 +1444,8 @@ def sparseHasNonScalarPart {n : Nat} {sig : Signature n}
     (m : MultivectorS sig Float) : Bool :=
   !(mvApproxEq m (m.gradeProject 0) (tol := 1e-9))
 
-/--
-The mixed conformal generator from the documented Grassmann.jl torus example does
-not square to a scalar, so the scalar-square `expBivector` shortcut is not a
-valid exact port path for that example.
--/
-def prop_cga3_torus_generator_square_non_scalar : Bool :=
+/-- Mixed conformal generator from the documented torus example. -/
+def cga3TorusGeneratorSparse : MultivectorS CGA3 Float :=
   let e1 : MultivectorS CGA3 Float := MultivectorS.basis ⟨0, by omega⟩
   let e2 : MultivectorS CGA3 Float := MultivectorS.basis ⟨1, by omega⟩
   let e3 : MultivectorS CGA3 Float := MultivectorS.basis ⟨2, by omega⟩
@@ -1457,10 +1453,26 @@ def prop_cga3_torus_generator_square_non_scalar : Bool :=
   let eminus : MultivectorS CGA3 Float := MultivectorS.basis ⟨4, by omega⟩
   let e12 := e1 * e2
   let einf3 := (eplus + eminus) ⋀ₛ e3
-  let generator := e12.smul (3.0 / 7.0) + einf3
+  e12.smul (3.0 / 7.0) + einf3
+
+/--
+The mixed conformal generator from the documented Grassmann.jl torus example does
+not square to a scalar, so the scalar-square `expBivector` shortcut is not a
+valid exact port path for that example.
+-/
+def prop_cga3_torus_generator_square_non_scalar : Bool :=
+  let generator := cga3TorusGeneratorSparse
   let square := generator * generator
   sparseHasNonScalarPart square &&
     approxEq square.scalarPart (-((3.0 / 7.0) * (3.0 / 7.0))) (tol := 1e-9)
+
+/-- Non-scalar-square conformal bivectors use the Taylor fallback, not the scalar shortcut. -/
+def prop_expBivector_cga3_torus_generator_matches_series : Bool :=
+  [(-0.5), (-0.25), 0.125, 0.375, 0.5].all fun θ =>
+    let B := cga3TorusGeneratorSparse.smul θ
+    sparseHasNonScalarPart (B * B) &&
+      hasNonScalarPart (B * B) &&
+      mvApproxEq (expBivector B) (expTaylorMV B 30) (tol := 1e-7)
 
 /-! ## High-Dimensional Exact Stress Tests -/
 
@@ -2059,8 +2071,11 @@ def runRotorExpReferenceTests : IO (List PropTestResult) := do
   let r4 := runBoolProp "CGA3 torus generator square non-scalar"
     prop_cga3_torus_generator_square_non_scalar
   IO.println s!"│ {r4}"
+  let r5 := runBoolProp "CGA3 torus expBivector falls back to series"
+    prop_expBivector_cga3_torus_generator_matches_series
+  IO.println s!"│ {r5}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [r1, r2, r3, r4]
+  return [r1, r2, r3, r4, r5]
 
 /-- Run all property tests -/
 def runPropertyTests : IO Unit := do
