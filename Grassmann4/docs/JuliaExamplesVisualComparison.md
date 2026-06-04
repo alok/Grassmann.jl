@@ -58,9 +58,13 @@ source. The same run also writes diagnostic raster metrics:
 ```
 
 The metrics file records grayscale standard deviation for each rendered Lean and
-Julia frame plus an ImageMagick RMSE value. Treat RMSE as a sanity check for
-blank or badly framed images, not as a pass/fail visual oracle; several examples
-are qualitative Lean counterparts rather than exact Grassmann.jl renderings.
+Julia frame plus ImageMagick RMSE diagnostics. The script now enforces a
+conservative visual smoke gate: all twelve expected Lean SVGs must be generated,
+the manifest must list every expected example, each Lean and Julia frame must
+have grayscale standard deviation of at least `1200`, and the normalized RMSE
+must stay at or below `0.25`. Treat the RMSE bound as a sanity check for blank or
+badly framed images, not as an exact visual oracle; several examples are
+qualitative Lean counterparts rather than exact Grassmann.jl renderings.
 
 It requires `curl`, `rsvg-convert`, and ImageMagick's `magick` command.
 
@@ -129,3 +133,5 @@ scripts/compare_julia_examples.sh
 
 The browser comparison page reported `12` example sections and `24/24` loaded
 images: one Lean SVG and one Julia/Makie reference PNG for each example.
+The contact-sheet script additionally passed the automated coverage and visual
+smoke checks for the same twelve examples.

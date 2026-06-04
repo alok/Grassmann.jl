@@ -20,13 +20,53 @@ reference_base="https://raw.githubusercontent.com/chakravala/Grassmann.jl/master
 out_root="$pkg_root/.generated/julia-examples"
 work_dir="$out_root/contact-sheet"
 metrics="$work_dir/metrics.tsv"
+minimum_frame_stddev=1200
+maximum_rmse_normalized=0.25
+
+numeric_ge() {
+  awk -v actual="$1" -v expected="$2" 'BEGIN { exit(actual >= expected ? 0 : 1) }'
+}
+
+numeric_le() {
+  awk -v actual="$1" -v expected="$2" 'BEGIN { exit(actual <= expected ? 0 : 1) }'
+}
+
+failures=()
+
+for ((i = 0; i < ${#names[@]}; i++)); do
+  for ((j = i + 1; j < ${#names[@]}; j++)); do
+    if [[ "${names[$i]}" == "${names[$j]}" ]]; then
+      failures+=("duplicate expected example name: ${names[$i]}")
+    fi
+  done
+done
 
 cd "$pkg_root"
+rm -rf "$out_root/lean" "$out_root/index.html" "$out_root/manifest.json"
 lake exe jlexamples
 
 rm -rf "$work_dir"
 mkdir -p "$work_dir"
-printf 'name\tlean_stddev\tjulia_stddev\trmse_diagnostic\n' > "$metrics"
+printf 'name\tlean_stddev\tjulia_stddev\trmse_normalized\trmse_diagnostic\n' > "$metrics"
+
+manifest="$out_root/manifest.json"
+if [[ ! -s "$manifest" ]]; then
+  failures+=("missing generated manifest: $manifest")
+else
+  manifest_body="$(< "$manifest")"
+  for name in "${names[@]}"; do
+    if [[ "$manifest_body" != *"\"name\":\"$name\""* ]]; then
+      failures+=("manifest missing expected example: $name")
+    fi
+  done
+fi
+
+shopt -s nullglob
+generated_svgs=("$out_root/lean"/*.svg)
+shopt -u nullglob
+if [[ ${#generated_svgs[@]} -ne ${#names[@]} ]]; then
+  failures+=("expected ${#names[@]} generated Lean SVGs, found ${#generated_svgs[@]}")
+fi
 
 pair_paths=()
 for name in "${names[@]}"; do
@@ -63,7 +103,20 @@ SVG
   lean_stddev="$(magick "$lean_frame" -colorspace Gray -format '%[standard-deviation]' info:)"
   julia_stddev="$(magick "$julia_frame" -colorspace Gray -format '%[standard-deviation]' info:)"
   rmse="$(magick compare -metric RMSE "$lean_frame" "$julia_frame" null: 2>&1 || true)"
-  printf '%s\t%s\t%s\t%s\n' "$name" "$lean_stddev" "$julia_stddev" "$rmse" >> "$metrics"
+  rmse_normalized="$(printf '%s\n' "$rmse" | awk -F '[()]' '{print $2}')"
+  printf '%s\t%s\t%s\t%s\t%s\n' "$name" "$lean_stddev" "$julia_stddev" "$rmse_normalized" "$rmse" >> "$metrics"
+
+  if ! numeric_ge "$lean_stddev" "$minimum_frame_stddev"; then
+    failures+=("$name Lean frame standard deviation $lean_stddev below $minimum_frame_stddev")
+  fi
+  if ! numeric_ge "$julia_stddev" "$minimum_frame_stddev"; then
+    failures+=("$name Julia frame standard deviation $julia_stddev below $minimum_frame_stddev")
+  fi
+  if [[ -z "$rmse_normalized" ]]; then
+    failures+=("$name RMSE diagnostic did not include a normalized value: $rmse")
+  elif ! numeric_le "$rmse_normalized" "$maximum_rmse_normalized"; then
+    failures+=("$name normalized RMSE $rmse_normalized above $maximum_rmse_normalized")
+  fi
 
   pair_paths+=("$pair")
 done
@@ -71,5 +124,15 @@ done
 contact="$work_dir/contact.png"
 magick "${pair_paths[@]}" -append "$contact"
 
+if [[ ${#failures[@]} -ne 0 ]]; then
+  printf 'visual comparison smoke checks failed:\n' >&2
+  for failure in "${failures[@]}"; do
+    printf '  - %s\n' "$failure" >&2
+  done
+  exit 1
+fi
+
 printf 'wrote visual comparison contact sheet to %s\n' "$contact"
 printf 'wrote diagnostic image metrics to %s\n' "$metrics"
+printf 'visual smoke checks passed: %s examples, frame stddev >= %s, normalized RMSE <= %s\n' \
+  "${#names[@]}" "$minimum_frame_stddev" "$maximum_rmse_normalized"
