@@ -134,10 +134,19 @@ theorem log_exp_roundtrip (B : MultivectorS sig Float)
     logRotor (expBivector B) = B := by
   sorry
 
+set_option linter.style.nativeDecide false in
 /-- exp(0) = 1 -/
 theorem exp_zero :
-    expBivector (MultivectorS.zero : MultivectorS sig Float) = MultivectorS.scalar 1 := by
-  sorry
+    expBivector (MultivectorS.zero : MultivectorS sig Float) = MultivectorS.scalar 1.0 := by
+  unfold expBivector bivectorSquare
+  have hmul : (MultivectorS.zero : MultivectorS sig Float) * MultivectorS.zero =
+      MultivectorS.zero := by
+    rfl
+  rw [hmul]
+  dsimp [MultivectorS.scalarPart, MultivectorS.coeff, MultivectorS.zero]
+  rw [if_pos]
+  · rfl
+  · native_decide
 
 /-- For B² = -1: exp(θB) = cos(θ) + sin(θ)B -/
 theorem exp_unit_bivector (B : MultivectorS sig Float) (θ : Float)
