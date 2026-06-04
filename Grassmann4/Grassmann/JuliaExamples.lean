@@ -62,7 +62,7 @@ def svgOpen (width height : Nat) : String :=
 def arrowDef : String :=
   "  <defs>\n" ++
   "    <marker id=\"arrow\" markerWidth=\"6\" markerHeight=\"6\" refX=\"5\" refY=\"3\" orient=\"auto\" markerUnits=\"strokeWidth\">\n" ++
-  "      <path d=\"M0,0 L0,6 L5,3 z\" fill=\"#5a5a5a\"/>\n" ++
+  "      <path d=\"M0,0 L0,6 L5,3 z\" fill=\"#8a8a8a\"/>\n" ++
   "    </marker>\n" ++
   "  </defs>\n"
 
@@ -108,7 +108,7 @@ def streamPath2D (field : Vec2 -> Vec2) (width height : Nat) (range : Float) (se
   let d := path2D width height range pts
   if d.isEmpty then ""
   else
-    s!"  <path d=\"{d}\" fill=\"none\" stroke=\"#555555\" stroke-width=\"1.15\" stroke-opacity=\"0.52\"/>\n"
+    s!"  <path d=\"{d}\" fill=\"none\" stroke=\"#6f6f6f\" stroke-width=\"0.82\" stroke-opacity=\"0.38\"/>\n"
 
 def arrowGlyph2D (field : Vec2 -> Vec2) (width height : Nat) (range : Float) (seed : Vec2) :
     String :=
@@ -123,7 +123,7 @@ def arrowGlyph2D (field : Vec2 -> Vec2) (width height : Nat) (range : Float) (se
     let y1 := p.2 - 0.5 * dy
     let x2 := p.1 + 0.5 * dx
     let y2 := p.2 + 0.5 * dy
-    s!"  <line x1=\"{fmt x1}\" y1=\"{fmt y1}\" x2=\"{fmt x2}\" y2=\"{fmt y2}\" stroke=\"#666666\" stroke-width=\"1\" stroke-opacity=\"0.52\" marker-end=\"url(#arrow)\"/>\n"
+    s!"  <line x1=\"{fmt x1}\" y1=\"{fmt y1}\" x2=\"{fmt x2}\" y2=\"{fmt y2}\" stroke=\"#808080\" stroke-width=\"0.65\" stroke-opacity=\"0.34\" marker-end=\"url(#arrow)\"/>\n"
 
 def seeds2D (count : Nat) (range : Float) : List Vec2 :=
   let step := 2.0 * range / (count.toFloat - 1.0)
@@ -194,8 +194,8 @@ def grid3D (width height : Nat) (scale : Float) (offset : Vec2) (range : Float :
       [{ x := -range, y := t, z := -range }, { x := range, y := t, z := -range }]
     let yLine := path3D width height scale offset
       [{ x := t, y := -range, z := -range }, { x := t, y := range, z := -range }]
-    acc ++ s!"  <path d=\"{xLine}\" fill=\"none\" stroke=\"#d7d7d7\" stroke-width=\"1\"/>\n" ++
-      s!"  <path d=\"{yLine}\" fill=\"none\" stroke=\"#d7d7d7\" stroke-width=\"1\"/>\n"
+    acc ++ s!"  <path d=\"{xLine}\" fill=\"none\" stroke=\"#eeeeee\" stroke-width=\"0.85\"/>\n" ++
+      s!"  <path d=\"{yLine}\" fill=\"none\" stroke=\"#eeeeee\" stroke-width=\"0.85\"/>\n"
   let xAxis := path3D width height scale offset
     [{ x := -range, y := 0.0, z := -range }, { x := range, y := 0.0, z := -range }]
   let yAxis := path3D width height scale offset
@@ -203,16 +203,16 @@ def grid3D (width height : Nat) (scale : Float) (offset : Vec2) (range : Float :
   let zAxis := path3D width height scale offset
     [{ x := 0.0, y := 0.0, z := -range }, { x := 0.0, y := 0.0, z := range }]
   planeLines ++
-    s!"  <path d=\"{xAxis}\" fill=\"none\" stroke=\"#222222\" stroke-width=\"1.25\"/>\n" ++
-    s!"  <path d=\"{yAxis}\" fill=\"none\" stroke=\"#222222\" stroke-width=\"1.25\"/>\n" ++
-    s!"  <path d=\"{zAxis}\" fill=\"none\" stroke=\"#222222\" stroke-width=\"1.25\"/>\n"
+    s!"  <path d=\"{xAxis}\" fill=\"none\" stroke=\"#8c8c8c\" stroke-width=\"0.9\"/>\n" ++
+    s!"  <path d=\"{yAxis}\" fill=\"none\" stroke=\"#8c8c8c\" stroke-width=\"0.9\"/>\n" ++
+    s!"  <path d=\"{zAxis}\" fill=\"none\" stroke=\"#8c8c8c\" stroke-width=\"0.9\"/>\n"
 
 def curveSvg3D (pts : List Vec3) (width height : Nat) (scale : Float) (offset : Vec2)
     (gridRange : Float := 2.0) : String :=
   let curve := path3D width height scale offset pts
   svgOpen width height ++
     grid3D width height scale offset gridRange ++
-    s!"  <path d=\"{curve}\" fill=\"none\" stroke=\"#3d3d3d\" stroke-width=\"1.45\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>\n" ++
+    s!"  <path d=\"{curve}\" fill=\"none\" stroke=\"#6b6b6b\" stroke-width=\"1.15\" stroke-opacity=\"0.78\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>\n" ++
     "</svg>\n"
 
 def sampleCurve (samples : Nat) (t0 t1 : Float) (f : Float -> Vec3) : List Vec3 :=
@@ -283,7 +283,7 @@ def streamPath3D (field : Vec3 -> Vec3) (width height : Nat) (scale : Float) (of
   let d := path3D width height scale offset pts
   if d.isEmpty then ""
   else
-    s!"  <path d=\"{d}\" fill=\"none\" stroke=\"#444444\" stroke-width=\"1.15\" stroke-opacity=\"0.72\" stroke-linecap=\"round\"/>\n"
+    s!"  <path d=\"{d}\" fill=\"none\" stroke=\"#595959\" stroke-width=\"0.8\" stroke-opacity=\"0.36\" stroke-linecap=\"round\"/>\n"
 
 def seeds3D (countXY countZ : Nat) (range : Float) : List Vec3 :=
   let stepXY := 2.0 * range / (countXY.toFloat - 1.0)
