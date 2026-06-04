@@ -114,6 +114,14 @@ def timeit (name : String) (warmupIters : Nat) (iters : Nat) (f : Nat → Float)
 
 /-! ## Correctness Verification -/
 
+def correctnessTolerance : Float := 1e-8
+
+def requireApproxZero (name : String) (diff : Float)
+    (tol : Float := correctnessTolerance) : IO Unit := do
+  IO.println s!"{name}: {diff}"
+  if diff.isNaN || diff > tol then
+    throw <| IO.userError s!"{name} exceeded tolerance {tol}: {diff}"
+
 def verifyCorrectness : IO Unit := do
   IO.println "=== Correctness Verification ==="
 
@@ -131,7 +139,7 @@ def verifyCorrectness : IO Unit := do
 
   let diff_mv_rotor := (List.finRange 8).foldl (init := 0.0) fun acc idx =>
     acc + Float.abs (naive_rotor.coeffs idx - mv_rotor_full.coeffs idx)
-  IO.println s!"MV rotor diff: {diff_mv_rotor}"
+  requireApproxZero "MV rotor diff" diff_mv_rotor
 
   -- Vector sandwich
   let v := testVector 1.0
@@ -145,7 +153,7 @@ def verifyCorrectness : IO Unit := do
 
   let diff_sandwich := (List.finRange 8).foldl (init := 0.0) fun acc idx =>
     acc + Float.abs (naive_sandwich.coeffs idx - mv_sandwich_full.coeffs idx)
-  IO.println s!"MV sandwich diff: {diff_sandwich}"
+  requireApproxZero "MV sandwich diff" diff_sandwich
 
   IO.println ""
 
