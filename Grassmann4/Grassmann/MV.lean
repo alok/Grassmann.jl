@@ -581,6 +581,31 @@ def toMultivector (m : MV sig p) : Multivector sig Float :=
       m.coeffs.get! pi
     else 0.0⟩
 
+/-- Dense reference conversion exposes the same coefficients as `MV.coeff` on in-range masks. -/
+theorem toMultivector_coeff (m : MV sig p) (i : Fin (2 ^ n)) :
+    (toMultivector m).coeffs i = m.coeff i.val := by
+  unfold toMultivector coeff
+  have hmask : i.val < 2 ^ n := i.isLt
+  by_cases hparity : Parity.containsMask p i.val = true
+  · simp [hmask, hparity]
+  · have hparity_false : Parity.containsMask p i.val = false := by
+      exact Bool.eq_false_of_not_eq_true hparity
+    simp [hmask, hparity_false]
+
+/-- Dense conversion has zero coefficients at blades outside the packed parity. -/
+theorem toMultivector_coeff_of_wrong_parity (m : MV sig p) {i : Fin (2 ^ n)}
+    (hparity : Parity.containsMask p i.val = false) :
+    (toMultivector m).coeffs i = 0.0 := by
+  rw [toMultivector_coeff]
+  exact coeff_of_wrong_parity m hparity
+
+/-- Dense conversion reads the same packed coefficient at blades inside the packed parity. -/
+theorem toMultivector_coeff_of_parity (m : MV sig p) {i : Fin (2 ^ n)}
+    (hparity : Parity.containsMask p i.val = true) :
+    (toMultivector m).coeffs i = m.coeffs.get! (packIdx n p i.val) := by
+  unfold toMultivector
+  simp [hparity]
+
 /-- Convert from proof-friendly Multivector -/
 @[inline]
 def ofMultivector (m : Multivector sig Float) (p : Parity) : MV sig p :=
