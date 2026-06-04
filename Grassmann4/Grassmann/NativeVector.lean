@@ -277,6 +277,55 @@ theorem coeff_oddPart (m : NativeMV sig) (mask : Nat) :
     rfl
   · simp
 
+/-- Coefficient of a native-vector sum at an in-range blade mask. -/
+theorem coeff_add (a b : NativeMV sig) {mask : Nat} (hmask : mask < 2 ^ n) :
+    (a + b).coeff mask = a.coeff mask + b.coeff mask := by
+  change (NativeMV.add a b).coeff mask = a.coeff mask + b.coeff mask
+  unfold coeff NativeMV.add
+  simp only [hmask, ↓reduceDIte, Vector.get, Vector.zipWith, Array.getElem_zipWith]
+  rfl
+
+/-- Coefficient of native-vector negation at an in-range blade mask. -/
+theorem coeff_neg (m : NativeMV sig) {mask : Nat} (hmask : mask < 2 ^ n) :
+    (-m).coeff mask = -m.coeff mask := by
+  change (NativeMV.neg m).coeff mask = -m.coeff mask
+  unfold coeff NativeMV.neg
+  simp only [hmask, ↓reduceDIte, Vector.get, Vector.map, Array.getElem_map]
+  rfl
+
+/-- Coefficient of native-vector scalar multiplication at an in-range blade mask. -/
+theorem coeff_smul (x : Float) (m : NativeMV sig) {mask : Nat} (hmask : mask < 2 ^ n) :
+    (x • m).coeff mask = x * m.coeff mask := by
+  change (NativeMV.smul x m).coeff mask = x * m.coeff mask
+  unfold coeff NativeMV.smul
+  simp only [hmask, ↓reduceDIte, Vector.get, Vector.map, Array.getElem_map]
+  rfl
+
+/-- Coefficient of native-vector reverse at an in-range blade mask. -/
+theorem coeff_reverse (m : NativeMV sig) {mask : Nat} (hmask : mask < 2 ^ n) :
+    m.reverse.coeff mask =
+      (let k := popcount mask
+       let sign := if (k * (k - 1) / 2) % 2 = 0 then 1.0 else -1.0
+       sign * m.coeff mask) := by
+  unfold coeff reverse
+  simp only [hmask, ↓reduceDIte, Vector.get, Vector.ofFn, Array.getElem_ofFn]
+  rfl
+
+/-- Coefficient formula for native-vector geometric product at an in-range blade mask. -/
+theorem coeff_geometricProduct (a b : NativeMV sig) {mask : Nat} (hmask : mask < 2 ^ n) :
+    (a * b).coeff mask = geometricCoeffAt sig a b mask := by
+  change (NativeMV.geometricProduct a b).coeff mask = geometricCoeffAt sig a b mask
+  unfold coeff geometricProduct
+  simp only [hmask, ↓reduceDIte, Vector.get, Vector.ofFn, Array.getElem_ofFn]
+  rfl
+
+/-- Coefficient formula for native-vector wedge product at an in-range blade mask. -/
+theorem coeff_wedge (a b : NativeMV sig) {mask : Nat} (hmask : mask < 2 ^ n) :
+    (a ⋀ᵥ b).coeff mask = wedgeCoeffAt sig a b mask := by
+  unfold coeff wedge
+  simp only [hmask, ↓reduceDIte, Vector.get, Vector.ofFn, Array.getElem_ofFn]
+  rfl
+
 @[simp]
 theorem gradeProject_idem (m : NativeMV sig) (k : Nat) :
     (m.gradeProject k).gradeProject k = m.gradeProject k := by
