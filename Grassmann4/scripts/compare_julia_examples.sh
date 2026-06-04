@@ -5,7 +5,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 pkg_root="$(cd "$script_dir/.." && pwd)"
 repo_root="$(cd "$pkg_root/.." && pwd)"
 
-for tool in lake curl rsvg-convert magick rg; do
+for tool in lake curl rsvg-convert magick rg jq; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     printf 'missing required tool: %s\n' "$tool" >&2
     exit 1
@@ -68,41 +68,29 @@ lake exe jlexamples
 
 if [[ ! -s "$manifest" ]]; then
   failures+=("missing generated manifest: $manifest")
+elif ! jq -e '
+    (.examples | type == "array" and length > 0) and
+    (all(.examples[]; (.name | type == "string" and length > 0) and
+      (.lean | type == "string" and length > 0) and
+      (.julia | type == "string" and length > 0))) and
+    (.example_count == (.examples | length)) and
+    (.cga_orbit_translation_witnesses | type == "array")
+  ' "$manifest" >/dev/null; then
+  failures+=("generated manifest failed schema checks: $manifest")
 else
-  while IFS= read -r line; do
-    if [[ "$line" != *'"name":"'* ]]; then
-      continue
-    fi
-
-    name="${line#*\"name\":\"}"
-    name="${name%%\"*}"
-    lean_path="${line#*\"lean\":\"}"
-    lean_path="${lean_path%%\"*}"
-    julia_url="${line#*\"julia\":\"}"
-    julia_url="${julia_url%%\"*}"
-
-    if [[ -z "$name" || -z "$lean_path" || -z "$julia_url" ]]; then
-      failures+=("malformed generated manifest entry: $line")
-    else
-      names+=("$name")
-      lean_paths+=("$lean_path")
-      julia_urls+=("$julia_url")
-    fi
-  done < "$manifest"
+  while IFS=$'\t' read -r name lean_path julia_url; do
+    names+=("$name")
+    lean_paths+=("$lean_path")
+    julia_urls+=("$julia_url")
+  done < <(jq -r '.examples[] | [.name, .lean, .julia] | @tsv' "$manifest")
 fi
 
 if [[ ${#names[@]} -eq 0 ]]; then
   failures+=("generated manifest did not list any examples")
 fi
 
-if [[ -s "$manifest" ]]; then
-  while IFS= read -r line; do
-    if [[ "$line" != *'"max_abs_diff":'* ]]; then
-      continue
-    fi
-
-    witness_diff="${line#*\"max_abs_diff\":}"
-    witness_diff="${witness_diff%%,*}"
+if [[ -s "$manifest" ]] && jq -e '.cga_orbit_translation_witnesses | type == "array"' "$manifest" >/dev/null; then
+  while IFS= read -r witness_diff; do
     cga_witness_count=$((cga_witness_count + 1))
     if numeric_ge "$witness_diff" "$cga_witness_max_diff"; then
       cga_witness_max_diff="$witness_diff"
@@ -110,7 +98,7 @@ if [[ -s "$manifest" ]]; then
     if ! numeric_le "$witness_diff" "$maximum_cga_witness_diff"; then
       failures+=("CGA orbit witness max_abs_diff $witness_diff above $maximum_cga_witness_diff")
     fi
-  done < "$manifest"
+  done < <(jq -r '.cga_orbit_translation_witnesses[].max_abs_diff' "$manifest")
 fi
 
 if [[ "$cga_witness_count" -eq 0 ]]; then

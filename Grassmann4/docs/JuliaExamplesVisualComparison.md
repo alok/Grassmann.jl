@@ -74,7 +74,7 @@ observed extrema for the run: minimum Lean frame standard deviation, minimum
 Julia frame standard deviation, maximum normalized RMSE, and maximum CGA witness
 difference.
 
-It requires `curl`, `rsvg-convert`, and ImageMagick's `magick` command.
+It requires `curl`, `jq`, `rsvg-convert`, and ImageMagick's `magick` command.
 
 ## Julia Reference Images
 
