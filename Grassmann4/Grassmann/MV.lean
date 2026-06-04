@@ -464,6 +464,26 @@ def rev (m : MV sig p) : MV sig p :=
     let sign := if (g * (g - 1) / 2) % 2 == 0 then 1.0 else -1.0
     sign * m.coeffs.get! pi)⟩
 
+/-- Grade involution: multiplies each grade-k blade by `(-1)^k`. -/
+@[inline]
+def involute (m : MV sig p) : MV sig p :=
+  let sz := storageSize n p
+  ⟨DataArray.ofArray ((Array.range sz).map fun pi =>
+    let mask := unpackIdx n p pi
+    let g := popcount mask
+    let sign := if g % 2 == 0 then 1.0 else -1.0
+    sign * m.coeffs.get! pi)⟩
+
+/-- Clifford conjugate: multiplies each grade-k blade by `(-1)^(k(k+1)/2)`. -/
+@[inline]
+def conjugate (m : MV sig p) : MV sig p :=
+  let sz := storageSize n p
+  ⟨DataArray.ofArray ((Array.range sz).map fun pi =>
+    let mask := unpackIdx n p pi
+    let g := popcount mask
+    let sign := if (g * (g + 1) / 2) % 2 == 0 then 1.0 else -1.0
+    sign * m.coeffs.get! pi)⟩
+
 /-! ### Grade Projection -/
 
 /-- Project to even part (from full MV, extracting even-grade components) -/

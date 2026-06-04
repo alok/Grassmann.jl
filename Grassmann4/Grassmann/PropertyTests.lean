@@ -433,6 +433,21 @@ def prop_mv_reverse_dense : Gen Bool := do
   let packed : MV R3 .full := MV.ofMultivector a.mv .full
   return packedMatchesDense (MV.rev packed) a.mv.reverse
 
+/-- Packed involute and Clifford conjugate agree with dense involutions. -/
+def prop_mv_involutions_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let denseEven := a.mv.evenPart
+  let denseOdd := a.mv.oddPart
+  let full : MV R3 .full := MV.ofMultivector a.mv .full
+  let even : MV R3 .even := MV.ofMultivector denseEven .even
+  let odd : MV R3 .odd := MV.ofMultivector denseOdd .odd
+  return packedMatchesDense (MV.involute full) a.mv.involute &&
+    packedMatchesDense (MV.conjugate full) a.mv.conjugate &&
+    packedMatchesDense (MV.involute even) denseEven.involute &&
+    packedMatchesDense (MV.conjugate even) denseEven.conjugate &&
+    packedMatchesDense (MV.involute odd) denseOdd.involute &&
+    packedMatchesDense (MV.conjugate odd) denseOdd.conjugate
+
 /-- Packed sandwich product agrees with dense sandwich product for even versors. -/
 def prop_mv_sandwich_dense : Gen Bool := do
   let r ← genR3DenseMv
@@ -513,6 +528,21 @@ def prop_mv_pga3_reverse_dense : Gen Bool := do
   let packed : MV PGA3 .full := MV.ofMultivector a.mv .full
   return packedMatchesDense (MV.rev packed) a.mv.reverse
 
+/-- PGA3 packed involute and Clifford conjugate agree with dense involutions. -/
+def prop_mv_pga3_involutions_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let denseEven := a.mv.evenPart
+  let denseOdd := a.mv.oddPart
+  let full : MV PGA3 .full := MV.ofMultivector a.mv .full
+  let even : MV PGA3 .even := MV.ofMultivector denseEven .even
+  let odd : MV PGA3 .odd := MV.ofMultivector denseOdd .odd
+  return packedMatchesDense (MV.involute full) a.mv.involute &&
+    packedMatchesDense (MV.conjugate full) a.mv.conjugate &&
+    packedMatchesDense (MV.involute even) denseEven.involute &&
+    packedMatchesDense (MV.conjugate even) denseEven.conjugate &&
+    packedMatchesDense (MV.involute odd) denseOdd.involute &&
+    packedMatchesDense (MV.conjugate odd) denseOdd.conjugate
+
 /-- PGA3 packed sandwich product agrees with dense sandwich product for even versors. -/
 def prop_mv_pga3_sandwich_dense : Gen Bool := do
   let r ← genPGA3DenseMv
@@ -592,6 +622,21 @@ def prop_mv_cga3_reverse_dense : Gen Bool := do
   let a ← genCGA3DenseMv
   let packed : MV CGA3 .full := MV.ofMultivector a.mv .full
   return packedMatchesDense (MV.rev packed) a.mv.reverse
+
+/-- CGA3 packed involute and Clifford conjugate agree with dense involutions. -/
+def prop_mv_cga3_involutions_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let denseEven := a.mv.evenPart
+  let denseOdd := a.mv.oddPart
+  let full : MV CGA3 .full := MV.ofMultivector a.mv .full
+  let even : MV CGA3 .even := MV.ofMultivector denseEven .even
+  let odd : MV CGA3 .odd := MV.ofMultivector denseOdd .odd
+  return packedMatchesDense (MV.involute full) a.mv.involute &&
+    packedMatchesDense (MV.conjugate full) a.mv.conjugate &&
+    packedMatchesDense (MV.involute even) denseEven.involute &&
+    packedMatchesDense (MV.conjugate even) denseEven.conjugate &&
+    packedMatchesDense (MV.involute odd) denseOdd.involute &&
+    packedMatchesDense (MV.conjugate odd) denseOdd.conjugate
 
 /-- CGA3 packed sandwich product agrees with dense sandwich product for even versors. -/
 def prop_mv_cga3_sandwich_dense : Gen Bool := do
@@ -1129,11 +1174,13 @@ def runPackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {r20}"
   let r21 ← runGenProp "MV reverse" prop_mv_reverse_dense
   IO.println s!"│ {r21}"
+  let r21a ← runGenProp "MV involutions" prop_mv_involutions_dense
+  IO.println s!"│ {r21a}"
   let r22 ← runGenProp "MV sandwich" prop_mv_sandwich_dense 50
   IO.println s!"│ {r22}"
   IO.println "└────────────────────────────────────────────────┘"
   return [r14, r15, r15a, r15b, r15c, r15d, r15e, r15f, r15g, r16, r17, r18, r19,
-    r20, r21, r22]
+    r20, r21, r21a, r22]
 
 /-- Run PGA3 packed-MV baseline checks against dense reference results. -/
 def runPGA3PackedReferenceTests : IO (List PropTestResult) := do
@@ -1154,10 +1201,13 @@ def runPGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {pgaMv7}"
   let pgaMv8 ← runGenProp "PGA3 MV reverse" prop_mv_pga3_reverse_dense
   IO.println s!"│ {pgaMv8}"
+  let pgaMv8a ← runGenProp "PGA3 MV involutions" prop_mv_pga3_involutions_dense
+  IO.println s!"│ {pgaMv8a}"
   let pgaMv9 ← runGenProp "PGA3 MV sandwich" prop_mv_pga3_sandwich_dense 50
   IO.println s!"│ {pgaMv9}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [pgaMv1, pgaMv2, pgaMv3, pgaMv4, pgaMv5, pgaMv6, pgaMv7, pgaMv8, pgaMv9]
+  return [pgaMv1, pgaMv2, pgaMv3, pgaMv4, pgaMv5, pgaMv6, pgaMv7, pgaMv8,
+    pgaMv8a, pgaMv9]
 
 /-- Run CGA3 packed-MV baseline checks against dense reference results. -/
 def runCGA3PackedReferenceTests : IO (List PropTestResult) := do
@@ -1178,10 +1228,13 @@ def runCGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {cgaMv7}"
   let cgaMv8 ← runGenProp "CGA3 MV reverse" prop_mv_cga3_reverse_dense
   IO.println s!"│ {cgaMv8}"
+  let cgaMv8a ← runGenProp "CGA3 MV involutions" prop_mv_cga3_involutions_dense
+  IO.println s!"│ {cgaMv8a}"
   let cgaMv9 ← runGenProp "CGA3 MV sandwich" prop_mv_cga3_sandwich_dense 50
   IO.println s!"│ {cgaMv9}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [cgaMv1, cgaMv2, cgaMv3, cgaMv4, cgaMv5, cgaMv6, cgaMv7, cgaMv8, cgaMv9]
+  return [cgaMv1, cgaMv2, cgaMv3, cgaMv4, cgaMv5, cgaMv6, cgaMv7, cgaMv8,
+    cgaMv8a, cgaMv9]
 
 /-- Run sparse-MV baseline checks against dense reference results. -/
 def runSparseReferenceTests : IO (List PropTestResult) := do
