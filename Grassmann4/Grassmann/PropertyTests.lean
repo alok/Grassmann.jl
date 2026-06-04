@@ -966,6 +966,24 @@ def prop_pga3_generated_point3_dense : Gen Bool := do
     (PGA.point3 c.1 c.2.1 c.2.2)
     (PGA.Proof.point c.1 c.2.1 c.2.2)
 
+/-- Generated packed PGA planes match the dense proof-friendly constructor. -/
+def prop_pga3_generated_plane3_dense : Gen Bool := do
+  let normal ← genCoord3 2.0
+  let d ← genFloat 2.0
+  return packedMatchesDense
+    (PGA.plane3 normal.1 normal.2.1 normal.2.2 d)
+    (PGA.Proof.plane normal.1 normal.2.1 normal.2.2 d)
+
+/-- Generated packed PGA lines match the dense proof-friendly constructor. -/
+def prop_pga3_generated_line3_dense : Gen Bool := do
+  let dir ← genCoord3 2.0
+  let moment ← genCoord3 2.0
+  return packedMatchesDense
+    (PGA.line3 dir.1 dir.2.1 dir.2.2 moment.1 moment.2.1 moment.2.2)
+    (PGA.Proof.lineFromDirMoment
+      dir.1 dir.2.1 dir.2.2
+      moment.1 moment.2.1 moment.2.2)
+
 /-- Generated packed PGA rotation motors match the dense proof-friendly constructor. -/
 def prop_pga3_generated_motor3_dense : Gen Bool := do
   let axis ← genCoord3 1.0
@@ -1005,6 +1023,40 @@ def prop_pga3_generated_motor_point_dense : Gen Bool := do
   return packedMatchesDense packedResult denseResult (tol := 1e-6) &&
     coordsApproxEq (PGA.extractPoint3 packedResult) (PGA.Proof.extractPoint denseResult)
       (tol := 1e-5)
+
+/-- Generated packed plane transforms agree with the dense PGA reference. -/
+def prop_pga3_generated_motor_plane_dense : Gen Bool := do
+  let normal ← genCoord3 2.0
+  let d ← genFloat 2.0
+  let axis ← genCoord3 1.0
+  let θ ← genFloat pga3TestPi
+  let packedMotor := PGA.motor3 axis.1 axis.2.1 axis.2.2 θ
+  let denseMotor := PGA.Proof.rotor axis.1 axis.2.1 axis.2.2 θ
+  let packedPlane := PGA.plane3 normal.1 normal.2.1 normal.2.2 d
+  let densePlane := PGA.Proof.plane normal.1 normal.2.1 normal.2.2 d
+  return packedMatchesDense
+    (PGA.Motor.transformPlane packedMotor packedPlane)
+    (PGA.Proof.applyMotor denseMotor densePlane)
+    (tol := 1e-6)
+
+/-- Generated packed line transforms agree with the dense PGA reference. -/
+def prop_pga3_generated_motor_line_dense : Gen Bool := do
+  let dir ← genCoord3 2.0
+  let moment ← genCoord3 2.0
+  let axis ← genCoord3 1.0
+  let θ ← genFloat pga3TestPi
+  let packedMotor := PGA.motor3 axis.1 axis.2.1 axis.2.2 θ
+  let denseMotor := PGA.Proof.rotor axis.1 axis.2.1 axis.2.2 θ
+  let packedLine :=
+    PGA.line3 dir.1 dir.2.1 dir.2.2 moment.1 moment.2.1 moment.2.2
+  let denseLine :=
+    PGA.Proof.lineFromDirMoment
+      dir.1 dir.2.1 dir.2.2
+      moment.1 moment.2.1 moment.2.2
+  return packedMatchesDense
+    (PGA.Motor.transformLine packedMotor packedLine)
+    (PGA.Proof.applyMotor denseMotor denseLine)
+    (tol := 1e-6)
 
 /-- Z-axis rotor point-cloud transforms use the same convention as the dense reference. -/
 def prop_pga3_z_rotor_point_cloud_dense : Bool :=
@@ -2118,6 +2170,12 @@ def runPGA3PointCloudTransformTests : IO (List PropTestResult) := do
   let pointCloud1b ← runGenProp "PGA3 generated motor constructor vs dense"
     prop_pga3_generated_motor3_dense
   IO.println s!"│ {pointCloud1b}"
+  let pointCloud1c ← runGenProp "PGA3 generated plane constructor vs dense"
+    prop_pga3_generated_plane3_dense
+  IO.println s!"│ {pointCloud1c}"
+  let pointCloud1d ← runGenProp "PGA3 generated line constructor vs dense"
+    prop_pga3_generated_line3_dense
+  IO.println s!"│ {pointCloud1d}"
   let pointCloud2 := runBoolProp "PGA3 identity motor point cloud"
     prop_pga3_identity_motor_point_cloud
   IO.println s!"│ {pointCloud2}"
@@ -2133,9 +2191,16 @@ def runPGA3PointCloudTransformTests : IO (List PropTestResult) := do
   let pointCloud6 ← runGenProp "PGA3 generated motor point transform vs dense"
     prop_pga3_generated_motor_point_dense 50
   IO.println s!"│ {pointCloud6}"
+  let pointCloud7 ← runGenProp "PGA3 generated motor plane transform vs dense"
+    prop_pga3_generated_motor_plane_dense 50
+  IO.println s!"│ {pointCloud7}"
+  let pointCloud8 ← runGenProp "PGA3 generated motor line transform vs dense"
+    prop_pga3_generated_motor_line_dense 50
+  IO.println s!"│ {pointCloud8}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [pointCloud1, pointCloud1a, pointCloud1b, pointCloud2, pointCloud3, pointCloud4,
-    pointCloud5, pointCloud6]
+  return [pointCloud1, pointCloud1a, pointCloud1b, pointCloud1c, pointCloud1d,
+    pointCloud2, pointCloud3, pointCloud4, pointCloud5, pointCloud6, pointCloud7,
+    pointCloud8]
 
 /-- Run user-facing CGA3 point-cloud transform checks. -/
 def runCGA3PointCloudTransformTests : IO (List PropTestResult) := do
