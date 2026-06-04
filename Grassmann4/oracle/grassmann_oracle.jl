@@ -553,6 +553,27 @@ function cmd_r3_det(
     )
 end
 
+"""
+Evaluate one of the documented plot-producing examples from docs/src/algebra.md
+at a scalar parameter and return Euclidean plotting coordinates.
+"""
+function cmd_julia_example_point(example_name::String, t::Float64)
+    if example_name == "projective_torus"
+        @basis S"∞+++"
+        y = ↓(exp(pi * t * ((3 / 7) * v12 + v∞3)) >>> ↑(v1 + v2 + v3))
+        vals = value(y)
+
+        return Dict(
+            "operation" => "julia_example_point",
+            "example" => example_name,
+            "t" => t,
+            "coords" => [Float64(vals[2]), Float64(vals[3]), Float64(vals[4])],
+        )
+    else
+        error("Unsupported Julia example point: $example_name")
+    end
+end
+
 # Main
 function main()
     if length(ARGS) == 0 || ARGS[1] == "test"
@@ -618,6 +639,8 @@ function main()
                        parse(Float64, ARGS[8]),
                        parse(Float64, ARGS[9]),
                        parse(Float64, ARGS[10]))
+        elseif cmd == "julia_example_point" && length(ARGS) >= 3
+            cmd_julia_example_point(ARGS[2], parse(Float64, ARGS[3]))
         else
             Dict("error" => "Unknown command: $cmd",
                  "usage" => """Commands:
@@ -640,6 +663,7 @@ function main()
   r3_cross <a> <b>                       - R3 cross product coordinates
   r3_det <c1x> <c1y> <c1z> <c2x> <c2y> <c2z> <c3x> <c3y> <c3z>
                                         - R3 determinant from column vectors
+  julia_example_point <name> <t>          - Documented plot example coordinates
 
 Signatures: R2, R3, R4, PGA2, PGA3, CGA2, CGA3, STA""")
         end

@@ -1,4 +1,5 @@
 import Grassmann.CGA
+import Grassmann.RotorExp
 
 /-
   Grassmann/JuliaExamples.lean
@@ -45,6 +46,48 @@ namespace Vec3
   if n < 1e-9 then { x := 0.0, y := 0.0, z := 0.0 } else smul (1.0 / n) v
 
 end Vec3
+
+/-! ## Exact projective Julia example evaluators
+
+The `S"∞+++"` torus example in `docs/src/algebra.md` uses a 4D Euclidean
+signature with the stereographic projective basis vector first in Julia's basis
+ordering. Lean stores the same signature as `R4`, with that projective basis
+vector last rather than first.
+-/
+
+abbrev ProjectiveR3 : Signature 4 := R4
+abbrev ProjectiveMV := MultivectorS ProjectiveR3 Float
+
+@[inline] def projE1 : ProjectiveMV := MultivectorS.basis ⟨0, by omega⟩
+@[inline] def projE2 : ProjectiveMV := MultivectorS.basis ⟨1, by omega⟩
+@[inline] def projE3 : ProjectiveMV := MultivectorS.basis ⟨2, by omega⟩
+@[inline] def projInf : ProjectiveMV := MultivectorS.basis ⟨3, by omega⟩
+
+@[inline] def coeffMask4 (m : ProjectiveMV) (mask : Nat) : Float :=
+  m.coeff mask
+
+def projectiveVec3 (p : Vec3) : ProjectiveMV :=
+  MultivectorS.smul p.x projE1 + MultivectorS.smul p.y projE2 +
+    MultivectorS.smul p.z projE3
+
+def projectiveUp (p : Vec3) : ProjectiveMV :=
+  let v := projectiveVec3 p
+  let p2 := p.x * p.x + p.y * p.y + p.z * p.z
+  let inv := 1.0 / (p2 + 1.0)
+  MultivectorS.smul (2.0 * inv) v + MultivectorS.smul ((p2 - 1.0) * inv) projInf
+
+def projectiveDown (omega : ProjectiveMV) : Vec3 :=
+  let denominator := 1.0 - coeffMask4 omega 8
+  { x := coeffMask4 omega 1 / denominator,
+    y := coeffMask4 omega 2 / denominator,
+    z := coeffMask4 omega 4 / denominator }
+
+def projectiveTorusGenerator : ProjectiveMV :=
+  MultivectorS.smul (3.0 / 7.0) (projE1 * projE2) + projInf * projE3
+
+def documentedProjectiveTorusPoint (t : Float) : Vec3 :=
+  let rotor := expTaylorMV (MultivectorS.smul (pi * t) projectiveTorusGenerator) 40
+  projectiveDown (rotor * projectiveUp { x := 1.0, y := 1.0, z := 1.0 } * rotor†ₛ)
 
 @[inline] def fmin (a b : Float) : Float := if a <= b then a else b
 @[inline] def fmax (a b : Float) : Float := if a >= b then a else b

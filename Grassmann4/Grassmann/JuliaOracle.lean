@@ -15,6 +15,7 @@ import Grassmann.RotorExp
 import Grassmann.LinearAlgebra
 import Grassmann.Manifold
 import Grassmann.CGA
+import Grassmann.JuliaExamples
 
 namespace Grassmann.JuliaOracle
 
@@ -573,6 +574,58 @@ def verifyR3Det (name : String) (columns : Array (Float × Float × Float))
       message := s!"Parse failed: {result.stdout}"
     }
 
+/-- Verify a documented Julia plot-example point against Lean coordinates. -/
+def verifyJuliaExamplePoint (exampleName : String) (t : Float)
+    (leanPoint : Grassmann.JuliaExamples.Vec3) : IO (Array TestResult) := do
+  let leanCoords := #[leanPoint.x, leanPoint.y, leanPoint.z]
+  let result ← callOracle ["julia_example_point", exampleName, toString t]
+  let baseName := s!"julia_example_point({exampleName},{t})"
+  if !result.success then
+    return #[{
+      name := baseName
+      passed := false
+      leanValue := 0.0
+      juliaValue := 0.0
+      difference := 0.0
+      message := s!"Oracle error: {result.stderr}"
+    }]
+  match parseJson result.stdout >>= fun j => getJsonFloatArray j "coords" with
+  | some juliaCoords =>
+    if juliaCoords.size != 3 then
+      return #[{
+        name := baseName
+        passed := false
+        leanValue := leanCoords.size.toFloat
+        juliaValue := juliaCoords.size.toFloat
+        difference := 0.0
+        message := "Coordinate count mismatch"
+      }]
+    let mkCoordResult (axis : String) (i : Nat) : TestResult :=
+      let leanValue := leanCoords.getD i 0.0
+      let juliaValue := juliaCoords.getD i 0.0
+      let diff := (leanValue - juliaValue).abs
+      {
+        name := s!"{baseName}.{axis}"
+        passed := floatsMatch leanValue juliaValue (tol := 1e-5)
+        leanValue := leanValue
+        juliaValue := juliaValue
+        difference := diff
+      }
+    return #[
+      mkCoordResult "x" 0,
+      mkCoordResult "y" 1,
+      mkCoordResult "z" 2
+    ]
+  | none =>
+    return #[{
+      name := baseName
+      passed := false
+      leanValue := 0.0
+      juliaValue := 0.0
+      difference := 0.0
+      message := s!"Parse failed: {result.stdout}"
+    }]
+
 /-! ## Lean Computation Helpers -/
 
 /-- R3 basis vector -/
@@ -763,6 +816,16 @@ def testR3LinearAlgebra : IO (Array TestResult) := do
     (LinearAlgebra.det [d1, d2, d3])
   return r1 ++ r2 ++ r3 ++ #[detId, detSwap, detScaled]
 
+/-- Test exact sample coordinates for plot-producing Julia examples. -/
+def testJuliaPlotExampleSamples : IO (Array TestResult) := do
+  let samples := #[-1.0, -0.5, 0.0, 0.5, 1.0]
+  let mut results := #[]
+  for t in samples do
+    let point := Grassmann.JuliaExamples.documentedProjectiveTorusPoint t
+    let sampleResults ← verifyJuliaExamplePoint "projective_torus" t point
+    results := results ++ sampleResults
+  return results
+
 /-! ## Main Test Runner -/
 
 /-- Run all tests -/
@@ -811,9 +874,15 @@ def runAllTests : IO Unit := do
   let linearResults ← testR3LinearAlgebra
   for r in linearResults do IO.println s!"│ {r}"
   IO.println "└──────────────────────────────────────────┘"
+  -- Julia plot examples
+  IO.println "\n┌─ Julia Plot Example Samples ─────────────┐"
+  let plotSampleResults ← testJuliaPlotExampleSamples
+  for r in plotSampleResults do IO.println s!"│ {r}"
+  IO.println "└──────────────────────────────────────────┘"
   -- Summary
   let all := r3Results ++ coeffResults ++ sigResults ++ cgaResults ++
-    cgaDistanceResults ++ cgaTranslatorResults ++ rotorResults ++ linearResults
+    cgaDistanceResults ++ cgaTranslatorResults ++ rotorResults ++ linearResults ++
+    plotSampleResults
   let passed := all.filter (·.passed)
   let failed := all.filter (!·.passed)
   IO.println "\n╔══════════════════════════════════════════╗"
