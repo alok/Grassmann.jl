@@ -212,8 +212,12 @@ def one (sig : Signature n) : MV sig .even := scalar sig 1.0
 /-- Get coefficient at blade mask (user-friendly interface). -/
 @[inline]
 def coeff (m : MV sig p) (bladeMask : Nat) : Float :=
-  let pi := packIdx n p bladeMask
-  m.coeffs.get! pi
+  if bladeMask < 2 ^ n then
+    if Parity.containsMask p bladeMask then
+      let pi := packIdx n p bladeMask
+      m.coeffs.get! pi
+    else 0.0
+  else 0.0
 
 /-- Get coefficient at packed index (fast internal interface). -/
 @[inline]
@@ -232,8 +236,12 @@ def scalarPart (m : MV sig p) : Float :=
 /-- Set coefficient at blade mask. Returns a new MV with the updated coefficient. -/
 @[inline]
 def setCoeff (m : MV sig p) (bladeMask : Nat) (x : Float) : MV sig p :=
-  let pi := packIdx n p bladeMask
-  ⟨m.coeffs.set! pi x⟩
+  if bladeMask < 2 ^ n then
+    if Parity.containsMask p bladeMask then
+      let pi := packIdx n p bladeMask
+      ⟨m.coeffs.set! pi x⟩
+    else m
+  else m
 
 /-- Build an MV from a list of (bladeMask, coefficient) pairs. -/
 @[inline]

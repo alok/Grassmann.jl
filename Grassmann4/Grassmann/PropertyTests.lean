@@ -302,6 +302,29 @@ def prop_mv_parity_projection : Gen Bool := do
   return packedMatchesDense evenPacked a.mv.evenPart &&
     packedMatchesDense oddPacked a.mv.oddPart
 
+/-- Packed `MV` user-facing coefficient access respects the parity tag. -/
+def prop_mv_parity_guard_coeff : Bool :=
+  let evenScalar := MV.scalar R3 7.0
+  let oddVector := (MV.zero R3 .odd).setCoeff 1 2.0
+  approxEq (evenScalar.coeff 0) 7.0 &&
+  approxEq (evenScalar.coeff 1) 0.0 &&
+  approxEq (oddVector.coeff 1) 2.0 &&
+  approxEq (oddVector.coeff 0) 0.0 &&
+  approxEq (oddVector.coeff 8) 0.0
+
+/-- Packed `MV` user-facing coefficient writes ignore masks outside their parity. -/
+def prop_mv_parity_guard_setCoeff : Bool :=
+  let evenZero : MV R3 .even := MV.zero R3 .even
+  let evenValid := evenZero.setCoeff 3 4.0
+  let evenInvalid := evenValid.setCoeff 1 9.0
+  let oddValid := (MV.zero R3 .odd).setCoeff 1 2.0
+  let oddInvalid := oddValid.setCoeff 0 9.0
+  approxEq (evenValid.coeff 3) 4.0 &&
+  approxEq (evenInvalid.coeff 3) 4.0 &&
+  approxEq (evenInvalid.coeff 1) 0.0 &&
+  approxEq (oddInvalid.coeff 1) 2.0 &&
+  approxEq (oddInvalid.coeff 0) 0.0
+
 /-- Packed full multiplication agrees with dense multiplication. -/
 def prop_mv_full_mul_dense : Gen Bool := do
   let a ← genR3DenseMv
@@ -1026,6 +1049,10 @@ def runPackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {r14}"
   let r15 ← runGenProp "MV parity projection" prop_mv_parity_projection
   IO.println s!"│ {r15}"
+  let r15a := runBoolProp "MV parity guarded coeff" prop_mv_parity_guard_coeff
+  IO.println s!"│ {r15a}"
+  let r15b := runBoolProp "MV parity guarded setCoeff" prop_mv_parity_guard_setCoeff
+  IO.println s!"│ {r15b}"
   let r16 ← runGenProp "MV full multiplication" prop_mv_full_mul_dense
   IO.println s!"│ {r16}"
   let r17 ← runGenProp "MV even*even multiplication" prop_mv_even_mul_dense
@@ -1041,7 +1068,7 @@ def runPackedReferenceTests : IO (List PropTestResult) := do
   let r22 ← runGenProp "MV sandwich" prop_mv_sandwich_dense 50
   IO.println s!"│ {r22}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [r14, r15, r16, r17, r18, r19, r20, r21, r22]
+  return [r14, r15, r15a, r15b, r16, r17, r18, r19, r20, r21, r22]
 
 /-- Run PGA3 packed-MV baseline checks against dense reference results. -/
 def runPGA3PackedReferenceTests : IO (List PropTestResult) := do
