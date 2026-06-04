@@ -28,6 +28,10 @@ def runNativeReferenceOnly : IO Unit := do
   let results ← Grassmann.PropertyTests.runNativeReferenceTests
   requireAllPassed "native-vector reference" results
 
+def runBladeReferenceOnly : IO Unit := do
+  let results ← Grassmann.PropertyTests.runBladeReferenceTests
+  requireAllPassed "blade reference" results
+
 def runSignTableReferenceOnly : IO Unit := do
   let results ← Grassmann.PropertyTests.runSignTableReferenceTests
   requireAllPassed "sign-table reference" results
@@ -54,7 +58,7 @@ def runHighDimStressOnly : IO Unit := do
 
 def usage : String :=
   "Usage: propertytests [cga-point-cloud|pga-point-cloud|mv-dispatch|" ++
-    "rotor-exp|native-reference|sign-table|packed-reference|" ++
+    "rotor-exp|native-reference|blade-reference|sign-table|packed-reference|" ++
     "sparse-reference|repr|stress]"
 
 def main (args : List String) : IO Unit := do
@@ -65,6 +69,7 @@ def main (args : List String) : IO Unit := do
   | ["mv-dispatch"] => runMVDispatchOnly
   | ["rotor-exp"] => runRotorExpOnly
   | ["native-reference"] => runNativeReferenceOnly
+  | ["blade-reference"] => runBladeReferenceOnly
   | ["sign-table"] => runSignTableReferenceOnly
   | ["packed-reference"] => runPackedReferenceOnly
   | ["sparse-reference"] => runSparseReferenceOnly

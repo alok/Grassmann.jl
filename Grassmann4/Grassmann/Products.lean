@@ -166,9 +166,12 @@ def regressiveProductBlades (a b : Blade sig) : BladeProduct sig :=
   else
     let wedgeComp := aComp ||| bComp
     let resultBits := wedgeComp ^^^ pseudoscalar
-    -- Sign computation is more complex, simplified here
-    let sign := wedgeSign sig ⟨aComp⟩ ⟨bComp⟩ * leftComplementSign sig ⟨wedgeComp⟩
-    .nonzero sign ⟨resultBits⟩
+    let sign :=
+      leftComplementSign sig a *
+      leftComplementSign sig b *
+      wedgeSign sig ⟨aComp⟩ ⟨bComp⟩ *
+      leftComplementSign sig ⟨wedgeComp⟩
+    if sign == 0 then .zero else .nonzero sign ⟨resultBits⟩
 
 /-! ## Single Products
 

@@ -1899,6 +1899,42 @@ def stressMv5 (mask : Nat) : Multivector R5Stress Int :=
 def denseIntEq {n : Nat} {sig : Signature n} (a b : Multivector sig Int) : Bool :=
   (List.finRange (2 ^ n)).all fun i => a.coeffs i == b.coeffs i
 
+/-! ## Exact Blade Reference Tests -/
+
+/-- Basis blade from a bit mask for exact blade-product checks. -/
+def bladeFromMask {n : Nat} (sig : Signature n) (mask : Nat) : Blade sig :=
+  ⟨BitVec.ofNat n mask⟩
+
+/-- Interpret a signed blade product as an exact dense integer multivector. -/
+def bladeProductToDenseInt {n : Nat} {sig : Signature n} (bp : BladeProduct sig) :
+    Multivector sig Int :=
+  match bp with
+  | .zero => 0
+  | .nonzero sign blade => (Multivector.ofBlade blade).smul sign
+
+/-- Blade regressive product agrees with dense regressive product on every basis pair. -/
+def bladeRegressiveMatchesDense {n : Nat} (sig : Signature n) : Bool :=
+  (List.range (2 ^ n)).all fun i =>
+    (List.range (2 ^ n)).all fun j =>
+      let a := bladeFromMask sig i
+      let b := bladeFromMask sig j
+      let denseA : Multivector sig Int := Multivector.ofBlade a
+      let denseB : Multivector sig Int := Multivector.ofBlade b
+      denseIntEq (bladeProductToDenseInt (regressiveProductBlades a b))
+        (denseA ⋁ᵐ denseB)
+
+/-- R3 blade regressive products match the dense oracle exactly. -/
+def prop_blade_regressive_r3_dense : Bool :=
+  bladeRegressiveMatchesDense R3
+
+/-- PGA3 blade regressive products match the dense oracle exactly. -/
+def prop_blade_regressive_pga3_dense : Bool :=
+  bladeRegressiveMatchesDense PGA3
+
+/-- CGA3 blade regressive products match the dense oracle exactly. -/
+def prop_blade_regressive_cga3_dense : Bool :=
+  bladeRegressiveMatchesDense CGA3
+
 /-- R5 exact basis, anticommutation, and wedge checks. -/
 def prop_R5_exact_basis_wedge : Bool :=
   let e1 := stressMv5 0b00001
@@ -2111,6 +2147,18 @@ def runGenProp (name : String) (prop : Gen Bool) (numTests : Nat := 100) : IO Pr
       failMsg := s!"Failed on test {Nat.repr i}"
       break
   return { name := name, passed := passed, numTests := numTests, message := failMsg }
+
+/-- Run exact blade-product checks against dense reference results. -/
+def runBladeReferenceTests : IO (List PropTestResult) := do
+  IO.println "\n┌─ Blade vs Dense Reference ────────────────────┐"
+  let bladeR3 := runBoolProp "R3 blade regressive product" prop_blade_regressive_r3_dense
+  IO.println s!"│ {bladeR3}"
+  let bladePGA3 := runBoolProp "PGA3 blade regressive product" prop_blade_regressive_pga3_dense
+  IO.println s!"│ {bladePGA3}"
+  let bladeCGA3 := runBoolProp "CGA3 blade regressive product" prop_blade_regressive_cga3_dense
+  IO.println s!"│ {bladeCGA3}"
+  IO.println "└────────────────────────────────────────────────┘"
+  return [bladeR3, bladePGA3, bladeCGA3]
 
 /-- Run native-vector baseline checks against dense reference results. -/
 def runNativeReferenceTests : IO (List PropTestResult) := do
@@ -2636,6 +2684,7 @@ def runPropertyTests : IO Unit := do
   let r13 ← runRandomProp "Conjugate involutive" prop_conjugate_involutive
   IO.println s!"│ {r13}"
   IO.println "└────────────────────────────────────────────────┘"
+  let bladeResults ← runBladeReferenceTests
   let nativeResults ← runNativeReferenceTests
   let signTableResults ← runSignTableReferenceTests
   let packedResults ← runPackedReferenceTests
@@ -2656,6 +2705,7 @@ def runPropertyTests : IO Unit := do
   let countPassed (results : List PropTestResult) := results.filter (·.passed) |>.length
   let passCount :=
     countPassed coreResults +
+    countPassed bladeResults +
     countPassed nativeResults +
     countPassed signTableResults +
     countPassed packedResults +
@@ -2675,6 +2725,7 @@ def runPropertyTests : IO Unit := do
   let basisPass := basisProps.filter id |>.length
   let total :=
     coreResults.length +
+    bladeResults.length +
     nativeResults.length +
     signTableResults.length +
     packedResults.length +
