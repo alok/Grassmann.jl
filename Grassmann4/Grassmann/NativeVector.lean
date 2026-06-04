@@ -353,6 +353,47 @@ theorem toVector_basisVector_ne {i j : Fin n} (hij : i ≠ j) :
   rw [coeff_toVector]
   exact coeff_basisVector_ne (basisVector_mask_lt j) (basisVector_mask_ne hij)
 
+/-- `vec2` round-trips through native coordinate extraction. -/
+@[simp]
+theorem toVector_vec2 (sig : Signature 2) (x y : Float) :
+    (vec2 sig x y).toVector = coords2 x y := by
+  apply Vector.ext
+  intro i hi
+  cases i with
+  | zero =>
+      simp [vec2, fromVector, toVector, coords2, coeff, setCoeff, List.finRange_succ,
+        Vector.get, Vector.set, Array.getElem_set]
+  | succ i =>
+      cases i with
+      | zero =>
+          simp [vec2, fromVector, toVector, coords2, coeff, setCoeff, List.finRange_succ,
+            Vector.get, Vector.set, Array.getElem_set]
+      | succ i =>
+          omega
+
+/-- `vec3` round-trips through native coordinate extraction. -/
+@[simp]
+theorem toVector_vec3 (sig : Signature 3) (x y z : Float) :
+    (vec3 sig x y z).toVector = coords3 x y z := by
+  apply Vector.ext
+  intro i hi
+  cases i with
+  | zero =>
+      simp [vec3, fromVector, toVector, coords3, coeff, setCoeff, List.finRange_succ,
+        Vector.get, Vector.set, Array.getElem_set]
+  | succ i =>
+      cases i with
+      | zero =>
+          simp [vec3, fromVector, toVector, coords3, coeff, setCoeff, List.finRange_succ,
+            Vector.get, Vector.set, Array.getElem_set]
+      | succ i =>
+          cases i with
+          | zero =>
+              simp [vec3, fromVector, toVector, coords3, coeff, setCoeff, List.finRange_succ,
+                Vector.get, Vector.set, Array.getElem_set]
+          | succ i =>
+              omega
+
 /-- Coefficient of a native-vector sum at an in-range blade mask. -/
 theorem coeff_add (a b : NativeMV sig) {mask : Nat} (hmask : mask < 2 ^ n) :
     (a + b).coeff mask = a.coeff mask + b.coeff mask := by
