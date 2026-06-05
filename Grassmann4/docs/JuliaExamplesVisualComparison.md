@@ -69,12 +69,17 @@ frame must have grayscale standard deviation of at least `1200`, and the
 normalized RMSE must stay at or below `0.25`. Treat the RMSE bound as a sanity
 check for blank or badly framed images, not as an exact visual oracle; several
 examples are qualitative Lean counterparts rather than exact Grassmann.jl
-renderings.
+renderings. The same run also checks formula witnesses: the CGA translation
+helper path, exact projective plot curves, the conformal helix motor, and the
+projective `orb`/`wave` stream-field motor all have `1e-6` max absolute
+difference gates.
 
 The generated `summary.json` repeats the gate thresholds and records the
 observed extrema for the run: minimum Lean frame standard deviation, minimum
 Julia frame standard deviation, maximum normalized RMSE, maximum CGA witness
-difference, and maximum projective plot formula witness difference.
+difference, maximum projective plot formula witness difference, maximum
+conformal plot formula witness difference, and maximum projective stream-field
+witness difference.
 
 It requires `curl`, `jq`, `rsvg-convert`, and ImageMagick's `magick` command.
 
@@ -116,7 +121,7 @@ The contact-sheet script provides the same comparison in one local image.
 | `plane-1` through `plane-6` | Direct linear-field counterparts | Euclidean rotations/reflections and hyperbolic boosts match the reference topology. Arrow glyphs and line density are approximate Makie-style matches. |
 | `torus` | Exact documented projective curve | Renders `documentedProjectiveTorusPoint` directly. Oracle tests and manifest witnesses sample-check the plotted path against the documented `S"∞+++"` evaluator; camera, grid, and stroke rendering remain approximate Makie-style matches. |
 | `helix` | Exact documented conformal curve | Renders the closed form of the documented `S"∞∅+++"` conformal helix. Manifest witnesses and property tests sample-check the plotted path against a sparse CGA motor evaluator; the helix-specific camera projection remains an approximate Makie-style view. |
-| `orb`, `wave` | Qualitative vector-field counterparts | Uses deterministic Lean vector fields styled to match Makie. Exact CGA streamplot parity remains future work. |
+| `orb`, `wave` | Documented projective stream fields | Uses the documented `exp((π/4) * (v12 + v∞3))` projective motor. Manifest witnesses sample-check the factored motor used for rendering against a local Taylor expansion of the whole documented exponential; stream seed placement, integration, camera, and stroke rendering remain approximate Makie-style matches. |
 | `orbit-2`, `orbit-4` | Exact documented projective curves | Render `documentedProjectiveOrbit2Point` and `documentedProjectiveOrbit4Point` directly. Oracle tests and manifest witnesses sample-check the plotted paths against the documented `S"∞+++"` evaluators. The manifest also keeps the auxiliary CGA translation witnesses for the separate fast closed-form helper path. |
 
 `lake exe oracletests` checks exact sample coordinates across the plotted
@@ -138,7 +143,8 @@ documented Julia plot images. The smoke gate passed with every rendered Lean and
 Julia frame above the `1200` grayscale standard-deviation floor, every
 normalized RMSE at or below `0.25`, all ten CGA orbit witnesses within `1e-6`
 max absolute difference, all fifteen projective plot formula witnesses within
-`1e-6` max absolute difference, and all five conformal helix plot witnesses
+`1e-6` max absolute difference, all five conformal helix plot witnesses within
+`1e-6` max absolute difference, and all ten projective stream-field witnesses
 within `1e-6` max absolute difference.
 
 The observed normalized RMSE values were:
@@ -155,17 +161,19 @@ The observed normalized RMSE values were:
 | `helix` | `0.092560` |
 | `orbit-2` | `0.095822` |
 | `orbit-4` | `0.112861` |
-| `orb` | `0.151953` |
-| `wave` | `0.120565` |
+| `orb` | `0.153940` |
+| `wave` | `0.124561` |
 
 The visual gate is still a smoke test rather than a pixel oracle: Makie camera
 framing, grid projection, antialiasing, and stroke alpha differ from the SVG
 renderer. Exact pointwise parity is now claimed for the documented projective
 `torus`, `orbit-2`, and `orbit-4` coordinate formulas sampled by the oracle and
 manifest witnesses. The documented conformal `helix` is checked against the
-sparse CGA motor evaluator. Exact CGA streamplot parity for `orb`/`wave` remains
-future work; a future port should wire those examples to the CGA streamplot field
-construction.
+sparse CGA motor evaluator. The documented projective `orb`/`wave` stream
+fields are now generated from the same projective motor in Lean and checked
+against a local Taylor expansion of the whole documented exponential; exact
+Makie streamplot raster parity remains future work because the streamline
+integrator, seed placement, camera, antialiasing, and stroke alpha still differ.
 
 ## Verified Commands
 
@@ -195,8 +203,8 @@ lake exe oracletests
 The generated browser comparison page contains `12` example sections: one Lean
 SVG and one Julia/Makie reference PNG for each example.
 The contact-sheet script additionally passed the automated coverage and visual
-smoke checks for the same twelve examples, plus the CGA and projective formula
-witness gates and the conformal helix formula witness gate.
+smoke checks for the same twelve examples, plus the CGA, projective plot,
+conformal helix, and projective stream-field witness gates.
 
 The Julia oracle suite checks exact `S"∞+++"` projective samples for `torus`,
 `orbit-2`, and `orbit-4` across

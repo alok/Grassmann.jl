@@ -486,15 +486,35 @@ def seeds3D (countXY countZ : Nat) (range : Float) : List Vec3 :=
           y := -range + j.toFloat * stepXY,
           z := -range + k.toFloat * stepZ }
 
+def projectiveOrbWaveGenerator : ProjectiveMV :=
+  projE1 * projE2 + projInf * projE3
+
+/-- Factored motor from the documented projective `orb`/`wave` Julia streamplot examples. -/
+def projectiveOrbWaveMotor : ProjectiveMV :=
+  expProjectiveScalarSquareBivector (MultivectorS.smul (pi / 4.0) (projE1 * projE2)) *
+    expProjectiveScalarSquareBivector (MultivectorS.smul (pi / 4.0) (projInf * projE3))
+
+/-- Local Taylor reference for the whole documented `exp((π/4) * (v12 + v∞3))` motor. -/
+def projectiveOrbWaveMotorTaylor : ProjectiveMV :=
+  expTaylorMV (MultivectorS.smul (pi / 4.0) projectiveOrbWaveGenerator) 40
+
+def projectiveMotorOutputVector (m x : ProjectiveMV) : Vec3 :=
+  let y := m * x * m†ₛ
+  { x := coeffMask4 y 1, y := coeffMask4 y 2, z := coeffMask4 y 4 }
+
+def projectiveOrbInputPoint (p : Vec3) : ProjectiveMV :=
+  projectiveUp p
+
+def projectiveWaveInputVector (p : Vec3) : ProjectiveMV :=
+  MultivectorS.smul p.x projInf +
+    MultivectorS.smul p.y projE1 +
+    MultivectorS.smul p.z projE2
+
 def orbField (p : Vec3) : Vec3 :=
-  { x := -0.85 * p.y + 0.28 * p.z,
-    y := 0.85 * p.x + 0.18 * Float.sin (2.0 * p.z),
-    z := 0.42 + 0.22 * p.x - 0.10 * p.z }
+  projectiveMotorOutputVector projectiveOrbWaveMotor (projectiveOrbInputPoint p)
 
 def waveField (p : Vec3) : Vec3 :=
-  { x := -0.55 * p.y + 0.42 * Float.sin (p.z + p.x),
-    y := 0.72 * p.x + 0.28 * Float.cos (p.z - p.y),
-    z := 0.52 * Float.sin p.x + 0.36 * Float.cos p.y }
+  projectiveMotorOutputVector projectiveOrbWaveMotor (projectiveWaveInputVector p)
 
 def streamSvg3D (field : Vec3 -> Vec3) (width height : Nat) (scale : Float) (offset : Vec2)
     (range gridRange : Float) : String :=
@@ -590,6 +610,30 @@ def conformalPlotWitnessEntries : List String :=
   orbitWitnessSamples.map
     (plotFormulaWitnessEntry "helix" helixPoint documentedConformalHelixMotorPoint)
 
+def streamWitnessSamples : List Vec3 :=
+  [ { x := -1.5, y := -1.5, z := -1.5 },
+    { x := -0.75, y := 0.0, z := 0.75 },
+    { x := 0.0, y := 0.0, z := 0.0 },
+    { x := 0.5, y := -1.0, z := 1.25 },
+    { x := 1.5, y := 1.5, z := 1.5 } ]
+
+def streamFieldWitnessEntry
+    (label : String) (input : Vec3 -> ProjectiveMV) (p : Vec3) : String :=
+  let factored := projectiveMotorOutputVector projectiveOrbWaveMotor (input p)
+  let taylor := projectiveMotorOutputVector projectiveOrbWaveMotorTaylor (input p)
+  let maxDiff := vec3MaxAbsDiff factored taylor
+  "    {\"example\":\"" ++ label ++
+    "\",\"input\":[" ++ toString p.x ++ "," ++ toString p.y ++ "," ++ toString p.z ++
+    "],\"max_abs_diff\":" ++ toString maxDiff ++
+    ",\"factored\":[" ++ toString factored.x ++ "," ++ toString factored.y ++ "," ++
+      toString factored.z ++
+    "],\"taylor\":[" ++ toString taylor.x ++ "," ++
+      toString taylor.y ++ "," ++ toString taylor.z ++ "]}"
+
+def projectiveStreamFieldWitnessEntries : List String :=
+  (streamWitnessSamples.map (streamFieldWitnessEntry "orb" projectiveOrbInputPoint)) ++
+  (streamWitnessSamples.map (streamFieldWitnessEntry "wave" projectiveWaveInputVector))
+
 def manifestEntry (ex : Prod String String) : String :=
   let name := ex.1
   "    {\"name\":\"" ++ referenceName name ++
@@ -612,6 +656,9 @@ def manifestJson : String :=
   "  ],\n" ++
   "  \"conformal_plot_formula_witnesses\":[\n" ++
   joinWith ",\n" conformalPlotWitnessEntries ++ "\n" ++
+  "  ],\n" ++
+  "  \"projective_stream_field_witnesses\":[\n" ++
+  joinWith ",\n" projectiveStreamFieldWitnessEntries ++ "\n" ++
   "  ]\n" ++
   "}\n"
 

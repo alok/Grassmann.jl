@@ -23,6 +23,7 @@ maximum_rmse_normalized=0.25
 maximum_cga_witness_diff=1e-6
 maximum_projective_plot_witness_diff=1e-6
 maximum_conformal_plot_witness_diff=1e-6
+maximum_projective_stream_field_witness_diff=1e-6
 
 contains_name() {
   local needle="$1"
@@ -64,6 +65,8 @@ projective_plot_witness_count=0
 projective_plot_witness_max_diff=0.0
 conformal_plot_witness_count=0
 conformal_plot_witness_max_diff=0.0
+projective_stream_field_witness_count=0
+projective_stream_field_witness_max_diff=0.0
 min_lean_stddev=""
 min_julia_stddev=""
 max_rmse_normalized=""
@@ -82,7 +85,8 @@ elif ! jq -e '
     (.example_count == (.examples | length)) and
     (.cga_orbit_translation_witnesses | type == "array") and
     (.projective_plot_formula_witnesses | type == "array") and
-    (.conformal_plot_formula_witnesses | type == "array")
+    (.conformal_plot_formula_witnesses | type == "array") and
+    (.projective_stream_field_witnesses | type == "array")
   ' "$manifest" >/dev/null; then
   failures+=("generated manifest failed schema checks: $manifest")
 else
@@ -143,6 +147,22 @@ fi
 
 if [[ "$conformal_plot_witness_count" -eq 0 ]]; then
   failures+=("generated manifest did not list conformal plot formula witnesses")
+fi
+
+if [[ -s "$manifest" ]] && jq -e '.projective_stream_field_witnesses | type == "array"' "$manifest" >/dev/null; then
+  while IFS= read -r witness_diff; do
+    projective_stream_field_witness_count=$((projective_stream_field_witness_count + 1))
+    if numeric_ge "$witness_diff" "$projective_stream_field_witness_max_diff"; then
+      projective_stream_field_witness_max_diff="$witness_diff"
+    fi
+    if ! numeric_le "$witness_diff" "$maximum_projective_stream_field_witness_diff"; then
+      failures+=("projective stream field witness max_abs_diff $witness_diff above $maximum_projective_stream_field_witness_diff")
+    fi
+  done < <(jq -r '.projective_stream_field_witnesses[].max_abs_diff' "$manifest")
+fi
+
+if [[ "$projective_stream_field_witness_count" -eq 0 ]]; then
+  failures+=("generated manifest did not list projective stream field witnesses")
 fi
 
 for ((i = 0; i < ${#names[@]}; i++)); do
@@ -291,6 +311,9 @@ fi
   printf '  "maximum_conformal_plot_witness_diff":%s,\n' "$maximum_conformal_plot_witness_diff"
   printf '  "conformal_plot_witness_count":%s,\n' "$conformal_plot_witness_count"
   printf '  "conformal_plot_witness_max_diff":%s,\n' "$conformal_plot_witness_max_diff"
+  printf '  "maximum_projective_stream_field_witness_diff":%s,\n' "$maximum_projective_stream_field_witness_diff"
+  printf '  "projective_stream_field_witness_count":%s,\n' "$projective_stream_field_witness_count"
+  printf '  "projective_stream_field_witness_max_diff":%s,\n' "$projective_stream_field_witness_max_diff"
   printf '  "metrics_tsv":"%s",\n' "$metrics"
   printf '  "contact_sheet":"%s",\n' "$contact"
   printf '  "examples":[\n'
@@ -323,3 +346,5 @@ printf 'projective plot formula witnesses passed: %s samples, max_abs_diff <= %s
   "$projective_plot_witness_count" "$maximum_projective_plot_witness_diff" "$projective_plot_witness_max_diff"
 printf 'conformal plot formula witnesses passed: %s samples, max_abs_diff <= %s (observed %s)\n' \
   "$conformal_plot_witness_count" "$maximum_conformal_plot_witness_diff" "$conformal_plot_witness_max_diff"
+printf 'projective stream field witnesses passed: %s samples, max_abs_diff <= %s (observed %s)\n' \
+  "$projective_stream_field_witness_count" "$maximum_projective_stream_field_witness_diff" "$projective_stream_field_witness_max_diff"
