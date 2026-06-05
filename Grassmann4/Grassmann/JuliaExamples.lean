@@ -323,14 +323,9 @@ def sampleCurve (samples : Nat) (t0 t1 : Float) (f : Float -> Vec3) : List Vec3 
     let t := t0 + (t1 - t0) * i.toFloat / denom
     f t
 
+/-- Exact projective torus curve from `docs/src/algebra.md`. -/
 def torusPoint (t : Float) : Vec3 :=
-  let major := 1.05
-  let minor := 0.55
-  let p := 3.0 * t
-  let q := 7.0 * t
-  { x := (major + minor * Float.cos q) * Float.cos p,
-    y := (major + minor * Float.cos q) * Float.sin p,
-    z := minor * Float.sin q }
+  documentedProjectiveTorusPoint t
 
 def helixPoint (t : Float) : Vec3 :=
   { x := Float.cos (3.0 * t), y := Float.sin (3.0 * t), z := 0.16 * t }
@@ -358,23 +353,24 @@ def orbitTranslatedPoint (scale t : Float) : Vec3 :=
 def orbitTranslatedPointCGA (scale t : Float) : Vec3 :=
   translatePointCGA baseOrbitPoint (Vec3.smul (scale * t) (translationVector t))
 
+/-- Exact projective orbit-2 curve from `docs/src/algebra.md`. -/
 def orbit2Point (t : Float) : Vec3 :=
-  orbitTranslatedPoint 1.0 t
+  documentedProjectiveOrbit2Point t
 
 def rotateZ (theta : Float) (p : Vec3) : Vec3 :=
   let c := Float.cos theta
   let s := Float.sin theta
   { x := c * p.x - s * p.y, y := s * p.x + c * p.y, z := p.z }
 
+/-- Exact projective orbit-4 curve from `docs/src/algebra.md`. -/
 def orbit4Point (t : Float) : Vec3 :=
-  let translated := orbitTranslatedPoint 0.07 t
-  rotateZ t translated
+  documentedProjectiveOrbit4Point t
 
 def curveExamples : List (Prod String String) :=
   [ ("torus.svg",
       curveSvg3D
         (sampleCurve 1800 (-2.0 * pi) (2.0 * pi) torusPoint)
-        360 250 86.0 (0.0, 0.0) 1.8),
+        360 250 65.0 (-7.0, 0.0) 2.5),
     ("helix.svg",
       curveSvg3D
         (sampleCurve 1200 (-2.0 * pi) (2.0 * pi) helixPoint)
@@ -382,11 +378,11 @@ def curveExamples : List (Prod String String) :=
     ("orbit-2.svg",
       curveSvg3D
         (sampleCurve 1800 (-2.0 * pi) (2.0 * pi) orbit2Point)
-        510 550 14.0 (20.0, 15.0) 8.0),
+        510 550 46.0 (-148.0, -130.0) 8.5),
     ("orbit-4.svg",
       curveSvg3D
         (sampleCurve 1600 (-2.0 * pi) (2.0 * pi) orbit4Point)
-        680 395 78.0 (0.0, 10.0) 2.0) ]
+        680 395 86.0 (34.0, -75.0) 4.0) ]
 
 def inRange3D (range : Float) (p : Vec3) : Bool :=
   Float.abs p.x <= range && Float.abs p.y <= range && Float.abs p.z <= range
@@ -503,6 +499,27 @@ def orbitWitnessEntries : List String :=
   (orbitWitnessSamples.map (orbitWitnessEntry "orbit-2" 1.0)) ++
   (orbitWitnessSamples.map (orbitWitnessEntry "orbit-4" 0.07))
 
+def projectivePlotWitnessEntry
+    (label : String) (plotted documented : Float -> Vec3) (t : Float) : String :=
+  let plottedPoint := plotted t
+  let documentedPoint := documented t
+  let maxDiff := vec3MaxAbsDiff plottedPoint documentedPoint
+  "    {\"example\":\"" ++ label ++
+    "\",\"t\":" ++ toString t ++
+    ",\"max_abs_diff\":" ++ toString maxDiff ++
+    ",\"plotted\":[" ++ toString plottedPoint.x ++ "," ++ toString plottedPoint.y ++ "," ++
+      toString plottedPoint.z ++
+    "],\"documented\":[" ++ toString documentedPoint.x ++ "," ++
+      toString documentedPoint.y ++ "," ++ toString documentedPoint.z ++ "]}"
+
+def projectivePlotWitnessEntries : List String :=
+  (orbitWitnessSamples.map
+    (projectivePlotWitnessEntry "torus" torusPoint documentedProjectiveTorusPoint)) ++
+  (orbitWitnessSamples.map
+    (projectivePlotWitnessEntry "orbit-2" orbit2Point documentedProjectiveOrbit2Point)) ++
+  (orbitWitnessSamples.map
+    (projectivePlotWitnessEntry "orbit-4" orbit4Point documentedProjectiveOrbit4Point))
+
 def manifestEntry (ex : Prod String String) : String :=
   let name := ex.1
   "    {\"name\":\"" ++ referenceName name ++
@@ -519,6 +536,9 @@ def manifestJson : String :=
   "  ],\n" ++
   "  \"cga_orbit_translation_witnesses\":[\n" ++
   joinWith ",\n" orbitWitnessEntries ++ "\n" ++
+  "  ],\n" ++
+  "  \"projective_plot_formula_witnesses\":[\n" ++
+  joinWith ",\n" projectivePlotWitnessEntries ++ "\n" ++
   "  ]\n" ++
   "}\n"
 

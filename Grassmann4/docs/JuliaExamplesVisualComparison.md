@@ -18,8 +18,10 @@ This writes Lean-generated SVGs to:
 ```
 
 It also writes a side-by-side visual comparison page and a machine-readable
-manifest. The manifest includes CGA witness samples for the orbit translation
-path, comparing the fast plotted coordinates against Lean's `CGA.transform`:
+manifest. The manifest includes numerical witness samples for two non-visual
+checks: the auxiliary CGA orbit translation path is compared against Lean's
+`CGA.transform`, and the plotted projective `torus`, `orbit-2`, and `orbit-4`
+curves are compared against their documented projective evaluators:
 
 ```text
 .generated/julia-examples/index.html
@@ -71,8 +73,8 @@ renderings.
 
 The generated `summary.json` repeats the gate thresholds and records the
 observed extrema for the run: minimum Lean frame standard deviation, minimum
-Julia frame standard deviation, maximum normalized RMSE, and maximum CGA witness
-difference.
+Julia frame standard deviation, maximum normalized RMSE, maximum CGA witness
+difference, and maximum projective plot formula witness difference.
 
 It requires `curl`, `jq`, `rsvg-convert`, and ImageMagick's `magick` command.
 
@@ -112,24 +114,25 @@ The contact-sheet script provides the same comparison in one local image.
 | Example set | Lean status | Notes |
 | --- | --- | --- |
 | `plane-1` through `plane-6` | Direct linear-field counterparts | Euclidean rotations/reflections and hyperbolic boosts match the reference topology. Arrow glyphs and line density are approximate Makie-style matches. |
-| `torus`, `helix` | Parametric counterparts | Captures the same 3D line-plot style and broad geometry, but not a proof of identical Grassmann.jl conformal motor output. |
+| `torus` | Exact documented projective curve | Renders `documentedProjectiveTorusPoint` directly. Oracle tests and manifest witnesses sample-check the plotted path against the documented `S"∞+++"` evaluator; camera, grid, and stroke rendering remain approximate Makie-style matches. |
+| `helix` | Parametric counterpart | Captures the same 3D line-plot style and broad geometry. Exact `S"∞∅+++"` conformal helix motor output remains future work. |
 | `orb`, `wave` | Qualitative vector-field counterparts | Uses deterministic Lean vector fields styled to match Makie. Exact CGA streamplot parity remains future work. |
-| `orbit-2`, `orbit-4` | CGA-checked orbit counterparts | The plotted translation leg uses the fast closed-form coordinates and the manifest records sample checks against Lean `CGA.point`/`CGA.translator`/`CGA.transform`; `orbit-4` applies an explicit Euclidean `z` rotation after translation. Exact pointwise parity against the full Grassmann.jl CGA plotting pipeline remains future work. |
+| `orbit-2`, `orbit-4` | Exact documented projective curves | Render `documentedProjectiveOrbit2Point` and `documentedProjectiveOrbit4Point` directly. Oracle tests and manifest witnesses sample-check the plotted paths against the documented `S"∞+++"` evaluators. The manifest also keeps the auxiliary CGA translation witnesses for the separate fast closed-form helper path. |
 
-Separately from the fast SVG generator, `lake exe oracletests` now checks exact
-sample coordinates across the plotted parameter range for the documented
-`S"∞+++"` projective formulas for `torus`, `orbit-2`, and `orbit-4` against
-Grassmann.jl. Those oracle-backed evaluators live in
-`Grassmann.JuliaExamples` and intentionally avoid replacing the SVG paths until
-plot-time performance is acceptable over the full sample range.
+`lake exe oracletests` checks exact sample coordinates across the plotted
+parameter range for the documented `S"∞+++"` projective formulas for `torus`,
+`orbit-2`, and `orbit-4` against Grassmann.jl. Those oracle-backed evaluators
+live in `Grassmann.JuliaExamples`; the same functions now feed the SVG paths for
+those three examples.
 
-## 2026-06-04 Audit
+## 2026-06-05 Audit
 
 The comparison harness was rerun from `Grassmann4` and covered all twelve
 documented Julia plot images. The smoke gate passed with every rendered Lean and
 Julia frame above the `1200` grayscale standard-deviation floor, every
-normalized RMSE at or below `0.25`, and all ten CGA orbit witnesses within
-`1e-6` max absolute difference.
+normalized RMSE at or below `0.25`, all ten CGA orbit witnesses within `1e-6`
+max absolute difference, and all fifteen projective plot formula witnesses
+within `1e-6` max absolute difference.
 
 The observed normalized RMSE values were:
 
@@ -141,24 +144,21 @@ The observed normalized RMSE values were:
 | `plane-4` | `0.105751` |
 | `plane-5` | `0.121607` |
 | `plane-6` | `0.129301` |
-| `torus` | `0.106073` |
+| `torus` | `0.105856` |
 | `helix` | `0.099739` |
-| `orbit-2` | `0.087348` |
-| `orbit-4` | `0.108997` |
+| `orbit-2` | `0.095822` |
+| `orbit-4` | `0.112861` |
 | `orb` | `0.151953` |
 | `wave` | `0.120565` |
 
-Exact pointwise torus parity is still intentionally not claimed. A direct local
-Julia oracle for the documented conformal torus expression loads and returns
-finite coordinate samples, but the Lean generator currently keeps the torus as a
-qualitative parametric counterpart. The existing closed-form `Multivector`
-bivector exponential is not valid for the mixed conformal torus generator,
-because that generator does not square to a scalar. A dense Taylor/scaling
-attempt was too slow for plot generation, and importing the packed `MV`
-implementation into `jlexamples` currently pulls LeanBLAS/SciLean linkage into
-the executable, which fails without configured CBLAS symbols. A future exact
-port should use a small standalone CGA motor exponential kernel or fix the
-LeanBLAS link path before replacing the qualitative torus/helix plots.
+The visual gate is still a smoke test rather than a pixel oracle: Makie camera
+framing, grid projection, antialiasing, and stroke alpha differ from the SVG
+renderer. Exact pointwise parity is now claimed for the documented projective
+`torus`, `orbit-2`, and `orbit-4` coordinate formulas sampled by the oracle and
+manifest witnesses. Exact conformal helix output and exact CGA streamplot parity
+for `orb`/`wave` remain future work; a future port should add a small standalone
+CGA motor exponential kernel for the helix and port the CGA streamplot field
+construction.
 
 ## Verified Commands
 
@@ -181,13 +181,15 @@ These commands were also run successfully from `Grassmann4`:
 ```bash
 lake exe jlexamples
 scripts/compare_julia_examples.sh
+lake exe oracletests
 ```
 
-The browser comparison page reported `12` example sections and `24/24` loaded
-images: one Lean SVG and one Julia/Makie reference PNG for each example.
+The generated browser comparison page contains `12` example sections: one Lean
+SVG and one Julia/Makie reference PNG for each example.
 The contact-sheet script additionally passed the automated coverage and visual
-smoke checks for the same twelve examples.
+smoke checks for the same twelve examples, plus the CGA and projective formula
+witness gates.
 
-The Julia oracle suite was later expanded to check exact `S"∞+++"` projective
-samples for `torus`, `orbit-2`, and `orbit-4` across
+The Julia oracle suite checks exact `S"∞+++"` projective samples for `torus`,
+`orbit-2`, and `orbit-4` across
 `[-2π, -π, -1, -0.5, 0, 0.5, 1, π, 2π]`. It passed with `145/145` checks.

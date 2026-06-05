@@ -21,6 +21,7 @@ julia_docs="$repo_root/docs/src/algebra.md"
 minimum_frame_stddev=1200
 maximum_rmse_normalized=0.25
 maximum_cga_witness_diff=1e-6
+maximum_projective_plot_witness_diff=1e-6
 
 contains_name() {
   local needle="$1"
@@ -58,6 +59,8 @@ lean_paths=()
 julia_urls=()
 cga_witness_count=0
 cga_witness_max_diff=0.0
+projective_plot_witness_count=0
+projective_plot_witness_max_diff=0.0
 min_lean_stddev=""
 min_julia_stddev=""
 max_rmse_normalized=""
@@ -74,7 +77,8 @@ elif ! jq -e '
       (.lean | type == "string" and length > 0) and
       (.julia | type == "string" and length > 0))) and
     (.example_count == (.examples | length)) and
-    (.cga_orbit_translation_witnesses | type == "array")
+    (.cga_orbit_translation_witnesses | type == "array") and
+    (.projective_plot_formula_witnesses | type == "array")
   ' "$manifest" >/dev/null; then
   failures+=("generated manifest failed schema checks: $manifest")
 else
@@ -103,6 +107,22 @@ fi
 
 if [[ "$cga_witness_count" -eq 0 ]]; then
   failures+=("generated manifest did not list CGA orbit translation witnesses")
+fi
+
+if [[ -s "$manifest" ]] && jq -e '.projective_plot_formula_witnesses | type == "array"' "$manifest" >/dev/null; then
+  while IFS= read -r witness_diff; do
+    projective_plot_witness_count=$((projective_plot_witness_count + 1))
+    if numeric_ge "$witness_diff" "$projective_plot_witness_max_diff"; then
+      projective_plot_witness_max_diff="$witness_diff"
+    fi
+    if ! numeric_le "$witness_diff" "$maximum_projective_plot_witness_diff"; then
+      failures+=("projective plot witness max_abs_diff $witness_diff above $maximum_projective_plot_witness_diff")
+    fi
+  done < <(jq -r '.projective_plot_formula_witnesses[].max_abs_diff' "$manifest")
+fi
+
+if [[ "$projective_plot_witness_count" -eq 0 ]]; then
+  failures+=("generated manifest did not list projective plot formula witnesses")
 fi
 
 for ((i = 0; i < ${#names[@]}; i++)); do
@@ -245,6 +265,9 @@ fi
   printf '  "maximum_cga_witness_diff":%s,\n' "$maximum_cga_witness_diff"
   printf '  "cga_witness_count":%s,\n' "$cga_witness_count"
   printf '  "cga_witness_max_diff":%s,\n' "$cga_witness_max_diff"
+  printf '  "maximum_projective_plot_witness_diff":%s,\n' "$maximum_projective_plot_witness_diff"
+  printf '  "projective_plot_witness_count":%s,\n' "$projective_plot_witness_count"
+  printf '  "projective_plot_witness_max_diff":%s,\n' "$projective_plot_witness_max_diff"
   printf '  "metrics_tsv":"%s",\n' "$metrics"
   printf '  "contact_sheet":"%s",\n' "$contact"
   printf '  "examples":[\n'
@@ -273,3 +296,5 @@ printf 'observed visual extrema: min Lean stddev %s, min Julia stddev %s, max no
   "$min_lean_stddev" "$min_julia_stddev" "$max_rmse_normalized"
 printf 'CGA witness checks passed: %s samples, max_abs_diff <= %s (observed %s)\n' \
   "$cga_witness_count" "$maximum_cga_witness_diff" "$cga_witness_max_diff"
+printf 'projective plot formula witnesses passed: %s samples, max_abs_diff <= %s (observed %s)\n' \
+  "$projective_plot_witness_count" "$maximum_projective_plot_witness_diff" "$projective_plot_witness_max_diff"
