@@ -87,9 +87,10 @@ def projectiveTorusGenerator : ProjectiveMV :=
 
 /--
 Closed-form exponential for the simple/scalar-square bivectors used by the
-documented projective Julia examples.
+documented Julia examples.
 -/
-def expProjectiveScalarSquareBivector (B : ProjectiveMV) : ProjectiveMV :=
+def expScalarSquareBivector {n : Nat} {sig : Signature n}
+    (B : MultivectorS sig Float) : MultivectorS sig Float :=
   let square := B * B
   if hasNonScalarPart square 1e-10 then
     expTaylorMV B 40
@@ -107,6 +108,9 @@ def expProjectiveScalarSquareBivector (B : ProjectiveMV) : ProjectiveMV :=
       let c := (expNorm + expNegNorm) / 2.0
       let s := (expNorm - expNegNorm) / 2.0
       MultivectorS.scalar c + B.smul (s / norm)
+
+def expProjectiveScalarSquareBivector (B : ProjectiveMV) : ProjectiveMV :=
+  expScalarSquareBivector B
 
 def projectiveOrbitBasePoint : Vec3 :=
   { x := 1.0, y := 1.0, z := -1.0 }
@@ -137,6 +141,66 @@ def documentedProjectiveOrbit4Point (t : Float) : Vec3 :=
       MultivectorS.smul (0.07 / 2.0) (projInf * projectiveOrbitVector t)
   let motor := expTaylorMV (MultivectorS.smul t generator) 40
   projectiveDown (motor * projectiveUp projectiveOrbitBasePoint * motor†ₛ)
+
+/-! ## Exact conformal Julia example evaluators
+
+The `S"∞∅+++"` helix example uses the same `CGA3` signature as the library's
+conformal helpers. The sparse helpers below keep the null-basis formula local to
+the Julia-example port while preserving Julia's documented identities:
+`e∞ = e₊ + e₋` and `e∅ = (e₋ - e₊) / 2`.
+-/
+
+abbrev ConformalMV := MultivectorS CGA3 Float
+
+@[inline] def cgaSparseE1 : ConformalMV := MultivectorS.basis ⟨0, by omega⟩
+@[inline] def cgaSparseE2 : ConformalMV := MultivectorS.basis ⟨1, by omega⟩
+@[inline] def cgaSparseE3 : ConformalMV := MultivectorS.basis ⟨2, by omega⟩
+@[inline] def cgaSparseEPlus : ConformalMV := MultivectorS.basis ⟨3, by omega⟩
+@[inline] def cgaSparseEMinus : ConformalMV := MultivectorS.basis ⟨4, by omega⟩
+
+@[inline] def cgaSparseEInf : ConformalMV :=
+  cgaSparseEPlus + cgaSparseEMinus
+
+@[inline] def cgaSparseE0 : ConformalMV :=
+  (cgaSparseEMinus - cgaSparseEPlus).smul 0.5
+
+def conformalVec3 (p : Vec3) : ConformalMV :=
+  MultivectorS.smul p.x cgaSparseE1 + MultivectorS.smul p.y cgaSparseE2 +
+    MultivectorS.smul p.z cgaSparseE3
+
+def conformalPoint (p : Vec3) : ConformalMV :=
+  let p2 := p.x * p.x + p.y * p.y + p.z * p.z
+  conformalVec3 p + MultivectorS.smul (p2 / 2.0) cgaSparseEInf + cgaSparseE0
+
+def conformalOriginWeight (p : ConformalMV) : Float :=
+  p.coeff 16 - p.coeff 8
+
+def conformalDown (p : ConformalMV) : Vec3 :=
+  let w := conformalOriginWeight p
+  { x := p.coeff 1 / w,
+    y := p.coeff 2 / w,
+    z := p.coeff 4 / w }
+
+def conformalHelixPart12 (t : Float) : ConformalMV :=
+  MultivectorS.smul (((3.0 / 7.0) * pi) * t) (cgaSparseE1 * cgaSparseE2)
+
+def conformalHelixPartInf3 (t : Float) : ConformalMV :=
+  MultivectorS.smul (pi * t) (cgaSparseEInf * cgaSparseE3)
+
+def conformalHelixBasePoint : Vec3 :=
+  { x := 1.0, y := 1.0, z := 1.0 }
+
+def documentedConformalHelixMotorPoint (t : Float) : Vec3 :=
+  let motor :=
+    expScalarSquareBivector (conformalHelixPart12 t) *
+      expScalarSquareBivector (conformalHelixPartInf3 t)
+  conformalDown (motor * conformalPoint conformalHelixBasePoint * motor†ₛ)
+
+def documentedConformalHelixPoint (t : Float) : Vec3 :=
+  let angle := (6.0 / 7.0) * pi * t
+  let c := Float.cos angle
+  let s := Float.sin angle
+  { x := c + s, y := c - s, z := 1.0 + 2.0 * pi * t }
 
 @[inline] def fmin (a b : Float) : Float := if a <= b then a else b
 @[inline] def fmax (a b : Float) : Float := if a >= b then a else b
@@ -270,52 +334,77 @@ def project3D (p : Vec3) : Vec2 :=
   let v := -0.24 * p.x - 0.20 * p.y - 0.72 * p.z
   (u, v)
 
-def mapProjected (width height : Nat) (scale : Float) (offset : Vec2) (p : Vec3) : Vec2 :=
-  let q := project3D p
+def mapProjectedBy (project : Vec3 -> Vec2) (width height : Nat) (scale : Float)
+    (offset : Vec2) (p : Vec3) : Vec2 :=
+  let q := project p
   (width.toFloat / 2.0 + offset.1 + scale * q.1,
    height.toFloat / 2.0 + offset.2 + scale * q.2)
 
-def path3D (width height : Nat) (scale : Float) (offset : Vec2) (pts : List Vec3) : String :=
+def mapProjected (width height : Nat) (scale : Float) (offset : Vec2) (p : Vec3) : Vec2 :=
+  mapProjectedBy project3D width height scale offset p
+
+def path3DBy (project : Vec3 -> Vec2) (width height : Nat) (scale : Float) (offset : Vec2)
+    (pts : List Vec3) : String :=
   match pts with
   | [] => ""
   | p :: rest =>
-      let p0 := mapProjected width height scale offset p
+      let p0 := mapProjectedBy project width height scale offset p
       let start := s!"M {fmt p0.1} {fmt p0.2}"
       rest.foldl
         (fun acc q =>
-          let qp := mapProjected width height scale offset q
+          let qp := mapProjectedBy project width height scale offset q
           acc ++ s!" L {fmt qp.1} {fmt qp.2}")
         start
 
-def grid3D (width height : Nat) (scale : Float) (offset : Vec2) (range : Float := 2.0) : String :=
+def path3D (width height : Nat) (scale : Float) (offset : Vec2) (pts : List Vec3) : String :=
+  path3DBy project3D width height scale offset pts
+
+def grid3DBy (project : Vec3 -> Vec2) (width height : Nat) (scale : Float) (offset : Vec2)
+    (range : Float := 2.0) : String :=
   let ticks := [-range, -range / 2.0, 0.0, range / 2.0, range]
   let planeLines := ticks.foldl (init := "") fun acc t =>
-    let xLine := path3D width height scale offset
+    let xLine := path3DBy project width height scale offset
       [{ x := -range, y := t, z := -range }, { x := range, y := t, z := -range }]
-    let yLine := path3D width height scale offset
+    let yLine := path3DBy project width height scale offset
       [{ x := t, y := -range, z := -range }, { x := t, y := range, z := -range }]
     acc ++ s!"  <path d=\"{xLine}\" fill=\"none\" stroke=\"#eeeeee\" stroke-width=\"0.85\"/>\n" ++
       s!"  <path d=\"{yLine}\" fill=\"none\" stroke=\"#eeeeee\" stroke-width=\"0.85\"/>\n"
-  let xAxis := path3D width height scale offset
+  let xAxis := path3DBy project width height scale offset
     [{ x := -range, y := 0.0, z := -range }, { x := range, y := 0.0, z := -range }]
-  let yAxis := path3D width height scale offset
+  let yAxis := path3DBy project width height scale offset
     [{ x := 0.0, y := -range, z := -range }, { x := 0.0, y := range, z := -range }]
-  let zAxis := path3D width height scale offset
+  let zAxis := path3DBy project width height scale offset
     [{ x := 0.0, y := 0.0, z := -range }, { x := 0.0, y := 0.0, z := range }]
   planeLines ++
     s!"  <path d=\"{xAxis}\" fill=\"none\" stroke=\"#8c8c8c\" stroke-width=\"0.9\"/>\n" ++
     s!"  <path d=\"{yAxis}\" fill=\"none\" stroke=\"#8c8c8c\" stroke-width=\"0.9\"/>\n" ++
     s!"  <path d=\"{zAxis}\" fill=\"none\" stroke=\"#8c8c8c\" stroke-width=\"0.9\"/>\n"
 
-def curveSvg3D (pts : List Vec3) (width height : Nat) (scale : Float) (offset : Vec2)
-    (gridRange : Float := 2.0) : String :=
-  let curve := path3D width height scale offset pts
+def grid3D (width height : Nat) (scale : Float) (offset : Vec2) (range : Float := 2.0) : String :=
+  grid3DBy project3D width height scale offset range
+
+def curveSvg3DBy (project : Vec3 -> Vec2) (pts : List Vec3) (width height : Nat) (scale : Float)
+    (offset : Vec2) (gridRange : Float := 2.0) : String :=
+  let curve := path3DBy project width height scale offset pts
   svgOpen width height ++
-    grid3D width height scale offset gridRange ++
+    grid3DBy project width height scale offset gridRange ++
     s!"  <path d=\"{curve}\" fill=\"none\" stroke=\"#6b6b6b\" " ++
     "stroke-width=\"1.15\" stroke-opacity=\"0.78\" " ++
     "stroke-linecap=\"round\" stroke-linejoin=\"round\"/>\n" ++
     "</svg>\n"
+
+def curveSvg3D (pts : List Vec3) (width height : Nat) (scale : Float) (offset : Vec2)
+    (gridRange : Float := 2.0) : String :=
+  curveSvg3DBy project3D pts width height scale offset gridRange
+
+def projectHelix3D (p : Vec3) : Vec2 :=
+  let u := 0.62 * p.z + 5.2 * (0.86 * p.x - 0.42 * p.y)
+  let v := -0.95 * p.z - 4.4 * (0.24 * p.x + 0.20 * p.y)
+  (u, v)
+
+def helixCurveSvg3D (pts : List Vec3) (width height : Nat) (scale : Float) (offset : Vec2)
+    (gridRange : Float := 2.0) : String :=
+  curveSvg3DBy projectHelix3D pts width height scale offset gridRange
 
 def sampleCurve (samples : Nat) (t0 t1 : Float) (f : Float -> Vec3) : List Vec3 :=
   (List.range samples).map fun i =>
@@ -327,8 +416,9 @@ def sampleCurve (samples : Nat) (t0 t1 : Float) (f : Float -> Vec3) : List Vec3 
 def torusPoint (t : Float) : Vec3 :=
   documentedProjectiveTorusPoint t
 
+/-- Exact conformal helix curve from `docs/src/algebra.md`. -/
 def helixPoint (t : Float) : Vec3 :=
-  { x := Float.cos (3.0 * t), y := Float.sin (3.0 * t), z := 0.16 * t }
+  documentedConformalHelixPoint t
 
 def translationVector (t : Float) : Vec3 :=
   { x := 3.0 * Float.sin (3.0 * t),
@@ -372,9 +462,9 @@ def curveExamples : List (Prod String String) :=
         (sampleCurve 1800 (-2.0 * pi) (2.0 * pi) torusPoint)
         360 250 65.0 (-7.0, 0.0) 2.5),
     ("helix.svg",
-      curveSvg3D
+      helixCurveSvg3D
         (sampleCurve 1200 (-2.0 * pi) (2.0 * pi) helixPoint)
-        360 250 84.0 (0.0, 0.0) 1.8),
+        360 250 2.35 (14.0, 0.0) 42.0),
     ("orbit-2.svg",
       curveSvg3D
         (sampleCurve 1800 (-2.0 * pi) (2.0 * pi) orbit2Point)
@@ -499,7 +589,7 @@ def orbitWitnessEntries : List String :=
   (orbitWitnessSamples.map (orbitWitnessEntry "orbit-2" 1.0)) ++
   (orbitWitnessSamples.map (orbitWitnessEntry "orbit-4" 0.07))
 
-def projectivePlotWitnessEntry
+def plotFormulaWitnessEntry
     (label : String) (plotted documented : Float -> Vec3) (t : Float) : String :=
   let plottedPoint := plotted t
   let documentedPoint := documented t
@@ -514,11 +604,15 @@ def projectivePlotWitnessEntry
 
 def projectivePlotWitnessEntries : List String :=
   (orbitWitnessSamples.map
-    (projectivePlotWitnessEntry "torus" torusPoint documentedProjectiveTorusPoint)) ++
+    (plotFormulaWitnessEntry "torus" torusPoint documentedProjectiveTorusPoint)) ++
   (orbitWitnessSamples.map
-    (projectivePlotWitnessEntry "orbit-2" orbit2Point documentedProjectiveOrbit2Point)) ++
+    (plotFormulaWitnessEntry "orbit-2" orbit2Point documentedProjectiveOrbit2Point)) ++
   (orbitWitnessSamples.map
-    (projectivePlotWitnessEntry "orbit-4" orbit4Point documentedProjectiveOrbit4Point))
+    (plotFormulaWitnessEntry "orbit-4" orbit4Point documentedProjectiveOrbit4Point))
+
+def conformalPlotWitnessEntries : List String :=
+  orbitWitnessSamples.map
+    (plotFormulaWitnessEntry "helix" helixPoint documentedConformalHelixMotorPoint)
 
 def manifestEntry (ex : Prod String String) : String :=
   let name := ex.1
@@ -539,6 +633,9 @@ def manifestJson : String :=
   "  ],\n" ++
   "  \"projective_plot_formula_witnesses\":[\n" ++
   joinWith ",\n" projectivePlotWitnessEntries ++ "\n" ++
+  "  ],\n" ++
+  "  \"conformal_plot_formula_witnesses\":[\n" ++
+  joinWith ",\n" conformalPlotWitnessEntries ++ "\n" ++
   "  ]\n" ++
   "}\n"
 

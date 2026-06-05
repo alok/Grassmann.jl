@@ -2465,6 +2465,45 @@ def prop_projective_orbit2_closed_form_matches_local_taylor : Bool :=
 
 end ProjectiveJulia
 
+/-! ### Documented Conformal Julia Example Exponentials -/
+
+namespace ConformalJulia
+
+open Grassmann.JuliaExamples
+
+def helixPointTaylor (t : Float) : Vec3 :=
+  let generator := conformalHelixPart12 t + conformalHelixPartInf3 t
+  let motor := expTaylorMV generator 40
+  conformalDown (motor * conformalPoint conformalHelixBasePoint * motor†ₛ)
+
+/-- The conformal helix summands commute, justifying the factored motor path. -/
+def prop_conformal_helix_parts_commute : Bool :=
+  ProjectiveJulia.plottedSamples.all fun t =>
+    let a := conformalHelixPart12 t
+    let b := conformalHelixPartInf3 t
+    let expA := expScalarSquareBivector a
+    let expB := expScalarSquareBivector b
+    mvApproxEq (a * b) (b * a) &&
+      mvApproxEq (expA * expB) (expB * expA) (tol := 1e-6)
+
+/-- The plotted closed form matches the sparse CGA motor over the rendered range. -/
+def prop_conformal_helix_closed_form_matches_motor : Bool :=
+  ProjectiveJulia.plottedSamples.all fun t =>
+    ProjectiveJulia.vec3ApproxEq
+      (documentedConformalHelixPoint t)
+      (documentedConformalHelixMotorPoint t)
+      (tol := 1e-6)
+
+/-- The factored conformal helix motor matches the generic Taylor path locally. -/
+def prop_conformal_helix_motor_matches_local_taylor : Bool :=
+  ProjectiveJulia.localTaylorSamples.all fun t =>
+    ProjectiveJulia.vec3ApproxEq
+      (documentedConformalHelixMotorPoint t)
+      (helixPointTaylor t)
+      (tol := 1e-5)
+
+end ConformalJulia
+
 /-! ## High-Dimensional Exact Stress Tests -/
 
 /-- Five-dimensional Euclidean signature used by exact stress checks. -/
@@ -3358,8 +3397,17 @@ def runRotorExpReferenceTests : IO (List PropTestResult) := do
   let r10 := runBoolProp "Projective orbit-2 closed form matches local Taylor"
     ProjectiveJulia.prop_projective_orbit2_closed_form_matches_local_taylor
   IO.println s!"│ {r10}"
+  let r11 := runBoolProp "Conformal helix factored parts commute"
+    ConformalJulia.prop_conformal_helix_parts_commute
+  IO.println s!"│ {r11}"
+  let r12 := runBoolProp "Conformal helix closed form matches motor"
+    ConformalJulia.prop_conformal_helix_closed_form_matches_motor
+  IO.println s!"│ {r12}"
+  let r13 := runBoolProp "Conformal helix motor matches local Taylor"
+    ConformalJulia.prop_conformal_helix_motor_matches_local_taylor
+  IO.println s!"│ {r13}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10]
+  return [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13]
 
 /-- Run all property tests -/
 def runPropertyTests : IO Unit := do

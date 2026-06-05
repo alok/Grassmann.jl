@@ -22,6 +22,7 @@ minimum_frame_stddev=1200
 maximum_rmse_normalized=0.25
 maximum_cga_witness_diff=1e-6
 maximum_projective_plot_witness_diff=1e-6
+maximum_conformal_plot_witness_diff=1e-6
 
 contains_name() {
   local needle="$1"
@@ -61,6 +62,8 @@ cga_witness_count=0
 cga_witness_max_diff=0.0
 projective_plot_witness_count=0
 projective_plot_witness_max_diff=0.0
+conformal_plot_witness_count=0
+conformal_plot_witness_max_diff=0.0
 min_lean_stddev=""
 min_julia_stddev=""
 max_rmse_normalized=""
@@ -78,7 +81,8 @@ elif ! jq -e '
       (.julia | type == "string" and length > 0))) and
     (.example_count == (.examples | length)) and
     (.cga_orbit_translation_witnesses | type == "array") and
-    (.projective_plot_formula_witnesses | type == "array")
+    (.projective_plot_formula_witnesses | type == "array") and
+    (.conformal_plot_formula_witnesses | type == "array")
   ' "$manifest" >/dev/null; then
   failures+=("generated manifest failed schema checks: $manifest")
 else
@@ -123,6 +127,22 @@ fi
 
 if [[ "$projective_plot_witness_count" -eq 0 ]]; then
   failures+=("generated manifest did not list projective plot formula witnesses")
+fi
+
+if [[ -s "$manifest" ]] && jq -e '.conformal_plot_formula_witnesses | type == "array"' "$manifest" >/dev/null; then
+  while IFS= read -r witness_diff; do
+    conformal_plot_witness_count=$((conformal_plot_witness_count + 1))
+    if numeric_ge "$witness_diff" "$conformal_plot_witness_max_diff"; then
+      conformal_plot_witness_max_diff="$witness_diff"
+    fi
+    if ! numeric_le "$witness_diff" "$maximum_conformal_plot_witness_diff"; then
+      failures+=("conformal plot witness max_abs_diff $witness_diff above $maximum_conformal_plot_witness_diff")
+    fi
+  done < <(jq -r '.conformal_plot_formula_witnesses[].max_abs_diff' "$manifest")
+fi
+
+if [[ "$conformal_plot_witness_count" -eq 0 ]]; then
+  failures+=("generated manifest did not list conformal plot formula witnesses")
 fi
 
 for ((i = 0; i < ${#names[@]}; i++)); do
@@ -268,6 +288,9 @@ fi
   printf '  "maximum_projective_plot_witness_diff":%s,\n' "$maximum_projective_plot_witness_diff"
   printf '  "projective_plot_witness_count":%s,\n' "$projective_plot_witness_count"
   printf '  "projective_plot_witness_max_diff":%s,\n' "$projective_plot_witness_max_diff"
+  printf '  "maximum_conformal_plot_witness_diff":%s,\n' "$maximum_conformal_plot_witness_diff"
+  printf '  "conformal_plot_witness_count":%s,\n' "$conformal_plot_witness_count"
+  printf '  "conformal_plot_witness_max_diff":%s,\n' "$conformal_plot_witness_max_diff"
   printf '  "metrics_tsv":"%s",\n' "$metrics"
   printf '  "contact_sheet":"%s",\n' "$contact"
   printf '  "examples":[\n'
@@ -298,3 +321,5 @@ printf 'CGA witness checks passed: %s samples, max_abs_diff <= %s (observed %s)\
   "$cga_witness_count" "$maximum_cga_witness_diff" "$cga_witness_max_diff"
 printf 'projective plot formula witnesses passed: %s samples, max_abs_diff <= %s (observed %s)\n' \
   "$projective_plot_witness_count" "$maximum_projective_plot_witness_diff" "$projective_plot_witness_max_diff"
+printf 'conformal plot formula witnesses passed: %s samples, max_abs_diff <= %s (observed %s)\n' \
+  "$conformal_plot_witness_count" "$maximum_conformal_plot_witness_diff" "$conformal_plot_witness_max_diff"

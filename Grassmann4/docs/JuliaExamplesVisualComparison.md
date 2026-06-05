@@ -115,7 +115,7 @@ The contact-sheet script provides the same comparison in one local image.
 | --- | --- | --- |
 | `plane-1` through `plane-6` | Direct linear-field counterparts | Euclidean rotations/reflections and hyperbolic boosts match the reference topology. Arrow glyphs and line density are approximate Makie-style matches. |
 | `torus` | Exact documented projective curve | Renders `documentedProjectiveTorusPoint` directly. Oracle tests and manifest witnesses sample-check the plotted path against the documented `S"∞+++"` evaluator; camera, grid, and stroke rendering remain approximate Makie-style matches. |
-| `helix` | Parametric counterpart | Captures the same 3D line-plot style and broad geometry. Exact `S"∞∅+++"` conformal helix motor output remains future work. |
+| `helix` | Exact documented conformal curve | Renders the closed form of the documented `S"∞∅+++"` conformal helix. Manifest witnesses and property tests sample-check the plotted path against a sparse CGA motor evaluator; the helix-specific camera projection remains an approximate Makie-style view. |
 | `orb`, `wave` | Qualitative vector-field counterparts | Uses deterministic Lean vector fields styled to match Makie. Exact CGA streamplot parity remains future work. |
 | `orbit-2`, `orbit-4` | Exact documented projective curves | Render `documentedProjectiveOrbit2Point` and `documentedProjectiveOrbit4Point` directly. Oracle tests and manifest witnesses sample-check the plotted paths against the documented `S"∞+++"` evaluators. The manifest also keeps the auxiliary CGA translation witnesses for the separate fast closed-form helper path. |
 
@@ -125,13 +125,20 @@ parameter range for the documented `S"∞+++"` projective formulas for `torus`,
 live in `Grassmann.JuliaExamples`; the same functions now feed the SVG paths for
 those three examples.
 
+The conformal `helix` path is checked separately because the local Grassmann.jl
+checkout currently does not provide a stable direct oracle for the null-basis
+`S"∞∅+++"` snippet. Lean renders the derived closed form and compares it against
+the equivalent sparse CGA motor evaluator in both manifest witnesses and
+property tests.
+
 ## 2026-06-05 Audit
 
 The comparison harness was rerun from `Grassmann4` and covered all twelve
 documented Julia plot images. The smoke gate passed with every rendered Lean and
 Julia frame above the `1200` grayscale standard-deviation floor, every
 normalized RMSE at or below `0.25`, all ten CGA orbit witnesses within `1e-6`
-max absolute difference, and all fifteen projective plot formula witnesses
+max absolute difference, all fifteen projective plot formula witnesses within
+`1e-6` max absolute difference, and all five conformal helix plot witnesses
 within `1e-6` max absolute difference.
 
 The observed normalized RMSE values were:
@@ -145,7 +152,7 @@ The observed normalized RMSE values were:
 | `plane-5` | `0.121607` |
 | `plane-6` | `0.129301` |
 | `torus` | `0.105856` |
-| `helix` | `0.099739` |
+| `helix` | `0.092560` |
 | `orbit-2` | `0.095822` |
 | `orbit-4` | `0.112861` |
 | `orb` | `0.151953` |
@@ -155,9 +162,9 @@ The visual gate is still a smoke test rather than a pixel oracle: Makie camera
 framing, grid projection, antialiasing, and stroke alpha differ from the SVG
 renderer. Exact pointwise parity is now claimed for the documented projective
 `torus`, `orbit-2`, and `orbit-4` coordinate formulas sampled by the oracle and
-manifest witnesses. Exact conformal helix output and exact CGA streamplot parity
-for `orb`/`wave` remain future work; a future port should add a small standalone
-CGA motor exponential kernel for the helix and port the CGA streamplot field
+manifest witnesses. The documented conformal `helix` is checked against the
+sparse CGA motor evaluator. Exact CGA streamplot parity for `orb`/`wave` remains
+future work; a future port should wire those examples to the CGA streamplot field
 construction.
 
 ## Verified Commands
@@ -181,6 +188,7 @@ These commands were also run successfully from `Grassmann4`:
 ```bash
 lake exe jlexamples
 scripts/compare_julia_examples.sh
+lake exe propertytests
 lake exe oracletests
 ```
 
@@ -188,7 +196,7 @@ The generated browser comparison page contains `12` example sections: one Lean
 SVG and one Julia/Makie reference PNG for each example.
 The contact-sheet script additionally passed the automated coverage and visual
 smoke checks for the same twelve examples, plus the CGA and projective formula
-witness gates.
+witness gates and the conformal helix formula witness gate.
 
 The Julia oracle suite checks exact `S"∞+++"` projective samples for `torus`,
 `orbit-2`, and `orbit-4` across
