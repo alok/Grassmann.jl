@@ -264,9 +264,9 @@ theorem rightContract_grade (a b : Multivector sig F) (j k : ℕ)
     (ha : a = a.gradeProject j) (hb : b = b.gradeProject k) (hkj : k ≤ j) :
     (a ⌊ᵐ b) = (a ⌊ᵐ b).gradeProject (j - k) := sorry
 
-/-- Scalar part of contraction: 1 ⌋ a = scalar(a) for any a -/
+/-- Scalar left contraction keeps the whole multivector. -/
 theorem one_leftContract (a : Multivector sig F) :
-    (1 : Multivector sig F) ⌋ᵐ a = a.grade0 := sorry
+    (1 : Multivector sig F) ⌋ᵐ a = a := sorry
 
 /-! ## Regressive Product Properties -/
 
