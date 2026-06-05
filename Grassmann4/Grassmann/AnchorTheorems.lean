@@ -46,11 +46,31 @@ theorem basis_anticommute (i j : Fin n) (h : i ≠ j) :
     ei * ej = (ej * ei).smul (-1 : Float) := by
   sorry
 
-/-- Basis vector squares to signature value: eᵢ² = sig(i) -/
+/-- Basis vector squares to signature value: eᵢ² = sig(i), including null dimensions. -/
 theorem basis_square (i : Fin n) :
     let ei : MultivectorS sig Float := MultivectorS.basis i
-    (ei * ei).scalarPart = if sig.metric.getLsbD i.val then -1 else 1 := by
+    (ei * ei).scalarPart =
+      if sig.degenerate.getLsbD i.val then 0
+      else if sig.metric.getLsbD i.val then -1 else 1 := by
   sorry
+
+/-- PGA3's projective basis vector is explicitly marked as null in the signature. -/
+theorem pga3_projective_signature_square :
+    Signature.basisSquare PGA3 ⟨3, by decide⟩ = 0 := by
+  decide
+
+/-- PGA3 projective basis blade `e₄`, encoded as bit mask `0b1000`. -/
+def pga3ProjectiveBlade : Blade PGA3 := ⟨BitVec.ofNat 4 8⟩
+
+/-- The geometric-product sign kernel cancels repeated PGA3 projective basis factors. -/
+theorem pga3_projective_geometric_sign :
+    geometricSign PGA3 pga3ProjectiveBlade pga3ProjectiveBlade = 0 := by
+  decide
+
+/-- The blade-level geometric product of PGA3's projective basis with itself is zero. -/
+theorem pga3_projective_blade_product_zero :
+    geometricProductBlades pga3ProjectiveBlade pga3ProjectiveBlade = BladeProduct.zero := by
+  rfl
 
 /-! ## Wedge Product Theorems -/
 
