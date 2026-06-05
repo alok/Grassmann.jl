@@ -1447,6 +1447,27 @@ def prop_cga3_translator_point_cloud : Bool :=
       let expected := (point.1 + delta.1, point.2.1 + delta.2.1, point.2.2 + delta.2.2)
       coordsApproxEq (cga3TranslateCoords point delta) expected
 
+/-- CGA null basis vectors square to zero and have the expected dual pairing. -/
+def prop_cga3_null_basis_vectors : Bool :=
+  let einf : Multivector CGA3 Float := CGA.einf
+  let eo : Multivector CGA3 Float := CGA.eo
+  approxEq (einf * einf).scalarPart 0.0 (tol := 1e-8) &&
+    approxEq (eo * eo).scalarPart 0.0 (tol := 1e-8) &&
+    approxEq (einf * eo).scalarPart (-1.0) (tol := 1e-8) &&
+    approxEq (eo * einf).scalarPart (-1.0) (tol := 1e-8)
+
+/-- Deterministic CGA point embeddings are null vectors. -/
+def prop_cga3_point_cloud_null_embeddings : Bool :=
+  pga3PointCloud.all fun point =>
+    let p := CGA.point point.1 point.2.1 point.2.2
+    approxEq (p * p).scalarPart 0.0 (tol := 1e-6)
+
+/-- Generated CGA point embeddings are null vectors. -/
+def prop_cga3_generated_point_null_embeddings : Gen Bool := do
+  let point ← genCoord3 4.0
+  let p := CGA.point point.1 point.2.1 point.2.2
+  return approxEq (p * p).scalarPart 0.0 (tol := 1e-6)
+
 /-- Generated CGA translators shift generated Euclidean points by the same vector. -/
 def prop_cga3_generated_translator_point : Gen Bool := do
   let point ← genCoord3 3.0
@@ -3026,7 +3047,16 @@ def runPGA3PointCloudTransformTests : IO (List PropTestResult) := do
 
 /-- Run user-facing CGA3 point-cloud transform checks. -/
 def runCGA3PointCloudTransformTests : IO (List PropTestResult) := do
-  IO.println "\n┌─ CGA3 Point-Cloud Translations ───────────────┐"
+  IO.println "\n┌─ CGA3 Point Geometry and Translations ────────┐"
+  let pointCloud0 := runBoolProp "CGA3 null basis vectors"
+    prop_cga3_null_basis_vectors
+  IO.println s!"│ {pointCloud0}"
+  let pointCloud0a := runBoolProp "CGA3 point cloud null embeddings"
+    prop_cga3_point_cloud_null_embeddings
+  IO.println s!"│ {pointCloud0a}"
+  let pointCloud0b ← runGenProp "CGA3 generated point null embeddings"
+    prop_cga3_generated_point_null_embeddings 25
+  IO.println s!"│ {pointCloud0b}"
   let pointCloud1 := runBoolProp "CGA3 translator point cloud"
     prop_cga3_translator_point_cloud
   IO.println s!"│ {pointCloud1}"
@@ -3037,7 +3067,7 @@ def runCGA3PointCloudTransformTests : IO (List PropTestResult) := do
     prop_cga3_translator_composition_point 5
   IO.println s!"│ {pointCloud3}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [pointCloud1, pointCloud2, pointCloud3]
+  return [pointCloud0, pointCloud0a, pointCloud0b, pointCloud1, pointCloud2, pointCloud3]
 
 /-- Run CGA3 packed-MV baseline checks against dense reference results. -/
 def runCGA3PackedReferenceTests : IO (List PropTestResult) := do
