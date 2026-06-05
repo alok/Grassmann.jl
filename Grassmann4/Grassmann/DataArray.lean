@@ -37,7 +37,7 @@ def GrassmannArray.zeros (n : ℕ) : GrassmannArray n :=
 @[inline]
 def GrassmannArray.scalar (n : ℕ) (x : Float) : GrassmannArray n :=
   let arr := GrassmannArray.zeros n
-  arr.set ⟨0, sorry_proof⟩ x
+  arr.set ⟨0, by simp⟩ x
 
 /-- Zero-filled even array of size 2^(n-1). -/
 @[inline]
@@ -48,7 +48,7 @@ def EvenArray.zeros (n : ℕ) : EvenArray n :=
 @[inline]
 def EvenArray.scalar (n : ℕ) (x : Float) : EvenArray n :=
   let arr := EvenArray.zeros n
-  arr.set ⟨0, sorry_proof⟩ x
+  arr.set ⟨0, by simp⟩ x
 
 /-! ### Accessors (compatibility layer) -/
 
