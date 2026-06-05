@@ -370,6 +370,25 @@ def nativeMatchesDense {n : Nat} {sig : Signature n} (native : NativeMV sig)
   (List.finRange (2 ^ n)).all fun i =>
     approxEq (native.coeff i.val) (dense.coeffs i) tol
 
+/-- Dense reference for the public native-vector `ofPairs` constructor.
+
+Native storage accepts all in-range masks and implements duplicate entries as
+overwrites through repeated public `setCoeff` writes.
+-/
+def denseAfterNativeOfPairs {n : Nat} {sig : Signature n}
+    (pairs : List (Nat × Float)) : Multivector sig Float :=
+  pairs.foldl (init := (0 : Multivector sig Float)) fun acc (mask, value) =>
+    if mask < 2 ^ n then
+      acc.setCoeff ⟨BitVec.ofNat n mask⟩ value
+    else
+      acc
+
+/-- Compare native-vector `ofPairs` against the dense public-behavior reference. -/
+def nativeOfPairsMatchesDense {n : Nat} (sig : Signature n)
+    (pairs : List (Nat × Float)) (tol : Float := 1e-9) : Bool :=
+  nativeMatchesDense (NativeMV.ofPairs sig pairs)
+    (denseAfterNativeOfPairs (sig := sig) pairs) tol
+
 /-- Native-vector `GAlgebra` operations agree with dense references. -/
 def nativeGAlgebraOpsMatchDense {n : Nat} {sig : Signature n}
     (a b : Multivector sig Float) (k : Nat) (scale : Float)
@@ -408,6 +427,12 @@ def nativeGAlgebraOpsMatchDense {n : Nat} {sig : Signature n}
 def prop_native_full_roundtrip : Gen Bool := do
   let a ← genR3DenseMv
   return nativeMatchesDense (nativeOfDense a.mv) a.mv
+
+/-- Native-vector `ofPairs` handles duplicate and out-of-range masks. -/
+def prop_native_ofPairs_dense : Bool :=
+  let pairs : List (Nat × Float) :=
+    [(0, 1.25), (1, -2.0), (3, 4.0), (8, 9.0), (1, 2.5), (6, -1.0)]
+  nativeOfPairsMatchesDense R3 pairs
 
 /-- Native-vector grade projection agrees with dense grade projection. -/
 def prop_native_grade_projection_dense : Gen Bool := do
@@ -514,6 +539,13 @@ def prop_native_pga3_full_roundtrip : Gen Bool := do
   let a ← genPGA3DenseMv
   return nativeMatchesDense (nativeOfDense a.mv) a.mv
 
+/-- PGA3 native-vector `ofPairs` matches dense public constructor behavior. -/
+def prop_native_pga3_ofPairs_dense : Bool :=
+  let pairs : List (Nat × Float) :=
+    [(0, 1.0), (1, 2.0), (3, 3.5), (5, -4.0), (8, 6.0), (16, 9.0),
+      (3, -1.5)]
+  nativeOfPairsMatchesDense PGA3 pairs
+
 /-- PGA3 native-vector grade projection agrees with dense grade projection. -/
 def prop_native_pga3_grade_projection_dense : Gen Bool := do
   let a ← genPGA3DenseMv
@@ -618,6 +650,13 @@ def prop_native_pga3_galgebra_normSq_dense : Gen Bool := do
 def prop_native_cga3_full_roundtrip : Gen Bool := do
   let a ← genCGA3DenseMv
   return nativeMatchesDense (nativeOfDense a.mv) a.mv
+
+/-- CGA3 native-vector `ofPairs` matches dense public constructor behavior. -/
+def prop_native_cga3_ofPairs_dense : Bool :=
+  let pairs : List (Nat × Float) :=
+    [(0, -0.5), (1, 1.0), (3, -2.0), (7, 4.0), (18, 5.0), (31, -6.0),
+      (32, 7.0), (18, -8.0)]
+  nativeOfPairsMatchesDense CGA3 pairs
 
 /-- CGA3 native-vector grade projection agrees with dense grade projection. -/
 def prop_native_cga3_grade_projection_dense : Gen Bool := do
@@ -3177,6 +3216,8 @@ def runNativeReferenceTests : IO (List PropTestResult) := do
   IO.println "\n┌─ Native Vector vs Dense Reference ───────────┐"
   let native1 ← runGenProp "Native full round-trip" prop_native_full_roundtrip
   IO.println s!"│ {native1}"
+  let native1a := runBoolProp "Native ofPairs dense reference" prop_native_ofPairs_dense
+  IO.println s!"│ {native1a}"
   let native2 ← runGenProp "Native grade projection" prop_native_grade_projection_dense
   IO.println s!"│ {native2}"
   let native3 ← runGenProp "Native parity projection" prop_native_parity_projection_dense
@@ -3207,6 +3248,9 @@ def runNativeReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {native6n}"
   let native7 ← runGenProp "PGA3 native full round-trip" prop_native_pga3_full_roundtrip
   IO.println s!"│ {native7}"
+  let native7a := runBoolProp "PGA3 native ofPairs dense reference"
+    prop_native_pga3_ofPairs_dense
+  IO.println s!"│ {native7a}"
   let native8 ← runGenProp "PGA3 native grade projection" prop_native_pga3_grade_projection_dense
   IO.println s!"│ {native8}"
   let native9 ← runGenProp "PGA3 native parity projection" prop_native_pga3_parity_projection_dense
@@ -3240,6 +3284,9 @@ def runNativeReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {native12n}"
   let native13 ← runGenProp "CGA3 native full round-trip" prop_native_cga3_full_roundtrip
   IO.println s!"│ {native13}"
+  let native13a := runBoolProp "CGA3 native ofPairs dense reference"
+    prop_native_cga3_ofPairs_dense
+  IO.println s!"│ {native13a}"
   let native14 ← runGenProp "CGA3 native grade projection" prop_native_cga3_grade_projection_dense
   IO.println s!"│ {native14}"
   let native15 ← runGenProp "CGA3 native parity projection" prop_native_cga3_parity_projection_dense
@@ -3273,13 +3320,13 @@ def runNativeReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {native18n}"
   IO.println "└────────────────────────────────────────────────┘"
   return [
-    native1, native2, native3, native4, native5, native6, native6s, native6i,
-    native6a, native6b, native6c, native6d, native6ops, native6g, native6n,
-    native7, native8, native9, native10, native11, native12, native12s, native12i,
-    native12a, native12b, native12c, native12d, native12ops, native12g, native12n,
-    native13, native14, native15, native16, native17, native18, native18s,
-    native18i, native18a, native18b, native18c, native18d, native18ops, native18g,
-    native18n]
+    native1, native1a, native2, native3, native4, native5, native6, native6s,
+    native6i, native6a, native6b, native6c, native6d, native6ops, native6g,
+    native6n, native7, native7a, native8, native9, native10, native11, native12,
+    native12s, native12i, native12a, native12b, native12c, native12d, native12ops,
+    native12g, native12n, native13, native13a, native14, native15, native16,
+    native17, native18, native18s, native18i, native18a, native18b, native18c,
+    native18d, native18ops, native18g, native18n]
 
 /-- Run sign-table fast-path checks against generic dense multiplication. -/
 def runSignTableReferenceTests : IO (List PropTestResult) := do
