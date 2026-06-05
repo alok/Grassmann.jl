@@ -334,6 +334,22 @@ def cga3OriginVector : Multivector CGA3 Rat :=
     (1 / (2 : Rat))
 
 set_option linter.style.nativeDecide false in
+/-- The conformal point-at-infinity vector has zero full geometric square. -/
+theorem cga3_infinity_square_zero :
+    cga3InfinityVector * cga3InfinityVector = (0 : Multivector CGA3 Rat) := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- The conformal origin vector has zero full geometric square. -/
+theorem cga3_origin_square_zero :
+    cga3OriginVector * cga3OriginVector = (0 : Multivector CGA3 Rat) := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
 /-- The conformal point-at-infinity vector is null. -/
 theorem cga3_infinity_square_scalar :
     (cga3InfinityVector * cga3InfinityVector).scalarPart = 0 := by
@@ -356,6 +372,44 @@ set_option linter.style.nativeDecide false in
 theorem cga3_origin_infinity_scalar_pair :
     (cga3OriginVector * cga3InfinityVector).scalarPart = -1 := by
   native_decide
+
+set_option linter.style.nativeDecide false in
+/-- The full product `e∞ * e₀` has scalar `-1` plus the extra conformal plane. -/
+theorem cga3_infinity_origin_product :
+    cga3InfinityVector * cga3OriginVector =
+      (Multivector.scalar (-1 : Rat) : Multivector CGA3 Rat).add
+        (Multivector.ofBlade cga3ExtraPlaneBlade) := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Reversing the full null-basis product flips the extra-plane component. -/
+theorem cga3_origin_infinity_product :
+    cga3OriginVector * cga3InfinityVector =
+      (Multivector.scalar (-1 : Rat) : Multivector CGA3 Rat).sub
+        (Multivector.ofBlade cga3ExtraPlaneBlade) := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- The exterior product `e∞ ∧ e₀` gives the positive extra conformal plane. -/
+theorem cga3_infinity_origin_wedge :
+    cga3InfinityVector ⋀ᵐ cga3OriginVector =
+      (Multivector.ofBlade cga3ExtraPlaneBlade : Multivector CGA3 Rat) := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Reversing the exterior null-basis product flips the extra-plane orientation. -/
+theorem cga3_origin_infinity_wedge :
+    cga3OriginVector ⋀ᵐ cga3InfinityVector =
+      (Multivector.ofBlade cga3ExtraPlaneBlade : Multivector CGA3 Rat).smul (-1 : Rat) := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
 
 /-! ## Wedge Product Theorems -/
 
