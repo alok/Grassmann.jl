@@ -1156,6 +1156,21 @@ def packedGAlgebraOpsMatchDense {n : Nat} {sig : Signature n}
     packedMatchesDense (inst.gradeProject packedA k) (a.gradeProject k) tol &&
     approxEq (inst.scalarPart packedA) a.scalarPart tol
 
+/-- Packed full `MV` agrees with dense references for generic normalization and
+inverse helpers. A large scalar offset keeps the generated multivector away from
+zero-norm and negative-norm cases in degenerate or indefinite signatures. -/
+def packedGAlgebraUnitHelpersMatchDense {n : Nat} {sig : Signature n}
+    (a : Multivector sig Float) (scalarBias : Float := 100.0)
+    (tol : Float := 1e-6) : Bool :=
+  let dense := a + (Multivector.scalar scalarBias : Multivector sig Float)
+  let packed : MV sig .full := MV.ofMultivector dense .full
+  let normalized :=
+    Grassmann.unitNormalizeFloat (sig := sig) (M := MV sig .full) packed
+  let inverse :=
+    Grassmann.versorInverseFloat (sig := sig) (M := MV sig .full) packed
+  packedMatchesDense normalized dense.normalize tol &&
+    packedMatchesDense inverse dense.inv tol
+
 /-- R3 full packed `MV` `GAlgebra` operations agree with dense references. -/
 def prop_mv_galgebra_ops_dense : Gen Bool := do
   let a ← genR3DenseMv
@@ -1181,6 +1196,11 @@ def prop_mv_galgebra_normSq_dense : Gen Bool := do
   return approxEq
     (Grassmann.normSq (sig := R3) (M := MV R3 .full) (F := Float) packed)
     a.mv.normSq (tol := 1e-6)
+
+/-- Packed full `MV` generic normalization/inverse helpers agree with dense references. -/
+def prop_mv_galgebra_unit_helpers_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  return packedGAlgebraUnitHelpersMatchDense (sig := R3) a.mv
 
 /-! ## Packed MV Dispatch Equivalence Tests -/
 
@@ -1496,6 +1516,11 @@ def prop_mv_pga3_galgebra_normSq_dense : Gen Bool := do
   return approxEq
     (Grassmann.normSq (sig := PGA3) (M := MV PGA3 .full) (F := Float) packed)
     a.mv.normSq (tol := 1e-6)
+
+/-- PGA3 packed full `MV` generic normalization/inverse helpers agree with dense references. -/
+def prop_mv_pga3_galgebra_unit_helpers_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  return packedGAlgebraUnitHelpersMatchDense (sig := PGA3) a.mv
 
 /-! ## PGA3 Point-Cloud Transform Tests -/
 
@@ -1988,6 +2013,11 @@ def prop_mv_cga3_galgebra_normSq_dense : Gen Bool := do
   return approxEq
     (Grassmann.normSq (sig := CGA3) (M := MV CGA3 .full) (F := Float) packed)
     a.mv.normSq (tol := 1e-6)
+
+/-- CGA3 packed full `MV` generic normalization/inverse helpers agree with dense references. -/
+def prop_mv_cga3_galgebra_unit_helpers_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  return packedGAlgebraUnitHelpersMatchDense (sig := CGA3) a.mv
 
 /-! ## Sparse Reference Tests -/
 
@@ -3557,10 +3587,12 @@ def runPackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {r22a}"
   let r22b ← runGenProp "MV GAlgebra normSq" prop_mv_galgebra_normSq_dense 50
   IO.println s!"│ {r22b}"
+  let r22c ← runGenProp "MV GAlgebra unit helpers" prop_mv_galgebra_unit_helpers_dense 50
+  IO.println s!"│ {r22c}"
   IO.println "└────────────────────────────────────────────────┘"
   return [r13, r14, r15, r15p, r15s, r15n, r15nr, r15sp, r15a, r15b, r15c, r15d,
     r15e, r15f, r15g, r15h, r15i, r16, r17, r18, r19, r20, r20a, r20b, r20c,
-    r21, r21a, r22, r22ops, r22a, r22b]
+    r21, r21a, r22, r22ops, r22a, r22b, r22c]
 
 /-- Run direct-dispatch vs typeclass-dispatch multiplication checks. -/
 def runMVDispatchReferenceTests : IO (List PropTestResult) := do
@@ -3639,11 +3671,14 @@ def runPGA3PackedReferenceTests : IO (List PropTestResult) := do
   let pgaMv9b ← runGenProp "PGA3 MV GAlgebra normSq"
     prop_mv_pga3_galgebra_normSq_dense 40
   IO.println s!"│ {pgaMv9b}"
+  let pgaMv9c ← runGenProp "PGA3 MV GAlgebra unit helpers"
+    prop_mv_pga3_galgebra_unit_helpers_dense 40
+  IO.println s!"│ {pgaMv9c}"
   IO.println "└────────────────────────────────────────────────┘"
   return [pgaMv1, pgaMv2, pgaMv2p, pgaMv2s, pgaMv2n, pgaMv2nr, pgaMv2sp,
     pgaMv2a, pgaMv2b, pgaMv2c, pgaMv2d, pgaMv2e, pgaMv2f, pgaMv2g, pgaMv3,
     pgaMv4, pgaMv5, pgaMv6, pgaMv7, pgaMv7a, pgaMv7b, pgaMv7c, pgaMv8,
-    pgaMv8a, pgaMv9, pgaMv9ops, pgaMv9a, pgaMv9b]
+    pgaMv8a, pgaMv9, pgaMv9ops, pgaMv9a, pgaMv9b, pgaMv9c]
 
 /-- Run user-facing PGA3 point-cloud transform checks. -/
 def runPGA3PointCloudTransformTests : IO (List PropTestResult) := do
@@ -3775,11 +3810,14 @@ def runCGA3PackedReferenceTests : IO (List PropTestResult) := do
   let cgaMv9b ← runGenProp "CGA3 MV GAlgebra normSq"
     prop_mv_cga3_galgebra_normSq_dense 20
   IO.println s!"│ {cgaMv9b}"
+  let cgaMv9c ← runGenProp "CGA3 MV GAlgebra unit helpers"
+    prop_mv_cga3_galgebra_unit_helpers_dense 20
+  IO.println s!"│ {cgaMv9c}"
   IO.println "└────────────────────────────────────────────────┘"
   return [cgaMv1, cgaMv2, cgaMv2p, cgaMv2s, cgaMv2n, cgaMv2nr, cgaMv2sp,
     cgaMv2a, cgaMv2b, cgaMv2c, cgaMv2d, cgaMv2e, cgaMv2f, cgaMv2g, cgaMv3,
     cgaMv4, cgaMv5, cgaMv6, cgaMv7, cgaMv7a, cgaMv7b, cgaMv7c, cgaMv8,
-    cgaMv8a, cgaMv9, cgaMv9ops, cgaMv9a, cgaMv9b]
+    cgaMv8a, cgaMv9, cgaMv9ops, cgaMv9a, cgaMv9b, cgaMv9c]
 
 /-- Run sparse-MV baseline checks against dense reference results. -/
 def runSparseReferenceTests : IO (List PropTestResult) := do
