@@ -160,6 +160,9 @@ theorem pga3_projective_signature_square :
 /-- PGA3 projective basis blade `e₄`, encoded as bit mask `0b1000`. -/
 def pga3ProjectiveBlade : Blade PGA3 := ⟨BitVec.ofNat 4 8⟩
 
+/-- PGA3 Euclidean-projective plane blade `e₁₄`, encoded as bit mask `0b1001`. -/
+def pga3ProjectivePlane1Blade : Blade PGA3 := ⟨BitVec.ofNat 4 9⟩
+
 /-- The geometric-product sign kernel cancels repeated PGA3 projective basis factors. -/
 theorem pga3_projective_geometric_sign :
     geometricSign PGA3 pga3ProjectiveBlade pga3ProjectiveBlade = 0 := by
@@ -169,6 +172,81 @@ theorem pga3_projective_geometric_sign :
 theorem pga3_projective_blade_product_zero :
     geometricProductBlades pga3ProjectiveBlade pga3ProjectiveBlade = BladeProduct.zero := by
   rfl
+
+set_option linter.style.nativeDecide false in
+/-- PGA3's first Euclidean basis blade still squares to scalar `+1`. -/
+theorem pga3_e1_blade_square :
+    geometricProductBlades (e1 : Blade PGA3) (e1 : Blade PGA3) =
+      BladeProduct.nonzero 1 Blade.scalar := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- Ordered PGA3 product `e1 * e0` gives the positive projective plane blade. -/
+theorem pga3_e1_projective_blade_product :
+    geometricProductBlades (e1 : Blade PGA3) pga3ProjectiveBlade =
+      BladeProduct.nonzero 1 pga3ProjectivePlane1Blade := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- Reversing `e1 * e0` flips the projective plane orientation sign. -/
+theorem pga3_projective_e1_blade_product :
+    geometricProductBlades pga3ProjectiveBlade (e1 : Blade PGA3) =
+      BladeProduct.nonzero (-1) pga3ProjectivePlane1Blade := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- PGA3 projective basis wedge with itself is zero. -/
+theorem pga3_projective_wedge_self_zero :
+    wedgeProductBlades pga3ProjectiveBlade pga3ProjectiveBlade = BladeProduct.zero := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- Ordered PGA3 wedge `e1 ∧ e0` gives the positive projective plane blade. -/
+theorem pga3_e1_projective_wedge :
+    wedgeProductBlades (e1 : Blade PGA3) pga3ProjectiveBlade =
+      BladeProduct.nonzero 1 pga3ProjectivePlane1Blade := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- Reversing PGA3 wedge `e1 ∧ e0` flips the projective plane orientation sign. -/
+theorem pga3_projective_e1_wedge :
+    wedgeProductBlades pga3ProjectiveBlade (e1 : Blade PGA3) =
+      BladeProduct.nonzero (-1) pga3ProjectivePlane1Blade := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- Left contraction `e1 ⌋ (e1 ∧ e0)` leaves the null projective basis blade. -/
+theorem pga3_e1_left_contract_projective_plane :
+    leftContractionBlades (e1 : Blade PGA3) pga3ProjectivePlane1Blade =
+      BladeProduct.nonzero 1 pga3ProjectiveBlade := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- Contracting the null projective basis into a blade containing it is zero. -/
+theorem pga3_projective_left_contract_projective_plane_zero :
+    leftContractionBlades pga3ProjectiveBlade pga3ProjectivePlane1Blade =
+      BladeProduct.zero := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- Right contraction `(e1 ∧ e0) ⌊ e1` leaves the null projective basis blade. -/
+theorem pga3_projective_plane_right_contract_e1 :
+    rightContractionBlades pga3ProjectivePlane1Blade (e1 : Blade PGA3) =
+      BladeProduct.nonzero 1 pga3ProjectiveBlade := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- Right contraction by the null projective basis is zero when the metric factor repeats. -/
+theorem pga3_projective_plane_right_contract_projective_zero :
+    rightContractionBlades pga3ProjectivePlane1Blade pga3ProjectiveBlade =
+      BladeProduct.zero := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- PGA3 scalar product of the null projective basis blade with itself is zero. -/
+theorem pga3_projective_scalar_product_self :
+    scalarProductBlades pga3ProjectiveBlade pga3ProjectiveBlade = 0 := by
+  native_decide
 
 /-! ## CGA Basis Anchor Theorems -/
 
