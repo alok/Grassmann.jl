@@ -2629,6 +2629,12 @@ def orbit2PointTaylor (t : Float) : Vec3 :=
   let motor := expTaylorMV generator 40
   projectiveDown (motor * projectiveUp projectiveOrbitBasePoint * motor†ₛ)
 
+def streamFieldMatchesTaylor (input : Vec3 -> ProjectiveMV) (p : Vec3) : Bool :=
+  vec3ApproxEq
+    (projectiveMotorOutputVector projectiveOrbWaveMotor (input p))
+    (projectiveMotorOutputVector projectiveOrbWaveMotorTaylor (input p))
+    (tol := 1e-6)
+
 def scalarSquareBivectorSamples : List ProjectiveMV :=
   let θs := localTaylorSamples
   θs.flatMap fun θ =>
@@ -2673,6 +2679,21 @@ def prop_projective_torus_factored_matches_local_taylor : Bool :=
 def prop_projective_orbit2_closed_form_matches_local_taylor : Bool :=
   localTaylorSamples.all fun t =>
     vec3ApproxEq (documentedProjectiveOrbit2Point t) (orbit2PointTaylor t) (tol := 1e-5)
+
+/-- The documented projective stream-field summands commute, justifying the factored motor. -/
+def prop_projective_stream_motor_parts_commute : Bool :=
+  let a := MultivectorS.smul (pi / 4.0) (projE1 * projE2)
+  let b := MultivectorS.smul (pi / 4.0) (projInf * projE3)
+  let expA := expProjectiveScalarSquareBivector a
+  let expB := expProjectiveScalarSquareBivector b
+  mvApproxEq (a * b) (b * a) &&
+    mvApproxEq (expA * expB) (expB * expA) (tol := 1e-6)
+
+/-- The plotted `orb` and `wave` stream fields match the whole documented exponential locally. -/
+def prop_projective_stream_fields_match_local_taylor : Bool :=
+  streamWitnessSamples.all fun p =>
+    streamFieldMatchesTaylor projectiveOrbInputPoint p &&
+      streamFieldMatchesTaylor projectiveWaveInputVector p
 
 end ProjectiveJulia
 
@@ -3628,17 +3649,24 @@ def runRotorExpReferenceTests : IO (List PropTestResult) := do
   let r10 := runBoolProp "Projective orbit-2 closed form matches local Taylor"
     ProjectiveJulia.prop_projective_orbit2_closed_form_matches_local_taylor
   IO.println s!"│ {r10}"
-  let r11 := runBoolProp "Conformal helix factored parts commute"
-    ConformalJulia.prop_conformal_helix_parts_commute
+  let r11 := runBoolProp "Projective stream motor parts commute"
+    ProjectiveJulia.prop_projective_stream_motor_parts_commute
   IO.println s!"│ {r11}"
-  let r12 := runBoolProp "Conformal helix closed form matches motor"
-    ConformalJulia.prop_conformal_helix_closed_form_matches_motor
+  let r12 := runBoolProp "Projective stream fields match local Taylor"
+    ProjectiveJulia.prop_projective_stream_fields_match_local_taylor
   IO.println s!"│ {r12}"
-  let r13 := runBoolProp "Conformal helix motor matches local Taylor"
-    ConformalJulia.prop_conformal_helix_motor_matches_local_taylor
+  let r13 := runBoolProp "Conformal helix factored parts commute"
+    ConformalJulia.prop_conformal_helix_parts_commute
   IO.println s!"│ {r13}"
+  let r14 := runBoolProp "Conformal helix closed form matches motor"
+    ConformalJulia.prop_conformal_helix_closed_form_matches_motor
+  IO.println s!"│ {r14}"
+  let r15 := runBoolProp "Conformal helix motor matches local Taylor"
+    ConformalJulia.prop_conformal_helix_motor_matches_local_taylor
+  IO.println s!"│ {r15}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [r1, r2, r3, r3a, r3b, r4, r5, r5a, r6, r7, r8, r9, r10, r11, r12, r13]
+  return [r1, r2, r3, r3a, r3b, r4, r5, r5a, r6, r7, r8, r9, r10, r11, r12,
+    r13, r14, r15]
 
 /-- Run all property tests -/
 def runPropertyTests : IO Unit := do
