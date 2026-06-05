@@ -19,6 +19,7 @@ import Grassmann.MV
 import Grassmann.PGA
 import Grassmann.CGA
 import Grassmann.RotorExp
+import Grassmann.JuliaExamples
 import Grassmann.BladeIndex
 import Grassmann.SignTables
 import Grassmann.Repr
@@ -2363,6 +2364,86 @@ def prop_expBivector_cga3_torus_generator_matches_series : Bool :=
       hasNonScalarPart (B * B) &&
       mvApproxEq (expBivector B) (expTaylorMV B 30) (tol := 1e-7)
 
+/-! ### Documented Projective Julia Example Exponentials -/
+
+namespace ProjectiveJulia
+
+open Grassmann.JuliaExamples
+
+/-- Parameter samples covering the exact projective Julia oracle range. -/
+def plottedSamples : List Float :=
+  let π := Grassmann.JuliaExamples.pi
+  [(-2.0 * π), (-π), -1.0, -0.5, 0.0, 0.5, 1.0, π, (2.0 * π)]
+
+/-- Smaller samples where the generic Taylor exponential is still a stable reference. -/
+def localTaylorSamples : List Float :=
+  [(-1.0), (-0.5), (-0.25), 0.0, 0.25, 0.5, 1.0]
+
+def vec3ApproxEq (a b : Vec3) (tol : Float := 1e-6) : Bool :=
+  approxEq a.x b.x tol && approxEq a.y b.y tol && approxEq a.z b.z tol
+
+def torusPart12 (t : Float) : ProjectiveMV :=
+  MultivectorS.smul (((3.0 / 7.0) * pi) * t) (projE1 * projE2)
+
+def torusPartInf3 (t : Float) : ProjectiveMV :=
+  MultivectorS.smul (pi * t) (projInf * projE3)
+
+def torusPointTaylor (t : Float) : Vec3 :=
+  let rotor := expTaylorMV (MultivectorS.smul (pi * t) projectiveTorusGenerator) 40
+  projectiveDown (rotor * projectiveUp { x := 1.0, y := 1.0, z := 1.0 } * rotor†ₛ)
+
+def orbit2PointTaylor (t : Float) : Vec3 :=
+  let generator := MultivectorS.smul (t / 2.0) (projInf * projectiveOrbitVector t)
+  let motor := expTaylorMV generator 40
+  projectiveDown (motor * projectiveUp projectiveOrbitBasePoint * motor†ₛ)
+
+def scalarSquareBivectorSamples : List ProjectiveMV :=
+  let θs := localTaylorSamples
+  θs.flatMap fun θ =>
+    [ torusPart12 θ,
+      torusPartInf3 θ,
+      MultivectorS.smul (θ / 2.0) (projInf * projectiveOrbitVector θ) ]
+
+/-- The projective closed form agrees with Taylor series on stable local samples. -/
+def prop_projective_scalar_square_exp_matches_series_locally : Bool :=
+  scalarSquareBivectorSamples.all fun B =>
+    !hasNonScalarPart (B * B) &&
+      mvApproxEq
+        (expProjectiveScalarSquareBivector B)
+        (expTaylorMV B 40)
+        (tol := 1e-6)
+
+/-- Scalar-square projective exponentials have the expected inverse over the plotted range. -/
+def prop_projective_scalar_square_exp_inverse : Bool :=
+  plottedSamples.all fun t =>
+    [torusPart12 t, torusPartInf3 t,
+      MultivectorS.smul (t / 2.0) (projInf * projectiveOrbitVector t)].all fun B =>
+      let motor := expProjectiveScalarSquareBivector B
+      let inverse := expProjectiveScalarSquareBivector (B.smul (-1.0))
+      mvApproxEq (motor * inverse) (MultivectorS.scalar 1.0 : ProjectiveMV) (tol := 1e-6)
+
+/-- The two projective torus summands commute, justifying the factored exponential path. -/
+def prop_projective_torus_parts_commute : Bool :=
+  plottedSamples.all fun t =>
+    let a := torusPart12 t
+    let b := torusPartInf3 t
+    let expA := expProjectiveScalarSquareBivector a
+    let expB := expProjectiveScalarSquareBivector b
+    mvApproxEq (a * b) (b * a) &&
+      mvApproxEq (expA * expB) (expB * expA) (tol := 1e-6)
+
+/-- The factored torus evaluator matches the previous Taylor path where Taylor is stable. -/
+def prop_projective_torus_factored_matches_local_taylor : Bool :=
+  localTaylorSamples.all fun t =>
+    vec3ApproxEq (documentedProjectiveTorusPoint t) (torusPointTaylor t) (tol := 1e-5)
+
+/-- The closed-form orbit-2 evaluator matches the previous Taylor path where Taylor is stable. -/
+def prop_projective_orbit2_closed_form_matches_local_taylor : Bool :=
+  localTaylorSamples.all fun t =>
+    vec3ApproxEq (documentedProjectiveOrbit2Point t) (orbit2PointTaylor t) (tol := 1e-5)
+
+end ProjectiveJulia
+
 /-! ## High-Dimensional Exact Stress Tests -/
 
 /-- Five-dimensional Euclidean signature used by exact stress checks. -/
@@ -3232,8 +3313,23 @@ def runRotorExpReferenceTests : IO (List PropTestResult) := do
   let r5 := runBoolProp "CGA3 torus expBivector falls back to series"
     prop_expBivector_cga3_torus_generator_matches_series
   IO.println s!"│ {r5}"
+  let r6 := runBoolProp "Projective scalar-square exp matches local series"
+    ProjectiveJulia.prop_projective_scalar_square_exp_matches_series_locally
+  IO.println s!"│ {r6}"
+  let r7 := runBoolProp "Projective scalar-square exp inverse"
+    ProjectiveJulia.prop_projective_scalar_square_exp_inverse
+  IO.println s!"│ {r7}"
+  let r8 := runBoolProp "Projective torus factored parts commute"
+    ProjectiveJulia.prop_projective_torus_parts_commute
+  IO.println s!"│ {r8}"
+  let r9 := runBoolProp "Projective torus factored evaluator matches local Taylor"
+    ProjectiveJulia.prop_projective_torus_factored_matches_local_taylor
+  IO.println s!"│ {r9}"
+  let r10 := runBoolProp "Projective orbit-2 closed form matches local Taylor"
+    ProjectiveJulia.prop_projective_orbit2_closed_form_matches_local_taylor
+  IO.println s!"│ {r10}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [r1, r2, r3, r4, r5]
+  return [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10]
 
 /-- Run all property tests -/
 def runPropertyTests : IO Unit := do
