@@ -33,7 +33,7 @@ structure MultivectorS (sig : Signature n) (F : Type*) where
 
 namespace MultivectorS
 
-variable [Ring F] [BEq F] [DecidableEq F]
+variable [Ring F] [BEq F]
 
 /-! ### Constructors -/
 
@@ -315,7 +315,7 @@ end MultivectorS
 
 /-! ## GAlgebra Instance for MultivectorS -/
 
-instance [Ring F] [BEq F] [DecidableEq F] : GAlgebra sig (MultivectorS sig F) F where
+instance [Ring F] [BEq F] : GAlgebra sig (MultivectorS sig F) F where
   basisVector := MultivectorS.basis
   scalar := MultivectorS.scalar
   zero := MultivectorS.zero

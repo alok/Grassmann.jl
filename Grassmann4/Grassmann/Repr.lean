@@ -81,7 +81,7 @@ instance (priority := 1000) [Ring F] : MultivectorRepr (Multivector sig F) sig F
 
 /-- Sparse representation (priority 500, lower than Dense).
     Use explicitly when working with high-dimensional sparse data. -/
-instance (priority := 500) [Ring F] [BEq F] [DecidableEq F] :
+instance (priority := 500) [Ring F] [BEq F] :
     MultivectorRepr (MultivectorS sig F) sig F where
   coeff := MultivectorS.coeff
   scalarPart := MultivectorS.scalarPart
@@ -258,11 +258,11 @@ def truncatedToSparse [Ring F] {maxGrade : ℕ} (m : TruncatedMV sig maxGrade F)
 Representation conversions preserve algebraic structure.
 -/
 
-theorem denseToSparse_add [Ring F] [BEq F] [DecidableEq F] (a b : Multivector sig F) :
+theorem denseToSparse_add [Ring F] [BEq F] (a b : Multivector sig F) :
     denseToSparse (a.add b) = (denseToSparse a).add (denseToSparse b) := by
   sorry_proof
 
-theorem denseToSparse_mul [Ring F] [BEq F] [DecidableEq F] (a b : Multivector sig F) :
+theorem denseToSparse_mul [Ring F] [BEq F] (a b : Multivector sig F) :
     denseToSparse (a * b) = (denseToSparse a) * (denseToSparse b) := by
   sorry_proof
 
@@ -270,7 +270,7 @@ theorem sparseToDense_add [Ring F] [BEq F] (a b : MultivectorS sig F) :
     sparseToDense (a.add b) = (sparseToDense a).add (sparseToDense b) := by
   sorry_proof
 
-theorem sparseToDense_mul [Ring F] [BEq F] [DecidableEq F] (a b : MultivectorS sig F) :
+theorem sparseToDense_mul [Ring F] [BEq F] (a b : MultivectorS sig F) :
     sparseToDense (a * b) = (sparseToDense a) * (sparseToDense b) := by
   sorry_proof
 
