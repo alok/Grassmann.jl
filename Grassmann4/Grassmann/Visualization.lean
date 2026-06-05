@@ -84,7 +84,9 @@ def svgArrow (p : VectorAtPoint) (scale : Float) (viewScale : Float) : String :=
     let dy := -p.vy / mag * scale  -- Flip y
     let x2 := cx + dx
     let y2 := cy + dy
-    s!"<line x1=\"{fmtFloat cx}\" y1=\"{fmtFloat cy}\" x2=\"{fmtFloat x2}\" y2=\"{fmtFloat y2}\" stroke=\"blue\" stroke-width=\"1\" marker-end=\"url(#arrow)\"/>\n"
+    s!"<line x1=\"{fmtFloat cx}\" y1=\"{fmtFloat cy}\" " ++
+    s!"x2=\"{fmtFloat x2}\" y2=\"{fmtFloat y2}\" " ++
+    "stroke=\"blue\" stroke-width=\"1\" marker-end=\"url(#arrow)\"/>\n"
 
 /-- Generate complete SVG for vector field -/
 def generateSVG (points : List VectorAtPoint) (width height : Nat) : String :=
@@ -94,7 +96,8 @@ def generateSVG (points : List VectorAtPoint) (width height : Nat) : String :=
   s!"<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}\" height=\"{height}\" viewBox=\"0 0 {width} {height}\">
   <defs>
-    <marker id=\"arrow\" markerWidth=\"10\" markerHeight=\"10\" refX=\"9\" refY=\"3\" orient=\"auto\" markerUnits=\"strokeWidth\">
+    <marker id=\"arrow\" markerWidth=\"10\" markerHeight=\"10\"
+      refX=\"9\" refY=\"3\" orient=\"auto\" markerUnits=\"strokeWidth\">
       <path d=\"M0,0 L0,6 L9,3 z\" fill=\"blue\" />
     </marker>
   </defs>
@@ -199,7 +202,8 @@ def generateJSON3D (points : List Vector3AtPoint) : String :=
   let lb := "{"  -- left brace
   let rb := "}"  -- right brace
   let jsonPoints := points.map fun p =>
-    s!"{lb}\"x\":{fmtFloat p.x},\"y\":{fmtFloat p.y},\"z\":{fmtFloat p.z},\"vx\":{fmtFloat p.vx},\"vy\":{fmtFloat p.vy},\"vz\":{fmtFloat p.vz}{rb}"
+    s!"{lb}\"x\":{fmtFloat p.x},\"y\":{fmtFloat p.y},\"z\":{fmtFloat p.z}," ++
+    s!"\"vx\":{fmtFloat p.vx},\"vy\":{fmtFloat p.vy},\"vz\":{fmtFloat p.vz}{rb}"
   "[" ++ String.intercalate ",\n" jsonPoints ++ "]"
 
 /-- Generate complete HTML with Three.js for 3D visualization -/
@@ -215,15 +219,18 @@ def generateHTML3D (points : List Vector3AtPoint) : String :=
   s!"  <style>body {lb} margin: 0; overflow: hidden; {rb}</style>\n" ++
   "</head>\n" ++
   "<body>\n" ++
-  "<script src=\"https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js\"></script>\n" ++
-  "<script src=\"https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js\"></script>\n" ++
+  "<script src=\"https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js\">" ++
+  "</script>\n" ++
+  "<script src=\"https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/" ++
+  "OrbitControls.js\"></script>\n" ++
   "<script>\n" ++
   s!"const data = {jsonData};\n" ++
   "\n" ++
   "// Scene setup\n" ++
   "const scene = new THREE.Scene();\n" ++
   "scene.background = new THREE.Color(0xf0f0f0);\n" ++
-  "const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);\n" ++
+  "const camera = new THREE.PerspectiveCamera(" ++
+  "75, window.innerWidth/window.innerHeight, 0.1, 1000);\n" ++
   "camera.position.set(3, 3, 3);\n" ++
   "\n" ++
   s!"const renderer = new THREE.WebGLRenderer({lb}antialias: true{rb});\n" ++
@@ -248,15 +255,18 @@ def generateHTML3D (points : List Vector3AtPoint) : String :=
   s!"  if (mag > 0.01) {lb}\n" ++
   "    const scale = 0.15;\n" ++
   "    const dir = new THREE.Vector3(p.vx, p.vy, p.vz).normalize();\n" ++
-  "    const arrowHelper = new THREE.ArrowHelper(dir, new THREE.Vector3(p.x, p.y, p.z), scale, 0x0066ff, 0.05, 0.03);\n" ++
+  "    const arrowHelper = new THREE.ArrowHelper(" ++
+  "dir, new THREE.Vector3(p.x, p.y, p.z), scale, 0x0066ff, 0.05, 0.03);\n" ++
   "    scene.add(arrowHelper);\n" ++
   s!"  {rb}\n" ++
   s!"{rb});\n" ++
   "\n" ++
   "// Title\n" ++
   "const titleDiv = document.createElement('div');\n" ++
-  "titleDiv.style.cssText = 'position:absolute;top:10px;left:10px;color:#333;font-family:monospace;font-size:14px;';\n" ++
-  "titleDiv.innerHTML = 'Rotor: exp(π/4 · (e₁₂ + e₂₃))<br>Drag to rotate, scroll to zoom';\n" ++
+  "titleDiv.style.cssText = 'position:absolute;top:10px;left:10px;color:#333;" ++
+  "font-family:monospace;font-size:14px;';\n" ++
+  "titleDiv.innerHTML = 'Rotor: exp(π/4 · (e₁₂ + e₂₃))<br>" ++
+  "Drag to rotate, scroll to zoom';\n" ++
   "document.body.appendChild(titleDiv);\n" ++
   "\n" ++
   "// Animation loop\n" ++

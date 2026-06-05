@@ -225,7 +225,7 @@ def simplexBoundaryFaces (s : IndexSimplex) : Array (Int × IndexSimplex) :=
   if s.grade == 0 then #[]
   else
     (Array.range s.vertices.size).filterMap fun i =>
-      if h : i < s.vertices.size then
+      if _h : i < s.vertices.size then
         let sign : Int := if i % 2 == 0 then 1 else -1
         -- Build face by excluding vertex i
         let faceVerts := (Array.range s.vertices.size).filterMap fun j =>

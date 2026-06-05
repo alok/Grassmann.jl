@@ -159,7 +159,7 @@ These use precomputed index lists to skip zero grades.
 variable {n : ℕ} {sig : Signature n} {F : Type*} [Ring F]
 
 /-- Extract coefficients at given indices as an array -/
-def extractCoeffs (m : Multivector sig F) (indices : List (Fin (2^n))) : Array F :=
+def extractCoeffs (m : Multivector sig F) (indices : List (Fin (2 ^ n))) : Array F :=
   indices.foldl (init := #[]) fun arr i => arr.push (m.coeffs i)
 
 /-- Build multivector from coefficients at given indices (others are zero) -/
@@ -172,17 +172,17 @@ def fromCoeffs (coeffs : Array F) (indices : List (Fin (2 ^ n))) : Multivector s
 
 /-- Grade-k projection using precomputed indices.
     More efficient than checking grade for each index. -/
-def gradeProjectFast (m : Multivector sig F) (indices : List (Fin (2^n))) :
+def gradeProjectFast (m : Multivector sig F) (indices : List (Fin (2 ^ n))) :
     Multivector sig F :=
   fromCoeffs (extractCoeffs m indices) indices
 
 /-- Even part using precomputed indices -/
-def evenPartFast (m : Multivector sig F) (evenIdx : List (Fin (2^n))) :
+def evenPartFast (m : Multivector sig F) (evenIdx : List (Fin (2 ^ n))) :
     Multivector sig F :=
   fromCoeffs (extractCoeffs m evenIdx) evenIdx
 
 /-- Odd part using precomputed indices -/
-def oddPartFast (m : Multivector sig F) (oddIdx : List (Fin (2^n))) :
+def oddPartFast (m : Multivector sig F) (oddIdx : List (Fin (2 ^ n))) :
     Multivector sig F :=
   fromCoeffs (extractCoeffs m oddIdx) oddIdx
 
@@ -195,8 +195,8 @@ When both operands have known grade structure, iterate only over non-zero pairs.
     For even × even, this is ~4x faster. -/
 @[specialize]
 def geometricProductSparse (a b : Multivector sig F)
-    (aIndices bIndices : List (Fin (2^n))) : Multivector sig F :=
-  let size := 2^n
+    (aIndices bIndices : List (Fin (2 ^ n))) : Multivector sig F :=
+  let size := 2 ^ n
   let table? : Option (SignTable n) := cachedSignTable (n := n) sig
   let resultArray :=
     match table? with
@@ -230,8 +230,8 @@ def geometricProductSparse (a b : Multivector sig F)
     This avoids list recursion overhead in tight loops. -/
 @[specialize]
 def geometricProductSparseArray (a b : Multivector sig F)
-    (aIndices bIndices : Array (Fin (2^n))) : Multivector sig F :=
-  let size := 2^n
+    (aIndices bIndices : Array (Fin (2 ^ n))) : Multivector sig F :=
+  let size := 2 ^ n
   let table? : Option (SignTable n) := cachedSignTable (n := n) sig
   let resultArray : Array F := Id.run do
     let mut resultArray : Array F := Array.replicate size (0 : F)
@@ -264,8 +264,8 @@ def geometricProductSparseArray (a b : Multivector sig F)
 /-- Wedge product iterating only over given index pairs -/
 @[specialize]
 def wedgeProductSparse (a b : Multivector sig F)
-    (aIndices bIndices : List (Fin (2^n))) : Multivector sig F :=
-  let size := 2^n
+    (aIndices bIndices : List (Fin (2 ^ n))) : Multivector sig F :=
+  let size := 2 ^ n
   let resultArray := aIndices.foldl (init := Array.replicate size (0 : F)) fun arr i =>
     bIndices.foldl (init := arr) fun arr2 j =>
       let bi : Blade sig := ⟨BitVec.ofNat n i.val⟩
@@ -286,8 +286,8 @@ def wedgeProductSparse (a b : Multivector sig F)
 /-- Array-based wedge product iterating only over given index pairs. -/
 @[specialize]
 def wedgeProductSparseArray (a b : Multivector sig F)
-    (aIndices bIndices : Array (Fin (2^n))) : Multivector sig F :=
-  let size := 2^n
+    (aIndices bIndices : Array (Fin (2 ^ n))) : Multivector sig F :=
+  let size := 2 ^ n
   let resultArray : Array F := Id.run do
     let mut resultArray : Array F := Array.replicate size (0 : F)
     for i in aIndices do

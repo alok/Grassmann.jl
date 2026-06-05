@@ -41,6 +41,7 @@ namespace Multivector
 
 variable [Ring F]
 
+omit [Ring F] in
 @[ext]
 theorem ext {a b : Multivector sig F} (h : ∀ i, a.coeffs i = b.coeffs i) : a = b := by
   cases a; cases b; simp only [mk.injEq]; funext i; exact h i
@@ -676,7 +677,10 @@ instance [Ring F] : GAlgebra sig (Multivector sig F) F where
 #eval (Multivector.basis ⟨1, by omega⟩ : Multivector R3 Int).coeff (e2 : Blade R3)  -- 1
 
 -- Grade projection
-#eval ((Multivector.one : Multivector R3 Int).add (Multivector.basis ⟨0, by omega⟩)).grade0.scalarPart  -- 1
+#eval
+  let m := (Multivector.one : Multivector R3 Int).add
+    (Multivector.basis ⟨0, by omega⟩)
+  m.grade0.scalarPart  -- 1
 
 -- Reverse signs
 #eval (Multivector.ofBlade (e1 : Blade R3) : Multivector R3 Int)†.coeff e1  -- 1 (vector unchanged)
