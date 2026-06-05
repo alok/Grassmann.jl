@@ -435,6 +435,37 @@ theorem coeff_setCoeff (m : NativeMV sig) (setMask queryMask : Nat) (x : Float) 
   · unfold setCoeff
     simp [hset]
 
+/-- Coefficient oracle for native-vector writes from `(bladeMask, coefficient)` pairs. -/
+def coeffAfterPairs (n : Nat) (pairs : List (Nat × Float)) (queryMask : Nat)
+    (init : Float := 0.0) : Float :=
+  pairs.foldl (init := init) fun acc (mask, x) =>
+    if _ : mask < 2 ^ n then
+      if queryMask = mask then x else acc
+    else
+      acc
+
+private theorem coeff_foldl_setCoeff (pairs : List (Nat × Float)) (m : NativeMV sig)
+    (queryMask : Nat) :
+    (pairs.foldl (init := m) fun acc (mask, x) => acc.setCoeff mask x).coeff queryMask =
+      coeffAfterPairs n pairs queryMask (m.coeff queryMask) := by
+  induction pairs generalizing m with
+  | nil => rfl
+  | cons pair rest ih =>
+      cases pair with
+      | mk mask x =>
+          simp only [List.foldl_cons]
+          rw [ih]
+          unfold coeffAfterPairs
+          simp only [List.foldl_cons]
+          rw [coeff_setCoeff]
+
+/-- Coefficient law for `NativeMV.ofPairs`; later duplicate masks overwrite earlier ones. -/
+theorem coeff_ofPairs (pairs : List (Nat × Float)) (queryMask : Nat) :
+    (ofPairs sig pairs).coeff queryMask = coeffAfterPairs n pairs queryMask := by
+  unfold ofPairs
+  rw [coeff_foldl_setCoeff]
+  rw [coeff_zero]
+
 /-- The blade mask used by a native basis vector is in coefficient range. -/
 theorem basisVector_mask_lt (i : Fin n) : 1 <<< i.val < 2 ^ n := by
   rw [Nat.one_shiftLeft]
