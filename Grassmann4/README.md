@@ -251,6 +251,9 @@ A local `scripts/packedmvbench_guard.sh` run on 2026-06-05 passed with
 motor-point transforms versus `211530.158400 ns/iter` dense transforms
 (`31.9x`).
 
+See `docs/PackedMVPerformance.md` for the focused PGA3 motor-point profiling
+commands and a current process-level `time -l` footprint snapshot.
+
 ## Correctness Gates
 
 The main property-test executable exposes focused gates for the core
