@@ -2736,6 +2736,73 @@ def prop_conformal_helix_motor_matches_local_taylor : Bool :=
 
 end ConformalJulia
 
+/-! ### Julia Visual Example Coverage -/
+
+namespace JuliaExampleCoverage
+
+open Grassmann.JuliaExamples
+
+/-- The plot-producing examples documented by Grassmann.jl's algebra page. -/
+def expectedFilenames : List String :=
+  [ "plane-1.svg", "plane-2.svg", "plane-3.svg", "plane-4.svg", "plane-5.svg", "plane-6.svg",
+    "torus.svg", "helix.svg", "orbit-2.svg", "orbit-4.svg", "orb.svg", "wave.svg" ]
+
+def noDuplicateStrings : List String → Bool
+  | [] => true
+  | x :: xs => !xs.contains x && noDuplicateStrings xs
+
+def generatedFilenames : List String :=
+  allExamples.map Prod.fst
+
+def generatedReferenceNames : List String :=
+  allExamples.map fun ex => referenceName ex.1
+
+def expectedReferenceNames : List String :=
+  expectedFilenames.map referenceName
+
+/-- The Lean generator still covers exactly the documented Julia plot examples. -/
+def prop_julia_example_names_complete : Bool :=
+  generatedFilenames == expectedFilenames &&
+    generatedReferenceNames == expectedReferenceNames &&
+    allExamples.length == expectedFilenames.length &&
+    noDuplicateStrings generatedFilenames &&
+    noDuplicateStrings generatedReferenceNames
+
+def svgContainsVisibleGeometry (body : String) : Bool :=
+  body.contains "<svg" &&
+    body.contains "</svg>" &&
+    body.contains "fill=\"#ffffff\"" &&
+    (body.contains "<path" || body.contains "<line") &&
+    body.length > 1000
+
+/-- Every Lean visual example has a plausible non-empty SVG payload. -/
+def prop_julia_example_svgs_nonempty : Bool :=
+  allExamples.all fun ex => svgContainsVisibleGeometry ex.2
+
+def manifestContainsExample (filename : String) : Bool :=
+  let name := referenceName filename
+  manifestJson.contains ("\"name\":\"" ++ name ++ "\"") &&
+    manifestJson.contains ("\"lean\":\"lean/" ++ filename ++ "\"") &&
+    manifestJson.contains ("\"julia\":\"" ++ juliaReferenceUrl filename ++ "\"")
+
+/-- The machine-readable manifest lists every generated Lean/Julia comparison pair. -/
+def prop_julia_example_manifest_covers_examples : Bool :=
+  manifestJson.contains s!"\"example_count\":{expectedFilenames.length}" &&
+    expectedFilenames.all manifestContainsExample
+
+def comparisonHtmlContainsExample (filename : String) : Bool :=
+  let label := referenceName filename
+  comparisonHtml.contains s!"<h2>{label}</h2>" &&
+    comparisonHtml.contains ("lean/" ++ filename) &&
+    comparisonHtml.contains (juliaReferenceUrl filename)
+
+/-- The side-by-side comparison page references every generated Lean and Julia artifact. -/
+def prop_julia_example_comparison_html_covers_examples : Bool :=
+  comparisonHtml.contains "<!doctype html>" &&
+    expectedFilenames.all comparisonHtmlContainsExample
+
+end JuliaExampleCoverage
+
 /-! ## High-Dimensional Exact Stress Tests -/
 
 /-- Five-dimensional Euclidean signature used by exact stress checks. -/
@@ -3692,6 +3759,24 @@ def runRotorExpReferenceTests : IO (List PropTestResult) := do
   return [r1, r2, r3, r3a, r3b, r4, r5, r5a, r6, r7, r8, r9, r10, r11, r12,
     r13, r14, r15]
 
+/-- Run pure coverage checks for the Lean Julia-example visual generator. -/
+def runJuliaExampleCoverageTests : IO (List PropTestResult) := do
+  IO.println "\n┌─ Julia Example Visual Coverage ───────────────┐"
+  let j1 := runBoolProp "Julia example names complete"
+    JuliaExampleCoverage.prop_julia_example_names_complete
+  IO.println s!"│ {j1}"
+  let j2 := runBoolProp "Julia example SVG payloads non-empty"
+    JuliaExampleCoverage.prop_julia_example_svgs_nonempty
+  IO.println s!"│ {j2}"
+  let j3 := runBoolProp "Julia example manifest covers pairs"
+    JuliaExampleCoverage.prop_julia_example_manifest_covers_examples
+  IO.println s!"│ {j3}"
+  let j4 := runBoolProp "Julia comparison HTML covers pairs"
+    JuliaExampleCoverage.prop_julia_example_comparison_html_covers_examples
+  IO.println s!"│ {j4}"
+  IO.println "└────────────────────────────────────────────────┘"
+  return [j1, j2, j3, j4]
+
 /-- Run all property tests -/
 def runPropertyTests : IO Unit := do
   IO.println "╔══════════════════════════════════════════════╗"
@@ -3780,6 +3865,7 @@ def runPropertyTests : IO Unit := do
   let reprResults ← runReprConversionTests
   let stressResults ← runHighDimStressTests
   let rotorExpResults ← runRotorExpReferenceTests
+  let juliaExampleResults ← runJuliaExampleCoverageTests
   -- Summary
   let coreResults := [r1, r2, r3, r4, r5, r6, r6scalarContract, r6rightContract,
     r6a, r6b, r6c, r7, r8, r9, r9a, r9b, r9c, r10, r11, r12, r13]
@@ -3801,7 +3887,8 @@ def runPropertyTests : IO Unit := do
     countPassed truncatedResults +
     countPassed reprResults +
     countPassed stressResults +
-    countPassed rotorExpResults
+    countPassed rotorExpResults +
+    countPassed juliaExampleResults
   let basisProps := [prop_R3_basis_squares, prop_R3_basis_anticommute, prop_CGA3_signature,
     prop_PGA3_signature, prop_R3_basis_anchor_identities, prop_PGA3_basis_anchor_identities,
     prop_CGA3_basis_anchor_identities]
@@ -3824,6 +3911,7 @@ def runPropertyTests : IO Unit := do
     reprResults.length +
     stressResults.length +
     rotorExpResults.length +
+    juliaExampleResults.length +
     basisProps.length
   let totalPass := passCount + basisPass
   IO.println ""

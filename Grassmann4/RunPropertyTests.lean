@@ -24,6 +24,10 @@ def runRotorExpOnly : IO Unit := do
   let results ← Grassmann.PropertyTests.runRotorExpReferenceTests
   requireAllPassed "rotor exponential" results
 
+def runJuliaExamplesOnly : IO Unit := do
+  let results ← Grassmann.PropertyTests.runJuliaExampleCoverageTests
+  requireAllPassed "Julia example coverage" results
+
 def runNativeReferenceOnly : IO Unit := do
   let results ← Grassmann.PropertyTests.runNativeReferenceTests
   requireAllPassed "native-vector reference" results
@@ -62,7 +66,7 @@ def runHighDimStressOnly : IO Unit := do
 
 def usage : String :=
   "Usage: propertytests [cga-point-cloud|pga-point-cloud|mv-dispatch|" ++
-    "rotor-exp|native-reference|blade-reference|sign-table|packed-reference|" ++
+    "rotor-exp|julia-examples|native-reference|blade-reference|sign-table|packed-reference|" ++
     "sparse-reference|truncated-reference|repr|stress]"
 
 def main (args : List String) : IO Unit := do
@@ -72,6 +76,7 @@ def main (args : List String) : IO Unit := do
   | ["pga-point-cloud"] => runPGA3PointCloudOnly
   | ["mv-dispatch"] => runMVDispatchOnly
   | ["rotor-exp"] => runRotorExpOnly
+  | ["julia-examples"] => runJuliaExamplesOnly
   | ["native-reference"] => runNativeReferenceOnly
   | ["blade-reference"] => runBladeReferenceOnly
   | ["sign-table"] => runSignTableReferenceOnly
