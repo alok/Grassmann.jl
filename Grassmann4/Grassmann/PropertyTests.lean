@@ -2208,6 +2208,19 @@ def prop_unit_rotor_scalar_part_hypothesis_insufficient : Bool :=
     !denseMvApproxEq denseRR (Multivector.scalar 1.0 : Multivector R3 Float) (tol := 1e-12)
   sparseHasNonScalar && denseHasNonScalar
 
+/-- Scalar-part normalization alone does not make sandwiching norm-preserving. -/
+def prop_scalar_part_rotor_hypothesis_does_not_preserve_norm : Bool :=
+  let c := 1.0 / Float.sqrt 2.0
+  let e1 : Multivector R3 Float := Multivector.basis ⟨0, by omega⟩
+  let e2 : Multivector R3 Float := Multivector.basis ⟨1, by omega⟩
+  let R : Multivector R3 Float := Multivector.scalar c + e1.smul c
+  let rr := R * R†
+  let sandwiched := R * e2 * R†
+  approxEq rr.scalarPart 1.0 (tol := 1e-12) &&
+    !denseMvApproxEq rr (Multivector.scalar 1.0 : Multivector R3 Float) (tol := 1e-12) &&
+    approxEq e2.norm 1.0 (tol := 1e-12) &&
+    approxEq sandwiched.norm 0.0 (tol := 1e-12)
+
 /-- The scalar unit is a two-sided identity for the sparse wedge product. -/
 def sparseWedgeOneIdentity {n : Nat} {sig : Signature n}
     (m : MultivectorS sig Float) : Bool :=
@@ -3499,6 +3512,9 @@ def runPropertyTests : IO Unit := do
   let r6a := runBoolProp "Scalar-part unit rotor hypothesis is insufficient"
     prop_unit_rotor_scalar_part_hypothesis_insufficient
   IO.println s!"│ {r6a}"
+  let r6b := runBoolProp "Scalar-part rotor hypothesis does not preserve norm"
+    prop_scalar_part_rotor_hypothesis_does_not_preserve_norm
+  IO.println s!"│ {r6b}"
   let r7 ← runRandomProp3 "Left distributivity" prop_left_distrib 30
   IO.println s!"│ {r7}"
   let r8 ← runRandomProp3 "Right distributivity" prop_right_distrib 30
@@ -3540,7 +3556,7 @@ def runPropertyTests : IO Unit := do
   let stressResults ← runHighDimStressTests
   let rotorExpResults ← runRotorExpReferenceTests
   -- Summary
-  let coreResults := [r1, r2, r3, r4, r5, r6, r6a, r7, r8, r9, r9a, r9b, r9c, r10, r11,
+  let coreResults := [r1, r2, r3, r4, r5, r6, r6a, r6b, r7, r8, r9, r9a, r9b, r9c, r10, r11,
     r12, r13]
   let countPassed (results : List PropTestResult) := results.filter (·.passed) |>.length
   let passCount :=

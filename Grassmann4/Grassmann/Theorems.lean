@@ -412,9 +412,12 @@ theorem unit_rotor_inverse (R : Multivector sig F) (h : R† * R = 1) :
     R† * R = 1 := by
   exact h
 
-/-- Rotation preserves norm: |R v R†| = |v| for unit rotor R -/
+/-- Sandwiching by a unit versor preserves norm.
+
+The weaker scalar-part condition `(R * R†).scalarPart = 1` is insufficient:
+full inverse equalities are needed to rule out non-scalar residue in `R * R†`. -/
 theorem rotation_preserves_norm (R v : Multivector sig Float)
-    (hR : (R * R†).scalarPart = 1) :
+    (hleft : R * R† = 1) (hright : R† * R = 1) :
     (R * v * R†).norm = v.norm := sorry
 
 /-- Double rotation: rotating v by θ twice is same as rotating by 2θ -/
