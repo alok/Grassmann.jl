@@ -212,4 +212,4 @@ conformal helix, and projective stream-field witness gates.
 
 The Julia oracle suite checks exact `S"∞+++"` projective samples for `torus`,
 `orbit-2`, and `orbit-4` across
-`[-2π, -π, -1, -0.5, 0, 0.5, 1, π, 2π]`. It passed with `145/145` checks.
+`[-2π, -π, -1, -0.5, 0, 0.5, 1, π, 2π]`. It passed with `161/161` checks.
