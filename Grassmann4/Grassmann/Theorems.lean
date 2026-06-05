@@ -400,8 +400,12 @@ theorem spinor_mul_closed (R₁ R₂ : Multivector sig Float)
     (h₁even : R₁ = R₁.evenPart) (h₂even : R₂ = R₂.evenPart) :
     (R₁ * R₂) = (R₁ * R₂).evenPart := sorry
 
-/-- Rotor inverse: R⁻¹ = R†/|R|² -/
-theorem rotor_inverse (R : Multivector sig Float) (h : R.normSq ≠ 0) :
+/-- Rotor inverse: `R⁻¹ = R† / |R|²` when the reverse product is purely scalar.
+
+The nonzero scalar norm alone is not enough for arbitrary multivectors: the
+full product `R * R†` may still contain non-scalar residue. -/
+theorem rotor_inverse (R : Multivector sig Float) (h : R.normSq ≠ 0)
+    (hscalar : R * R† = Multivector.scalar R.normSq) :
     R * (R†.smul (1 / R.normSq)) = Multivector.one := sorry
 
 /-- Unit rotor inverse condition as a full multivector equality.

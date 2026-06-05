@@ -2221,6 +2221,18 @@ def prop_scalar_part_rotor_hypothesis_does_not_preserve_norm : Bool :=
     approxEq e2.norm 1.0 (tol := 1e-12) &&
     approxEq sandwiched.norm 0.0 (tol := 1e-12)
 
+/-- Nonzero reverse norm alone does not make `R† / normSq` a right inverse. -/
+def prop_reverse_norm_formula_requires_scalar_reverse_product : Bool :=
+  let e1 : Multivector R3 Float := Multivector.basis ⟨0, by omega⟩
+  let R : Multivector R3 Float := Multivector.scalar 1.0 + e1
+  let rr := R * R†
+  let candidate := R * (R†.smul (1.0 / R.normSq))
+  approxEq R.normSq 2.0 (tol := 1e-12) &&
+    !denseMvApproxEq rr (Multivector.scalar R.normSq : Multivector R3 Float) (tol := 1e-12) &&
+    approxEq candidate.scalarPart 1.0 (tol := 1e-12) &&
+    approxEq (candidate.coeffs ⟨1, by omega⟩) 1.0 (tol := 1e-12) &&
+    !denseMvApproxEq candidate (Multivector.one : Multivector R3 Float) (tol := 1e-12)
+
 /-- The scalar unit is a two-sided identity for the sparse wedge product. -/
 def sparseWedgeOneIdentity {n : Nat} {sig : Signature n}
     (m : MultivectorS sig Float) : Bool :=
@@ -3515,6 +3527,9 @@ def runPropertyTests : IO Unit := do
   let r6b := runBoolProp "Scalar-part rotor hypothesis does not preserve norm"
     prop_scalar_part_rotor_hypothesis_does_not_preserve_norm
   IO.println s!"│ {r6b}"
+  let r6c := runBoolProp "Reverse-norm inverse formula needs scalar product"
+    prop_reverse_norm_formula_requires_scalar_reverse_product
+  IO.println s!"│ {r6c}"
   let r7 ← runRandomProp3 "Left distributivity" prop_left_distrib 30
   IO.println s!"│ {r7}"
   let r8 ← runRandomProp3 "Right distributivity" prop_right_distrib 30
@@ -3556,7 +3571,7 @@ def runPropertyTests : IO Unit := do
   let stressResults ← runHighDimStressTests
   let rotorExpResults ← runRotorExpReferenceTests
   -- Summary
-  let coreResults := [r1, r2, r3, r4, r5, r6, r6a, r6b, r7, r8, r9, r9a, r9b, r9c, r10, r11,
+  let coreResults := [r1, r2, r3, r4, r5, r6, r6a, r6b, r6c, r7, r8, r9, r9a, r9b, r9c, r10, r11,
     r12, r13]
   let countPassed (results : List PropTestResult) := results.filter (·.passed) |>.length
   let passCount :=
