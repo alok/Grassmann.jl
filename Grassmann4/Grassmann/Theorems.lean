@@ -53,6 +53,16 @@ theorem gradeProject_add (a b : Multivector sig F) (k : ℕ) :
   simp only [Multivector.gradeProject, HAdd.hAdd, Multivector.add]
   split_ifs with h <;> first | rfl | exact (add_zero 0).symm
 
+omit [Div F] in
+/-- Grade projection commutes with scalar multiplication. -/
+@[simp]
+theorem gradeProject_smul (x : F) (a : Multivector sig F) (k : ℕ) :
+    (x • a).gradeProject k = x • (a.gradeProject k) := by
+  change (Multivector.smul x a).gradeProject k = Multivector.smul x (a.gradeProject k)
+  ext i
+  simp only [Multivector.smul, Multivector.gradeProject]
+  split_ifs <;> simp
+
 /-- Even part is idempotent -/
 @[simp]
 theorem evenPart_idem (a : Multivector sig F) : a.evenPart.evenPart = a.evenPart := by
@@ -81,11 +91,31 @@ theorem evenPart_add (a b : Multivector sig F) : (a + b).evenPart = a.evenPart +
   ext i; simp only [Multivector.evenPart, HAdd.hAdd, Multivector.add]
   split_ifs with h <;> first | rfl | exact (add_zero 0).symm
 
+omit [Div F] in
+/-- Even part commutes with scalar multiplication. -/
+@[simp]
+theorem evenPart_smul (x : F) (a : Multivector sig F) :
+    (x • a).evenPart = x • a.evenPart := by
+  change (Multivector.smul x a).evenPart = Multivector.smul x a.evenPart
+  ext i
+  simp only [Multivector.smul, Multivector.evenPart]
+  split_ifs <;> simp
+
 /-- Odd part distributes over addition -/
 @[simp]
 theorem oddPart_add (a b : Multivector sig F) : (a + b).oddPart = a.oddPart + b.oddPart := by
   ext i; simp only [Multivector.oddPart, HAdd.hAdd, Multivector.add]
   split_ifs with h <;> first | rfl | exact (add_zero 0).symm
+
+omit [Div F] in
+/-- Odd part commutes with scalar multiplication. -/
+@[simp]
+theorem oddPart_smul (x : F) (a : Multivector sig F) :
+    (x • a).oddPart = x • a.oddPart := by
+  change (Multivector.smul x a).oddPart = Multivector.smul x a.oddPart
+  ext i
+  simp only [Multivector.smul, Multivector.oddPart]
+  split_ifs <;> simp
 
 /-- Even and odd parts sum to original -/
 theorem evenPart_oddPart_sum (a : Multivector sig F) : a.evenPart + a.oddPart = a := by
@@ -234,17 +264,50 @@ theorem reverse_add (a b : Multivector sig F) : (a + b)† = a† + b† := by
   ext i; simp only [Multivector.reverse, HAdd.hAdd, Multivector.add]
   split_ifs <;> first | rfl | exact neg_add _ _
 
+omit [Div F] in
+/-- Reverse commutes with scalar multiplication. -/
+@[simp]
+theorem reverse_smul (x : F) (a : Multivector sig F) :
+    (x • a)† = x • a† := by
+  change Multivector.reverse (Multivector.smul x a) =
+    Multivector.smul x (Multivector.reverse a)
+  ext i
+  simp only [Multivector.smul, Multivector.reverse]
+  split_ifs <;> simp
+
 /-- Involute preserves addition: (a + b)ˆ = aˆ + bˆ -/
 @[simp]
 theorem involute_add (a b : Multivector sig F) : (a + b)ˆ = aˆ + bˆ := by
   ext i; simp only [Multivector.involute, HAdd.hAdd, Multivector.add]
   split_ifs <;> first | rfl | exact neg_add _ _
 
+omit [Div F] in
+/-- Grade involution commutes with scalar multiplication. -/
+@[simp]
+theorem involute_smul (x : F) (a : Multivector sig F) :
+    (x • a)ˆ = x • aˆ := by
+  change Multivector.involute (Multivector.smul x a) =
+    Multivector.smul x (Multivector.involute a)
+  ext i
+  simp only [Multivector.smul, Multivector.involute]
+  split_ifs <;> simp
+
 /-- Conjugate preserves addition: (a + b)‡ = a‡ + b‡ -/
 @[simp]
 theorem conjugate_add (a b : Multivector sig F) : (a + b)‡ = a‡ + b‡ := by
   ext i; simp only [Multivector.conjugate, HAdd.hAdd, Multivector.add]
   split_ifs <;> first | rfl | exact neg_add _ _
+
+omit [Div F] in
+/-- Clifford conjugation commutes with scalar multiplication. -/
+@[simp]
+theorem conjugate_smul (x : F) (a : Multivector sig F) :
+    (x • a)‡ = x • a‡ := by
+  change Multivector.conjugate (Multivector.smul x a) =
+    Multivector.smul x (Multivector.conjugate a)
+  ext i
+  simp only [Multivector.smul, Multivector.conjugate]
+  split_ifs <;> simp
 
 /-! ## Hodge Dual Properties -/
 
