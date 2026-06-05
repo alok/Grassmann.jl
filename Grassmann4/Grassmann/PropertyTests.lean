@@ -1010,8 +1010,14 @@ def prop_mv_right_contract_dense : Gen Bool := do
 /-- Packed reverse agrees with dense reverse. -/
 def prop_mv_reverse_dense : Gen Bool := do
   let a ← genR3DenseMv
-  let packed : MV R3 .full := MV.ofMultivector a.mv .full
-  return packedMatchesDense (MV.rev packed) a.mv.reverse
+  let denseEven := a.mv.evenPart
+  let denseOdd := a.mv.oddPart
+  let full : MV R3 .full := MV.ofMultivector a.mv .full
+  let even : MV R3 .even := MV.ofMultivector denseEven .even
+  let odd : MV R3 .odd := MV.ofMultivector denseOdd .odd
+  return packedMatchesDense (MV.rev full) a.mv.reverse &&
+    packedMatchesDense (MV.rev even) denseEven.reverse &&
+    packedMatchesDense (MV.rev odd) denseOdd.reverse
 
 /-- Packed involute and Clifford conjugate agree with dense involutions. -/
 def prop_mv_involutions_dense : Gen Bool := do
@@ -1325,8 +1331,14 @@ def prop_mv_pga3_right_contract_dense : Gen Bool := do
 /-- PGA3 packed reverse agrees with dense reverse. -/
 def prop_mv_pga3_reverse_dense : Gen Bool := do
   let a ← genPGA3DenseMv
-  let packed : MV PGA3 .full := MV.ofMultivector a.mv .full
-  return packedMatchesDense (MV.rev packed) a.mv.reverse
+  let denseEven := a.mv.evenPart
+  let denseOdd := a.mv.oddPart
+  let full : MV PGA3 .full := MV.ofMultivector a.mv .full
+  let even : MV PGA3 .even := MV.ofMultivector denseEven .even
+  let odd : MV PGA3 .odd := MV.ofMultivector denseOdd .odd
+  return packedMatchesDense (MV.rev full) a.mv.reverse &&
+    packedMatchesDense (MV.rev even) denseEven.reverse &&
+    packedMatchesDense (MV.rev odd) denseOdd.reverse
 
 /-- PGA3 packed involute and Clifford conjugate agree with dense involutions. -/
 def prop_mv_pga3_involutions_dense : Gen Bool := do
@@ -1783,8 +1795,14 @@ def prop_mv_cga3_right_contract_dense : Gen Bool := do
 /-- CGA3 packed reverse agrees with dense reverse. -/
 def prop_mv_cga3_reverse_dense : Gen Bool := do
   let a ← genCGA3DenseMv
-  let packed : MV CGA3 .full := MV.ofMultivector a.mv .full
-  return packedMatchesDense (MV.rev packed) a.mv.reverse
+  let denseEven := a.mv.evenPart
+  let denseOdd := a.mv.oddPart
+  let full : MV CGA3 .full := MV.ofMultivector a.mv .full
+  let even : MV CGA3 .even := MV.ofMultivector denseEven .even
+  let odd : MV CGA3 .odd := MV.ofMultivector denseOdd .odd
+  return packedMatchesDense (MV.rev full) a.mv.reverse &&
+    packedMatchesDense (MV.rev even) denseEven.reverse &&
+    packedMatchesDense (MV.rev odd) denseOdd.reverse
 
 /-- CGA3 packed involute and Clifford conjugate agree with dense involutions. -/
 def prop_mv_cga3_involutions_dense : Gen Bool := do
