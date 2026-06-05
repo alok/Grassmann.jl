@@ -2790,6 +2790,23 @@ def prop_julia_example_manifest_covers_examples : Bool :=
   manifestJson.contains s!"\"example_count\":{expectedFilenames.length}" &&
     expectedFilenames.all manifestContainsExample
 
+def manifestContainsWitnessGroup (key : String) (entries : List String) : Bool :=
+  manifestJson.contains ("\"" ++ key ++ "\":[") &&
+    entries.all fun entry => manifestJson.contains entry
+
+/-- The machine-readable manifest keeps every exact formula witness group wired in. -/
+def prop_julia_example_manifest_covers_witnesses : Bool :=
+  orbitWitnessEntries.length == 10 &&
+    projectivePlotWitnessEntries.length == 15 &&
+    conformalPlotWitnessEntries.length == 5 &&
+    projectiveStreamFieldWitnessEntries.length == 10 &&
+    manifestContainsWitnessGroup "cga_orbit_translation_witnesses" orbitWitnessEntries &&
+    manifestContainsWitnessGroup "projective_plot_formula_witnesses"
+      projectivePlotWitnessEntries &&
+    manifestContainsWitnessGroup "conformal_plot_formula_witnesses" conformalPlotWitnessEntries &&
+    manifestContainsWitnessGroup "projective_stream_field_witnesses"
+      projectiveStreamFieldWitnessEntries
+
 def comparisonHtmlContainsExample (filename : String) : Bool :=
   let label := referenceName filename
   comparisonHtml.contains s!"<h2>{label}</h2>" &&
@@ -3771,11 +3788,14 @@ def runJuliaExampleCoverageTests : IO (List PropTestResult) := do
   let j3 := runBoolProp "Julia example manifest covers pairs"
     JuliaExampleCoverage.prop_julia_example_manifest_covers_examples
   IO.println s!"│ {j3}"
-  let j4 := runBoolProp "Julia comparison HTML covers pairs"
-    JuliaExampleCoverage.prop_julia_example_comparison_html_covers_examples
+  let j4 := runBoolProp "Julia example manifest covers witnesses"
+    JuliaExampleCoverage.prop_julia_example_manifest_covers_witnesses
   IO.println s!"│ {j4}"
+  let j5 := runBoolProp "Julia comparison HTML covers pairs"
+    JuliaExampleCoverage.prop_julia_example_comparison_html_covers_examples
+  IO.println s!"│ {j5}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [j1, j2, j3, j4]
+  return [j1, j2, j3, j4, j5]
 
 /-- Run all property tests -/
 def runPropertyTests : IO Unit := do
