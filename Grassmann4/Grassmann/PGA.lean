@@ -25,8 +25,8 @@ namespace Grassmann
 
 /-! ## PGA Signature
 
-PGA3 has signature Cl(3,0,1) which we model as Cl(3,1) with special interpretation.
-PGA3 is defined in Manifold.lean as: Signature.cl 3 1
+PGA3 has signature Cl(3,0,1), with one degenerate projective dimension.
+PGA3 is defined in Manifold.lean as: Signature.clr 3 0 1.
 -/
 
 namespace PGA
@@ -35,8 +35,7 @@ namespace PGA
 
 In PGA3:
 - e1, e2, e3: Euclidean vectors (square to +1)
-- e0: degenerate/null dimension (squares to 0 in true PGA)
-  Note: In our Cl(3,1) model, e0 squares to -1, but we interpret it projectively.
+- e0: degenerate/null dimension (squares to 0)
 -/
 
 /-- Euclidean basis e₁ -/
@@ -151,9 +150,9 @@ def rotor (dx dy dz : Float) (theta : Float) : Multivector PGA3 Float :=
 /-- Create a translator for translation by (tx, ty, tz) -/
 def translator (tx ty tz : F) : Multivector PGA3 F :=
   (Multivector.one : Multivector PGA3 F)
-    |>.add ((Multivector.ofBlade e01).smul (tx / (2 : F)))
+    |>.add ((Multivector.ofBlade e01).smul (-(tx / (2 : F))))
     |>.add ((Multivector.ofBlade e02).smul (ty / (2 : F)))
-    |>.add ((Multivector.ofBlade e03).smul (tz / (2 : F)))
+    |>.add ((Multivector.ofBlade e03).smul (-(tz / (2 : F))))
 
 /-- Apply motor transformation: X' = M X M̃ -/
 def applyMotor (motor x : Multivector PGA3 F) : Multivector PGA3 F :=
