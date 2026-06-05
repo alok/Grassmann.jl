@@ -1709,6 +1709,75 @@ def prop_pga3_composed_motor_point_cloud_sequential : Bool :=
     let composedPoint := PGA.Motor.transformPoint composed point
     coordsApproxEq (PGA.extractPoint3 composedPoint) (PGA.extractPoint3 sequential)
 
+/-- Generated composed packed motors transform generated points like dense motors,
+and match sequential packed application. -/
+def prop_pga3_generated_composed_motor_point_dense : Gen Bool := do
+  let point ← genCoord3 2.0
+  let axisA ← genCoord3 1.0
+  let axisB ← genCoord3 1.0
+  let thetaA ← genFloat pga3TestPi
+  let thetaB ← genFloat pga3TestPi
+  let packedA := PGA.motor3 axisA.1 axisA.2.1 axisA.2.2 thetaA
+  let packedB := PGA.motor3 axisB.1 axisB.2.1 axisB.2.2 thetaB
+  let denseA := PGA.Proof.rotor axisA.1 axisA.2.1 axisA.2.2 thetaA
+  let denseB := PGA.Proof.rotor axisB.1 axisB.2.1 axisB.2.2 thetaB
+  let packedComposed := PGA.Motor.compose packedB packedA
+  let denseComposed := denseB * denseA
+  let packedPoint := PGA.point3 point.1 point.2.1 point.2.2
+  let densePoint := PGA.Proof.point point.1 point.2.1 point.2.2
+  let composedResult := PGA.Motor.transformPoint packedComposed packedPoint
+  let denseResult := PGA.Proof.applyMotor denseComposed densePoint
+  let sequentialResult :=
+    PGA.Motor.transformPoint packedB (PGA.Motor.transformPoint packedA packedPoint)
+  return packedMatchesDense composedResult denseResult (tol := 1e-6) &&
+    packedApproxEq composedResult sequentialResult (tol := 1e-6) &&
+    coordsApproxEq (PGA.extractPoint3 composedResult) (PGA.Proof.extractPoint denseResult)
+      (tol := 1e-5) &&
+    coordsApproxEq (PGA.extractPoint3 composedResult) (PGA.extractPoint3 sequentialResult)
+      (tol := 1e-5)
+
+/-- Generated composed packed motors transform generated planes like dense motors. -/
+def prop_pga3_generated_composed_motor_plane_dense : Gen Bool := do
+  let normal ← genCoord3 2.0
+  let d ← genFloat 2.0
+  let axisA ← genCoord3 1.0
+  let axisB ← genCoord3 1.0
+  let thetaA ← genFloat pga3TestPi
+  let thetaB ← genFloat pga3TestPi
+  let packedA := PGA.motor3 axisA.1 axisA.2.1 axisA.2.2 thetaA
+  let packedB := PGA.motor3 axisB.1 axisB.2.1 axisB.2.2 thetaB
+  let denseA := PGA.Proof.rotor axisA.1 axisA.2.1 axisA.2.2 thetaA
+  let denseB := PGA.Proof.rotor axisB.1 axisB.2.1 axisB.2.2 thetaB
+  let packedPlane := PGA.plane3 normal.1 normal.2.1 normal.2.2 d
+  let densePlane := PGA.Proof.plane normal.1 normal.2.1 normal.2.2 d
+  return packedMatchesDense
+    (PGA.Motor.transformPlane (PGA.Motor.compose packedB packedA) packedPlane)
+    (PGA.Proof.applyMotor (denseB * denseA) densePlane)
+    (tol := 1e-6)
+
+/-- Generated composed packed motors transform generated lines like dense motors. -/
+def prop_pga3_generated_composed_motor_line_dense : Gen Bool := do
+  let dir ← genCoord3 2.0
+  let moment ← genCoord3 2.0
+  let axisA ← genCoord3 1.0
+  let axisB ← genCoord3 1.0
+  let thetaA ← genFloat pga3TestPi
+  let thetaB ← genFloat pga3TestPi
+  let packedA := PGA.motor3 axisA.1 axisA.2.1 axisA.2.2 thetaA
+  let packedB := PGA.motor3 axisB.1 axisB.2.1 axisB.2.2 thetaB
+  let denseA := PGA.Proof.rotor axisA.1 axisA.2.1 axisA.2.2 thetaA
+  let denseB := PGA.Proof.rotor axisB.1 axisB.2.1 axisB.2.2 thetaB
+  let packedLine :=
+    PGA.line3 dir.1 dir.2.1 dir.2.2 moment.1 moment.2.1 moment.2.2
+  let denseLine :=
+    PGA.Proof.lineFromDirMoment
+      dir.1 dir.2.1 dir.2.2
+      moment.1 moment.2.1 moment.2.2
+  return packedMatchesDense
+    (PGA.Motor.transformLine (PGA.Motor.compose packedB packedA) packedLine)
+    (PGA.Proof.applyMotor (denseB * denseA) denseLine)
+    (tol := 1e-6)
+
 /-! ## CGA3 Point-Cloud Transform Tests -/
 
 /-- Deterministic translations used to check the CGA translator path. -/
@@ -3753,10 +3822,19 @@ def runPGA3PointCloudTransformTests : IO (List PropTestResult) := do
   let pointCloud8 ← runGenProp "PGA3 generated motor line transform vs dense"
     prop_pga3_generated_motor_line_dense 50
   IO.println s!"│ {pointCloud8}"
+  let pointCloud9 ← runGenProp "PGA3 generated composed motor point vs dense"
+    prop_pga3_generated_composed_motor_point_dense 50
+  IO.println s!"│ {pointCloud9}"
+  let pointCloud10 ← runGenProp "PGA3 generated composed motor plane vs dense"
+    prop_pga3_generated_composed_motor_plane_dense 50
+  IO.println s!"│ {pointCloud10}"
+  let pointCloud11 ← runGenProp "PGA3 generated composed motor line vs dense"
+    prop_pga3_generated_composed_motor_line_dense 50
+  IO.println s!"│ {pointCloud11}"
   IO.println "└────────────────────────────────────────────────┘"
   return [pointCloud1, pointCloud1a, pointCloud1b, pointCloud1c, pointCloud1d,
     pointCloud2, pointCloud3, pointCloud4, pointCloud5, pointCloud6, pointCloud7,
-    pointCloud8]
+    pointCloud8, pointCloud9, pointCloud10, pointCloud11]
 
 /-- Run user-facing CGA3 point-cloud transform checks. -/
 def runCGA3PointCloudTransformTests : IO (List PropTestResult) := do
