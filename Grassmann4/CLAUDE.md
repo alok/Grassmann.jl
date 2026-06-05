@@ -22,7 +22,7 @@ A Lean 4 implementation of Clifford/Grassmann algebras with:
 - [ ] **Revisit typeclass dispatch when Lean 4 inlining improves** - Currently `MVMulKernel` typeclass adds ~50% runtime overhead vs direct dispatch (`mulDirect`). Tried `@[inline]`, `@[always_inline]`, `@[specialize]`, `@[default_instance]`, and release mode builds. The elegant typeclass-based code is preserved but `instHMulMV` uses `mulDirect` for performance. Revisit when compiler improves.
 - [ ] Fill `sorry` proofs in `AnchorTheorems.lean` - these are the key algebraic identities
 - [ ] Profile PGA motor transforms with `hwatch` to verify no unexpected allocations
-- [ ] Add property tests for `MV` packed operations against dense `Multivector`
+- [ ] Extend packed `MV` vs dense `Multivector` property tests when adding new operations or signatures
 
 ### Medium Priority
 - [ ] Add `@[inline]` to remaining hot-path functions in `LinearAlgebra.lean`
@@ -70,6 +70,18 @@ From `lake exe bench`:
 The unified MV type provides excellent performance with a clean API. Typeclass dispatch
 experiments showed ~50% overhead that can't be eliminated with `@[inline]` etc., so MV
 uses direct pattern matching for dispatch.
+
+## Verified Coverage (Jun 2026)
+- Packed `MV` dense-reference coverage is in `Grassmann.PropertyTests` and exposed
+  through `lake exe propertytests packed-reference`; it checks R3, PGA3, and CGA3
+  full/even/odd storage against dense `Multivector` for round-trips, projections,
+  scalar products, multiplication, wedge, contractions, derived products,
+  involutions, sandwiches, and `GAlgebra` helpers.
+- Dispatch equivalence is exposed through `lake exe propertytests mv-dispatch`;
+  it compares direct `mulDirect` against the preserved typeclass kernel path for
+  R3, PGA3, and CGA3.
+- `scripts/packedmvbench_guard.sh` provides the focused PGA3 motor-point
+  correctness/performance guard.
 
 ## Build Commands
 ```bash

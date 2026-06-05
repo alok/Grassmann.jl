@@ -246,6 +246,11 @@ sandwich versus `110933.791250 ns/iter` dense sandwich (`1100.3x`),
 compile-time gradient versus `8043.472080 ns/iter` finite-difference gradient
 (`10.1x`).
 
+A local `scripts/packedmvbench_guard.sh` run on 2026-06-05 passed with
+`0.000000` PGA3 motor-point correctness drift, `6641.300000 ns/iter` packed
+motor-point transforms versus `211530.158400 ns/iter` dense transforms
+(`31.9x`).
+
 ## Testing Against Grassmann.jl
 
 The `OracleTests` module contains tests designed to be verified against Grassmann.jl:
