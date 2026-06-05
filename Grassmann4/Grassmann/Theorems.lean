@@ -311,6 +311,49 @@ theorem conjugate_smul (x : F) (a : Multivector sig F) :
 
 /-! ## Hodge Dual Properties -/
 
+omit [Div F] in
+/-- Hodge dual maps zero to zero. -/
+@[simp]
+theorem hodge_zero : (⋆ᵐ(0 : Multivector sig F)) = 0 := by
+  ext i
+  simp only [Multivector.hodgeDual]
+  split_ifs <;> first | rfl | exact neg_zero
+
+omit [Div F] in
+/-- Hodge dual distributes over addition. -/
+@[simp]
+theorem hodge_add (a b : Multivector sig F) :
+    ⋆ᵐ(a + b) = ⋆ᵐa + ⋆ᵐb := by
+  ext i
+  simp only [Multivector.hodgeDual, HAdd.hAdd, Multivector.add]
+  by_cases hlt : (BitVec.ofNat n i.val ^^^ pseudoscalar).toNat < 2 ^ n
+  · simp only [hlt, ↓reduceDIte]
+    split_ifs with hsign
+    · exact neg_add _ _
+    · rfl
+  · simp only [hlt, ↓reduceDIte]
+    exact (zero_add (0 : F)).symm
+
+omit [Div F] in
+/-- Hodge dual commutes with scalar multiplication. -/
+@[simp]
+theorem hodge_smul (x : F) (a : Multivector sig F) :
+    ⋆ᵐ(x • a) = x • ⋆ᵐa := by
+  change Multivector.hodgeDual (Multivector.smul x a) =
+    Multivector.smul x (Multivector.hodgeDual a)
+  ext i
+  simp only [Multivector.hodgeDual, Multivector.smul]
+  split_ifs <;> simp
+
+omit [Div F] in
+/-- Hodge dual distributes over negation. -/
+@[simp]
+theorem hodge_neg (a : Multivector sig F) :
+    ⋆ᵐ(-a) = -(⋆ᵐa) := by
+  ext i
+  simp only [Multivector.hodgeDual, Neg.neg, Multivector.neg]
+  split_ifs <;> simp
+
 /-- Hodge dual swaps grades: grade(⋆a) = n - grade(a) for homogeneous a -/
 theorem hodge_grade (a : Multivector sig F) (k : ℕ) (ha : a = a.gradeProject k) :
     ⋆ᵐa = (⋆ᵐa).gradeProject (n - k) := sorry
