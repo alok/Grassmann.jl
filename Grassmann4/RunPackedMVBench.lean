@@ -5,6 +5,7 @@
     lake exe packedmvbench [base-iters]
 -/
 import Grassmann.MV
+import Grassmann.PGA
 
 namespace Grassmann.PackedMVBench
 
@@ -27,6 +28,22 @@ def densePGA3 (seed : Float) : Multivector PGA3 Float :=
 @[noinline]
 def denseCGA3 (seed : Float) : Multivector CGA3 Float :=
   ⟨fun i => coeffPattern seed i.val⟩
+
+@[noinline]
+def densePGA3Motor (seed : Float) : Multivector PGA3 Float :=
+  PGA.Proof.rotor 0.25 0.5 1.0 (0.05 * seed)
+
+@[noinline]
+def packedPGA3Motor (seed : Float) : PGA.Motor PGA3 :=
+  PGA.motor3 0.25 0.5 1.0 (0.05 * seed)
+
+@[noinline]
+def densePGA3Point (seed : Float) : Multivector PGA3 Float :=
+  PGA.Proof.point (0.7 * seed) (Float.sin seed) (Float.cos (seed * 0.5))
+
+@[noinline]
+def packedPGA3Point (seed : Float) : PGA.Point PGA3 :=
+  PGA.point3 (0.7 * seed) (Float.sin seed) (Float.cos (seed * 0.5))
 
 @[inline]
 def denseCoeff {n : Nat} {sig : Signature n} (m : Multivector sig Float)
@@ -51,10 +68,25 @@ def denseL1Diff {n : Nat} {sig : Signature n}
   (List.finRange (2 ^ n)).foldl (init := 0.0) fun acc i =>
     acc + Float.abs (a.coeffs i - b.coeffs i)
 
+@[inline]
+def coordProbe (c : Float × Float × Float) : Float :=
+  c.1 + c.2.1 + c.2.2
+
+def coordL1Diff (a b : Float × Float × Float) : Float :=
+  Float.abs (a.1 - b.1) +
+    Float.abs (a.2.1 - b.2.1) +
+    Float.abs (a.2.2 - b.2.2)
+
 def requireApproxDense {n : Nat} {sig : Signature n}
     (name : String) (actual expected : Multivector sig Float) : IO Unit := do
   let diff := denseL1Diff actual expected
   IO.println s!"{name}: l1 diff {diff}"
+  if diff.isNaN || diff > tolerance then
+    throw <| IO.userError s!"{name} exceeded tolerance {tolerance}: {diff}"
+
+def requireApproxCoords (name : String) (actual expected : Float × Float × Float) : IO Unit := do
+  let diff := coordL1Diff actual expected
+  IO.println s!"{name}: coord l1 diff {diff}"
   if diff.isNaN || diff > tolerance then
     throw <| IO.userError s!"{name} exceeded tolerance {tolerance}: {diff}"
 
@@ -88,6 +120,15 @@ def verifyPGA3 : IO Unit := do
     (MV.toMultivector (MV.rightContract pa pb))
     (Multivector.rightContract a b)
 
+def verifyPGA3MotorPointTransform : IO Unit := do
+  let denseMotor := densePGA3Motor 3.0
+  let packedMotor := packedPGA3Motor 3.0
+  let densePoint := densePGA3Point 2.0
+  let packedPoint := packedPGA3Point 2.0
+  requireApproxCoords "PGA3 motor point transform"
+    (PGA.extractPoint3 (PGA.Motor.transformPoint packedMotor packedPoint))
+    (PGA.Proof.extractPoint (PGA.Proof.applyMotor denseMotor densePoint))
+
 def verifyCGA3 : IO Unit := do
   let a := denseCGA3 1.5
   let b := denseCGA3 2.5
@@ -107,6 +148,7 @@ def verifyCorrectness : IO Unit := do
   IO.println "=== Correctness guard ==="
   verifyR3
   verifyPGA3
+  verifyPGA3MotorPointTransform
   verifyCGA3
   IO.println ""
 
@@ -219,6 +261,34 @@ def runPGA3 (iters : Nat) : IO Unit := do
       let idx := i % samples
       packedProbe (MV.rightContract (packedA.getD idx defaultPA) (packedB.getD idx defaultPB)))
 
+def runPGA3MotorPointTransform (iters : Nat) : IO Unit := do
+  IO.println "=== PGA3 motor point transforms ==="
+  let samples : Nat := 16
+  let denseMotors : Array (Multivector PGA3 Float) :=
+    Array.ofFn (n := samples) fun k => densePGA3Motor (Float.ofNat (k.val + 1))
+  let packedMotors : Array (PGA.Motor PGA3) :=
+    Array.ofFn (n := samples) fun k => packedPGA3Motor (Float.ofNat (k.val + 1))
+  let densePoints : Array (Multivector PGA3 Float) :=
+    Array.ofFn (n := samples) fun k => densePGA3Point (Float.ofNat (k.val + 1))
+  let packedPoints : Array (PGA.Point PGA3) :=
+    Array.ofFn (n := samples) fun k => packedPGA3Point (Float.ofNat (k.val + 1))
+  let defaultDenseMotor := densePGA3Motor 1.0
+  let defaultPackedMotor := packedPGA3Motor 1.0
+  let defaultDensePoint := densePGA3Point 1.0
+  let defaultPackedPoint := packedPGA3Point 1.0
+  let warmup := positiveIters (iters / 10)
+  compare "dense motor point transform" "packed MV motor point transform" warmup iters
+    (fun i =>
+      let idx := i % samples
+      let motor := denseMotors.getD idx defaultDenseMotor
+      let point := densePoints.getD idx defaultDensePoint
+      coordProbe (PGA.Proof.extractPoint (PGA.Proof.applyMotor motor point)))
+    (fun i =>
+      let idx := i % samples
+      let motor := packedMotors.getD idx defaultPackedMotor
+      let point := packedPoints.getD idx defaultPackedPoint
+      coordProbe (PGA.extractPoint3 (PGA.Motor.transformPoint motor point)))
+
 def runCGA3 (iters : Nat) : IO Unit := do
   IO.println "=== CGA3 full packed products ==="
   let samples : Nat := 16
@@ -263,6 +333,7 @@ def runAll (baseIters : Nat := defaultBaseIters) : IO Unit := do
   verifyCorrectness
   runR3 (positiveIters baseIters)
   runPGA3 (positiveIters (baseIters / 2))
+  runPGA3MotorPointTransform (positiveIters (baseIters / 2))
   runCGA3 (positiveIters (baseIters / 5))
   IO.println "Done!"
 
