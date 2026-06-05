@@ -313,6 +313,19 @@ def packedNormSqMatchesDense {n : Nat} {sig : Signature n}
     approxEq ((even * MV.rev even).scalarPart) denseEven.normSq tol &&
     approxEq ((odd * MV.rev odd).scalarPart) denseOdd.normSq tol
 
+/-- Packed reverse norm-squared computation agrees with dense references for full
+and parity-packed inputs. -/
+def packedNormSqRevMatchesDense {n : Nat} {sig : Signature n}
+    (a : Multivector sig Float) (tol : Float := 1e-6) : Bool :=
+  let denseEven := a.evenPart
+  let denseOdd := a.oddPart
+  let full : MV sig .full := MV.ofMultivector a .full
+  let even : MV sig .even := MV.ofMultivector denseEven .even
+  let odd : MV sig .odd := MV.ofMultivector denseOdd .odd
+  approxEq ((MV.rev full * full).scalarPart) a.normSqRev tol &&
+    approxEq ((MV.rev even * even).scalarPart) denseEven.normSqRev tol &&
+    approxEq ((MV.rev odd * odd).scalarPart) denseOdd.normSqRev tol
+
 /-- Packed scalar-product computation agrees with dense references for full and
 parity-packed inputs. -/
 def packedScalarProductMatchesDense {n : Nat} {sig : Signature n}
@@ -894,6 +907,11 @@ def prop_mv_normSq_dense : Gen Bool := do
   let a ← genR3DenseMv
   return packedNormSqMatchesDense a.mv
 
+/-- Packed reverse norm-squared agrees with dense references across storage tags. -/
+def prop_mv_normSqRev_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  return packedNormSqRevMatchesDense a.mv
+
 /-- Packed scalar product agrees with dense references across storage tags. -/
 def prop_mv_scalar_product_dense : Gen Bool := do
   let a ← genR3DenseMv
@@ -1259,6 +1277,11 @@ def prop_mv_pga3_scalar_part_dense : Gen Bool := do
 def prop_mv_pga3_normSq_dense : Gen Bool := do
   let a ← genPGA3DenseMv
   return packedNormSqMatchesDense a.mv
+
+/-- PGA3 packed reverse norm-squared agrees with dense references across storage tags. -/
+def prop_mv_pga3_normSqRev_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  return packedNormSqRevMatchesDense a.mv
 
 /-- PGA3 packed scalar product agrees with dense references across storage tags. -/
 def prop_mv_pga3_scalar_product_dense : Gen Bool := do
@@ -1746,6 +1769,11 @@ def prop_mv_cga3_scalar_part_dense : Gen Bool := do
 def prop_mv_cga3_normSq_dense : Gen Bool := do
   let a ← genCGA3DenseMv
   return packedNormSqMatchesDense a.mv
+
+/-- CGA3 packed reverse norm-squared agrees with dense references across storage tags. -/
+def prop_mv_cga3_normSqRev_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  return packedNormSqRevMatchesDense a.mv
 
 /-- CGA3 packed scalar product agrees with dense references across storage tags. -/
 def prop_mv_cga3_scalar_product_dense : Gen Bool := do
@@ -3479,6 +3507,8 @@ def runPackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {r15s}"
   let r15n ← runGenProp "MV parity normSq" prop_mv_normSq_dense
   IO.println s!"│ {r15n}"
+  let r15nr ← runGenProp "MV parity normSqRev" prop_mv_normSqRev_dense
+  IO.println s!"│ {r15nr}"
   let r15sp ← runGenProp "MV scalar product" prop_mv_scalar_product_dense
   IO.println s!"│ {r15sp}"
   let r15a ← runGenProp "MV full linear ops" prop_mv_full_linear_ops_dense
@@ -3528,9 +3558,9 @@ def runPackedReferenceTests : IO (List PropTestResult) := do
   let r22b ← runGenProp "MV GAlgebra normSq" prop_mv_galgebra_normSq_dense 50
   IO.println s!"│ {r22b}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [r13, r14, r15, r15p, r15s, r15n, r15sp, r15a, r15b, r15c, r15d, r15e,
-    r15f, r15g, r15h, r15i, r16, r17, r18, r19, r20, r20a, r20b, r20c, r21,
-    r21a, r22, r22ops, r22a, r22b]
+  return [r13, r14, r15, r15p, r15s, r15n, r15nr, r15sp, r15a, r15b, r15c, r15d,
+    r15e, r15f, r15g, r15h, r15i, r16, r17, r18, r19, r20, r20a, r20b, r20c,
+    r21, r21a, r22, r22ops, r22a, r22b]
 
 /-- Run direct-dispatch vs typeclass-dispatch multiplication checks. -/
 def runMVDispatchReferenceTests : IO (List PropTestResult) := do
@@ -3560,6 +3590,8 @@ def runPGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {pgaMv2s}"
   let pgaMv2n ← runGenProp "PGA3 MV parity normSq" prop_mv_pga3_normSq_dense
   IO.println s!"│ {pgaMv2n}"
+  let pgaMv2nr ← runGenProp "PGA3 MV parity normSqRev" prop_mv_pga3_normSqRev_dense
+  IO.println s!"│ {pgaMv2nr}"
   let pgaMv2sp ← runGenProp "PGA3 MV scalar product" prop_mv_pga3_scalar_product_dense
   IO.println s!"│ {pgaMv2sp}"
   let pgaMv2a ← runGenProp "PGA3 MV full linear ops" prop_mv_pga3_full_linear_ops_dense
@@ -3608,10 +3640,10 @@ def runPGA3PackedReferenceTests : IO (List PropTestResult) := do
     prop_mv_pga3_galgebra_normSq_dense 40
   IO.println s!"│ {pgaMv9b}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [pgaMv1, pgaMv2, pgaMv2p, pgaMv2s, pgaMv2n, pgaMv2sp, pgaMv2a,
-    pgaMv2b, pgaMv2c, pgaMv2d, pgaMv2e, pgaMv2f, pgaMv2g, pgaMv3, pgaMv4,
-    pgaMv5, pgaMv6, pgaMv7, pgaMv7a, pgaMv7b, pgaMv7c, pgaMv8, pgaMv8a,
-    pgaMv9, pgaMv9ops, pgaMv9a, pgaMv9b]
+  return [pgaMv1, pgaMv2, pgaMv2p, pgaMv2s, pgaMv2n, pgaMv2nr, pgaMv2sp,
+    pgaMv2a, pgaMv2b, pgaMv2c, pgaMv2d, pgaMv2e, pgaMv2f, pgaMv2g, pgaMv3,
+    pgaMv4, pgaMv5, pgaMv6, pgaMv7, pgaMv7a, pgaMv7b, pgaMv7c, pgaMv8,
+    pgaMv8a, pgaMv9, pgaMv9ops, pgaMv9a, pgaMv9b]
 
 /-- Run user-facing PGA3 point-cloud transform checks. -/
 def runPGA3PointCloudTransformTests : IO (List PropTestResult) := do
@@ -3694,6 +3726,8 @@ def runCGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {cgaMv2s}"
   let cgaMv2n ← runGenProp "CGA3 MV parity normSq" prop_mv_cga3_normSq_dense
   IO.println s!"│ {cgaMv2n}"
+  let cgaMv2nr ← runGenProp "CGA3 MV parity normSqRev" prop_mv_cga3_normSqRev_dense
+  IO.println s!"│ {cgaMv2nr}"
   let cgaMv2sp ← runGenProp "CGA3 MV scalar product" prop_mv_cga3_scalar_product_dense
   IO.println s!"│ {cgaMv2sp}"
   let cgaMv2a ← runGenProp "CGA3 MV full linear ops" prop_mv_cga3_full_linear_ops_dense
@@ -3742,10 +3776,10 @@ def runCGA3PackedReferenceTests : IO (List PropTestResult) := do
     prop_mv_cga3_galgebra_normSq_dense 20
   IO.println s!"│ {cgaMv9b}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [cgaMv1, cgaMv2, cgaMv2p, cgaMv2s, cgaMv2n, cgaMv2sp, cgaMv2a,
-    cgaMv2b, cgaMv2c, cgaMv2d, cgaMv2e, cgaMv2f, cgaMv2g, cgaMv3, cgaMv4,
-    cgaMv5, cgaMv6, cgaMv7, cgaMv7a, cgaMv7b, cgaMv7c, cgaMv8, cgaMv8a,
-    cgaMv9, cgaMv9ops, cgaMv9a, cgaMv9b]
+  return [cgaMv1, cgaMv2, cgaMv2p, cgaMv2s, cgaMv2n, cgaMv2nr, cgaMv2sp,
+    cgaMv2a, cgaMv2b, cgaMv2c, cgaMv2d, cgaMv2e, cgaMv2f, cgaMv2g, cgaMv3,
+    cgaMv4, cgaMv5, cgaMv6, cgaMv7, cgaMv7a, cgaMv7b, cgaMv7c, cgaMv8,
+    cgaMv8a, cgaMv9, cgaMv9ops, cgaMv9a, cgaMv9b]
 
 /-- Run sparse-MV baseline checks against dense reference results. -/
 def runSparseReferenceTests : IO (List PropTestResult) := do
