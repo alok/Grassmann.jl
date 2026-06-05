@@ -2204,6 +2204,21 @@ def prop_scalar_left_contraction_keeps_all_grades : Bool :=
     !mvApproxEq sparseLhs (sparseA.gradeProject 0) (tol := 1e-12) &&
     approxEq (sparseLhs.coeff 1) 1.0 (tol := 1e-12)
 
+/-- Right contraction by scalar one keeps all grades, not only the scalar part. -/
+def prop_scalar_right_contraction_keeps_all_grades : Bool :=
+  let denseE1 : Multivector R3 Float := Multivector.basis ⟨0, by omega⟩
+  let denseA : Multivector R3 Float := Multivector.scalar 2.0 + denseE1
+  let denseLhs := denseA ⌊ᵐ (1 : Multivector R3 Float)
+  let sparseE1 : MultivectorS R3 Float := MultivectorS.basis ⟨0, by omega⟩
+  let sparseA : MultivectorS R3 Float := MultivectorS.scalar 2.0 + sparseE1
+  let sparseLhs := MultivectorS.rightContract sparseA (1 : MultivectorS R3 Float)
+  denseMvApproxEq denseLhs denseA (tol := 1e-12) &&
+    !denseMvApproxEq denseLhs denseA.grade0 (tol := 1e-12) &&
+    approxEq (denseLhs.coeffs ⟨1, by omega⟩) 1.0 (tol := 1e-12) &&
+    mvApproxEq sparseLhs sparseA (tol := 1e-12) &&
+    !mvApproxEq sparseLhs (sparseA.gradeProject 0) (tol := 1e-12) &&
+    approxEq (sparseLhs.coeff 1) 1.0 (tol := 1e-12)
+
 /-- Scalar part alone does not prove `R * R† = 1` as a full multivector. -/
 def prop_unit_rotor_scalar_part_hypothesis_insufficient : Bool :=
   let c := 1.0 / Float.sqrt 2.0
@@ -3539,6 +3554,9 @@ def runPropertyTests : IO Unit := do
   let r6scalarContract := runBoolProp "Scalar left contraction keeps all grades"
     prop_scalar_left_contraction_keeps_all_grades
   IO.println s!"│ {r6scalarContract}"
+  let r6rightContract := runBoolProp "Scalar right contraction keeps all grades"
+    prop_scalar_right_contraction_keeps_all_grades
+  IO.println s!"│ {r6rightContract}"
   let r6a := runBoolProp "Scalar-part unit rotor hypothesis is insufficient"
     prop_unit_rotor_scalar_part_hypothesis_insufficient
   IO.println s!"│ {r6a}"
@@ -3589,8 +3607,8 @@ def runPropertyTests : IO Unit := do
   let stressResults ← runHighDimStressTests
   let rotorExpResults ← runRotorExpReferenceTests
   -- Summary
-  let coreResults := [r1, r2, r3, r4, r5, r6, r6scalarContract, r6a, r6b,
-    r6c, r7, r8, r9, r9a, r9b, r9c, r10, r11, r12, r13]
+  let coreResults := [r1, r2, r3, r4, r5, r6, r6scalarContract, r6rightContract,
+    r6a, r6b, r6c, r7, r8, r9, r9a, r9b, r9c, r10, r11, r12, r13]
   let countPassed (results : List PropTestResult) := results.filter (·.passed) |>.length
   let passCount :=
     countPassed coreResults +

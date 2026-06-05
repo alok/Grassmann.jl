@@ -268,6 +268,10 @@ theorem rightContract_grade (a b : Multivector sig F) (j k : ℕ)
 theorem one_leftContract (a : Multivector sig F) :
     (1 : Multivector sig F) ⌋ᵐ a = a := sorry
 
+/-- Scalar right contraction keeps the whole multivector. -/
+theorem rightContract_one (a : Multivector sig F) :
+    a ⌊ᵐ (1 : Multivector sig F) = a := sorry
+
 /-! ## Regressive Product Properties -/
 
 /-- Regressive product is dual to wedge: a ∨ b = ⋆(⋆a ∧ ⋆b) -/
