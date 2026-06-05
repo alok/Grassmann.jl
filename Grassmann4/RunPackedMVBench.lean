@@ -11,6 +11,7 @@ namespace Grassmann.PackedMVBench
 
 def tolerance : Float := 1e-6
 def defaultBaseIters : Nat := 20000
+def defaultMotorPointIters : Nat := 100000
 
 @[inline]
 def coeffPattern (seed : Float) (mask : Nat) : Float :=
@@ -289,6 +290,44 @@ def runPGA3MotorPointTransform (iters : Nat) : IO Unit := do
       let point := packedPoints.getD idx defaultPackedPoint
       coordProbe (PGA.extractPoint3 (PGA.Motor.transformPoint motor point)))
 
+/-- Run only the dense PGA3 motor-point transform loop.
+
+This is intentionally quiet so external profilers such as `hwatch`, `hyperfine`,
+or `/usr/bin/time -l` can measure the operation without mixed benchmark noise. -/
+def runDensePGA3MotorPointTransformOnly (iters : Nat := defaultMotorPointIters) : IO Unit := do
+  let samples : Nat := 16
+  let denseMotors : Array (Multivector PGA3 Float) :=
+    Array.ofFn (n := samples) fun k => densePGA3Motor (Float.ofNat (k.val + 1))
+  let densePoints : Array (Multivector PGA3 Float) :=
+    Array.ofFn (n := samples) fun k => densePGA3Point (Float.ofNat (k.val + 1))
+  let defaultDenseMotor := densePGA3Motor 1.0
+  let defaultDensePoint := densePGA3Point 1.0
+  let result := runN (positiveIters iters) fun i =>
+    let idx := i % samples
+    let motor := denseMotors.getD idx defaultDenseMotor
+    let point := densePoints.getD idx defaultDensePoint
+    coordProbe (PGA.Proof.extractPoint (PGA.Proof.applyMotor motor point))
+  blackhole result
+
+/-- Run only the packed MV PGA3 motor-point transform loop.
+
+This is intentionally quiet so external profilers such as `hwatch`, `hyperfine`,
+or `/usr/bin/time -l` can measure the operation without mixed benchmark noise. -/
+def runPackedPGA3MotorPointTransformOnly (iters : Nat := defaultMotorPointIters) : IO Unit := do
+  let samples : Nat := 16
+  let packedMotors : Array (PGA.Motor PGA3) :=
+    Array.ofFn (n := samples) fun k => packedPGA3Motor (Float.ofNat (k.val + 1))
+  let packedPoints : Array (PGA.Point PGA3) :=
+    Array.ofFn (n := samples) fun k => packedPGA3Point (Float.ofNat (k.val + 1))
+  let defaultPackedMotor := packedPGA3Motor 1.0
+  let defaultPackedPoint := packedPGA3Point 1.0
+  let result := runN (positiveIters iters) fun i =>
+    let idx := i % samples
+    let motor := packedMotors.getD idx defaultPackedMotor
+    let point := packedPoints.getD idx defaultPackedPoint
+    coordProbe (PGA.extractPoint3 (PGA.Motor.transformPoint motor point))
+  blackhole result
+
 def runCGA3 (iters : Nat) : IO Unit := do
   IO.println "=== CGA3 full packed products ==="
   let samples : Nat := 16
@@ -339,12 +378,42 @@ def runAll (baseIters : Nat := defaultBaseIters) : IO Unit := do
 
 end Grassmann.PackedMVBench
 
+def parseItersArg (s : String) : IO Nat := do
+  match s.toNat? with
+  | some iters => pure iters
+  | none => throw <| IO.userError s!"Invalid iteration count: {s}"
+
+def usage : String :=
+  String.intercalate "\n" [
+    "Usage: packedmvbench [base-iters]",
+    "       packedmvbench all [base-iters]",
+    "       packedmvbench pga-motor-point [iters]",
+    "       packedmvbench pga-motor-point-dense [iters]",
+    "       packedmvbench pga-motor-point-packed [iters]"
+  ]
+
 def main (args : List String) : IO Unit := do
   match args with
   | [] => Grassmann.PackedMVBench.runAll
+  | ["all"] => Grassmann.PackedMVBench.runAll
+  | ["all", itersStr] =>
+      Grassmann.PackedMVBench.runAll (← parseItersArg itersStr)
+  | ["pga-motor-point"] =>
+      Grassmann.PackedMVBench.runPGA3MotorPointTransform
+        Grassmann.PackedMVBench.defaultMotorPointIters
+  | ["pga-motor-point", itersStr] =>
+      Grassmann.PackedMVBench.runPGA3MotorPointTransform (← parseItersArg itersStr)
+  | ["pga-motor-point-dense"] =>
+      Grassmann.PackedMVBench.runDensePGA3MotorPointTransformOnly
+  | ["pga-motor-point-dense", itersStr] =>
+      Grassmann.PackedMVBench.runDensePGA3MotorPointTransformOnly (← parseItersArg itersStr)
+  | ["pga-motor-point-packed"] =>
+      Grassmann.PackedMVBench.runPackedPGA3MotorPointTransformOnly
+  | ["pga-motor-point-packed", itersStr] =>
+      Grassmann.PackedMVBench.runPackedPGA3MotorPointTransformOnly (← parseItersArg itersStr)
   | [itersStr] =>
       match itersStr.toNat? with
       | some iters => Grassmann.PackedMVBench.runAll iters
-      | none => throw <| IO.userError s!"Invalid iteration count: {itersStr}"
+      | none => throw <| IO.userError usage
   | _ =>
-      throw <| IO.userError "Usage: packedmvbench [base-iters]"
+      throw <| IO.userError usage
