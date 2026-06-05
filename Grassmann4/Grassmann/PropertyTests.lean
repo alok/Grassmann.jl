@@ -408,6 +408,17 @@ def packedRightContractMatchesDense {n : Nat} {sig : Signature n}
     packedMatchesDense (MV.rightContract oddA evenB) (denseAOdd ⌊ᵐ denseBEven) tol &&
     packedMatchesDense (MV.rightContract oddA oddB) (denseAOdd ⌊ᵐ denseBOdd) tol
 
+/-- Full packed `MV` dual and derived products agree with dense references. -/
+def packedFullDerivedProductsMatchDense {n : Nat} {sig : Signature n}
+    (a b : Multivector sig Float) (tol : Float := 1e-6) : Bool :=
+  let fullA : MV sig .full := MV.ofMultivector a .full
+  let fullB : MV sig .full := MV.ofMultivector b .full
+  packedMatchesDense (MV.hodgeDual fullA) (⋆ᵐa) tol &&
+    packedMatchesDense (MV.regressiveProduct fullA fullB) (a ⋁ᵐ b) tol &&
+    packedMatchesDense (MV.fatDot fullA fullB) (a ⋅ᵐ b) tol &&
+    packedMatchesDense (MV.commutator fullA fullB) (Multivector.commutator a b) tol &&
+    packedMatchesDense (MV.antiCommutator fullA fullB) (Multivector.antiCommutator a b) tol
+
 /-! ## Native Vector Reference Tests -/
 
 /-- Convert a dense reference multivector to the native-vector baseline. -/
@@ -1085,6 +1096,12 @@ def prop_mv_right_contract_dense : Gen Bool := do
   let b ← genR3DenseMv
   return packedRightContractMatchesDense a.mv b.mv
 
+/-- Full packed derived products agree with dense references. -/
+def prop_mv_full_derived_products_dense : Gen Bool := do
+  let a ← genR3DenseMv
+  let b ← genR3DenseMv
+  return packedFullDerivedProductsMatchDense a.mv b.mv
+
 /-- Packed reverse agrees with dense reverse. -/
 def prop_mv_reverse_dense : Gen Bool := do
   let a ← genR3DenseMv
@@ -1453,6 +1470,12 @@ def prop_mv_pga3_right_contract_dense : Gen Bool := do
   let a ← genPGA3DenseMv
   let b ← genPGA3DenseMv
   return packedRightContractMatchesDense a.mv b.mv
+
+/-- PGA3 full packed derived products agree with dense references. -/
+def prop_mv_pga3_full_derived_products_dense : Gen Bool := do
+  let a ← genPGA3DenseMv
+  let b ← genPGA3DenseMv
+  return packedFullDerivedProductsMatchDense a.mv b.mv
 
 /-- PGA3 packed reverse agrees with dense reverse. -/
 def prop_mv_pga3_reverse_dense : Gen Bool := do
@@ -1950,6 +1973,12 @@ def prop_mv_cga3_right_contract_dense : Gen Bool := do
   let a ← genCGA3DenseMv
   let b ← genCGA3DenseMv
   return packedRightContractMatchesDense a.mv b.mv
+
+/-- CGA3 full packed derived products agree with dense references. -/
+def prop_mv_cga3_full_derived_products_dense : Gen Bool := do
+  let a ← genCGA3DenseMv
+  let b ← genCGA3DenseMv
+  return packedFullDerivedProductsMatchDense a.mv b.mv
 
 /-- CGA3 packed reverse agrees with dense reverse. -/
 def prop_mv_cga3_reverse_dense : Gen Bool := do
@@ -3575,6 +3604,8 @@ def runPackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {r20b}"
   let r20c ← runGenProp "MV right contraction" prop_mv_right_contract_dense
   IO.println s!"│ {r20c}"
+  let r20d ← runGenProp "MV full derived products" prop_mv_full_derived_products_dense
+  IO.println s!"│ {r20d}"
   let r21 ← runGenProp "MV reverse" prop_mv_reverse_dense
   IO.println s!"│ {r21}"
   let r21a ← runGenProp "MV involutions" prop_mv_involutions_dense
@@ -3592,7 +3623,7 @@ def runPackedReferenceTests : IO (List PropTestResult) := do
   IO.println "└────────────────────────────────────────────────┘"
   return [r13, r14, r15, r15p, r15s, r15n, r15nr, r15sp, r15a, r15b, r15c, r15d,
     r15e, r15f, r15g, r15h, r15i, r16, r17, r18, r19, r20, r20a, r20b, r20c,
-    r21, r21a, r22, r22ops, r22a, r22b, r22c]
+    r20d, r21, r21a, r22, r22ops, r22a, r22b, r22c]
 
 /-- Run direct-dispatch vs typeclass-dispatch multiplication checks. -/
 def runMVDispatchReferenceTests : IO (List PropTestResult) := do
@@ -3656,6 +3687,9 @@ def runPGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {pgaMv7b}"
   let pgaMv7c ← runGenProp "PGA3 MV right contraction" prop_mv_pga3_right_contract_dense
   IO.println s!"│ {pgaMv7c}"
+  let pgaMv7d ← runGenProp "PGA3 MV full derived products"
+    prop_mv_pga3_full_derived_products_dense
+  IO.println s!"│ {pgaMv7d}"
   let pgaMv8 ← runGenProp "PGA3 MV reverse" prop_mv_pga3_reverse_dense
   IO.println s!"│ {pgaMv8}"
   let pgaMv8a ← runGenProp "PGA3 MV involutions" prop_mv_pga3_involutions_dense
@@ -3677,7 +3711,7 @@ def runPGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println "└────────────────────────────────────────────────┘"
   return [pgaMv1, pgaMv2, pgaMv2p, pgaMv2s, pgaMv2n, pgaMv2nr, pgaMv2sp,
     pgaMv2a, pgaMv2b, pgaMv2c, pgaMv2d, pgaMv2e, pgaMv2f, pgaMv2g, pgaMv3,
-    pgaMv4, pgaMv5, pgaMv6, pgaMv7, pgaMv7a, pgaMv7b, pgaMv7c, pgaMv8,
+    pgaMv4, pgaMv5, pgaMv6, pgaMv7, pgaMv7a, pgaMv7b, pgaMv7c, pgaMv7d, pgaMv8,
     pgaMv8a, pgaMv9, pgaMv9ops, pgaMv9a, pgaMv9b, pgaMv9c]
 
 /-- Run user-facing PGA3 point-cloud transform checks. -/
@@ -3795,6 +3829,9 @@ def runCGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {cgaMv7b}"
   let cgaMv7c ← runGenProp "CGA3 MV right contraction" prop_mv_cga3_right_contract_dense
   IO.println s!"│ {cgaMv7c}"
+  let cgaMv7d ← runGenProp "CGA3 MV full derived products"
+    prop_mv_cga3_full_derived_products_dense
+  IO.println s!"│ {cgaMv7d}"
   let cgaMv8 ← runGenProp "CGA3 MV reverse" prop_mv_cga3_reverse_dense
   IO.println s!"│ {cgaMv8}"
   let cgaMv8a ← runGenProp "CGA3 MV involutions" prop_mv_cga3_involutions_dense
@@ -3816,7 +3853,7 @@ def runCGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println "└────────────────────────────────────────────────┘"
   return [cgaMv1, cgaMv2, cgaMv2p, cgaMv2s, cgaMv2n, cgaMv2nr, cgaMv2sp,
     cgaMv2a, cgaMv2b, cgaMv2c, cgaMv2d, cgaMv2e, cgaMv2f, cgaMv2g, cgaMv3,
-    cgaMv4, cgaMv5, cgaMv6, cgaMv7, cgaMv7a, cgaMv7b, cgaMv7c, cgaMv8,
+    cgaMv4, cgaMv5, cgaMv6, cgaMv7, cgaMv7a, cgaMv7b, cgaMv7c, cgaMv7d, cgaMv8,
     cgaMv8a, cgaMv9, cgaMv9ops, cgaMv9a, cgaMv9b, cgaMv9c]
 
 /-- Run sparse-MV baseline checks against dense reference results. -/

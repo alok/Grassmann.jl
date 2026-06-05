@@ -614,6 +614,29 @@ def leftContract (a : MV sig p1) (b : MV sig p2) : MV sig (p1 * p2) :=
 def rightContract (a : MV sig p1) (b : MV sig p2) : MV sig (p1 * p2) :=
   ⟨rightContractKernelGeneric sig p1 p2 a.coeffs b.coeffs⟩
 
+/-! ### Dual and Derived Products -/
+
+/-- Hodge dual for full packed storage.
+
+The dual may flip even/odd parity when the dimension is odd, so this operation
+is exposed on `.full` storage where every grade can be represented directly. -/
+@[inline]
+def hodgeDual (m : MV sig .full) : MV sig .full :=
+  let szFull := storageSize n .full
+  ⟨DataArray.ofArray ((Array.range szFull).map fun mask =>
+    let outBlade : Blade sig := ⟨BitVec.ofNat n mask⟩
+    let dualBits := outBlade.bits ^^^ pseudoscalar
+    let dualIdx := dualBits.toNat
+    let sign := leftComplementSign sig ⟨dualBits⟩
+    let coeff := m.coeffs.get! dualIdx
+    if sign < 0 then -coeff else coeff)⟩
+
+/-- Regressive product / meet for full packed storage, defined by dualizing the
+exterior product. -/
+@[inline]
+def regressiveProduct (a b : MV sig .full) : MV sig .full :=
+  hodgeDual (wedge (hodgeDual a) (hodgeDual b))
+
 /-! ### Scalar Multiplication -/
 
 @[inline]
@@ -634,6 +657,23 @@ def add (a b : MV sig p) : MV sig p :=
 def neg (m : MV sig p) : MV sig p :=
   let sz := storageSize n p
   ⟨DataArray.ofArray ((Array.range sz).map fun pi => -m.coeffs.get! pi)⟩
+
+/-! ### More Full-Storage Derived Products -/
+
+/-- Fat dot / inner product for full packed storage. -/
+@[inline]
+def fatDot (a b : MV sig .full) : MV sig .full :=
+  add (leftContract a b) (rightContract a b)
+
+/-- Commutator product `(ab - ba) / 2` for full packed storage. -/
+@[inline]
+def commutator (a b : MV sig .full) : MV sig .full :=
+  smul 0.5 (add (mulDirect a b) (neg (mulDirect b a)))
+
+/-- Anticommutator product `(ab + ba) / 2` for full packed storage. -/
+@[inline]
+def antiCommutator (a b : MV sig .full) : MV sig .full :=
+  smul 0.5 (add (mulDirect a b) (mulDirect b a))
 
 /-! ### Reverse (Dagger) -/
 
