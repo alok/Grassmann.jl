@@ -208,12 +208,28 @@ lake build
 
 ## Benchmarks
 
-Packed `MV` performance checks live in `packedmvbench`:
+Use the benchmark guards for repeatable local correctness and performance
+checks:
 
 ```bash
+scripts/bench_guard.sh
+scripts/packedmvbench_guard.sh
+```
+
+`scripts/bench_guard.sh` runs the core `lake exe bench` suite, checks that the
+packed `MV` rotor and sandwich paths still match dense `Multivector`, and
+enforces conservative local latency and speedup thresholds for rotor,
+sandwich, PGA3 motor, and compile-time gradient kernels. Override defaults with
+`MAX_MV_ROTOR_NS`, `MAX_MV_SANDWICH_NS`, `MAX_MV_MOTOR_NS`,
+`MAX_KERNEL_GRAD_NS`, `MIN_ROTOR_SPEEDUP`, `MIN_SANDWICH_SPEEDUP`, and
+`MIN_GRADIENT_SPEEDUP`.
+
+Packed `MV` point-transform checks live in `packedmvbench`:
+
+```bash
+lake exe bench verify
 lake exe packedmvbench all 200
 lake exe packedmvbench pga-motor-point 5000
-scripts/packedmvbench_guard.sh
 ```
 
 `scripts/packedmvbench_guard.sh` runs a small correctness smoke test, then
@@ -221,6 +237,14 @@ checks the packed PGA3 motor-point transform against conservative local
 thresholds. Override defaults with `PACKED_MV_BENCH_MOTOR_ITERS`,
 `MAX_PACKED_PGA_MOTOR_POINT_NS`, and
 `MIN_PACKED_PGA_MOTOR_POINT_SPEEDUP`.
+
+A local `scripts/bench_guard.sh` run on 2026-06-05 passed with zero checked
+correctness drift, `156.632080 ns/iter` MV rotor composition versus
+`37116.177920 ns/iter` dense composition (`237.0x`), `100.820830 ns/iter` MV
+sandwich versus `110933.791250 ns/iter` dense sandwich (`1100.3x`),
+`868.634160 ns/iter` PGA3 motor multiplication, and `793.880420 ns/iter`
+compile-time gradient versus `8043.472080 ns/iter` finite-difference gradient
+(`10.1x`).
 
 ## Testing Against Grassmann.jl
 
