@@ -98,7 +98,7 @@ instance (priority := 500) [Ring F] [BEq F] [DecidableEq F] :
 
 /-- Truncated representation (priority 200, lowest).
     Use for very high dimensions when only low-grade components matter. -/
-instance (priority := 200) [Ring F] [BEq F] [DecidableEq F] {maxGrade : ℕ} :
+instance (priority := 200) [Ring F] [BEq F] {maxGrade : ℕ} :
     MultivectorRepr (TruncatedMV sig maxGrade F) sig F where
   coeff := TruncatedMV.coeff
   scalarPart := TruncatedMV.scalarPart

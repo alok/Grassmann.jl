@@ -150,7 +150,7 @@ private def productGrade (ga gb : ℕ) (productType : String) : Option ℕ :=
 
 /-- Geometric product (truncated).
     Terms producing grades > maxGrade are discarded. -/
-def geometricProduct [Ring F] [BEq F] [DecidableEq F]
+def geometricProduct [Ring F] [BEq F]
     (a b : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
   let result := (List.finRange (maxGrade + 1)).foldl (init := zero) fun acc1 ga =>
     (List.finRange (maxGrade + 1)).foldl (init := acc1) fun acc2 gb =>
@@ -179,7 +179,7 @@ def geometricProduct [Ring F] [BEq F] [DecidableEq F]
 
 /-- Wedge product (truncated).
     Grade(a ∧ b) = grade(a) + grade(b), so truncation is natural. -/
-def wedgeProduct [Ring F] [BEq F] [DecidableEq F]
+def wedgeProduct [Ring F] [BEq F]
     (a b : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
   let result := (List.finRange (maxGrade + 1)).foldl (init := zero) fun acc1 ga =>
     (List.finRange (maxGrade + 1)).foldl (init := acc1) fun acc2 gb =>
@@ -208,7 +208,7 @@ def wedgeProduct [Ring F] [BEq F] [DecidableEq F]
       else acc2
   result
 
-instance [Ring F] [BEq F] [DecidableEq F] : Mul (TruncatedMV sig maxGrade F) := ⟨geometricProduct⟩
+instance [Ring F] [BEq F] : Mul (TruncatedMV sig maxGrade F) := ⟨geometricProduct⟩
 
 infixl:65 " ⋀ₜ " => wedgeProduct
 
@@ -244,7 +244,7 @@ def conjugate [Ring F] (m : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGra
       acc.insert idx newCoeff⟩
 
 /-- Left contraction (truncated) -/
-def leftContract [Ring F] [BEq F] [DecidableEq F]
+def leftContract [Ring F] [BEq F]
     (a b : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
   let result := (List.finRange (maxGrade + 1)).foldl (init := zero) fun acc1 ga =>
     (List.finRange (maxGrade + 1)).foldl (init := acc1) fun acc2 gb =>
@@ -273,7 +273,7 @@ def leftContract [Ring F] [BEq F] [DecidableEq F]
   result
 
 /-- Right contraction (truncated) -/
-def rightContract [Ring F] [BEq F] [DecidableEq F]
+def rightContract [Ring F] [BEq F]
     (a b : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
   let result := (List.finRange (maxGrade + 1)).foldl (init := zero) fun acc1 ga =>
     (List.finRange (maxGrade + 1)).foldl (init := acc1) fun acc2 gb =>
@@ -346,7 +346,7 @@ end TruncatedMV
 
 /-! ## GAlgebra Instance for TruncatedMV -/
 
-instance (maxGrade : ℕ) [Ring F] [BEq F] [DecidableEq F] : GAlgebra sig (TruncatedMV sig maxGrade F) F where
+instance (maxGrade : ℕ) [Ring F] [BEq F] : GAlgebra sig (TruncatedMV sig maxGrade F) F where
   basisVector := TruncatedMV.basisVec
   scalar := TruncatedMV.scalar
   zero := TruncatedMV.zero
@@ -383,11 +383,6 @@ def euclideanSig (n : ℕ) : Signature n := Signature.euclidean n
 /-- High-dimensional CGA signature: R^{n+1,1} -/
 def cgaHighDimSig (n : ℕ) : Signature (n + 2) :=
   ⟨BitVec.ofNat (n + 2) (1 <<< (n + 1)), 0⟩  -- Only e_{n+1} is negative
-
-/-! ## Float DecidableEq for tests -/
-
-instance : DecidableEq Float := fun a b =>
-  if a == b then isTrue sorry_proof else isFalse sorry_proof
 
 /-! ## Tests -/
 
