@@ -9,7 +9,7 @@
   Design:
   - `EvenMV sig F` stores coefficients only for even-grade basis blades.
   - Enumeration of even blades is by increasing bitmask order.
-  - Proof obligations about parity/indices are left as `sorry_proof` for now.
+  - Cached Nat index tables are read through bounds-checked coefficient helpers.
 -/
 import Grassmann.Multivector
 import Grassmann.Parity
@@ -416,32 +416,32 @@ private def evenRightOutSignCGA3 : Array Int8 := evenRightOutSignFromTable CGA3S
   | 5 => if s == CGA3 then some evenRightOutSignCGA3 else none
   | _ => none
 
-/-- Packed index → full blade mask. -/
-@[inline]
-private def packedToMask (i : Fin (2 ^ (n - 1))) : Nat :=
-  (evenMasksCached n).getD i.val 0
-
-/-- Full mask → packed index (assumes mask is even). -/
-@[inline]
-private def maskToPacked (m : Nat) : Fin (2 ^ (n - 1)) :=
-  let k := (evenIndexMapCached n).getD m 0
-  ⟨k, by sorry_proof⟩
-
 end Kernel
 
 open Kernel
+
+@[inline] private def packedCoeffD (e : EvenMV sig F) (i : Nat) : F :=
+  if h : i < 2 ^ (n - 1) then
+    e.coeffs ⟨i, h⟩
+  else
+    0
+
+@[inline] private def denseCoeffD (m : Multivector sig F) (i : Nat) : F :=
+  if h : i < 2 ^ n then
+    m.coeffs ⟨i, h⟩
+  else
+    0
 
 /-! ### Conversions -/
 
 /-- Convert packed even multivector to dense multivector. -/
 def toMultivector (e : EvenMV sig F) : Multivector sig F :=
-  let masks := evenMasksCached n
   let map := evenIndexMapCached n
   ⟨fun i =>
     let m := i.val
     if grade (BitVec.ofNat n m) % 2 = 0 then
       let k := map.getD m 0
-      e.coeffs ⟨k, by sorry_proof⟩
+      packedCoeffD e k
     else 0⟩
 
 /-- Pack the even part of a dense multivector. -/
@@ -449,7 +449,7 @@ def ofMultivectorEven (m : Multivector sig F) : EvenMV sig F :=
   let masks := evenMasksCached n
   ⟨fun i =>
     let mask := masks.getD i.val 0
-    m.coeffs ⟨mask, by sorry_proof⟩⟩
+    denseCoeffD m mask⟩
 
 /-! ### Involutions on packed storage -/
 
@@ -478,13 +478,13 @@ def geometricProduct (a b : EvenMV sig F) : EvenMV sig F :=
       let resultArray : Array F := Id.run do
         let mut out : Array F := Array.replicate sizeEven (0 : F)
         for i in idxEven do
-          let ai := a.coeffs ⟨i, by sorry_proof⟩
+          let ai := packedCoeffD a i
           let base := i * sizeEven
           for j in idxEven do
             let sign := signs.getD (base + j) 0
             if sign != 0 then
               let k := mulIdx.getD (base + j) 0
-              let bj := b.coeffs ⟨j, by sorry_proof⟩
+              let bj := packedCoeffD b j
               let coeff := ai * bj
               let contrib := if sign < 0 then -coeff else coeff
               let old := out.getD k 0
@@ -502,14 +502,14 @@ def geometricProduct (a b : EvenMV sig F) : EvenMV sig F :=
         | some table =>
             for i in idxEven do
               let mi := masks.getD i 0
-              let ai := a.coeffs ⟨i, by sorry_proof⟩
+              let ai := packedCoeffD a i
               for j in idxEven do
                 let mj := masks.getD j 0
                 let sign := table.lookup mi mj
                 if sign != 0 then
                   let resMask := mi ^^^ mj
                   let k := map.getD resMask 0
-                  let bj := b.coeffs ⟨j, by sorry_proof⟩
+                  let bj := packedCoeffD b j
                   let coeff := ai * bj
                   let contrib := if sign < 0 then -coeff else coeff
                   let old := out.getD k 0
@@ -518,7 +518,7 @@ def geometricProduct (a b : EvenMV sig F) : EvenMV sig F :=
             for i in idxEven do
               let mi := masks.getD i 0
               let bi : Blade sig := ⟨BitVec.ofNat n mi⟩
-              let ai := a.coeffs ⟨i, by sorry_proof⟩
+              let ai := packedCoeffD a i
               for j in idxEven do
                 let mj := masks.getD j 0
                 let bj : Blade sig := ⟨BitVec.ofNat n mj⟩
@@ -526,7 +526,7 @@ def geometricProduct (a b : EvenMV sig F) : EvenMV sig F :=
                 if sign != 0 then
                   let resMask := mi ^^^ mj
                   let k := map.getD resMask 0
-                  let bjCoeff := b.coeffs ⟨j, by sorry_proof⟩
+                  let bjCoeff := packedCoeffD b j
                   let coeff := ai * bjCoeff
                   let contrib := if sign < 0 then -coeff else coeff
                   let old := out.getD k 0
@@ -551,13 +551,13 @@ def geometricProductLeft (a : EvenMV sig F) (b : Multivector sig F) :
         Id.run do
           let mut out : Array F := Array.replicate sizeFull (0 : F)
           for i in idxEven do
-            let ai := a.coeffs ⟨i, by sorry_proof⟩
+            let ai := packedCoeffD a i
             let base := i * sizeFull
             for j in idxAll do
               let sign := signs.getD (base + j) 0
               if sign != 0 then
                 let resIdx := mulIdx.getD (base + j) 0
-                let bj := b.coeffs ⟨j, by sorry_proof⟩
+                let bj := denseCoeffD b j
                 let coeff := ai * bj
                 let contrib := if sign < 0 then -coeff else coeff
                 let old := out.getD resIdx 0
@@ -573,12 +573,12 @@ def geometricProductLeft (a : EvenMV sig F) (b : Multivector sig F) :
           | some table =>
               for i in idxEven do
                 let mi := masks.getD i 0
-                let ai := a.coeffs ⟨i, by sorry_proof⟩
+                let ai := packedCoeffD a i
                 for j in idxAll do
                   let sign := table.lookup mi j
                   if sign != 0 then
                     let resIdx := mi ^^^ j
-                    let bj := b.coeffs ⟨j, by sorry_proof⟩
+                    let bj := denseCoeffD b j
                     let coeff := ai * bj
                     let contrib := if sign < 0 then -coeff else coeff
                     let old := out.getD resIdx 0
@@ -587,13 +587,13 @@ def geometricProductLeft (a : EvenMV sig F) (b : Multivector sig F) :
               for i in idxEven do
                 let mi := masks.getD i 0
                 let bi : Blade sig := ⟨BitVec.ofNat n mi⟩
-                let ai := a.coeffs ⟨i, by sorry_proof⟩
+                let ai := packedCoeffD a i
                 for j in idxAll do
                   let bj : Blade sig := ⟨BitVec.ofNat n j⟩
                   let sign := geometricSign sig bi bj
                   if sign != 0 then
                     let resIdx := mi ^^^ j
-                    let bjCoeff := b.coeffs ⟨j, by sorry_proof⟩
+                    let bjCoeff := denseCoeffD b j
                     let coeff := ai * bjCoeff
                     let contrib := if sign < 0 then -coeff else coeff
                     let old := out.getD resIdx 0
@@ -617,13 +617,13 @@ def geometricProductRight (a : Multivector sig F) (b : EvenMV sig F) :
         Id.run do
           let mut out : Array F := Array.replicate sizeFull (0 : F)
           for i in idxAll do
-            let ai := a.coeffs ⟨i, by sorry_proof⟩
+            let ai := denseCoeffD a i
             let base := i * sizeEven
             for j in idxEven do
               let sign := signs.getD (base + j) 0
               if sign != 0 then
                 let resIdx := mulIdx.getD (base + j) 0
-                let bj := b.coeffs ⟨j, by sorry_proof⟩
+                let bj := packedCoeffD b j
                 let coeff := ai * bj
                 let contrib := if sign < 0 then -coeff else coeff
                 let old := out.getD resIdx 0
@@ -638,13 +638,13 @@ def geometricProductRight (a : Multivector sig F) (b : EvenMV sig F) :
           match table? with
           | some table =>
               for i in idxAll do
-                let ai := a.coeffs ⟨i, by sorry_proof⟩
+                let ai := denseCoeffD a i
                 for j in idxEven do
                   let mj := masks.getD j 0
                   let sign := table.lookup i mj
                   if sign != 0 then
                     let resIdx := i ^^^ mj
-                    let bj := b.coeffs ⟨j, by sorry_proof⟩
+                    let bj := packedCoeffD b j
                     let coeff := ai * bj
                     let contrib := if sign < 0 then -coeff else coeff
                     let old := out.getD resIdx 0
@@ -652,14 +652,14 @@ def geometricProductRight (a : Multivector sig F) (b : EvenMV sig F) :
           | none =>
               for i in idxAll do
                 let bi : Blade sig := ⟨BitVec.ofNat n i⟩
-                let ai := a.coeffs ⟨i, by sorry_proof⟩
+                let ai := denseCoeffD a i
                 for j in idxEven do
                   let mj := masks.getD j 0
                   let bj : Blade sig := ⟨BitVec.ofNat n mj⟩
                   let sign := geometricSign sig bi bj
                   if sign != 0 then
                     let resIdx := i ^^^ mj
-                    let bjCoeff := b.coeffs ⟨j, by sorry_proof⟩
+                    let bjCoeff := packedCoeffD b j
                     let coeff := ai * bjCoeff
                     let contrib := if sign < 0 then -coeff else coeff
                     let old := out.getD resIdx 0
@@ -691,7 +691,7 @@ def geometricProductLeftSparse (a : EvenMV sig F) (b : Multivector sig F)
         Id.run do
           let mut out : Array F := Array.replicate sizeFull (0 : F)
           for i in idxEven do
-            let ai := a.coeffs ⟨i, by sorry_proof⟩
+            let ai := packedCoeffD a i
             let base := i * sizeFull
             for j in bIdx do
               let jv := j.val
@@ -714,7 +714,7 @@ def geometricProductLeftSparse (a : EvenMV sig F) (b : Multivector sig F)
           | some table =>
               for i in idxEven do
                 let mi := masks.getD i 0
-                let ai := a.coeffs ⟨i, by sorry_proof⟩
+                let ai := packedCoeffD a i
                 for j in bIdx do
                   let sign := table.lookup mi j.val
                   if sign != 0 then
@@ -728,7 +728,7 @@ def geometricProductLeftSparse (a : EvenMV sig F) (b : Multivector sig F)
               for i in idxEven do
                 let mi := masks.getD i 0
                 let bi : Blade sig := ⟨BitVec.ofNat n mi⟩
-                let ai := a.coeffs ⟨i, by sorry_proof⟩
+                let ai := packedCoeffD a i
                 for j in bIdx do
                   let bj : Blade sig := ⟨BitVec.ofNat n j.val⟩
                   let sign := geometricSign sig bi bj
@@ -764,7 +764,7 @@ def geometricProductRightSparse (a : Multivector sig F) (aIdx : Array (Fin (2 ^ 
               let sign := signs.getD (base + j) 0
               if sign != 0 then
                 let resIdx := mulIdx.getD (base + j) 0
-                let bj := b.coeffs ⟨j, by sorry_proof⟩
+                let bj := packedCoeffD b j
                 let coeff := ai * bj
                 let contrib := if sign < 0 then -coeff else coeff
                 let old := out.getD resIdx 0
@@ -785,7 +785,7 @@ def geometricProductRightSparse (a : Multivector sig F) (aIdx : Array (Fin (2 ^ 
                   let sign := table.lookup i.val mj
                   if sign != 0 then
                     let resIdx := i.val ^^^ mj
-                    let bj := b.coeffs ⟨j, by sorry_proof⟩
+                    let bj := packedCoeffD b j
                     let coeff := ai * bj
                     let contrib := if sign < 0 then -coeff else coeff
                     let old := out.getD resIdx 0
@@ -800,7 +800,7 @@ def geometricProductRightSparse (a : Multivector sig F) (aIdx : Array (Fin (2 ^ 
                   let sign := geometricSign sig bi bj
                   if sign != 0 then
                     let resIdx := i.val ^^^ mj
-                    let bjCoeff := b.coeffs ⟨j, by sorry_proof⟩
+                    let bjCoeff := packedCoeffD b j
                     let coeff := ai * bjCoeff
                     let contrib := if sign < 0 then -coeff else coeff
                     let old := out.getD resIdx 0
@@ -837,8 +837,8 @@ def geometricProductRightAtIndices (a : Multivector sig F) (b : EvenMV sig F)
                   let sign := outSigns.getD (base + j) 0
                   if sign != 0 then
                     let i := invIdx.getD (base + j) 0
-                    let ai := a.coeffs ⟨i, by sorry_proof⟩
-                    let bj := b.coeffs ⟨j, by sorry_proof⟩
+                    let ai := denseCoeffD a i
+                    let bj := packedCoeffD b j
                     let coeff := ai * bj
                     let contrib := if sign < 0 then -coeff else coeff
                     acc := acc + contrib
@@ -855,8 +855,8 @@ def geometricProductRightAtIndices (a : Multivector sig F) (b : EvenMV sig F)
                   let i := k.val ^^^ mj
                   let sign := signs.getD (i * sizeEven + j) 0
                   if sign != 0 then
-                    let ai := a.coeffs ⟨i, by sorry_proof⟩
-                    let bj := b.coeffs ⟨j, by sorry_proof⟩
+                    let ai := denseCoeffD a i
+                    let bj := packedCoeffD b j
                     let coeff := ai * bj
                     let contrib := if sign < 0 then -coeff else coeff
                     acc := acc + contrib
@@ -876,8 +876,8 @@ def geometricProductRightAtIndices (a : Multivector sig F) (b : EvenMV sig F)
                   let i := k.val ^^^ mj
                   let sign := table.lookup i mj
                   if sign != 0 then
-                    let ai := a.coeffs ⟨i, by sorry_proof⟩
-                    let bj := b.coeffs ⟨j, by sorry_proof⟩
+                    let ai := denseCoeffD a i
+                    let bj := packedCoeffD b j
                     let coeff := ai * bj
                     let contrib := if sign < 0 then -coeff else coeff
                     acc := acc + contrib
@@ -892,8 +892,8 @@ def geometricProductRightAtIndices (a : Multivector sig F) (b : EvenMV sig F)
                   let bj : Blade sig := ⟨BitVec.ofNat n mj⟩
                   let sign := geometricSign sig bi bj
                   if sign != 0 then
-                    let ai := a.coeffs ⟨i, by sorry_proof⟩
-                    let bjCoeff := b.coeffs ⟨j, by sorry_proof⟩
+                    let ai := denseCoeffD a i
+                    let bjCoeff := packedCoeffD b j
                     let coeff := ai * bjCoeff
                     let contrib := if sign < 0 then -coeff else coeff
                     acc := acc + contrib
