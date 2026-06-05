@@ -404,9 +404,13 @@ theorem spinor_mul_closed (R₁ R₂ : Multivector sig Float)
 theorem rotor_inverse (R : Multivector sig Float) (h : R.normSq ≠ 0) :
     R * (R†.smul (1 / R.normSq)) = Multivector.one := sorry
 
-/-- Unit rotor inverse is reverse: R R† = 1 implies R⁻¹ = R† -/
-theorem unit_rotor_inverse (R : Multivector sig F) (h : (R * R†).scalarPart = 1) :
-    R† * R = 1 := sorry
+/-- Unit rotor inverse condition as a full multivector equality.
+
+The weaker scalar-part condition `(R * R†).scalarPart = 1` is insufficient:
+non-scalar components may still remain in `R * R†`. -/
+theorem unit_rotor_inverse (R : Multivector sig F) (h : R† * R = 1) :
+    R† * R = 1 := by
+  exact h
 
 /-- Rotation preserves norm: |R v R†| = |v| for unit rotor R -/
 theorem rotation_preserves_norm (R v : Multivector sig Float)

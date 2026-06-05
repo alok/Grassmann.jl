@@ -2189,15 +2189,24 @@ def prop_mul_assoc (a b c : R3Mv) : Bool :=
 def prop_mul_one (a : R3Mv) : Bool :=
   mvApproxEq (a.mv * 1) a.mv && mvApproxEq (1 * a.mv) a.mv
 
-/-- Scalar part alone does not prove `R * R† = 1` as a multivector. -/
+/-- Scalar part alone does not prove `R * R† = 1` as a full multivector. -/
 def prop_unit_rotor_scalar_part_hypothesis_insufficient : Bool :=
   let c := 1.0 / Float.sqrt 2.0
   let e1 : MultivectorS R3 Float := MultivectorS.basis ⟨0, by omega⟩
   let R : MultivectorS R3 Float := MultivectorS.scalar c + e1.smul c
   let rr := R * R†ₛ
-  approxEq rr.scalarPart 1.0 (tol := 1e-12) &&
+  let denseE1 : Multivector R3 Float := Multivector.basis ⟨0, by omega⟩
+  let denseR : Multivector R3 Float := Multivector.scalar c + denseE1.smul c
+  let denseRR := denseR * denseR†
+  let sparseHasNonScalar :=
+    approxEq rr.scalarPart 1.0 (tol := 1e-12) &&
     approxEq (rr.coeff 1) 1.0 (tol := 1e-12) &&
     !mvApproxEq rr (MultivectorS.scalar 1.0 : MultivectorS R3 Float) (tol := 1e-12)
+  let denseHasNonScalar :=
+    approxEq denseRR.scalarPart 1.0 (tol := 1e-12) &&
+    approxEq (denseRR.coeffs ⟨1, by omega⟩) 1.0 (tol := 1e-12) &&
+    !denseMvApproxEq denseRR (Multivector.scalar 1.0 : Multivector R3 Float) (tol := 1e-12)
+  sparseHasNonScalar && denseHasNonScalar
 
 /-- The scalar unit is a two-sided identity for the sparse wedge product. -/
 def sparseWedgeOneIdentity {n : Nat} {sig : Signature n}
