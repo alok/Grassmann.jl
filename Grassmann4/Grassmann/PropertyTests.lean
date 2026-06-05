@@ -2429,6 +2429,52 @@ def prop_PGA3_signature : Bool :=
   approxEq (e3 * e3).scalarPart 1.0 &&
   approxEq (e0 * e0).scalarPart 0.0
 
+/-- Float encoding of the diagonal signature value for a basis vector. -/
+def basisSquareFloat {n : Nat} (sig : Signature n) (i : Fin n) : Float :=
+  if sig.isDegenerate i then 0.0
+  else if sig.isPositive i then 1.0
+  else -1.0
+
+/-- Sparse and dense basis-vector squares follow the signature exactly. -/
+def basisSquaresMatchSignature {n : Nat} (sig : Signature n) : Bool :=
+  (List.finRange n).all fun i =>
+    let expected := basisSquareFloat sig i
+    let sparseE : MultivectorS sig Float := MultivectorS.basis i
+    let denseE : Multivector sig Float := Multivector.basis i
+    mvApproxEq (sparseE * sparseE)
+        (MultivectorS.scalar expected : MultivectorS sig Float) (tol := 1e-12) &&
+      denseMvApproxEq (denseE * denseE)
+        (Multivector.scalar expected : Multivector sig Float) (tol := 1e-12)
+
+/-- Distinct sparse and dense basis vectors anticommute. -/
+def basisPairsAnticommute {n : Nat} (sig : Signature n) : Bool :=
+  (List.finRange n).all fun i =>
+    (List.finRange n).all fun j =>
+      if i == j then true
+      else
+        let sparseI : MultivectorS sig Float := MultivectorS.basis i
+        let sparseJ : MultivectorS sig Float := MultivectorS.basis j
+        let denseI : Multivector sig Float := Multivector.basis i
+        let denseJ : Multivector sig Float := Multivector.basis j
+        mvApproxEq (sparseI * sparseJ) (-(sparseJ * sparseI)) (tol := 1e-12) &&
+          denseMvApproxEq (denseI * denseJ) (-(denseJ * denseI)) (tol := 1e-12)
+
+/-- Basis-vector anchor identities for a whole signature. -/
+def basisVectorAnchorIdentities {n : Nat} (sig : Signature n) : Bool :=
+  basisSquaresMatchSignature sig && basisPairsAnticommute sig
+
+/-- R3 basis-vector anchors hold in both sparse and dense representations. -/
+def prop_R3_basis_anchor_identities : Bool :=
+  basisVectorAnchorIdentities R3
+
+/-- PGA3 basis-vector anchors include the degenerate projective basis square. -/
+def prop_PGA3_basis_anchor_identities : Bool :=
+  basisVectorAnchorIdentities PGA3
+
+/-- CGA3 basis-vector anchors include the extra negative conformal basis vector. -/
+def prop_CGA3_basis_anchor_identities : Bool :=
+  basisVectorAnchorIdentities CGA3
+
 /-- Specialized R3 cross product agrees with the generic Hodge-dual construction. -/
 def prop_R3_crossProduct3D_matches_hodge_cross : Bool :=
   let e1v : Multivector R3 Float := vector3 1.0 0.0 0.0
@@ -3606,6 +3652,9 @@ def runPropertyTests : IO Unit := do
   IO.println s!"│ {runBoolProp "R3 basis anticommute" prop_R3_basis_anticommute}"
   IO.println s!"│ {runBoolProp "CGA3 signature correct" prop_CGA3_signature}"
   IO.println s!"│ {runBoolProp "PGA3 signature correct" prop_PGA3_signature}"
+  IO.println s!"│ {runBoolProp "R3 basis anchors" prop_R3_basis_anchor_identities}"
+  IO.println s!"│ {runBoolProp "PGA3 basis anchors" prop_PGA3_basis_anchor_identities}"
+  IO.println s!"│ {runBoolProp "CGA3 basis anchors" prop_CGA3_basis_anchor_identities}"
   IO.println "└────────────────────────────────────────────────┘"
   -- Additive properties
   IO.println "\n┌─ Addition Properties ─────────────────────────┐"
@@ -3702,7 +3751,8 @@ def runPropertyTests : IO Unit := do
     countPassed stressResults +
     countPassed rotorExpResults
   let basisProps := [prop_R3_basis_squares, prop_R3_basis_anticommute, prop_CGA3_signature,
-    prop_PGA3_signature]
+    prop_PGA3_signature, prop_R3_basis_anchor_identities, prop_PGA3_basis_anchor_identities,
+    prop_CGA3_basis_anchor_identities]
   let basisPass := basisProps.filter id |>.length
   let total :=
     coreResults.length +
