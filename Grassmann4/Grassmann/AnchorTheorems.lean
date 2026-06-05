@@ -153,6 +153,94 @@ theorem r3_e12_scalar_product_self :
     scalarProductBlades (e12 : Blade R3) (e12 : Blade R3) = -1 := by
   native_decide
 
+/-! ### R3 Dense Involution Anchors -/
+
+/-- Exact rational R3 vector `e1` as a dense multivector. -/
+def r3E1Multivector : Multivector R3 Rat :=
+  Multivector.ofBlade (e1 : Blade R3)
+
+/-- Exact rational R3 bivector `e12` as a dense multivector. -/
+def r3E12Multivector : Multivector R3 Rat :=
+  Multivector.ofBlade (e12 : Blade R3)
+
+/-- Exact rational R3 pseudoscalar `e123` as a dense multivector. -/
+def r3E123Multivector : Multivector R3 Rat :=
+  Multivector.ofBlade (e123 : Blade R3)
+
+set_option linter.style.nativeDecide false in
+/-- Reverse fixes R3 vectors. -/
+theorem r3_e1_reverse :
+    r3E1Multivector† = r3E1Multivector := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Reverse negates R3 bivectors. -/
+theorem r3_e12_reverse :
+    r3E12Multivector† = r3E12Multivector.smul (-1 : Rat) := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Reverse negates the R3 pseudoscalar. -/
+theorem r3_e123_reverse :
+    r3E123Multivector† = r3E123Multivector.smul (-1 : Rat) := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Grade involution negates R3 vectors. -/
+theorem r3_e1_involute :
+    r3E1Multivectorˆ = r3E1Multivector.smul (-1 : Rat) := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Grade involution fixes R3 bivectors. -/
+theorem r3_e12_involute :
+    r3E12Multivectorˆ = r3E12Multivector := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Grade involution negates the R3 pseudoscalar. -/
+theorem r3_e123_involute :
+    r3E123Multivectorˆ = r3E123Multivector.smul (-1 : Rat) := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Clifford conjugation negates R3 vectors. -/
+theorem r3_e1_conjugate :
+    r3E1Multivector‡ = r3E1Multivector.smul (-1 : Rat) := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Clifford conjugation negates R3 bivectors. -/
+theorem r3_e12_conjugate :
+    r3E12Multivector‡ = r3E12Multivector.smul (-1 : Rat) := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Clifford conjugation fixes the R3 pseudoscalar. -/
+theorem r3_e123_conjugate :
+    r3E123Multivector‡ = r3E123Multivector := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+/-! ## PGA3 Null Basis Anchor Theorems -/
+
 /-- PGA3's projective basis vector is explicitly marked as null in the signature. -/
 theorem pga3_projective_signature_square :
     Signature.basisSquare PGA3 ⟨3, by decide⟩ = 0 := by
