@@ -3246,6 +3246,60 @@ def svgContainsVisibleGeometry (body : String) : Bool :=
 def prop_julia_example_svgs_nonempty : Bool :=
   allExamples.all fun ex => svgContainsVisibleGeometry ex.2
 
+def normalizeHexChar? : Char → Option Char
+  | '0' => some '0'
+  | '1' => some '1'
+  | '2' => some '2'
+  | '3' => some '3'
+  | '4' => some '4'
+  | '5' => some '5'
+  | '6' => some '6'
+  | '7' => some '7'
+  | '8' => some '8'
+  | '9' => some '9'
+  | 'a' | 'A' => some 'a'
+  | 'b' | 'B' => some 'b'
+  | 'c' | 'C' => some 'c'
+  | 'd' | 'D' => some 'd'
+  | 'e' | 'E' => some 'e'
+  | 'f' | 'F' => some 'f'
+  | _ => none
+
+def hexColor? (a b c d e f : Char) : Option String := do
+  let a ← normalizeHexChar? a
+  let b ← normalizeHexChar? b
+  let c ← normalizeHexChar? c
+  let d ← normalizeHexChar? d
+  let e ← normalizeHexChar? e
+  let f ← normalizeHexChar? f
+  some (String.ofList ['#', a, b, c, d, e, f])
+
+partial def hexColorsAux : List Char → List String
+  | [] => []
+  | '#' :: a :: b :: c :: d :: e :: f :: rest =>
+      match hexColor? a b c d e f with
+      | some color => color :: hexColorsAux rest
+      | none => hexColorsAux (a :: b :: c :: d :: e :: f :: rest)
+  | _ :: rest => hexColorsAux rest
+
+def hexColors (body : String) : List String :=
+  hexColorsAux body.toList
+
+def isGrayscaleHexColor (color : String) : Bool :=
+  match color.toList with
+  | ['#', r1, r2, g1, g2, b1, b2] =>
+      r1 == g1 && r2 == g2 && g1 == b1 && g2 == b2
+  | _ => false
+
+def allSvgHexColors : List String :=
+  allExamples.foldl (init := []) fun acc ex => acc ++ hexColors ex.2
+
+/-- The Lean SVG examples keep the same grayscale/white palette family as the
+Julia/Makie reference images used by the visual comparison smoke gate. -/
+def prop_julia_example_svg_palette_grayscale : Bool :=
+  let colors := allSvgHexColors
+  !colors.isEmpty && colors.all isGrayscaleHexColor
+
 def manifestContainsExample (filename : String) : Bool :=
   let name := referenceName filename
   manifestJson.contains ("\"name\":\"" ++ name ++ "\"") &&
@@ -4353,8 +4407,11 @@ def runJuliaExampleCoverageTests : IO (List PropTestResult) := do
   let j5 := runBoolProp "Julia comparison HTML covers pairs"
     JuliaExampleCoverage.prop_julia_example_comparison_html_covers_examples
   IO.println s!"│ {j5}"
+  let j6 := runBoolProp "Julia example SVG palette grayscale"
+    JuliaExampleCoverage.prop_julia_example_svg_palette_grayscale
+  IO.println s!"│ {j6}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [j1, j2, j3, j4, j5]
+  return [j1, j2, j3, j4, j5, j6]
 
 /-- Run all property tests -/
 def runPropertyTests : IO Unit := do
