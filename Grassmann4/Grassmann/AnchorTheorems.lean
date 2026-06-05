@@ -10,6 +10,7 @@
 import Grassmann.SparseMultivector
 import Grassmann.RotorExp
 import Grassmann.GANotation
+import Mathlib.Algebra.Field.Rat
 
 namespace Grassmann.Theorems
 
@@ -319,6 +320,41 @@ set_option linter.style.nativeDecide false in
 theorem cga3_eminus_eplus_blade_product :
     geometricProductBlades cga3EminusBlade cga3EplusBlade =
       BladeProduct.nonzero (-1) cga3ExtraPlaneBlade := by
+  native_decide
+
+/-! ### CGA Null Basis Anchors -/
+
+/-- Exact rational point-at-infinity vector `e∞ = e₋ + e₊` in CGA3. -/
+def cga3InfinityVector : Multivector CGA3 Rat :=
+  (Multivector.ofBlade cga3EminusBlade).add (Multivector.ofBlade cga3EplusBlade)
+
+/-- Exact rational origin vector `e₀ = (e₋ - e₊) / 2` in CGA3. -/
+def cga3OriginVector : Multivector CGA3 Rat :=
+  ((Multivector.ofBlade cga3EminusBlade).sub (Multivector.ofBlade cga3EplusBlade)).smul
+    (1 / (2 : Rat))
+
+set_option linter.style.nativeDecide false in
+/-- The conformal point-at-infinity vector is null. -/
+theorem cga3_infinity_square_scalar :
+    (cga3InfinityVector * cga3InfinityVector).scalarPart = 0 := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- The conformal origin vector is null. -/
+theorem cga3_origin_square_scalar :
+    (cga3OriginVector * cga3OriginVector).scalarPart = 0 := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- The conformal null basis satisfies `e∞ · e₀ = -1`. -/
+theorem cga3_infinity_origin_scalar_pair :
+    (cga3InfinityVector * cga3OriginVector).scalarPart = -1 := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- Reversing the conformal null-basis scalar pair gives the same value. -/
+theorem cga3_origin_infinity_scalar_pair :
+    (cga3OriginVector * cga3InfinityVector).scalarPart = -1 := by
   native_decide
 
 /-! ## Wedge Product Theorems -/
