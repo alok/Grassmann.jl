@@ -2350,6 +2350,24 @@ def prop_expBivector_cga3_ePlusEMinus_matches_series : Bool :=
     let B := cga3EPlusEMinusSparse.smul θ
     mvApproxEq (expBivector B) (expTaylorMV B 24) (tol := 1e-5)
 
+/-- Scalar-square exponential uses the exact elliptic closed form for R3 rotors. -/
+def prop_expScalarSquareBivector_r3_closed_form : Bool :=
+  rotorExpSampleAngles.all fun θ =>
+    let B := r3E12Sparse.smul θ
+    let R := expScalarSquareBivector B
+    !hasNonScalarPart (B * B) &&
+      approxEq R.scalarPart (Float.cos θ) (tol := 1e-12) &&
+      approxEq (R.coeff 3) (Float.sin θ) (tol := 1e-12)
+
+/-- Scalar-square exponential uses the exact hyperbolic closed form in CGA. -/
+def prop_expScalarSquareBivector_cga3_closed_form : Bool :=
+  rotorExpSampleAngles.all fun θ =>
+    let B := cga3EPlusEMinusSparse.smul θ
+    let R := expScalarSquareBivector B
+    !hasNonScalarPart (B * B) &&
+      approxEq R.scalarPart (Float.cosh θ) (tol := 1e-12) &&
+      approxEq (R.coeff 24) (Float.sinh θ) (tol := 1e-12)
+
 /-- Return true when a sparse multivector has any non-scalar coefficient. -/
 def sparseHasNonScalarPart {n : Nat} {sig : Signature n}
     (m : MultivectorS sig Float) : Bool :=
@@ -2384,6 +2402,17 @@ def prop_expBivector_cga3_torus_generator_matches_series : Bool :=
     sparseHasNonScalarPart (B * B) &&
       hasNonScalarPart (B * B) &&
       mvApproxEq (expBivector B) (expTaylorMV B 30) (tol := 1e-7)
+
+/-- Non-scalar-square bivectors take the Taylor fallback in the reusable helper. -/
+def prop_expScalarSquareBivector_fallback_matches_series : Bool :=
+  [(-0.5), (-0.25), 0.125, 0.375, 0.5].all fun θ =>
+    let B := cga3TorusGeneratorSparse.smul θ
+    sparseHasNonScalarPart (B * B) &&
+      hasNonScalarPart (B * B) &&
+      mvApproxEq
+        (expScalarSquareBivector B (fallbackTerms := 30))
+        (expTaylorMV B 30)
+        (tol := 1e-7)
 
 /-! ### Documented Projective Julia Example Exponentials -/
 
@@ -3376,12 +3405,21 @@ def runRotorExpReferenceTests : IO (List PropTestResult) := do
   let r3 := runBoolProp "CGA3 hyperbolic expBivector matches series"
     prop_expBivector_cga3_ePlusEMinus_matches_series
   IO.println s!"│ {r3}"
+  let r3a := runBoolProp "R3 scalar-square exp closed form"
+    prop_expScalarSquareBivector_r3_closed_form
+  IO.println s!"│ {r3a}"
+  let r3b := runBoolProp "CGA3 scalar-square exp closed form"
+    prop_expScalarSquareBivector_cga3_closed_form
+  IO.println s!"│ {r3b}"
   let r4 := runBoolProp "CGA3 torus generator square non-scalar"
     prop_cga3_torus_generator_square_non_scalar
   IO.println s!"│ {r4}"
   let r5 := runBoolProp "CGA3 torus expBivector falls back to series"
     prop_expBivector_cga3_torus_generator_matches_series
   IO.println s!"│ {r5}"
+  let r5a := runBoolProp "Scalar-square exp fallback matches series"
+    prop_expScalarSquareBivector_fallback_matches_series
+  IO.println s!"│ {r5a}"
   let r6 := runBoolProp "Projective scalar-square exp matches local series"
     ProjectiveJulia.prop_projective_scalar_square_exp_matches_series_locally
   IO.println s!"│ {r6}"
@@ -3407,7 +3445,7 @@ def runRotorExpReferenceTests : IO (List PropTestResult) := do
     ConformalJulia.prop_conformal_helix_motor_matches_local_taylor
   IO.println s!"│ {r13}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13]
+  return [r1, r2, r3, r3a, r3b, r4, r5, r5a, r6, r7, r8, r9, r10, r11, r12, r13]
 
 /-- Run all property tests -/
 def runPropertyTests : IO Unit := do

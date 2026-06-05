@@ -138,15 +138,23 @@ set_option linter.style.nativeDecide false in
 /-- exp(0) = 1 -/
 theorem exp_zero :
     expBivector (MultivectorS.zero : MultivectorS sig Float) = MultivectorS.scalar 1.0 := by
-  unfold expBivector bivectorSquare
+  unfold expBivector
   have hmul : (MultivectorS.zero : MultivectorS sig Float) * MultivectorS.zero =
       MultivectorS.zero := by
     rfl
+  have hfold :
+      Std.TreeMap.foldl
+          (fun acc (idx : Nat) (coeff : Float) =>
+            acc || (!(idx == 0) && !(coeff.abs < 1e-10)))
+          false (∅ : Std.TreeMap Nat Float) = false := by
+    rfl
   rw [hmul]
   dsimp [MultivectorS.scalarPart, MultivectorS.coeff, MultivectorS.zero]
-  rw [if_pos]
+  simp only [hasNonScalarPart, hfold, Bool.false_eq_true, if_false]
+  split
   · rfl
-  · native_decide
+  · rename_i hnot
+    exact False.elim (hnot (by native_decide))
 
 /-- For B² = -1: exp(θB) = cos(θ) + sin(θ)B -/
 theorem exp_unit_bivector (B : MultivectorS sig Float) (θ : Float)

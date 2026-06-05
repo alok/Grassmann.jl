@@ -98,6 +98,28 @@ def expTaylorMV (M : MultivectorS sig Float) (terms : Nat := 12) : MultivectorS 
       go remaining (k + 1) (Mn * M) (acc + term)
   go terms 0 (MultivectorS.scalar 1.0) MultivectorS.zero
 
+/-- Closed-form exponential for bivectors whose square is scalar.
+
+When `B * B` has no non-scalar part, the exponential reduces to the standard
+elliptic, hyperbolic, or nilpotent closed form. If `B²` contains non-scalar
+terms, this function deliberately falls back to the sparse Taylor series. -/
+def expScalarSquareBivector (B : MultivectorS sig Float)
+    (tol : Float := 1e-10) (zeroTol : Float := 1e-12) (fallbackTerms : Nat := 24) :
+    MultivectorS sig Float :=
+  let square := B * B
+  if hasNonScalarPart square tol then
+    expTaylorMV B fallbackTerms
+  else
+    let B2 := square.scalarPart
+    if B2.abs < zeroTol then
+      MultivectorS.scalar 1.0 + B
+    else if B2 < 0.0 then
+      let norm := Float.sqrt (-B2)
+      MultivectorS.scalar (Float.cos norm) + B.smul (Float.sin norm / norm)
+    else
+      let norm := Float.sqrt B2
+      MultivectorS.scalar (Float.cosh norm) + B.smul (Float.sinh norm / norm)
+
 /-- Exponential of a pure bivector.
     Uses the appropriate formula based on B²:
     - B² < 0 (Euclidean): exp(B) = cos(|B|) + sin(|B|)·B/|B|

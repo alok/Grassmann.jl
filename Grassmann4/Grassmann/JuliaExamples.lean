@@ -85,32 +85,8 @@ def projectiveDown (omega : ProjectiveMV) : Vec3 :=
 def projectiveTorusGenerator : ProjectiveMV :=
   MultivectorS.smul (3.0 / 7.0) (projE1 * projE2) + projInf * projE3
 
-/--
-Closed-form exponential for the simple/scalar-square bivectors used by the
-documented Julia examples.
--/
-def expScalarSquareBivector {n : Nat} {sig : Signature n}
-    (B : MultivectorS sig Float) : MultivectorS sig Float :=
-  let square := B * B
-  if hasNonScalarPart square 1e-10 then
-    expTaylorMV B 40
-  else
-    let B2 := square.scalarPart
-    if B2.abs < 1e-12 then
-      MultivectorS.scalar 1.0 + B
-    else if B2 < 0.0 then
-      let norm := Float.sqrt (-B2)
-      MultivectorS.scalar (Float.cos norm) + B.smul (Float.sin norm / norm)
-    else
-      let norm := Float.sqrt B2
-      let expNorm := Float.exp norm
-      let expNegNorm := Float.exp (-norm)
-      let c := (expNorm + expNegNorm) / 2.0
-      let s := (expNorm - expNegNorm) / 2.0
-      MultivectorS.scalar c + B.smul (s / norm)
-
 def expProjectiveScalarSquareBivector (B : ProjectiveMV) : ProjectiveMV :=
-  expScalarSquareBivector B
+  Grassmann.expScalarSquareBivector B (fallbackTerms := 40)
 
 def projectiveOrbitBasePoint : Vec3 :=
   { x := 1.0, y := 1.0, z := -1.0 }
@@ -192,8 +168,8 @@ def conformalHelixBasePoint : Vec3 :=
 
 def documentedConformalHelixMotorPoint (t : Float) : Vec3 :=
   let motor :=
-    expScalarSquareBivector (conformalHelixPart12 t) *
-      expScalarSquareBivector (conformalHelixPartInf3 t)
+    Grassmann.expScalarSquareBivector (conformalHelixPart12 t) (fallbackTerms := 40) *
+      Grassmann.expScalarSquareBivector (conformalHelixPartInf3 t) (fallbackTerms := 40)
   conformalDown (motor * conformalPoint conformalHelixBasePoint * motor†ₛ)
 
 def documentedConformalHelixPoint (t : Float) : Vec3 :=
