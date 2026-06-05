@@ -2,8 +2,8 @@
   Grassmann/AnchorTheorems.lean - Fundamental theorems that should hold if the implementation is correct
 
   These are "anchor theorems" - key mathematical properties of Clifford algebras
-  that serve as correctness specifications. They are deliberately left as `sorry`
-  to guide future formalization efforts.
+  that serve as correctness specifications. Some are proved directly against the
+  executable kernels; the remaining `sorry`s mark formalization targets.
 
   If any of these theorems are false, the implementation has a bug.
 -/
@@ -53,6 +53,104 @@ theorem basis_square (i : Fin n) :
       if sig.degenerate.getLsbD i.val then 0
       else if sig.metric.getLsbD i.val then -1 else 1 := by
   sorry
+
+/-! ## R3 Basis Blade Anchor Theorems -/
+
+set_option linter.style.nativeDecide false in
+/-- R3's first Euclidean basis blade squares to scalar `+1`. -/
+theorem r3_e1_blade_square :
+    geometricProductBlades (e1 : Blade R3) (e1 : Blade R3) =
+      BladeProduct.nonzero 1 Blade.scalar := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- R3's second Euclidean basis blade squares to scalar `+1`. -/
+theorem r3_e2_blade_square :
+    geometricProductBlades (e2 : Blade R3) (e2 : Blade R3) =
+      BladeProduct.nonzero 1 Blade.scalar := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- R3's third Euclidean basis blade squares to scalar `+1`. -/
+theorem r3_e3_blade_square :
+    geometricProductBlades (e3 : Blade R3) (e3 : Blade R3) =
+      BladeProduct.nonzero 1 Blade.scalar := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- Ordered R3 basis-vector product `e1 * e2` gives the positive bivector `e12`. -/
+theorem r3_e1_e2_blade_product :
+    geometricProductBlades (e1 : Blade R3) (e2 : Blade R3) =
+      BladeProduct.nonzero 1 (e12 : Blade R3) := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- Reversing R3 basis-vector order flips the `e12` sign. -/
+theorem r3_e2_e1_blade_product :
+    geometricProductBlades (e2 : Blade R3) (e1 : Blade R3) =
+      BladeProduct.nonzero (-1) (e12 : Blade R3) := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- R3 Euclidean bivector `e12` squares to scalar `-1`. -/
+theorem r3_e12_blade_square :
+    geometricProductBlades (e12 : Blade R3) (e12 : Blade R3) =
+      BladeProduct.nonzero (-1) Blade.scalar := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- Wedge product of an R3 basis vector with itself is zero. -/
+theorem r3_e1_wedge_self_zero :
+    wedgeProductBlades (e1 : Blade R3) (e1 : Blade R3) = BladeProduct.zero := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- Ordered R3 basis-vector wedge `e1 ∧ e2` gives the positive bivector `e12`. -/
+theorem r3_e1_wedge_e2 :
+    wedgeProductBlades (e1 : Blade R3) (e2 : Blade R3) =
+      BladeProduct.nonzero 1 (e12 : Blade R3) := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- Reversing R3 basis-vector wedge order flips the `e12` sign. -/
+theorem r3_e2_wedge_e1 :
+    wedgeProductBlades (e2 : Blade R3) (e1 : Blade R3) =
+      BladeProduct.nonzero (-1) (e12 : Blade R3) := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- Left contraction `e1 ⌋ e12` leaves the `e2` basis blade. -/
+theorem r3_e1_left_contract_e12 :
+    leftContractionBlades (e1 : Blade R3) (e12 : Blade R3) =
+      BladeProduct.nonzero 1 (e2 : Blade R3) := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- Left contraction `e2 ⌋ e12` records the expected orientation sign. -/
+theorem r3_e2_left_contract_e12 :
+    leftContractionBlades (e2 : Blade R3) (e12 : Blade R3) =
+      BladeProduct.nonzero (-1) (e1 : Blade R3) := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- Right contraction `e12 ⌊ e1` leaves the `e2` basis blade. -/
+theorem r3_e12_right_contract_e1 :
+    rightContractionBlades (e12 : Blade R3) (e1 : Blade R3) =
+      BladeProduct.nonzero 1 (e2 : Blade R3) := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- Right contraction `e12 ⌊ e2` records the expected orientation sign. -/
+theorem r3_e12_right_contract_e2 :
+    rightContractionBlades (e12 : Blade R3) (e2 : Blade R3) =
+      BladeProduct.nonzero (-1) (e1 : Blade R3) := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- R3 scalar product of `e12` with itself is `-1`. -/
+theorem r3_e12_scalar_product_self :
+    scalarProductBlades (e12 : Blade R3) (e12 : Blade R3) = -1 := by
+  native_decide
 
 /-- PGA3's projective basis vector is explicitly marked as null in the signature. -/
 theorem pga3_projective_signature_square :
