@@ -159,9 +159,25 @@ theorem r3_e12_scalar_product_self :
 def r3E1Multivector : Multivector R3 Rat :=
   Multivector.ofBlade (e1 : Blade R3)
 
+/-- Exact rational R3 vector `e2` as a dense multivector. -/
+def r3E2Multivector : Multivector R3 Rat :=
+  Multivector.ofBlade (e2 : Blade R3)
+
+/-- Exact rational R3 vector `e3` as a dense multivector. -/
+def r3E3Multivector : Multivector R3 Rat :=
+  Multivector.ofBlade (e3 : Blade R3)
+
 /-- Exact rational R3 bivector `e12` as a dense multivector. -/
 def r3E12Multivector : Multivector R3 Rat :=
   Multivector.ofBlade (e12 : Blade R3)
+
+/-- Exact rational R3 bivector `e13` as a dense multivector. -/
+def r3E13Multivector : Multivector R3 Rat :=
+  Multivector.ofBlade (e13 : Blade R3)
+
+/-- Exact rational R3 bivector `e23` as a dense multivector. -/
+def r3E23Multivector : Multivector R3 Rat :=
+  Multivector.ofBlade (e23 : Blade R3)
 
 /-- Exact rational R3 pseudoscalar `e123` as a dense multivector. -/
 def r3E123Multivector : Multivector R3 Rat :=
@@ -235,6 +251,174 @@ set_option linter.style.nativeDecide false in
 /-- Clifford conjugation fixes the R3 pseudoscalar. -/
 theorem r3_e123_conjugate :
     r3E123Multivector‡ = r3E123Multivector := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+/-! ### R3 Dense Hodge Anchors -/
+
+set_option linter.style.nativeDecide false in
+/-- Hodge dual maps the R3 scalar basis blade to the pseudoscalar. -/
+theorem r3_hodge_scalar :
+    ⋆ᵐ(Multivector.one : Multivector R3 Rat) = r3E123Multivector := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Hodge dual maps `e1` to `e23` in R3. -/
+theorem r3_hodge_e1 :
+    ⋆ᵐr3E1Multivector = r3E23Multivector := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Hodge dual maps `e2` to `-e13` in R3. -/
+theorem r3_hodge_e2 :
+    ⋆ᵐr3E2Multivector = r3E13Multivector.smul (-1 : Rat) := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Hodge dual maps `e3` to `e12` in R3. -/
+theorem r3_hodge_e3 :
+    ⋆ᵐr3E3Multivector = r3E12Multivector := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Hodge dual maps the R3 pseudoscalar to the scalar basis blade. -/
+theorem r3_hodge_pseudoscalar :
+    ⋆ᵐr3E123Multivector = (Multivector.one : Multivector R3 Rat) := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Hodge dual squares to the identity on R3 vectors. -/
+theorem r3_hodge_hodge_e1 :
+    ⋆ᵐ(⋆ᵐr3E1Multivector) = r3E1Multivector := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Hodge dual squares to the identity on R3 bivectors. -/
+theorem r3_hodge_hodge_e12 :
+    ⋆ᵐ(⋆ᵐr3E12Multivector) = r3E12Multivector := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+/-! ### R4 Dense Hodge Anchors -/
+
+/-- Exact rational R4 vector `e1` as a dense multivector. -/
+def r4E1Multivector : Multivector Grassmann.R4 Rat :=
+  Multivector.ofBlade (e1 : Blade Grassmann.R4)
+
+/-- Exact rational R4 vector `e2` as a dense multivector. -/
+def r4E2Multivector : Multivector Grassmann.R4 Rat :=
+  Multivector.ofBlade (e2 : Blade Grassmann.R4)
+
+/-- Exact rational R4 vector `e3` as a dense multivector. -/
+def r4E3Multivector : Multivector Grassmann.R4 Rat :=
+  Multivector.ofBlade (e3 : Blade Grassmann.R4)
+
+/-- Exact rational R4 vector `e4` as a dense multivector. -/
+def r4E4Multivector : Multivector Grassmann.R4 Rat :=
+  Multivector.ofBlade (e4 : Blade Grassmann.R4)
+
+/-- Exact rational R4 bivector `e12` as a dense multivector. -/
+def r4E12Multivector : Multivector Grassmann.R4 Rat :=
+  Multivector.ofBlade (e12 : Blade Grassmann.R4)
+
+/-- R4 trivector `e123`, encoded as bit mask `0b0111`. -/
+def r4E123Blade : Blade Grassmann.R4 := ⟨BitVec.ofNat 4 0b0111⟩
+
+/-- R4 trivector `e124`, encoded as bit mask `0b1011`. -/
+def r4E124Blade : Blade Grassmann.R4 := ⟨BitVec.ofNat 4 0b1011⟩
+
+/-- R4 trivector `e134`, encoded as bit mask `0b1101`. -/
+def r4E134Blade : Blade Grassmann.R4 := ⟨BitVec.ofNat 4 0b1101⟩
+
+/-- R4 trivector `e234`, encoded as bit mask `0b1110`. -/
+def r4E234Blade : Blade Grassmann.R4 := ⟨BitVec.ofNat 4 0b1110⟩
+
+/-- Exact rational R4 trivector `e123` as a dense multivector. -/
+def r4E123Multivector : Multivector Grassmann.R4 Rat :=
+  Multivector.ofBlade r4E123Blade
+
+/-- Exact rational R4 trivector `e124` as a dense multivector. -/
+def r4E124Multivector : Multivector Grassmann.R4 Rat :=
+  Multivector.ofBlade r4E124Blade
+
+/-- Exact rational R4 trivector `e134` as a dense multivector. -/
+def r4E134Multivector : Multivector Grassmann.R4 Rat :=
+  Multivector.ofBlade r4E134Blade
+
+/-- Exact rational R4 trivector `e234` as a dense multivector. -/
+def r4E234Multivector : Multivector Grassmann.R4 Rat :=
+  Multivector.ofBlade r4E234Blade
+
+/-- Exact rational R4 pseudoscalar as a dense multivector. -/
+def r4PseudoscalarMultivector : Multivector Grassmann.R4 Rat :=
+  Multivector.ofBlade (Blade.pseudoscalar : Blade Grassmann.R4)
+
+set_option linter.style.nativeDecide false in
+/-- Hodge dual maps the R4 scalar basis blade to the pseudoscalar. -/
+theorem r4_hodge_scalar :
+    ⋆ᵐ(Multivector.one : Multivector Grassmann.R4 Rat) = r4PseudoscalarMultivector := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Hodge dual maps `e1` to `e234` in R4. -/
+theorem r4_hodge_e1 :
+    ⋆ᵐr4E1Multivector = r4E234Multivector := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Hodge dual maps `e2` to `-e134` in R4. -/
+theorem r4_hodge_e2 :
+    ⋆ᵐr4E2Multivector = r4E134Multivector.smul (-1 : Rat) := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Hodge dual maps `e3` to `e124` in R4. -/
+theorem r4_hodge_e3 :
+    ⋆ᵐr4E3Multivector = r4E124Multivector := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Hodge dual maps `e4` to `-e123` in R4. -/
+theorem r4_hodge_e4 :
+    ⋆ᵐr4E4Multivector = r4E123Multivector.smul (-1 : Rat) := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Hodge dual squares to `-1` on R4 vectors. -/
+theorem r4_hodge_hodge_e1 :
+    ⋆ᵐ(⋆ᵐr4E1Multivector) = r4E1Multivector.smul (-1 : Rat) := by
+  apply Multivector.ext
+  intro i
+  native_decide +revert
+
+set_option linter.style.nativeDecide false in
+/-- Hodge dual squares to the identity on R4 bivectors. -/
+theorem r4_hodge_hodge_e12 :
+    ⋆ᵐ(⋆ᵐr4E12Multivector) = r4E12Multivector := by
   apply Multivector.ext
   intro i
   native_decide +revert
