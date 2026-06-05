@@ -72,6 +72,79 @@ theorem pga3_projective_blade_product_zero :
     geometricProductBlades pga3ProjectiveBlade pga3ProjectiveBlade = BladeProduct.zero := by
   rfl
 
+/-! ## CGA Basis Anchor Theorems -/
+
+/-- CGA3's positive conformal basis blade, encoded as bit mask `0b01000`. -/
+def cga3EplusBlade : Blade CGA3 := ⟨BitVec.ofNat 5 8⟩
+
+/-- CGA3's negative conformal basis blade, encoded as bit mask `0b10000`. -/
+def cga3EminusBlade : Blade CGA3 := ⟨BitVec.ofNat 5 16⟩
+
+/-- CGA3's conformal plane blade spanned by the extra basis directions. -/
+def cga3ExtraPlaneBlade : Blade CGA3 := ⟨BitVec.ofNat 5 24⟩
+
+/-- CGA3's positive conformal basis vector squares to `+1`. -/
+theorem cga3_eplus_signature_square :
+    Signature.basisSquare CGA3 ⟨3, by decide⟩ = 1 := by
+  decide
+
+/-- CGA3's negative conformal basis vector squares to `-1`. -/
+theorem cga3_eminus_signature_square :
+    Signature.basisSquare CGA3 ⟨4, by decide⟩ = -1 := by
+  decide
+
+set_option linter.style.nativeDecide false in
+/-- The geometric-product sign kernel records the positive conformal square. -/
+theorem cga3_eplus_geometric_sign :
+    geometricSign CGA3 cga3EplusBlade cga3EplusBlade = 1 := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- The geometric-product sign kernel records the negative conformal square. -/
+theorem cga3_eminus_geometric_sign :
+    geometricSign CGA3 cga3EminusBlade cga3EminusBlade = -1 := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- The ordered product of CGA3's extra conformal basis directions has positive sign. -/
+theorem cga3_eplus_eminus_geometric_sign :
+    geometricSign CGA3 cga3EplusBlade cga3EminusBlade = 1 := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- Reversing CGA3's extra conformal basis directions flips the sign. -/
+theorem cga3_eminus_eplus_geometric_sign :
+    geometricSign CGA3 cga3EminusBlade cga3EplusBlade = -1 := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- The positive conformal basis blade squares to the scalar blade. -/
+theorem cga3_eplus_blade_product :
+    geometricProductBlades cga3EplusBlade cga3EplusBlade =
+      BladeProduct.nonzero 1 Blade.scalar := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- The negative conformal basis blade squares to negative scalar. -/
+theorem cga3_eminus_blade_product :
+    geometricProductBlades cga3EminusBlade cga3EminusBlade =
+      BladeProduct.nonzero (-1) Blade.scalar := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- The ordered extra conformal product gives the extra-plane blade. -/
+theorem cga3_eplus_eminus_blade_product :
+    geometricProductBlades cga3EplusBlade cga3EminusBlade =
+      BladeProduct.nonzero 1 cga3ExtraPlaneBlade := by
+  native_decide
+
+set_option linter.style.nativeDecide false in
+/-- Reversing the extra conformal product negates the extra-plane blade. -/
+theorem cga3_eminus_eplus_blade_product :
+    geometricProductBlades cga3EminusBlade cga3EplusBlade =
+      BladeProduct.nonzero (-1) cga3ExtraPlaneBlade := by
+  native_decide
+
 /-! ## Wedge Product Theorems -/
 
 /-- Wedge product is antisymmetric: a ∧ b = -b ∧ a for vectors -/

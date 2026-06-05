@@ -30,7 +30,7 @@ Each product returns a sign and a result blade (or zero).
 inductive BladeProduct (sig : Signature n) where
   | zero : BladeProduct sig
   | nonzero : Int → Blade sig → BladeProduct sig
-  deriving Repr
+  deriving DecidableEq, Repr
 
 namespace BladeProduct
 
