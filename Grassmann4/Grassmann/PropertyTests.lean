@@ -2761,6 +2761,18 @@ def stressMv5 (mask : Nat) : Multivector R5Stress Int :=
 def denseIntEq {n : Nat} {sig : Signature n} (a b : Multivector sig Int) : Bool :=
   (List.finRange (2 ^ n)).all fun i => a.coeffs i == b.coeffs i
 
+/-- Euclidean `⋆⋆` sign on a grade-`k` basis blade in dimension `n`. -/
+def euclideanHodgeSquareSign (n k : Nat) : Int :=
+  if (k * (n - k)) % 2 == 0 then 1 else -1
+
+/-- Every basis blade satisfies the Euclidean `⋆⋆` sign convention. -/
+def hodgeSquareMatchesEuclideanBasis {n : Nat} (sig : Signature n) : Bool :=
+  (List.range (2 ^ n)).all fun mask =>
+    let blade : Blade sig := ⟨BitVec.ofNat n mask⟩
+    let mv : Multivector sig Int := Multivector.ofBlade blade
+    let k := grade (BitVec.ofNat n mask)
+    denseIntEq (⋆ᵐ(⋆ᵐmv)) (mv.smul (euclideanHodgeSquareSign n k))
+
 /-! ## Exact Blade Reference Tests -/
 
 /-- Basis blade from a bit mask for exact blade-product checks. -/
@@ -2856,6 +2868,14 @@ def prop_R4_exact_hodge_det : Bool :=
   LinearAlgebra.det [e1, e2, e3, e4] == 1 &&
   LinearAlgebra.det [e2, e1, e3, e4] == -1 &&
   LinearAlgebra.det [scaled1, scaled2, scaled3, scaled4] == 210
+
+/-- R4 exact Hodge dual squares with the expected Euclidean signs on all basis blades. -/
+def prop_R4_exact_hodge_square_basis : Bool :=
+  hodgeSquareMatchesEuclideanBasis R4
+
+/-- R5 exact Hodge dual squares with the expected Euclidean signs on all basis blades. -/
+def prop_R5_exact_hodge_square_basis : Bool :=
+  hodgeSquareMatchesEuclideanBasis R5Stress
 
 /-- R4 exact rotor composition and identity checks. -/
 def prop_R4_exact_composition_identity : Bool :=
@@ -3599,13 +3619,17 @@ def runHighDimStressTests : IO (List PropTestResult) := do
   IO.println s!"│ {s2}"
   let s3 := runBoolProp "R4 Hodge and determinant" prop_R4_exact_hodge_det
   IO.println s!"│ {s3}"
-  let s4 := runBoolProp "R4 composition and identities" prop_R4_exact_composition_identity
+  let s4 := runBoolProp "R4 Hodge square basis signs" prop_R4_exact_hodge_square_basis
   IO.println s!"│ {s4}"
-  let s5 := runBoolProp "R3 cross product matches Hodge cross"
-    prop_R3_crossProduct3D_matches_hodge_cross
+  let s5 := runBoolProp "R5 Hodge square basis signs" prop_R5_exact_hodge_square_basis
   IO.println s!"│ {s5}"
+  let s6 := runBoolProp "R4 composition and identities" prop_R4_exact_composition_identity
+  IO.println s!"│ {s6}"
+  let s7 := runBoolProp "R3 cross product matches Hodge cross"
+    prop_R3_crossProduct3D_matches_hodge_cross
+  IO.println s!"│ {s7}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [s1, s2, s3, s4, s5]
+  return [s1, s2, s3, s4, s5, s6, s7]
 
 /-- Run rotor exponential checks against generic series and known CGA preconditions. -/
 def runRotorExpReferenceTests : IO (List PropTestResult) := do
