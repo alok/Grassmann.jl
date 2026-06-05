@@ -206,6 +206,22 @@ let a := signedArea2D v1 v2       -- 2D signed area
 lake build
 ```
 
+## Benchmarks
+
+Packed `MV` performance checks live in `packedmvbench`:
+
+```bash
+lake exe packedmvbench all 200
+lake exe packedmvbench pga-motor-point 5000
+scripts/packedmvbench_guard.sh
+```
+
+`scripts/packedmvbench_guard.sh` runs a small correctness smoke test, then
+checks the packed PGA3 motor-point transform against conservative local
+thresholds. Override defaults with `PACKED_MV_BENCH_MOTOR_ITERS`,
+`MAX_PACKED_PGA_MOTOR_POINT_NS`, and
+`MIN_PACKED_PGA_MOTOR_POINT_SPEEDUP`.
+
 ## Testing Against Grassmann.jl
 
 The `OracleTests` module contains tests designed to be verified against Grassmann.jl:
