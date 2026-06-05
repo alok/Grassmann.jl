@@ -15,6 +15,7 @@ import Grassmann.RotorExp
 import Grassmann.LinearAlgebra
 import Grassmann.Manifold
 import Grassmann.CGA
+import Grassmann.PGATransforms
 import Grassmann.JuliaExamples
 
 namespace Grassmann.JuliaOracle
@@ -286,6 +287,64 @@ def verifyCGATranslator (x y z tx ty tz : Float) : IO (Array TestResult) := do
     toString tx, toString ty, toString tz
   ]
   let baseName := s!"cga_translate({x},{y},{z};{tx},{ty},{tz})"
+  if !result.success then
+    return #[{
+      name := baseName
+      passed := false
+      leanValue := 0.0
+      juliaValue := 0.0
+      difference := 0.0
+      message := s!"Oracle error: {result.stderr}"
+    }]
+  match parseJson result.stdout >>= fun j => getJsonFloatArray j "coords" with
+  | some juliaCoords =>
+    if juliaCoords.size != 3 then
+      return #[{
+        name := baseName
+        passed := false
+        leanValue := leanCoords.size.toFloat
+        juliaValue := juliaCoords.size.toFloat
+        difference := 0.0
+        message := "Coordinate count mismatch"
+      }]
+    let mkCoordResult (axis : String) (i : Nat) : TestResult :=
+      let leanValue := leanCoords.getD i 0.0
+      let juliaValue := juliaCoords.getD i 0.0
+      let diff := (leanValue - juliaValue).abs
+      {
+        name := s!"{baseName}.{axis}"
+        passed := floatsMatch leanValue juliaValue (tol := 1e-6)
+        leanValue := leanValue
+        juliaValue := juliaValue
+        difference := diff
+      }
+    return #[
+      mkCoordResult "x" 0,
+      mkCoordResult "y" 1,
+      mkCoordResult "z" 2
+    ]
+  | none =>
+    return #[{
+      name := baseName
+      passed := false
+      leanValue := 0.0
+      juliaValue := 0.0
+      difference := 0.0
+      message := s!"Parse failed: {result.stdout}"
+    }]
+
+/-- Verify packed PGA3 point translation coordinates against Grassmann.jl. -/
+def verifyPGA3Translator (x y z tx ty tz : Float) : IO (Array TestResult) := do
+  let point := PGA.point3 x y z
+  let translator := PGA.translator3 tx ty tz
+  let coords := PGA.extractPoint3 (PGA.Motor.transformPoint translator point)
+  let leanCoords := #[coords.1, coords.2.1, coords.2.2]
+  let result ← callOracle [
+    "pga3_translate_point",
+    toString x, toString y, toString z,
+    toString tx, toString ty, toString tz
+  ]
+  let baseName := s!"pga3_translate({x},{y},{z};{tx},{ty},{tz})"
   if !result.success then
     return #[{
       name := baseName
@@ -734,6 +793,12 @@ def testPGA3Products : IO (Array TestResult) := do
     ((e12 * e12).scalarPart)
   return #[r1, r2, r3, r4, r5, r6, r7]
 
+/-- Test PGA3 translators against the Grassmann.jl projective sandwich action. -/
+def testPGA3Translators : IO (Array TestResult) := do
+  let r1 ← verifyPGA3Translator 1.0 2.0 (-0.5) 0.25 (-0.75) 1.5
+  let r2 ← verifyPGA3Translator (-2.0) 0.5 3.0 1.25 0.0 (-2.5)
+  return r1 ++ r2
+
 /-- Test signature verification -/
 def testSignatures : IO (Array TestResult) := do
   let r1 ← verifySignature "R3" #[1.0, 1.0, 1.0]
@@ -915,6 +980,11 @@ def runAllTests : IO Unit := do
   let pgaResults ← testPGA3Products
   for r in pgaResults do IO.println s!"│ {r}"
   IO.println "└──────────────────────────────────────────┘"
+  -- PGA3 translations
+  IO.println "\n┌─ PGA3 Translators ───────────────────────┐"
+  let pgaTranslatorResults ← testPGA3Translators
+  for r in pgaTranslatorResults do IO.println s!"│ {r}"
+  IO.println "└──────────────────────────────────────────┘"
   -- Signatures
   IO.println "\n┌─ Signature Verification ─────────────────┐"
   let sigResults ← testSignatures
@@ -951,8 +1021,9 @@ def runAllTests : IO Unit := do
   for r in plotSampleResults do IO.println s!"│ {r}"
   IO.println "└──────────────────────────────────────────┘"
   -- Summary
-  let all := r3Results ++ coeffResults ++ pgaResults ++ sigResults ++ cgaResults ++
-    cgaDistanceResults ++ cgaTranslatorResults ++ rotorResults ++ linearResults ++
+  let all := r3Results ++ coeffResults ++ pgaResults ++ pgaTranslatorResults ++
+    sigResults ++ cgaResults ++ cgaDistanceResults ++ cgaTranslatorResults ++
+    rotorResults ++ linearResults ++
     plotSampleResults
   let passed := all.filter (·.passed)
   let failed := all.filter (!·.passed)

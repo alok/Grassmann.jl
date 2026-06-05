@@ -450,6 +450,85 @@ function cmd_cga_translate_point_composed(
 end
 
 """
+Build a PGA3 point in the projective model used by the Lean port.
+
+Grassmann.jl's grade-3 storage order for `D"1,1,1,0"` is
+`[e123, e124, e134, e234]`. Lean's point coordinates are
+`e123 + x*e023 + y*e031 + z*e012`, which maps here to
+`[w, z, -y, x]`.
+"""
+function pga3_point(x::Float64, y::Float64, z::Float64)
+    alg = get_algebra("PGA3")
+    e1 = basis_vector(alg, 1)
+    e2 = basis_vector(alg, 2)
+    e3 = basis_vector(alg, 3)
+    e4 = basis_vector(alg, 4)
+
+    e123 = e1 * e2 * e3
+    e423 = e4 * e2 * e3
+    e431 = e4 * e3 * e1
+    e412 = e4 * e1 * e2
+
+    return e123 + x*e423 + y*e431 + z*e412
+end
+
+"""
+Build a PGA3 translator that shifts embedded point coordinates by `(tx, ty, tz)`.
+The signs are written in Grassmann.jl's null-last basis convention.
+"""
+function pga3_translator(tx::Float64, ty::Float64, tz::Float64)
+    alg = get_algebra("PGA3")
+    e1 = basis_vector(alg, 1)
+    e2 = basis_vector(alg, 2)
+    e3 = basis_vector(alg, 3)
+    e4 = basis_vector(alg, 4)
+
+    return 1.0*alg[1] + (tx/2)*e4*e1 + (ty/2)*e4*e2 + (tz/2)*e4*e3
+end
+
+"""
+Extract Euclidean coordinates from a normalized PGA3 grade-3 point.
+"""
+function pga3_extract_point(p)
+    vals = collect(value(p))
+    if length(vals) != 4
+        error("Expected a PGA3 grade-3 point with 4 coefficients, got $(length(vals))")
+    end
+
+    w = Float64(vals[1])
+    if abs(w) < 1e-12
+        error("Cannot extract coordinates from a point at infinity")
+    end
+
+    return [Float64(vals[4]) / w, -Float64(vals[3]) / w, Float64(vals[2]) / w]
+end
+
+"""
+Translate a PGA3 point and return extracted Euclidean coordinates.
+"""
+function cmd_pga3_translate_point(
+    x::Float64,
+    y::Float64,
+    z::Float64,
+    tx::Float64,
+    ty::Float64,
+    tz::Float64,
+)
+    point = pga3_point(x, y, z)
+    translator = pga3_translator(tx, ty, tz)
+    translated = translator >>> point
+    coords = pga3_extract_point(translated)
+
+    return Dict(
+        "operation" => "pga3_translate_point",
+        "point" => [x, y, z],
+        "translation" => [tx, ty, tz],
+        "coords" => coords,
+        "result" => string(translated),
+    )
+end
+
+"""
 Verify rotor normalization and action.
 """
 function cmd_verify_rotor(sig_name::String, angle::Float64)
@@ -666,6 +745,13 @@ function main()
                                              parse(Float64, ARGS[8]),
                                              parse(Float64, ARGS[9]),
                                              parse(Float64, ARGS[10]))
+        elseif cmd == "pga3_translate_point" && length(ARGS) >= 7
+            cmd_pga3_translate_point(parse(Float64, ARGS[2]),
+                                     parse(Float64, ARGS[3]),
+                                     parse(Float64, ARGS[4]),
+                                     parse(Float64, ARGS[5]),
+                                     parse(Float64, ARGS[6]),
+                                     parse(Float64, ARGS[7]))
         elseif cmd == "verify_rotor" && length(ARGS) >= 3
             cmd_verify_rotor(ARGS[2], parse(Float64, ARGS[3]))
         elseif cmd == "signature_check" && length(ARGS) >= 2
@@ -704,6 +790,8 @@ function main()
                                         - Translate a CGA point
   cga_translate_point_composed <x> <y> <z> <tx1> <ty1> <tz1> <tx2> <ty2> <tz2>
                                         - Compose two CGA translations
+  pga3_translate_point <x> <y> <z> <tx> <ty> <tz>
+                                        - Translate a PGA3 point
   verify_rotor <sig> <angle>            - Verify rotor
   signature_check <sig>                 - Check basis squares
   bivector_exp <sig> <i> <j> <angle>    - exp(angle*eij)

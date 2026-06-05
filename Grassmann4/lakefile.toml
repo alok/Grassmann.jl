@@ -40,6 +40,7 @@ root = "RunJuliaExamples"
 [[lean_exe]]
 name = "oracletests"
 root = "RunOracleTests"
+moreLinkArgs = ["-L/opt/homebrew/opt/openblas/lib", "-lblas"]
 
 [[lean_exe]]
 name = "propertytests"
