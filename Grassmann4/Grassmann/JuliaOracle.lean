@@ -641,6 +641,10 @@ def r3e (i : Nat) (h : i < 3 := by omega) : MultivectorS R3 Float :=
 def cga3e (i : Nat) (h : i < 5 := by omega) : MultivectorS CGA3 Float :=
   MultivectorS.basis ⟨i, h⟩
 
+/-- PGA3 basis vector. -/
+def pga3e (i : Nat) (h : i < 4 := by omega) : MultivectorS PGA3 Float :=
+  MultivectorS.basis ⟨i, h⟩
+
 /-- R3 dense vector coordinates in basis order. -/
 def r3DenseCoords (m : Multivector R3 Float) : Array Float :=
   #[m.coeff (e1 : Blade R3), m.coeff (e2 : Blade R3), m.coeff (e3 : Blade R3)]
@@ -711,12 +715,34 @@ def testBladeCoefficients : IO (Array TestResult) := do
     r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17
   ]
 
+/-- Test PGA3 projective products, including the degenerate projective basis. -/
+def testPGA3Products : IO (Array TestResult) := do
+  let e1 := pga3e 0
+  let e2 := pga3e 1
+  let e3 := pga3e 2
+  let e4 := pga3e 3
+  let e12 := e1 * e2
+  let r1 ← verifyGeometricProduct "PGA3" "e1" "e1" (e1 * e1).scalarPart
+  let r2 ← verifyGeometricProduct "PGA3" "e2" "e2" (e2 * e2).scalarPart
+  let r3 ← verifyGeometricProduct "PGA3" "e3" "e3" (e3 * e3).scalarPart
+  let r4 ← verifyGeometricProduct "PGA3" "e4" "e4" (e4 * e4).scalarPart
+  let r5 ← verifyBladeCoefficient "PGA3" "geometric_product" "e1" "e2" "e12"
+    ((e1 * e2).coeff 3)
+  let r6 ← verifyBladeCoefficient "PGA3" "wedge_product" "e2" "e1" "e12"
+    ((e2 ⋀ₛ e1).coeff 3)
+  let r7 ← verifyBladeCoefficient "PGA3" "geometric_product" "e12" "e12" "1"
+    ((e12 * e12).scalarPart)
+  return #[r1, r2, r3, r4, r5, r6, r7]
+
 /-- Test signature verification -/
 def testSignatures : IO (Array TestResult) := do
   let r1 ← verifySignature "R3" #[1.0, 1.0, 1.0]
   let r2 ← verifySignature "CGA3" #[1.0, 1.0, 1.0, 1.0, -1.0]
   let r3 ← verifySignature "STA" #[1.0, -1.0, -1.0, -1.0]
-  return #[r1, r2, r3]
+  let r4 ← verifySignature "R4" #[1.0, 1.0, 1.0, 1.0]
+  let r5 ← verifySignature "PGA2" #[1.0, 1.0, 0.0]
+  let r6 ← verifySignature "PGA3" #[1.0, 1.0, 1.0, 0.0]
+  return #[r1, r2, r3, r4, r5, r6]
 
 /-- Test CGA null vectors -/
 def testCGANullVectors : IO (Array TestResult) := do
@@ -884,6 +910,11 @@ def runAllTests : IO Unit := do
   let coeffResults ← testBladeCoefficients
   for r in coeffResults do IO.println s!"│ {r}"
   IO.println "└──────────────────────────────────────────┘"
+  -- PGA3 products
+  IO.println "\n┌─ PGA3 Projective Products ───────────────┐"
+  let pgaResults ← testPGA3Products
+  for r in pgaResults do IO.println s!"│ {r}"
+  IO.println "└──────────────────────────────────────────┘"
   -- Signatures
   IO.println "\n┌─ Signature Verification ─────────────────┐"
   let sigResults ← testSignatures
@@ -920,7 +951,7 @@ def runAllTests : IO Unit := do
   for r in plotSampleResults do IO.println s!"│ {r}"
   IO.println "└──────────────────────────────────────────┘"
   -- Summary
-  let all := r3Results ++ coeffResults ++ sigResults ++ cgaResults ++
+  let all := r3Results ++ coeffResults ++ pgaResults ++ sigResults ++ cgaResults ++
     cgaDistanceResults ++ cgaTranslatorResults ++ rotorResults ++ linearResults ++
     plotSampleResults
   let passed := all.filter (·.passed)
