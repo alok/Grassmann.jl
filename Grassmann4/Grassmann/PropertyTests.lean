@@ -280,6 +280,26 @@ def denseAfterPackedSetCoeff {n : Nat} {sig : Signature n} (p : Parity)
     else
       0.0⟩
 
+/-- Dense reference for the public `MV.ofPairs` constructor.
+
+`MV.ofPairs` is implemented as repeated public `setCoeff` writes, so duplicate
+masks are overwrites, out-of-range masks are ignored, and parity-packed storage
+keeps only masks admitted by the selected parity.
+-/
+def denseAfterPackedOfPairs {n : Nat} {sig : Signature n} (p : Parity)
+    (pairs : List (Nat × Float)) : Multivector sig Float :=
+  pairs.foldl (init := (0 : Multivector sig Float)) fun acc (mask, value) =>
+    if mask < 2 ^ n && Parity.containsMask p mask then
+      acc.setCoeff ⟨BitVec.ofNat n mask⟩ value
+    else
+      acc
+
+/-- Compare `MV.ofPairs` against the dense public-behavior reference. -/
+def packedOfPairsMatchesDense {n : Nat} (sig : Signature n) (p : Parity)
+    (pairs : List (Nat × Float)) (tol : Float := 1e-9) : Bool :=
+  packedMatchesDense (MV.ofPairs sig p pairs)
+    (denseAfterPackedOfPairs (sig := sig) p pairs) tol
+
 /-- Packed wedge agrees with dense wedge for full and parity-packed inputs. -/
 def packedWedgeMatchesDense {n : Nat} {sig : Signature n} (a b : Multivector sig Float)
     (tol : Float := 1e-6) : Bool :=
@@ -874,6 +894,14 @@ def prop_mv_setCoeff_dense : Gen Bool := do
     packedMatchesDense (odd.setCoeff mask value)
       (denseAfterPackedSetCoeff .odd a.mv mask value)
 
+/-- Packed `MV.ofPairs` handles duplicate, out-of-range, and parity-filtered masks. -/
+def prop_mv_ofPairs_dense : Bool :=
+  let pairs : List (Nat × Float) :=
+    [(0, 1.25), (1, -2.0), (3, 4.0), (8, 9.0), (1, 2.5), (6, -1.0)]
+  packedOfPairsMatchesDense R3 .full pairs &&
+    packedOfPairsMatchesDense R3 .even pairs &&
+    packedOfPairsMatchesDense R3 .odd pairs
+
 /-- Packed full multiplication agrees with dense multiplication. -/
 def prop_mv_full_mul_dense : Gen Bool := do
   let a ← genR3DenseMv
@@ -1179,6 +1207,15 @@ def prop_mv_pga3_setCoeff_dense : Gen Bool := do
       (denseAfterPackedSetCoeff .even a.mv mask value) &&
     packedMatchesDense (odd.setCoeff mask value)
       (denseAfterPackedSetCoeff .odd a.mv mask value)
+
+/-- PGA3 packed `MV.ofPairs` matches dense public constructor behavior. -/
+def prop_mv_pga3_ofPairs_dense : Bool :=
+  let pairs : List (Nat × Float) :=
+    [(0, 1.0), (1, 2.0), (3, 3.5), (5, -4.0), (8, 6.0), (16, 9.0),
+      (3, -1.5)]
+  packedOfPairsMatchesDense PGA3 .full pairs &&
+    packedOfPairsMatchesDense PGA3 .even pairs &&
+    packedOfPairsMatchesDense PGA3 .odd pairs
 
 /-- PGA3 packed full multiplication agrees with dense multiplication. -/
 def prop_mv_pga3_full_mul_dense : Gen Bool := do
@@ -1628,6 +1665,15 @@ def prop_mv_cga3_setCoeff_dense : Gen Bool := do
       (denseAfterPackedSetCoeff .even a.mv mask value) &&
     packedMatchesDense (odd.setCoeff mask value)
       (denseAfterPackedSetCoeff .odd a.mv mask value)
+
+/-- CGA3 packed `MV.ofPairs` matches dense public constructor behavior. -/
+def prop_mv_cga3_ofPairs_dense : Bool :=
+  let pairs : List (Nat × Float) :=
+    [(0, -0.5), (1, 1.0), (3, -2.0), (7, 4.0), (18, 5.0), (31, -6.0),
+      (32, 7.0), (18, -8.0)]
+  packedOfPairsMatchesDense CGA3 .full pairs &&
+    packedOfPairsMatchesDense CGA3 .even pairs &&
+    packedOfPairsMatchesDense CGA3 .odd pairs
 
 /-- CGA3 packed full multiplication agrees with dense multiplication. -/
 def prop_mv_cga3_full_mul_dense : Gen Bool := do
@@ -3274,6 +3320,8 @@ def runPackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {r15g}"
   let r15h ← runGenProp "MV setCoeff dense reference" prop_mv_setCoeff_dense
   IO.println s!"│ {r15h}"
+  let r15i := runBoolProp "MV ofPairs dense reference" prop_mv_ofPairs_dense
+  IO.println s!"│ {r15i}"
   let r16 ← runGenProp "MV full multiplication" prop_mv_full_mul_dense
   IO.println s!"│ {r16}"
   let r17 ← runGenProp "MV even*even multiplication" prop_mv_even_mul_dense
@@ -3303,8 +3351,9 @@ def runPackedReferenceTests : IO (List PropTestResult) := do
   let r22b ← runGenProp "MV GAlgebra normSq" prop_mv_galgebra_normSq_dense 50
   IO.println s!"│ {r22b}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [r13, r14, r15, r15p, r15a, r15b, r15c, r15d, r15e, r15f, r15g, r15h, r16,
-    r17, r18, r19, r20, r20a, r20b, r20c, r21, r21a, r22, r22ops, r22a, r22b]
+  return [r13, r14, r15, r15p, r15a, r15b, r15c, r15d, r15e, r15f, r15g, r15h,
+    r15i, r16, r17, r18, r19, r20, r20a, r20b, r20c, r21, r21a, r22, r22ops,
+    r22a, r22b]
 
 /-- Run direct-dispatch vs typeclass-dispatch multiplication checks. -/
 def runMVDispatchReferenceTests : IO (List PropTestResult) := do
@@ -3342,6 +3391,8 @@ def runPGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {pgaMv2e}"
   let pgaMv2f ← runGenProp "PGA3 MV setCoeff dense reference" prop_mv_pga3_setCoeff_dense
   IO.println s!"│ {pgaMv2f}"
+  let pgaMv2g := runBoolProp "PGA3 MV ofPairs dense reference" prop_mv_pga3_ofPairs_dense
+  IO.println s!"│ {pgaMv2g}"
   let pgaMv3 ← runGenProp "PGA3 MV full multiplication" prop_mv_pga3_full_mul_dense
   IO.println s!"│ {pgaMv3}"
   let pgaMv4 ← runGenProp "PGA3 MV even*even multiplication" prop_mv_pga3_even_mul_dense
@@ -3375,8 +3426,8 @@ def runPGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {pgaMv9b}"
   IO.println "└────────────────────────────────────────────────┘"
   return [pgaMv1, pgaMv2, pgaMv2p, pgaMv2a, pgaMv2b, pgaMv2c, pgaMv2d, pgaMv2e,
-    pgaMv2f, pgaMv3, pgaMv4, pgaMv5, pgaMv6, pgaMv7, pgaMv7a, pgaMv7b, pgaMv7c,
-    pgaMv8, pgaMv8a, pgaMv9, pgaMv9ops, pgaMv9a, pgaMv9b]
+    pgaMv2f, pgaMv2g, pgaMv3, pgaMv4, pgaMv5, pgaMv6, pgaMv7, pgaMv7a, pgaMv7b,
+    pgaMv7c, pgaMv8, pgaMv8a, pgaMv9, pgaMv9ops, pgaMv9a, pgaMv9b]
 
 /-- Run user-facing PGA3 point-cloud transform checks. -/
 def runPGA3PointCloudTransformTests : IO (List PropTestResult) := do
@@ -3467,6 +3518,8 @@ def runCGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {cgaMv2e}"
   let cgaMv2f ← runGenProp "CGA3 MV setCoeff dense reference" prop_mv_cga3_setCoeff_dense
   IO.println s!"│ {cgaMv2f}"
+  let cgaMv2g := runBoolProp "CGA3 MV ofPairs dense reference" prop_mv_cga3_ofPairs_dense
+  IO.println s!"│ {cgaMv2g}"
   let cgaMv3 ← runGenProp "CGA3 MV full multiplication" prop_mv_cga3_full_mul_dense
   IO.println s!"│ {cgaMv3}"
   let cgaMv4 ← runGenProp "CGA3 MV even*even multiplication" prop_mv_cga3_even_mul_dense
@@ -3500,8 +3553,8 @@ def runCGA3PackedReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {cgaMv9b}"
   IO.println "└────────────────────────────────────────────────┘"
   return [cgaMv1, cgaMv2, cgaMv2p, cgaMv2a, cgaMv2b, cgaMv2c, cgaMv2d, cgaMv2e,
-    cgaMv2f, cgaMv3, cgaMv4, cgaMv5, cgaMv6, cgaMv7, cgaMv7a, cgaMv7b, cgaMv7c,
-    cgaMv8, cgaMv8a, cgaMv9, cgaMv9ops, cgaMv9a, cgaMv9b]
+    cgaMv2f, cgaMv2g, cgaMv3, cgaMv4, cgaMv5, cgaMv6, cgaMv7, cgaMv7a, cgaMv7b,
+    cgaMv7c, cgaMv8, cgaMv8a, cgaMv9, cgaMv9ops, cgaMv9a, cgaMv9b]
 
 /-- Run sparse-MV baseline checks against dense reference results. -/
 def runSparseReferenceTests : IO (List PropTestResult) := do
