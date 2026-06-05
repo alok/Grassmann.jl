@@ -722,6 +722,38 @@ def prop_sign_table_cga3_mul_generic : Gen Bool := do
 
 /-! ## Packed MV Reference Tests -/
 
+/-- Packed `MV` index tables agree with generic parity filtering and round-trip all
+valid blade masks. This covers both cached dimensions and generic fallback paths. -/
+def packedLayoutInvariant (n : Nat) (p : Parity) : Bool :=
+  let idx := MV.indices n p
+  let expected := MV.computeIndices n p
+  let packedIndicesRoundtrip :=
+    (List.range idx.size).all fun pi =>
+      let mask := MV.unpackIdx n p pi
+      mask == idx.getD pi 0 &&
+        decide (mask < 2 ^ n) &&
+        Parity.containsMask p mask &&
+        MV.packIdx n p mask == pi &&
+        MV.computePackIdx n p mask == pi
+  let validMasksRoundtrip :=
+    (List.range (2 ^ n)).all fun mask =>
+      if Parity.containsMask p mask then
+        let pi := MV.packIdx n p mask
+        decide (pi < idx.size) &&
+          MV.unpackIdx n p pi == mask &&
+          pi == MV.computePackIdx n p mask
+      else true
+  idx == expected &&
+    idx.size == storageSize n p &&
+    packedIndicesRoundtrip &&
+    validMasksRoundtrip
+
+/-- Packed `MV` layout maps are internally consistent for cached and fallback dimensions. -/
+def prop_mv_layout_invariants : Bool :=
+  [1, 2, 3, 4, 5, 6].all fun n =>
+    [.full, .even, .odd].all fun p =>
+      packedLayoutInvariant n p
+
 /-- Full packed `MV` round-trip preserves all dense coefficients. -/
 def prop_mv_full_roundtrip : Gen Bool := do
   let a ← genR3DenseMv
@@ -3047,6 +3079,8 @@ def runSignTableReferenceTests : IO (List PropTestResult) := do
 /-- Run R3 packed-MV baseline checks against dense reference results. -/
 def runPackedReferenceTests : IO (List PropTestResult) := do
   IO.println "\n┌─ Packed MV vs Dense Reference ────────────────┐"
+  let r13 := runBoolProp "MV layout invariants" prop_mv_layout_invariants
+  IO.println s!"│ {r13}"
   let r14 ← runGenProp "MV full round-trip" prop_mv_full_roundtrip
   IO.println s!"│ {r14}"
   let r15 ← runGenProp "MV parity projection" prop_mv_parity_projection
@@ -3098,7 +3132,7 @@ def runPackedReferenceTests : IO (List PropTestResult) := do
   let r22b ← runGenProp "MV GAlgebra normSq" prop_mv_galgebra_normSq_dense 50
   IO.println s!"│ {r22b}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [r14, r15, r15p, r15a, r15b, r15c, r15d, r15e, r15f, r15g, r15h, r16,
+  return [r13, r14, r15, r15p, r15a, r15b, r15c, r15d, r15e, r15f, r15g, r15h, r16,
     r17, r18, r19, r20, r20a, r20b, r20c, r21, r21a, r22, r22ops, r22a, r22b]
 
 /-- Run direct-dispatch vs typeclass-dispatch multiplication checks. -/
