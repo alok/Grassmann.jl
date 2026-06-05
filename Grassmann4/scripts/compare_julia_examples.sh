@@ -48,6 +48,30 @@ numeric_gt() {
   awk -v actual="$1" -v expected="$2" 'BEGIN { exit(actual > expected ? 0 : 1) }'
 }
 
+is_grayscale_hex() {
+  local color="${1#\#}"
+  local lower
+  lower="$(printf '%s' "$color" | tr '[:upper:]' '[:lower:]')"
+  local red="${lower:0:2}"
+  local green="${lower:2:2}"
+  local blue="${lower:4:2}"
+  [[ "$red" == "$green" && "$green" == "$blue" ]]
+}
+
+json_string_array() {
+  local first=true
+  printf '['
+  for value in "$@"; do
+    if [[ "$first" == true ]]; then
+      first=false
+    else
+      printf ','
+    fi
+    printf '"%s"' "$value"
+  done
+  printf ']'
+}
+
 report_failures() {
   printf 'visual comparison smoke checks failed:\n' >&2
   for failure in "${failures[@]}"; do
@@ -70,6 +94,8 @@ projective_stream_field_witness_max_diff=0.0
 min_lean_stddev=""
 min_julia_stddev=""
 max_rmse_normalized=""
+lean_palette_colors=()
+lean_palette_grayscale=true
 
 cd "$pkg_root"
 rm -rf "$out_root/lean" "$out_root/index.html" "$out_root/manifest.json"
@@ -210,6 +236,24 @@ if [[ ${#generated_svgs[@]} -ne ${#names[@]} ]]; then
   failures+=("expected ${#names[@]} generated Lean SVGs, found ${#generated_svgs[@]}")
 fi
 
+if [[ ${#generated_svgs[@]} -gt 0 ]]; then
+  while IFS= read -r color; do
+    lean_palette_colors+=("$color")
+    if ! is_grayscale_hex "$color"; then
+      lean_palette_grayscale=false
+      failures+=("Lean SVG palette includes non-grayscale color: $color")
+    fi
+  done < <(
+    { rg --no-filename -o '#[0-9A-Fa-f]{6}' "${generated_svgs[@]}" || true; } |
+      awk '{print tolower($0)}' |
+      sort -u
+  )
+fi
+
+if [[ ${#lean_palette_colors[@]} -eq 0 ]]; then
+  failures+=("generated Lean SVGs did not contain any explicit hex colors")
+fi
+
 if [[ ${#names[@]} -eq 0 ]]; then
   report_failures
   exit 1
@@ -314,6 +358,11 @@ fi
   printf '  "maximum_projective_stream_field_witness_diff":%s,\n' "$maximum_projective_stream_field_witness_diff"
   printf '  "projective_stream_field_witness_count":%s,\n' "$projective_stream_field_witness_count"
   printf '  "projective_stream_field_witness_max_diff":%s,\n' "$projective_stream_field_witness_max_diff"
+  printf '  "lean_palette_grayscale":%s,\n' "$lean_palette_grayscale"
+  printf '  "lean_palette_color_count":%s,\n' "${#lean_palette_colors[@]}"
+  printf '  "lean_palette_colors":'
+  json_string_array "${lean_palette_colors[@]}"
+  printf ',\n'
   printf '  "metrics_tsv":"%s",\n' "$metrics"
   printf '  "contact_sheet":"%s",\n' "$contact"
   printf '  "examples":[\n'
@@ -340,6 +389,8 @@ printf 'visual smoke checks passed: %s examples, frame stddev >= %s, normalized 
   "${#names[@]}" "$minimum_frame_stddev" "$maximum_rmse_normalized"
 printf 'observed visual extrema: min Lean stddev %s, min Julia stddev %s, max normalized RMSE %s\n' \
   "$min_lean_stddev" "$min_julia_stddev" "$max_rmse_normalized"
+printf 'Lean palette checks passed: %s explicit SVG colors, grayscale/white only\n' \
+  "${#lean_palette_colors[@]}"
 printf 'CGA witness checks passed: %s samples, max_abs_diff <= %s (observed %s)\n' \
   "$cga_witness_count" "$maximum_cga_witness_diff" "$cga_witness_max_diff"
 printf 'projective plot formula witnesses passed: %s samples, max_abs_diff <= %s (observed %s)\n' \

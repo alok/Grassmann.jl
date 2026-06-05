@@ -66,20 +66,23 @@ conservative visual smoke gate: all documented `paper/img/*.png` examples in
 `docs/src/algebra.md` must be covered, all twelve expected Lean SVGs must be
 generated, the manifest must list every expected example, each Lean and Julia
 frame must have grayscale standard deviation of at least `1200`, and the
-normalized RMSE must stay at or below `0.25`. Treat the RMSE bound as a sanity
-check for blank or badly framed images, not as an exact visual oracle; several
-examples are qualitative Lean counterparts rather than exact Grassmann.jl
-renderings. The same run also checks formula witnesses: the CGA translation
-helper path, exact projective plot curves, the conformal helix motor, and the
-projective `orb`/`wave` stream-field motor all have `1e-6` max absolute
-difference gates.
+normalized RMSE must stay at or below `0.25`. The Lean SVGs are also scanned
+for explicit hex colors, and every color must be grayscale/white so the visual
+port cannot silently drift away from the Julia/Makie palette. Treat the RMSE
+bound as a sanity check for blank or badly framed images, not as an exact visual
+oracle; several examples are qualitative Lean counterparts rather than exact
+Grassmann.jl renderings. The same run also checks formula witnesses: the CGA
+translation helper path, exact projective plot curves, the conformal helix
+motor, and the projective `orb`/`wave` stream-field motor all have `1e-6` max
+absolute difference gates.
 
 The generated `summary.json` repeats the gate thresholds and records the
 observed extrema for the run: minimum Lean frame standard deviation, minimum
 Julia frame standard deviation, maximum normalized RMSE, maximum CGA witness
 difference, maximum projective plot formula witness difference, maximum
-conformal plot formula witness difference, and maximum projective stream-field
-witness difference.
+conformal plot formula witness difference, maximum projective stream-field
+witness difference, and the unique explicit Lean SVG palette colors observed by
+the run.
 
 It requires `curl`, `jq`, `rsvg-convert`, and ImageMagick's `magick` command.
 
@@ -144,8 +147,9 @@ Julia frame above the `1200` grayscale standard-deviation floor, every
 normalized RMSE at or below `0.25`, all ten CGA orbit witnesses within `1e-6`
 max absolute difference, all fifteen projective plot formula witnesses within
 `1e-6` max absolute difference, all five conformal helix plot witnesses within
-`1e-6` max absolute difference, and all ten projective stream-field witnesses
-within `1e-6` max absolute difference.
+`1e-6` max absolute difference, all ten projective stream-field witnesses
+within `1e-6` max absolute difference, and the generated Lean SVG palette
+restricted to explicit grayscale/white colors.
 
 The observed normalized RMSE values were:
 
