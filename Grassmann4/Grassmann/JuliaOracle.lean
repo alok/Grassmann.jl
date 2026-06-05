@@ -575,11 +575,11 @@ def verifyR3Det (name : String) (columns : Array (Float × Float × Float))
     }
 
 /-- Verify a documented Julia plot-example point against Lean coordinates. -/
-def verifyJuliaExamplePoint (exampleName : String) (t : Float)
-    (leanPoint : Grassmann.JuliaExamples.Vec3) : IO (Array TestResult) := do
+def verifyJuliaExamplePointAt (exampleName : String) (tArg : String)
+    (leanPoint : Grassmann.JuliaExamples.Vec3) (tol : Float := 1e-5) : IO (Array TestResult) := do
   let leanCoords := #[leanPoint.x, leanPoint.y, leanPoint.z]
-  let result ← callOracle ["julia_example_point", exampleName, toString t]
-  let baseName := s!"julia_example_point({exampleName},{t})"
+  let result ← callOracle ["julia_example_point", exampleName, tArg]
+  let baseName := s!"julia_example_point({exampleName},{tArg})"
   if !result.success then
     return #[{
       name := baseName
@@ -606,7 +606,7 @@ def verifyJuliaExamplePoint (exampleName : String) (t : Float)
       let diff := (leanValue - juliaValue).abs
       {
         name := s!"{baseName}.{axis}"
-        passed := floatsMatch leanValue juliaValue (tol := 1e-5)
+        passed := floatsMatch leanValue juliaValue (tol := tol)
         leanValue := leanValue
         juliaValue := juliaValue
         difference := diff
@@ -625,6 +625,11 @@ def verifyJuliaExamplePoint (exampleName : String) (t : Float)
       difference := 0.0
       message := s!"Parse failed: {result.stdout}"
     }]
+
+/-- Verify a documented Julia plot-example point using Lean's default Float text. -/
+def verifyJuliaExamplePoint (exampleName : String) (t : Float)
+    (leanPoint : Grassmann.JuliaExamples.Vec3) : IO (Array TestResult) :=
+  verifyJuliaExamplePointAt exampleName (toString t) leanPoint
 
 /-! ## Lean Computation Helpers -/
 
@@ -828,19 +833,36 @@ def testR3LinearAlgebra : IO (Array TestResult) := do
 
 /-- Test exact sample coordinates for plot-producing Julia examples. -/
 def testJuliaPlotExampleSamples : IO (Array TestResult) := do
-  let samples := #[-1.0, -0.5, 0.0, 0.5, 1.0]
+  let π := Grassmann.JuliaExamples.pi
+  let samples := #[
+    ((-2.0 * π), "-6.283185307179586"),
+    ((-π), "-3.141592653589793"),
+    (-1.0, "-1.0"),
+    (-0.5, "-0.5"),
+    (0.0, "0.0"),
+    (0.5, "0.5"),
+    (1.0, "1.0"),
+    (π, "3.141592653589793"),
+    ((2.0 * π), "6.283185307179586")
+  ]
   let mut results := #[]
-  for t in samples do
+  for sample in samples do
+    let t := sample.1
+    let tArg := sample.2
     let point := Grassmann.JuliaExamples.documentedProjectiveTorusPoint t
-    let sampleResults ← verifyJuliaExamplePoint "projective_torus" t point
+    let sampleResults ← verifyJuliaExamplePointAt "projective_torus" tArg point (tol := 5e-5)
     results := results ++ sampleResults
-  for t in samples do
+  for sample in samples do
+    let t := sample.1
+    let tArg := sample.2
     let point := Grassmann.JuliaExamples.documentedProjectiveOrbit2Point t
-    let sampleResults ← verifyJuliaExamplePoint "projective_orbit_2" t point
+    let sampleResults ← verifyJuliaExamplePointAt "projective_orbit_2" tArg point (tol := 5e-5)
     results := results ++ sampleResults
-  for t in samples do
+  for sample in samples do
+    let t := sample.1
+    let tArg := sample.2
     let point := Grassmann.JuliaExamples.documentedProjectiveOrbit4Point t
-    let sampleResults ← verifyJuliaExamplePoint "projective_orbit_4" t point
+    let sampleResults ← verifyJuliaExamplePointAt "projective_orbit_4" tArg point (tol := 5e-5)
     results := results ++ sampleResults
   return results
 

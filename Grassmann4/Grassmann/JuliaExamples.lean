@@ -85,11 +85,40 @@ def projectiveDown (omega : ProjectiveMV) : Vec3 :=
 def projectiveTorusGenerator : ProjectiveMV :=
   MultivectorS.smul (3.0 / 7.0) (projE1 * projE2) + projInf * projE3
 
+/--
+Closed-form exponential for the simple/scalar-square bivectors used by the
+documented projective Julia examples.
+-/
+def expProjectiveScalarSquareBivector (B : ProjectiveMV) : ProjectiveMV :=
+  let square := B * B
+  if hasNonScalarPart square 1e-10 then
+    expTaylorMV B 40
+  else
+    let B2 := square.scalarPart
+    if B2.abs < 1e-12 then
+      MultivectorS.scalar 1.0 + B
+    else if B2 < 0.0 then
+      let norm := Float.sqrt (-B2)
+      MultivectorS.scalar (Float.cos norm) + B.smul (Float.sin norm / norm)
+    else
+      let norm := Float.sqrt B2
+      let expNorm := Float.exp norm
+      let expNegNorm := Float.exp (-norm)
+      let c := (expNorm + expNegNorm) / 2.0
+      let s := (expNorm - expNegNorm) / 2.0
+      MultivectorS.scalar c + B.smul (s / norm)
+
 def projectiveOrbitBasePoint : Vec3 :=
   { x := 1.0, y := 1.0, z := -1.0 }
 
 def documentedProjectiveTorusPoint (t : Float) : Vec3 :=
-  let rotor := expTaylorMV (MultivectorS.smul (pi * t) projectiveTorusGenerator) 40
+  let θ := pi * t
+  -- The two bivector summands commute, so exp(aA + C) = exp(aA) * exp(C).
+  let rotor :=
+    expProjectiveScalarSquareBivector
+      (MultivectorS.smul ((3.0 / 7.0) * θ) (projE1 * projE2)) *
+    expProjectiveScalarSquareBivector
+      (MultivectorS.smul θ (projInf * projE3))
   projectiveDown (rotor * projectiveUp { x := 1.0, y := 1.0, z := 1.0 } * rotor†ₛ)
 
 def projectiveOrbitVector (t : Float) : ProjectiveMV :=
@@ -99,7 +128,7 @@ def projectiveOrbitVector (t : Float) : ProjectiveMV :=
 
 def documentedProjectiveOrbit2Point (t : Float) : Vec3 :=
   let generator := MultivectorS.smul (t / 2.0) (projInf * projectiveOrbitVector t)
-  let motor := expTaylorMV generator 40
+  let motor := expProjectiveScalarSquareBivector generator
   projectiveDown (motor * projectiveUp projectiveOrbitBasePoint * motor†ₛ)
 
 def documentedProjectiveOrbit4Point (t : Float) : Vec3 :=

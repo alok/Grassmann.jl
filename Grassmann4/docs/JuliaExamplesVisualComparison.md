@@ -117,11 +117,11 @@ The contact-sheet script provides the same comparison in one local image.
 | `orbit-2`, `orbit-4` | CGA-checked orbit counterparts | The plotted translation leg uses the fast closed-form coordinates and the manifest records sample checks against Lean `CGA.point`/`CGA.translator`/`CGA.transform`; `orbit-4` applies an explicit Euclidean `z` rotation after translation. Exact pointwise parity against the full Grassmann.jl CGA plotting pipeline remains future work. |
 
 Separately from the fast SVG generator, `lake exe oracletests` now checks exact
-sample coordinates for the documented `S"∞+++"` projective formulas for
-`torus`, `orbit-2`, and `orbit-4` against Grassmann.jl. Those oracle-backed
-evaluators live in `Grassmann.JuliaExamples` and intentionally avoid replacing
-the SVG paths until plot-time performance is acceptable over the full sample
-range.
+sample coordinates across the plotted parameter range for the documented
+`S"∞+++"` projective formulas for `torus`, `orbit-2`, and `orbit-4` against
+Grassmann.jl. Those oracle-backed evaluators live in
+`Grassmann.JuliaExamples` and intentionally avoid replacing the SVG paths until
+plot-time performance is acceptable over the full sample range.
 
 ## 2026-06-04 Audit
 
@@ -188,6 +188,6 @@ images: one Lean SVG and one Julia/Makie reference PNG for each example.
 The contact-sheet script additionally passed the automated coverage and visual
 smoke checks for the same twelve examples.
 
-The Julia oracle suite was later extended with exact `S"∞+++"` projective
-samples for `orbit-2` and `orbit-4`, in addition to the existing torus samples.
-It passed with `109/109` checks.
+The Julia oracle suite was later expanded to check exact `S"∞+++"` projective
+samples for `torus`, `orbit-2`, and `orbit-4` across
+`[-2π, -π, -1, -0.5, 0, 0.5, 1, π, 2π]`. It passed with `145/145` checks.
