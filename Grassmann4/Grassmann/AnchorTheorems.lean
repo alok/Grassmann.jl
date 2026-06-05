@@ -102,11 +102,14 @@ theorem reverse_bivector (B : MultivectorS sig Float)
 
 /-! ## Rotor Theorems -/
 
-/-- Unit rotor satisfies R * R† = 1 -/
+/-- Unit rotor inverse condition as a full multivector equality.
+
+The weaker scalar-part condition `(R * R†ₛ).scalarPart = 1` is insufficient:
+non-scalar components may still remain in `R * R†ₛ`. -/
 theorem unit_rotor_inverse (R : MultivectorS sig Float)
-    (hunit : (R * R†ₛ).scalarPart = 1) :
+    (hunit : R * R†ₛ = MultivectorS.scalar 1) :
     R * R†ₛ = MultivectorS.scalar 1 := by
-  sorry
+  exact hunit
 
 /-- Sandwich product preserves grade of vectors -/
 theorem sandwich_preserves_vector_grade (R v : MultivectorS sig Float)

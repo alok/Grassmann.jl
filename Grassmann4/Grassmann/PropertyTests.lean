@@ -2189,6 +2189,16 @@ def prop_mul_assoc (a b c : R3Mv) : Bool :=
 def prop_mul_one (a : R3Mv) : Bool :=
   mvApproxEq (a.mv * 1) a.mv && mvApproxEq (1 * a.mv) a.mv
 
+/-- Scalar part alone does not prove `R * R† = 1` as a multivector. -/
+def prop_unit_rotor_scalar_part_hypothesis_insufficient : Bool :=
+  let c := 1.0 / Float.sqrt 2.0
+  let e1 : MultivectorS R3 Float := MultivectorS.basis ⟨0, by omega⟩
+  let R : MultivectorS R3 Float := MultivectorS.scalar c + e1.smul c
+  let rr := R * R†ₛ
+  approxEq rr.scalarPart 1.0 (tol := 1e-12) &&
+    approxEq (rr.coeff 1) 1.0 (tol := 1e-12) &&
+    !mvApproxEq rr (MultivectorS.scalar 1.0 : MultivectorS R3 Float) (tol := 1e-12)
+
 /-- The scalar unit is a two-sided identity for the sparse wedge product. -/
 def sparseWedgeOneIdentity {n : Nat} {sig : Signature n}
     (m : MultivectorS sig Float) : Bool :=
@@ -3477,6 +3487,9 @@ def runPropertyTests : IO Unit := do
   IO.println s!"│ {r5}"
   let r6 ← runRandomProp "One is identity" prop_mul_one
   IO.println s!"│ {r6}"
+  let r6a := runBoolProp "Scalar-part unit rotor hypothesis is insufficient"
+    prop_unit_rotor_scalar_part_hypothesis_insufficient
+  IO.println s!"│ {r6a}"
   let r7 ← runRandomProp3 "Left distributivity" prop_left_distrib 30
   IO.println s!"│ {r7}"
   let r8 ← runRandomProp3 "Right distributivity" prop_right_distrib 30
@@ -3518,7 +3531,7 @@ def runPropertyTests : IO Unit := do
   let stressResults ← runHighDimStressTests
   let rotorExpResults ← runRotorExpReferenceTests
   -- Summary
-  let coreResults := [r1, r2, r3, r4, r5, r6, r7, r8, r9, r9a, r9b, r9c, r10, r11,
+  let coreResults := [r1, r2, r3, r4, r5, r6, r6a, r7, r8, r9, r9a, r9b, r9c, r10, r11,
     r12, r13]
   let countPassed (results : List PropTestResult) := results.filter (·.passed) |>.length
   let passCount :=
