@@ -212,6 +212,15 @@ def sparseMatchesDense {n : Nat} {sig : Signature n} (sparse : MultivectorS sig 
     (dense : Multivector sig Float) (tol : Float := 1e-9) : Bool :=
   denseMvApproxEq (sparseToDenseRef sparse) dense tol
 
+/-- Dense oracle for the Hestenes inner product: keep grade `|r - s|` from each
+homogeneous grade-`r`/grade-`s` product. -/
+def denseInnerProductRef {n : Nat} {sig : Signature n}
+    (a b : Multivector sig Float) : Multivector sig Float :=
+  (List.range (n + 1)).foldl (init := (0 : Multivector sig Float)) fun acc r =>
+    (List.range (n + 1)).foldl (init := acc) fun acc' s =>
+      let targetGrade := if r >= s then r - s else s - r
+      acc' + (((a.gradeProject r) * (b.gradeProject s)).gradeProject targetGrade)
+
 /-- Public dense → sparse → dense conversion preserves dense coefficients. -/
 def denseSparseRoundtripMatches {n : Nat} {sig : Signature n} (dense : Multivector sig Float)
     (tol : Float := 1e-9) : Bool :=
@@ -1752,6 +1761,13 @@ def prop_sparse_scalarProduct_dense (a b : R3Mv) : Bool :=
   approxEq (MultivectorS.scalarProduct a.mv b.mv) (denseA.scalarProduct denseB)
     (tol := 1e-6)
 
+/-- Sparse inner product agrees with dense grade-decomposition reference. -/
+def prop_sparse_innerProduct_dense (a b : R3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (MultivectorS.innerProduct a.mv b.mv)
+    (denseInnerProductRef denseA denseB) (tol := 1e-6)
+
 /-- Sparse regressive product agrees with dense regressive product. -/
 def prop_sparse_regressive_dense (a b : R3Mv) : Bool :=
   let denseA := sparseToDenseRef a.mv
@@ -1905,6 +1921,13 @@ def prop_sparse_pga3_scalarProduct_dense (a b : PGA3Mv) : Bool :=
   approxEq (MultivectorS.scalarProduct a.mv b.mv) (denseA.scalarProduct denseB)
     (tol := 1e-6)
 
+/-- PGA3 sparse inner product agrees with dense grade-decomposition reference. -/
+def prop_sparse_pga3_innerProduct_dense (a b : PGA3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (MultivectorS.innerProduct a.mv b.mv)
+    (denseInnerProductRef denseA denseB) (tol := 1e-6)
+
 /-- PGA3 sparse regressive product agrees with dense regressive product. -/
 def prop_sparse_pga3_regressive_dense (a b : PGA3Mv) : Bool :=
   let denseA := sparseToDenseRef a.mv
@@ -2003,6 +2026,13 @@ def prop_sparse_cga3_scalarProduct_dense (a b : CGA3Mv) : Bool :=
   let denseB := sparseToDenseRef b.mv
   approxEq (MultivectorS.scalarProduct a.mv b.mv) (denseA.scalarProduct denseB)
     (tol := 1e-6)
+
+/-- CGA3 sparse inner product agrees with dense grade-decomposition reference. -/
+def prop_sparse_cga3_innerProduct_dense (a b : CGA3Mv) : Bool :=
+  let denseA := sparseToDenseRef a.mv
+  let denseB := sparseToDenseRef b.mv
+  sparseMatchesDense (MultivectorS.innerProduct a.mv b.mv)
+    (denseInnerProductRef denseA denseB) (tol := 1e-6)
 
 /-- CGA3 sparse regressive product agrees with dense regressive product. -/
 def prop_sparse_cga3_regressive_dense (a b : CGA3Mv) : Bool :=
@@ -3283,6 +3313,8 @@ def runSparseReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {r25b}"
   let r25c ← runRandomProp2 "Sparse scalar product" prop_sparse_scalarProduct_dense
   IO.println s!"│ {r25c}"
+  let r25g ← runRandomProp2 "Sparse inner product" prop_sparse_innerProduct_dense
+  IO.println s!"│ {r25g}"
   let r25d ← runRandomProp2 "Sparse regressive product" prop_sparse_regressive_dense
   IO.println s!"│ {r25d}"
   let r25e ← runRandomProp2 "Sparse commutator" prop_sparse_commutator_dense
@@ -3306,8 +3338,8 @@ def runSparseReferenceTests : IO (List PropTestResult) := do
   let r29c ← runRandomProp "Sparse grade decomposition" prop_sparse_gradeProject_decomposition
   IO.println s!"│ {r29c}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [r23, r24, r25, r25a, r25b, r25c, r25d, r25e, r25f, r26, r27, r28,
-    r29, r29ops, r29a, r29b, r29c]
+  return [r23, r24, r25, r25a, r25b, r25c, r25g, r25d, r25e, r25f, r26,
+    r27, r28, r29, r29ops, r29a, r29b, r29c]
 
 /-- Run PGA3 sparse-MV baseline checks against dense reference results. -/
 def runPGA3SparseReferenceTests : IO (List PropTestResult) := do
@@ -3327,6 +3359,9 @@ def runPGA3SparseReferenceTests : IO (List PropTestResult) := do
   let pgaSparse3c ← runRandomPGA3Prop2 "PGA3 sparse scalar product"
     prop_sparse_pga3_scalarProduct_dense
   IO.println s!"│ {pgaSparse3c}"
+  let pgaSparse3g ← runRandomPGA3Prop2 "PGA3 sparse inner product"
+    prop_sparse_pga3_innerProduct_dense
+  IO.println s!"│ {pgaSparse3g}"
   let pgaSparse3d ← runRandomPGA3Prop2 "PGA3 sparse regressive product"
     prop_sparse_pga3_regressive_dense
   IO.println s!"│ {pgaSparse3d}"
@@ -3358,8 +3393,9 @@ def runPGA3SparseReferenceTests : IO (List PropTestResult) := do
   IO.println s!"│ {pgaSparse10}"
   IO.println "└────────────────────────────────────────────────┘"
   return [pgaSparse1, pgaSparse2, pgaSparse3, pgaSparse3a, pgaSparse3b,
-    pgaSparse3c, pgaSparse3d, pgaSparse3e, pgaSparse3f, pgaSparse4, pgaSparse5,
-    pgaSparse6, pgaSparse7, pgaSparse7ops, pgaSparse8, pgaSparse9, pgaSparse10]
+    pgaSparse3c, pgaSparse3g, pgaSparse3d, pgaSparse3e, pgaSparse3f,
+    pgaSparse4, pgaSparse5, pgaSparse6, pgaSparse7, pgaSparse7ops,
+    pgaSparse8, pgaSparse9, pgaSparse10]
 
 /-- Run CGA3 sparse-MV baseline checks against dense reference results. -/
 def runCGA3SparseReferenceTests : IO (List PropTestResult) := do
@@ -3379,6 +3415,9 @@ def runCGA3SparseReferenceTests : IO (List PropTestResult) := do
   let r32c ← runRandomCGA3Prop2 "CGA3 sparse scalar product"
     prop_sparse_cga3_scalarProduct_dense
   IO.println s!"│ {r32c}"
+  let r32g ← runRandomCGA3Prop2 "CGA3 sparse inner product"
+    prop_sparse_cga3_innerProduct_dense
+  IO.println s!"│ {r32g}"
   let r32d ← runRandomCGA3Prop2 "CGA3 sparse regressive product"
     prop_sparse_cga3_regressive_dense
   IO.println s!"│ {r32d}"
@@ -3409,8 +3448,8 @@ def runCGA3SparseReferenceTests : IO (List PropTestResult) := do
     prop_sparse_cga3_gradeProject_decomposition
   IO.println s!"│ {r39}"
   IO.println "└────────────────────────────────────────────────┘"
-  return [r30, r31, r32, r32a, r32b, r32c, r32d, r32e, r32f, r33, r34, r35,
-    r36, r36ops, r37, r38, r39]
+  return [r30, r31, r32, r32a, r32b, r32c, r32g, r32d, r32e, r32f, r33,
+    r34, r35, r36, r36ops, r37, r38, r39]
 
 /-- Run truncated-MV checks against dense references after dropping high grades. -/
 def runTruncatedReferenceTests : IO (List PropTestResult) := do
