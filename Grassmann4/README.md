@@ -251,6 +251,30 @@ A local `scripts/packedmvbench_guard.sh` run on 2026-06-05 passed with
 motor-point transforms versus `211530.158400 ns/iter` dense transforms
 (`31.9x`).
 
+## Correctness Gates
+
+The main property-test executable exposes focused gates for the core
+representations:
+
+```bash
+lake exe propertytests packed-reference
+lake exe propertytests sparse-reference
+lake exe propertytests truncated-reference
+lake exe propertytests repr
+lake exe propertytests stress
+lake exe propertytests mv-dispatch
+```
+
+Local runs on 2026-06-05 passed the sparse, truncated, representation
+conversion, and high-dimensional stress gates. The sparse gate checks R3,
+PGA3, and CGA3 `MultivectorS` operations against dense references for
+arithmetic, products, involutions, grade projections, grade-projector
+identities, and `GAlgebra` helpers. The truncated gate checks PGA3 null-basis
+squares and R3/PGA3/CGA3 grade-2 truncated `GAlgebra` operations against dense
+references. The representation gate checks dense/sparse round-trips for all
+three signatures. The stress gate runs exact R4/R5 basis, wedge, rotor,
+contraction, Hodge, determinant, composition, and R3 cross-product anchors.
+
 ## Testing Against Grassmann.jl
 
 The `OracleTests` module contains tests designed to be verified against Grassmann.jl:

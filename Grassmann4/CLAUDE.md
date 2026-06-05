@@ -80,6 +80,19 @@ uses direct pattern matching for dispatch.
 - Dispatch equivalence is exposed through `lake exe propertytests mv-dispatch`;
   it compares direct `mulDirect` against the preserved typeclass kernel path for
   R3, PGA3, and CGA3.
+- Sparse `MultivectorS` dense-reference coverage is exposed through
+  `lake exe propertytests sparse-reference`; it checks R3, PGA3, and CGA3
+  sparse operations against dense `Multivector` for arithmetic, products,
+  involutions, grade projections, grade-projector identities, and `GAlgebra`
+  helpers.
+- Representation conversion and truncated-storage coverage are exposed through
+  `lake exe propertytests repr` and `lake exe propertytests truncated-reference`;
+  these cover dense/sparse round-trips for R3/PGA3/CGA3 and grade-2 truncation
+  against dense references.
+- Exact higher-dimensional anchor checks are exposed through
+  `lake exe propertytests stress`; they cover R4/R5 basis products, wedge,
+  rotors, contractions, Hodge square signs, determinant/Hodge anchors,
+  composition identities, and the R3 Hodge cross-product identity.
 - `scripts/packedmvbench_guard.sh` provides the focused PGA3 motor-point
   correctness/performance guard.
 
