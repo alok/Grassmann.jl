@@ -6,7 +6,7 @@
   tables independent of `EvenMV` prevents the primary runtime from importing
   that backend and its proof-oriented dependencies.
 -/
-import Grassmann.SignTables
+import Grassmann.SignTablesCore
 
 namespace Grassmann
 

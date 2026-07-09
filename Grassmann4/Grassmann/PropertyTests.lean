@@ -15,7 +15,7 @@ import Grassmann.Products
 import Grassmann.Manifold
 import Grassmann.LinearAlgebra
 import Grassmann.StaticOpt
-import Grassmann.MV
+import Grassmann.MVDense
 import Grassmann.PGA
 import Grassmann.PGATransforms
 import Grassmann.CGA

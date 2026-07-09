@@ -15,9 +15,6 @@
 -/
 import Grassmann.Manifold
 import Grassmann.Blade
-import Grassmann.Proof
-
-open Grassmann.Proof
 
 namespace Grassmann
 

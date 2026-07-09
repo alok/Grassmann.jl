@@ -16,53 +16,15 @@
   let product := geometricProductWithTable table a b
   ```
 -/
+import Grassmann.SignTablesCore
 import Grassmann.Multivector
 
 namespace Grassmann
 
-/-! ## Precomputed Sign Tables for Standard Signatures -/
-
-/-- Precomputed sign table for R2 (4×4 = 16 entries) -/
-def R2SignTable : SignTable 2 := buildSignTable R2
-
-/-- Precomputed sign table for R3 (8×8 = 64 entries) -/
-def R3SignTable : SignTable 3 := buildSignTable R3
-
-/-- Precomputed sign table for R4 (16×16 = 256 entries) -/
-def R4SignTable : SignTable 4 := buildSignTable R4
-
-/-- Precomputed sign table for STA Cl(1,3) (16×16 = 256 entries) -/
-def STASignTable : SignTable 4 := buildSignTable STA
-
-/-- Precomputed sign table for PGA3 Cl(3,0,1) (16×16 = 256 entries) -/
-def PGA3SignTable : SignTable 4 := buildSignTable PGA3
-
-/-- Precomputed sign table for CGA3 Cl(4,1) (32×32 = 1024 entries) -/
-def CGA3SignTable : SignTable 5 := buildSignTable CGA3
-
-/-! ## Cached Sign Table Selection
-
-We want fast defaults without users having to manually thread tables.
-This helper returns a precomputed table when `sig` is one of the canonical
-small signatures; otherwise it returns `none` and callers fall back to
-on‑the‑fly sign computation.
--/
+/-! The proof-free tables and `cachedSignTable` selector are provided by
+`Grassmann.SignTablesCore`.  This module adds dense `Multivector` integration. -/
 
 variable {n : ℕ}
-
-/-- Lookup a cached sign table for common `Signature`s. -/
-@[inline]
-def cachedSignTable (sig : Signature n) : Option (SignTable n) :=
-  match n with
-  | 2 => if sig == R2 then some (R2SignTable) else none
-  | 3 => if sig == R3 then some (R3SignTable) else none
-  | 4 =>
-      if sig == R4 then some (R4SignTable)
-      else if sig == STA then some STASignTable
-      else if sig == PGA3 then some PGA3SignTable
-      else none
-  | 5 => if sig == CGA3 then some CGA3SignTable else none
-  | _ => none
 
 namespace Multivector
 

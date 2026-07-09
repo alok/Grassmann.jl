@@ -17,7 +17,7 @@
   - Spinors ≅ unit quaternions ≅ SU(2)
   - Double cover of SO(3)
 -/
-import Grassmann.MV
+import Grassmann.MVDense
 import Grassmann.Proof
 
 open Grassmann.Proof

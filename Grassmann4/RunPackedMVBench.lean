@@ -4,7 +4,7 @@
   Run from Grassmann4 with:
     lake exe packedmvbench [base-iters]
 -/
-import Grassmann.MV
+import Grassmann.MVDense
 import Grassmann.PGA
 
 namespace Grassmann.PackedMVBench

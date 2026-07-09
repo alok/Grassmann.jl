@@ -1,4 +1,4 @@
-import Grassmann.MV
+import Grassmann.MVDense
 import Grassmann.SparseMultivector
 
 namespace Grassmann.FatDotTests
