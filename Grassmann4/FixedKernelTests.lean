@@ -30,7 +30,6 @@ def run : IO Unit := do
     MV.mulKernelEvenEven 3 EvenMV.Kernel.evenMulSignR3
   let pga3Reference : DataArray → DataArray → DataArray :=
     MV.mulKernelEvenEven 4 EvenMV.Kernel.evenMulSignPGA3
-
   requireZero "R3 straight-line kernel"
     (maxBasisPairDiff 4 r3Reference MV.mulKernelR3EvenEven)
   requireZero "R3 direct dispatch"
@@ -39,7 +38,6 @@ def run : IO Unit := do
     (maxBasisPairDiff 8 pga3Reference MV.mulKernelPGA3EvenEven)
   requireZero "PGA3 direct dispatch"
     (maxBasisPairDiff 8 pga3Reference (MV.mulKernelDirect PGA3 .even .even))
-
   let r3a := DataArray.ofArray #[1.25, -2.0, 0.75, 4.5]
   let r3b := DataArray.ofArray #[-0.5, 3.0, 2.25, -1.0]
   let pga3a := DataArray.ofArray #[1.25, -2.0, 0.75, 4.5, 3.0, -1.5, 2.0, 0.25]
@@ -48,7 +46,6 @@ def run : IO Unit := do
     (maxAbsDiff (r3Reference r3a r3b) (MV.mulKernelR3EvenEven r3a r3b))
   requireZero "PGA3 mixed coefficients"
     (maxAbsDiff (pga3Reference pga3a pga3b) (MV.mulKernelPGA3EvenEven pga3a pga3b))
-
   IO.println "fixed packed-kernel tests passed"
 
 end Grassmann.FixedKernelTests
