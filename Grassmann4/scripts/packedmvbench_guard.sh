@@ -2,7 +2,13 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-pkg_root="$(cd "$script_dir/.." && pwd)"
+repo_root="$(cd "$script_dir/../.." && pwd)"
+pkg_root="${GRASSMANN_LAKE_ROOT:-$repo_root}"
+
+if [[ ! -f "$pkg_root/lakefile.toml" || ! -f "$pkg_root/lean-toolchain" ]]; then
+  printf 'invalid Grassmann Lake root: %s\n' "$pkg_root" >&2
+  exit 1
+fi
 
 for tool in lake awk sed; do
   if ! command -v "$tool" >/dev/null 2>&1; then

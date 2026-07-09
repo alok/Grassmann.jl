@@ -11,12 +11,8 @@ maxSynthPendingDepth = 3
 
 [[require]]
 name = "mathlib"
-scope = "leanprover-community"
-rev = "master"
-
-[[require]]
-name = "SciLean"
-path = "/Users/alokbeniwal/scilean"
+git = "https://github.com/leanprover-community/mathlib4.git"
+rev = "32d24245c7a12ded17325299fd41d412022cd3fe"
 
 # Temporarily disabled - Verso dependency issues
 # [[require]]
@@ -51,6 +47,12 @@ srcDir = "Grassmann4"
 name = "bench"
 root = "Grassmann.Bench"
 srcDir = "Grassmann4"
+
+[[lean_exe]]
+name = "packedmvbench"
+root = "RunPackedMVBench"
+srcDir = "Grassmann4"
+precompileModules = false
 
 [[lean_exe]]
 name = "jlexamples"
