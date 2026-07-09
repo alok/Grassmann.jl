@@ -284,7 +284,7 @@ class Interop (A B C : Type*) where
 
 /-- For blades in the same space, interop is trivial -/
 instance : Interop (Blade sig) (Blade sig) (BladeProduct sig) where
-  interop op a b := op (geometricProductBlades a a) (geometricProductBlades b b)
+  interop op a b := op (.nonzero 1 a) (.nonzero 1 b)
 
 -- Test blade embedding
 #eval let b := (e1 : Blade R2)
@@ -373,14 +373,13 @@ infixl:65 " ⊙ᵇ " => antiDotBlades
 /-- Sandwich product for blades: a × x × a† -/
 @[specialize]
 def sandwichBlades (a x : Blade sig) : BladeProduct sig :=
-  -- Compute a * x first
   match geometricProductBlades a x with
   | .zero => .zero
   | .nonzero s1 ax =>
-    -- Then (a*x) * a† where a† = a for blades (reverse is identity on vectors)
     match geometricProductBlades ax a with
     | .zero => .zero
-    | .nonzero s2 result => .nonzero (s1 * s2) result
+    | .nonzero s2 result =>
+      .nonzero (s1 * s2 * reverseSign a.grade) result
 
 /-- Anti-sandwich: ⋆(⋆R >>> ⋆x) where >>> is right geometric product.
     Defined as: antisandwich(R, x) = ⋆((⋆R) * (⋆x) * (⋆R)†) -/
