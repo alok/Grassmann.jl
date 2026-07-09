@@ -531,8 +531,31 @@ These call the optimized `mulKernelEvenEven` with the correct precomputed sign t
 @[inline, always_inline] def mulKernelR2EvenEven (a b : DataArray) : DataArray :=
   mulKernelEvenEven 2 EvenMV.Kernel.evenMulSignR2 a b
 
-@[inline, always_inline] def mulKernelR3EvenEven (a b : DataArray) : DataArray :=
-  mulKernelEvenEven 3 EvenMV.Kernel.evenMulSignR3 a b
+/-- Straight-line quaternion kernel for the R3 even subalgebra.
+
+Packed coefficient order is `[1, e12, e13, e23]`. Keeping this fixed-size
+kernel branch-free avoids the allocation, table lookups, and nested loops of
+the generic even kernel in the rotor composition hot path.
+-/
+@[inline, always_inline]
+def mulKernelR3EvenEven (a : @& DataArray) (b : @& DataArray) : DataArray :=
+  let a0 := a.get! 0
+  let a1 := a.get! 1
+  let a2 := a.get! 2
+  let a3 := a.get! 3
+  let b0 := b.get! 0
+  let b1 := b.get! 1
+  let b2 := b.get! 2
+  let b3 := b.get! 3
+  let c0 := a0 * b0 - a1 * b1 - a2 * b2 - a3 * b3
+  let c1 := a0 * b1 + a1 * b0 - a2 * b3 + a3 * b2
+  let c2 := a0 * b2 + a1 * b3 + a2 * b0 - a3 * b1
+  let c3 := a0 * b3 - a1 * b2 + a2 * b1 + a3 * b0
+  FloatArray.emptyWithCapacity 4
+    |>.push c0
+    |>.push c1
+    |>.push c2
+    |>.push c3
 
 @[inline, always_inline] def mulKernelR4EvenEven (a b : DataArray) : DataArray :=
   mulKernelEvenEven 4 EvenMV.Kernel.evenMulSignR4 a b
@@ -540,8 +563,51 @@ These call the optimized `mulKernelEvenEven` with the correct precomputed sign t
 @[inline, always_inline] def mulKernelSTAEvenEven (a b : DataArray) : DataArray :=
   mulKernelEvenEven 4 EvenMV.Kernel.evenMulSignSTA a b
 
-@[inline, always_inline] def mulKernelPGA3EvenEven (a b : DataArray) : DataArray :=
-  mulKernelEvenEven 4 EvenMV.Kernel.evenMulSignPGA3 a b
+/-- Straight-line dual-quaternion kernel for the PGA3 even subalgebra.
+
+Packed coefficient order is `[1, e12, e13, e23, e01, e02, e03, e0123]`.
+The first four coefficients form the rotor part and the last four form the
+nilpotent ideal part of a projective motor.
+-/
+@[inline, always_inline]
+def mulKernelPGA3EvenEven (a : @& DataArray) (b : @& DataArray) : DataArray :=
+  let a0 := a.get! 0
+  let a1 := a.get! 1
+  let a2 := a.get! 2
+  let a3 := a.get! 3
+  let a4 := a.get! 4
+  let a5 := a.get! 5
+  let a6 := a.get! 6
+  let a7 := a.get! 7
+  let b0 := b.get! 0
+  let b1 := b.get! 1
+  let b2 := b.get! 2
+  let b3 := b.get! 3
+  let b4 := b.get! 4
+  let b5 := b.get! 5
+  let b6 := b.get! 6
+  let b7 := b.get! 7
+  let c0 := a0 * b0 - a1 * b1 - a2 * b2 - a3 * b3
+  let c1 := a0 * b1 + a1 * b0 - a2 * b3 + a3 * b2
+  let c2 := a0 * b2 + a1 * b3 + a2 * b0 - a3 * b1
+  let c3 := a0 * b3 - a1 * b2 + a2 * b1 + a3 * b0
+  let c4 := a0 * b4 + a1 * b5 + a2 * b6 - a3 * b7
+    + a4 * b0 - a5 * b1 - a6 * b2 - a7 * b3
+  let c5 := a0 * b5 - a1 * b4 + a2 * b7 + a3 * b6
+    + a4 * b1 + a5 * b0 - a6 * b3 + a7 * b2
+  let c6 := a0 * b6 - a1 * b7 - a2 * b4 - a3 * b5
+    + a4 * b2 + a5 * b3 + a6 * b0 - a7 * b1
+  let c7 := a0 * b7 + a1 * b6 - a2 * b5 + a3 * b4
+    + a4 * b3 - a5 * b2 + a6 * b1 + a7 * b0
+  FloatArray.emptyWithCapacity 8
+    |>.push c0
+    |>.push c1
+    |>.push c2
+    |>.push c3
+    |>.push c4
+    |>.push c5
+    |>.push c6
+    |>.push c7
 
 @[inline, always_inline] def mulKernelCGA3EvenEven (a b : DataArray) : DataArray :=
   mulKernelEvenEven 5 EvenMV.Kernel.evenMulSignCGA3 a b
@@ -597,14 +663,25 @@ def mulTC [inst : MVMulKernel n sig p1 p2] (a : MV sig p1) (b : MV sig p2) : MV 
 
 /-! #### Multiplication via Direct Dispatch (Fallback) -/
 
+/-- Cached-table fallback for even products without a straight-line kernel. -/
+@[inline, always_inline]
+def mulKernelEvenEvenDirect (sig : Signature n) (a : @& DataArray) (b : @& DataArray) : DataArray :=
+  match @EvenMV.Kernel.evenMulSignCached n sig sig with
+  | some signs => mulKernelEvenEven n signs a b
+  | none => mulKernelGeneric sig .even .even a b
+
 /-- Direct multiplication kernel with fast path for even×even. -/
 @[inline, always_inline]
-def mulKernelDirect (sig : Signature n) (p1 p2 : Parity) (a b : DataArray) : DataArray :=
+def mulKernelDirect (sig : Signature n) (p1 p2 : Parity)
+    (a : @& DataArray) (b : @& DataArray) : DataArray :=
   match p1, p2 with
   | .even, .even =>
-    match @EvenMV.Kernel.evenMulSignCached n sig sig with
-    | some signs => mulKernelEvenEven n signs a b
-    | none => mulKernelGeneric sig p1 p2 a b
+    if n == 3 && sig.metric.toNat == 0 && sig.degenerate.toNat == 0 then
+      mulKernelR3EvenEven a b
+    else if n == 4 && sig.metric.toNat == 0 && sig.degenerate.toNat == 8 then
+      mulKernelPGA3EvenEven a b
+    else
+      mulKernelEvenEvenDirect sig a b
   | _, _ => mulKernelGeneric sig p1 p2 a b
 
 /-- Geometric product - uses typeclass dispatch with specialization. -/
