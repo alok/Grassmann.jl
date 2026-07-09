@@ -28,6 +28,15 @@ open Lean (Json)
 /-- Path to Julia oracle script (relative to project root) -/
 def oraclePath : String := "oracle/grassmann_oracle.jl"
 
+/-- Resolve the authoritative outer checkout.
+
+Supported commands run from the outer repository root.  CI or callers that
+launch the executable elsewhere can set `GRASSMANN_REPO_ROOT` explicitly. -/
+def repoRoot : IO System.FilePath := do
+  match ← IO.getEnv "GRASSMANN_REPO_ROOT" with
+  | some root => pure root
+  | none => IO.currentDir
+
 /-- Tolerance for floating point comparison -/
 def defaultTolerance : Float := 1e-9
 
@@ -71,19 +80,18 @@ structure OracleResult where
   stderr : String
   deriving Repr
 
-/-- Call the Julia oracle with arguments.
-    Uses `env -i` to spawn Julia in a clean environment, avoiding LLVM library
-    conflicts between Lean's bundled LLVM and Julia's codegen. -/
-def callOracle (args : List String) : IO OracleResult := do
+/-- Invoke one Julia oracle process in a clean environment. -/
+private def callOracleOnce (args : List String) : IO OracleResult := do
   -- Use env to spawn Julia with minimal environment to avoid LLVM conflicts
   -- The conflict occurs because Lean loads its own libLLVM which then interferes
   -- with Julia's libjulia-codegen when it tries to load
-  let home := (← IO.getEnv "HOME").getD "/Users/alokbeniwal"
-  -- Include juliaup bin path and standard paths
-  let path := s!"{home}/.juliaup/bin:/usr/local/bin:/usr/bin:/bin"
-  let juliaDepot := home ++ "/.julia"
+  let home := (← IO.getEnv "HOME").getD "/tmp"
+  let path := (← IO.getEnv "PATH").getD "/usr/local/bin:/usr/bin:/bin"
+  let julia := (← IO.getEnv "JULIA").getD "julia"
+  let juliaDepot := (← IO.getEnv "JULIA_DEPOT_PATH").getD (home ++ "/.julia")
+  let root ← repoRoot
+  let oracleRoot := root / "Grassmann4"
   -- Use --project to activate the Grassmann.jl environment
-  let grassmannProject := s!"{home}/Grassmann"
   let child ← IO.Process.spawn {
     cmd := "env"
     args := #["-i",
@@ -91,11 +99,11 @@ def callOracle (args : List String) : IO OracleResult := do
               s!"PATH={path}",
               s!"JULIA_DEPOT_PATH={juliaDepot}",
               "JULIA_PKG_PRECOMPILE_AUTO=0",
-              "julia", "--startup-file=no", s!"--project={grassmannProject}",
+              julia, "--startup-file=no", s!"--project={root}",
               oraclePath] ++ args.toArray
     stdout := .piped
     stderr := .piped
-    cwd := some "/Users/alokbeniwal/Grassmann/Grassmann4"
+    cwd := some oracleRoot
   }
   let stdout ← child.stdout.readToEnd
   let stderr ← child.stderr.readToEnd
@@ -105,6 +113,19 @@ def callOracle (args : List String) : IO OracleResult := do
     stdout := stdout.trimAscii.toString
     stderr := stderr.trimAscii.toString
   }
+
+/-- Call the Julia oracle with arguments.
+
+The first package load in a fresh Julia depot can exit after attempting to
+precompile unrelated optional development dependencies from the historical
+Grassmann.jl project.  Grassmann itself is cached by that attempt, so retry the
+same isolated call once. A persistent package or oracle failure remains fatal
+and is returned with its diagnostic output. -/
+def callOracle (args : List String) : IO OracleResult := do
+  let first ← callOracleOnce args
+  if first.success || !first.stderr.contains "Precompiling packages" then
+    return first
+  callOracleOnce args
 
 /-! ## Test Results -/
 
