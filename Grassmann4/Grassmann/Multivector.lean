@@ -463,9 +463,17 @@ infixl:65 " ⌊ᵐ " => Multivector.rightContract
 
 /-! ### Fat Dot Product -/
 
-/-- Fat dot / inner product: sum of left and right contractions minus scalar product -/
+/-- Grassmann ("fat dot") contraction.
+
+For mixed-grade multivectors this selects the reverse-based contraction for
+each homogeneous pair, regardless of which operand has the lower grade.  The
+left and right contractions both contain the equal-grade scalar term, so that
+overlap must be subtracted once.  The scalar part of `left` is exactly
+`scalarProduct a b`; reusing it avoids a third quadratic product traversal. -/
 def fatDot (a b : Multivector sig F) : Multivector sig F :=
-  (a ⌋ᵐ b).add (a ⌊ᵐ b)
+  let left := a ⌋ᵐ b
+  let right := a ⌊ᵐ b
+  (left.add right).sub (scalar left.scalarPart)
 
 infixl:65 " ⋅ᵐ " => Multivector.fatDot
 

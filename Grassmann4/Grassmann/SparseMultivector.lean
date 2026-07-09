@@ -287,10 +287,22 @@ def anticommutatorProduct (a b : MultivectorS sig F) [OfNat F 2] [Div F] :
     MultivectorS sig F :=
   ((a * b) + (b * a)).smul (1 / 2)
 
-/-- Fat dot product: symmetric scalar product ⟨a†b⟩₀ = ⟨b†a⟩₀
-    This is the Grassmann.jl ⊙ operation -/
-def fatDot (a b : MultivectorS sig F) : F :=
-  scalarProduct a b
+/-- Grassmann ("fat dot") contraction.
+
+This is the reverse-based, mixed-grade contraction: combine left and right
+contractions and subtract their shared equal-grade scalar term once.  It is a
+multivector-valued operation, unlike `scalarProduct`, and it is distinct from
+the Hestenes `innerProduct` above. -/
+def fatDot (a b : MultivectorS sig F) : MultivectorS sig F :=
+  let left := leftContract a b
+  (left + rightContract a b) - scalar left.scalarPart
+
+/-- Two-argument symmetrization `(a*b + b*a)/2`.
+
+This is the operation denoted by `⊙` in Grassmann.jl. -/
+def symmetrization (a b : MultivectorS sig F) [OfNat F 2] [Div F] :
+    MultivectorS sig F :=
+  anticommutatorProduct a b
 
 /-! ### Product Notation -/
 
@@ -298,7 +310,7 @@ infixl:65 " ⋅ₛ " => innerProduct
 infixl:60 " ∨ₛ " => regressiveProduct
 notation:65 "[" a ", " b "]ₛ" => commutatorProduct a b
 notation:65 "{" a ", " b "}ₛ" => anticommutatorProduct a b
-infixl:65 " ⊙ₛ " => fatDot
+infixl:65 " ⊙ₛ " => symmetrization
 
 /-! ### Conversion -/
 

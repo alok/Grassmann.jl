@@ -760,10 +760,16 @@ def neg (m : MV sig p) : MV sig p :=
 
 /-! ### More Full-Storage Derived Products -/
 
-/-- Fat dot / inner product for full packed storage. -/
+/-- Grassmann ("fat dot") contraction for full packed storage.
+
+The left and right contractions both contain the equal-grade scalar term.  We
+subtract that shared term once, reusing the left contraction's scalar slot so
+the operation does not need another geometric-product traversal. -/
 @[inline]
 def fatDot (a b : MV sig .full) : MV sig .full :=
-  add (leftContract a b) (rightContract a b)
+  let left := leftContract a b
+  let both := add left (rightContract a b)
+  both.setCoeff 0 (both.scalarPart - left.scalarPart)
 
 /-- Commutator product `(ab - ba) / 2` for full packed storage. -/
 @[inline]
