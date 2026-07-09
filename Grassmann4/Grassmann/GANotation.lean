@@ -59,20 +59,21 @@ def grade3 {n : ℕ} {sig : Signature n} (M : MultivectorS sig Float) :
 -- The wedge product is already defined in SparseMultivector
 -- We add some additional notation here
 
-/-- Left contraction: a ⌋ b extracts the part of b "contained in" a -/
+/-- Left contraction for sparse multivectors.
+
+Delegates to the canonical sparse implementation, which applies the grade,
+blade-containment, and metric-sign rules for every pair of nonzero terms. -/
 def leftContract {n : ℕ} {sig : Signature n} (a b : MultivectorS sig Float) :
     MultivectorS sig Float :=
-  -- Implementation: sum over grades, keeping only grade(b) - grade(a) terms
-  -- For simplicity, use the formula: a ⌋ b = ⟨a · b⟩_{|b|-|a|}
-  let prod := a * b
-  -- This is a simplified version - full implementation would check grades
-  prod
+  MultivectorS.leftContract a b
 
-/-- Right contraction: a ⌊ b = (b† ⌋ a†)† -/
+/-- Right contraction for sparse multivectors.
+
+Delegates to the canonical sparse implementation rather than deriving the
+operation through a second, potentially divergent contraction definition. -/
 def rightContract {n : ℕ} {sig : Signature n} (a b : MultivectorS sig Float) :
     MultivectorS sig Float :=
-  let result := leftContract b†ₛ a†ₛ
-  result†ₛ
+  MultivectorS.rightContract a b
 
 /-! ## Notation Declarations -/
 
