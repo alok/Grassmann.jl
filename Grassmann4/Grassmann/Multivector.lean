@@ -491,18 +491,56 @@ def antiCommutator [Div F] [OfNat F 2] (a b : Multivector sig F) : Multivector s
 
 /-! ### Inverse -/
 
-/-- Safe inverse of multivector: returns `none` if normSq is zero.
-    When normSq ≠ 0: m⁻¹ = m† / (m m†) -/
-def inv? [Div F] [DecidableEq F] (m : Multivector sig F) : Option (Multivector sig F) :=
-  let nsq := m.normSq
-  if nsq = 0 then none
-  else some (m†.smul (1 / nsq))
+/-- Whether every non-scalar coefficient is exactly zero.
 
-/-- Inverse of multivector (when it exists): m⁻¹ = m† / (m m†)
-    ⚠️ WARNING: Returns garbage when normSq is zero. Use `inv?` for safe inversion. -/
+This is intentionally an exact, coefficient-wise predicate. In particular, it
+does not use a quadratic norm, which could hide nonzero coefficients in
+indefinite or degenerate signatures. -/
+def isScalarExact [BEq F] (m : Multivector sig F) : Bool :=
+  (allIndices n).all fun i =>
+    i.val == 0 || m.coeffs i == 0
+
+/-- Checked inverse for a versor-shaped multivector.
+
+Returns `some (m† / q)` only when the full reverse product `m * m†` is exactly
+the nonzero scalar `q`. Returns `none` both for singular inputs and for general
+multivectors whose reverse product has any non-scalar component.
+
+For floating-point data with expected roundoff, callers should establish an
+application-appropriate tolerance before invoking an unchecked hot path. -/
+def versorInv? [Div F] [BEq F]
+    (m : Multivector sig F) : Option (Multivector sig F) :=
+  let rev := m†
+  let reverseProduct := m * rev
+  let q := reverseProduct.scalarPart
+  if reverseProduct.isScalarExact then
+    if q == 0 then none
+    else some (rev.smul (1 / q))
+  else
+    none
+
+/-- Compute the reverse-over-scalar candidate without checking its preconditions.
+
+Use only when the caller has already established that `m * m†` is a nonzero
+scalar. Prefer `versorInv?` at untrusted API boundaries. -/
+def uncheckedVersorInv [Div F] (m : Multivector sig F) : Multivector sig F :=
+  let rev := m†
+  let q := (m * rev).scalarPart
+  rev.smul (1 / q)
+
+/-- Deprecated compatibility alias for the checked versor inverse. -/
+@[deprecated "Use `versorInv?`; it also rejects non-scalar reverse products."
+    (since := "2026-07-09")]
+def inv? [Div F] [DecidableEq F]
+    (m : Multivector sig F) : Option (Multivector sig F) :=
+  letI : BEq F := ⟨fun a b => decide (a = b)⟩
+  m.versorInv?
+
+/-- Deprecated compatibility alias for the old unchecked formula. -/
+@[deprecated "Use `versorInv?`; use `uncheckedVersorInv` only after checking its preconditions."
+    (since := "2026-07-09")]
 def inv [Div F] (m : Multivector sig F) : Multivector sig F :=
-  let nsq := m.normSq
-  m†.smul (1 / nsq)
+  m.uncheckedVersorInv
 
 /-! ### Sandwich Product -/
 
