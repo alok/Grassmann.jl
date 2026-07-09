@@ -85,6 +85,7 @@ The parity `p` is a type-level tag that:
 2. Computes output parity automatically via `Parity.mul`
 3. Enables type-safe grade algebra: even × even = even, etc. -/
 structure MV {n : ℕ} (sig : Signature n) (p : Parity) where
+  private mk ::
   coeffs : DataArray
 
 namespace MV
@@ -195,6 +196,28 @@ def packIdx (n : Nat) (p : Parity) (mask : Nat) : Nat :=
 @[inline]
 def zero (sig : Signature n) (p : Parity) : MV sig p :=
   ⟨DataArray.zeros (storageSize n p)⟩
+
+/-- Import a native coefficient buffer after validating the packed layout.
+
+This is the boundary constructor for bindings and other low-level consumers.
+The raw `MV` constructor is private so downstream code cannot accidentally
+create a value whose buffer is shorter than every kernel expects.
+-/
+@[inline]
+def ofDataArray? (sig : Signature n) (p : Parity) (coeffs : DataArray) : Option (MV sig p) :=
+  if coeffs.size == storageSize n p then
+    some ⟨coeffs⟩
+  else
+    none
+
+/-- Number of packed coefficients required by this multivector's layout. -/
+@[inline, always_inline]
+def coefficientCount (_m : MV sig p) : Nat := storageSize n p
+
+/-- Check the internal packed-buffer invariant at an API or FFI boundary. -/
+@[inline, always_inline]
+def isWellFormed (m : MV sig p) : Bool :=
+  m.coeffs.size == storageSize n p
 
 /-- Scalar multivector (only valid for even or full parity) -/
 @[inline]

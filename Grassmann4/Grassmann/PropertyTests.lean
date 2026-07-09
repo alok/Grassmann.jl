@@ -871,9 +871,11 @@ def packedLayoutInvariant (n : Nat) (p : Parity) : Bool :=
 
 /-- Packed `MV` layout maps are internally consistent for cached and fallback dimensions. -/
 def prop_mv_layout_invariants : Bool :=
-  [1, 2, 3, 4, 5, 6].all fun n =>
+  ([1, 2, 3, 4, 5, 6].all fun n =>
     [.full, .even, .odd].all fun p =>
-      packedLayoutInvariant n p
+      packedLayoutInvariant n p) &&
+  (MV.ofDataArray? R3 .even (DataArray.zeros 4)).isSome &&
+  !(MV.ofDataArray? R3 .even (DataArray.zeros 3)).isSome
 
 /-- Full packed `MV` round-trip preserves all dense coefficients. -/
 def prop_mv_full_roundtrip : Gen Bool := do
@@ -4554,6 +4556,8 @@ def runPropertyTests : IO Unit := do
   IO.println "╔══════════════════════════════════════════════╗"
   IO.println s!"║  Summary: {Nat.repr totalPass}/{Nat.repr total} property tests passed          ║"
   IO.println "╚══════════════════════════════════════════════╝"
+  unless totalPass == total do
+    throw <| IO.userError s!"property test suite failed: {totalPass}/{total} passed"
 
 -- Quick check using Plausible's built-in #test
 -- #test ∀ (a b : R3Mv), a.mv + b.mv = b.mv + a.mv
@@ -4660,7 +4664,7 @@ def runOptimizationTests (numTests : Nat := 100) : IO Unit := do
   if allPass then
     IO.println s!"  All 6 test categories PASSED ({Nat.repr (6 * numTests)} total test cases) ✓"
   else
-    IO.println "  Some optimization tests FAILED ✗"
+    throw <| IO.userError "optimization consistency tests failed"
 
 end OptimizationTests
 
