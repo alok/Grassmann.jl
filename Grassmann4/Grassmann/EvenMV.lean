@@ -17,7 +17,7 @@ import Grassmann.Proof
 import Grassmann.BladeIndex
 import Grassmann.GradeSet
 import Grassmann.SignTables
-import Mathlib.Algebra.Group.Nat.Even
+import Grassmann.EvenKernelTables
 
 open Grassmann.Proof
 
@@ -73,352 +73,9 @@ instance : Sub (EvenMV sig F) := ⟨sub⟩
 instance : Neg (EvenMV sig F) := ⟨neg⟩
 instance : SMul F (EvenMV sig F) := ⟨smul⟩
 
-/-! ### Kernel tables
+/-! Shared packed-even lookup tables live in the production table module. -/
 
-This namespace contains the precomputed index/sign kernels used by the fast
-even-only algorithms. It is factored out so other backends (e.g. `DataArray`)
-can reuse the same tables without duplicating logic.
--/
-
-namespace Kernel
-
-/-- Boolean test for even grade (runtime cheap). -/
-private def isEvenGrade (n : ℕ) (m : Nat) : Bool :=
-  decide (Even (grade (BitVec.ofNat n m)))
-
-/-- List of all even blade bitmasks in increasing order. -/
-private def evenMaskList (n : ℕ) : List Nat :=
-  (List.range (2 ^ n)).filter fun m => isEvenGrade n m
-
-/-- Array of even blade masks for O(1) access (computed). -/
-private def evenMasksCompute (n : ℕ) : Array Nat :=
-  (evenMaskList n).toArray
-
-/-- Map full blade bitmask → packed even index (computed).
-    For odd masks, the value is arbitrary (0). -/
-private def evenIndexMapCompute (n : ℕ) : Array Nat :=
-  let sizeFull := 2 ^ n
-  let masks := evenMasksCompute n
-  let init := Array.replicate sizeFull 0
-  (List.finRange masks.size).foldl (init := init) fun acc i =>
-    let mask := masks.getD i.val 0
-    acc.set! mask i.val
-
-/-! #### Cached enumeration for small n -/
-
-private def evenMasks2 : Array Nat := evenMasksCompute 2
-private def evenMasks3 : Array Nat := evenMasksCompute 3
-private def evenMasks4 : Array Nat := evenMasksCompute 4
-private def evenMasks5 : Array Nat := evenMasksCompute 5
-
-private def evenIndexMap2 : Array Nat := evenIndexMapCompute 2
-private def evenIndexMap3 : Array Nat := evenIndexMapCompute 3
-private def evenIndexMap4 : Array Nat := evenIndexMapCompute 4
-private def evenIndexMap5 : Array Nat := evenIndexMapCompute 5
-
-private def evenPackedIdx2 : Array Nat := Array.range (2 ^ (2 - 1))
-private def evenPackedIdx3 : Array Nat := Array.range (2 ^ (3 - 1))
-private def evenPackedIdx4 : Array Nat := Array.range (2 ^ (4 - 1))
-private def evenPackedIdx5 : Array Nat := Array.range (2 ^ (5 - 1))
-
-private def fullIdx2 : Array Nat := Array.range (2 ^ 2)
-private def fullIdx3 : Array Nat := Array.range (2 ^ 3)
-private def fullIdx4 : Array Nat := Array.range (2 ^ 4)
-private def fullIdx5 : Array Nat := Array.range (2 ^ 5)
-
-@[inline] def evenMasksCached (n : ℕ) : Array Nat :=
-  match n with
-  | 2 => evenMasks2
-  | 3 => evenMasks3
-  | 4 => evenMasks4
-  | 5 => evenMasks5
-  | _ => evenMasksCompute n
-
-@[inline] def evenIndexMapCached (n : ℕ) : Array Nat :=
-  match n with
-  | 2 => evenIndexMap2
-  | 3 => evenIndexMap3
-  | 4 => evenIndexMap4
-  | 5 => evenIndexMap5
-  | _ => evenIndexMapCompute n
-
-/-- Cached packed index range `0..2^(n-1)-1` for small `n` (avoids allocating per product). -/
-@[inline] def evenPackedIdxCached (n : ℕ) : Array Nat :=
-  match n with
-  | 2 => evenPackedIdx2
-  | 3 => evenPackedIdx3
-  | 4 => evenPackedIdx4
-  | 5 => evenPackedIdx5
-  | _ => Array.range (2 ^ (n - 1))
-
-/-- Cached full index range `0..2^n-1` for small `n`. -/
-@[inline] def fullIdxCached (n : ℕ) : Array Nat :=
-  match n with
-  | 2 => fullIdx2
-  | 3 => fullIdx3
-  | 4 => fullIdx4
-  | 5 => fullIdx5
-  | _ => Array.range (2 ^ n)
-
-/-! #### Cached even×even kernel tables (n=2..5) -/
-
-/-- For each packed even pair `(i,j)`, precompute the packed output index `k`.
-    This depends only on `n` (not on signature). -/
-private def evenMulIdxCompute (n : ℕ) : Array Nat :=
-  let sizeEven := 2 ^ (n - 1)
-  let masks := evenMasksCompute n
-  let map := evenIndexMapCompute n
-  Array.ofFn (n := sizeEven * sizeEven) fun idx =>
-    let i := idx / sizeEven
-    let j := idx % sizeEven
-    let mi := masks.getD i 0
-    let mj := masks.getD j 0
-    map.getD (mi ^^^ mj) 0
-
--- Precomputed even×even index tables (dimension-only, signature-independent)
--- Made public for typeclass-based compile-time dispatch
-def evenMulIdx2 : Array Nat := evenMulIdxCompute 2
-def evenMulIdx3 : Array Nat := evenMulIdxCompute 3
-def evenMulIdx4 : Array Nat := evenMulIdxCompute 4
-def evenMulIdx5 : Array Nat := evenMulIdxCompute 5
-
-@[inline] def evenMulIdxCached (n : ℕ) : Array Nat :=
-  match n with
-  | 2 => evenMulIdx2
-  | 3 => evenMulIdx3
-  | 4 => evenMulIdx4
-  | 5 => evenMulIdx5
-  | _ => #[]
-
-/-- For each packed even pair `(i,j)`, precompute the sign in `{-1,0,1}`.
-    This depends on the signature (via its precomputed `SignTable`). -/
-private def evenMulSignFromTable {n : ℕ} (table : SignTable n) : Array Int8 :=
-  let sizeEven := 2 ^ (n - 1)
-  let masks := evenMasksCached n
-  Array.ofFn (n := sizeEven * sizeEven) fun idx =>
-    let i := idx / sizeEven
-    let j := idx % sizeEven
-    let mi := masks.getD i 0
-    let mj := masks.getD j 0
-    table.lookup mi mj
-
--- Precomputed even×even sign tables for canonical signatures
--- Made public for typeclass-based compile-time dispatch
-def evenMulSignR2 : Array Int8 := evenMulSignFromTable R2SignTable
-def evenMulSignR3 : Array Int8 := evenMulSignFromTable R3SignTable
-def evenMulSignR4 : Array Int8 := evenMulSignFromTable R4SignTable
-def evenMulSignSTA : Array Int8 := evenMulSignFromTable STASignTable
-def evenMulSignPGA3 : Array Int8 := evenMulSignFromTable PGA3SignTable
-def evenMulSignCGA3 : Array Int8 := evenMulSignFromTable CGA3SignTable
-
-/-- Cached even×even sign table restricted to even blades, for canonical signatures. -/
-@[inline] def evenMulSignCached (s : Signature n) : Option (Array Int8) :=
-  match n with
-  | 2 => if s == R2 then some evenMulSignR2 else none
-  | 3 => if s == R3 then some evenMulSignR3 else none
-  | 4 =>
-      if s == R4 then some evenMulSignR4
-      else if s == STA then some evenMulSignSTA
-      else if s == PGA3 then some evenMulSignPGA3
-      else none
-  | 5 => if s == CGA3 then some evenMulSignCGA3 else none
-  | _ => none
-
-/-! #### Cached even×full kernels (left/right multiply) -/
-
-/-- For each even packed index `i` and full index `j`, precompute the full output index `k`.
-    Depends only on `n`. Layout: `k[(i*sizeFull)+j]`. -/
-private def evenLeftMulIdxCompute (n : ℕ) : Array Nat :=
-  let sizeEven := 2 ^ (n - 1)
-  let sizeFull := 2 ^ n
-  let masks := evenMasksCompute n
-  Array.ofFn (n := sizeEven * sizeFull) fun idx =>
-    let i := idx / sizeFull
-    let j := idx % sizeFull
-    let mi := masks.getD i 0
-    mi ^^^ j
-
-private def evenLeftMulIdx2 : Array Nat := evenLeftMulIdxCompute 2
-private def evenLeftMulIdx3 : Array Nat := evenLeftMulIdxCompute 3
-private def evenLeftMulIdx4 : Array Nat := evenLeftMulIdxCompute 4
-private def evenLeftMulIdx5 : Array Nat := evenLeftMulIdxCompute 5
-
-@[inline] def evenLeftMulIdxCached (n : ℕ) : Array Nat :=
-  match n with
-  | 2 => evenLeftMulIdx2
-  | 3 => evenLeftMulIdx3
-  | 4 => evenLeftMulIdx4
-  | 5 => evenLeftMulIdx5
-  | _ => #[]
-
-/-- For each full index `i` and packed even index `j`, precompute the full output index `k`.
-    Depends only on `n`. Layout: `k[(i*sizeEven)+j]`. -/
-private def evenRightMulIdxCompute (n : ℕ) : Array Nat :=
-  let sizeEven := 2 ^ (n - 1)
-  let sizeFull := 2 ^ n
-  let masks := evenMasksCompute n
-  Array.ofFn (n := sizeFull * sizeEven) fun idx =>
-    let i := idx / sizeEven
-    let j := idx % sizeEven
-    let mj := masks.getD j 0
-    i ^^^ mj
-
-private def evenRightMulIdx2 : Array Nat := evenRightMulIdxCompute 2
-private def evenRightMulIdx3 : Array Nat := evenRightMulIdxCompute 3
-private def evenRightMulIdx4 : Array Nat := evenRightMulIdxCompute 4
-private def evenRightMulIdx5 : Array Nat := evenRightMulIdxCompute 5
-
-@[inline] def evenRightMulIdxCached (n : ℕ) : Array Nat :=
-  match n with
-  | 2 => evenRightMulIdx2
-  | 3 => evenRightMulIdx3
-  | 4 => evenRightMulIdx4
-  | 5 => evenRightMulIdx5
-  | _ => #[]
-
-/-- For each even packed index `i` and full index `j`, precompute the sign in `{-1,0,1}`.
-    Depends on the signature's `SignTable`. Layout: `sign[(i*sizeFull)+j]`. -/
-private def evenLeftMulSignFromTable {n : ℕ} (table : SignTable n) : Array Int8 :=
-  let sizeEven := 2 ^ (n - 1)
-  let sizeFull := 2 ^ n
-  let masks := evenMasksCached n
-  Array.ofFn (n := sizeEven * sizeFull) fun idx =>
-    let i := idx / sizeFull
-    let j := idx % sizeFull
-    let mi := masks.getD i 0
-    table.lookup mi j
-
-/-- For each full index `i` and even packed index `j`, precompute the sign in `{-1,0,1}`.
-    Depends on the signature's `SignTable`. Layout: `sign[(i*sizeEven)+j]`. -/
-private def evenRightMulSignFromTable {n : ℕ} (table : SignTable n) : Array Int8 :=
-  let sizeEven := 2 ^ (n - 1)
-  let sizeFull := 2 ^ n
-  let masks := evenMasksCached n
-  Array.ofFn (n := sizeFull * sizeEven) fun idx =>
-    let i := idx / sizeEven
-    let j := idx % sizeEven
-    let mj := masks.getD j 0
-    table.lookup i mj
-
-private def evenLeftMulSignR2 : Array Int8 := evenLeftMulSignFromTable R2SignTable
-private def evenLeftMulSignR3 : Array Int8 := evenLeftMulSignFromTable R3SignTable
-private def evenLeftMulSignR4 : Array Int8 := evenLeftMulSignFromTable R4SignTable
-private def evenLeftMulSignSTA : Array Int8 := evenLeftMulSignFromTable STASignTable
-private def evenLeftMulSignPGA3 : Array Int8 := evenLeftMulSignFromTable PGA3SignTable
-private def evenLeftMulSignCGA3 : Array Int8 := evenLeftMulSignFromTable CGA3SignTable
-
-private def evenRightMulSignR2 : Array Int8 := evenRightMulSignFromTable R2SignTable
-private def evenRightMulSignR3 : Array Int8 := evenRightMulSignFromTable R3SignTable
-private def evenRightMulSignR4 : Array Int8 := evenRightMulSignFromTable R4SignTable
-private def evenRightMulSignSTA : Array Int8 := evenRightMulSignFromTable STASignTable
-private def evenRightMulSignPGA3 : Array Int8 := evenRightMulSignFromTable PGA3SignTable
-private def evenRightMulSignCGA3 : Array Int8 := evenRightMulSignFromTable CGA3SignTable
-
-/-- Cached even×full sign table restricted to left even blades, for canonical signatures. -/
-@[inline] def evenLeftMulSignCached (s : Signature n) : Option (Array Int8) :=
-  match n with
-  | 2 => if s == R2 then some evenLeftMulSignR2 else none
-  | 3 => if s == R3 then some evenLeftMulSignR3 else none
-  | 4 =>
-      if s == R4 then some evenLeftMulSignR4
-      else if s == STA then some evenLeftMulSignSTA
-      else if s == PGA3 then some evenLeftMulSignPGA3
-      else none
-  | 5 => if s == CGA3 then some evenLeftMulSignCGA3 else none
-  | _ => none
-
-/-- Cached full×even sign table restricted to right even blades, for canonical signatures. -/
-@[inline] def evenRightMulSignCached (s : Signature n) : Option (Array Int8) :=
-  match n with
-  | 2 => if s == R2 then some evenRightMulSignR2 else none
-  | 3 => if s == R3 then some evenRightMulSignR3 else none
-  | 4 =>
-      if s == R4 then some evenRightMulSignR4
-      else if s == STA then some evenRightMulSignSTA
-      else if s == PGA3 then some evenRightMulSignPGA3
-      else none
-  | 5 => if s == CGA3 then some evenRightMulSignCGA3 else none
-  | _ => none
-
-/-! #### Cached kernels for `RightAtIndices`
-
-When computing only a restricted set of *output* indices (e.g. a PGA point/plane/line
-transform where we know the output grade), it is profitable to loop over
-`outIdx × even` and invert the XOR mapping.
-
-For very small outputs (grade-1/grade-3 in `n=4`) the per‑pair overhead of
-computing `i := k ^^^ mask(j)` and then indexing `signs[(i*sizeEven)+j]` starts to
-matter, so we cache:
-- the inverted left index `i[(k*sizeEven)+j]`
-- the sign in the same layout `signOut[(k*sizeEven)+j]` for canonical signatures
-  (so the inner loop is just a couple of array loads + mul/add).
--/
-
-/-- For each output index `k` and packed even index `j`, precompute the left index
-    `i = k ^^^ mask(j)`. Depends only on `n`.
-
-    Layout: `i[(k*sizeEven)+j]`. -/
-private def evenRightOutLeftIdxCompute (n : ℕ) : Array Nat :=
-  let sizeEven := 2 ^ (n - 1)
-  let sizeFull := 2 ^ n
-  let masks := evenMasksCompute n
-  Array.ofFn (n := sizeFull * sizeEven) fun idx =>
-    let k := idx / sizeEven
-    let j := idx % sizeEven
-    let mj := masks.getD j 0
-    k ^^^ mj
-
-private def evenRightOutLeftIdx2 : Array Nat := evenRightOutLeftIdxCompute 2
-private def evenRightOutLeftIdx3 : Array Nat := evenRightOutLeftIdxCompute 3
-private def evenRightOutLeftIdx4 : Array Nat := evenRightOutLeftIdxCompute 4
-private def evenRightOutLeftIdx5 : Array Nat := evenRightOutLeftIdxCompute 5
-
-@[inline] def evenRightOutLeftIdxCached (n : ℕ) : Array Nat :=
-  match n with
-  | 2 => evenRightOutLeftIdx2
-  | 3 => evenRightOutLeftIdx3
-  | 4 => evenRightOutLeftIdx4
-  | 5 => evenRightOutLeftIdx5
-  | _ => #[]
-
-/-- For each output index `k` and packed even index `j`, precompute the sign for the
-    contribution coming from `i = k ^^^ mask(j)`.
-
-    Layout: `sign[(k*sizeEven)+j]`. -/
-private def evenRightOutSignFromTable {n : ℕ} (table : SignTable n) : Array Int8 :=
-  let sizeEven := 2 ^ (n - 1)
-  let sizeFull := 2 ^ n
-  let masks := evenMasksCached n
-  Array.ofFn (n := sizeFull * sizeEven) fun idx =>
-    let k := idx / sizeEven
-    let j := idx % sizeEven
-    let mj := masks.getD j 0
-    let i := k ^^^ mj
-    table.lookup i mj
-
-private def evenRightOutSignR2 : Array Int8 := evenRightOutSignFromTable R2SignTable
-private def evenRightOutSignR3 : Array Int8 := evenRightOutSignFromTable R3SignTable
-private def evenRightOutSignR4 : Array Int8 := evenRightOutSignFromTable R4SignTable
-private def evenRightOutSignSTA : Array Int8 := evenRightOutSignFromTable STASignTable
-private def evenRightOutSignPGA3 : Array Int8 := evenRightOutSignFromTable PGA3SignTable
-private def evenRightOutSignCGA3 : Array Int8 := evenRightOutSignFromTable CGA3SignTable
-
-/-- Cached `RightAtIndices` sign table in output-major layout for canonical signatures. -/
-@[inline] def evenRightOutSignCached (s : Signature n) : Option (Array Int8) :=
-  match n with
-  | 2 => if s == R2 then some evenRightOutSignR2 else none
-  | 3 => if s == R3 then some evenRightOutSignR3 else none
-  | 4 =>
-      if s == R4 then some evenRightOutSignR4
-      else if s == STA then some evenRightOutSignSTA
-      else if s == PGA3 then some evenRightOutSignPGA3
-      else none
-  | 5 => if s == CGA3 then some evenRightOutSignCGA3 else none
-  | _ => none
-
-end Kernel
-
-open Kernel
+open EvenKernelTables
 
 @[inline] private def packedCoeffD (e : EvenMV sig F) (i : Nat) : F :=
   if h : i < 2 ^ (n - 1) then
@@ -471,7 +128,7 @@ postfix:max "†ᵉ" => EvenMV.reverse
 def geometricProduct (a b : EvenMV sig F) : EvenMV sig F :=
   let sizeEven := 2 ^ (n - 1)
   let idxEven := evenPackedIdxCached n
-  match evenMulSignCached (sig := sig) (n := n) sig with
+  match evenMulSignCached (n := n) sig with
   | some signs =>
       -- Fast kernel: (packed_i, packed_j) ↦ (packed_k, sign) is precomputed.
       let mulIdx := evenMulIdxCached n
@@ -544,7 +201,7 @@ def geometricProductLeft (a : EvenMV sig F) (b : Multivector sig F) :
   let idxEven := evenPackedIdxCached n
   let idxAll := fullIdxCached n
   let resultArray : Array F :=
-    match evenLeftMulSignCached (sig := sig) (n := n) sig with
+    match evenLeftMulSignCached (n := n) sig with
     | some signs =>
         -- Fast kernel for canonical signatures.
         let mulIdx := evenLeftMulIdxCached n
@@ -609,7 +266,7 @@ def geometricProductRight (a : Multivector sig F) (b : EvenMV sig F) :
   let idxEven := evenPackedIdxCached n
   let idxAll := fullIdxCached n
   let resultArray : Array F :=
-    match evenRightMulSignCached (sig := sig) (n := n) sig with
+    match evenRightMulSignCached (n := n) sig with
     | some signs =>
         -- Fast kernel for canonical signatures.
         let mulIdx := evenRightMulIdxCached n
@@ -684,7 +341,7 @@ def geometricProductLeftSparse (a : EvenMV sig F) (b : Multivector sig F)
   let sizeFull := 2 ^ n
   let idxEven := evenPackedIdxCached n
   let resultArray : Array F :=
-    match evenLeftMulSignCached (sig := sig) (n := n) sig with
+    match evenLeftMulSignCached (n := n) sig with
     | some signs =>
         -- Fast kernel for canonical signatures.
         let mulIdx := evenLeftMulIdxCached n
@@ -750,7 +407,7 @@ def geometricProductRightSparse (a : Multivector sig F) (aIdx : Array (Fin (2 ^ 
   let sizeFull := 2 ^ n
   let idxEven := evenPackedIdxCached n
   let resultArray : Array F :=
-    match evenRightMulSignCached (sig := sig) (n := n) sig with
+    match evenRightMulSignCached (n := n) sig with
     | some signs =>
         -- Fast kernel for canonical signatures.
         let mulIdx := evenRightMulIdxCached n
@@ -822,10 +479,10 @@ def geometricProductRightAtIndices (a : Multivector sig F) (b : EvenMV sig F)
   let idxEven := evenPackedIdxCached n
   let masks := evenMasksCached n
   let resultArray : Array F :=
-    match evenRightMulSignCached (sig := sig) (n := n) sig with
+    match evenRightMulSignCached (n := n) sig with
     | some signs =>
         -- Fast kernel for canonical signatures.
-        match evenRightOutSignCached (sig := sig) (n := n) sig with
+        match evenRightOutSignCached (n := n) sig with
         | some outSigns =>
             let invIdx := evenRightOutLeftIdxCached n
             Id.run do

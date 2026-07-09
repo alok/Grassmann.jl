@@ -11,7 +11,7 @@
 import Grassmann.DataArray
 import Grassmann.Parity
 import Grassmann.SignTables
-import Grassmann.EvenMV  -- for Kernel tables (fast even×even path)
+import Grassmann.EvenKernelTables
 
 namespace Grassmann
 
@@ -308,7 +308,7 @@ def ofPairs (sig : Signature n) (p : Parity) (pairs : List (Nat × Float)) : MV 
 
 The generic kernel uses pack/unpack for all parity combinations.
 For even×even with cached signature tables, we have a fast path that
-reuses EvenMV.Kernel's precomputed tables directly. -/
+reuses the production even-kernel tables directly. -/
 
 /-- Generic packed geometric product kernel (uses pack/unpack) -/
 @[inline]
@@ -490,12 +490,12 @@ def rightContractKernelGeneric (sig : Signature n) (p1 p2 : Parity)
               out := out.set! pk (out.get! pk + contrib)
     out
 
-/-- Fast path even×even kernel using EvenMV.Kernel's precomputed tables.
+/-- Fast path even×even kernel using the shared precomputed tables.
     Matches EvenMVDA.geometricProduct exactly. -/
 @[inline, always_inline, specialize]
 def mulKernelEvenEven (n : Nat) (signs : Array Int8) (a b : DataArray) : DataArray := Id.run do
-  let idxEven := EvenMV.Kernel.evenPackedIdxCached n
-  let mulIdx := EvenMV.Kernel.evenMulIdxCached n
+  let idxEven := EvenKernelTables.evenPackedIdxCached n
+  let mulIdx := EvenKernelTables.evenMulIdxCached n
   let sizeEven := storageSize n .even
   let mut out := DataArray.zeros sizeEven
   for i in idxEven do
@@ -529,7 +529,7 @@ class MVMulKernel (n : ℕ) (sig : Signature n) (p1 p2 : Parity) where
 These call the optimized `mulKernelEvenEven` with the correct precomputed sign table. -/
 
 @[inline, always_inline] def mulKernelR2EvenEven (a b : DataArray) : DataArray :=
-  mulKernelEvenEven 2 EvenMV.Kernel.evenMulSignR2 a b
+  mulKernelEvenEven 2 EvenKernelTables.evenMulSignR2 a b
 
 /-- Straight-line quaternion kernel for the R3 even subalgebra.
 
@@ -558,10 +558,10 @@ def mulKernelR3EvenEven (a : @& DataArray) (b : @& DataArray) : DataArray :=
     |>.push c3
 
 @[inline, always_inline] def mulKernelR4EvenEven (a b : DataArray) : DataArray :=
-  mulKernelEvenEven 4 EvenMV.Kernel.evenMulSignR4 a b
+  mulKernelEvenEven 4 EvenKernelTables.evenMulSignR4 a b
 
 @[inline, always_inline] def mulKernelSTAEvenEven (a b : DataArray) : DataArray :=
-  mulKernelEvenEven 4 EvenMV.Kernel.evenMulSignSTA a b
+  mulKernelEvenEven 4 EvenKernelTables.evenMulSignSTA a b
 
 /-- Straight-line dual-quaternion kernel for the PGA3 even subalgebra.
 
@@ -610,7 +610,7 @@ def mulKernelPGA3EvenEven (a : @& DataArray) (b : @& DataArray) : DataArray :=
     |>.push c7
 
 @[inline, always_inline] def mulKernelCGA3EvenEven (a b : DataArray) : DataArray :=
-  mulKernelEvenEven 5 EvenMV.Kernel.evenMulSignCGA3 a b
+  mulKernelEvenEven 5 EvenKernelTables.evenMulSignCGA3 a b
 
 /-! #### Specialized Instances (High Priority)
 
@@ -666,7 +666,7 @@ def mulTC [inst : MVMulKernel n sig p1 p2] (a : MV sig p1) (b : MV sig p2) : MV 
 /-- Cached-table fallback for even products without a straight-line kernel. -/
 @[inline, always_inline]
 def mulKernelEvenEvenDirect (sig : Signature n) (a : @& DataArray) (b : @& DataArray) : DataArray :=
-  match @EvenMV.Kernel.evenMulSignCached n sig sig with
+  match EvenKernelTables.evenMulSignCached sig with
   | some signs => mulKernelEvenEven n signs a b
   | none => mulKernelGeneric sig .even .even a b
 
