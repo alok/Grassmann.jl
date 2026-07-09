@@ -1,0 +1,82 @@
+2026-07-09 INITIAL RECOVERY
+
+- Read repository-local Lean 4 guidance and recovered the active project intent.
+- Found the existing Linear project `Grassmann4` and active issue ALOK-749,
+  "Close Grassmann.jl port parity gaps in Lean".
+- Confirmed the outer git repository is authoritative. The nested
+  `Grassmann4/.git` remains on its old `main` index and reports committed outer
+  work as dirty; do not commit through it.
+- Created branch `codex/alok-749-lean4-port` from the current outer working tree,
+  preserving all uncommitted application experiments.
+- Current dirty work includes Unreal exports/headers, physics, Metal, SciLean AD,
+  curve shortening, collision/constraint, and optimizer experiments plus Lake
+  metadata/toolchain drift. None has yet been accepted as supported.
+- Identified a concrete correctness problem in the current Unreal FFI: motor
+  composition and transforms use explicitly simplified formulas instead of the
+  packed `MV PGA3` implementation, while the header declares runtime functions
+  that are not visibly implemented. This is a primary repair target.
+- Baseline build/test/performance and Julia-parity audits are running read-only.
+
+NEXT
+
+1. Reconcile the canonical Lake configuration and isolate the supported runtime
+   import graph from proof/application experiments.
+2. Replace the placeholder FFI with packed-kernel-backed exports and add a native
+   C smoke test.
+3. Run the remaining sparse/truncated/repr/stress/Julia-oracle gates.
+4. Continue repairing semantic parity gaps and document the deliberately deferred
+   Julia surface.
+
+2026-07-09 NATIVE BACKEND AND CORRECTNESS CHECKPOINT
+
+- `943e84e` replaces the stale SciLean array dependency in the packed runtime
+  with Lean's unboxed `FloatArray`. `lake build Grassmann`, `Grassmann.MV`, and
+  `Grassmann.DataArray` pass.
+- `f5359f9` routes sparse contraction notation to the canonical implementation;
+  its independent grade/sign regression suite passes.
+- `7f776ed` makes the raw `MV` constructor private, adds checked native-buffer
+  import, and makes the default property runner fail nonzero on red results.
+- `d33a37c` adds straight-line R3 quaternion and PGA3 dual-quaternion products.
+  Exhaustive fixed-kernel tests, direct/typeclass dispatch tests, and the full
+  R3/PGA3/CGA3 packed-reference suite pass.
+- Release guard after specialization: rotor 127.19 ns/iter (301.8x dense),
+  sandwich 98.39 ns/iter (1206.3x), PGA3 motor 453.10 ns/iter, with exact-zero
+  correctness diffs.
+- `ebdd0cf` replaces the misleading general inverse contract with a checked
+  `versorInv?`, deprecates the unsafe old names, and covers the non-scalar
+  reverse-product counterexample.
+- The remaining binding prototype is still unsupported. A versioned, Lean-free
+  C ABI over the canonical packed PGA implementation is now the active slice.
+
+2026-07-09 LEAN 4 PORT COMPLETION
+
+- `acfff42` isolates the packed runtime from dense/proof infrastructure;
+  `b3fd53f` makes the outer workspace canonical and reproducible with exact
+  mathlib pin `32d24245c7a12ded17325299fd41d412022cd3fe` and no required path
+  dependencies.
+- `06a9822` shares one Init-only PGA3 kernel between packed `MV`, standalone
+  packed PGA constructors/transforms, and foreign callers. Exhaustive basis-pair
+  tests cover even-even, even-odd, and odd-even products plus independent
+  right-handed rotation/translation anchors.
+- `38fef93` exposes the versioned, caller-owned C ABI. The final smoke passed C
+  and C++ headers, symbol audit, process and foreign-thread initialization,
+  transforms, layout checks, and 100,000 iterations / 500,000 consuming calls.
+- `41fcaf6` makes `import Grassmann` the proof-free public runtime and provides
+  `Grassmann.Reference` / `Grassmann.All` as explicit dense/extended opt-ins.
+- `9608f6a` makes the Julia oracle checkout-independent and safe across the
+  historical project's one-time optional-package precompile failure.
+- Final correctness gates passed: canonical root build, `Grassmann.Reference`,
+  fixed kernels, fat dot, all focused property modes (packed, sparse,
+  truncated, representation, stress, dispatch, PGA point cloud), and 161/161
+  Julia oracle checks.
+- Final benchmark guards passed with zero checked drift: packed rotor
+  122.529580 ns (310.9x dense), sandwich 99.087500 ns (1157.6x), PGA3 motor
+  438.934170 ns, gradient 830.090420 ns (10.0x finite difference), and PGA3
+  motor-point 4340.383400 ns (95.0x dense).
+- Final C ABI boundary timing was 14.2 ns/call for construction/copy and
+  18.8 ns/call for packed input/extract/copy; ownership stress took 18.3 ms.
+- Experimental physics, Metal, Unreal, SciLean-AD, curve-shortening, and local
+  nested-workspace edits remain deliberately untouched and outside the
+  supported runtime surface.
+
+<promise>COMPLETE</promise>

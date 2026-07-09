@@ -2,7 +2,14 @@
 
 A Lean 4 port of [Grassmann.jl](https://github.com/chakravala/Grassmann.jl) - a Clifford/Geometric Algebra library.
 
-**3400+ lines** across **15 modules** implementing geometric algebra for arbitrary dimensions and signatures.
+This directory contains the Lean sources. The authoritative Lake workspace is
+the repository root (`../lakefile.toml`), which pins Lean `v4.27.0-rc1` and
+mathlib commit `32d24245c7a12ded17325299fd41d412022cd3fe`. Run the commands in
+this README from that outer repository root.
+
+The nested `Grassmann4/lakefile.toml` is an experimental, noncanonical
+workspace with maintainer-local path dependencies. Those dependencies are not
+required by the supported outer build.
 
 ## Features
 
@@ -15,12 +22,36 @@ A Lean 4 port of [Grassmann.jl](https://github.com/chakravala/Grassmann.jl) - a 
 - **Linear algebra**: Generic determinants, linear maps, Cramer's rule, outermorphism
 - **Calculus**: Gradient, divergence, curl, Laplacian via finite differences
 - **Unicode notation**: Clean syntax with operators like `⋀`, `⊛`, `⌋`
-- **Computable**: All definitions work with `#eval` and Float arithmetic
+- **Computable packed runtime**: `MV` uses native Float storage and does not
+  import the project's placeholder proof axioms
+
+## Runtime Architecture
+
+The performance-oriented and reference-oriented APIs have an explicit import
+boundary:
+
+```lean
+-- Proof-free packed Float runtime.
+import Grassmann.MV
+
+-- Optional conversions/coercions to the dense reference representation.
+-- This import reaches Multivector and its proof-oriented infrastructure.
+import Grassmann.MVDense
+```
+
+`Grassmann.SignTablesCore` supplies cached sign tables to the packed runtime;
+`Grassmann.SignTables` adds dense `Multivector` integration. The supported
+`import Grassmann` root is also proof-free and includes the packed PGA3 API;
+use `import Grassmann.Reference` for the broad dense/extended surface.
 
 ## Quick Start
 
+The examples below opt into the dense/reference surface because they mix blade
+notation, dense `Multivector`, and spinor APIs. Use `import Grassmann` for a
+packed-runtime application.
+
 ```lean
-import Grassmann
+import Grassmann.Reference
 
 open Grassmann
 
@@ -47,23 +78,32 @@ open Grassmann
 
 ## Modules
 
-| Module | Lines | Description |
-|--------|-------|-------------|
-| `BitMask` | 218 | BitVec utilities: popcount, grade, indices |
-| `Manifold` | 144 | Metric signatures: R1-R4, STA, CGA3, PGA3, Cl(p,q) |
-| `Blade` | 184 | Basis blades with BitVec representation |
-| `Parity` | 166 | Sign computation via parityjoin algorithm |
-| `Products` | 198 | Geometric, wedge, dot, contraction for blades |
-| `Notation` | 111 | Unicode operators: `⋀`, `⊛`, `⌋`, `⌊`, `⋁` |
-| `Multivector` | 426 | Full 2^n multivector type with all products |
-| `Versor` | 173 | Exponential, rotor construction, sandwich product |
-| `Spinor` | 213 | Even-grade multivectors, slerp, axis-angle rotors |
-| `CGA` | 190 | Conformal GA: points, lines, circles, spheres, meet |
-| `PGA` | 233 | Projective GA: points, lines, planes, motors |
-| `LinearAlgebra` | 266 | Generic determinant, linear maps, Cramer's rule |
-| `Calculus` | 205 | Gradient, divergence, curl, Laplacian |
-| `Tests` | 310 | Comprehensive algebraic identity tests |
-| `OracleTests` | 371 | Tests comparing against Grassmann.jl |
+| Module | Description |
+|--------|-------------|
+| `BitMask` | BitVec utilities: popcount, grade, indices |
+| `Manifold` | Metric signatures: R1-R4, STA, CGA3, PGA3, Cl(p,q,r) |
+| `Blade` | Basis blades with BitVec representation |
+| `Parity` | Sign computation via the parityjoin algorithm |
+| `Products` | Geometric, wedge, dot, and contraction products for blades |
+| `Notation` | Unicode operators: `⋀`, `⊛`, `⌋`, `⌊`, `⋁` |
+| `DataArray` | Native unboxed Float storage used by packed kernels |
+| `MV` | Proof-free parity-packed Float multivectors and direct-dispatch kernels |
+| `SignTablesCore` | Proof-free cached tables for standard signatures |
+| `EvenKernelTables` | Shared packed even-grade lookup tables |
+| `PGA3Kernel` | Init-only fixed PGA3 kernels shared by Lean and C callers |
+| `PGA3Packed` | Proof-free packed PGA3 constructors and transformations |
+| `MVDense` | Opt-in packed/dense conversion and coercion layer |
+| `Multivector` | Dense 2^n reference and proof-oriented representation |
+| `SparseMultivector` | Sparse reference representation |
+| `TruncatedMV` | Grade-truncated representation for larger dimensions |
+| `Versor` / `Spinor` | Rotor construction, sandwich products, and interpolation |
+| `CGA` | Conformal GA: points, lines, circles, spheres, meet |
+| `PGA` / `PGATransforms` | Projective GA entities and rigid transformations |
+| `LinearAlgebra` | Generic determinant, linear maps, Cramer's rule |
+| `Calculus` | Gradient, divergence, curl, Laplacian |
+| `PropertyTests` | Focused dense/packed/sparse/truncated reference gates |
+| `JuliaOracle` | Automated comparisons against Grassmann.jl |
+| `CABI` | Internal exports behind the versioned, caller-owned C API |
 
 ## Signatures
 
@@ -83,7 +123,7 @@ STA : Signature 4
 -- Conformal geometric algebra Cl(4,1)
 CGA3 : Signature 5
 
--- Projective geometric algebra Cl(3,1)
+-- Projective geometric algebra Cl(3,0,1)
 PGA3 : Signature 4
 
 -- Custom signatures
@@ -202,9 +242,17 @@ let a := signedArea2D v1 v2       -- 2D signed area
 
 ## Building
 
+From the outer repository root:
+
 ```bash
+lake update
 lake build
+lake build Grassmann.MV Grassmann.MVDense
 ```
+
+The root workspace fetches its pinned mathlib revision and has no required local
+path dependencies. Do not use the nested experimental Lake workspace as the
+normal build entrypoint.
 
 ## Benchmarks
 
@@ -212,12 +260,12 @@ Use the benchmark guards for repeatable local correctness and performance
 checks:
 
 ```bash
-scripts/bench_guard.sh
-scripts/packedmvbench_guard.sh
+Grassmann4/scripts/bench_guard.sh
+Grassmann4/scripts/packedmvbench_guard.sh
 ```
 
-`scripts/bench_guard.sh` runs the core `lake exe bench` suite, checks that the
-packed `MV` rotor and sandwich paths still match dense `Multivector`, and
+`Grassmann4/scripts/bench_guard.sh` runs the core `lake exe bench` suite, checks
+that the packed `MV` rotor and sandwich paths still match dense `Multivector`, and
 enforces conservative local latency and speedup thresholds for rotor,
 sandwich, PGA3 motor, and compile-time gradient kernels. Override defaults with
 `MAX_MV_ROTOR_NS`, `MAX_MV_SANDWICH_NS`, `MAX_MV_MOTOR_NS`,
@@ -232,24 +280,32 @@ lake exe packedmvbench all 200
 lake exe packedmvbench pga-motor-point 5000
 ```
 
-`scripts/packedmvbench_guard.sh` runs a small correctness smoke test, then
-checks the packed PGA3 motor-point transform against conservative local
+`Grassmann4/scripts/packedmvbench_guard.sh` runs a small correctness smoke test,
+then checks the packed PGA3 motor-point transform against conservative local
 thresholds. Override defaults with `PACKED_MV_BENCH_MOTOR_ITERS`,
 `MAX_PACKED_PGA_MOTOR_POINT_NS`, and
 `MIN_PACKED_PGA_MOTOR_POINT_SPEEDUP`.
 
-A local `scripts/bench_guard.sh` run on 2026-06-05 passed with zero checked
-correctness drift, `156.632080 ns/iter` MV rotor composition versus
+A local `Grassmann4/scripts/bench_guard.sh` run on 2026-06-05 passed with zero
+checked correctness drift, `156.632080 ns/iter` MV rotor composition versus
 `37116.177920 ns/iter` dense composition (`237.0x`), `100.820830 ns/iter` MV
 sandwich versus `110933.791250 ns/iter` dense sandwich (`1100.3x`),
 `868.634160 ns/iter` PGA3 motor multiplication, and `793.880420 ns/iter`
 compile-time gradient versus `8043.472080 ns/iter` finite-difference gradient
 (`10.1x`).
 
-A local `scripts/packedmvbench_guard.sh` run on 2026-06-05 passed with
-`0.000000` PGA3 motor-point correctness drift, `6641.300000 ns/iter` packed
+A local `Grassmann4/scripts/packedmvbench_guard.sh` run on 2026-06-05 passed
+with `0.000000` PGA3 motor-point correctness drift, `6641.300000 ns/iter` packed
 motor-point transforms versus `211530.158400 ns/iter` dense transforms
 (`31.9x`).
+
+The 2026-07-09 port acceptance run also passed with zero rotor, sandwich, and
+PGA3 point-transform drift. It measured `122.529580 ns/iter` for packed rotor
+composition versus `38096.199170 ns/iter` dense (`310.9x`), `99.087500 ns/iter`
+for packed sandwich transforms versus `114705.108330 ns/iter` dense (`1157.6x`),
+`438.934170 ns/iter` for packed PGA3 motor multiplication, and
+`4340.383400 ns/iter` for packed PGA3 motor-point transforms versus
+`412131.550000 ns/iter` dense (`95.0x`).
 
 See `docs/PackedMVPerformance.md` for the focused PGA3 motor-point profiling
 commands and a current process-level `time -l` footprint snapshot.
@@ -261,11 +317,16 @@ representations:
 
 ```bash
 lake exe propertytests packed-reference
+lake exe propertytests mv-dispatch
+lake exe propertytests pga-point-cloud
 lake exe propertytests sparse-reference
 lake exe propertytests truncated-reference
 lake exe propertytests repr
 lake exe propertytests stress
-lake exe propertytests mv-dispatch
+lake exe propertytests
+lake exe fixedkerneltests
+lake exe fatdottests
+lake exe pga3kerneltests
 ```
 
 Local runs on 2026-06-05 passed the sparse, truncated, representation
@@ -280,7 +341,41 @@ contraction, Hodge, determinant, composition, and R3 cross-product anchors.
 
 ## Testing Against Grassmann.jl
 
-The `OracleTests` module contains tests designed to be verified against Grassmann.jl:
+Run the automated oracle guard from the outer repository root:
+
+```bash
+lake exe oracletests
+```
+
+This is optional and requires Julia plus the repository's Grassmann.jl
+environment. The launcher uses the current outer repository root and inherited
+environment; override `GRASSMANN_REPO_ROOT`, `JULIA`, or `JULIA_DEPOT_PATH` for
+nonstandard launch locations.
+
+## Native C ABI
+
+`include/grassmann/cabi.h` defines the versioned PGA3 ABI using caller-owned
+fixed `double` buffers. It does not expose Lean objects. From the outer root,
+build the shared library and run the C/C++ headers, runtime initialization,
+foreign-thread, layout, transform, ownership-stress, symbol, and timing smoke:
+
+```bash
+Grassmann4/scripts/cabi_smoke.sh
+```
+
+Call `grassmann_initialize_v1` once before use. Foreign worker threads must pair
+`grassmann_thread_initialize_v1` and `grassmann_thread_finalize_v1`. The Lean
+runtime remains alive for the process lifetime; there is deliberately no
+process-global shutdown API. Packed mask order and semantic channel aliases are
+documented in the header.
+
+The 2026-07-09 ABI acceptance run passed both header probes, the exported-symbol
+audit, a foreign-thread call, layout checks, and 100,000 iterations / 500,000
+consuming calls of ownership stress. Informational boundary timings were
+`14.2 ns/call` for construction/result copies and `18.8 ns/call` for packed
+input/extract/result copies.
+
+The underlying oracle checks can also be explored directly in Julia:
 
 ```julia
 using Grassmann
