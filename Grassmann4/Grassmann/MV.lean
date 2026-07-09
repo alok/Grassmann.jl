@@ -779,7 +779,7 @@ theorem toMultivector_coeff (m : MV sig p) (i : Fin (2 ^ n)) :
   by_cases hparity : Parity.containsMask p i.val = true
   · simp [hmask, hparity]
   · have hparity_false : Parity.containsMask p i.val = false := by
-      exact Bool.eq_false_of_not_eq_true hparity
+      cases h : Parity.containsMask p i.val <;> simp_all
     simp [hmask, hparity_false]
 
 /-- Dense conversion has zero coefficients at blades outside the packed parity. -/

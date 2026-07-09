@@ -1,6 +1,6 @@
 import Grassmann.DataArray
 
-/-! ### Quick test of SciLean-backed DataArray types -/
+/-! ### Quick test of built-in FloatArray-backed DataArray types -/
 
 namespace Grassmann.TestDA
 
@@ -21,10 +21,14 @@ open Grassmann
 #check DataArray
 #check DataArray.zeros 16
 
--- Verify type equalities
-example : GrassmannArray 3 = SciLean.DataArrayN Float (SciLean.Idx (2^3)) := rfl
-example : EvenArray 3 = SciLean.DataArrayN Float (SciLean.Idx (2^(3-1))) := rfl
-example : DataArray = SciLean.DataArray Float := rfl
+-- Verify the public aliases use Lean's contiguous unboxed FloatArray.
+example : GrassmannArray 3 = FloatArray := rfl
+example : EvenArray 3 = FloatArray := rfl
+example : DataArray = FloatArray := rfl
+
+example : (GrassmannArray.zeros 3).size = 8 := by native_decide
+example : (EvenArray.zeros 3).size = 4 := by native_decide
+example : (GrassmannArray.scalar 3 2.5).get! 0 == 2.5 := by native_decide
 
 #print "TestDA types verified!"
 

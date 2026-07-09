@@ -1,201 +1,137 @@
 /-
-  Grassmann/DataArray.lean - SciLean-backed arrays for numeric kernels
+  Grassmann/DataArray.lean - unboxed Float storage for numeric kernels
 
-  This module provides the numeric array backing for Grassmann algebra operations.
-  We now use SciLean's DataArrayN as the "one true" backing type, which gives us:
-  - Type-safe shape tracking via index types
-  - GPU support via Metal (automatic on Apple Silicon)
-  - BLAS integration for matrix operations
-  - Unified API across CPU/GPU
+  The core Grassmann runtime deliberately uses Lean's built-in `FloatArray`.
+  `FloatArray` is represented by a contiguous native array of doubles, has a
+  stable Lean runtime C API, and does not pull the optional SciLean/Verso stack
+  into every consumer of the algebra library.
 
-  The main types:
-  - `GrassmannArray n` = `Float^[Idx (2^n)]` for full multivectors
-  - `EvenArray n` = `Float^[Idx (2^(n-1))]` for packed even elements
+  The public aliases below retain the old names while the hot `MV` path uses
+  `DataArray` directly.  The dimension parameters on `GrassmannArray` and
+  `EvenArray` document the intended layout; `MV` owns the runtime size checks.
 -/
-import SciLean.Data.DataArray
+import Init.Data.FloatArray
 
 namespace Grassmann
 
-open SciLean
+/-! ### Unboxed runtime storage -/
 
-private def idxOfNat? (limit i : Nat) : Option (Idx limit) :=
-  if hSize : i < USize.size then
-    if h : i < limit then
-      some ⟨USize.ofNatLT i hSize, by simpa using h⟩
-    else
-      none
-  else
-    none
-
-/-! ### Type aliases for Grassmann-specific shaped arrays -/
-
-/-- Array for storing 2^n coefficients of a full multivector. -/
-abbrev GrassmannArray (n : ℕ) := Float^[Idx (2^n)]
-
-/-- Array for storing 2^(n-1) coefficients of an even multivector. -/
-abbrev EvenArray (n : ℕ) := Float^[Idx (2^(n-1))]
-
-/-! ### Constructors -/
-
-/-- Zero-filled array of size 2^n. -/
-@[inline]
-def GrassmannArray.zeros (n : ℕ) : GrassmannArray n :=
-  SciLean.ofFn fun (_ : Idx (2^n)) => (0 : Float)
-
-/-- Scalar multivector (1 in position 0, rest zeros). -/
-@[inline]
-def GrassmannArray.scalar (n : ℕ) (x : Float) : GrassmannArray n :=
-  let arr := GrassmannArray.zeros n
-  arr.set ⟨0, by simp⟩ x
-
-/-- Zero-filled even array of size 2^(n-1). -/
-@[inline]
-def EvenArray.zeros (n : ℕ) : EvenArray n :=
-  SciLean.ofFn fun (_ : Idx (2^(n-1))) => (0 : Float)
-
-/-- Scalar even multivector. -/
-@[inline]
-def EvenArray.scalar (n : ℕ) (x : Float) : EvenArray n :=
-  let arr := EvenArray.zeros n
-  arr.set ⟨0, by simp⟩ x
-
-/-! ### Accessors (compatibility layer) -/
-
-/-- Get coefficient at index (unsafe, panics on OOB). -/
-@[inline]
-def GrassmannArray.get! {n : ℕ} (arr : GrassmannArray n) (i : Nat) : Float :=
-  match idxOfNat? (2 ^ n) i with
-  | some idx => arr.get idx
-  | none =>
-    panic! s!"GrassmannArray.get!: index {i} out of bounds for size {2 ^ n}"
-
-/-- Set coefficient at index (unsafe). -/
-@[inline]
-def GrassmannArray.set! {n : ℕ} (arr : GrassmannArray n) (i : Nat) (x : Float) : GrassmannArray n :=
-  match idxOfNat? (2 ^ n) i with
-  | some idx => arr.set idx x
-  | none =>
-    arr
-
-/-- Get coefficient at index (unsafe). -/
-@[inline]
-def EvenArray.get! {n : ℕ} (arr : EvenArray n) (i : Nat) : Float :=
-  match idxOfNat? (2 ^ (n - 1)) i with
-  | some idx => arr.get idx
-  | none =>
-    panic! s!"EvenArray.get!: index {i} out of bounds for size {2 ^ (n - 1)}"
-
-/-- Set coefficient at index (unsafe). -/
-@[inline]
-def EvenArray.set! {n : ℕ} (arr : EvenArray n) (i : Nat) (x : Float) : EvenArray n :=
-  match idxOfNat? (2 ^ (n - 1)) i with
-  | some idx => arr.set idx x
-  | none =>
-    arr
-
-/-! ### Conversions -/
-
-/-- Create from function. -/
-@[inline]
-def GrassmannArray.ofFn {n : ℕ} (f : Fin (2 ^ n) → Float) : GrassmannArray n :=
-  SciLean.ofFn fun (i : Idx (2 ^ n)) => f ⟨i.1.toNat, i.2⟩
-
-/-- Create even array from function. -/
-@[inline]
-def EvenArray.ofFn {n : ℕ} (f : Fin (2 ^ (n - 1)) → Float) : EvenArray n :=
-  SciLean.ofFn fun (i : Idx (2 ^ (n - 1))) => f ⟨i.1.toNat, i.2⟩
-
-/-! ### Legacy DataArray compatibility
-
-These definitions maintain backward compatibility with code using the old API.
-The legacy DataArray is now backed by SciLean's DataArray Float.
--/
-
-/-- Legacy DataArray type - now backed by SciLean's DataArray. -/
-abbrev DataArray := SciLean.DataArray Float
+/-- Contiguous, unboxed Float storage used by `MV` kernels. -/
+abbrev DataArray := FloatArray
 
 namespace DataArray
 
 /-- Number of elements. -/
-@[inline] def len (a : DataArray) : Nat := SciLean.DataArray.size a
+@[inline, always_inline]
+def len (a : DataArray) : Nat := a.size
 
 /-- Empty data array. -/
-@[inline] def empty : DataArray := ⟨ByteArray.empty, by decide⟩
+@[inline]
+def empty : DataArray := FloatArray.empty
 
-/-- Allocate a zero-filled DataArray of length n. -/
-@[inline] def zeros (n : Nat) : DataArray := SciLean.DataArray.mkZero n
+private def replicateAux (x : Float) : Nat → FloatArray → FloatArray
+  | 0, out => out
+  | n + 1, out => replicateAux x n (out.push x)
 
-/-- Allocate a DataArray filled with x. -/
-@[inline] def replicate (n : Nat) (x : Float) : DataArray := SciLean.DataArray.replicate n x
+/-- Allocate a DataArray filled with `x`. -/
+@[inline]
+def replicate (n : Nat) (x : Float) : DataArray :=
+  replicateAux x n (FloatArray.emptyWithCapacity n)
 
-/-- Unsafe read (panics on OOB). -/
-@[inline] def get! (a : DataArray) (i : Nat) : Float :=
-  let sz := SciLean.DataArray.size a
-  match idxOfNat? sz i with
-  | some idx => a.get idx
-  | none =>
-    panic! s!"DataArray.get!: index {i} out of bounds"
+/-- Allocate a zero-filled DataArray of length `n`. -/
+@[inline]
+def zeros (n : Nat) : DataArray := replicate n 0.0
 
-/-- Unsafe write. -/
-@[inline] def set! (a : DataArray) (i : Nat) (x : Float) : DataArray :=
-  let sz := SciLean.DataArray.size a
-  match idxOfNat? sz i with
-  | some idx => a.set idx x
-  | none =>
-    a
+/-- Read a coefficient through Lean's native FloatArray runtime primitive.
 
-/-- Construct from Array Float using recursive helper. -/
-private def ofArrayAux (arr : Array Float) (da : DataArray) (i : Nat) : DataArray :=
-  if _ : i < arr.size then
-    match idxOfNat? (SciLean.DataArray.size da) i with
-    | some idx =>
-      let da' := da.set idx arr[i]
-      ofArrayAux arr da' (i + 1)
-    | none =>
-      da
-  else
-    da
-termination_by arr.size - i
+All `MV` constructors maintain the packed-storage length invariant, so hot
+kernels stay in bounds.  The runtime primitive still handles an accidental
+out-of-bounds read without introducing a second Lean-level bounds branch.
+-/
+@[inline, always_inline]
+def get! (a : @& DataArray) (i : Nat) : Float :=
+  FloatArray.get! a i
 
-@[inline] def ofArray (arr : Array Float) : DataArray :=
-  ofArrayAux arr (SciLean.DataArray.mkZero arr.size) 0
+/-- Write a coefficient. Out-of-bounds writes preserve the input array. -/
+@[inline, always_inline]
+def set! (a : DataArray) (i : Nat) (x : Float) : DataArray :=
+  FloatArray.set! a i x
 
-/-- Convert to Array Float using recursive helper. -/
-private def toArrayAux (a : DataArray) (arr : Array Float) (i : Nat) (sz : Nat) : Array Float :=
-  if _ : i < sz then
-    match idxOfNat? (SciLean.DataArray.size a) i with
-    | some idx =>
-      let v := a.get idx
-      toArrayAux a (arr.push v) (i + 1) sz
-    | none =>
-      arr
-  else
-    arr
-termination_by sz - i
+/-- Copy a boxed Lean array into contiguous Float storage. -/
+@[inline]
+def ofArray (arr : Array Float) : DataArray :=
+  arr.foldl (fun out x => out.push x) (FloatArray.emptyWithCapacity arr.size)
 
-@[inline] def toArray (a : DataArray) : Array Float :=
-  let sz := SciLean.DataArray.size a
-  toArrayAux a (Array.mkEmpty sz) 0 sz
+/-- Copy contiguous Float storage into a boxed Lean array. -/
+@[inline]
+def toArray (a : DataArray) : Array Float :=
+  a.foldl (fun out x => out.push x) (Array.mkEmpty a.size)
 
-/-- Left fold using recursive helper. -/
-private def foldlAux {β : Type} (f : β → Float → β) (a : DataArray)
-    (acc : β) (i : Nat) (stop : Nat) : β :=
-  if _ : i < stop then
-    match idxOfNat? (SciLean.DataArray.size a) i with
-    | some idx =>
-      let v := a.get idx
-      foldlAux f a (f acc v) (i + 1) stop
-    | none =>
-      acc
-  else
-    acc
-termination_by stop - i
-
-@[inline] def foldl {β : Type} (f : β → Float → β) (init : β) (a : DataArray)
-    (start : Nat := 0) (stop : Nat := SciLean.DataArray.size a) : β :=
-  let sz := SciLean.DataArray.size a
-  foldlAux f a init start (min stop sz)
+/-- Left fold over a subrange of the contiguous storage. -/
+@[inline]
+def foldl {β : Type} (f : β → Float → β) (init : β) (a : DataArray)
+    (start : Nat := 0) (stop : Nat := a.size) : β :=
+  FloatArray.foldl f init a start (min stop a.size)
 
 end DataArray
+
+/-! ### Grassmann layout aliases -/
+
+/-- Full multivector coefficient storage. Expected length: `2^n`. -/
+abbrev GrassmannArray (_n : Nat) := DataArray
+
+/-- Packed even multivector coefficient storage. Expected length: `2^(n-1)`. -/
+abbrev EvenArray (_n : Nat) := DataArray
+
+/-- Zero-filled full multivector storage. -/
+@[inline]
+def GrassmannArray.zeros (n : Nat) : GrassmannArray n :=
+  DataArray.zeros (Nat.pow 2 n)
+
+/-- Scalar full multivector storage. -/
+@[inline]
+def GrassmannArray.scalar (n : Nat) (x : Float) : GrassmannArray n :=
+  (GrassmannArray.zeros n).set! 0 x
+
+/-- Zero-filled packed-even multivector storage. -/
+@[inline]
+def EvenArray.zeros (n : Nat) : EvenArray n :=
+  DataArray.zeros (Nat.pow 2 (Nat.sub n 1))
+
+/-- Scalar packed-even multivector storage. -/
+@[inline]
+def EvenArray.scalar (n : Nat) (x : Float) : EvenArray n :=
+  (EvenArray.zeros n).set! 0 x
+
+/-- Read a coefficient from full multivector storage. -/
+@[inline, always_inline]
+def GrassmannArray.get! {n : Nat} (arr : @& GrassmannArray n) (i : Nat) : Float :=
+  DataArray.get! arr i
+
+/-- Write a coefficient in full multivector storage. -/
+@[inline, always_inline]
+def GrassmannArray.set! {n : Nat} (arr : GrassmannArray n) (i : Nat) (x : Float) :
+    GrassmannArray n :=
+  DataArray.set! arr i x
+
+/-- Read a coefficient from packed-even multivector storage. -/
+@[inline, always_inline]
+def EvenArray.get! {n : Nat} (arr : @& EvenArray n) (i : Nat) : Float :=
+  DataArray.get! arr i
+
+/-- Write a coefficient in packed-even multivector storage. -/
+@[inline, always_inline]
+def EvenArray.set! {n : Nat} (arr : EvenArray n) (i : Nat) (x : Float) : EvenArray n :=
+  DataArray.set! arr i x
+
+/-- Construct full multivector storage from a coefficient function. -/
+@[inline]
+def GrassmannArray.ofFn {n : Nat} (f : Fin (Nat.pow 2 n) → Float) : GrassmannArray n :=
+  DataArray.ofArray (Array.ofFn f)
+
+/-- Construct packed-even storage from a coefficient function. -/
+@[inline]
+def EvenArray.ofFn {n : Nat} (f : Fin (Nat.pow 2 (Nat.sub n 1)) → Float) : EvenArray n :=
+  DataArray.ofArray (Array.ofFn f)
 
 end Grassmann
