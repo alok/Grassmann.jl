@@ -44,6 +44,21 @@ root = "RunPropertyTests"
 srcDir = "Grassmann4"
 
 [[lean_exe]]
+name = "fixedkerneltests"
+root = "FixedKernelTests"
+srcDir = "Grassmann4"
+
+[[lean_exe]]
+name = "fatdottests"
+root = "FatDotTests"
+srcDir = "Grassmann4"
+
+[[lean_exe]]
+name = "pga3kerneltests"
+root = "PGA3KernelTests"
+srcDir = "Grassmann4"
+
+[[lean_exe]]
 name = "bench"
 root = "Grassmann.Bench"
 srcDir = "Grassmann4"

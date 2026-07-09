@@ -19,7 +19,7 @@
   - The origin is represented by e₁₂₃ (pseudoscalar without e₀)
 -/
 import Grassmann.Multivector
-import Grassmann.MV
+import Grassmann.PGA3Packed
 
 namespace Grassmann
 
@@ -30,50 +30,6 @@ PGA3 is defined in Manifold.lean as: Signature.clr 3 0 1.
 -/
 
 namespace PGA
-
-/-! ## Basis Elements
-
-In PGA3:
-- e1, e2, e3: Euclidean vectors (square to +1)
-- e0: degenerate/null dimension (squares to 0)
--/
-
-/-- Euclidean basis e₁ -/
-def e1 : Blade PGA3 := ⟨0b0001⟩
-/-- Euclidean basis e₂ -/
-def e2 : Blade PGA3 := ⟨0b0010⟩
-/-- Euclidean basis e₃ -/
-def e3 : Blade PGA3 := ⟨0b0100⟩
-/-- Degenerate/projective basis e₀ -/
-def e0 : Blade PGA3 := ⟨0b1000⟩
-
--- Bivectors (lines in PGA)
-/-- e₀₁ bivector -/
-def e01 : Blade PGA3 := ⟨0b1001⟩
-/-- e₀₂ bivector -/
-def e02 : Blade PGA3 := ⟨0b1010⟩
-/-- e₀₃ bivector -/
-def e03 : Blade PGA3 := ⟨0b1100⟩
-/-- e₁₂ bivector -/
-def e12 : Blade PGA3 := ⟨0b0011⟩
-/-- e₃₁ bivector (note: e31 = -e13) -/
-def e31 : Blade PGA3 := ⟨0b0101⟩
-/-- e₂₃ bivector -/
-def e23 : Blade PGA3 := ⟨0b0110⟩
-
--- Trivectors (points in PGA)
-/-- e₁₂₃ trivector (ideal point / origin pseudoscalar) -/
-def e123 : Blade PGA3 := ⟨0b0111⟩
-/-- e₀₂₃ trivector -/
-def e023 : Blade PGA3 := ⟨0b1110⟩
-/-- e₀₃₁ trivector -/
-def e031 : Blade PGA3 := ⟨0b1101⟩
-/-- e₀₁₂ trivector -/
-def e012 : Blade PGA3 := ⟨0b1011⟩
-
--- Pseudoscalar
-/-- e₀₁₂₃ pseudoscalar -/
-def e0123 : Blade PGA3 := ⟨0b1111⟩
 
 /-! ## Proof-Friendly API (Generic over F)
 
@@ -164,59 +120,6 @@ def distanceSq (p1 p2 : Multivector PGA3 F) : F :=
   (l * l†).scalarPart
 
 end Proof
-
-/-! ## Float-Optimized API (DataArray-backed)
-
-The types `PGA.Motor`, `PGA.Point`, `PGA.Plane`, `PGA.Line` are imported from
-`Grassmann.MV` and backed by DataArray for efficient Float computation.
--/
-
-/-- Create a PGA3 point from Euclidean coordinates (Float, DataArray-backed).
-    P = e123 + x·e023 + y·e031 + z·e012 -/
-def point3 (x y z : Float) : Point PGA3 :=
-  MV.zero PGA3 .odd
-    |>.setCoeff 7 1.0    -- e123
-    |>.setCoeff 14 x     -- e023
-    |>.setCoeff 13 y     -- e031
-    |>.setCoeff 11 z     -- e012
-
-/-- Create a PGA3 plane from normal (nx,ny,nz) and distance d (Float, DataArray-backed). -/
-def plane3 (nx ny nz d : Float) : Plane PGA3 :=
-  MV.zero PGA3 .odd
-    |>.setCoeff 1 nx     -- e1
-    |>.setCoeff 2 ny     -- e2
-    |>.setCoeff 4 nz     -- e3
-    |>.setCoeff 8 d      -- e0
-
-/-- Create a PGA3 line from direction and moment (Float, DataArray-backed). -/
-def line3 (dx dy dz mx my mz : Float) : Line PGA3 :=
-  MV.zero PGA3 .even
-    |>.setCoeff 6 dx     -- e23
-    |>.setCoeff 5 dy     -- e31
-    |>.setCoeff 3 dz     -- e12
-    |>.setCoeff 9 mx     -- e01
-    |>.setCoeff 10 my    -- e02
-    |>.setCoeff 12 mz    -- e03
-
-/-- Create a PGA3 motor from rotation angle and axis (Float, DataArray-backed). -/
-def motor3 (dx dy dz theta : Float) : Motor PGA3 :=
-  let halfAngle := theta / 2.0
-  let c := Float.cos halfAngle
-  let s := Float.sin halfAngle
-  MV.zero PGA3 .even
-    |>.setCoeff 0 c             -- scalar
-    |>.setCoeff 6 (s * dx)      -- e23
-    |>.setCoeff 5 (s * dy)      -- e31
-    |>.setCoeff 3 (s * dz)      -- e12
-
-/-- Extract Euclidean coordinates from a DataArray-backed PGA3 point. -/
-def extractPoint3 (p : Point PGA3) : Float × Float × Float :=
-  let mv := p.toMV
-  let w := mv.coeff 7  -- e123 coefficient
-  if w == 0 then
-    (0, 0, 0)
-  else
-    (mv.coeff 14 / w, mv.coeff 13 / w, mv.coeff 11 / w)
 
 end PGA
 
