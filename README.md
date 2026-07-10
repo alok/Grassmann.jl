@@ -42,6 +42,8 @@ This gives the project a single Float-oriented multivector type with:
   grade involution that returns even inputs and negates odd inputs directly,
 - a borrowed, one-buffer full-storage Hodge dual with a compact orientation
   bit stream through dimension 6 and a direct parity fallback above it,
+- checked arithmetic packed rank/unrank plus borrowed one-buffer grade/parity
+  projection and parity-widening kernels,
 - standard `Zero`, `Inhabited`, and `SMul Float` interfaces for every parity,
   plus `One` for even and full storage only,
 - an opt-in bridge back to dense `Multivector` values when reference comparisons or proof-oriented code matter more than runtime.

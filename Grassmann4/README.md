@@ -68,6 +68,16 @@ with a direct parity loop. The operation is signature independent rather than a
 metric pseudoscalar inverse, so degenerate PGA null blades keep their
 combinatorial complements.
 
+Packed parity indices are arithmetic: a valid even/odd blade mask has rank
+`mask / 2`, and its discarded low bit is reconstructed from the packed rank's
+popcount parity. The checked public wrappers retain their historical
+out-of-range behavior, including the dimension-zero compatibility slot.
+`evenPart`, `oddPart`, `gradeProject`, `evenToFull`, and `oddToFull` borrow their
+input and construct exactly one native result buffer; widening emits each
+adjacent full-storage pair from one packed coefficient. Grade notation
+`⟨m⟩₀`--`⟨m⟩₃` dispatches through the carrier-indexed `GAGradeProject` class so
+the signature and coefficient type are inferred from `m`.
+
 ## Quick Start
 
 The examples below opt into the dense/reference surface because they mix blade
@@ -324,6 +334,7 @@ lake exe packedmvbench subtraction 250000
 lake exe packedmvbench linear-arithmetic 500000
 lake exe packedmvbench unary-involutions 100000
 lake exe packedmvbench hodge-dual 100000
+lake exe packedmvbench projections-widening 100000
 ```
 
 `Grassmann4/scripts/packedmvbench_guard.sh` runs a small correctness smoke test,
@@ -334,12 +345,15 @@ with their former boxed-array shapes; subtraction is compared with the
 now-optimized two-buffer `add`/`neg` composition. Iteration counts and thresholds
 have corresponding `PACKED_MV_BENCH_*`, `MAX_PACKED_*`, and `MIN_PACKED_*`
 overrides in the script. Hodge dual is checked over full CGA3 storage against
-its former boxed complement/map shape.
+its former boxed complement/map shape. Grade projection, full-to-parity
+projection, and parity widening are checked over seven CGA3 full/even/odd
+shapes against their former boxed implementations.
 
 `Grassmann4/scripts/packed_linear_codegen_guard.sh` materializes the current
 `Grassmann.MV` C facet without Lake's shared artifact cache and audits only the
-exact non-boxed generated-C bodies for the linear, unary, and Hodge kernels. For
-each nontrivial constructor it requires one final result
+exact non-boxed generated-C bodies for arithmetic indexing and the linear,
+unary, Hodge, projection, and widening kernels. For each nontrivial constructor
+it requires one final result
 allocation, direct unboxed Float arithmetic, borrowed inputs, a single push per
 coefficient, and tail-loop codegen. It separately verifies the allocation-free
 even-involution return, the one-allocation odd/full branches, the unboxed Hodge
@@ -391,6 +405,15 @@ coefficients and measured `79.200830 ns/iter` direct versus
 unboxed dimension-0--6 sign selector, its one-read/one-push loop, the
 dimension-7-and-above parity fallback, and the single-allocation public
 dispatch.
+
+The 2026-07-09 packed-projection acceptance run had zero L1 drift for full
+grade-2, even grade-2, odd grade-3, even/odd part, and even/odd widening over 16
+varied CGA3 values. Direct grade projection measured `148.915420`--
+`332.903330 ns/iter`, parity projection `163.958750`--`164.517920 ns/iter`, and
+widening `157.757500`--`164.021250 ns/iter`; speedups over the retained boxed
+shapes were `3.209x`--`12.716x`. The generated-C guard independently pins
+array-free arithmetic indexing, one-buffer projection loops, two-push widening,
+and the dimension-zero retain/zero branches.
 
 See `docs/PackedMVPerformance.md` for the focused PGA3 motor-point profiling
 commands and a current process-level `time -l` footprint snapshot.

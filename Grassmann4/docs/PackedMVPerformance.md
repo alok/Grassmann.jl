@@ -1,8 +1,9 @@
 # Packed MV Performance Evidence
 
 This note records the repeatable checks for the packed `MV` backend's PGA3
-motor-point path, basic linear kernels, unary involutions, and Hodge dual. These paths
-exercise the port's hot native representation: projective transforms over
+motor-point path, basic linear kernels, unary involutions, Hodge dual, grade and
+parity projection, and parity widening. These paths exercise the port's hot
+native representation: projective transforms over
 `MV PGA3 .even` and `MV PGA3 .odd`, plus full/even/odd arithmetic over
 contiguous `FloatArray` storage.
 
@@ -23,6 +24,7 @@ lake exe packedmvbench subtraction "$PACKED_MV_BENCH_SUBTRACTION_ITERS"
 lake exe packedmvbench linear-arithmetic "$PACKED_MV_BENCH_LINEAR_ITERS"
 lake exe packedmvbench unary-involutions "$PACKED_MV_BENCH_UNARY_ITERS"
 lake exe packedmvbench hodge-dual "$PACKED_MV_BENCH_HODGE_ITERS"
+lake exe packedmvbench projections-widening "$PACKED_MV_BENCH_PROJECTION_ITERS"
 ```
 
 Default thresholds:
@@ -43,6 +45,10 @@ Default thresholds:
 | Direct-vs-boxed unary speedup | `>= 20x` each |
 | Direct full Hodge dual | `<= 250 ns/iter` |
 | Direct-vs-boxed Hodge speedup | `>= 100x` |
+| Direct full grade projection | `<= 500 ns/iter` |
+| Direct half-storage grade/parity projection | `<= 300 ns/iter` |
+| Direct parity widening | `<= 300 ns/iter` |
+| Direct-vs-boxed projection/widening speedup | `>= 3x` each |
 
 The subtraction comparator is intentionally the current optimized
 `MV.add a (MV.neg b)` composition. Its relative threshold is lower than the
@@ -65,6 +71,14 @@ the same exterior-complement sign directly. This is not a metric pseudoscalar
 inverse: the combinatorial complement remains defined for degenerate PGA null
 blades.
 
+Projection preflight compares every stored coefficient of 16 varied CGA3
+values for full grade 2, even grade 2, odd grade 3, full-to-even, full-to-odd,
+even-to-full, and odd-to-full. Valid packed rank/unrank is arithmetic, while the
+checked public wrappers preserve full-storage identity, restricted-layout
+default-zero behavior, and the dimension-zero compatibility slot. Each direct
+projector allocates one final buffer; each widening loop reads one packed
+coefficient and pushes its two adjacent full-storage slots.
+
 ## Generated-C Structure Guard
 
 Timing is not an allocation counter. Run the compiler-structural gate as a
@@ -75,9 +89,10 @@ scripts/packed_linear_codegen_guard.sh
 ```
 
 The script disables Lake's shared artifact cache, materializes the current
-`Grassmann.MV` C facet, and extracts only the non-boxed linear loops, the five
-full/packed unary loops, both Hodge loops, and the public constructors or parity
-branches that own their result. It requires:
+`Grassmann.MV` C facet, and extracts only arithmetic rank/unrank, the non-boxed
+linear loops, the five full/packed unary loops, both Hodge loops, projection and
+widening loops, and the public constructors or parity branches that own their
+result. It requires:
 
 - one final `lean_mk_empty_float_array` in each nontrivial public constructor;
 - direct `lean_float_array_get`, one unboxed Float operation, and one
@@ -90,6 +105,8 @@ branches that own their result. It requires:
   allocation feeding `negAux` or `involuteFullAux` for odd or full storage.
 - an unboxed `UInt64` Hodge orientation selector, one-read/one-push small and
   fallback loops, and one result allocation in the public Hodge dispatch.
+- no cached arrays or linear searches in valid packed rank/unrank, one
+  read/one-push projection loops, and one read/two-push widening loops.
 
 The audit does not scan the whole generated module. Typeclass dictionaries may
 legitimately allocate closures, and boxed wrappers may legitimately unbox and
@@ -194,3 +211,25 @@ dimensions 0--6, a one-read/one-push tail loop for that sign stream, a separate
 direct-parity tail loop for dimensions 7 and above, and exactly one result
 allocation in the public dispatch. Neither loop reconstructs blades or uses the
 former boxed range/map callback path.
+
+## 2026-07-09 Packed Projection and Widening Audit
+
+Four isolated 100,000-iteration runs had zero L1 drift for all seven CGA3
+comparisons. The final thresholded guard recorded:
+
+| Operation/layout | Direct | Boxed comparator | Speedup |
+| --- | ---: | ---: | ---: |
+| Grade 2 full | `332.903330 ns/iter` | `2352.362080 ns/iter` | `7.066x` |
+| Grade 2 even | `148.915420 ns/iter` | `1006.363330 ns/iter` | `6.758x` |
+| Grade 3 odd | `167.370420 ns/iter` | `959.642500 ns/iter` | `5.734x` |
+| Full to even | `164.517920 ns/iter` | `527.972090 ns/iter` | `3.209x` |
+| Full to odd | `163.958750 ns/iter` | `544.757500 ns/iter` | `3.323x` |
+| Even to full | `157.757500 ns/iter` | `2006.029580 ns/iter` | `12.716x` |
+| Odd to full | `164.021250 ns/iter` | `1962.703750 ns/iter` | `11.966x` |
+
+The first implementation exposed a boxed-`Nat` shift/OR hotspot in arithmetic
+unranking: full-to-parity projection measured about `1.27 us/iter`. Expressing
+the same valid mask as `rank + rank + lowBit` reduced it to the final
+`164 ns/iter` range. Generated C independently confirms no cached index arrays,
+searches, boxed coefficient arrays, callback applications, second-pass writes,
+or borrowed-input reference-count churn in the hot helpers.
