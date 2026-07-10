@@ -110,3 +110,36 @@ Plus the native binding build/link/run smoke test added by this work.
 Only emit `<promise>COMPLETE</promise>` after every required outcome above is
 verified in the current working tree, all intended changes are committed, and
 `git status --short` contains no unexplained port-related work.
+
+## Continuation: ALOK-762 PGA3 ABI v1.1
+
+The core port milestone above is complete. The active continuation improves the
+same supported runtime and native boundary without widening the proof/reference
+surface.
+
+### Required outcomes
+
+- Fuse the fixed PGA3 even-odd-even motor sandwich into one allocation and
+  independently compare it with the existing composed kernels over every basis
+  pair and mixed coefficients.
+- Route public packed odd sandwiches through the fused kernel while preserving
+  the generic fallback for every other signature/parity.
+- Provide checked rigid-motor unit, normalization, and inverse operations based
+  on the quaternion norm and Study condition; reject null and Study-invalid
+  inputs rather than silently treating reverse as an inverse.
+- Transform flat contiguous XYZ point clouds in one shared-kernel call and one
+  caller-owned C ABI call, including empty, in-place, overflow, foreign-thread,
+  and ownership-stress behavior.
+- Release the additions as ABI v1.1 while retaining the `_v1` major symbol
+  family and keeping Lean objects out of the public header.
+- Beat the measured 4326.7375 ns/point packed baseline by at least 3x and keep
+  the public path below 1500 ns/point on this machine. Batch transforms over at
+  least 4096 points must be at least 3x faster per point than repeated scalar
+  make/apply/extract calls measured in the same process.
+- Re-run the canonical build, reference build, kernel/property/Julia oracle
+  checks, C ABI smoke, and both performance guards before completion.
+
+### Continuation completion rule
+
+Only emit a new `<promise>COMPLETE</promise>` after ALOK-762 is verified,
+documented, committed atomically, and updated in Linear with exact results.

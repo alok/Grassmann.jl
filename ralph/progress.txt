@@ -79,4 +79,74 @@ NEXT
   nested-workspace edits remain deliberately untouched and outside the
   supported runtime surface.
 
+2026-07-09 ALOK-762 CONTINUATION STARTED
+
+- User requested that the port loop continue after the supported core milestone.
+- Three independent audits compared the next soundness, Julia-parity, and
+  native-performance slices. The active milestone combines the two coherent
+  PGA3 boundary gaps: fused/batched transforms and checked rigid-motor
+  normalization/inversion.
+- Created high-priority Linear issue ALOK-762, "Ship fused PGA3 transforms and
+  checked C ABI v1.1", and branch `codex/alok-762-pga3-abi-v1-1`.
+- Fresh public packed baseline: 4326.7375 ns/point versus 421677.2208 ns/point
+  dense (97.46x). The required improvement is at least 3x from that packed
+  baseline, with a 1500 ns/point ceiling.
+- The later soundness milestone is an axiom firewall for the dense/reference
+  computational core: remove its dependency on the fake `Ring Float` and
+  `Field Float` instances before attempting the currently false or underspecified
+  theorem statements.
+
+NEXT
+
+1. Add a scalarized fused odd sandwich and exhaustive independent regressions.
+2. Specialize public packed PGA3 transforms and share constructors/extraction.
+3. Add checked motor validation, normalization, and inverse.
+4. Add contiguous XYZ batch transforms and ABI v1.1 bindings.
+5. Run the complete acceptance matrix and record measured results.
+
+2026-07-09 ALOK-762 PGA3 ABI V1.1 COMPLETE
+
+- `26171d8` fuses the fixed PGA3 even-odd-even sandwich into one scalarized
+  kernel allocation and routes the public packed odd path through it. Exhaustive
+  basis-pair and mixed-coefficient tests agree exactly with the independently
+  composed kernels.
+- `7991f1d` adds scale-invariant Study-condition validation, normalization,
+  checked inverse, shared point/plane/line/rotor/translator constructors, and a
+  flat XYZ batch transform that hoists one normalized affine transform per
+  cloud. Adversarial NaN, infinity, short/long storage, null, Study-invalid,
+  reciprocal-overflow, scale, inverse, and round-trip cases pass.
+- `1533540` and `dfe4ab3` release those operations through the caller-owned C
+  ABI v1.1 (`0x00010001`) while retaining the `_v1` symbol family and exposing
+  no Lean heap objects. Empty/null, in-place, bad-length, invalid-motor,
+  overflow, foreign-thread, C/C++ header, and ownership paths all pass.
+- `9dfc754` guards the dedicated Lean flat-batch path; `a929571` extends the
+  portable Grassmann.jl oracle with packed-order checked-motor comparisons.
+- Canonical `lake build` passed 483 jobs; `lake build Grassmann.Reference`
+  passed 619 jobs with only pre-existing experimental/reference lint warnings.
+  The fixed kernels, fat dot, and Init-only PGA3 regressions also pass.
+- All 13 focused property modes passed: 274 reported groups and 19,599 cases
+  across packed, sparse, truncated, representation, stress, native/blade
+  reference, sign tables, dispatch, rotor exponential, Julia examples, and
+  PGA/CGA point clouds. The Julia oracle passed all 188/188 comparisons,
+  including the new 27/27 checked-motor block.
+- The C ABI smoke completed 100,000 ownership-stress iterations and 900,000
+  consuming calls in 169.3 ms. A 4,096-point C batch took 32.0 us versus
+  311.6 us through repeated scalar calls (9.73x); construction/copy measured
+  13.6 ns and packed input/extract/copy measured 19.2 ns.
+- The public packed point transform improved from the fresh 4326.7375 ns/point
+  baseline to 542.3333 ns/point (7.98x faster and below the 1500 ns ceiling),
+  versus 425211.4041 ns/point dense (784.04x). The Lean flat batch measured
+  10.529277 ns/point versus 660.720620 ns/point scalar (62.75x).
+- Existing physics, Metal, Unreal, SciLean-AD, curve-shortening, and nested
+  workspace edits remain untouched and outside this milestone.
+
+NEXT
+
+1. Firewall the dense/reference computational surface from axiom-backed Float
+   algebra instances.
+2. Keep exact-law generic algebra separate from lawless IEEE-754 execution and
+   add a negative `Ring Float` synthesis regression.
+3. Re-run the full reference/property/oracle matrix before widening the
+   supported opt-in surface.
+
 <promise>COMPLETE</promise>
