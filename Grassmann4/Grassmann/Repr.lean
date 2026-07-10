@@ -13,9 +13,6 @@
 import Grassmann.Multivector
 import Grassmann.SparseMultivector
 import Grassmann.TruncatedMV
-import Grassmann.Proof
-
-open Grassmann.Proof
 
 namespace Grassmann
 
@@ -64,7 +61,7 @@ variable {n : ℕ} {sig : Signature n} {F : Type*}
 
 /-- Dense representation is the default (priority 1000 > default 100).
     This ensures `Multivector` is preferred when typeclass inference is ambiguous. -/
-instance (priority := 1000) [Ring F] : MultivectorRepr (Multivector sig F) sig F where
+instance (priority := 1000) [CoeffOps F] : MultivectorRepr (Multivector sig F) sig F where
   coeff m idx :=
     if h : idx < 2^n then m.coeffs ⟨idx, h⟩ else 0
   scalarPart := Multivector.scalarPart
@@ -81,7 +78,7 @@ instance (priority := 1000) [Ring F] : MultivectorRepr (Multivector sig F) sig F
 
 /-- Sparse representation (priority 500, lower than Dense).
     Use explicitly when working with high-dimensional sparse data. -/
-instance (priority := 500) [Ring F] [BEq F] :
+instance (priority := 500) [CoeffOps F] [BEq F] :
     MultivectorRepr (MultivectorS sig F) sig F where
   coeff := MultivectorS.coeff
   scalarPart := MultivectorS.scalarPart
@@ -98,7 +95,7 @@ instance (priority := 500) [Ring F] [BEq F] :
 
 /-- Truncated representation (priority 200, lowest).
     Use for very high dimensions when only low-grade components matter. -/
-instance (priority := 200) [Ring F] [BEq F] {maxGrade : ℕ} :
+instance (priority := 200) [CoeffOps F] [BEq F] {maxGrade : ℕ} :
     MultivectorRepr (TruncatedMV sig maxGrade F) sig F where
   coeff := TruncatedMV.coeff
   scalarPart := TruncatedMV.scalarPart
@@ -142,7 +139,7 @@ def genericNormSq [MultivectorRepr M sig F] (m : M) : F :=
 ```lean
 -- This works better - sig is explicit, M inferred from concrete type
 def normSqGeneric {n : ℕ} {sig : Signature n} {F : Type*} {M : Type*}
-    [Ring F] [MultivectorRepr M sig F] (m : M) : F :=
+    [CoeffOps F] [MultivectorRepr M sig F] (m : M) : F :=
   MultivectorRepr.scalarPart (MultivectorRepr.mul m (MultivectorRepr.reverse m))
 ```
 
@@ -181,22 +178,22 @@ The `inst` parameter makes the instance explicit, avoiding resolution issues.
 /-- Generic norm squared - works across all representations.
     Uses explicit instance parameter to avoid inference issues with dependent types. -/
 def normSqGeneric {n : ℕ} {sig : Signature n} {F : Type*} {M : Type*}
-    [Ring F] (inst : MultivectorRepr M sig F) (m : M) : F :=
+    (inst : MultivectorRepr M sig F) (m : M) : F :=
   inst.scalarPart (inst.mul m (inst.reverse m))
 
 /-- Generic scalar extraction. -/
 def scalarGeneric {n : ℕ} {sig : Signature n} {F : Type*} {M : Type*}
-    [Ring F] (inst : MultivectorRepr M sig F) (m : M) : F :=
+    (inst : MultivectorRepr M sig F) (m : M) : F :=
   inst.scalarPart m
 
 /-- Generic reverse involution. -/
 def reverseGeneric {n : ℕ} {sig : Signature n} {F : Type*} {M : Type*}
-    [Ring F] (inst : MultivectorRepr M sig F) (m : M) : M :=
+    (inst : MultivectorRepr M sig F) (m : M) : M :=
   inst.reverse m
 
 /-- Generic geometric product. -/
 def mulGeneric {n : ℕ} {sig : Signature n} {F : Type*} {M : Type*}
-    [Ring F] (inst : MultivectorRepr M sig F) (a b : M) : M :=
+    (inst : MultivectorRepr M sig F) (a b : M) : M :=
   inst.mul a b
 
 /-! ### Usage Examples
@@ -233,7 +230,7 @@ def chooseRepr (n : ℕ) (_maxNnz : ℕ := 1000) : ReprChoice :=
 /-! ## Conversion Between Representations -/
 
 /-- Convert Dense to Sparse -/
-def denseToSparse [Ring F] [BEq F] (m : Multivector sig F) : MultivectorS sig F :=
+def denseToSparse [CoeffOps F] [BEq F] (m : Multivector sig F) : MultivectorS sig F :=
   let indices := List.finRange (2^n)
   indices.foldl (init := MultivectorS.zero) fun acc i =>
     let c := m.coeffs i
@@ -241,42 +238,18 @@ def denseToSparse [Ring F] [BEq F] (m : Multivector sig F) : MultivectorS sig F 
     else ⟨acc.coeffs.insert i.val c⟩
 
 /-- Convert Sparse to Dense -/
-def sparseToDense [Ring F] (m : MultivectorS sig F) : Multivector sig F :=
+def sparseToDense [CoeffOps F] (m : MultivectorS sig F) : Multivector sig F :=
   ⟨fun i => m.coeff i.val⟩
 
 /-- Convert Sparse to Truncated (drops high grades) -/
-def sparseToTruncated [Ring F] [BEq F] (m : MultivectorS sig F) {maxGrade : ℕ} :
+def sparseToTruncated [CoeffOps F] [BEq F] (m : MultivectorS sig F) {maxGrade : ℕ} :
     TruncatedMV sig maxGrade F :=
   TruncatedMV.ofSparse m
 
 /-- Convert Truncated to Sparse -/
-def truncatedToSparse [Ring F] {maxGrade : ℕ} (m : TruncatedMV sig maxGrade F) : MultivectorS sig F :=
+def truncatedToSparse [CoeffOps F] {maxGrade : ℕ}
+    (m : TruncatedMV sig maxGrade F) : MultivectorS sig F :=
   TruncatedMV.toSparse m
-
-/-! ## Theorems (Stated with sorry_proof)
-
-Representation conversions preserve algebraic structure.
--/
-
-theorem denseToSparse_add [Ring F] [BEq F] (a b : Multivector sig F) :
-    denseToSparse (a.add b) = (denseToSparse a).add (denseToSparse b) := by
-  sorry_proof
-
-theorem denseToSparse_mul [Ring F] [BEq F] (a b : Multivector sig F) :
-    denseToSparse (a * b) = (denseToSparse a) * (denseToSparse b) := by
-  sorry_proof
-
-theorem sparseToDense_add [Ring F] [BEq F] (a b : MultivectorS sig F) :
-    sparseToDense (a.add b) = (sparseToDense a).add (sparseToDense b) := by
-  sorry_proof
-
-theorem sparseToDense_mul [Ring F] [BEq F] (a b : MultivectorS sig F) :
-    sparseToDense (a * b) = (sparseToDense a) * (sparseToDense b) := by
-  sorry_proof
-
-theorem roundtrip_dense_sparse [Ring F] [BEq F] (m : Multivector sig F) :
-    sparseToDense (denseToSparse m) = m := by
-  sorry_proof
 
 /-! ## Tests -/
 

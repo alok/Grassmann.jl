@@ -1,14 +1,15 @@
 /-
   Grassmann/Reference.lean - opt-in dense and extended API
 
-  This module preserves the broad Lean 4 port surface without making its
-  proof placeholders, dense allocations, or development-oriented utilities a
-  transitive dependency of `import Grassmann`.
+  This module preserves the broad Lean 4 port surface without making dense
+  allocations or development-oriented utilities a transitive dependency of
+  `import Grassmann`.
 
   The generic `Multivector` model remains valuable as the readable behavioral
-  reference for packed kernels.  It currently imports `Grassmann.Proof`, whose
-  Float algebra instances are axiom-backed; do not mistake this aggregation
-  module for the supported proof-free runtime.
+  reference for packed kernels.  Like the supported runtime import, this
+  aggregation is axiom-free: it does not import `Grassmann.Proof`, install
+  algebraically invalid Float instances, or expose theorem drafts backed by
+  proof placeholders.  Those remain behind explicit proof-only imports.
 -/
 import Grassmann
 
