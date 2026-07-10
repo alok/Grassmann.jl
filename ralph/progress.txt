@@ -149,4 +149,83 @@ NEXT
 3. Re-run the full reference/property/oracle matrix before widening the
    supported opt-in surface.
 
+2026-07-09 ALOK-763 REFERENCE AXIOM FIREWALL STARTED
+
+- Closed ALOK-762 in Linear after commit `24c0360` and moved to branch
+  `codex/alok-763-reference-axiom-firewall`.
+- Created high-priority Linear issue ALOK-763, "Firewall dense Float execution
+  from algebraic axioms".
+- The Reference closure contains 47 local modules. Twenty-seven currently have
+  a transitive path to `Grassmann.Proof`, but the actual custom-axiom payload is
+  concentrated in the fake Float Ring/Field instance and five `Repr` theorem
+  drafts.
+- A read-only `/tmp` prototype already passes `lake build Grassmann.Reference`
+  (616 jobs) with a lawless coefficient-operations class, no fake Float
+  Ring/Field, and no transitive Proof import. Dense Float computation still
+  returns the expected `e1 * e1 = 1.0`.
+- The prototype found one non-obvious operational requirement: generic PGA/CGA
+  formulas use `(2 : F)`, so the capability must include `OfNat F 2` alongside
+  zero, one, addition, subtraction, negation, and multiplication.
+- The exact Float counterexample `(1e20 + -1e20) + 3 = 3` while
+  `1e20 + (-1e20 + 3) = 0` will guard why exact associativity must not return.
+
+NEXT
+
+1. Land the coefficient-operations boundary and migrate computational scopes.
+2. Isolate representation theorem drafts and remove Proof imports/instances.
+3. Add negative synthesis/import-graph regressions and exact-ring checks.
+4. Run the complete acceptance matrix and record exact results.
+
+2026-07-09 ALOK-763 REFERENCE AXIOM FIREWALL COMPLETE
+
+- `31b41e9` introduces `CoeffOps`, a lawless bundle of zero, one, literal two,
+  addition, subtraction, negation, and multiplication. Dense, sparse,
+  truncated, PGA/CGA, calculus, linear algebra, sign-table, blade-index, and
+  storage computation now requires executable operations rather than false
+  algebraic laws; operations-only `GAlgebra` instances remain available for
+  Float.
+- `e61cbf6` removes the fake Float Ring/Field and all 36 axiom-backed law
+  fields. `Grassmann.Reference` no longer reaches `Grassmann.Proof`; the five
+  underspecified arbitrary-`BEq` representation theorem drafts moved to the
+  explicit `Grassmann.ReprTheorems` proof-only module.
+- `068dca4` adds a compile-time firewall. In one Reference import it verifies
+  that `Ring Float`, `Field Float`, `sorryProofAxiom`, and `sorryDataAxiom` are
+  unavailable while native Float operations, `CoeffOps Float`, dense/sparse/
+  truncated Float `GAlgebra`, exact `Int` rings, conversions, and products all
+  remain available. It also locks in a concrete Float non-associativity witness.
+- `19dc484` removes the same unnecessary Proof dependency from legacy packed
+  even kernels; `f2b6e0a` removes stale guidance that Float evaluation needs
+  proof axioms; `2b3c46c` migrates the committed static-optimizer kernel scope.
+- The Reference import walk still reaches 47 local modules, but reaches neither
+  `Proof` nor `ReprTheorems`, and no reachable source contains an axiom,
+  `sorry`, `sorry_proof`, or `sorry_data` payload.
+- Canonical `lake build` passed 483 jobs. The combined Reference firewall,
+  explicit theorem-draft, and legacy-even build passed 623 jobs. All 13 focused
+  property modes passed 274 groups / 19,599 cases against a freshly rebuilt
+  executable. Fixed kernels, fat dot, and Init-only PGA3 regressions passed.
+- The portable Julia oracle passed 188/188. C ABI v1.1 smoke passed with
+  100,000 ownership iterations / 900,000 consuming calls in 169.9 ms; its
+  4,096-point batch took 32.2 us versus 296.0 us scalar (9.19x).
+- Performance guards retained zero checked drift: packed rotor 125.279580 ns
+  (305.3x dense), sandwich 103.989580 ns (1146.1x), motor 446.774580 ns, and
+  analytic gradient 744.347080 ns (7.9x finite difference). Packed PGA3 point
+  transform measured 548.308400 ns (649.1x dense); the flat Lean batch measured
+  10.605123 ns/point versus 679.222168 ns/point scalar (64.05x).
+- A kitchen-sink `Grassmann.All` audit compiled the long Stress/DSL/oracle
+  modules but remains intentionally unsupported for two pre-existing reasons:
+  CoffeeshopExamples requires the disabled LeanPlot dependency, and Alok's
+  dirty CurveShortening experiment references missing `Grassmann.MV.sub`.
+- Alok's uncommitted optimizer derivative additions also needed five local
+  `[CoeffOps F]` substitutions to run the full working-tree test executable.
+  Those substitutions remain with the existing uncommitted optimizer work;
+  none of that experiment was swept into these commits.
+
+NEXT
+
+1. Repair or narrow the kitchen-sink `Grassmann.All` aggregation without
+   reintroducing disabled dependencies or absorbing application experiments.
+2. Replace false and underspecified theorem statements with honest exact-scalar
+   formulations before attempting proofs.
+3. Continue draining explicit proof placeholders in bounded, executable slices.
+
 <promise>COMPLETE</promise>

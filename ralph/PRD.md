@@ -143,3 +143,35 @@ surface.
 
 Only emit a new `<promise>COMPLETE</promise>` after ALOK-762 is verified,
 documented, committed atomically, and updated in Linear with exact results.
+
+## Continuation: ALOK-763 Reference axiom firewall
+
+The native runtime and ABI milestone is complete. The active continuation makes
+the opt-in dense/reference implementation computationally honest: IEEE-754
+operations may execute, but they must not be packaged as exact ring or field
+laws.
+
+### Required outcomes
+
+- Introduce a lawless coefficient-operations capability containing only the
+  executable operations used by multivector kernels, including the literal
+  `2` required by generic translator and conformal formulas.
+- Weaken dense, sparse, truncated, representation, and supporting algorithms
+  from `Ring F` only where no ring law is consumed. `GAlgebra` is an
+  operations-only interface and must remain available for Float; keep actual
+  theorem and law-bearing APIs constrained by genuine algebraic structures.
+- Make `import Grassmann.Reference` independent of `Grassmann.Proof`,
+  `sorryProofAxiom`, `sorryDataAxiom`, and the fake Float `Ring`/`Field`
+  instances.
+- Move the five unproved and underspecified representation-conversion theorem
+  drafts behind an explicit theorem/proof import.
+- Add compile-time negative checks that `Ring Float` and `Field Float` cannot be
+  synthesized after importing Reference, plus executable Float
+  non-associativity and exact-ring compatibility regressions.
+- Re-run the canonical/reference builds, every focused property mode, Julia
+  oracle, fixed kernels, ABI smoke, and performance guards.
+
+### Continuation completion rule
+
+Only emit a new `<promise>COMPLETE</promise>` after ALOK-763 is axiom-firewalled,
+fully verified, committed atomically, and updated in Linear with exact results.
