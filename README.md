@@ -37,7 +37,14 @@ This gives the project a single Float-oriented multivector type with:
 - packed storage for even and odd subalgebras,
 - parity-aware multiplication,
 - direct-dispatch fast paths for common signatures,
+- borrowed, single-result-buffer `add`, `sub`, `neg`, and Float scalar kernels,
+- standard `Zero`, `Inhabited`, and `SMul Float` interfaces for every parity,
+  plus `One` for even and full storage only,
 - an opt-in bridge back to dense `Multivector` values when reference comparisons or proof-oriented code matter more than runtime.
+
+Odd storage deliberately has no `One` instance because it cannot represent the
+scalar blade. Float-backed `MV` exposes executable operations and notation, not
+law-bearing ring or module instances.
 
 ### Packed runtime and dense reference layers
 
@@ -161,16 +168,28 @@ lake exe bench verify
 Grassmann4/scripts/bench_guard.sh
 Grassmann4/scripts/packedmvbench_guard.sh
 
+# Generated-C shape guard for packed linear kernels.
+Grassmann4/scripts/packed_linear_codegen_guard.sh
+
 # Focused packed PGA3 transform benchmark.
 lake exe packedmvbench all 200
 lake exe packedmvbench pga-motor-point 5000
 lake exe packedmvbench subtraction 250000
+lake exe packedmvbench linear-arithmetic 500000
 ```
 
 The subtraction benchmark compares the borrowed, one-buffer `MV.sub` kernel
-with the old `MV.add a (MV.neg b)` composition over 32-coefficient CGA3 full
-storage. The thresholded guard checks both an absolute ceiling and a minimum
-speedup so an accidental return to the two-result path is visible.
+with `MV.add a (MV.neg b)` over 32-coefficient CGA3 full storage. Both component
+kernels are now optimized, but direct subtraction still saves a traversal and
+one result buffer. The linear-arithmetic mode compares the one-buffer add,
+negation, and scalar kernels with their former boxed `Array.range`/`Array.map`
+shape. The thresholded guard checks absolute ceilings and relative speedups.
+
+`packed_linear_codegen_guard.sh` complements timing with a compiler-structural
+gate. It checks the exact non-boxed generated-C bodies for one final
+`FloatArray`, borrowed inputs, direct unboxed Float operations, one push per
+coefficient, and a tail jump, while excluding legitimate typeclass dictionary
+closures and boxed ABI adapters.
 
 The guard thresholds are intentionally conservative but still depend on the
 host and build state; use their environment-variable overrides when establishing
@@ -183,6 +202,15 @@ for packed sandwich transforms versus `114705.108330 ns/iter` dense (`1157.6x`),
 `438.934170 ns/iter` for packed PGA3 motor multiplication, and
 `4340.383400 ns/iter` for packed PGA3 motor-point transforms versus
 `412131.550000 ns/iter` dense (`95.0x`).
+
+The 2026-07-09 packed-linear acceptance run measured `93.865084 ns/iter` for
+addition versus `339.517418 ns/iter` boxed (`3.617x`), `84.626166 ns/iter` for
+negation versus `299.504500 ns/iter` boxed (`3.539x`), and
+`84.537666 ns/iter` for scalar multiplication versus `294.006500 ns/iter`
+boxed (`3.478x`). Direct subtraction measured `91.165830 ns/iter` versus
+`161.609580 ns/iter` for the optimized two-buffer composition (`1.773x`). All
+linear preflight comparisons had zero L1 drift, and the generated-C shape guard
+passed all four operations with an unboxed `double` scalar ABI.
 
 Other useful entrypoints:
 

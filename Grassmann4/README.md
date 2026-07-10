@@ -48,6 +48,13 @@ use `import Grassmann.All` or run `lake build Grassmann.All` from the outer root
 Application experiments and optional-dependency modules are deliberately not
 part of that aggregate.
 
+Packed linear arithmetic uses borrowed inputs and one final `FloatArray` for
+`MV.add`, `MV.sub`, `MV.neg`, and `MV.smul`. Standard `Zero`, `Inhabited`, and
+`SMul Float` instances work for full, even, and odd storage. `One` exists only
+for even and full storage; an odd packed value cannot contain the scalar
+identity. These are executable interfaces and do not assert exact Float ring or
+module laws.
+
 ## Quick Start
 
 The examples below opt into the dense/reference surface because they mix blade
@@ -283,6 +290,7 @@ checks:
 ```bash
 Grassmann4/scripts/bench_guard.sh
 Grassmann4/scripts/packedmvbench_guard.sh
+Grassmann4/scripts/packed_linear_codegen_guard.sh
 ```
 
 `Grassmann4/scripts/bench_guard.sh` runs the core `lake exe bench` suite, checks
@@ -299,13 +307,23 @@ Packed `MV` point-transform checks live in `packedmvbench`:
 lake exe bench verify
 lake exe packedmvbench all 200
 lake exe packedmvbench pga-motor-point 5000
+lake exe packedmvbench subtraction 250000
+lake exe packedmvbench linear-arithmetic 500000
 ```
 
 `Grassmann4/scripts/packedmvbench_guard.sh` runs a small correctness smoke test,
-then checks the packed PGA3 motor-point transform against conservative local
-thresholds. Override defaults with `PACKED_MV_BENCH_MOTOR_ITERS`,
-`MAX_PACKED_PGA_MOTOR_POINT_NS`, and
-`MIN_PACKED_PGA_MOTOR_POINT_SPEEDUP`.
+then checks the packed PGA3 motor-point transform, direct subtraction, addition,
+negation, and Float scalar multiplication against conservative local absolute
+and relative thresholds. The linear kernels are compared with their former
+boxed-array shape; subtraction is compared with the now-optimized two-buffer
+`add`/`neg` composition. Iteration counts and thresholds have corresponding
+`PACKED_MV_BENCH_*`, `MAX_PACKED_*`, and `MIN_PACKED_*` overrides in the script.
+
+`Grassmann4/scripts/packed_linear_codegen_guard.sh` builds `Grassmann.MV` and
+audits only the exact non-boxed generated-C bodies for the four linear kernels.
+It requires one final result allocation, direct unboxed Float arithmetic,
+borrowed inputs, a single push per coefficient, and tail-loop codegen. It
+deliberately excludes typeclass dictionary closures and boxed ABI adapters.
 
 A local `Grassmann4/scripts/bench_guard.sh` run on 2026-06-05 passed with zero
 checked correctness drift, `156.632080 ns/iter` MV rotor composition versus
@@ -327,6 +345,15 @@ for packed sandwich transforms versus `114705.108330 ns/iter` dense (`1157.6x`),
 `438.934170 ns/iter` for packed PGA3 motor multiplication, and
 `4340.383400 ns/iter` for packed PGA3 motor-point transforms versus
 `412131.550000 ns/iter` dense (`95.0x`).
+
+The 2026-07-09 packed-linear acceptance run had zero L1 drift and measured
+`93.865084 ns/iter` addition versus `339.517418 ns/iter` boxed (`3.617x`),
+`84.626166 ns/iter` negation versus `299.504500 ns/iter` boxed (`3.539x`), and
+`84.537666 ns/iter` scalar multiplication versus `294.006500 ns/iter` boxed
+(`3.478x`). Direct subtraction measured `91.165830 ns/iter` versus
+`161.609580 ns/iter` for optimized `add`/`neg` composition (`1.773x`). The
+generated-C shape guard passed add, sub, neg, and smul, including an unboxed
+`double` scalar through the smul loop.
 
 See `docs/PackedMVPerformance.md` for the focused PGA3 motor-point profiling
 commands and a current process-level `time -l` footprint snapshot.
