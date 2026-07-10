@@ -735,20 +735,55 @@ def rightContract (a : MV sig p1) (b : MV sig p2) : MV sig (p1 * p2) :=
 
 /-! ### Dual and Derived Products -/
 
+/-- Hodge-negation bits indexed by output blade mask for dimensions up to six.
+
+For output `o`, Hodge reads the complementary input `(2^n - 1) - o`. The two
+masks are disjoint, so the left-complement sign is signature-independent and is
+exactly their permutation sign. Packing those signs in one native word avoids
+recomputing transpositions or consulting the much larger geometric sign table. -/
+@[noinline]
+private def hodgeDualNegBits : Nat → UInt64
+  | 0 => 0x0
+  | 1 => 0x0
+  | 2 => 0x2
+  | 3 => 0x24
+  | 4 => 0x24b2
+  | 5 => 0x24b24d24
+  | 6 => 0x24b24d24b2db24b2
+  | _ => 0x0
+
+/-- Tail-recursive Hodge loop using one native negation bit per output slot. -/
+private def hodgeDualSmallAux (m : @& DataArray) (negBits : UInt64) :
+    Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      let value := m.get! remaining
+      let result := if negBits &&& 1 != 0 then -value else value
+      hodgeDualSmallAux m (negBits >>> 1) remaining (out.push result)
+
+/-- Allocation-tight Hodge fallback for dimensions whose sign sequence does
+not fit in a `UInt64`. Complementary masks make `parityJoinBasic` exactly the
+left-complement sign used by the dense reference implementation. -/
+private def hodgeDualLargeAux (n : Nat) (m : @& DataArray) (outMask : Nat) :
+    Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      let value := m.get! remaining
+      let result := if parityJoinBasic remaining outMask n then -value else value
+      hodgeDualLargeAux n m (outMask + 1) remaining (out.push result)
+
 /-- Hodge dual for full packed storage.
 
 The dual may flip even/odd parity when the dimension is odd, so this operation
 is exposed on `.full` storage where every grade can be represented directly. -/
 @[inline]
-def hodgeDual (m : MV sig .full) : MV sig .full :=
+def hodgeDual (m : @& MV sig .full) : MV sig .full :=
   let szFull := storageSize n .full
-  ⟨DataArray.ofArray ((Array.range szFull).map fun mask =>
-    let outBlade : Blade sig := ⟨BitVec.ofNat n mask⟩
-    let dualBits := outBlade.bits ^^^ pseudoscalar
-    let dualIdx := dualBits.toNat
-    let sign := leftComplementSign sig ⟨dualBits⟩
-    let coeff := m.coeffs.get! dualIdx
-    if sign < 0 then -coeff else coeff)⟩
+  let out := FloatArray.emptyWithCapacity szFull
+  if n ≤ 6 then
+    ⟨hodgeDualSmallAux m.coeffs (hodgeDualNegBits n) szFull out⟩
+  else
+    ⟨hodgeDualLargeAux n m.coeffs 0 szFull out⟩
 
 /-- Regressive product / meet for full packed storage, defined by dualizing the
 exterior product. -/
