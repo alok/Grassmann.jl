@@ -53,7 +53,10 @@ smoke_bin="$output_dir/cabi_smoke"
 
 echo "[cabi] package root: $lake_root"
 echo "[cabi] checking Lean boundary and C/C++ headers"
-"${lake_cmd[@]}" build \
+# The linker consumes these exact local object facets. Lake's shared artifact
+# cache can replay only their trace metadata after a clean build, so disable it
+# here instead of accepting a successful fetch with no object on disk.
+LAKE_CACHE_DIR='' lake --dir "$lake_root" --no-cache build \
   'Grassmann.PGA3Kernel:o.export' \
   'Grassmann.CABI:o.export'
 
