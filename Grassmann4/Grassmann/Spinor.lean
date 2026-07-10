@@ -78,7 +78,7 @@ def add (a b : Spinor sig) : Spinor sig := ⟨a.mv + b.mv⟩
 
 /-- Subtract spinors -/
 @[inline]
-def sub (a b : Spinor sig) : Spinor sig := ⟨a.mv + (-b.mv)⟩
+def sub (a b : Spinor sig) : Spinor sig := ⟨a.mv - b.mv⟩
 
 /-- Scale spinor -/
 @[inline]
@@ -90,8 +90,11 @@ def neg (s : Spinor sig) : Spinor sig := ⟨-s.mv⟩
 
 instance : Zero (Spinor sig) := ⟨Spinor.zero⟩
 instance : One (Spinor sig) := ⟨Spinor.one⟩
+instance : Inhabited (Spinor sig) := ⟨Spinor.zero⟩
 instance : Add (Spinor sig) := ⟨Spinor.add⟩
+instance : Sub (Spinor sig) := ⟨Spinor.sub⟩
 instance : Neg (Spinor sig) := ⟨Spinor.neg⟩
+instance : SMul Float (Spinor sig) := ⟨Spinor.smul⟩
 instance : Mul (Spinor sig) := ⟨Spinor.mul⟩
 
 /-! ### Coercion to Multivector -/

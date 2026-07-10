@@ -824,7 +824,7 @@ def fatDot (a b : MV sig .full) : MV sig .full :=
 /-- Commutator product `(ab - ba) / 2` for full packed storage. -/
 @[inline]
 def commutator (a b : MV sig .full) : MV sig .full :=
-  smul 0.5 (add (mulDirect a b) (neg (mulDirect b a)))
+  smul 0.5 (sub (mulDirect a b) (mulDirect b a))
 
 /-- Anticommutator product `(ab + ba) / 2` for full packed storage. -/
 @[inline]

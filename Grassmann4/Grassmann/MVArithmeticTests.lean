@@ -4,7 +4,7 @@
   These compile-time checks keep packed subtraction aligned with its dense
   reference across full, even, and odd storage layouts.
 -/
-import Grassmann.MVDense
+import Grassmann.Spinor
 
 namespace Grassmann.MVArithmeticTests
 
@@ -145,5 +145,27 @@ example : True := by
   fail_if_success
     let _ := (inferInstance : One (MV R3 .odd))
   trivial
+
+/-! ## Spinor linear surface -/
+
+/- The even-storage wrapper delegates subtraction and scalar notation directly. -/
+#guard
+  let a : Spinor R3 := Spinor.ofMV <| MV.ofPairs R3 .even
+    [(0, 1.0), (3, 2.0), (5, -3.0), (6, 4.0)]
+  let b : Spinor R3 := Spinor.ofMV <| MV.ofPairs R3 .even
+    [(0, -1.0), (3, 0.5), (5, -1.0), (6, 10.0)]
+  let direct := Spinor.sub a b
+  let notationDiff := a - b
+  let namedScaled := Spinor.smul 2.0 a
+  let notationScaled := 2.0 • a
+  let zero : Spinor R3 := 0
+  let fallback : Spinor R3 := default
+  direct.mv.isWellFormed && notationDiff.mv.isWellFormed &&
+    namedScaled.mv.isWellFormed && notationScaled.mv.isWellFormed &&
+    packedCoefficientsEqual direct.mv notationDiff.mv &&
+    packedCoefficientsEqual direct.mv
+      (MV.ofPairs R3 .even [(0, 2.0), (3, 1.5), (5, -2.0), (6, -6.0)]) &&
+    packedCoefficientsEqual namedScaled.mv notationScaled.mv &&
+    packedCoefficientsEqual zero.mv fallback.mv
 
 end Grassmann.MVArithmeticTests
