@@ -421,4 +421,83 @@ NEXT
    then pin timing and generated-C structure.
 3. Continue with grade/parity projection, widening, and dense-conversion loops.
 
+2026-07-09 ALOK-768 PACKED HODGE DUAL STARTED
+
+- Closed ALOK-767 in Linear after commit `8b798b2` and moved to branch
+  `codex/alok-768-packed-hodge`.
+- Created high-priority Linear issue ALOK-768, "Make packed Hodge dual
+  table-driven and allocation-tight".
+- Current `MV.hodgeDual` still constructs `Array.range`, maps boxed Float
+  coefficients through per-element Blade/BitVec complement work, and copies the
+  result into `FloatArray`.
+- Native CGA3 prototypes measured about 23.4 us for the boxed path and 22.9 us
+  for a one-buffer path that recomputed complement signs. Reusing the existing
+  cached sign table reduced the same all-32-coefficient operation to about
+  127 ns, roughly 184x faster than the current implementation.
+- Hodge remains intentionally full-only because it flips parity in odd
+  dimensions. The implementation must preserve a correct uncached-signature
+  fallback rather than specializing the public semantics to CGA3.
+- Source and compiler audits established that complementary input/output masks
+  make Hodge's sign independent of metric and degeneracy. The active design
+  packs all signs for dimensions 0-6 into one unboxed `UInt64`; dimension 7 and
+  above use direct permutation parity. This is smaller and faster than a 4^n
+  geometric sign table while retaining PGA3's nonzero null-blade complements.
+
+NEXT
+
+1. Pin exact all-slot and standard-signature semantics before the rewrite.
+2. Land cached-table and direct-fallback one-buffer loops.
+3. Add timing/codegen gates, then run the complete acceptance matrix.
+
+2026-07-09 ALOK-768 PACKED HODGE DUAL COMPLETE
+
+- `408ced4` isolates packed Hodge semantics in a focused exact module;
+  `c2f4de9` covers dimensions 0 and 1, standard R2/R3/R4/STA/PGA3/CGA3
+  signatures, and the dimension-6/dimension-7 dispatch boundary.
+- `f29c927` replaces the boxed range/map/copy implementation with a borrowed,
+  one-buffer kernel. Dimensions 0-6 consume an unboxed `UInt64` orientation
+  stream; dimensions 7 and above use direct `parityJoinBasic`. Degenerate PGA3
+  retains the exterior left-complement anchors `e4 -> -e123` and `e123 -> e4`.
+- `7447270` adds the permanent boxed-vs-direct Hodge benchmark and zero-drift
+  preflight. `bedd2b1` makes C-facet generation cache-independent and pins the
+  selector ABI, both one-read/one-push tail loops, and the single-allocation
+  public dispatch. `4008405` documents the runtime semantics and thresholds.
+- A post-clean ABI run exposed that Lake could fetch only export-facet trace
+  metadata after a clean build. `cbfb075` disables the shared artifact cache for
+  those exact native facets, so the C binding smoke always links current local
+  `PGA3Kernel` and `CABI` objects.
+- Canonical root build passed 483 jobs; dirty CurveShortening passed 478 with
+  only its existing long-line warnings; the explicit Reference/soundness/
+  theorem/arithmetic/curve/All matrix passed 634 jobs.
+- The complete property executable passed 305/305 named groups, including the
+  three separately named 100-case packed Hodge comparisons, followed by all 6
+  optimization-consistency categories and 600 cases. Fixed packed kernels,
+  fat-dot, and Init-only PGA3 kernel regressions passed.
+- The Grassmann.jl oracle passed 188/188 numeric and example witnesses. All
+  observed algebraic comparison errors stayed within their gates.
+- C ABI v1.1 passed C/C++ headers, public symbols, runtime, pthread ownership,
+  and layout checks. Boundary copies measured 12.8 ns and 18.7 ns; 100,000
+  ownership iterations / 900,000 consuming calls took 163.2 ms; the 4,096-point
+  batch took 32.1 us versus 288.0 us scalar (`8.98x`).
+- The isolated core guard retained zero rotor/sandwich drift: rotor
+  `119.645000 ns` (`308.9x` dense), sandwich `96.867080 ns` (`1166.1x`), motor
+  `416.905410 ns`, and analytic gradient `721.077920 ns` (`7.8x` finite
+  difference).
+- The final packed guard had zero checked drift. Hodge measured
+  `77.165840 ns/iter` direct versus `26675.972920 ns/iter` boxed (`345.697x`).
+  The PGA3 point path was `643.978x` dense; add/neg/smul were
+  `3.812x`/`3.543x`/`3.733x`, direct subtraction was `1.764x`, and every unary
+  involution remained above its threshold.
+- All unrelated dirty curve, optimizer, physics, Metal, Unreal, SciLean-AD,
+  nested-workspace, and Lake edits remain unstaged and uncommitted.
+
+NEXT
+
+1. Replace parity-index arrays and linear searches with checked arithmetic
+   rank/unrank while preserving packed order and dimension-zero behavior.
+2. Rewrite even/odd projection, grade projection, and parity widening as
+   borrowed one-buffer loops with exact all-slot laws.
+3. Add permanent projection timing/codegen guards, then continue to dense
+   ingress and remaining generic product hot paths.
+
 <promise>COMPLETE</promise>

@@ -255,3 +255,45 @@ eliminates unnecessary parity-index decoding from valid full-storage loops.
 
 Only emit a new `<promise>COMPLETE</promise>` after ALOK-767 is implemented,
 fully verified, committed atomically, and updated in Linear with exact results.
+
+## Continuation: ALOK-768 packed Hodge dual
+
+Packed index decoding and unary involutions are complete. The active
+continuation removes the largest remaining boxed unary bottleneck from the
+full-storage runtime.
+
+### Required outcomes
+
+- Rewrite full-storage `MV.hodgeDual` as a borrowed, monomorphic, one-result-
+  buffer loop with no boxed coefficient arrays, range/map callbacks, or copy
+  pass.
+- Use a precomputed signature-independent orientation bitmask for dimensions
+  whose full sign sequence fits in `UInt64`, plus a correct allocation-tight
+  permutation-parity fallback above that boundary. Preserve the current
+  left-complement semantics, including nonzero complements in degenerate PGA3.
+- Keep the operation full-storage-only: odd-dimensional Hodge changes parity,
+  so no invalid same-parity packed API may be introduced.
+- Add deterministic all-slot coverage, explicit standard-signature and
+  degenerate PGA3 checks, buffer invariants, named randomized dense-reference
+  coverage, and second-dual comparison with the independent dense result.
+- Add a stable CGA3 boxed-vs-direct benchmark and scoped generated-C guard.
+- Re-run canonical, Reference, All, dirty CurveShortening, packed/full property,
+  kernel, C ABI, and performance acceptance.
+
+### Continuation completion rule
+
+Only emit a new `<promise>COMPLETE</promise>` after ALOK-768 is implemented,
+fully verified, committed atomically, and updated in Linear with exact results.
+
+### Completion
+
+ALOK-768 is complete. Packed Hodge dual now uses one borrowed-input output loop,
+a compact unboxed orientation stream through dimension 6, and a direct parity
+fallback above that boundary. Exact all-slot, dispatch-boundary, PGA null-blade,
+randomized dense-reference, benchmark, and generated-C gates are permanent.
+Canonical and broad builds, the full property suite, fixed kernels, Julia
+oracle, C ABI v1.1, and both performance guards passed. The final isolated CGA3
+measurement was `77.165840 ns/iter` direct versus `26675.972920 ns/iter` boxed
+(`345.697x`) with zero L1 drift.
+
+<promise>COMPLETE</promise>
