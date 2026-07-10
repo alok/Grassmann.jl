@@ -10,6 +10,7 @@ import Grassmann.Reference
 import Grassmann.StressTests
 import Grassmann.Tests
 import Grassmann.MVArithmeticTests
+import Grassmann.MVUnaryTests
 import Grassmann.OracleTests
 import Grassmann.DSLTests
 import Grassmann.PropertyTests

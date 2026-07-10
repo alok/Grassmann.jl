@@ -165,10 +165,16 @@ def indices (n : Nat) (p : Parity) : Array Nat :=
   | 5, .odd  => oddIdx5
   | _, _     => computeIndices n p
 
-/-- Unpack: packed index → blade mask. Uses the indices array (which IS the unpack map). -/
+/-- Unpack a valid packed index into its blade mask.
+
+Full storage is already indexed by blade mask, so its unpacking map is the
+identity and must not materialize or consult an index array. -/
 @[inline]
 def unpackIdx (n : Nat) (p : Parity) (pi : Nat) : Nat :=
-  (indices n p).getD pi 0
+  match p with
+  | .full => pi
+  | .even => (indices n .even).getD pi 0
+  | .odd => (indices n .odd).getD pi 0
 
 /-- Compute pack index on the fly (for dimensions without cached tables). -/
 @[inline]
