@@ -299,4 +299,60 @@ NEXT
 3. Continue auditing supported callers for Julia-port API gaps before widening
    application or optional-dependency surfaces.
 
+2026-07-09 ALOK-766 PACKED LINEAR ARITHMETIC STARTED
+
+- Closed ALOK-765 in Linear after commit `42083b1` and moved to branch
+  `codex/alok-766-packed-linear-arithmetic`.
+- Created high-priority Linear issue ALOK-766, "Make packed linear arithmetic
+  allocation-tight and complete".
+- `MV.add`, `MV.neg`, and `MV.smul` still use `Array.range`, boxed
+  `Array Float`, and a copy into `FloatArray`. Subtraction now demonstrates the
+  intended borrowed, monomorphic tail-loop shape and permanent guard pattern.
+- The core also exposes functions for zero and even identity but lacks standard
+  `Zero`, `SMul Float`, and `Inhabited` instances. Identity must remain
+  parity-sensitive: even and full are valid, odd is not.
+
+NEXT
+
+1. Measure the current boxed baselines and audit generated C and instance
+   boundaries.
+2. Land direct add/neg/smul loops and exact API regressions atomically.
+3. Extend permanent benchmarks and run the complete acceptance matrix.
+
+2026-07-09 ALOK-766 PACKED LINEAR ARITHMETIC COMPLETE
+
+- `ec7fb6f` replaced boxed `Array.range`/`Array.map` add, negation, and Float
+  scalar multiplication with borrowed-input, monomorphic tail loops that build
+  one capacity-sized `FloatArray`.
+- `923e5a8` added `Zero`, `Inhabited`, and `SMul Float` for every packed parity,
+  plus representable `One` instances for even and full storage only.
+- `ef54bca` expanded all nine randomized R3/PGA3/CGA3 full/even/odd linear
+  groups and exact layout/instance checks, including rejection of odd `One`.
+- `e2a875c` added a permanent 32-coefficient CGA3 boxed-vs-direct benchmark and
+  thresholded JSON guard. `d4bac9f` added a generated-C gate for one output
+  allocation, direct unboxed arithmetic, borrowed inputs, tail jumps, and the
+  unboxed `double` smul ABI.
+- `eef0310` documented the runtime interfaces and repeatable evidence.
+  `f8d5dc9` routed packed commutator and Spinor subtraction through direct
+  `MV.sub`, added the missing Spinor linear instances, and pinned their notation.
+- Acceptance passed: explicit broad build 632 jobs, canonical build 483 jobs,
+  post-cleanup `Grassmann.All` 625 jobs, 302/302 property groups, 600/600
+  optimization cases, all three fixed-kernel executables, generated-C audit,
+  C ABI v1.1 smoke, and both performance guards.
+- The final packed guard measured add 86.842000 ns (3.760x boxed), negation
+  82.148416 ns (3.651x), smul 84.374832 ns (3.578x), subtraction 91.032500 ns
+  (1.783x optimized add-neg), and PGA3 motor-point transforms 653.129x dense,
+  all with zero checked drift.
+- Linear ALOK-766 received the exact commit/build/property/kernel/codegen/ABI/
+  benchmark evidence and was moved to Done.
+
+NEXT
+
+1. Special-case full-storage packed-index decoding, which is identity in every
+   valid kernel loop and currently rebuilds or consults an unnecessary map.
+2. Rewrite reverse, involute, and conjugate as borrowed one-buffer kernels with
+   parity-aware zero-allocation fast paths where the operation is identity.
+3. Add deterministic all-slot unary/projector regressions before optimizing the
+   remaining Hodge, grade-projection, parity-projection, and widening paths.
+
 <promise>COMPLETE</promise>

@@ -204,3 +204,29 @@ broad dependency-free aggregation build honestly.
 
 Only emit a new `<promise>COMPLETE</promise>` after ALOK-765 is implemented,
 fully verified, committed atomically, and updated in Linear with exact results.
+
+## Continuation: ALOK-766 packed linear arithmetic
+
+Packed subtraction and the canonical broad aggregate are complete. The active
+continuation removes the same boxed-array overhead from the remaining basic
+linear kernels and fills their standard Lean runtime interfaces.
+
+### Required outcomes
+
+- Rewrite packed addition, negation, and Float scalar multiplication as
+  borrowed-input, monomorphic, single-buffer tail loops with no boxed
+  coefficient arrays or per-element closure/control allocation.
+- Provide `Zero`, `SMul Float`, and `Inhabited` uniformly across parity tags.
+  Provide `One` only for even and full storage; odd storage cannot represent a
+  scalar identity and must continue to reject that instance.
+- Cover named functions and notation, exact layouts, dense agreement, buffer
+  invariants, positive instances, and the negative odd-identity boundary.
+- Add stable CGA3 full-storage benchmark and guard coverage for all three
+  rewritten kernels, including comparisons against the previous boxed shape.
+- Re-run canonical, Reference, All, dirty CurveShortening, full property,
+  generated-code, kernel, native-binding, and performance acceptance.
+
+### Continuation completion rule
+
+Only emit a new `<promise>COMPLETE</promise>` after ALOK-766 is implemented,
+fully verified, committed atomically, and updated in Linear with exact results.
