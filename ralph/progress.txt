@@ -583,3 +583,79 @@ NEXT
    surface gaps under the same correctness/performance discipline.
 
 <promise>COMPLETE</promise>
+
+2026-07-09 ALOK-770 ALLOCATION-TIGHT DENSE INGRESS STARTED
+
+- Closed ALOK-769 in Linear after commit `8ac0e6b` and moved to branch
+  `codex/alok-770-dense-ingress`.
+- Created high-priority Linear issue ALOK-770, "Make dense-to-packed MV ingress
+  allocation-tight".
+- Source and generated-code audits established that `MVDense.ofMultivector`
+  still built a boxed `Array Float` with `Array.range`/`map`, then copied it
+  into `FloatArray`. The target is a borrowed coefficient function, one native
+  buffer, proof-erased bounds invariants, and no post-build validation pass.
+- The dimension-zero odd layout has one observable compatibility slot even
+  though it represents no odd blade, so the rewrite must preserve its exact
+  physical buffer and round-trip behavior rather than applying the `n > 0`
+  rank formula blindly.
+
+NEXT
+
+1. Land proof-carrying native-buffer construction and one-buffer full/packed
+   ingress helpers.
+2. Add exhaustive independent conversion fixtures and retained boxed timing
+   baselines.
+3. Pin generated C, run the complete acceptance matrix, and continue through
+   the remaining constructor/product and binding gaps.
+
+2026-07-09 ALOK-770 ALLOCATION-TIGHT DENSE INGRESS COMPLETE
+
+- `3df6520` adds public valid-rank bounds, a proof-carrying `MV.ofDataArray`,
+  and borrowed full/packed one-buffer ingress helpers whose size and index
+  proofs erase runtime bounds checks and fallback validation. Independent
+  tests cover dimensions 0, 1, 5, 6, and 12 across full/even/odd storage,
+  including the exact dimension-zero odd compatibility slot.
+- `ba2a9d2` adds retained boxed-vs-direct CGA3 full/even/odd benchmarks with 16
+  varied coefficient closures and exhaustive physical-data preflight.
+  `edf5932` pins freshly generated C to one allocation, one push per output,
+  arithmetic packed decoding, tail recursion, and direct helper returns.
+- `685708c` integrates dense ingress into the thresholded packed runtime gate;
+  `92bc729` records the buffer, ownership, command, and threshold contracts.
+  The final run measured full `6337.973750` vs `6518.802090 ns/iter`
+  (`1.029x`), even `3294.365420` vs `3386.238750` (`1.028x`), and odd
+  `3317.837500` vs `3427.283750` (`1.033x`), with every L1 diff exactly zero.
+- Focused MVDense builds passed 584 jobs. Canonical `lake build` passed 483
+  jobs; `Grassmann.All` passed 629; dirty `Grassmann.CurveShortening` passed
+  478 with only its three existing long-line warnings. Milestone and worktree
+  `git diff --check` both passed.
+- The complete property executable passed 305/305 named groups followed by all
+  6 optimization-consistency categories and 600/600 cases. Fixed packed
+  kernels, fat-dot, and Init-only PGA3 kernel regressions all passed.
+- The authoritative outer-root Grassmann.jl run passed 188/188 results. A
+  deliberately incorrect nested-cwd invocation exposed the existing oracle
+  root assumption (`.../Grassmann4/Grassmann4`); the correctly rooted rerun
+  returned real Julia values. The separate visual oracle passed 12 examples,
+  all 40 formula witnesses, grayscale palette checks, and a worst normalized
+  RMSE of `0.15394` against the `0.25` ceiling.
+- C ABI v1.1 passed C/C++ headers, exported symbols, foreign use, 100,000
+  ownership iterations / 900,000 consuming calls in 171.3 ms, and a
+  4,096-point batch at 31.8 us versus 295.2 us scalar (`9.30x`). Boundary
+  copies measured 12.9 ns and 18.2 ns. No public ABI changed.
+- The isolated core guard retained zero rotor/sandwich drift: rotor
+  `123.501660 ns` (`298.2x` dense), sandwich `103.495000 ns` (`1100.5x`),
+  motor `439.678750 ns`, and analytic gradient `737.311660 ns` (`7.9x` finite
+  difference). Both generated-C guards passed, including all 33 existing
+  packed linear/projection/Hodge checks and all five new ingress checks.
+- All unrelated dirty curve, optimizer, physics, Metal, Unreal, SciLean-AD,
+  nested-workspace, and Lake edits remain unstaged and uncommitted.
+
+NEXT
+
+1. Audit and replace the highest-cost remaining generic product/constructor
+   path with allocation-tight native storage and independent dense semantics.
+2. Make the Julia oracle root detection fail fast and preserve its planned
+   188-result cardinality on transport failures.
+3. Continue the Julia API and C/C++ binding surface audit without destabilizing
+   the versioned PGA3 ABI.
+
+<promise>COMPLETE</promise>

@@ -347,3 +347,50 @@ were `148.915420`--`332.903330 ns/iter` for grade projection,
 `3.209x`--`12.716x` speedups over the retained boxed shapes.
 
 <promise>COMPLETE</promise>
+
+## Continuation: ALOK-770 allocation-tight dense ingress
+
+Packed parity indexing and projection/widening are complete. The active
+continuation removes the boxed-array and copy-pass overhead from converting a
+dense coefficient function into a packed `MV` while preserving every storage
+layout edge case and the public native boundary.
+
+### Required outcomes
+
+- Replace `MVDense.ofMultivector`'s range/map/copy construction with borrowed
+  full and parity-packed helpers that allocate exactly one native result
+  buffer and return it directly.
+- Add a proof-carrying constructor for already validated native coefficient
+  buffers while keeping untrusted buffer validation explicit.
+- Preserve full/even/odd physical order and the observable dimension-zero odd
+  compatibility slot, including round trips through dense multivectors.
+- Add independent exhaustive fixtures for dimensions 0, 1, 5, 6, and 12,
+  checking physical data, public coefficients, size, well-formedness, and both
+  conversion directions.
+- Add stable full/even/odd CGA3 boxed-vs-direct timings, zero-drift gates,
+  thresholded JSON output, and freshly generated-C structure checks.
+- Re-run canonical and broad builds, dirty CurveShortening, complete property
+  and native-kernel suites, the numeric and visual Julia oracles, C ABI v1.1,
+  and both performance guards without changing the binding ABI.
+
+### Continuation completion rule
+
+Only emit a new `<promise>COMPLETE</promise>` after ALOK-770 is implemented,
+fully verified, committed atomically, and updated in Linear with exact results.
+
+### Completion
+
+ALOK-770 is complete. Dense-to-packed ingress now borrows its coefficient
+function, fills one capacity-sized `FloatArray`, and constructs the `MV`
+through a proof-carrying validated-buffer path. Exact dimension-zero behavior
+and all three storage layouts are permanently covered at dimensions 0, 1, 5,
+6, and 12. Generated-C gates pin the one-buffer tail loops and direct returns;
+the benchmark gate retains the former boxed implementation as an executable
+oracle. Canonical and broad builds, dirty CurveShortening, all 305 property
+groups and 600 optimization cases, native kernels, the 188-result Julia oracle,
+the 12-example visual oracle, C ABI v1.1, and both runtime guards passed. The
+final thresholded CGA3 ingress measurements were `6337.973750 ns/iter` full,
+`3294.365420 ns/iter` even, and `3317.837500 ns/iter` odd, with zero L1 drift
+and `1.029x`/`1.028x`/`1.033x` speedups over the retained boxed shapes.
+
+<promise>COMPLETE</promise>
