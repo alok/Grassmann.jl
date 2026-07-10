@@ -257,12 +257,13 @@ def truncatedMatchesDense {n : Nat} {sig : Signature n} {maxGrade : Nat}
 /-- Compare a packed `MV` result against its dense reference. -/
 def packedMatchesDense {n : Nat} {sig : Signature n} {p : Parity}
     (packed : MV sig p) (dense : Multivector sig Float) (tol : Float := 1e-9) : Bool :=
-  denseMvApproxEq (MV.toMultivector packed) dense tol
+  packed.isWellFormed && denseMvApproxEq (MV.toMultivector packed) dense tol
 
 /-- Compare two packed `MV` values through the dense reference view. -/
 def packedApproxEq {n : Nat} {sig : Signature n} {p : Parity}
     (a b : MV sig p) (tol : Float := 1e-9) : Bool :=
-  denseMvApproxEq (MV.toMultivector a) (MV.toMultivector b) tol
+  a.isWellFormed && b.isWellFormed &&
+    denseMvApproxEq (MV.toMultivector a) (MV.toMultivector b) tol
 
 /-- Packed named operations and standard notation agree with dense linear arithmetic. -/
 def packedLinearOpsMatchDense {n : Nat} {sig : Signature n} {p : Parity}
