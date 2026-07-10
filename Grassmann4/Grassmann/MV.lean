@@ -163,7 +163,7 @@ def unpackIdxValid (n : Nat) (p : Parity) (pi : Nat) : Nat :=
   match p with
   | .full => pi
   | .even | .odd =>
-      (pi <<< 1) ||| packedLowBit n p (popcount pi)
+      pi + pi + packedLowBit n p (popcount pi)
 
 /-- Allocation-free packed rank for a caller-validated blade mask. -/
 @[inline, always_inline]
