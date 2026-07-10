@@ -86,7 +86,8 @@ import Grassmann.All
 - `Grassmann4/Grassmann/Theorems.lean`: algebraic properties and lemmas.
 - `Grassmann4/Grassmann/AnchorTheorems.lean`: important identities, still incomplete.
 - `Grassmann4/Grassmann/Bench.lean`: benchmark executable comparing `MV` and dense `Multivector`.
-- `Grassmann4/Grassmann/CurveShortening.lean`: discrete geometric flow example using GA primitives.
+- `Grassmann4/Grassmann/CurveShortening.lean`: standalone discrete geometric-flow
+  experiment; packed-`MV` integration is still application work in progress.
 - `Grassmann4/Grassmann/MetalCodegen.lean`: Metal shader generation experiments.
 
 ## Prerequisites
