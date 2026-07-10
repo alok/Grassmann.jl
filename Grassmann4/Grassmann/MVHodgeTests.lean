@@ -32,15 +32,16 @@ private def checkHodge {n : Nat} (sig : Signature n) : Bool :=
   matchesDenseExact first dense.hodgeDual &&
     matchesDenseExact second dense.hodgeDual.hodgeDual
 
-/-! ## Cached and fallback dispatch -/
+/-! ## Small-mask and generic dispatch -/
 
-/- Every cached standard signature observes every full-storage slot. -/
+/- Standard signatures and both ends of the fixed UInt64 mask path observe every slot. -/
 #guard
-  checkHodge R2 && checkHodge R3 && checkHodge R4 && checkHodge STA &&
-    checkHodge PGA3 && checkHodge CGA3
+  checkHodge (Signature.euclidean 0) && checkHodge R1 && checkHodge R2 &&
+    checkHodge R3 && checkHodge R4 && checkHodge STA && checkHodge PGA3 &&
+    checkHodge CGA3 && checkHodge (Signature.euclidean 6)
 
-/- R1 is deliberately uncached and pins the allocation-tight fallback. -/
-#guard checkHodge R1
+/- Dimension seven is the first generic sign-computation fallback. -/
+#guard checkHodge (Signature.euclidean 7)
 
 /-! ## Exact orientation and second-dual laws -/
 
