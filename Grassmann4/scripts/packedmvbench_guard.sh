@@ -23,6 +23,7 @@ subtraction_iters="${PACKED_MV_BENCH_SUBTRACTION_ITERS:-100000}"
 linear_iters="${PACKED_MV_BENCH_LINEAR_ITERS:-500000}"
 unary_iters="${PACKED_MV_BENCH_UNARY_ITERS:-100000}"
 hodge_iters="${PACKED_MV_BENCH_HODGE_ITERS:-100000}"
+projection_iters="${PACKED_MV_BENCH_PROJECTION_ITERS:-100000}"
 max_correctness_diff="${MAX_PACKED_MV_CORRECTNESS_DIFF:-1e-6}"
 max_packed_motor_ns="${MAX_PACKED_PGA_MOTOR_POINT_NS:-20000}"
 min_motor_speedup="${MIN_PACKED_PGA_MOTOR_POINT_SPEEDUP:-5}"
@@ -48,6 +49,14 @@ min_packed_unary_speedup="${MIN_PACKED_MV_UNARY_SPEEDUP:-20}"
 # at 79-81 ns/iter and the exact old boxed shape at 26.7-27.8 us/iter.
 max_packed_hodge_ns="${MAX_PACKED_MV_HODGE_NS:-250}"
 min_packed_hodge_speedup="${MIN_PACKED_MV_HODGE_SPEEDUP:-100}"
+# Projection and parity-widening kernels traverse at most one input and build
+# exactly one output buffer. Keep separate ceilings for full projection,
+# half-sized projection, and widening while sharing the boxed-shape speedup
+# floor across all seven operations.
+max_packed_full_projection_ns="${MAX_PACKED_MV_FULL_PROJECTION_NS:-500}"
+max_packed_half_projection_ns="${MAX_PACKED_MV_HALF_PROJECTION_NS:-300}"
+max_packed_widening_ns="${MAX_PACKED_MV_WIDENING_NS:-300}"
+min_packed_projection_speedup="${MIN_PACKED_MV_PROJECTION_SPEEDUP:-3.0}"
 
 bench_log="${PACKED_MV_BENCH_GUARD_LOG:-}"
 if [[ -z "$bench_log" ]]; then
@@ -177,7 +186,11 @@ write_summary_json() {
     printf '    "max_packed_odd_involute_ns": %s,\n' "$max_packed_odd_involute_ns"
     printf '    "min_packed_unary_speedup": %s,\n' "$min_packed_unary_speedup"
     printf '    "max_packed_hodge_ns": %s,\n' "$max_packed_hodge_ns"
-    printf '    "min_packed_hodge_speedup": %s\n' "$min_packed_hodge_speedup"
+    printf '    "min_packed_hodge_speedup": %s,\n' "$min_packed_hodge_speedup"
+    printf '    "max_packed_full_projection_ns": %s,\n' "$max_packed_full_projection_ns"
+    printf '    "max_packed_half_projection_ns": %s,\n' "$max_packed_half_projection_ns"
+    printf '    "max_packed_widening_ns": %s,\n' "$max_packed_widening_ns"
+    printf '    "min_packed_projection_speedup": %s\n' "$min_packed_projection_speedup"
     printf '  },\n'
     printf '  "metrics": {\n'
     printf '    "pga_motor_point_diff": %s,\n' "$motor_point_diff"
@@ -220,7 +233,28 @@ write_summary_json() {
     printf '    "packed_direct_conjugate_odd_ns": %s,\n' "$direct_conjugate_odd_ns"
     printf '    "hodge_dual_l1_diff": %s,\n' "$hodge_dual_diff"
     printf '    "packed_boxed_hodge_dual_ns": %s,\n' "$boxed_hodge_dual_ns"
-    printf '    "packed_direct_hodge_dual_ns": %s\n' "$direct_hodge_dual_ns"
+    printf '    "packed_direct_hodge_dual_ns": %s,\n' "$direct_hodge_dual_ns"
+    printf '    "projection_full_grade2_l1_diff": %s,\n' "$projection_full_grade2_diff"
+    printf '    "projection_even_grade2_l1_diff": %s,\n' "$projection_even_grade2_diff"
+    printf '    "projection_odd_grade3_l1_diff": %s,\n' "$projection_odd_grade3_diff"
+    printf '    "projection_even_part_l1_diff": %s,\n' "$projection_even_part_diff"
+    printf '    "projection_odd_part_l1_diff": %s,\n' "$projection_odd_part_diff"
+    printf '    "widening_even_to_full_l1_diff": %s,\n' "$widening_even_to_full_diff"
+    printf '    "widening_odd_to_full_l1_diff": %s,\n' "$widening_odd_to_full_diff"
+    printf '    "packed_boxed_full_grade2_projection_ns": %s,\n' "$boxed_full_grade2_projection_ns"
+    printf '    "packed_direct_full_grade2_projection_ns": %s,\n' "$direct_full_grade2_projection_ns"
+    printf '    "packed_boxed_even_grade2_projection_ns": %s,\n' "$boxed_even_grade2_projection_ns"
+    printf '    "packed_direct_even_grade2_projection_ns": %s,\n' "$direct_even_grade2_projection_ns"
+    printf '    "packed_boxed_odd_grade3_projection_ns": %s,\n' "$boxed_odd_grade3_projection_ns"
+    printf '    "packed_direct_odd_grade3_projection_ns": %s,\n' "$direct_odd_grade3_projection_ns"
+    printf '    "packed_boxed_even_part_ns": %s,\n' "$boxed_even_part_ns"
+    printf '    "packed_direct_even_part_ns": %s,\n' "$direct_even_part_ns"
+    printf '    "packed_boxed_odd_part_ns": %s,\n' "$boxed_odd_part_ns"
+    printf '    "packed_direct_odd_part_ns": %s,\n' "$direct_odd_part_ns"
+    printf '    "packed_boxed_even_to_full_ns": %s,\n' "$boxed_even_to_full_widening_ns"
+    printf '    "packed_direct_even_to_full_ns": %s,\n' "$direct_even_to_full_widening_ns"
+    printf '    "packed_boxed_odd_to_full_ns": %s,\n' "$boxed_odd_to_full_widening_ns"
+    printf '    "packed_direct_odd_to_full_ns": %s\n' "$direct_odd_to_full_widening_ns"
     printf '  },\n'
     printf '  "speedups": {\n'
     printf '    "pga_motor_point": %s,\n' "$motor_speedup"
@@ -237,7 +271,14 @@ write_summary_json() {
     printf '    "packed_conjugate_full": %s,\n' "$conjugate_full_speedup"
     printf '    "packed_conjugate_even": %s,\n' "$conjugate_even_speedup"
     printf '    "packed_conjugate_odd": %s,\n' "$conjugate_odd_speedup"
-    printf '    "packed_hodge_dual": %s\n' "$hodge_dual_speedup"
+    printf '    "packed_hodge_dual": %s,\n' "$hodge_dual_speedup"
+    printf '    "packed_full_grade2_projection": %s,\n' "$full_grade2_projection_speedup"
+    printf '    "packed_even_grade2_projection": %s,\n' "$even_grade2_projection_speedup"
+    printf '    "packed_odd_grade3_projection": %s,\n' "$odd_grade3_projection_speedup"
+    printf '    "packed_even_part": %s,\n' "$even_part_speedup"
+    printf '    "packed_odd_part": %s,\n' "$odd_part_speedup"
+    printf '    "packed_even_to_full": %s,\n' "$even_to_full_widening_speedup"
+    printf '    "packed_odd_to_full": %s\n' "$odd_to_full_widening_speedup"
     printf '  }\n'
     printf '}\n'
   } > "$summary_json"
@@ -278,6 +319,12 @@ fi
 
 if ! lake exe packedmvbench hodge-dual "$hodge_iters" >> "$bench_log" 2>&1; then
   printf 'lake exe packedmvbench hodge-dual failed; benchmark log follows:\n' >&2
+  cat "$bench_log" >&2
+  exit 1
+fi
+
+if ! lake exe packedmvbench projections-widening "$projection_iters" >> "$bench_log" 2>&1; then
+  printf 'lake exe packedmvbench projections-widening failed; benchmark log follows:\n' >&2
   cat "$bench_log" >&2
   exit 1
 fi
@@ -338,6 +385,39 @@ hodge_dual_diff="$(get_last_metric "hodge dual l1 diff")"
 boxed_hodge_dual_ns="$(get_timed_metric "boxed CGA3 full hodge dual")"
 direct_hodge_dual_ns="$(get_timed_metric "direct CGA3 full hodge dual")"
 hodge_dual_speedup="$(ratio "$boxed_hodge_dual_ns" "$direct_hodge_dual_ns")"
+projection_full_grade2_diff="$(get_last_metric "projection full grade2 l1 diff")"
+projection_even_grade2_diff="$(get_last_metric "projection even grade2 l1 diff")"
+projection_odd_grade3_diff="$(get_last_metric "projection odd grade3 l1 diff")"
+projection_even_part_diff="$(get_last_metric "projection even part l1 diff")"
+projection_odd_part_diff="$(get_last_metric "projection odd part l1 diff")"
+widening_even_to_full_diff="$(get_last_metric "widening even to full l1 diff")"
+widening_odd_to_full_diff="$(get_last_metric "widening odd to full l1 diff")"
+boxed_full_grade2_projection_ns="$(get_timed_metric "boxed CGA3 full grade-2 projection")"
+direct_full_grade2_projection_ns="$(get_timed_metric "direct CGA3 full grade-2 projection")"
+boxed_even_grade2_projection_ns="$(get_timed_metric "boxed CGA3 even grade-2 projection")"
+direct_even_grade2_projection_ns="$(get_timed_metric "direct CGA3 even grade-2 projection")"
+boxed_odd_grade3_projection_ns="$(get_timed_metric "boxed CGA3 odd grade-3 projection")"
+direct_odd_grade3_projection_ns="$(get_timed_metric "direct CGA3 odd grade-3 projection")"
+boxed_even_part_ns="$(get_timed_metric "boxed CGA3 even part")"
+direct_even_part_ns="$(get_timed_metric "direct CGA3 even part")"
+boxed_odd_part_ns="$(get_timed_metric "boxed CGA3 odd part")"
+direct_odd_part_ns="$(get_timed_metric "direct CGA3 odd part")"
+boxed_even_to_full_widening_ns="$(get_timed_metric "boxed CGA3 even-to-full widening")"
+direct_even_to_full_widening_ns="$(get_timed_metric "direct CGA3 even-to-full widening")"
+boxed_odd_to_full_widening_ns="$(get_timed_metric "boxed CGA3 odd-to-full widening")"
+direct_odd_to_full_widening_ns="$(get_timed_metric "direct CGA3 odd-to-full widening")"
+full_grade2_projection_speedup="$(ratio "$boxed_full_grade2_projection_ns" \
+  "$direct_full_grade2_projection_ns")"
+even_grade2_projection_speedup="$(ratio "$boxed_even_grade2_projection_ns" \
+  "$direct_even_grade2_projection_ns")"
+odd_grade3_projection_speedup="$(ratio "$boxed_odd_grade3_projection_ns" \
+  "$direct_odd_grade3_projection_ns")"
+even_part_speedup="$(ratio "$boxed_even_part_ns" "$direct_even_part_ns")"
+odd_part_speedup="$(ratio "$boxed_odd_part_ns" "$direct_odd_part_ns")"
+even_to_full_widening_speedup="$(ratio "$boxed_even_to_full_widening_ns" \
+  "$direct_even_to_full_widening_ns")"
+odd_to_full_widening_speedup="$(ratio "$boxed_odd_to_full_widening_ns" \
+  "$direct_odd_to_full_widening_ns")"
 
 check_le "PGA3 motor point transform diff" "$motor_point_diff" "$max_correctness_diff" ""
 check_le "Packed PGA3 motor point transform" "$packed_motor_ns" "$max_packed_motor_ns" "ns/iter"
@@ -400,6 +480,43 @@ check_le "Packed Hodge dual" "$direct_hodge_dual_ns" \
 check_ge "Packed Hodge dual speedup" "$hodge_dual_speedup" \
   "$min_packed_hodge_speedup" "x"
 
+projection_diff_labels=(
+  "full grade-2 projection" "even grade-2 projection" "odd grade-3 projection"
+  "even part" "odd part" "even-to-full widening" "odd-to-full widening"
+)
+projection_diffs=(
+  "$projection_full_grade2_diff" "$projection_even_grade2_diff"
+  "$projection_odd_grade3_diff" "$projection_even_part_diff"
+  "$projection_odd_part_diff" "$widening_even_to_full_diff"
+  "$widening_odd_to_full_diff"
+)
+projection_speedups=(
+  "$full_grade2_projection_speedup" "$even_grade2_projection_speedup"
+  "$odd_grade3_projection_speedup" "$even_part_speedup" "$odd_part_speedup"
+  "$even_to_full_widening_speedup" "$odd_to_full_widening_speedup"
+)
+for ((i = 0; i < ${#projection_diff_labels[@]}; i++)); do
+  label="Packed ${projection_diff_labels[$i]}"
+  check_le "$label baseline diff" "${projection_diffs[$i]}" \
+    "$max_correctness_diff" ""
+  check_ge "$label speedup" "${projection_speedups[$i]}" \
+    "$min_packed_projection_speedup" "x"
+done
+check_le "Packed full grade-2 projection" "$direct_full_grade2_projection_ns" \
+  "$max_packed_full_projection_ns" "ns/iter"
+check_le "Packed even grade-2 projection" "$direct_even_grade2_projection_ns" \
+  "$max_packed_half_projection_ns" "ns/iter"
+check_le "Packed odd grade-3 projection" "$direct_odd_grade3_projection_ns" \
+  "$max_packed_half_projection_ns" "ns/iter"
+check_le "Packed even part" "$direct_even_part_ns" \
+  "$max_packed_half_projection_ns" "ns/iter"
+check_le "Packed odd part" "$direct_odd_part_ns" \
+  "$max_packed_half_projection_ns" "ns/iter"
+check_le "Packed even-to-full widening" "$direct_even_to_full_widening_ns" \
+  "$max_packed_widening_ns" "ns/iter"
+check_le "Packed odd-to-full widening" "$direct_odd_to_full_widening_ns" \
+  "$max_packed_widening_ns" "ns/iter"
+
 status="passed"
 if [[ ${#failures[@]} -ne 0 ]]; then
   status="failed"
@@ -445,3 +562,18 @@ for ((i = 0; i < ${#unary_diff_labels[@]}; i++)); do
 done
 printf '  Packed Hodge dual: %s ns/iter direct vs %s ns/iter boxed (%sx)\n' \
   "$direct_hodge_dual_ns" "$boxed_hodge_dual_ns" "$hodge_dual_speedup"
+projection_boxed_ns=(
+  "$boxed_full_grade2_projection_ns" "$boxed_even_grade2_projection_ns"
+  "$boxed_odd_grade3_projection_ns" "$boxed_even_part_ns" "$boxed_odd_part_ns"
+  "$boxed_even_to_full_widening_ns" "$boxed_odd_to_full_widening_ns"
+)
+projection_direct_ns=(
+  "$direct_full_grade2_projection_ns" "$direct_even_grade2_projection_ns"
+  "$direct_odd_grade3_projection_ns" "$direct_even_part_ns" "$direct_odd_part_ns"
+  "$direct_even_to_full_widening_ns" "$direct_odd_to_full_widening_ns"
+)
+for ((i = 0; i < ${#projection_diff_labels[@]}; i++)); do
+  printf '  Packed %s: %s ns/iter direct vs %s ns/iter boxed (%sx)\n' \
+    "${projection_diff_labels[$i]}" "${projection_direct_ns[$i]}" \
+    "${projection_boxed_ns[$i]}" "${projection_speedups[$i]}"
+done
