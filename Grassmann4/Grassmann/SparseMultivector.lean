@@ -11,7 +11,7 @@
   - N ≤ 8: Use dense Array (MultivectorA)
   - N > 8: Use sparse TreeMap (MultivectorS)
 -/
-import Grassmann.Multivector  -- Get Ring and existing signatures
+import Grassmann.Multivector
 import Grassmann.GATypeclass
 import Std.Data.TreeMap
 
@@ -33,7 +33,7 @@ structure MultivectorS (sig : Signature n) (F : Type*) where
 
 namespace MultivectorS
 
-variable [Ring F] [BEq F]
+variable [CoeffOps F] [BEq F]
 
 /-! ### Constructors -/
 
@@ -327,7 +327,7 @@ end MultivectorS
 
 /-! ## GAlgebra Instance for MultivectorS -/
 
-instance [Ring F] [BEq F] : GAlgebra sig (MultivectorS sig F) F where
+instance [CoeffOps F] [BEq F] : GAlgebra sig (MultivectorS sig F) F where
   basisVector := MultivectorS.basis
   scalar := MultivectorS.scalar
   zero := MultivectorS.zero

@@ -17,10 +17,7 @@
 -/
 import Grassmann.SparseMultivector
 import Grassmann.GATypeclass
-import Grassmann.Proof
 import Std.Data.TreeMap
-
-open Grassmann.Proof
 
 namespace Grassmann
 
@@ -56,20 +53,20 @@ def zero : TruncatedMV sig maxGrade F :=
   ⟨fun _ => Std.TreeMap.empty⟩
 
 /-- Scalar truncated multivector (requires maxGrade ≥ 0) -/
-def scalar [Ring F] [BEq F] (x : F) : TruncatedMV sig maxGrade F :=
+def scalar [CoeffOps F] [BEq F] (x : F) : TruncatedMV sig maxGrade F :=
   if x == 0 then zero
   else ⟨fun k => if k.val = 0 then Std.TreeMap.empty.insert 0 x else Std.TreeMap.empty⟩
 
 /-- One (scalar 1) -/
-def one [Ring F] [BEq F] : TruncatedMV sig maxGrade F := scalar 1
+def one [CoeffOps F] [BEq F] : TruncatedMV sig maxGrade F := scalar 1
 
 /-- Basis vector e_i (requires maxGrade ≥ 1) -/
-def basis [Ring F] [BEq F] (i : Fin n) (_h : 1 ≤ maxGrade := by omega) : TruncatedMV sig maxGrade F :=
+def basis [CoeffOps F] [BEq F] (i : Fin n) (_h : 1 ≤ maxGrade := by omega) : TruncatedMV sig maxGrade F :=
   let idx := 1 <<< i.val
   ⟨fun k => if k.val = 1 then Std.TreeMap.empty.insert idx (1 : F) else Std.TreeMap.empty⟩
 
 /-- Bivector basis e_i ∧ e_j (requires maxGrade ≥ 2) -/
-def bivectorBasis [Ring F] [BEq F] (i j : Fin n) (_h : 2 ≤ maxGrade := by omega) : TruncatedMV sig maxGrade F :=
+def bivectorBasis [CoeffOps F] [BEq F] (i j : Fin n) (_h : 2 ≤ maxGrade := by omega) : TruncatedMV sig maxGrade F :=
   if i == j then zero
   else
     let idx := (1 <<< i.val) ||| (1 <<< j.val)
@@ -79,14 +76,14 @@ def bivectorBasis [Ring F] [BEq F] (i j : Fin n) (_h : 2 ≤ maxGrade := by omeg
 /-! ### Coefficient Access -/
 
 /-- Get coefficient for a specific blade index -/
-def coeff [Ring F] (m : TruncatedMV sig maxGrade F) (bladeIdx : ℕ) : F :=
+def coeff [CoeffOps F] (m : TruncatedMV sig maxGrade F) (bladeIdx : ℕ) : F :=
   let g := grade (BitVec.ofNat n bladeIdx)
   if h : g ≤ maxGrade then
     (m.gradeData ⟨g, by omega⟩).get? bladeIdx |>.getD 0
   else 0
 
 /-- Scalar part (grade 0 coefficient at index 0) -/
-def scalarPart [Ring F] (m : TruncatedMV sig maxGrade F) : F :=
+def scalarPart [CoeffOps F] (m : TruncatedMV sig maxGrade F) : F :=
   m.coeff 0
 
 /-- Get all non-zero terms in a grade as (index, coeff) pairs -/
@@ -100,7 +97,7 @@ def nnz (m : TruncatedMV sig maxGrade F) : ℕ :=
 /-! ### Arithmetic -/
 
 /-- Add two truncated multivectors -/
-def add [Ring F] [BEq F] (a b : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
+def add [CoeffOps F] [BEq F] (a b : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
   ⟨fun k =>
     let aData := a.gradeData k
     let bData := b.gradeData k
@@ -110,29 +107,29 @@ def add [Ring F] [BEq F] (a b : TruncatedMV sig maxGrade F) : TruncatedMV sig ma
       if newVal == 0 then acc.erase idx else acc.insert idx newVal⟩
 
 /-- Negate -/
-def neg [Ring F] (m : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
+def neg [CoeffOps F] (m : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
   ⟨fun k =>
     (m.gradeData k).foldl (init := Std.TreeMap.empty) fun acc idx coeff =>
       acc.insert idx (-coeff)⟩
 
 /-- Subtract -/
-def sub [Ring F] [BEq F] (a b : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
+def sub [CoeffOps F] [BEq F] (a b : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
   a.add b.neg
 
 /-- Scale by scalar -/
-def smul [Ring F] [BEq F] (x : F) (m : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
+def smul [CoeffOps F] [BEq F] (x : F) (m : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
   if x == 0 then zero
   else ⟨fun k =>
     (m.gradeData k).foldl (init := Std.TreeMap.empty) fun acc idx coeff =>
       let newVal := x * coeff
       if newVal == 0 then acc else acc.insert idx newVal⟩
 
-instance [Ring F] [BEq F] : Zero (TruncatedMV sig maxGrade F) := ⟨zero⟩
-instance [Ring F] [BEq F] : One (TruncatedMV sig maxGrade F) := ⟨one⟩
-instance [Ring F] [BEq F] : Add (TruncatedMV sig maxGrade F) := ⟨add⟩
-instance [Ring F] : Neg (TruncatedMV sig maxGrade F) := ⟨neg⟩
-instance [Ring F] [BEq F] : Sub (TruncatedMV sig maxGrade F) := ⟨sub⟩
-instance [Ring F] [BEq F] : SMul F (TruncatedMV sig maxGrade F) := ⟨smul⟩
+instance [CoeffOps F] [BEq F] : Zero (TruncatedMV sig maxGrade F) := ⟨zero⟩
+instance [CoeffOps F] [BEq F] : One (TruncatedMV sig maxGrade F) := ⟨one⟩
+instance [CoeffOps F] [BEq F] : Add (TruncatedMV sig maxGrade F) := ⟨add⟩
+instance [CoeffOps F] : Neg (TruncatedMV sig maxGrade F) := ⟨neg⟩
+instance [CoeffOps F] [BEq F] : Sub (TruncatedMV sig maxGrade F) := ⟨sub⟩
+instance [CoeffOps F] [BEq F] : SMul F (TruncatedMV sig maxGrade F) := ⟨smul⟩
 
 /-! ### Products (Truncated)
 
@@ -150,7 +147,7 @@ private def productGrade (ga gb : ℕ) (productType : String) : Option ℕ :=
 
 /-- Geometric product (truncated).
     Terms producing grades > maxGrade are discarded. -/
-def geometricProduct [Ring F] [BEq F]
+def geometricProduct [CoeffOps F] [BEq F]
     (a b : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
   let result := (List.finRange (maxGrade + 1)).foldl (init := zero) fun acc1 ga =>
     (List.finRange (maxGrade + 1)).foldl (init := acc1) fun acc2 gb =>
@@ -179,7 +176,7 @@ def geometricProduct [Ring F] [BEq F]
 
 /-- Wedge product (truncated).
     Grade(a ∧ b) = grade(a) + grade(b), so truncation is natural. -/
-def wedgeProduct [Ring F] [BEq F]
+def wedgeProduct [CoeffOps F] [BEq F]
     (a b : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
   let result := (List.finRange (maxGrade + 1)).foldl (init := zero) fun acc1 ga =>
     (List.finRange (maxGrade + 1)).foldl (init := acc1) fun acc2 gb =>
@@ -208,14 +205,14 @@ def wedgeProduct [Ring F] [BEq F]
       else acc2
   result
 
-instance [Ring F] [BEq F] : Mul (TruncatedMV sig maxGrade F) := ⟨geometricProduct⟩
+instance [CoeffOps F] [BEq F] : Mul (TruncatedMV sig maxGrade F) := ⟨geometricProduct⟩
 
 infixl:65 " ⋀ₜ " => wedgeProduct
 
 /-! ### Involutions -/
 
 /-- Reverse (dagger) -/
-def reverse [Ring F] (m : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
+def reverse [CoeffOps F] (m : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
   ⟨fun k =>
     let g := k.val
     let sign : Int := if (g * (g - 1) / 2) % 2 == 0 then 1 else -1
@@ -226,7 +223,7 @@ def reverse [Ring F] (m : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade
 postfix:max "†ₜ" => reverse
 
 /-- Grade involution: multiplies grade k by (-1)^k -/
-def involute [Ring F] (m : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
+def involute [CoeffOps F] (m : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
   ⟨fun k =>
     let g := k.val
     let sign : Int := if g % 2 == 0 then 1 else -1
@@ -235,7 +232,7 @@ def involute [Ring F] (m : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrad
       acc.insert idx newCoeff⟩
 
 /-- Clifford conjugate: reverse composed with involute -/
-def conjugate [Ring F] (m : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
+def conjugate [CoeffOps F] (m : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
   ⟨fun k =>
     let g := k.val
     let sign : Int := if (g * (g + 1) / 2) % 2 == 0 then 1 else -1
@@ -244,7 +241,7 @@ def conjugate [Ring F] (m : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGra
       acc.insert idx newCoeff⟩
 
 /-- Left contraction (truncated) -/
-def leftContract [Ring F] [BEq F]
+def leftContract [CoeffOps F] [BEq F]
     (a b : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
   let result := (List.finRange (maxGrade + 1)).foldl (init := zero) fun acc1 ga =>
     (List.finRange (maxGrade + 1)).foldl (init := acc1) fun acc2 gb =>
@@ -273,7 +270,7 @@ def leftContract [Ring F] [BEq F]
   result
 
 /-- Right contraction (truncated) -/
-def rightContract [Ring F] [BEq F]
+def rightContract [CoeffOps F] [BEq F]
     (a b : TruncatedMV sig maxGrade F) : TruncatedMV sig maxGrade F :=
   let result := (List.finRange (maxGrade + 1)).foldl (init := zero) fun acc1 ga =>
     (List.finRange (maxGrade + 1)).foldl (init := acc1) fun acc2 gb =>
@@ -302,20 +299,20 @@ def rightContract [Ring F] [BEq F]
   result
 
 /-- Grade projection: extract grade-k component -/
-def gradeProject [Ring F] [BEq F] (m : TruncatedMV sig maxGrade F) (k : ℕ) : TruncatedMV sig maxGrade F :=
+def gradeProject [CoeffOps F] [BEq F] (m : TruncatedMV sig maxGrade F) (k : ℕ) : TruncatedMV sig maxGrade F :=
   if _ : k ≤ maxGrade then
     ⟨fun g => if g.val == k then m.gradeData g else Std.TreeMap.empty⟩
   else zero
 
 /-- Basis vector without proof requirement (returns zero if maxGrade < 1) -/
-def basisVec [Ring F] [BEq F] (i : Fin n) : TruncatedMV sig maxGrade F :=
+def basisVec [CoeffOps F] [BEq F] (i : Fin n) : TruncatedMV sig maxGrade F :=
   if _ : 1 ≤ maxGrade then
     let idx := 1 <<< i.val
     ⟨fun k => if k.val = 1 then Std.TreeMap.empty.insert idx (1 : F) else Std.TreeMap.empty⟩
   else zero
 
 /-- Blade from bitmask (truncated if grade > maxGrade) -/
-def ofBladeBits [Ring F] [BEq F] (bits : BitVec n) : TruncatedMV sig maxGrade F :=
+def ofBladeBits [CoeffOps F] [BEq F] (bits : BitVec n) : TruncatedMV sig maxGrade F :=
   let g := grade bits
   if _ : g ≤ maxGrade then
     let idx := bits.toNat
@@ -325,7 +322,7 @@ def ofBladeBits [Ring F] [BEq F] (bits : BitVec n) : TruncatedMV sig maxGrade F 
 /-! ### Conversion -/
 
 /-- Convert from sparse multivector (truncating high grades) -/
-def ofSparse [Ring F] [BEq F] (m : MultivectorS sig F) : TruncatedMV sig maxGrade F :=
+def ofSparse [CoeffOps F] [BEq F] (m : MultivectorS sig F) : TruncatedMV sig maxGrade F :=
   let terms := m.toList
   terms.foldl (init := zero) fun acc (idx, coeff) =>
     let g := grade (BitVec.ofNat n idx)
@@ -336,7 +333,7 @@ def ofSparse [Ring F] [BEq F] (m : MultivectorS sig F) : TruncatedMV sig maxGrad
     else acc
 
 /-- Convert to sparse multivector -/
-def toSparse [Ring F] (m : TruncatedMV sig maxGrade F) : MultivectorS sig F :=
+def toSparse [CoeffOps F] (m : TruncatedMV sig maxGrade F) : MultivectorS sig F :=
   (List.finRange (maxGrade + 1)).foldl (init := MultivectorS.zero) fun acc k =>
     let terms := (m.gradeData k).toList
     terms.foldl (init := acc) fun acc2 (idx, coeff) =>
@@ -346,7 +343,7 @@ end TruncatedMV
 
 /-! ## GAlgebra Instance for TruncatedMV -/
 
-instance (maxGrade : ℕ) [Ring F] [BEq F] : GAlgebra sig (TruncatedMV sig maxGrade F) F where
+instance (maxGrade : ℕ) [CoeffOps F] [BEq F] : GAlgebra sig (TruncatedMV sig maxGrade F) F where
   basisVector := TruncatedMV.basisVec
   scalar := TruncatedMV.scalar
   zero := TruncatedMV.zero

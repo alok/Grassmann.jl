@@ -139,7 +139,7 @@ structure GradedMV (sig : Signature n) (F : Type*) (grades : GradeSet) where
 
 namespace GradedMV
 
-variable {n : ℕ} {sig : Signature n} {F : Type*} [Ring F]
+variable {n : ℕ} {sig : Signature n} {F : Type*} [CoeffOps F]
 variable {gs gs1 gs2 : GradeSet}
 
 /-- Create from multivector (full grade set) -/

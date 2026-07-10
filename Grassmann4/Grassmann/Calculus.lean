@@ -24,7 +24,7 @@ namespace Grassmann
 namespace Calculus
 
 variable {n : ℕ} {sig : Signature n} {F : Type*}
-variable [Ring F] [Div F]
+variable [CoeffOps F] [Div F]
 
 /-! ## Discrete Derivatives
 

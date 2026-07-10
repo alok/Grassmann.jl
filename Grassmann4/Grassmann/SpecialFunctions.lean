@@ -13,7 +13,7 @@ import Grassmann.Multivector
 namespace Grassmann
 
 variable {n : ℕ} {sig : Signature n} {F : Type*}
-variable [Ring F] [Div F]
+variable [CoeffOps F] [Div F]
 
 /-! ## Complex Numbers in Cl(0,1)
 
@@ -104,7 +104,7 @@ structure Dual (F : Type*) where
 
 namespace Dual
 
-variable [Ring F]
+variable [CoeffOps F]
 
 def zero : Dual F := ⟨0, 0⟩
 def one : Dual F := ⟨1, 0⟩

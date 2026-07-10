@@ -156,7 +156,7 @@ def CGA3EvenIdx : List (Fin 32) := evenIndices 5
 These use precomputed index lists to skip zero grades.
 -/
 
-variable {n : ℕ} {sig : Signature n} {F : Type*} [Ring F]
+variable {n : ℕ} {sig : Signature n} {F : Type*} [CoeffOps F]
 
 /-- Extract coefficients at given indices as an array -/
 def extractCoeffs (m : Multivector sig F) (indices : List (Fin (2 ^ n))) : Array F :=

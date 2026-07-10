@@ -18,9 +18,6 @@
   - Double cover of SO(3)
 -/
 import Grassmann.MVDense
-import Grassmann.Proof
-
-open Grassmann.Proof
 
 namespace Grassmann
 

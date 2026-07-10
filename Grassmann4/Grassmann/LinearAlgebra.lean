@@ -18,7 +18,7 @@ namespace Grassmann
 namespace LinearAlgebra
 
 variable {n : ℕ} {sig : Signature n} {F : Type*}
-variable [Ring F] [Div F]
+variable [CoeffOps F] [Div F]
 
 /-! ## Pseudoscalar Blade -/
 
@@ -70,7 +70,7 @@ structure LinearMap (sig : Signature n) (F : Type*) where
 
 namespace LinearMap
 
-variable [Ring F] [Div F]
+variable [CoeffOps F] [Div F]
 
 /-- Get the i-th basis blade (single bit set) -/
 def basisBlade (i : Fin n) : Blade sig :=

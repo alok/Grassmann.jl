@@ -39,7 +39,7 @@ For Float-optimized operations, use the MV-backed types directly.
 
 namespace Proof
 
-variable {F : Type*} [Ring F] [Div F]
+variable {F : Type*} [CoeffOps F] [Div F]
 
 /-- Create a point from Euclidean coordinates -/
 def point (x y z : F) : Multivector PGA3 F :=

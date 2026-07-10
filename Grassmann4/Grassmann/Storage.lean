@@ -18,10 +18,8 @@
   - OpenCL Clifford: https://ieeexplore.ieee.org/document/7302251/
 -/
 import Grassmann.Manifold
-import Grassmann.Proof
+import Grassmann.CoeffOps
 import Std.Data.TreeMap
-
-open Grassmann.Proof
 
 namespace Grassmann.Storage
 
@@ -63,7 +61,7 @@ structure SparseStore (F : Type*) (sz : Nat) where
 
 namespace SparseStore
 
-variable {F : Type*} {sz : Nat} [Ring F] [BEq F]
+variable {F : Type*} {sz : Nat} [CoeffOps F] [BEq F]
 
 def get (s : SparseStore F sz) (i : Fin sz) : F := s.data.get? i.val |>.getD 0
 def set (s : SparseStore F sz) (i : Fin sz) (x : F) : SparseStore F sz :=
@@ -118,7 +116,7 @@ structure MVVec (sig : Signature n) (F : Type*) [Inhabited F] where
 
 namespace MVVec
 
-variable {n : ℕ} {sig : Signature n} {F : Type*} [Inhabited F] [Ring F]
+variable {n : ℕ} {sig : Signature n} {F : Type*} [Inhabited F] [CoeffOps F]
 
 def get (m : MVVec sig F) (i : Fin (2 ^ n)) : F := m.store.get i
 def zero : MVVec sig F := ⟨VecStore.replicate 0⟩
@@ -137,12 +135,12 @@ instance : Neg (MVVec sig F) := ⟨neg⟩
 end MVVec
 
 /-- Multivector backed by Sparse storage -/
-structure MVSparse (sig : Signature n) (F : Type*) [Ring F] [BEq F] where
+structure MVSparse (sig : Signature n) (F : Type*) [CoeffOps F] [BEq F] where
   store : SparseStore F (2 ^ n)
 
 namespace MVSparse
 
-variable {n : ℕ} {sig : Signature n} {F : Type*} [Ring F] [BEq F]
+variable {n : ℕ} {sig : Signature n} {F : Type*} [CoeffOps F] [BEq F]
 
 def get (m : MVSparse sig F) (i : Fin (2 ^ n)) : F := m.store.get i
 def zero : MVSparse sig F := ⟨SparseStore.replicate 0⟩

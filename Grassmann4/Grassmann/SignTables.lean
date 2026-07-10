@@ -28,7 +28,7 @@ variable {n : ℕ}
 
 namespace Multivector
 
-variable {sig : Signature n} {F : Type*} [Ring F]
+variable {sig : Signature n} {F : Type*} [CoeffOps F]
 
 /-- Geometric product that automatically uses cached sign tables when available. -/
 @[inline, specialize]
@@ -41,7 +41,7 @@ end Multivector
 
 /-- Override the default `Mul` for dense multivectors with a table‑aware version.
     This keeps APIs the same while making small canonical algebras fast by default. -/
-instance (priority := 1100) {n : ℕ} {sig : Signature n} {F : Type*} [Ring F] :
+instance (priority := 1100) {n : ℕ} {sig : Signature n} {F : Type*} [CoeffOps F] :
     Mul (Multivector sig F) :=
   ⟨Multivector.geometricProductFast (sig := sig) (n := n)⟩
 

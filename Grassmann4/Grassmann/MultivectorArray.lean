@@ -25,7 +25,7 @@ structure MultivectorA (sig : Signature n) (F : Type*) where
 
 namespace MultivectorA
 
-variable [Ring F] [Div F] [Inhabited F]
+variable [CoeffOps F] [Div F] [Inhabited F]
 
 /-! ### Constructors -/
 

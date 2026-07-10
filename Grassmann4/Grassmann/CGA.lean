@@ -99,7 +99,7 @@ CGA3 is defined in Manifold.lean as: Signature.cl 4 1
 
 namespace CGA
 
-variable {F : Type*} [Ring F] [Div F]
+variable {F : Type*} [CoeffOps F] [Div F]
 
 /-! ## Basis Elements
 

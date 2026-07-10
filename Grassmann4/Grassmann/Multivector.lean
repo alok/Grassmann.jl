@@ -11,11 +11,11 @@
 
   Design:
   - Multivector structure has NO constraint on scalar type F
-  - Operations are guarded by [Ring F], [Field F] etc.
-  - Float Ring instance is in Proof.lean with sorry_proof axioms
+  - Computational operations are guarded by the lawless `[CoeffOps F]`
+  - Algebraic theorems can separately require lawful structures such as `Ring F`
 -/
 import Grassmann.Products
-import Grassmann.Proof
+import Grassmann.CoeffOps
 import Grassmann.GATypeclass
 import Mathlib.Algebra.Ring.Defs
 import Mathlib.Algebra.Group.Defs
@@ -39,9 +39,9 @@ structure Multivector (sig : Signature n) (F : Type*) where
 
 namespace Multivector
 
-variable [Ring F]
+variable [CoeffOps F]
 
-omit [Ring F] in
+omit [CoeffOps F] in
 @[ext]
 theorem ext {a b : Multivector sig F} (h : ∀ i, a.coeffs i = b.coeffs i) : a = b := by
   cases a; cases b; simp only [mk.injEq]; funext i; exact h i
@@ -559,15 +559,9 @@ def sandwich (a x : Multivector sig F) : Multivector sig F :=
 
 end Multivector
 
-/-! ## Float-specific Operations
-
-Float Ring/Field instances are defined in Grassmann.Proof with sorry_proof.
-Here we only define Float-specific computational operations.
--/
+/-! ## Float-specific Operations -/
 
 namespace Multivector
-
--- Float Ring/Field instance imported from Grassmann.Proof
 
 /-- Norm (magnitude) of a multivector: √(m m†) -/
 def norm (m : Multivector sig Float) : Float :=
@@ -643,7 +637,7 @@ end Multivector
 section Convenience
 
 variable {n : ℕ} {sig : Signature n}
-variable [Ring F]
+variable [CoeffOps F]
 
 /-- Create a vector from an array of components (generic n-dimensional) -/
 def vectorFromArray (components : Array F) : Multivector sig F :=
@@ -693,7 +687,7 @@ end Convenience
 
 /-! ## GAlgebra Instance -/
 
-instance [Ring F] : GAlgebra sig (Multivector sig F) F where
+instance [CoeffOps F] : GAlgebra sig (Multivector sig F) F where
   basisVector := Multivector.basis
   scalar := Multivector.scalar
   zero := Multivector.zero
@@ -801,7 +795,7 @@ structure Chain (sig : Signature n) (k : ℕ) (F : Type*) where
 
 namespace Chain
 
-variable [Ring F]
+variable [CoeffOps F]
 
 /-- Zero chain -/
 def zero : Chain sig k F := ⟨fun _ _ => 0⟩
@@ -856,7 +850,7 @@ structure Projector (sig : Signature n) (F : Type*) where
 
 namespace Projector
 
-variable {n : ℕ} {sig : Signature n} {F : Type*} [Ring F]
+variable {n : ℕ} {sig : Signature n} {F : Type*} [CoeffOps F]
 
 /-- Create projector from a blade -/
 def ofBlade (b : Blade sig) : Projector sig F := ⟨b, 1⟩
@@ -886,7 +880,7 @@ structure Dyadic (sig : Signature n) (F : Type*) where
 
 namespace Dyadic
 
-variable {n : ℕ} {sig : Signature n} {F : Type*} [Ring F]
+variable {n : ℕ} {sig : Signature n} {F : Type*} [CoeffOps F]
 
 /-- Create dyadic from two vectors -/
 def ofVectors (a b : Multivector sig F) : Dyadic sig F := ⟨a, b⟩
@@ -927,7 +921,7 @@ structure DyadicChain (sig : Signature n) (F : Type*) where
 
 namespace DyadicChain
 
-variable {n : ℕ} {sig : Signature n} {F : Type*} [Ring F]
+variable {n : ℕ} {sig : Signature n} {F : Type*} [CoeffOps F]
 
 /-- Empty chain -/
 def empty : DyadicChain sig F := ⟨[]⟩
@@ -958,7 +952,7 @@ structure Outermorphism (sig : Signature n) (F : Type*) where
 
 namespace Outermorphism
 
-variable {n : ℕ} {sig : Signature n} {F : Type*} [Ring F]
+variable {n : ℕ} {sig : Signature n} {F : Type*} [CoeffOps F]
 
 /-- Identity outermorphism -/
 def identity : Outermorphism sig F :=
@@ -1036,7 +1030,7 @@ namespace Multivector
 /-- Right geometric division: a ⊘ b = a · b⁻¹
     Solves for x in the equation x·b = a
     Requires b to have non-zero norm. -/
-def geometricDivRight [Ring F] [Div F]
+def geometricDivRight [CoeffOps F] [Div F]
     (a b : Multivector sig F) : Multivector sig F :=
   let brev := b†
   let normSq := (b * brev).scalarPart
@@ -1044,7 +1038,7 @@ def geometricDivRight [Ring F] [Div F]
 
 /-- Left geometric division: a ⊘ₗ b = b⁻¹ · a
     Solves for x in the equation b·x = a -/
-def geometricDivLeft [Ring F] [Div F]
+def geometricDivLeft [CoeffOps F] [Div F]
     (a b : Multivector sig F) : Multivector sig F :=
   let brev := b†
   let normSq := (brev * b).scalarPart
@@ -1052,13 +1046,13 @@ def geometricDivLeft [Ring F] [Div F]
 
 /-- Project multivector a onto blade/multivector B.
     proj_B(a) = (a ⌋ B) · B⁻¹ -/
-def project [Ring F] [Div F]
+def project [CoeffOps F] [Div F]
     (a B : Multivector sig F) : Multivector sig F :=
   geometricDivRight (a ⌋ᵐ B) B
 
 /-- Reject multivector a from blade/multivector B.
     rej_B(a) = a - proj_B(a) -/
-def reject [Ring F] [Div F]
+def reject [CoeffOps F] [Div F]
     (a B : Multivector sig F) : Multivector sig F :=
   a.sub (project a B)
 
@@ -1074,7 +1068,7 @@ infixl:70 " ⊘ₗᵐ " => Multivector.geometricDivLeft
 
 /-- Cross product in 3D: a × b = ⋆(a ∧ b).
     Maps two vectors to a vector (the dual of their bivector). -/
-def crossProduct3D [Ring F]
+def crossProduct3D [CoeffOps F]
     (a b : Multivector R3 F) : Multivector R3 F :=
   let wedge := a ⋀ᵐ b
   -- Hodge dual in 3D maps bivectors to vectors
