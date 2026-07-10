@@ -29,7 +29,7 @@ import Grassmann.SignTables
 
 namespace Grassmann
 
-variable {n : ℕ} {sig : Signature n} {F : Type*} [Ring F]
+variable {n : ℕ} {sig : Signature n} {F : Type*} [CoeffOps F]
 
 /-- Even‑left geometric product: assumes `a` has only even coefficients.
     Skips all odd `i` indices (via cached grade-set index tables). -/
