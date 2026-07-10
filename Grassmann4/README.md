@@ -55,6 +55,12 @@ for even and full storage; an odd packed value cannot contain the scalar
 identity. These are executable interfaces and do not assert exact Float ring or
 module laws.
 
+Packed reverse and Clifford conjugation likewise borrow their input and build
+one final `FloatArray`. Grade involution is parity-specialized: even values are
+immutable fixed points and return directly, odd values use the one-buffer
+negation kernel, and full storage uses one dedicated loop. Valid full packed
+indices decode directly to the same blade mask.
+
 ## Quick Start
 
 The examples below opt into the dense/reference surface because they mix blade
@@ -309,21 +315,25 @@ lake exe packedmvbench all 200
 lake exe packedmvbench pga-motor-point 5000
 lake exe packedmvbench subtraction 250000
 lake exe packedmvbench linear-arithmetic 500000
+lake exe packedmvbench unary-involutions 100000
 ```
 
 `Grassmann4/scripts/packedmvbench_guard.sh` runs a small correctness smoke test,
 then checks the packed PGA3 motor-point transform, direct subtraction, addition,
 negation, and Float scalar multiplication against conservative local absolute
-and relative thresholds. The linear kernels are compared with their former
-boxed-array shape; subtraction is compared with the now-optimized two-buffer
-`add`/`neg` composition. Iteration counts and thresholds have corresponding
-`PACKED_MV_BENCH_*`, `MAX_PACKED_*`, and `MIN_PACKED_*` overrides in the script.
+and relative thresholds. The linear and full/even/odd unary kernels are compared
+with their former boxed-array shapes; subtraction is compared with the
+now-optimized two-buffer `add`/`neg` composition. Iteration counts and thresholds
+have corresponding `PACKED_MV_BENCH_*`, `MAX_PACKED_*`, and `MIN_PACKED_*`
+overrides in the script.
 
 `Grassmann4/scripts/packed_linear_codegen_guard.sh` builds `Grassmann.MV` and
-audits only the exact non-boxed generated-C bodies for the four linear kernels.
-It requires one final result allocation, direct unboxed Float arithmetic,
-borrowed inputs, a single push per coefficient, and tail-loop codegen. It
-deliberately excludes typeclass dictionary closures and boxed ABI adapters.
+audits only the exact non-boxed generated-C bodies for the linear and unary
+kernels. For each nontrivial constructor it requires one final result
+allocation, direct unboxed Float arithmetic, borrowed inputs, a single push per
+coefficient, and tail-loop codegen. It separately verifies the allocation-free
+even-involution return and the one-allocation odd/full branches. It deliberately
+excludes typeclass dictionary closures and boxed ABI adapters.
 
 A local `Grassmann4/scripts/bench_guard.sh` run on 2026-06-05 passed with zero
 checked correctness drift, `156.632080 ns/iter` MV rotor composition versus
@@ -354,6 +364,15 @@ The 2026-07-09 packed-linear acceptance run had zero L1 drift and measured
 `161.609580 ns/iter` for optimized `add`/`neg` composition (`1.773x`). The
 generated-C shape guard passed add, sub, neg, and smul, including an unboxed
 `double` scalar through the smul loop.
+
+The 2026-07-09 packed-unary acceptance run had zero L1 drift across every CGA3
+full/even/odd reverse, grade-involution, and Clifford-conjugation result. Direct
+full kernels measured `327.273750`–`395.760000 ns/iter`, parity reverse and
+conjugation measured `204.964580`–`216.921250 ns/iter`, even involution returned
+its input in `20.438340 ns/iter`, and odd involution used direct negation in
+`51.632500 ns/iter`. Compared with the retained boxed shapes, the nine speedups
+ranged from `33.439x` to `351.206x`. The generated-C guard passed all five unary
+helper loops and all three public involution branches.
 
 See `docs/PackedMVPerformance.md` for the focused PGA3 motor-point profiling
 commands and a current process-level `time -l` footprint snapshot.

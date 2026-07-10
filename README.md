@@ -38,6 +38,8 @@ This gives the project a single Float-oriented multivector type with:
 - parity-aware multiplication,
 - direct-dispatch fast paths for common signatures,
 - borrowed, single-result-buffer `add`, `sub`, `neg`, and Float scalar kernels,
+- borrowed reverse and Clifford-conjugation kernels, plus parity-specialized
+  grade involution that returns even inputs and negates odd inputs directly,
 - standard `Zero`, `Inhabited`, and `SMul Float` interfaces for every parity,
   plus `One` for even and full storage only,
 - an opt-in bridge back to dense `Multivector` values when reference comparisons or proof-oriented code matter more than runtime.
@@ -176,6 +178,7 @@ lake exe packedmvbench all 200
 lake exe packedmvbench pga-motor-point 5000
 lake exe packedmvbench subtraction 250000
 lake exe packedmvbench linear-arithmetic 500000
+lake exe packedmvbench unary-involutions 100000
 ```
 
 The subtraction benchmark compares the borrowed, one-buffer `MV.sub` kernel
@@ -183,13 +186,17 @@ with `MV.add a (MV.neg b)` over 32-coefficient CGA3 full storage. Both component
 kernels are now optimized, but direct subtraction still saves a traversal and
 one result buffer. The linear-arithmetic mode compares the one-buffer add,
 negation, and scalar kernels with their former boxed `Array.range`/`Array.map`
-shape. The thresholded guard checks absolute ceilings and relative speedups.
+shape. The unary-involutions mode does the same for full/even/odd reverse,
+grade involution, and Clifford conjugation. The thresholded guard checks
+absolute ceilings and relative speedups.
 
 `packed_linear_codegen_guard.sh` complements timing with a compiler-structural
 gate. It checks the exact non-boxed generated-C bodies for one final
 `FloatArray`, borrowed inputs, direct unboxed Float operations, one push per
 coefficient, and a tail jump, while excluding legitimate typeclass dictionary
-closures and boxed ABI adapters.
+closures and boxed ABI adapters. It also pins the unary loops and verifies that
+even involution retains and returns its input while odd involution allocates one
+negation result.
 
 The guard thresholds are intentionally conservative but still depend on the
 host and build state; use their environment-variable overrides when establishing
@@ -211,6 +218,15 @@ boxed (`3.478x`). Direct subtraction measured `91.165830 ns/iter` versus
 `161.609580 ns/iter` for the optimized two-buffer composition (`1.773x`). All
 linear preflight comparisons had zero L1 drift, and the generated-C shape guard
 passed all four operations with an unboxed `double` scalar ABI.
+
+The 2026-07-09 packed-unary acceptance run also had zero L1 drift across every
+CGA3 full/even/odd reverse, grade-involution, and Clifford-conjugation result.
+Direct full kernels measured `327.273750`–`395.760000 ns/iter`, parity reverse
+and conjugation measured `204.964580`–`216.921250 ns/iter`, even involution
+returned its input in `20.438340 ns/iter`, and odd involution used direct
+negation in `51.632500 ns/iter`. Compared with the retained boxed shapes, the
+nine speedups ranged from `33.439x` to `351.206x`. The generated-C guard passed
+all five unary helper loops and all three public involution branches.
 
 Other useful entrypoints:
 
