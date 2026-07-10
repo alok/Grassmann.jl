@@ -171,3 +171,203 @@ smul_helper="$(extract_body "$smul_re")"
 require_count 'smul helper ABI' "$smul_helper" 'smulAux(double ' 1
 
 printf 'PASS smul scalar ABI is unboxed double\n'
+
+# Extract one switch arm from an already-extracted function body while
+# respecting nested braces. This pins involute's parity-specific fast paths.
+extract_case_body() {
+  local body="$1"
+  local marker="$2"
+
+  printf '%s\n' "$body" |
+    awk -v marker="$marker" '
+      !seen && $0 ~ "^[[:space:]]*" marker "[[:space:]]*$" {
+        seen = 1
+        print
+        next
+      }
+
+      seen {
+        print
+
+        line = $0
+        opens = gsub(/[\{]/, "{", line)
+
+        line = $0
+        closes = gsub(/[\}]/, "}", line)
+
+        if (opens != 0) inside = 1
+        if (inside) {
+          depth += opens - closes
+          if (depth == 0) exit
+        }
+      }
+    '
+}
+
+require_call_result_return() {
+  local label="$1"
+  local body="$2"
+  local call="$3"
+  local assigned
+  local returned
+
+  assigned="$(
+    printf '%s\n' "$body" |
+      awk -v call="$call" '
+        index($0, call) != 0 {
+          line = $0
+          gsub(/[[:space:]]/, "", line)
+          sub(/=.*/, "", line)
+          print line
+        }
+      '
+  )"
+  returned="$(
+    printf '%s\n' "$body" |
+      awk '
+        {
+          line = $0
+          gsub(/[[:space:]]/, "", line)
+          if (line ~ /^returnx_[0-9]+;$/) {
+            sub(/^return/, "", line)
+            sub(/;$/, "", line)
+            print line
+          }
+        }
+      '
+  )"
+
+  if [[ -z "$assigned" || "$assigned" != "$returned" ]]; then
+    printf 'FAIL %s: helper result %s is not returned directly (return=%s)\n' \
+      "$label" "$assigned" "$returned" >&2
+    exit 1
+  fi
+}
+
+require_retain_return() {
+  local label="$1"
+  local body="$2"
+  local retained
+  local returned
+
+  retained="$(
+    printf '%s\n' "$body" |
+      awk '
+        {
+          line = $0
+          gsub(/[[:space:]]/, "", line)
+          if (line ~ /^lean_inc_ref\(x_[0-9]+\);$/) {
+            sub(/^lean_inc_ref\(/, "", line)
+            sub(/\);$/, "", line)
+            print line
+          }
+        }
+      '
+  )"
+  returned="$(
+    printf '%s\n' "$body" |
+      awk '
+        {
+          line = $0
+          gsub(/[[:space:]]/, "", line)
+          if (line ~ /^returnx_[0-9]+;$/) {
+            sub(/^return/, "", line)
+            sub(/;$/, "", line)
+            print line
+          }
+        }
+      '
+  )"
+
+  if [[ -z "$retained" || "$retained" != "$returned" ]]; then
+    printf 'FAIL %s: retained input %s is not returned directly (return=%s)\n' \
+      "$label" "$retained" "$returned" >&2
+    exit 1
+  fi
+}
+
+helpers=(
+  revFullAux
+  revPackedAux
+  involuteFullAux
+  conjugateFullAux
+  conjugatePackedAux
+)
+packed=(0 1 0 0 1)
+nat_subs=(2 2 1 1 1)
+nat_adds=(1 1 1 2 2)
+nat_muls=(1 1 0 1 1)
+nat_shifts=(1 1 0 1 1)
+
+for ((i = 0; i < ${#helpers[@]}; i++)); do
+  helper_name="${helpers[$i]}"
+  helper_re="^LEAN_EXPORT lean_object[*] .*__Grassmann_MV_${helper_name}[(][^;]*[)] [\{]$"
+
+  if [[ "$(definition_count "$helper_re")" != 1 ]]; then
+    printf 'FAIL %s: expected exactly one non-boxed helper definition\n' \
+      "$helper_name" >&2
+    exit 1
+  fi
+
+  body="$(extract_body "$helper_re")"
+
+  require_count "$helper_name" "$body" lean_float_array_get 1
+  require_count "$helper_name" "$body" lean_float_negate 1
+  require_count "$helper_name" "$body" lean_float_array_push 1
+  require_count "$helper_name" "$body" 'goto _start;' 1
+  require_count "$helper_name" "$body" lp_Grassmann_Grassmann_popcount 1
+  require_count "$helper_name" "$body" lean_nat_mod 1
+  require_count "$helper_name" "$body" lean_nat_dec_eq 2
+  require_count "$helper_name" "$body" lean_nat_sub "${nat_subs[$i]}"
+  require_count "$helper_name" "$body" lean_nat_add "${nat_adds[$i]}"
+  require_count "$helper_name" "$body" lean_nat_mul "${nat_muls[$i]}"
+  require_count "$helper_name" "$body" lean_nat_shiftr "${nat_shifts[$i]}"
+
+  if [[ "${packed[$i]}" == 1 ]]; then
+    require_count "$helper_name" "$body" lean_array_get_size 1
+    require_count "$helper_name" "$body" lean_array_fget_borrowed 1
+    require_count "$helper_name" "$body" lean_nat_dec_lt 1
+  else
+    require_count "$helper_name" "$body" lean_array_get_size 0
+    require_count "$helper_name" "$body" lean_array_fget_borrowed 0
+    require_count "$helper_name" "$body" lean_nat_dec_lt 0
+  fi
+
+  forbid "$helper_name" "$body" \
+    'lean_alloc_|lean_apply_|lean_box|lean_mk_empty_float_array|l_Array_range|Array_(map|fold)|lean_float_array_set|lean_(inc|dec)_ref'
+
+  printf 'PASS %s generated-C loop structure\n' "$helper_name"
+done
+
+involute_re='^LEAN_EXPORT lean_object[*] lp_Grassmann_Grassmann_MV_involute[(][^;]*[)] [\{]$'
+if [[ "$(definition_count "$involute_re")" != 1 ]]; then
+  printf 'FAIL involute: expected exactly one non-boxed public definition\n' >&2
+  exit 1
+fi
+involute_body="$(extract_body "$involute_re")"
+even_body="$(extract_case_body "$involute_body" 'case 0:')"
+odd_body="$(extract_case_body "$involute_body" 'case 1:')"
+full_body="$(extract_case_body "$involute_body" 'default:')"
+
+require_count 'involute even' "$even_body" lean_inc_ref 1
+require_count 'involute even' "$even_body" return 1
+forbid 'involute even' "$even_body" \
+  'lean_mk_empty_float_array|__Grassmann_MV_(negAux|involuteFullAux)[(]|lean_float_array_|lean_alloc_|lean_apply_|lean_box|l_Array_range|Array_(map|fold)'
+require_retain_return 'involute even' "$even_body"
+printf 'PASS involute even directly retains and returns its input without allocation\n'
+
+require_count 'involute odd' "$odd_body" lean_mk_empty_float_array 1
+require_count 'involute odd' "$odd_body" '__Grassmann_MV_negAux(' 1
+require_count 'involute odd' "$odd_body" return 1
+forbid 'involute odd' "$odd_body" \
+  '__Grassmann_MV_involuteFullAux[(]|lean_float_array_(get|push|set)|lean_alloc_|lean_apply_|lean_box|l_Array_range|Array_(map|fold)'
+require_call_result_return 'involute odd' "$odd_body" '__Grassmann_MV_negAux('
+printf 'PASS involute odd allocates once and returns negAux directly\n'
+
+require_count 'involute full' "$full_body" lean_mk_empty_float_array 1
+require_count 'involute full' "$full_body" '__Grassmann_MV_involuteFullAux(' 1
+require_count 'involute full' "$full_body" return 1
+forbid 'involute full' "$full_body" \
+  '__Grassmann_MV_negAux[(]|lean_float_array_(get|push|set)|lean_alloc_|lean_apply_|lean_box|l_Array_range|Array_(map|fold)'
+require_call_result_return 'involute full' "$full_body" '__Grassmann_MV_involuteFullAux('
+printf 'PASS involute full allocates once and returns involuteFullAux directly\n'
