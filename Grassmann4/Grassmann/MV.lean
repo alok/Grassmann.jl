@@ -759,6 +759,17 @@ def add (a b : MV sig p) : MV sig p :=
   let sz := storageSize n p
   ⟨DataArray.ofArray ((Array.range sz).map fun pi => a.coeffs.get! pi + b.coeffs.get! pi)⟩
 
+/-! ### Subtraction -/
+
+/-- Subtract packed multivectors without allocating an intermediate negation. -/
+@[inline]
+def sub (a : @& MV sig p) (b : @& MV sig p) : MV sig p := Id.run do
+  let sz := storageSize n p
+  let mut out := FloatArray.emptyWithCapacity sz
+  for pi in [:sz] do
+    out := out.push (a.coeffs.get! pi - b.coeffs.get! pi)
+  return ⟨out⟩
+
 /-! ### Negation -/
 
 @[inline]
@@ -893,6 +904,9 @@ instance instHMulFloat : HMul Float (MV sig p) (MV sig p) where
 
 instance instAdd : Add (MV sig p) where
   add := add
+
+instance instSub : Sub (MV sig p) where
+  sub := sub
 
 instance instNeg : Neg (MV sig p) where
   neg := neg
