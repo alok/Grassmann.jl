@@ -11,6 +11,7 @@ import Grassmann.StressTests
 import Grassmann.Tests
 import Grassmann.MVArithmeticTests
 import Grassmann.MVUnaryTests
+import Grassmann.MVHodgeTests
 import Grassmann.OracleTests
 import Grassmann.DSLTests
 import Grassmann.PropertyTests
