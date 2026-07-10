@@ -19,9 +19,12 @@ done
 
 smoke_iters="${PACKED_MV_BENCH_SMOKE_ITERS:-200}"
 motor_iters="${PACKED_MV_BENCH_MOTOR_ITERS:-5000}"
+subtraction_iters="${PACKED_MV_BENCH_SUBTRACTION_ITERS:-100000}"
 max_correctness_diff="${MAX_PACKED_MV_CORRECTNESS_DIFF:-1e-6}"
 max_packed_motor_ns="${MAX_PACKED_PGA_MOTOR_POINT_NS:-20000}"
 min_motor_speedup="${MIN_PACKED_PGA_MOTOR_POINT_SPEEDUP:-5}"
+max_packed_subtraction_ns="${MAX_PACKED_MV_SUBTRACTION_NS:-500}"
+min_subtraction_speedup="${MIN_PACKED_MV_SUBTRACTION_SPEEDUP:-3}"
 
 bench_log="${PACKED_MV_BENCH_GUARD_LOG:-}"
 if [[ -z "$bench_log" ]]; then
@@ -136,15 +139,20 @@ write_summary_json() {
     printf '  "thresholds": {\n'
     printf '    "max_correctness_diff": %s,\n' "$max_correctness_diff"
     printf '    "max_packed_motor_ns": %s,\n' "$max_packed_motor_ns"
-    printf '    "min_motor_speedup": %s\n' "$min_motor_speedup"
+    printf '    "min_motor_speedup": %s,\n' "$min_motor_speedup"
+    printf '    "max_packed_subtraction_ns": %s,\n' "$max_packed_subtraction_ns"
+    printf '    "min_subtraction_speedup": %s\n' "$min_subtraction_speedup"
     printf '  },\n'
     printf '  "metrics": {\n'
     printf '    "pga_motor_point_diff": %s,\n' "$motor_point_diff"
     printf '    "dense_motor_point_ns": %s,\n' "$dense_motor_ns"
-    printf '    "packed_motor_point_ns": %s\n' "$packed_motor_ns"
+    printf '    "packed_motor_point_ns": %s,\n' "$packed_motor_ns"
+    printf '    "packed_add_neg_subtraction_ns": %s,\n' "$composed_subtraction_ns"
+    printf '    "packed_direct_subtraction_ns": %s\n' "$direct_subtraction_ns"
     printf '  },\n'
     printf '  "speedups": {\n'
-    printf '    "pga_motor_point": %s\n' "$motor_speedup"
+    printf '    "pga_motor_point": %s,\n' "$motor_speedup"
+    printf '    "packed_subtraction": %s\n' "$subtraction_speedup"
     printf '  }\n'
     printf '}\n'
   } > "$summary_json"
@@ -165,14 +173,27 @@ if ! lake exe packedmvbench pga-motor-point "$motor_iters" >> "$bench_log" 2>&1;
   exit 1
 fi
 
+if ! lake exe packedmvbench subtraction "$subtraction_iters" >> "$bench_log" 2>&1; then
+  printf 'lake exe packedmvbench subtraction failed; benchmark log follows:\n' >&2
+  cat "$bench_log" >&2
+  exit 1
+fi
+
 motor_point_diff="$(get_last_metric "PGA3 motor point transform")"
 dense_motor_ns="$(get_timed_metric "dense motor point transform")"
 packed_motor_ns="$(get_timed_metric "packed MV motor point transform")"
 motor_speedup="$(ratio "$dense_motor_ns" "$packed_motor_ns")"
+composed_subtraction_ns="$(get_timed_metric "packed add-neg subtraction")"
+direct_subtraction_ns="$(get_timed_metric "packed direct subtraction")"
+subtraction_speedup="$(ratio "$composed_subtraction_ns" "$direct_subtraction_ns")"
 
 check_le "PGA3 motor point transform diff" "$motor_point_diff" "$max_correctness_diff" ""
 check_le "Packed PGA3 motor point transform" "$packed_motor_ns" "$max_packed_motor_ns" "ns/iter"
 check_ge "PGA3 motor point transform speedup" "$motor_speedup" "$min_motor_speedup" "x"
+check_le "Packed direct subtraction" "$direct_subtraction_ns" \
+  "$max_packed_subtraction_ns" "ns/iter"
+check_ge "Packed subtraction speedup" "$subtraction_speedup" \
+  "$min_subtraction_speedup" "x"
 
 status="passed"
 if [[ ${#failures[@]} -ne 0 ]]; then
@@ -194,3 +215,5 @@ printf 'benchmark summary: %s\n' "$summary_json"
 printf '  PGA3 motor point diff: %s\n' "$motor_point_diff"
 printf '  PGA3 motor point: %s ns/iter packed vs %s ns/iter dense (%sx)\n' \
   "$packed_motor_ns" "$dense_motor_ns" "$motor_speedup"
+printf '  Packed subtraction: %s ns/iter direct vs %s ns/iter add-neg (%sx)\n' \
+  "$direct_subtraction_ns" "$composed_subtraction_ns" "$subtraction_speedup"

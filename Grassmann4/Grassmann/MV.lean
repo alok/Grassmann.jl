@@ -761,14 +761,21 @@ def add (a b : MV sig p) : MV sig p :=
 
 /-! ### Subtraction -/
 
+/-- Tail-recursive coefficient loop for packed subtraction.
+
+Keeping the loop explicit avoids the closure and per-iteration control objects
+introduced by generic `ForIn` lowering while the unique `FloatArray` is grown
+in place. -/
+private def subAux (a b : @& DataArray) (i : Nat) : Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      subAux a b (i + 1) remaining (out.push (a.get! i - b.get! i))
+
 /-- Subtract packed multivectors without allocating an intermediate negation. -/
 @[inline]
-def sub (a : @& MV sig p) (b : @& MV sig p) : MV sig p := Id.run do
+def sub (a : @& MV sig p) (b : @& MV sig p) : MV sig p :=
   let sz := storageSize n p
-  let mut out := FloatArray.emptyWithCapacity sz
-  for pi in [:sz] do
-    out := out.push (a.coeffs.get! pi - b.coeffs.get! pi)
-  return ⟨out⟩
+  ⟨subAux a.coeffs b.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
 
 /-! ### Negation -/
 

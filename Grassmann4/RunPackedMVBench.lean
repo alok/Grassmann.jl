@@ -12,6 +12,7 @@ namespace Grassmann.PackedMVBench
 def tolerance : Float := 1e-6
 def defaultBaseIters : Nat := 20000
 def defaultMotorPointIters : Nat := 100000
+def defaultSubtractionIters : Nat := 250000
 def defaultXYZBatchPoints : Nat := 4096
 def defaultXYZBatchIters : Nat := 100
 
@@ -156,6 +157,9 @@ def verifyCGA3 : IO Unit := do
   requireApproxDense "CGA3 full right contraction"
     (MV.toMultivector (MV.rightContract pa pb))
     (Multivector.rightContract a b)
+  requireApproxDense "CGA3 packed subtraction"
+    (MV.toMultivector (pa - pb))
+    (a - b)
 
 def verifyCorrectness : IO Unit := do
   IO.println "=== Correctness guard ==="
@@ -201,6 +205,34 @@ def compare (denseName packedName : String) (warmupIters iters : Nat)
 
 def positiveIters (n : Nat) : Nat :=
   if n = 0 then 1 else n
+
+/-- Compare the one-buffer subtraction kernel with the old add-neg composition.
+
+CGA3 full storage exercises 32 contiguous coefficients, the largest standard
+signature in the packed benchmark matrix. -/
+def runPackedSubtraction (iters : Nat := defaultSubtractionIters) : IO Unit := do
+  IO.println "=== CGA3 packed subtraction ==="
+  let samples : Nat := 16
+  let denseA : Array (Multivector CGA3 Float) :=
+    Array.ofFn (n := samples) fun k => denseCGA3 (Float.ofNat (k.val + 1))
+  let denseB : Array (Multivector CGA3 Float) :=
+    Array.ofFn (n := samples) fun k => denseCGA3 (Float.ofNat (k.val + 17))
+  let packedA : Array (MV CGA3 .full) := denseA.map fun m => MV.ofMultivector m .full
+  let packedB : Array (MV CGA3 .full) := denseB.map fun m => MV.ofMultivector m .full
+  let defaultA : MV CGA3 .full := MV.ofMultivector (denseCGA3 1.0) .full
+  let defaultB : MV CGA3 .full := MV.ofMultivector (denseCGA3 2.0) .full
+  let positive := positiveIters iters
+  let warmup := positiveIters (positive / 10)
+  let composedNs ← timeit "packed add-neg subtraction" warmup positive fun i =>
+    let idx := i % samples
+    let a := packedA.getD idx defaultA
+    let b := packedB.getD idx defaultB
+    packedProbe (MV.add a (MV.neg b))
+  let directNs ← timeit "packed direct subtraction" warmup positive fun i =>
+    let idx := i % samples
+    packedProbe (MV.sub (packedA.getD idx defaultA) (packedB.getD idx defaultB))
+  IO.println s!"  speedup: {composedNs / directNs}x"
+  IO.println ""
 
 def runR3 (iters : Nat) : IO Unit := do
   IO.println "=== R3 full packed products ==="
@@ -432,10 +464,11 @@ def runCGA3 (iters : Nat) : IO Unit := do
 
 def runAll (baseIters : Nat := defaultBaseIters) : IO Unit := do
   IO.println "===================================================="
-  IO.println "      Packed MV Exterior/Interior Benchmarks"
+  IO.println "                 Packed MV Benchmarks"
   IO.println "===================================================="
   IO.println ""
   verifyCorrectness
+  runPackedSubtraction (positiveIters baseIters)
   runR3 (positiveIters baseIters)
   runPGA3 (positiveIters (baseIters / 2))
   runPGA3MotorPointTransform (positiveIters (baseIters / 2))
@@ -453,6 +486,7 @@ def usage : String :=
   String.intercalate "\n" [
     "Usage: packedmvbench [base-iters]",
     "       packedmvbench all [base-iters]",
+    "       packedmvbench subtraction [iters]",
     "       packedmvbench pga-motor-point [iters]",
     "       packedmvbench pga-motor-point-dense [iters]",
     "       packedmvbench pga-motor-point-packed [iters]",
@@ -465,6 +499,10 @@ def main (args : List String) : IO Unit := do
   | ["all"] => Grassmann.PackedMVBench.runAll
   | ["all", itersStr] =>
       Grassmann.PackedMVBench.runAll (← parseItersArg itersStr)
+  | ["subtraction"] =>
+      Grassmann.PackedMVBench.runPackedSubtraction
+  | ["subtraction", itersStr] =>
+      Grassmann.PackedMVBench.runPackedSubtraction (← parseItersArg itersStr)
   | ["pga-motor-point"] =>
       Grassmann.PackedMVBench.runPGA3MotorPointTransform
         Grassmann.PackedMVBench.defaultMotorPointIters
