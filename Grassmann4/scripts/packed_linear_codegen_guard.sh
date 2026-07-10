@@ -21,8 +21,10 @@ for tool in lake awk rg; do
   fi
 done
 
-lake_cmd=(lake --dir "$lake_root")
-"${lake_cmd[@]}" build Grassmann.MV
+# Disable Lake's shared artifact cache and request this module's C facet
+# explicitly. A plain module build can report a fetched object without
+# materializing the generated C that this guard must inspect.
+LAKE_CACHE_DIR='' lake --dir "$lake_root" --no-cache build +Grassmann.MV:c
 
 c_file="${MV_C_FILE:-$lake_root/.lake/build/ir/Grassmann/MV.c}"
 if [[ ! -s "$c_file" ]]; then
@@ -371,3 +373,72 @@ forbid 'involute full' "$full_body" \
   '__Grassmann_MV_negAux[(]|lean_float_array_(get|push|set)|lean_alloc_|lean_apply_|lean_box|l_Array_range|Array_(map|fold)'
 require_call_result_return 'involute full' "$full_body" '__Grassmann_MV_involuteFullAux('
 printf 'PASS involute full allocates once and returns involuteFullAux directly\n'
+
+# Hodge dual uses a compact orientation bit stream for dimensions 0--6 and a
+# parity fallback above that boundary. Pin the selector ABI, both tail loops,
+# and the single-allocation public dispatch independently.
+hodge_bits_re='^LEAN_EXPORT uint64_t .*__Grassmann_MV_hodgeDualNegBits[(][^;]*[)] [\{]$'
+hodge_small_re='^LEAN_EXPORT lean_object[*] .*__Grassmann_MV_hodgeDualSmallAux[(][^;]*[)] [\{]$'
+hodge_large_re='^LEAN_EXPORT lean_object[*] .*__Grassmann_MV_hodgeDualLargeAux[(][^;]*[)] [\{]$'
+hodge_public_re='^LEAN_EXPORT lean_object[*] lp_Grassmann_Grassmann_MV_hodgeDual[(][^;]*[)] [\{]$'
+
+for definition in \
+  "$hodge_bits_re" \
+  "$hodge_small_re" \
+  "$hodge_large_re" \
+  "$hodge_public_re"; do
+  if [[ "$(definition_count "$definition")" != 1 ]]; then
+    printf 'FAIL hodge dual: expected exactly one matching non-boxed definition: %s\n' \
+      "$definition" >&2
+    exit 1
+  fi
+done
+
+hodge_bits="$(extract_body "$hodge_bits_re")"
+hodge_small="$(extract_body "$hodge_small_re")"
+hodge_large="$(extract_body "$hodge_large_re")"
+hodge_public="$(extract_body "$hodge_public_re")"
+
+require_count 'hodge sign selector' "$hodge_bits" lean_nat_dec_eq 7
+require_count 'hodge sign selector ABI' "$hodge_bits" \
+  'LEAN_EXPORT uint64_t ' 1
+forbid 'hodge sign selector' "$hodge_bits" \
+  'lean_alloc_|lean_apply_|lean_box|lean_mk_empty_float_array|lean_float_array_|l_Array_range|Array_(map|fold)|lean_array_|BitVec|pseudoscalar|nat_lxor|leftComplementSign|lean_(inc|dec)_ref'
+printf 'PASS hodge sign selector is unboxed UInt64\n'
+
+require_count 'hodge small helper ABI' "$hodge_small" \
+  'hodgeDualSmallAux(lean_object*' 1
+require_count 'hodge small helper ABI' "$hodge_small" \
+  'uint64_t x_2, lean_object* x_3' 1
+require_count 'hodge small helper' "$hodge_small" lean_float_array_get 1
+require_count 'hodge small helper' "$hodge_small" lean_uint64_land 1
+require_count 'hodge small helper' "$hodge_small" lean_uint64_dec_eq 1
+require_count 'hodge small helper' "$hodge_small" lean_float_negate 1
+require_count 'hodge small helper' "$hodge_small" lean_uint64_shift_right 1
+require_count 'hodge small helper' "$hodge_small" lean_nat_sub 1
+require_count 'hodge small helper' "$hodge_small" lean_float_array_push 1
+require_count 'hodge small helper' "$hodge_small" 'goto _start;' 1
+forbid 'hodge small helper' "$hodge_small" \
+  'lean_alloc_|lean_apply_|lean_box|lean_mk_empty_float_array|l_Array_range|Array_(map|fold)|lean_array_|lean_float_array_set|BitVec|pseudoscalar|nat_lxor|leftComplementSign|parityJoinBasic|lean_(inc|dec)_ref'
+printf 'PASS hodge small-dimension generated-C loop structure\n'
+
+require_count 'hodge large helper' "$hodge_large" lean_float_array_get 1
+require_count 'hodge large helper' "$hodge_large" parityJoinBasic 1
+require_count 'hodge large helper' "$hodge_large" lean_float_negate 1
+require_count 'hodge large helper' "$hodge_large" lean_nat_sub 1
+require_count 'hodge large helper' "$hodge_large" lean_nat_add 1
+require_count 'hodge large helper' "$hodge_large" lean_float_array_push 1
+require_count 'hodge large helper' "$hodge_large" 'goto _start;' 1
+forbid 'hodge large helper' "$hodge_large" \
+  'lean_alloc_|lean_apply_|lean_box|lean_mk_empty_float_array|l_Array_range|Array_(map|fold)|lean_array_|lean_float_array_set|BitVec|pseudoscalar|nat_lxor|leftComplementSign|lean_(inc|dec)_ref'
+printf 'PASS hodge large-dimension generated-C loop structure\n'
+
+require_count 'hodge public' "$hodge_public" lean_nat_pow 1
+require_count 'hodge public' "$hodge_public" lean_mk_empty_float_array 1
+require_count 'hodge public' "$hodge_public" lean_nat_dec_le 1
+require_count 'hodge public' "$hodge_public" '__Grassmann_MV_hodgeDualNegBits(' 1
+require_count 'hodge public' "$hodge_public" '__Grassmann_MV_hodgeDualSmallAux(' 1
+require_count 'hodge public' "$hodge_public" '__Grassmann_MV_hodgeDualLargeAux(' 1
+forbid 'hodge public' "$hodge_public" \
+  'lean_alloc_|lean_apply_|lean_box|l_Array_range|Array_(map|fold)|lean_array_|lean_float_array_(get|push|set)|BitVec|pseudoscalar|nat_lxor|leftComplementSign|lean_(inc|dec)_ref'
+printf 'PASS hodge public dispatch allocates one result buffer\n'
