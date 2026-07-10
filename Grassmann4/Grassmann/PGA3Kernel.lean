@@ -219,10 +219,77 @@ def oddEvenMul (a : @& FloatArray) (b : @& FloatArray) : FloatArray :=
     |>.push c6
     |>.push c7
 
-/-- Apply a native packed motor via the sandwich product `motor * point * reverse motor`. -/
+/--
+Apply a native packed motor to any packed odd PGA3 multivector.
+
+This is the scalarized form of `motor * odd * reverse motor`. It preserves the
+operation order of `evenOddMul` followed by `oddEvenMul`, but keeps the
+intermediate coefficients in locals and allocates only the final array.
+-/
+@[inline, always_inline]
+def motorSandwichOdd (motor : @& FloatArray) (odd : @& FloatArray) : FloatArray :=
+  let m0 := motor.get! 0
+  let m1 := motor.get! 1
+  let m2 := motor.get! 2
+  let m3 := motor.get! 3
+  let m4 := motor.get! 4
+  let m5 := motor.get! 5
+  let m6 := motor.get! 6
+  let m7 := motor.get! 7
+  let p0 := odd.get! 0
+  let p1 := odd.get! 1
+  let p2 := odd.get! 2
+  let p3 := odd.get! 3
+  let p4 := odd.get! 4
+  let p5 := odd.get! 5
+  let p6 := odd.get! 6
+  let p7 := odd.get! 7
+  let t0 := m0 * p0 + m1 * p1 + m2 * p2 - m3 * p3
+  let t1 := m0 * p1 - m1 * p0 + m2 * p3 + m3 * p2
+  let t2 := m0 * p2 - m1 * p3 - m2 * p0 - m3 * p1
+  let t3 := m0 * p3 + m1 * p2 - m2 * p1 + m3 * p0
+  let t4 := m0 * p4 - m1 * p5 - m2 * p6 - m3 * p7
+    - m4 * p0 - m5 * p1 - m6 * p2 + m7 * p3
+  let t5 := m0 * p5 + m1 * p4 - m2 * p7 + m3 * p6
+    - m4 * p1 + m5 * p0 - m6 * p3 - m7 * p2
+  let t6 := m0 * p6 + m1 * p7 + m2 * p4 - m3 * p5
+    - m4 * p2 + m5 * p3 + m6 * p0 + m7 * p1
+  let t7 := m0 * p7 - m1 * p6 + m2 * p5 + m3 * p4
+    - m4 * p3 - m5 * p2 + m6 * p1 - m7 * p0
+  let r0 := m0
+  let r1 := -m1
+  let r2 := -m2
+  let r3 := -m3
+  let r4 := -m4
+  let r5 := -m5
+  let r6 := -m6
+  let r7 := m7
+  let c0 := t0 * r0 - t1 * r1 - t2 * r2 - t3 * r3
+  let c1 := t0 * r1 + t1 * r0 - t2 * r3 + t3 * r2
+  let c2 := t0 * r2 + t1 * r3 + t2 * r0 - t3 * r1
+  let c3 := t0 * r3 - t1 * r2 + t2 * r1 + t3 * r0
+  let c4 := t0 * r4 + t1 * r5 + t2 * r6 - t3 * r7
+    + t4 * r0 - t5 * r1 - t6 * r2 - t7 * r3
+  let c5 := t0 * r5 - t1 * r4 + t2 * r7 + t3 * r6
+    + t4 * r1 + t5 * r0 - t6 * r3 + t7 * r2
+  let c6 := t0 * r6 - t1 * r7 - t2 * r4 - t3 * r5
+    + t4 * r2 + t5 * r3 + t6 * r0 - t7 * r1
+  let c7 := t0 * r7 + t1 * r6 - t2 * r5 + t3 * r4
+    + t4 * r3 - t5 * r2 + t6 * r1 + t7 * r0
+  FloatArray.emptyWithCapacity 8
+    |>.push c0
+    |>.push c1
+    |>.push c2
+    |>.push c3
+    |>.push c4
+    |>.push c5
+    |>.push c6
+    |>.push c7
+
+/-- Apply a native packed motor to a packed PGA3 point. -/
 @[inline, always_inline]
 def motorApplyPoint (motor : @& FloatArray) (p : @& FloatArray) : FloatArray :=
-  oddEvenMul (evenOddMul motor p) (motorReverse motor)
+  motorSandwichOdd motor p
 
 /-- Extract Euclidean coordinates from a native packed point. -/
 @[inline, always_inline]

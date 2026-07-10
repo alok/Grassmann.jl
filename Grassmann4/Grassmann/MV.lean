@@ -911,14 +911,30 @@ abbrev Vec' {n : ℕ} (sig : Signature n) := MV sig .odd
 
 /-! ## Sandwich Product for MV -/
 
-/-- Sandwich product: R * x * R† (rotation/reflection) -/
-@[inline]
-def mvSandwich {n : ℕ} {sig : Signature n} {p : Parity}
+@[inline, always_inline]
+private def mvSandwichGeneric {n : ℕ} {sig : Signature n} {p : Parity}
     (R : MV sig .even) (x : MV sig p) : MV sig p :=
   -- R * x gives parity (even * p) = p
   -- (R * x) * R† gives parity (p * even) = p
   let Rx : MV sig p := ⟨MV.mulKernelDirect sig .even p R.coeffs x.coeffs⟩
   ⟨MV.mulKernelDirect sig p .even Rx.coeffs (MV.rev R).coeffs⟩
+
+/-- Sandwich product: `R * x * R†` (rotation/reflection).
+
+PGA3 odd multivectors use the shared scalarized kernel, which covers both
+points and planes without materializing the intermediate product or reverse.
+-/
+@[inline, always_inline]
+def mvSandwich {n : ℕ} {sig : Signature n} {p : Parity}
+    (R : MV sig .even) (x : MV sig p) : MV sig p :=
+  match p with
+  | .odd =>
+    if n == 4 && sig.metric.toNat == 0 && sig.degenerate.toNat == 8 then
+      ⟨PGA3Kernel.motorSandwichOdd R.coeffs x.coeffs⟩
+    else
+      mvSandwichGeneric R x
+  | .even => mvSandwichGeneric R x
+  | .full => mvSandwichGeneric R x
 
 /-! ## PGA Subtypes
 

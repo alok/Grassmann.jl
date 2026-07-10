@@ -18,6 +18,12 @@ private def maxAbsDiff (a b : FloatArray) : Float :=
 private def basisPacked (index : Nat) : FloatArray :=
   PGA3Kernel.zero.set! index 1.0
 
+private def composedMotorSandwichOdd
+    (motor : FloatArray) (odd : FloatArray) : FloatArray :=
+  PGA3Kernel.oddEvenMul
+    (PGA3Kernel.evenOddMul motor odd)
+    (PGA3Kernel.motorReverse motor)
+
 private def coordsApproxEq (a b : Coord3) (tol : Float := tolerance) : Bool :=
   Float.abs (a.1 - b.1) ≤ tol &&
     Float.abs (a.2.1 - b.2.1) ≤ tol &&
@@ -72,6 +78,18 @@ private def checkMotorMulBasis : IO Unit := do
       requireArrays s!"oddEvenMul/generic basis pair ({i}, {j})"
         oddEvenResult (MV.mulKernelGeneric PGA3 .odd .even a b)
         0.0
+      requireArrays s!"motorSandwichOdd/composed basis pair ({i}, {j})"
+        (PGA3Kernel.motorSandwichOdd a b)
+        (composedMotorSandwichOdd a b)
+        0.0
+      let packedMotor :=
+        (MV.ofDataArray? PGA3 .even a).getD (MV.zero PGA3 .even)
+      let packedOdd :=
+        (MV.ofDataArray? PGA3 .odd b).getD (MV.zero PGA3 .odd)
+      requireArrays s!"mvSandwich/composed basis pair ({i}, {j})"
+        (mvSandwich packedMotor packedOdd).coeffs
+        (composedMotorSandwichOdd a b)
+        0.0
   let a := PGA3Kernel.zero
     |>.set! 0 1.25
     |>.set! 1 (-2.0)
@@ -112,6 +130,18 @@ private def checkMotorMulBasis : IO Unit := do
   requireArrays "oddEvenMul mixed coefficients versus generic"
     (PGA3Kernel.oddEvenMul a b)
     (MV.mulKernelGeneric PGA3 .odd .even a b)
+  requireArrays "motorSandwichOdd mixed coefficients versus composed"
+    (PGA3Kernel.motorSandwichOdd a b)
+    (composedMotorSandwichOdd a b)
+    0.0
+  let packedMotor :=
+    (MV.ofDataArray? PGA3 .even a).getD (MV.zero PGA3 .even)
+  let packedOdd :=
+    (MV.ofDataArray? PGA3 .odd b).getD (MV.zero PGA3 .odd)
+  requireArrays "mvSandwich mixed coefficients versus composed"
+    (mvSandwich packedMotor packedOdd).coeffs
+    (composedMotorSandwichOdd a b)
+    0.0
 
 private def checkTranslation : IO Unit := do
   let expected : Coord3 := (5.0, 7.0, 9.0)
