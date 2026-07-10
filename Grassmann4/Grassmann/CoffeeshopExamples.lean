@@ -571,9 +571,9 @@ def writeMandelbrotBoundarySVG : IO Unit := do
   IO.println s!"Saved {pts.size} boundary points to {svgPath}"
 
 /-!
-Uncomment to (re)generate the example outputs.
-
-⚠️ Note: use `#eval!` because this project uses `sorry_proof` for Float algebra instances.
+Uncomment to (re)generate the example outputs. The commands write files;
+`#eval!` is retained only for the image pipeline's unsafe implementation, not
+for Float algebra axioms.
 -/
 -- #eval! writeMandelbrotPNG
 -- #eval! writeMandelbrotBoundarySVG

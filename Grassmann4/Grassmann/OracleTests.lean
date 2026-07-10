@@ -314,7 +314,8 @@ v3 × v1 = v2
 
 section CrossProductOracle
 
--- e1 × e2 = e3 (disabled: depends on Float Ring sorry)
+-- Illustrative cross-product evaluations (asserted by the property/oracle runners).
+-- e1 × e2 = e3
 -- #eval let c := cross
 --         (Multivector.ofBlade (e1 : Blade R3) : Multivector R3 Float)
 --         (Multivector.ofBlade (e2 : Blade R3))
@@ -348,7 +349,8 @@ det([a b c]) = (a ∧ b ∧ c) / (v1 ∧ v2 ∧ v3)
 
 section DeterminantOracle
 
--- Identity matrix det = 1 (disabled: depends on Float Ring sorry)
+-- Illustrative determinant evaluations (asserted by the property/oracle runners).
+-- Identity matrix det = 1
 -- #eval let v1 : Multivector R3 Float := Multivector.ofBlade (e1 : Blade R3)
 --       let v2 : Multivector R3 Float := Multivector.ofBlade (e2 : Blade R3)
 --       let v3 : Multivector R3 Float := Multivector.ofBlade (e3 : Blade R3)
