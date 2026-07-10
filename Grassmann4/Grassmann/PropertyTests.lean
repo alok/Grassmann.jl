@@ -264,6 +264,25 @@ def packedApproxEq {n : Nat} {sig : Signature n} {p : Parity}
     (a b : MV sig p) (tol : Float := 1e-9) : Bool :=
   denseMvApproxEq (MV.toMultivector a) (MV.toMultivector b) tol
 
+/-- Packed named operations and standard notation agree with dense linear arithmetic. -/
+def packedLinearOpsMatchDense {n : Nat} {sig : Signature n} {p : Parity}
+    (packedA packedB : MV sig p)
+    (denseA denseB : Multivector sig Float)
+    (scale : Float) (tol : Float := 1e-9) : Bool :=
+  let denseAdd := Multivector.add denseA denseB
+  let denseSub := Multivector.sub denseA denseB
+  let denseNeg := Multivector.neg denseA
+  let denseSmul := Multivector.smul scale denseA
+  packedMatchesDense (MV.add packedA packedB) denseAdd tol &&
+    packedMatchesDense (packedA + packedB) denseAdd tol &&
+    packedMatchesDense (MV.sub packedA packedB) denseSub tol &&
+    packedMatchesDense (packedA - packedB) denseSub tol &&
+    packedMatchesDense (MV.neg packedA) denseNeg tol &&
+    packedMatchesDense (-packedA) denseNeg tol &&
+    packedMatchesDense (MV.smul scale packedA) denseSmul tol &&
+    packedMatchesDense (scale • packedA) denseSmul tol &&
+    packedMatchesDense (scale * packedA) denseSmul tol
+
 /-- Dense reference for a user-facing `MV.setCoeff` write.
 
 Packed `MV` storage ignores masks outside the selected parity, while its dense view
@@ -939,11 +958,7 @@ def prop_mv_full_linear_ops_dense : Gen Bool := do
   let packedA : MV R3 .full := MV.ofMultivector a.mv .full
   let packedB : MV R3 .full := MV.ofMultivector b.mv .full
   let scale : Float := 2.5
-  return packedMatchesDense (packedA + packedB) (a.mv + b.mv) &&
-    packedMatchesDense (MV.sub packedA packedB) (Multivector.sub a.mv b.mv) &&
-    packedMatchesDense (packedA - packedB) (a.mv - b.mv) &&
-    packedMatchesDense (-packedA) (-a.mv) &&
-    packedMatchesDense (scale * packedA) (a.mv.smul scale)
+  return packedLinearOpsMatchDense packedA packedB a.mv b.mv scale
 
 /-- Even packed `MV` linear operations agree with dense references. -/
 def prop_mv_even_linear_ops_dense : Gen Bool := do
@@ -954,11 +969,7 @@ def prop_mv_even_linear_ops_dense : Gen Bool := do
   let packedA : MV R3 .even := MV.ofMultivector denseA .even
   let packedB : MV R3 .even := MV.ofMultivector denseB .even
   let scale : Float := -3.0
-  return packedMatchesDense (packedA + packedB) (denseA + denseB) &&
-    packedMatchesDense (MV.sub packedA packedB) (Multivector.sub denseA denseB) &&
-    packedMatchesDense (packedA - packedB) (denseA - denseB) &&
-    packedMatchesDense (-packedA) (-denseA) &&
-    packedMatchesDense (scale * packedA) (denseA.smul scale)
+  return packedLinearOpsMatchDense packedA packedB denseA denseB scale
 
 /-- Odd packed `MV` linear operations agree with dense references. -/
 def prop_mv_odd_linear_ops_dense : Gen Bool := do
@@ -969,11 +980,7 @@ def prop_mv_odd_linear_ops_dense : Gen Bool := do
   let packedA : MV R3 .odd := MV.ofMultivector denseA .odd
   let packedB : MV R3 .odd := MV.ofMultivector denseB .odd
   let scale : Float := 0.25
-  return packedMatchesDense (packedA + packedB) (denseA + denseB) &&
-    packedMatchesDense (MV.sub packedA packedB) (Multivector.sub denseA denseB) &&
-    packedMatchesDense (packedA - packedB) (denseA - denseB) &&
-    packedMatchesDense (-packedA) (-denseA) &&
-    packedMatchesDense (scale * packedA) (denseA.smul scale)
+  return packedLinearOpsMatchDense packedA packedB denseA denseB scale
 
 /-- Full packed `MV` projectors agree with dense even/odd projection. -/
 def prop_mv_full_projectors_dense : Gen Bool := do
@@ -1342,11 +1349,7 @@ def prop_mv_pga3_full_linear_ops_dense : Gen Bool := do
   let packedA : MV PGA3 .full := MV.ofMultivector a.mv .full
   let packedB : MV PGA3 .full := MV.ofMultivector b.mv .full
   let scale : Float := 1.75
-  return packedMatchesDense (packedA + packedB) (a.mv + b.mv) &&
-    packedMatchesDense (MV.sub packedA packedB) (Multivector.sub a.mv b.mv) &&
-    packedMatchesDense (packedA - packedB) (a.mv - b.mv) &&
-    packedMatchesDense (-packedA) (-a.mv) &&
-    packedMatchesDense (scale * packedA) (a.mv.smul scale)
+  return packedLinearOpsMatchDense packedA packedB a.mv b.mv scale
 
 /-- PGA3 even packed `MV` linear operations agree with dense references. -/
 def prop_mv_pga3_even_linear_ops_dense : Gen Bool := do
@@ -1357,11 +1360,7 @@ def prop_mv_pga3_even_linear_ops_dense : Gen Bool := do
   let packedA : MV PGA3 .even := MV.ofMultivector denseA .even
   let packedB : MV PGA3 .even := MV.ofMultivector denseB .even
   let scale : Float := -2.25
-  return packedMatchesDense (packedA + packedB) (denseA + denseB) &&
-    packedMatchesDense (MV.sub packedA packedB) (Multivector.sub denseA denseB) &&
-    packedMatchesDense (packedA - packedB) (denseA - denseB) &&
-    packedMatchesDense (-packedA) (-denseA) &&
-    packedMatchesDense (scale * packedA) (denseA.smul scale)
+  return packedLinearOpsMatchDense packedA packedB denseA denseB scale
 
 /-- PGA3 odd packed `MV` linear operations agree with dense references. -/
 def prop_mv_pga3_odd_linear_ops_dense : Gen Bool := do
@@ -1372,11 +1371,7 @@ def prop_mv_pga3_odd_linear_ops_dense : Gen Bool := do
   let packedA : MV PGA3 .odd := MV.ofMultivector denseA .odd
   let packedB : MV PGA3 .odd := MV.ofMultivector denseB .odd
   let scale : Float := 0.5
-  return packedMatchesDense (packedA + packedB) (denseA + denseB) &&
-    packedMatchesDense (MV.sub packedA packedB) (Multivector.sub denseA denseB) &&
-    packedMatchesDense (packedA - packedB) (denseA - denseB) &&
-    packedMatchesDense (-packedA) (-denseA) &&
-    packedMatchesDense (scale * packedA) (denseA.smul scale)
+  return packedLinearOpsMatchDense packedA packedB denseA denseB scale
 
 /-- PGA3 full packed `MV` projectors agree with dense even/odd projection. -/
 def prop_mv_pga3_full_projectors_dense : Gen Bool := do
@@ -2021,11 +2016,7 @@ def prop_mv_cga3_full_linear_ops_dense : Gen Bool := do
   let packedA : MV CGA3 .full := MV.ofMultivector a.mv .full
   let packedB : MV CGA3 .full := MV.ofMultivector b.mv .full
   let scale : Float := 1.75
-  return packedMatchesDense (packedA + packedB) (a.mv + b.mv) &&
-    packedMatchesDense (MV.sub packedA packedB) (Multivector.sub a.mv b.mv) &&
-    packedMatchesDense (packedA - packedB) (a.mv - b.mv) &&
-    packedMatchesDense (-packedA) (-a.mv) &&
-    packedMatchesDense (scale * packedA) (a.mv.smul scale)
+  return packedLinearOpsMatchDense packedA packedB a.mv b.mv scale
 
 /-- CGA3 even packed `MV` linear operations agree with dense references. -/
 def prop_mv_cga3_even_linear_ops_dense : Gen Bool := do
@@ -2036,11 +2027,7 @@ def prop_mv_cga3_even_linear_ops_dense : Gen Bool := do
   let packedA : MV CGA3 .even := MV.ofMultivector denseA .even
   let packedB : MV CGA3 .even := MV.ofMultivector denseB .even
   let scale : Float := -2.25
-  return packedMatchesDense (packedA + packedB) (denseA + denseB) &&
-    packedMatchesDense (MV.sub packedA packedB) (Multivector.sub denseA denseB) &&
-    packedMatchesDense (packedA - packedB) (denseA - denseB) &&
-    packedMatchesDense (-packedA) (-denseA) &&
-    packedMatchesDense (scale * packedA) (denseA.smul scale)
+  return packedLinearOpsMatchDense packedA packedB denseA denseB scale
 
 /-- CGA3 odd packed `MV` linear operations agree with dense references. -/
 def prop_mv_cga3_odd_linear_ops_dense : Gen Bool := do
@@ -2051,11 +2038,7 @@ def prop_mv_cga3_odd_linear_ops_dense : Gen Bool := do
   let packedA : MV CGA3 .odd := MV.ofMultivector denseA .odd
   let packedB : MV CGA3 .odd := MV.ofMultivector denseB .odd
   let scale : Float := 0.5
-  return packedMatchesDense (packedA + packedB) (denseA + denseB) &&
-    packedMatchesDense (MV.sub packedA packedB) (Multivector.sub denseA denseB) &&
-    packedMatchesDense (packedA - packedB) (denseA - denseB) &&
-    packedMatchesDense (-packedA) (-denseA) &&
-    packedMatchesDense (scale * packedA) (denseA.smul scale)
+  return packedLinearOpsMatchDense packedA packedB denseA denseB scale
 
 /-- CGA3 full packed `MV` projectors agree with dense even/odd projection. -/
 def prop_mv_cga3_full_projectors_dense : Gen Bool := do

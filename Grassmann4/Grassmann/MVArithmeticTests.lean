@@ -35,13 +35,31 @@ private def checkSubtraction {n : Nat} {sig : Signature n} {p : Parity}
     matchesDenseSubtraction a b direct &&
     matchesDenseSubtraction a b operator
 
+/-- Check named and notation dispatch for the remaining basic linear operations. -/
+private def checkLinearSurface {n : Nat} {sig : Signature n} {p : Parity}
+    (a b : MV sig p) (scale : Float) : Bool :=
+  let namedAdd := MV.add a b
+  let notationAdd := a + b
+  let namedNeg := MV.neg a
+  let notationNeg := -a
+  let namedSmul := MV.smul scale a
+  let notationSmul := scale • a
+  let legacySmul := scale * a
+  namedAdd.isWellFormed && notationAdd.isWellFormed &&
+    namedNeg.isWellFormed && notationNeg.isWellFormed &&
+    namedSmul.isWellFormed && notationSmul.isWellFormed && legacySmul.isWellFormed &&
+    packedCoefficientsEqual namedAdd notationAdd &&
+    packedCoefficientsEqual namedNeg notationNeg &&
+    packedCoefficientsEqual namedSmul notationSmul &&
+    packedCoefficientsEqual namedSmul legacySmul
+
 /-! ## Representative layouts and signatures -/
 
 /- The R2 odd layout used by the MV-backed curve-shortening port. -/
 #guard
   let a : MV R2 .odd := MV.ofPairs R2 .odd [(1, 7.5), (2, -3.0)]
   let b : MV R2 .odd := MV.ofPairs R2 .odd [(1, 2.5), (2, 4.0)]
-  checkSubtraction a b [(1, 5.0), (2, -7.0)]
+  checkSubtraction a b [(1, 5.0), (2, -7.0)] && checkLinearSurface a b 2.0
 
 /- Full R3 storage checks every one of its eight blade slots. -/
 #guard
@@ -53,7 +71,8 @@ private def checkSubtraction {n : Nat} {sig : Signature n} {p : Parity}
      (4, -2.0), (5, 0.25), (6, 4.0), (7, 2.5)]
   checkSubtraction a b
     [(0, 7.0), (1, -7.0), (2, 8.0), (3, 2.0),
-     (4, -6.0), (5, 3.0), (6, 8.0), (7, -4.0)]
+     (4, -6.0), (5, 3.0), (6, 8.0), (7, -4.0)] &&
+    checkLinearSurface a b (-0.5)
 
 /- Packed PGA3 even storage checks all scalar, bivector, and pseudoscalar slots. -/
 #guard
@@ -65,7 +84,8 @@ private def checkSubtraction {n : Nat} {sig : Signature n} {p : Parity}
      (9, 2.0), (10, -2.0), (12, 9.0), (15, -4.0)]
   checkSubtraction a b
     [(0, 2.0), (3, 1.5), (5, -2.0), (6, -6.0),
-     (9, 3.0), (10, -4.0), (12, -2.0), (15, 12.0)]
+     (9, 3.0), (10, -4.0), (12, -2.0), (15, 12.0)] &&
+    checkLinearSurface a b 3.0
 
 /- The sixteen-slot CGA3 odd layout exercises the largest cached pack map. -/
 #guard
@@ -83,6 +103,47 @@ private def checkSubtraction {n : Nat} {sig : Signature n} {p : Parity}
     [(1, 15.0), (2, -13.0), (4, 11.0), (7, -9.0),
      (8, 7.0), (11, -5.0), (13, 3.0), (14, -1.0),
      (16, -1.0), (19, 3.0), (21, -5.0), (22, 7.0),
-     (25, -9.0), (26, 11.0), (28, -13.0), (31, 15.0)]
+     (25, -9.0), (26, 11.0), (28, -13.0), (31, 15.0)] &&
+    checkLinearSurface a b 0.25
+
+/-! ## Standard instance surface -/
+
+/- Zero notation and `default` produce well-formed packed zeros for every parity. -/
+#guard
+  let fullZero : MV R3 .full := 0
+  let evenZero : MV PGA3 .even := 0
+  let oddZero : MV CGA3 .odd := 0
+  let fullDefault : MV R3 .full := default
+  let evenDefault : MV PGA3 .even := default
+  let oddDefault : MV CGA3 .odd := default
+  fullZero.isWellFormed && evenZero.isWellFormed && oddZero.isWellFormed &&
+    packedCoefficientsEqual fullZero (MV.zero R3 .full) &&
+    packedCoefficientsEqual evenZero (MV.zero PGA3 .even) &&
+    packedCoefficientsEqual oddZero (MV.zero CGA3 .odd) &&
+    packedCoefficientsEqual fullDefault fullZero &&
+    packedCoefficientsEqual evenDefault evenZero &&
+    packedCoefficientsEqual oddDefault oddZero
+
+/- Scalar identity is representable in even and full storage. -/
+#guard
+  let evenOne : MV PGA3 .even := 1
+  let fullOne : MV R3 .full := 1
+  let evenValue : MV PGA3 .even :=
+    MV.ofPairs PGA3 .even [(0, 2.0), (3, -1.0), (15, 0.5)]
+  let fullValue : MV R3 .full :=
+    MV.ofPairs R3 .full [(0, -2.0), (1, 3.0), (6, 4.0), (7, -0.25)]
+  evenOne.isWellFormed && fullOne.isWellFormed &&
+    packedCoefficientsEqual evenOne (MV.one PGA3) &&
+    evenOne.scalarPart == 1.0 && fullOne.scalarPart == 1.0 &&
+    packedCoefficientsEqual (evenOne * evenValue) evenValue &&
+    packedCoefficientsEqual (evenValue * evenOne) evenValue &&
+    packedCoefficientsEqual (fullOne * fullValue) fullValue &&
+    packedCoefficientsEqual (fullValue * fullOne) fullValue
+
+/- Odd storage cannot represent the scalar multiplicative identity. -/
+example : True := by
+  fail_if_success
+    let _ := (inferInstance : One (MV R3 .odd))
+  trivial
 
 end Grassmann.MVArithmeticTests
