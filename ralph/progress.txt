@@ -355,4 +355,70 @@ NEXT
 3. Add deterministic all-slot unary/projector regressions before optimizing the
    remaining Hodge, grade-projection, parity-projection, and widening paths.
 
+2026-07-09 ALOK-767 PACKED UNARY KERNELS STARTED
+
+- Closed ALOK-766 in Linear after commit `18c349f` and moved to branch
+  `codex/alok-767-packed-unary`.
+- Created high-priority Linear issue ALOK-767, "Optimize packed index decoding
+  and unary involutions".
+- Read-only source and native prototype audits found boxed
+  `Array.range`/`Array.map` paths in reverse, involute, conjugate, Hodge dual,
+  projectors, grade projection, widening, and dense conversion.
+- The bounded first target is reverse/involute/conjugate. CGA3 native prototypes
+  were roughly 31x-43x faster for nontrivial unary loops; even involution can
+  return its immutable input without allocating, and odd involution can use the
+  new negation kernel.
+- `unpackIdx` also consults a parity-index array for full storage even though
+  full packing is identity. A monomorphic CGA3 full multiplication prototype
+  improved from about 4.18 us to 3.05 us when that lookup was removed.
+
+NEXT
+
+1. Land and exactly guard the valid full-storage identity decode.
+2. Strengthen packed buffer/all-slot unary regressions before rewriting kernels.
+3. Land borrowed unary loops, generated-C gates, and permanent benchmarks.
+
+2026-07-09 ALOK-767 PACKED UNARY KERNELS COMPLETE
+
+- `442828d` makes valid full-storage unpacking the direct blade-mask identity.
+  `52b8583` adds deterministic all-slot CGA3 full/even/odd checks, the R2 odd
+  curve layout, buffer invariants, involution laws, and public wrapper dispatch.
+- `5eb50b7` replaces boxed range/map reverse and Clifford conjugation with
+  borrowed one-buffer tail loops. Full grade involution uses the same shape,
+  even involution retains and returns its immutable input, and odd involution
+  delegates to the optimized negation loop.
+- `e097474` adds permanent 100,000-iteration CGA3 unary comparisons and strict
+  layout-specific thresholds. All nine preflights had zero L1 drift. Direct
+  full operations measured 327.273750-395.760000 ns, parity reverse/conjugation
+  204.964580-216.921250 ns, even involution 20.438340 ns, and odd involution
+  51.632500 ns; speedups over the retained boxed shapes were 33.439x-351.206x.
+- `c006ddb` pins the generated-C loop shape for all five unary helpers and the
+  three public involution branches. `532a08c` documents the runtime contract,
+  thresholds, structural checks, and measured results.
+- Canonical build passed 483 jobs; `Grassmann.All` passed 626; dirty
+  CurveShortening passed 478; the explicit Reference/soundness/theorem/All
+  matrix passed 633. The full runtime suite passed 302/302 named groups and
+  20,951 cases, followed by all 6 optimization categories and 600 cases.
+- Fixed packed kernels, fat dot, Init-only PGA3 kernels, and the 12-example
+  Julia visual/numeric oracle passed. All 40 numeric witnesses had zero observed
+  error and the maximum visual normalized RMSE was 0.15394 below the 0.25 gate.
+- C ABI v1.1 smoke passed with 100,000 ownership iterations / 900,000 consuming
+  calls in 170.6 ms. Boundary copies were 13.5 ns and 18.9 ns; the 4,096-point
+  batch took 31.6 us versus 301.8 us scalar, a 9.56x speedup.
+- The core guard retained zero checked drift: rotor 121.700410 ns (315.3x
+  dense), sandwich 98.163750 ns (1170.5x), motor 429.302080 ns, and analytic
+  gradient 732.027090 ns (7.9x finite difference). The packed guard retained
+  the linear-kernel thresholds and measured the PGA3 point path at 641.385x
+  dense.
+- All unrelated dirty curve, optimizer, physics, Metal, Unreal, SciLean-AD,
+  nested-workspace, and Lake edits remain unstaged and uncommitted.
+
+NEXT
+
+1. Replace boxed full-storage Hodge dual with a borrowed one-buffer kernel using
+   the existing cached sign table and complementary blade index.
+2. Give Hodge its own deterministic all-slot and named randomized oracle checks,
+   then pin timing and generated-C structure.
+3. Continue with grade/parity projection, widening, and dense-conversion loops.
+
 <promise>COMPLETE</promise>

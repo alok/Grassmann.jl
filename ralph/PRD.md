@@ -230,3 +230,28 @@ linear kernels and fills their standard Lean runtime interfaces.
 
 Only emit a new `<promise>COMPLETE</promise>` after ALOK-766 is implemented,
 fully verified, committed atomically, and updated in Linear with exact results.
+
+## Continuation: ALOK-767 packed unary kernels
+
+Basic packed linear arithmetic is complete. The active continuation removes
+boxed-array overhead from reverse and the remaining unary involutions, and
+eliminates unnecessary parity-index decoding from valid full-storage loops.
+
+### Required outcomes
+
+- Make valid full-storage packed-index decoding the identity operation and pin
+  its exact in-range behavior.
+- Rewrite reverse, involute, and conjugate as borrowed-input native kernels with
+  no boxed coefficient arrays or per-element callback/control allocation.
+- Use exact parity fast paths: even involution returns the immutable input and
+  odd involution delegates to the optimized negation kernel.
+- Strengthen packed reference checks with buffer invariants and deterministic
+  all-slot full/even/odd unary fixtures, including the R2 odd curve layout.
+- Add stable CGA3 full/even/odd unary benchmarks and scoped generated-C guards.
+- Re-run canonical, Reference, All, dirty CurveShortening, packed/full property,
+  kernel, C ABI, and performance acceptance.
+
+### Continuation completion rule
+
+Only emit a new `<promise>COMPLETE</promise>` after ALOK-767 is implemented,
+fully verified, committed atomically, and updated in Linear with exact results.
