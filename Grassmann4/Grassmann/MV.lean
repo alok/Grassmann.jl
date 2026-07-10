@@ -887,11 +887,15 @@ def antiCommutator (a b : MV sig .full) : MV sig .full :=
 
 /-! ### Reverse (Dagger) -/
 
-/-- Whether reverse negates the coefficient at a blade mask. -/
-@[inline]
-private def reverseNegates (mask : Nat) : Bool :=
-  let g := popcount mask
+/-- Whether reverse negates a coefficient of the given grade. -/
+@[inline, always_inline]
+private def reverseNegatesGrade (g : Nat) : Bool :=
   (g * (g - 1) / 2) % 2 != 0
+
+/-- Whether reverse negates the coefficient at a blade mask. -/
+@[inline, always_inline]
+private def reverseNegates (mask : Nat) : Bool :=
+  reverseNegatesGrade (popcount mask)
 
 /-- Tail-recursive reverse loop for identity-indexed full storage. -/
 private def revFullAux (m : @& DataArray) (i : Nat) :
@@ -908,7 +912,9 @@ private def revPackedAux (n : Nat) (p : Parity) (m : @& DataArray) (i : Nat) :
   | 0, out => out
   | remaining + 1, out =>
       let value := m.get! i
-      let result := if reverseNegates (unpackIdxValid n p i) then -value else value
+      let rankPopcount := popcount i
+      let grade := rankPopcount + packedLowBit n p rankPopcount
+      let result := if reverseNegatesGrade grade then -value else value
       revPackedAux n p m (i + 1) remaining (out.push result)
 
 /-- Reverse operation: reverses the order of basis vectors in each blade.
@@ -943,11 +949,15 @@ def involute (m : @& MV sig p) : MV sig p :=
       let sz := storageSize n .full
       ⟨involuteFullAux m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
 
-/-- Whether Clifford conjugation negates the coefficient at a blade mask. -/
-@[inline]
-private def conjugateNegates (mask : Nat) : Bool :=
-  let g := popcount mask
+/-- Whether Clifford conjugation negates a coefficient of the given grade. -/
+@[inline, always_inline]
+private def conjugateNegatesGrade (g : Nat) : Bool :=
   (g * (g + 1) / 2) % 2 != 0
+
+/-- Whether Clifford conjugation negates the coefficient at a blade mask. -/
+@[inline, always_inline]
+private def conjugateNegates (mask : Nat) : Bool :=
+  conjugateNegatesGrade (popcount mask)
 
 /-- Tail-recursive Clifford-conjugation loop for full storage. -/
 private def conjugateFullAux (m : @& DataArray) (i : Nat) :
@@ -964,7 +974,9 @@ private def conjugatePackedAux (n : Nat) (p : Parity) (m : @& DataArray) (i : Na
   | 0, out => out
   | remaining + 1, out =>
       let value := m.get! i
-      let result := if conjugateNegates (unpackIdxValid n p i) then -value else value
+      let rankPopcount := popcount i
+      let grade := rankPopcount + packedLowBit n p rankPopcount
+      let result := if conjugateNegatesGrade grade then -value else value
       conjugatePackedAux n p m (i + 1) remaining (out.push result)
 
 /-- Clifford conjugate: multiplies each grade-k blade by `(-1)^(k(k+1)/2)`. -/
