@@ -17,6 +17,7 @@ def defaultLinearArithmeticIters : Nat := 500000
 def defaultUnaryInvolutionIters : Nat := 100000
 def defaultHodgeDualIters : Nat := 100000
 def defaultProjectionWideningIters : Nat := 100000
+def defaultDenseIngressIters : Nat := 100000
 def defaultXYZBatchPoints : Nat := 4096
 def defaultXYZBatchIters : Nat := 100
 
@@ -226,6 +227,98 @@ def compare (denseName packedName : String) (warmupIters iters : Nat)
 
 def positiveIters (n : Nat) : Nat :=
   if n = 0 then 1 else n
+
+/-! ### Dense-to-packed ingress allocation baselines -/
+
+/-- Exact pre-ALOK-770 boxed dense-to-packed conversion shape. -/
+@[inline]
+def boxedDenseIngress {n : Nat} {sig : Signature n}
+    (m : Multivector sig Float) (p : Parity) : MV sig p :=
+  let sz := storageSize n p
+  let coeffs := DataArray.ofArray ((Array.range sz).map fun pi =>
+    let mask := MV.unpackIdxValid n p pi
+    if hmask : mask < 2 ^ n then
+      m.coeffs ⟨mask, hmask⟩
+    else
+      0.0)
+  (MV.ofDataArray? sig p coeffs).getD (MV.zero sig p)
+
+@[noinline]
+def boxedDenseIngressFullData (m : Multivector CGA3 Float) : DataArray :=
+  (boxedDenseIngress m .full).coeffs
+
+@[noinline]
+def boxedDenseIngressEvenData (m : Multivector CGA3 Float) : DataArray :=
+  (boxedDenseIngress m .even).coeffs
+
+@[noinline]
+def boxedDenseIngressOddData (m : Multivector CGA3 Float) : DataArray :=
+  (boxedDenseIngress m .odd).coeffs
+
+@[noinline]
+def directDenseIngressFullData (m : @& Multivector CGA3 Float) : DataArray :=
+  (MV.ofMultivector m .full).coeffs
+
+@[noinline]
+def directDenseIngressEvenData (m : @& Multivector CGA3 Float) : DataArray :=
+  (MV.ofMultivector m .even).coeffs
+
+@[noinline]
+def directDenseIngressOddData (m : @& Multivector CGA3 Float) : DataArray :=
+  (MV.ofMultivector m .odd).coeffs
+
+def denseIngressBaselineDiff
+    (samples : Nat) (values : Array (Multivector CGA3 Float))
+    (fallback : Multivector CGA3 Float)
+    (boxed direct : Multivector CGA3 Float → DataArray) : Float :=
+  (List.range samples).foldl (init := 0.0) fun acc i =>
+    let value := values.getD i fallback
+    acc + dataL1Diff (boxed value) (direct value)
+
+/-- Compare one-buffer CGA3 dense ingress with its former boxed-array shape. -/
+def runDenseIngress (iters : Nat := defaultDenseIngressIters) : IO Unit := do
+  IO.println "=== CGA3 dense-to-packed ingress ==="
+  let samples : Nat := 16
+  let dense : Array (Multivector CGA3 Float) :=
+    Array.ofFn (n := samples) fun k => denseCGA3 (Float.ofNat (k.val + 1))
+  let defaultDense := denseCGA3 1.0
+  -- Preflight every sample and every physically stored coefficient.
+  let fullDiff := denseIngressBaselineDiff samples dense defaultDense
+    boxedDenseIngressFullData directDenseIngressFullData
+  let evenDiff := denseIngressBaselineDiff samples dense defaultDense
+    boxedDenseIngressEvenData directDenseIngressEvenData
+  let oddDiff := denseIngressBaselineDiff samples dense defaultDense
+    boxedDenseIngressOddData directDenseIngressOddData
+  IO.println s!"  full ingress l1 diff: {fullDiff}"
+  IO.println s!"  even ingress l1 diff: {evenDiff}"
+  IO.println s!"  odd ingress l1 diff: {oddDiff}"
+  let diffs := [fullDiff, evenDiff, oddDiff]
+  if diffs.any fun diff => diff.isNaN || diff > tolerance then
+    throw <| IO.userError "dense-to-packed ingress baseline mismatch"
+  let positive := positiveIters iters
+  let warmup := positiveIters (positive / 10)
+  let boxedFullNs ← timeit "boxed CGA3 full dense ingress" warmup positive fun i =>
+    packedDataProbe
+      (boxedDenseIngressFullData (dense.getD (i % samples) defaultDense))
+  let directFullNs ← timeit "direct CGA3 full dense ingress" warmup positive fun i =>
+    packedDataProbe
+      (directDenseIngressFullData (dense.getD (i % samples) defaultDense))
+  let boxedEvenNs ← timeit "boxed CGA3 even dense ingress" warmup positive fun i =>
+    packedHalfDataProbe
+      (boxedDenseIngressEvenData (dense.getD (i % samples) defaultDense))
+  let directEvenNs ← timeit "direct CGA3 even dense ingress" warmup positive fun i =>
+    packedHalfDataProbe
+      (directDenseIngressEvenData (dense.getD (i % samples) defaultDense))
+  let boxedOddNs ← timeit "boxed CGA3 odd dense ingress" warmup positive fun i =>
+    packedHalfDataProbe
+      (boxedDenseIngressOddData (dense.getD (i % samples) defaultDense))
+  let directOddNs ← timeit "direct CGA3 odd dense ingress" warmup positive fun i =>
+    packedHalfDataProbe
+      (directDenseIngressOddData (dense.getD (i % samples) defaultDense))
+  IO.println s!"  full ingress speedup: {boxedFullNs / directFullNs}x"
+  IO.println s!"  even ingress speedup: {boxedEvenNs / directEvenNs}x"
+  IO.println s!"  odd ingress speedup: {boxedOddNs / directOddNs}x"
+  IO.println ""
 
 /-! ### Packed linear-arithmetic allocation baselines -/
 
@@ -1032,6 +1125,7 @@ def runAll (baseIters : Nat := defaultBaseIters) : IO Unit := do
   runPackedUnaryInvolutions (positiveIters baseIters)
   runPackedHodgeDual (positiveIters baseIters)
   runPackedProjectionsWidening (positiveIters baseIters)
+  runDenseIngress (positiveIters baseIters)
   runR3 (positiveIters baseIters)
   runPGA3 (positiveIters (baseIters / 2))
   runPGA3MotorPointTransform (positiveIters (baseIters / 2))
@@ -1054,6 +1148,7 @@ def usage : String :=
     "       packedmvbench unary-involutions [iters]",
     "       packedmvbench hodge-dual [iters]",
     "       packedmvbench projections-widening [iters]",
+    "       packedmvbench dense-ingress [iters]",
     "       packedmvbench pga-motor-point [iters]",
     "       packedmvbench pga-motor-point-dense [iters]",
     "       packedmvbench pga-motor-point-packed [iters]",
@@ -1086,6 +1181,10 @@ def main (args : List String) : IO Unit := do
       Grassmann.PackedMVBench.runPackedProjectionsWidening
   | ["projections-widening", itersStr] =>
       Grassmann.PackedMVBench.runPackedProjectionsWidening (← parseItersArg itersStr)
+  | ["dense-ingress"] =>
+      Grassmann.PackedMVBench.runDenseIngress
+  | ["dense-ingress", itersStr] =>
+      Grassmann.PackedMVBench.runDenseIngress (← parseItersArg itersStr)
   | ["pga-motor-point"] =>
       Grassmann.PackedMVBench.runPGA3MotorPointTransform
         Grassmann.PackedMVBench.defaultMotorPointIters
