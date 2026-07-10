@@ -12,6 +12,8 @@ namespace Grassmann.PackedMVBench
 def tolerance : Float := 1e-6
 def defaultBaseIters : Nat := 20000
 def defaultMotorPointIters : Nat := 100000
+def defaultXYZBatchPoints : Nat := 4096
+def defaultXYZBatchIters : Nat := 100
 
 @[inline]
 def coeffPattern (seed : Float) (mask : Nat) : Float :=
@@ -45,6 +47,16 @@ def densePGA3Point (seed : Float) : Multivector PGA3 Float :=
 @[noinline]
 def packedPGA3Point (seed : Float) : PGA.Point PGA3 :=
   PGA.point3 (0.7 * seed) (Float.sin seed) (Float.cos (seed * 0.5))
+
+def packedXYZInput (pointCount : Nat) (offset : Float := 0.0) : FloatArray := Id.run do
+  let mut xyz := FloatArray.emptyWithCapacity (pointCount * 3)
+  for i in [0:pointCount] do
+    let seed := Float.ofNat (i + 1) + offset
+    xyz := xyz
+      |>.push (0.7 * seed)
+      |>.push (Float.sin seed)
+      |>.push (Float.cos (seed * 0.5))
+  return xyz
 
 @[inline]
 def denseCoeff {n : Nat} {sig : Signature n} (m : Multivector sig Float)
@@ -328,6 +340,60 @@ def runPackedPGA3MotorPointTransformOnly (iters : Nat := defaultMotorPointIters)
     coordProbe (PGA.extractPoint3 (PGA.Motor.transformPoint motor point))
   blackhole result
 
+@[noinline]
+def scalarXYZTransformProbe
+    (motor : @& PGA.Motor PGA3) (xyz : @& FloatArray) : Float := Id.run do
+  let pointCount := xyz.size / 3
+  let mut sum := 0.0
+  for i in [0:pointCount] do
+    let base := i * 3
+    let point := PGA.point3
+      (xyz.get! base) (xyz.get! (base + 1)) (xyz.get! (base + 2))
+    sum := sum + coordProbe
+      (PGA.extractPoint3 (PGA.Motor.transformPoint motor point))
+  return sum
+
+@[noinline]
+def batchedXYZTransformProbe
+    (motor : @& PGA.Motor PGA3) (xyz : @& FloatArray) : Float := Id.run do
+  let transformed :=
+    (PGA.Motor.transformXYZBatch3? motor xyz).getD FloatArray.empty
+  let mut sum := 0.0
+  for i in [0:transformed.size] do
+    sum := sum + transformed.get! i
+  return sum
+
+/-- Compare one public packed transform per point with the flat checked batch path. -/
+def runPGA3XYZBatch
+    (pointCount : Nat := defaultXYZBatchPoints)
+    (iters : Nat := defaultXYZBatchIters) : IO Unit := do
+  if pointCount == 0 then
+    throw <| IO.userError "PGA3 XYZ batch benchmark requires at least one point"
+  let motor := PGA.rigidMotor3 0.0 0.0 1.0 0.7 2.0 (-3.0) 4.0
+  let sampleCount := 16
+  let inputs : Array FloatArray :=
+    Array.ofFn (n := sampleCount) fun i =>
+      packedXYZInput pointCount (Float.ofNat i.val * 0.03125)
+  let xyz := inputs.getD 0 (packedXYZInput pointCount)
+  let scalarProbe := scalarXYZTransformProbe motor xyz
+  let batchProbe := batchedXYZTransformProbe motor xyz
+  let probeDiff := Float.abs (scalarProbe - batchProbe)
+  if probeDiff > 1.0e-6 * Float.ofNat pointCount then
+    throw <| IO.userError s!"PGA3 XYZ batch probe mismatch: {probeDiff}"
+  IO.println s!"=== PGA3 XYZ batch transforms ({pointCount} points) ==="
+  let positive := positiveIters iters
+  let warmup := positiveIters (positive / 10)
+  let scalarNs ← timeit "scalar public loop" warmup positive fun i =>
+    scalarXYZTransformProbe motor (inputs.getD (i % sampleCount) xyz)
+  let batchNs ← timeit "flat checked batch" warmup positive fun i =>
+    batchedXYZTransformProbe motor (inputs.getD (i % sampleCount) xyz)
+  let speedup := scalarNs / batchNs
+  IO.println s!"  scalar: {scalarNs / Float.ofNat pointCount} ns/point"
+  IO.println s!"  batch: {batchNs / Float.ofNat pointCount} ns/point"
+  IO.println s!"  speedup: {speedup}x"
+  if speedup < 3.0 then
+    throw <| IO.userError s!"PGA3 XYZ batch speedup {speedup}x is below 3x"
+
 def runCGA3 (iters : Nat) : IO Unit := do
   IO.println "=== CGA3 full packed products ==="
   let samples : Nat := 16
@@ -389,7 +455,8 @@ def usage : String :=
     "       packedmvbench all [base-iters]",
     "       packedmvbench pga-motor-point [iters]",
     "       packedmvbench pga-motor-point-dense [iters]",
-    "       packedmvbench pga-motor-point-packed [iters]"
+    "       packedmvbench pga-motor-point-packed [iters]",
+    "       packedmvbench pga-xyz-batch [point-count] [iters]"
   ]
 
 def main (args : List String) : IO Unit := do
@@ -411,6 +478,14 @@ def main (args : List String) : IO Unit := do
       Grassmann.PackedMVBench.runPackedPGA3MotorPointTransformOnly
   | ["pga-motor-point-packed", itersStr] =>
       Grassmann.PackedMVBench.runPackedPGA3MotorPointTransformOnly (← parseItersArg itersStr)
+  | ["pga-xyz-batch"] =>
+      Grassmann.PackedMVBench.runPGA3XYZBatch
+  | ["pga-xyz-batch", pointCountStr] =>
+      Grassmann.PackedMVBench.runPGA3XYZBatch (← parseItersArg pointCountStr)
+  | ["pga-xyz-batch", pointCountStr, itersStr] =>
+      Grassmann.PackedMVBench.runPGA3XYZBatch
+        (← parseItersArg pointCountStr)
+        (← parseItersArg itersStr)
   | [itersStr] =>
       match itersStr.toNat? with
       | some iters => Grassmann.PackedMVBench.runAll iters
