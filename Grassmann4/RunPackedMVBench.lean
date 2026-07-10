@@ -14,6 +14,7 @@ def defaultBaseIters : Nat := 20000
 def defaultMotorPointIters : Nat := 100000
 def defaultSubtractionIters : Nat := 250000
 def defaultLinearArithmeticIters : Nat := 500000
+def defaultUnaryInvolutionIters : Nat := 100000
 def defaultXYZBatchPoints : Nat := 4096
 def defaultXYZBatchIters : Nat := 100
 
@@ -82,6 +83,11 @@ def packedProbe {n : Nat} {sig : Signature n} {p : Parity} (m : MV sig p) : Floa
 def packedDataProbe (a : @& DataArray) : Float :=
   a.get! 0 + a.get! 1 + a.get! 2 + a.get! 3 +
     a.get! 7 + a.get! 15 + a.get! 23 + a.get! 31
+
+@[inline]
+def packedHalfDataProbe (a : @& DataArray) : Float :=
+  a.get! 0 + a.get! 1 + a.get! 2 + a.get! 3 +
+    a.get! 7 + a.get! 11 + a.get! 13 + a.get! 15
 
 def dataL1Diff (a b : @& DataArray) : Float :=
   if a.size != b.size then
@@ -300,6 +306,211 @@ def runPackedLinearArithmetic
   IO.println s!"  add speedup: {boxedAddNs / directAddNs}x"
   IO.println s!"  neg speedup: {boxedNegNs / directNegNs}x"
   IO.println s!"  smul speedup: {boxedSmulNs / directSmulNs}x"
+  IO.println ""
+
+/-! ### Packed unary-involution allocation baselines -/
+
+/-- Pre-ALOK-767 reverse shape retained only as a benchmark baseline. -/
+@[always_inline]
+def boxedReverseData {p : Parity} (a : @& MV CGA3 p) : DataArray :=
+  let size := storageSize 5 p
+  DataArray.ofArray <| (Array.range size).map fun i =>
+    let mask := MV.unpackIdx 5 p i
+    let grade := popcount mask
+    let sign := if (grade * (grade - 1) / 2) % 2 == 0 then 1.0 else -1.0
+    sign * a.coeffs.get! i
+
+/-- Pre-ALOK-767 grade-involution shape retained only as a benchmark baseline. -/
+@[always_inline]
+def boxedInvoluteData {p : Parity} (a : @& MV CGA3 p) : DataArray :=
+  let size := storageSize 5 p
+  DataArray.ofArray <| (Array.range size).map fun i =>
+    let grade := popcount (MV.unpackIdx 5 p i)
+    let sign := if grade % 2 == 0 then 1.0 else -1.0
+    sign * a.coeffs.get! i
+
+/-- Pre-ALOK-767 Clifford-conjugation shape retained only as a benchmark baseline. -/
+@[always_inline]
+def boxedConjugateData {p : Parity} (a : @& MV CGA3 p) : DataArray :=
+  let size := storageSize 5 p
+  DataArray.ofArray <| (Array.range size).map fun i =>
+    let mask := MV.unpackIdx 5 p i
+    let grade := popcount mask
+    let sign := if (grade * (grade + 1) / 2) % 2 == 0 then 1.0 else -1.0
+    sign * a.coeffs.get! i
+
+@[noinline] def boxedRevFullData (a : @& MV CGA3 .full) : DataArray :=
+  boxedReverseData a
+@[noinline] def boxedRevEvenData (a : @& MV CGA3 .even) : DataArray :=
+  boxedReverseData a
+@[noinline] def boxedRevOddData (a : @& MV CGA3 .odd) : DataArray :=
+  boxedReverseData a
+
+@[noinline] def boxedInvoluteFullData (a : @& MV CGA3 .full) : DataArray :=
+  boxedInvoluteData a
+@[noinline] def boxedInvoluteEvenData (a : @& MV CGA3 .even) : DataArray :=
+  boxedInvoluteData a
+@[noinline] def boxedInvoluteOddData (a : @& MV CGA3 .odd) : DataArray :=
+  boxedInvoluteData a
+
+@[noinline] def boxedConjugateFullData (a : @& MV CGA3 .full) : DataArray :=
+  boxedConjugateData a
+@[noinline] def boxedConjugateEvenData (a : @& MV CGA3 .even) : DataArray :=
+  boxedConjugateData a
+@[noinline] def boxedConjugateOddData (a : @& MV CGA3 .odd) : DataArray :=
+  boxedConjugateData a
+
+@[noinline] def directRevFullData (a : @& MV CGA3 .full) : DataArray :=
+  (MV.rev a).coeffs
+@[noinline] def directRevEvenData (a : @& MV CGA3 .even) : DataArray :=
+  (MV.rev a).coeffs
+@[noinline] def directRevOddData (a : @& MV CGA3 .odd) : DataArray :=
+  (MV.rev a).coeffs
+
+@[noinline] def directInvoluteFullData (a : @& MV CGA3 .full) : DataArray :=
+  (MV.involute a).coeffs
+@[noinline] def directInvoluteEvenData (a : @& MV CGA3 .even) : DataArray :=
+  (MV.involute a).coeffs
+@[noinline] def directInvoluteOddData (a : @& MV CGA3 .odd) : DataArray :=
+  (MV.involute a).coeffs
+
+@[noinline] def directConjugateFullData (a : @& MV CGA3 .full) : DataArray :=
+  (MV.conjugate a).coeffs
+@[noinline] def directConjugateEvenData (a : @& MV CGA3 .even) : DataArray :=
+  (MV.conjugate a).coeffs
+@[noinline] def directConjugateOddData (a : @& MV CGA3 .odd) : DataArray :=
+  (MV.conjugate a).coeffs
+
+def unaryBaselineDiff {p : Parity}
+    (samples : Nat) (values : Array (MV CGA3 p)) (fallback : MV CGA3 p)
+    (boxed direct : MV CGA3 p → DataArray) : Float :=
+  (List.range samples).foldl (init := 0.0) fun acc i =>
+    let value := values.getD i fallback
+    acc + dataL1Diff (boxed value) (direct value)
+
+/-- Compare packed CGA3 unary kernels with their former boxed-array shapes. -/
+def runPackedUnaryInvolutions
+    (iters : Nat := defaultUnaryInvolutionIters) : IO Unit := do
+  IO.println "=== CGA3 packed unary involutions ==="
+  let samples : Nat := 16
+  let dense : Array (Multivector CGA3 Float) :=
+    Array.ofFn (n := samples) fun k => denseCGA3 (Float.ofNat (k.val + 1))
+  let full : Array (MV CGA3 .full) := dense.map fun m => MV.ofMultivector m .full
+  let even : Array (MV CGA3 .even) := dense.map fun m => MV.ofMultivector m .even
+  let odd : Array (MV CGA3 .odd) := dense.map fun m => MV.ofMultivector m .odd
+  let defaultDense := denseCGA3 1.0
+  let defaultFull : MV CGA3 .full := MV.ofMultivector defaultDense .full
+  let defaultEven : MV CGA3 .even := MV.ofMultivector defaultDense .even
+  let defaultOdd : MV CGA3 .odd := MV.ofMultivector defaultDense .odd
+  -- Preflight every operation, layout, sample, and stored coefficient.
+  let revFullDiff := unaryBaselineDiff samples full defaultFull
+    boxedRevFullData directRevFullData
+  let revEvenDiff := unaryBaselineDiff samples even defaultEven
+    boxedRevEvenData directRevEvenData
+  let revOddDiff := unaryBaselineDiff samples odd defaultOdd
+    boxedRevOddData directRevOddData
+  let involuteFullDiff := unaryBaselineDiff samples full defaultFull
+    boxedInvoluteFullData directInvoluteFullData
+  let involuteEvenDiff := unaryBaselineDiff samples even defaultEven
+    boxedInvoluteEvenData directInvoluteEvenData
+  let involuteOddDiff := unaryBaselineDiff samples odd defaultOdd
+    boxedInvoluteOddData directInvoluteOddData
+  let conjugateFullDiff := unaryBaselineDiff samples full defaultFull
+    boxedConjugateFullData directConjugateFullData
+  let conjugateEvenDiff := unaryBaselineDiff samples even defaultEven
+    boxedConjugateEvenData directConjugateEvenData
+  let conjugateOddDiff := unaryBaselineDiff samples odd defaultOdd
+    boxedConjugateOddData directConjugateOddData
+  IO.println s!"  reverse full l1 diff: {revFullDiff}"
+  IO.println s!"  reverse even l1 diff: {revEvenDiff}"
+  IO.println s!"  reverse odd l1 diff: {revOddDiff}"
+  IO.println s!"  involute full l1 diff: {involuteFullDiff}"
+  IO.println s!"  involute even l1 diff: {involuteEvenDiff}"
+  IO.println s!"  involute odd l1 diff: {involuteOddDiff}"
+  IO.println s!"  conjugate full l1 diff: {conjugateFullDiff}"
+  IO.println s!"  conjugate even l1 diff: {conjugateEvenDiff}"
+  IO.println s!"  conjugate odd l1 diff: {conjugateOddDiff}"
+  let diffs := [
+    revFullDiff, revEvenDiff, revOddDiff,
+    involuteFullDiff, involuteEvenDiff, involuteOddDiff,
+    conjugateFullDiff, conjugateEvenDiff, conjugateOddDiff]
+  if diffs.any fun diff => diff.isNaN || diff > tolerance then
+    throw <| IO.userError "packed unary-involution baseline mismatch"
+  -- Time matching no-inline boxed and direct producers.
+  let positive := positiveIters iters
+  let warmup := positiveIters (positive / 10)
+  let boxedRevFullNs ← timeit "boxed CGA3 full reverse" warmup positive fun i =>
+    packedDataProbe (boxedRevFullData (full.getD (i % samples) defaultFull))
+  let directRevFullNs ← timeit "direct CGA3 full reverse" warmup positive fun i =>
+    packedDataProbe (directRevFullData (full.getD (i % samples) defaultFull))
+  let boxedRevEvenNs ← timeit "boxed CGA3 even reverse" warmup positive fun i =>
+    packedHalfDataProbe (boxedRevEvenData (even.getD (i % samples) defaultEven))
+  let directRevEvenNs ← timeit "direct CGA3 even reverse" warmup positive fun i =>
+    packedHalfDataProbe (directRevEvenData (even.getD (i % samples) defaultEven))
+  let boxedRevOddNs ← timeit "boxed CGA3 odd reverse" warmup positive fun i =>
+    packedHalfDataProbe (boxedRevOddData (odd.getD (i % samples) defaultOdd))
+  let directRevOddNs ← timeit "direct CGA3 odd reverse" warmup positive fun i =>
+    packedHalfDataProbe (directRevOddData (odd.getD (i % samples) defaultOdd))
+  -- Grade involution includes its even identity and odd negation fast paths.
+  let boxedInvoluteFullNs ←
+    timeit "boxed CGA3 full involute" warmup positive fun i =>
+      packedDataProbe
+        (boxedInvoluteFullData (full.getD (i % samples) defaultFull))
+  let directInvoluteFullNs ←
+    timeit "direct CGA3 full involute" warmup positive fun i =>
+      packedDataProbe
+        (directInvoluteFullData (full.getD (i % samples) defaultFull))
+  let boxedInvoluteEvenNs ←
+    timeit "boxed CGA3 even involute" warmup positive fun i =>
+      packedHalfDataProbe
+        (boxedInvoluteEvenData (even.getD (i % samples) defaultEven))
+  let directInvoluteEvenNs ←
+    timeit "direct CGA3 even involute" warmup positive fun i =>
+      packedHalfDataProbe
+        (directInvoluteEvenData (even.getD (i % samples) defaultEven))
+  let boxedInvoluteOddNs ←
+    timeit "boxed CGA3 odd involute" warmup positive fun i =>
+      packedHalfDataProbe
+        (boxedInvoluteOddData (odd.getD (i % samples) defaultOdd))
+  let directInvoluteOddNs ←
+    timeit "direct CGA3 odd involute" warmup positive fun i =>
+      packedHalfDataProbe
+        (directInvoluteOddData (odd.getD (i % samples) defaultOdd))
+  -- Clifford conjugation stays one pass for all three layouts.
+  let boxedConjugateFullNs ←
+    timeit "boxed CGA3 full conjugate" warmup positive fun i =>
+      packedDataProbe
+        (boxedConjugateFullData (full.getD (i % samples) defaultFull))
+  let directConjugateFullNs ←
+    timeit "direct CGA3 full conjugate" warmup positive fun i =>
+      packedDataProbe
+        (directConjugateFullData (full.getD (i % samples) defaultFull))
+  let boxedConjugateEvenNs ←
+    timeit "boxed CGA3 even conjugate" warmup positive fun i =>
+      packedHalfDataProbe
+        (boxedConjugateEvenData (even.getD (i % samples) defaultEven))
+  let directConjugateEvenNs ←
+    timeit "direct CGA3 even conjugate" warmup positive fun i =>
+      packedHalfDataProbe
+        (directConjugateEvenData (even.getD (i % samples) defaultEven))
+  let boxedConjugateOddNs ←
+    timeit "boxed CGA3 odd conjugate" warmup positive fun i =>
+      packedHalfDataProbe
+        (boxedConjugateOddData (odd.getD (i % samples) defaultOdd))
+  let directConjugateOddNs ←
+    timeit "direct CGA3 odd conjugate" warmup positive fun i =>
+      packedHalfDataProbe
+        (directConjugateOddData (odd.getD (i % samples) defaultOdd))
+  -- Keep human-readable ratios alongside the parseable timing labels.
+  IO.println s!"  full reverse speedup: {boxedRevFullNs / directRevFullNs}x"
+  IO.println s!"  even reverse speedup: {boxedRevEvenNs / directRevEvenNs}x"
+  IO.println s!"  odd reverse speedup: {boxedRevOddNs / directRevOddNs}x"
+  IO.println s!"  full involute speedup: {boxedInvoluteFullNs / directInvoluteFullNs}x"
+  IO.println s!"  even involute speedup: {boxedInvoluteEvenNs / directInvoluteEvenNs}x"
+  IO.println s!"  odd involute speedup: {boxedInvoluteOddNs / directInvoluteOddNs}x"
+  IO.println s!"  full conjugate speedup: {boxedConjugateFullNs / directConjugateFullNs}x"
+  IO.println s!"  even conjugate speedup: {boxedConjugateEvenNs / directConjugateEvenNs}x"
+  IO.println s!"  odd conjugate speedup: {boxedConjugateOddNs / directConjugateOddNs}x"
   IO.println ""
 
 /-- Compare the one-buffer subtraction kernel with the old add-neg composition.
@@ -566,6 +777,7 @@ def runAll (baseIters : Nat := defaultBaseIters) : IO Unit := do
   verifyCorrectness
   runPackedSubtraction (positiveIters baseIters)
   runPackedLinearArithmetic (positiveIters baseIters)
+  runPackedUnaryInvolutions (positiveIters baseIters)
   runR3 (positiveIters baseIters)
   runPGA3 (positiveIters (baseIters / 2))
   runPGA3MotorPointTransform (positiveIters (baseIters / 2))
@@ -585,6 +797,7 @@ def usage : String :=
     "       packedmvbench all [base-iters]",
     "       packedmvbench subtraction [iters]",
     "       packedmvbench linear-arithmetic [iters]",
+    "       packedmvbench unary-involutions [iters]",
     "       packedmvbench pga-motor-point [iters]",
     "       packedmvbench pga-motor-point-dense [iters]",
     "       packedmvbench pga-motor-point-packed [iters]",
@@ -605,6 +818,10 @@ def main (args : List String) : IO Unit := do
       Grassmann.PackedMVBench.runPackedLinearArithmetic
   | ["linear-arithmetic", itersStr] =>
       Grassmann.PackedMVBench.runPackedLinearArithmetic (← parseItersArg itersStr)
+  | ["unary-involutions"] =>
+      Grassmann.PackedMVBench.runPackedUnaryInvolutions
+  | ["unary-involutions", itersStr] =>
+      Grassmann.PackedMVBench.runPackedUnaryInvolutions (← parseItersArg itersStr)
   | ["pga-motor-point"] =>
       Grassmann.PackedMVBench.runPGA3MotorPointTransform
         Grassmann.PackedMVBench.defaultMotorPointIters

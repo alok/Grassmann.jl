@@ -21,6 +21,7 @@ smoke_iters="${PACKED_MV_BENCH_SMOKE_ITERS:-200}"
 motor_iters="${PACKED_MV_BENCH_MOTOR_ITERS:-5000}"
 subtraction_iters="${PACKED_MV_BENCH_SUBTRACTION_ITERS:-100000}"
 linear_iters="${PACKED_MV_BENCH_LINEAR_ITERS:-500000}"
+unary_iters="${PACKED_MV_BENCH_UNARY_ITERS:-100000}"
 max_correctness_diff="${MAX_PACKED_MV_CORRECTNESS_DIFF:-1e-6}"
 max_packed_motor_ns="${MAX_PACKED_PGA_MOTOR_POINT_NS:-20000}"
 min_motor_speedup="${MIN_PACKED_PGA_MOTOR_POINT_SPEEDUP:-5}"
@@ -34,6 +35,14 @@ max_packed_neg_ns="${MAX_PACKED_MV_NEG_NS:-500}"
 min_packed_neg_speedup="${MIN_PACKED_MV_NEG_SPEEDUP:-2.5}"
 max_packed_smul_ns="${MAX_PACKED_MV_SMUL_NS:-500}"
 min_packed_smul_speedup="${MIN_PACKED_MV_SMUL_SPEEDUP:-2.5}"
+# The direct CGA3 unary kernels are one-buffer loops, except for the even
+# involute identity and odd involute negation fast paths. Separate ceilings
+# preserve those stronger guarantees without overfitting one host.
+max_packed_full_unary_ns="${MAX_PACKED_MV_FULL_UNARY_NS:-750}"
+max_packed_parity_unary_ns="${MAX_PACKED_MV_PARITY_UNARY_NS:-500}"
+max_packed_even_involute_ns="${MAX_PACKED_MV_EVEN_INVOLUTE_NS:-100}"
+max_packed_odd_involute_ns="${MAX_PACKED_MV_ODD_INVOLUTE_NS:-150}"
+min_packed_unary_speedup="${MIN_PACKED_MV_UNARY_SPEEDUP:-20}"
 
 bench_log="${PACKED_MV_BENCH_GUARD_LOG:-}"
 if [[ -z "$bench_log" ]]; then
@@ -156,7 +165,12 @@ write_summary_json() {
     printf '    "max_packed_neg_ns": %s,\n' "$max_packed_neg_ns"
     printf '    "min_packed_neg_speedup": %s,\n' "$min_packed_neg_speedup"
     printf '    "max_packed_smul_ns": %s,\n' "$max_packed_smul_ns"
-    printf '    "min_packed_smul_speedup": %s\n' "$min_packed_smul_speedup"
+    printf '    "min_packed_smul_speedup": %s,\n' "$min_packed_smul_speedup"
+    printf '    "max_packed_full_unary_ns": %s,\n' "$max_packed_full_unary_ns"
+    printf '    "max_packed_parity_unary_ns": %s,\n' "$max_packed_parity_unary_ns"
+    printf '    "max_packed_even_involute_ns": %s,\n' "$max_packed_even_involute_ns"
+    printf '    "max_packed_odd_involute_ns": %s,\n' "$max_packed_odd_involute_ns"
+    printf '    "min_packed_unary_speedup": %s\n' "$min_packed_unary_speedup"
     printf '  },\n'
     printf '  "metrics": {\n'
     printf '    "pga_motor_point_diff": %s,\n' "$motor_point_diff"
@@ -169,14 +183,50 @@ write_summary_json() {
     printf '    "packed_boxed_neg_ns": %s,\n' "$boxed_neg_ns"
     printf '    "packed_direct_neg_ns": %s,\n' "$direct_neg_ns"
     printf '    "packed_boxed_smul_ns": %s,\n' "$boxed_smul_ns"
-    printf '    "packed_direct_smul_ns": %s\n' "$direct_smul_ns"
+    printf '    "packed_direct_smul_ns": %s,\n' "$direct_smul_ns"
+    printf '    "unary_reverse_full_diff": %s,\n' "$reverse_full_diff"
+    printf '    "unary_reverse_even_diff": %s,\n' "$reverse_even_diff"
+    printf '    "unary_reverse_odd_diff": %s,\n' "$reverse_odd_diff"
+    printf '    "unary_involute_full_diff": %s,\n' "$involute_full_diff"
+    printf '    "unary_involute_even_diff": %s,\n' "$involute_even_diff"
+    printf '    "unary_involute_odd_diff": %s,\n' "$involute_odd_diff"
+    printf '    "unary_conjugate_full_diff": %s,\n' "$conjugate_full_diff"
+    printf '    "unary_conjugate_even_diff": %s,\n' "$conjugate_even_diff"
+    printf '    "unary_conjugate_odd_diff": %s,\n' "$conjugate_odd_diff"
+    printf '    "packed_boxed_reverse_full_ns": %s,\n' "$boxed_reverse_full_ns"
+    printf '    "packed_direct_reverse_full_ns": %s,\n' "$direct_reverse_full_ns"
+    printf '    "packed_boxed_reverse_even_ns": %s,\n' "$boxed_reverse_even_ns"
+    printf '    "packed_direct_reverse_even_ns": %s,\n' "$direct_reverse_even_ns"
+    printf '    "packed_boxed_reverse_odd_ns": %s,\n' "$boxed_reverse_odd_ns"
+    printf '    "packed_direct_reverse_odd_ns": %s,\n' "$direct_reverse_odd_ns"
+    printf '    "packed_boxed_involute_full_ns": %s,\n' "$boxed_involute_full_ns"
+    printf '    "packed_direct_involute_full_ns": %s,\n' "$direct_involute_full_ns"
+    printf '    "packed_boxed_involute_even_ns": %s,\n' "$boxed_involute_even_ns"
+    printf '    "packed_direct_involute_even_ns": %s,\n' "$direct_involute_even_ns"
+    printf '    "packed_boxed_involute_odd_ns": %s,\n' "$boxed_involute_odd_ns"
+    printf '    "packed_direct_involute_odd_ns": %s,\n' "$direct_involute_odd_ns"
+    printf '    "packed_boxed_conjugate_full_ns": %s,\n' "$boxed_conjugate_full_ns"
+    printf '    "packed_direct_conjugate_full_ns": %s,\n' "$direct_conjugate_full_ns"
+    printf '    "packed_boxed_conjugate_even_ns": %s,\n' "$boxed_conjugate_even_ns"
+    printf '    "packed_direct_conjugate_even_ns": %s,\n' "$direct_conjugate_even_ns"
+    printf '    "packed_boxed_conjugate_odd_ns": %s,\n' "$boxed_conjugate_odd_ns"
+    printf '    "packed_direct_conjugate_odd_ns": %s\n' "$direct_conjugate_odd_ns"
     printf '  },\n'
     printf '  "speedups": {\n'
     printf '    "pga_motor_point": %s,\n' "$motor_speedup"
     printf '    "packed_subtraction": %s,\n' "$subtraction_speedup"
     printf '    "packed_add": %s,\n' "$add_speedup"
     printf '    "packed_neg": %s,\n' "$neg_speedup"
-    printf '    "packed_smul": %s\n' "$smul_speedup"
+    printf '    "packed_smul": %s,\n' "$smul_speedup"
+    printf '    "packed_reverse_full": %s,\n' "$reverse_full_speedup"
+    printf '    "packed_reverse_even": %s,\n' "$reverse_even_speedup"
+    printf '    "packed_reverse_odd": %s,\n' "$reverse_odd_speedup"
+    printf '    "packed_involute_full": %s,\n' "$involute_full_speedup"
+    printf '    "packed_involute_even": %s,\n' "$involute_even_speedup"
+    printf '    "packed_involute_odd": %s,\n' "$involute_odd_speedup"
+    printf '    "packed_conjugate_full": %s,\n' "$conjugate_full_speedup"
+    printf '    "packed_conjugate_even": %s,\n' "$conjugate_even_speedup"
+    printf '    "packed_conjugate_odd": %s\n' "$conjugate_odd_speedup"
     printf '  }\n'
     printf '}\n'
   } > "$summary_json"
@@ -209,6 +259,12 @@ if ! lake exe packedmvbench linear-arithmetic "$linear_iters" >> "$bench_log" 2>
   exit 1
 fi
 
+if ! lake exe packedmvbench unary-involutions "$unary_iters" >> "$bench_log" 2>&1; then
+  printf 'lake exe packedmvbench unary-involutions failed; benchmark log follows:\n' >&2
+  cat "$bench_log" >&2
+  exit 1
+fi
+
 motor_point_diff="$(get_last_metric "PGA3 motor point transform")"
 dense_motor_ns="$(get_timed_metric "dense motor point transform")"
 packed_motor_ns="$(get_timed_metric "packed MV motor point transform")"
@@ -225,6 +281,42 @@ direct_smul_ns="$(get_timed_metric "direct CGA3 full smul")"
 add_speedup="$(ratio "$boxed_add_ns" "$direct_add_ns")"
 neg_speedup="$(ratio "$boxed_neg_ns" "$direct_neg_ns")"
 smul_speedup="$(ratio "$boxed_smul_ns" "$direct_smul_ns")"
+reverse_full_diff="$(get_last_metric "reverse full l1 diff")"
+reverse_even_diff="$(get_last_metric "reverse even l1 diff")"
+reverse_odd_diff="$(get_last_metric "reverse odd l1 diff")"
+involute_full_diff="$(get_last_metric "involute full l1 diff")"
+involute_even_diff="$(get_last_metric "involute even l1 diff")"
+involute_odd_diff="$(get_last_metric "involute odd l1 diff")"
+conjugate_full_diff="$(get_last_metric "conjugate full l1 diff")"
+conjugate_even_diff="$(get_last_metric "conjugate even l1 diff")"
+conjugate_odd_diff="$(get_last_metric "conjugate odd l1 diff")"
+boxed_reverse_full_ns="$(get_timed_metric "boxed CGA3 full reverse")"
+direct_reverse_full_ns="$(get_timed_metric "direct CGA3 full reverse")"
+boxed_reverse_even_ns="$(get_timed_metric "boxed CGA3 even reverse")"
+direct_reverse_even_ns="$(get_timed_metric "direct CGA3 even reverse")"
+boxed_reverse_odd_ns="$(get_timed_metric "boxed CGA3 odd reverse")"
+direct_reverse_odd_ns="$(get_timed_metric "direct CGA3 odd reverse")"
+boxed_involute_full_ns="$(get_timed_metric "boxed CGA3 full involute")"
+direct_involute_full_ns="$(get_timed_metric "direct CGA3 full involute")"
+boxed_involute_even_ns="$(get_timed_metric "boxed CGA3 even involute")"
+direct_involute_even_ns="$(get_timed_metric "direct CGA3 even involute")"
+boxed_involute_odd_ns="$(get_timed_metric "boxed CGA3 odd involute")"
+direct_involute_odd_ns="$(get_timed_metric "direct CGA3 odd involute")"
+boxed_conjugate_full_ns="$(get_timed_metric "boxed CGA3 full conjugate")"
+direct_conjugate_full_ns="$(get_timed_metric "direct CGA3 full conjugate")"
+boxed_conjugate_even_ns="$(get_timed_metric "boxed CGA3 even conjugate")"
+direct_conjugate_even_ns="$(get_timed_metric "direct CGA3 even conjugate")"
+boxed_conjugate_odd_ns="$(get_timed_metric "boxed CGA3 odd conjugate")"
+direct_conjugate_odd_ns="$(get_timed_metric "direct CGA3 odd conjugate")"
+reverse_full_speedup="$(ratio "$boxed_reverse_full_ns" "$direct_reverse_full_ns")"
+reverse_even_speedup="$(ratio "$boxed_reverse_even_ns" "$direct_reverse_even_ns")"
+reverse_odd_speedup="$(ratio "$boxed_reverse_odd_ns" "$direct_reverse_odd_ns")"
+involute_full_speedup="$(ratio "$boxed_involute_full_ns" "$direct_involute_full_ns")"
+involute_even_speedup="$(ratio "$boxed_involute_even_ns" "$direct_involute_even_ns")"
+involute_odd_speedup="$(ratio "$boxed_involute_odd_ns" "$direct_involute_odd_ns")"
+conjugate_full_speedup="$(ratio "$boxed_conjugate_full_ns" "$direct_conjugate_full_ns")"
+conjugate_even_speedup="$(ratio "$boxed_conjugate_even_ns" "$direct_conjugate_even_ns")"
+conjugate_odd_speedup="$(ratio "$boxed_conjugate_odd_ns" "$direct_conjugate_odd_ns")"
 
 check_le "PGA3 motor point transform diff" "$motor_point_diff" "$max_correctness_diff" ""
 check_le "Packed PGA3 motor point transform" "$packed_motor_ns" "$max_packed_motor_ns" "ns/iter"
@@ -241,6 +333,45 @@ check_le "Packed direct scalar multiplication" "$direct_smul_ns" \
   "$max_packed_smul_ns" "ns/iter"
 check_ge "Packed scalar multiplication speedup" "$smul_speedup" \
   "$min_packed_smul_speedup" "x"
+
+unary_diff_labels=(
+  "reverse full" "reverse even" "reverse odd"
+  "involute full" "involute even" "involute odd"
+  "conjugate full" "conjugate even" "conjugate odd"
+)
+unary_diffs=(
+  "$reverse_full_diff" "$reverse_even_diff" "$reverse_odd_diff"
+  "$involute_full_diff" "$involute_even_diff" "$involute_odd_diff"
+  "$conjugate_full_diff" "$conjugate_even_diff" "$conjugate_odd_diff"
+)
+unary_speedups=(
+  "$reverse_full_speedup" "$reverse_even_speedup" "$reverse_odd_speedup"
+  "$involute_full_speedup" "$involute_even_speedup" "$involute_odd_speedup"
+  "$conjugate_full_speedup" "$conjugate_even_speedup" "$conjugate_odd_speedup"
+)
+for ((i = 0; i < ${#unary_diff_labels[@]}; i++)); do
+  label="Packed ${unary_diff_labels[$i]}"
+  check_le "$label baseline diff" "${unary_diffs[$i]}" "$max_correctness_diff" ""
+  check_ge "$label speedup" "${unary_speedups[$i]}" "$min_packed_unary_speedup" "x"
+done
+check_le "Packed full reverse" "$direct_reverse_full_ns" \
+  "$max_packed_full_unary_ns" "ns/iter"
+check_le "Packed full involute" "$direct_involute_full_ns" \
+  "$max_packed_full_unary_ns" "ns/iter"
+check_le "Packed full conjugate" "$direct_conjugate_full_ns" \
+  "$max_packed_full_unary_ns" "ns/iter"
+check_le "Packed even reverse" "$direct_reverse_even_ns" \
+  "$max_packed_parity_unary_ns" "ns/iter"
+check_le "Packed odd reverse" "$direct_reverse_odd_ns" \
+  "$max_packed_parity_unary_ns" "ns/iter"
+check_le "Packed even conjugate" "$direct_conjugate_even_ns" \
+  "$max_packed_parity_unary_ns" "ns/iter"
+check_le "Packed odd conjugate" "$direct_conjugate_odd_ns" \
+  "$max_packed_parity_unary_ns" "ns/iter"
+check_le "Packed even involute" "$direct_involute_even_ns" \
+  "$max_packed_even_involute_ns" "ns/iter"
+check_le "Packed odd involute" "$direct_involute_odd_ns" \
+  "$max_packed_odd_involute_ns" "ns/iter"
 
 status="passed"
 if [[ ${#failures[@]} -ne 0 ]]; then
@@ -270,3 +401,18 @@ printf '  Packed negation: %s ns/iter direct vs %s ns/iter boxed (%sx)\n' \
   "$direct_neg_ns" "$boxed_neg_ns" "$neg_speedup"
 printf '  Packed scalar multiplication: %s ns/iter direct vs %s ns/iter boxed (%sx)\n' \
   "$direct_smul_ns" "$boxed_smul_ns" "$smul_speedup"
+unary_boxed_ns=(
+  "$boxed_reverse_full_ns" "$boxed_reverse_even_ns" "$boxed_reverse_odd_ns"
+  "$boxed_involute_full_ns" "$boxed_involute_even_ns" "$boxed_involute_odd_ns"
+  "$boxed_conjugate_full_ns" "$boxed_conjugate_even_ns" "$boxed_conjugate_odd_ns"
+)
+unary_direct_ns=(
+  "$direct_reverse_full_ns" "$direct_reverse_even_ns" "$direct_reverse_odd_ns"
+  "$direct_involute_full_ns" "$direct_involute_even_ns" "$direct_involute_odd_ns"
+  "$direct_conjugate_full_ns" "$direct_conjugate_even_ns" "$direct_conjugate_odd_ns"
+)
+for ((i = 0; i < ${#unary_diff_labels[@]}; i++)); do
+  printf '  Packed %s: %s ns/iter direct vs %s ns/iter boxed (%sx)\n' \
+    "${unary_diff_labels[$i]}" "${unary_direct_ns[$i]}" \
+    "${unary_boxed_ns[$i]}" "${unary_speedups[$i]}"
+done
