@@ -501,3 +501,85 @@ NEXT
    ingress and remaining generic product hot paths.
 
 <promise>COMPLETE</promise>
+
+2026-07-09 ALOK-769 PACKED PROJECTIONS AND PARITY INDEXING STARTED
+
+- Closed ALOK-768 in Linear after commit `f02a4b0` and moved to branch
+  `codex/alok-769-packed-projections`.
+- Created high-priority Linear issue ALOK-769, "Make packed parity indexing and
+  projection/widening allocation-tight".
+- Source and exhaustive independent audits established that, for dimensions
+  above zero, valid even/odd rank is `mask >>> 1` and unrank reconstructs the
+  discarded low bit from the packed rank's popcount parity. Public
+  `computePackIdx` and `packIdx` deliberately differ for invalid full masks,
+  and the one-slot dimension-zero odd layout remains observable through raw
+  packed access.
+- The five remaining projector/widening operations still built boxed
+  `Array Float` intermediates through range/map callbacks before copying into
+  `FloatArray`. The target shape is a borrowed source, one capacity-sized result
+  buffer, direct get/push tail loops, and explicit dimension-zero compatibility
+  branches.
+
+NEXT
+
+1. Land arithmetic rank/unrank and exact boundary/all-slot regressions.
+2. Replace the five boxed projection/widening bodies with one-buffer kernels.
+3. Add measured timing and generated-C gates, then run full acceptance.
+
+2026-07-09 ALOK-769 PACKED PROJECTIONS AND PARITY INDEXING COMPLETE
+
+- `c64f5e9` removes cached pack maps, adds checked arithmetic rank/unrank,
+  routes valid core and dense callers through it, and replaces even/odd part,
+  grade projection, and parity widening with borrowed one-buffer tail loops.
+  It also repairs scoped grade notation through carrier-indexed
+  `GAGradeProject` and adds exhaustive focused coverage through dimension 12,
+  exact dimension-zero/invalid boundaries, all-slot CGA3, and dimension six.
+- Initial measurement exposed generic boxed-`Nat` shift/OR as a real hotspot:
+  full-to-parity projection was about 1.27 us. `3bfdf5b` uses the equivalent
+  `rank + rank + lowBit` formula and reduces the operation to about 164 ns.
+  `e4e2034` avoids reconstructing full masks in packed reverse/conjugation and
+  derives their signs from one packed-rank popcount, restoring 173--180 ns
+  parity unary kernels and more than 40x boxed speedups.
+- `8b69e0a` adds seven permanent full/even/odd CGA3 boxed-vs-direct comparisons.
+  `86de458` adds zero-drift, absolute-latency, relative-speedup, JSON, and
+  environment-override gates. The final thresholded run measured full/even/odd
+  grade projection at 332.903330/148.915420/167.370420 ns, even/odd part at
+  164.517920/163.958750 ns, and even/odd widening at
+  157.757500/164.021250 ns. Every L1 diff was zero and speedups were
+  3.209x--12.716x.
+- `0c6afac` pins cache-independent arithmetic rank/unrank, one-popcount packed
+  unary signs, four allocation-free projection/widening helpers, direct helper
+  returns, one-result-buffer public dispatch, and dimension-zero retain/zero
+  branches in freshly generated C. `8c034a8` documents the runtime contract,
+  thresholds, structural gates, and measured results.
+- Canonical `lake build` passed 483 jobs. The explicit Reference, soundness,
+  theorem, arithmetic, unary, Hodge, projection, dirty CurveShortening, and All
+  matrix passed 683 jobs with only the existing theorem/style/deprecation
+  warnings and zero errors.
+- The complete property executable passed 305/305 named groups, followed by all
+  6 optimization-consistency categories and 600/600 cases. Fixed packed
+  kernels covered 1,164 coefficient comparisons; fat dot passed 10 assertions;
+  the Init-only PGA3 kernel suite passed 602 named gates / 1,149 primitive
+  requirements.
+- The Grassmann.jl oracle passed 188/188; its largest displayed absolute
+  difference was 0.000019 in one projective-torus plot sample. C ABI v1.1
+  passed headers, public symbols, foreign use, 100,000 ownership iterations /
+  900,000 consuming calls in 176.2 ms, and a 4,096-point batch at 31.4 us versus
+  307.8 us scalar (`9.79x`). Boundary copies measured 13.2 ns and 18.5 ns.
+- The core guard retained zero rotor/sandwich drift: rotor 137.979160 ns
+  (`283.8x` dense), sandwich 106.628330 ns (`1126.3x`), motor 460.331250 ns,
+  and analytic gradient 760.126250 ns (`8.0x` finite difference). The packed
+  guard also retained every prior arithmetic, unary, Hodge, and PGA3 threshold.
+- All unrelated dirty curve, optimizer, physics, Metal, Unreal, SciLean-AD,
+  nested-workspace, and Lake edits remain unstaged and uncommitted.
+
+NEXT
+
+1. Replace boxed `MVDense.ofMultivector` ingress with a borrowed one-buffer
+   builder while preserving closure ownership and dimension-zero semantics.
+2. Add exact dense-ingress timing/codegen gates and a buffer-native boundary
+   audit before changing any public binding ABI.
+3. Continue through remaining generic constructor/product hot paths and Julia
+   surface gaps under the same correctness/performance discipline.
+
+<promise>COMPLETE</promise>

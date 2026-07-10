@@ -297,3 +297,53 @@ measurement was `77.165840 ns/iter` direct versus `26675.972920 ns/iter` boxed
 (`345.697x`) with zero L1 drift.
 
 <promise>COMPLETE</promise>
+
+## Continuation: ALOK-769 packed projections and parity indexing
+
+Packed Hodge dual is complete. The active continuation removes cached-map and
+boxed-array overhead from parity indexing, grade/parity projection, and parity
+widening without changing storage order or the native boundary.
+
+### Required outcomes
+
+- Replace valid parity rank/unrank searches and cached pack maps with checked
+  arithmetic while preserving the public full-identity, restricted
+  default-zero, and dimension-zero compatibility behavior.
+- Route valid packed coefficient, product, involution, dense-conversion, and
+  projection callers through allocation-free arithmetic helpers.
+- Rewrite full-to-even, full-to-odd, grade projection, and even/odd widening as
+  borrowed-input, one-result-buffer tail loops with no boxed coefficient
+  arrays, callbacks, copy passes, or transient index maps.
+- Repair grade notation inference without destabilizing the existing generic
+  `GAlgebra` operator surface.
+- Add exhaustive dimension-1--12 rank/unrank checks, explicit dimension-zero
+  and invalid-input anchors, exact all-slot CGA3 and dimension-six fixtures,
+  and full/even/odd projection/widening laws.
+- Add stable seven-shape CGA3 benchmarks, thresholded JSON evidence, and
+  generated-C gates for arithmetic indexing, allocation ownership, direct
+  FloatArray traffic, tail loops, and dimension-zero branches.
+- Re-run canonical and broad builds, dirty CurveShortening, full properties,
+  native kernels, Julia oracle, C ABI v1.1, and both performance guards.
+
+### Continuation completion rule
+
+Only emit a new `<promise>COMPLETE</promise>` after ALOK-769 is implemented,
+fully verified, committed atomically, and updated in Linear with exact results.
+
+### Completion
+
+ALOK-769 is complete. Valid parity indexing is arithmetic and cache-independent;
+checked wrappers preserve their exact legacy boundary behavior. Grade/parity
+projection and parity widening now borrow their inputs and construct one native
+result buffer, and packed reverse/conjugation derive their signs directly from
+the packed rank's grade. Exhaustive focused tests, randomized dense-reference
+properties, seven timing comparisons, and generated-C structure checks are
+permanent. Canonical and broad builds, dirty CurveShortening, all 305 property
+groups, 600 optimization cases, fixed kernels, the 188-case Julia oracle, C ABI
+v1.1, and both performance guards passed. The final CGA3 direct measurements
+were `148.915420`--`332.903330 ns/iter` for grade projection,
+`163.958750`--`164.517920 ns/iter` for parity projection, and
+`157.757500`--`164.021250 ns/iter` for widening, with zero L1 drift and
+`3.209x`--`12.716x` speedups over the retained boxed shapes.
+
+<promise>COMPLETE</promise>
