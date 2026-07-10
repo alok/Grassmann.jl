@@ -52,6 +52,10 @@ import Grassmann
 
 -- Broad dense/reference API, including MVDense conversions and coercions.
 import Grassmann.Reference
+
+-- Canonical-dependency-only development aggregate: Reference plus the broad
+-- compile-time validation suites. Application experiments remain opt-in.
+import Grassmann.All
 ```
 
 `Grassmann.SignTablesCore` contains the proof-free cached sign tables used by
@@ -73,6 +77,8 @@ import Grassmann.Reference
 - `Grassmann4/Grassmann/PGA3Packed.lean`: proof-free packed PGA3 constructors
   and rigid transformations.
 - `Grassmann4/Grassmann/Reference.lean`: opt-in dense and extended API.
+- `Grassmann4/Grassmann/All.lean`: broad Reference/test aggregate that stays
+  within the canonical root dependency closure.
 - `Grassmann4/Grassmann/EvenMV.lean`: deprecated packed-even compatibility
   representation; new code should use `MV sig .even`.
 - `Grassmann4/Grassmann/PGA.lean`: projective geometric algebra.
@@ -108,9 +114,16 @@ From the repository root:
 lake update
 lake build
 lake build Grassmann.MV Grassmann.MVDense
+lake build Grassmann.All
 ```
 
 All commands in this README assume the repository root as the current directory.
+
+`Grassmann.All` intentionally excludes application experiments and optional
+dependency adapters. Build the in-repository curve experiment explicitly with
+`lake build Grassmann.CurveShortening`. `Grassmann.CoffeeshopExamples` and
+`Grassmann.LeanPlotDemo` require a separately compatible LeanPlot package
+profile; LeanPlot is not a dependency of the canonical workspace.
 
 ### Correctness guards
 
@@ -150,7 +163,13 @@ Grassmann4/scripts/packedmvbench_guard.sh
 # Focused packed PGA3 transform benchmark.
 lake exe packedmvbench all 200
 lake exe packedmvbench pga-motor-point 5000
+lake exe packedmvbench subtraction 250000
 ```
+
+The subtraction benchmark compares the borrowed, one-buffer `MV.sub` kernel
+with the old `MV.add a (MV.neg b)` composition over 32-coefficient CGA3 full
+storage. The thresholded guard checks both an absolute ceiling and a minimum
+speedup so an accidental return to the two-result path is visible.
 
 The guard thresholds are intentionally conservative but still depend on the
 host and build state; use their environment-variable overrides when establishing

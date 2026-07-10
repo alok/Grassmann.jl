@@ -42,7 +42,11 @@ import Grassmann.MVDense
 `Grassmann.SignTablesCore` supplies cached sign tables to the packed runtime;
 `Grassmann.SignTables` adds dense `Multivector` integration. The supported
 `import Grassmann` root is also proof-free and includes the packed PGA3 API;
-use `import Grassmann.Reference` for the broad dense/extended surface.
+use `import Grassmann.Reference` for the broad dense/extended surface. For
+canonical development builds that also compile the broad validation suites,
+use `import Grassmann.All` or run `lake build Grassmann.All` from the outer root.
+Application experiments and optional-dependency modules are deliberately not
+part of that aggregate.
 
 ## Quick Start
 
@@ -102,8 +106,25 @@ open Grassmann
 | `LinearAlgebra` | Generic determinant, linear maps, Cramer's rule |
 | `Calculus` | Gradient, divergence, curl, Laplacian |
 | `PropertyTests` | Focused dense/packed/sparse/truncated reference gates |
+| `MVArithmeticTests` | Exact packed linear-arithmetic layout regressions |
 | `JuliaOracle` | Automated comparisons against Grassmann.jl |
 | `CABI` | Internal exports behind the versioned, caller-owned C API |
+
+## Development aggregate and experiments
+
+`Grassmann.All` imports `Grassmann.Reference` plus the dependency-free stress,
+unit, exact packed-arithmetic, oracle-anchor, DSL, and property-test modules.
+It is designed to build in the authoritative outer workspace without local
+SciLean, LeanPlot, or LeviCivita checkouts.
+
+These application modules remain explicit entry points:
+
+- `Grassmann.CurveShortening` is an in-repository geometric-flow experiment.
+- `Grassmann.CoffeeshopExamples` and `Grassmann.LeanPlotDemo` require a
+  separately compatible LeanPlot package profile.
+
+The experimental nested Lake workspace does not currently provide a supported
+LeanPlot profile; use the outer workspace for canonical build results.
 
 ## Signatures
 
