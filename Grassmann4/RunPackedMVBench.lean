@@ -16,6 +16,7 @@ def defaultSubtractionIters : Nat := 250000
 def defaultLinearArithmeticIters : Nat := 500000
 def defaultUnaryInvolutionIters : Nat := 100000
 def defaultHodgeDualIters : Nat := 100000
+def defaultProjectionWideningIters : Nat := 100000
 def defaultXYZBatchPoints : Nat := 4096
 def defaultXYZBatchIters : Nat := 100
 
@@ -554,6 +555,216 @@ def runPackedHodgeDual (iters : Nat := defaultHodgeDualIters) : IO Unit := do
   IO.println s!"  hodge dual speedup: {boxedNs / directNs}x"
   IO.println ""
 
+/-! ### Packed projection and parity-widening allocation baselines -/
+
+/-- Exact pre-ALOK-769 boxed full-grade-projection shape. -/
+@[noinline]
+def boxedFullGrade2ProjectionData (m : @& MV CGA3 .full) : DataArray :=
+  let sz := storageSize 5 .full
+  DataArray.ofArray ((Array.range sz).map fun pi =>
+    let mask := MV.unpackIdx 5 .full pi
+    if popcount mask == 2 then m.coeffs.get! pi else 0.0)
+
+/-- Exact pre-ALOK-769 boxed even-grade-projection shape. -/
+@[noinline]
+def boxedEvenGrade2ProjectionData (m : @& MV CGA3 .even) : DataArray :=
+  let sz := storageSize 5 .even
+  DataArray.ofArray ((Array.range sz).map fun pi =>
+    let mask := MV.unpackIdx 5 .even pi
+    if popcount mask == 2 then m.coeffs.get! pi else 0.0)
+
+/-- Exact pre-ALOK-769 boxed odd-grade-projection shape. -/
+@[noinline]
+def boxedOddGrade3ProjectionData (m : @& MV CGA3 .odd) : DataArray :=
+  let sz := storageSize 5 .odd
+  DataArray.ofArray ((Array.range sz).map fun pi =>
+    let mask := MV.unpackIdx 5 .odd pi
+    if popcount mask == 3 then m.coeffs.get! pi else 0.0)
+
+/-- Exact pre-ALOK-769 boxed full-to-even projection shape. -/
+@[noinline]
+def boxedEvenPartData (m : @& MV CGA3 .full) : DataArray :=
+  let szEven := storageSize 5 .even
+  DataArray.ofArray ((Array.range szEven).map fun pi =>
+    let mask := MV.unpackIdx 5 .even pi
+    m.coeffs.get! mask)
+
+/-- Exact pre-ALOK-769 boxed full-to-odd projection shape. -/
+@[noinline]
+def boxedOddPartData (m : @& MV CGA3 .full) : DataArray :=
+  let szOdd := storageSize 5 .odd
+  DataArray.ofArray ((Array.range szOdd).map fun pi =>
+    let mask := MV.unpackIdx 5 .odd pi
+    m.coeffs.get! mask)
+
+/-- Exact pre-ALOK-769 boxed even-to-full widening shape. -/
+@[noinline]
+def boxedEvenToFullData (m : @& MV CGA3 .even) : DataArray :=
+  let szFull := storageSize 5 .full
+  DataArray.ofArray ((Array.range szFull).map fun mask =>
+    if Parity.containsMask .even mask then
+      let pi := MV.packIdx 5 .even mask
+      m.coeffs.get! pi
+    else 0.0)
+
+/-- Exact pre-ALOK-769 boxed odd-to-full widening shape. -/
+@[noinline]
+def boxedOddToFullData (m : @& MV CGA3 .odd) : DataArray :=
+  let szFull := storageSize 5 .full
+  DataArray.ofArray ((Array.range szFull).map fun mask =>
+    if Parity.containsMask .odd mask then
+      let pi := MV.packIdx 5 .odd mask
+      m.coeffs.get! pi
+    else 0.0)
+
+@[noinline]
+def directFullGrade2ProjectionData (m : @& MV CGA3 .full) : DataArray :=
+  (MV.gradeProject m 2).coeffs
+
+@[noinline]
+def directEvenGrade2ProjectionData (m : @& MV CGA3 .even) : DataArray :=
+  (MV.gradeProject m 2).coeffs
+
+@[noinline]
+def directOddGrade3ProjectionData (m : @& MV CGA3 .odd) : DataArray :=
+  (MV.gradeProject m 3).coeffs
+
+@[noinline]
+def directEvenPartData (m : @& MV CGA3 .full) : DataArray :=
+  (MV.evenPart m).coeffs
+
+@[noinline]
+def directOddPartData (m : @& MV CGA3 .full) : DataArray :=
+  (MV.oddPart m).coeffs
+
+@[noinline]
+def directEvenToFullData (m : @& MV CGA3 .even) : DataArray :=
+  (MV.evenToFull m).coeffs
+
+@[noinline]
+def directOddToFullData (m : @& MV CGA3 .odd) : DataArray :=
+  (MV.oddToFull m).coeffs
+
+@[noinline]
+def projectionFullProbe (a : @& DataArray) : Float :=
+  packedDataProbe a
+
+@[noinline]
+def projectionHalfProbe (a : @& DataArray) : Float :=
+  packedHalfDataProbe a
+
+def projectionBaselineDiff {p : Parity}
+    (samples : Nat) (values : Array (MV CGA3 p)) (fallback : MV CGA3 p)
+    (boxed direct : MV CGA3 p → DataArray) : Float :=
+  (List.range samples).foldl (init := 0.0) fun acc i =>
+    let value := values.getD i fallback
+    acc + dataL1Diff (boxed value) (direct value)
+
+/-- Compare the one-buffer CGA3 projection and widening kernels with their
+former boxed-array shapes. -/
+def runPackedProjectionsWidening
+    (iters : Nat := defaultProjectionWideningIters) : IO Unit := do
+  IO.println "=== CGA3 packed projections and parity widening ==="
+  let samples : Nat := 16
+  let dense : Array (Multivector CGA3 Float) :=
+    Array.ofFn (n := samples) fun k => denseCGA3 (Float.ofNat (k.val + 1))
+  let full : Array (MV CGA3 .full) := dense.map fun m => MV.ofMultivector m .full
+  let even : Array (MV CGA3 .even) := dense.map fun m => MV.ofMultivector m .even
+  let odd : Array (MV CGA3 .odd) := dense.map fun m => MV.ofMultivector m .odd
+  let defaultDense := denseCGA3 1.0
+  let defaultFull : MV CGA3 .full := MV.ofMultivector defaultDense .full
+  let defaultEven : MV CGA3 .even := MV.ofMultivector defaultDense .even
+  let defaultOdd : MV CGA3 .odd := MV.ofMultivector defaultDense .odd
+  -- Preflight every operation, sample, and stored output coefficient.
+  let fullGrade2Diff := projectionBaselineDiff samples full defaultFull
+    boxedFullGrade2ProjectionData directFullGrade2ProjectionData
+  let evenGrade2Diff := projectionBaselineDiff samples even defaultEven
+    boxedEvenGrade2ProjectionData directEvenGrade2ProjectionData
+  let oddGrade3Diff := projectionBaselineDiff samples odd defaultOdd
+    boxedOddGrade3ProjectionData directOddGrade3ProjectionData
+  let evenPartDiff := projectionBaselineDiff samples full defaultFull
+    boxedEvenPartData directEvenPartData
+  let oddPartDiff := projectionBaselineDiff samples full defaultFull
+    boxedOddPartData directOddPartData
+  let evenToFullDiff := projectionBaselineDiff samples even defaultEven
+    boxedEvenToFullData directEvenToFullData
+  let oddToFullDiff := projectionBaselineDiff samples odd defaultOdd
+    boxedOddToFullData directOddToFullData
+  IO.println s!"  projection full grade2 l1 diff: {fullGrade2Diff}"
+  IO.println s!"  projection even grade2 l1 diff: {evenGrade2Diff}"
+  IO.println s!"  projection odd grade3 l1 diff: {oddGrade3Diff}"
+  IO.println s!"  projection even part l1 diff: {evenPartDiff}"
+  IO.println s!"  projection odd part l1 diff: {oddPartDiff}"
+  IO.println s!"  widening even to full l1 diff: {evenToFullDiff}"
+  IO.println s!"  widening odd to full l1 diff: {oddToFullDiff}"
+  let diffs := [
+    fullGrade2Diff, evenGrade2Diff, oddGrade3Diff,
+    evenPartDiff, oddPartDiff, evenToFullDiff, oddToFullDiff]
+  if diffs.any fun diff => diff.isNaN || diff > tolerance then
+    throw <| IO.userError "packed projection/widening baseline mismatch"
+  let positive := positiveIters iters
+  let warmup := positiveIters (positive / 10)
+  let boxedFullGrade2Ns ←
+    timeit "boxed CGA3 full grade-2 projection" warmup positive fun i =>
+      projectionFullProbe
+        (boxedFullGrade2ProjectionData (full.getD (i % samples) defaultFull))
+  let directFullGrade2Ns ←
+    timeit "direct CGA3 full grade-2 projection" warmup positive fun i =>
+      projectionFullProbe
+        (directFullGrade2ProjectionData (full.getD (i % samples) defaultFull))
+  let boxedEvenGrade2Ns ←
+    timeit "boxed CGA3 even grade-2 projection" warmup positive fun i =>
+      projectionHalfProbe
+        (boxedEvenGrade2ProjectionData (even.getD (i % samples) defaultEven))
+  let directEvenGrade2Ns ←
+    timeit "direct CGA3 even grade-2 projection" warmup positive fun i =>
+      projectionHalfProbe
+        (directEvenGrade2ProjectionData (even.getD (i % samples) defaultEven))
+  let boxedOddGrade3Ns ←
+    timeit "boxed CGA3 odd grade-3 projection" warmup positive fun i =>
+      projectionHalfProbe
+        (boxedOddGrade3ProjectionData (odd.getD (i % samples) defaultOdd))
+  let directOddGrade3Ns ←
+    timeit "direct CGA3 odd grade-3 projection" warmup positive fun i =>
+      projectionHalfProbe
+        (directOddGrade3ProjectionData (odd.getD (i % samples) defaultOdd))
+  let boxedEvenPartNs ←
+    timeit "boxed CGA3 even part" warmup positive fun i =>
+      projectionHalfProbe (boxedEvenPartData (full.getD (i % samples) defaultFull))
+  let directEvenPartNs ←
+    timeit "direct CGA3 even part" warmup positive fun i =>
+      projectionHalfProbe (directEvenPartData (full.getD (i % samples) defaultFull))
+  let boxedOddPartNs ←
+    timeit "boxed CGA3 odd part" warmup positive fun i =>
+      projectionHalfProbe (boxedOddPartData (full.getD (i % samples) defaultFull))
+  let directOddPartNs ←
+    timeit "direct CGA3 odd part" warmup positive fun i =>
+      projectionHalfProbe (directOddPartData (full.getD (i % samples) defaultFull))
+  let boxedEvenToFullNs ←
+    timeit "boxed CGA3 even-to-full widening" warmup positive fun i =>
+      projectionFullProbe
+        (boxedEvenToFullData (even.getD (i % samples) defaultEven))
+  let directEvenToFullNs ←
+    timeit "direct CGA3 even-to-full widening" warmup positive fun i =>
+      projectionFullProbe
+        (directEvenToFullData (even.getD (i % samples) defaultEven))
+  let boxedOddToFullNs ←
+    timeit "boxed CGA3 odd-to-full widening" warmup positive fun i =>
+      projectionFullProbe
+        (boxedOddToFullData (odd.getD (i % samples) defaultOdd))
+  let directOddToFullNs ←
+    timeit "direct CGA3 odd-to-full widening" warmup positive fun i =>
+      projectionFullProbe
+        (directOddToFullData (odd.getD (i % samples) defaultOdd))
+  IO.println s!"  full grade-2 projection speedup: {boxedFullGrade2Ns / directFullGrade2Ns}x"
+  IO.println s!"  even grade-2 projection speedup: {boxedEvenGrade2Ns / directEvenGrade2Ns}x"
+  IO.println s!"  odd grade-3 projection speedup: {boxedOddGrade3Ns / directOddGrade3Ns}x"
+  IO.println s!"  even part speedup: {boxedEvenPartNs / directEvenPartNs}x"
+  IO.println s!"  odd part speedup: {boxedOddPartNs / directOddPartNs}x"
+  IO.println s!"  even-to-full widening speedup: {boxedEvenToFullNs / directEvenToFullNs}x"
+  IO.println s!"  odd-to-full widening speedup: {boxedOddToFullNs / directOddToFullNs}x"
+  IO.println ""
+
 /-- Compare the one-buffer subtraction kernel with the old add-neg composition.
 
 CGA3 full storage exercises 32 contiguous coefficients, the largest standard
@@ -820,6 +1031,7 @@ def runAll (baseIters : Nat := defaultBaseIters) : IO Unit := do
   runPackedLinearArithmetic (positiveIters baseIters)
   runPackedUnaryInvolutions (positiveIters baseIters)
   runPackedHodgeDual (positiveIters baseIters)
+  runPackedProjectionsWidening (positiveIters baseIters)
   runR3 (positiveIters baseIters)
   runPGA3 (positiveIters (baseIters / 2))
   runPGA3MotorPointTransform (positiveIters (baseIters / 2))
@@ -841,6 +1053,7 @@ def usage : String :=
     "       packedmvbench linear-arithmetic [iters]",
     "       packedmvbench unary-involutions [iters]",
     "       packedmvbench hodge-dual [iters]",
+    "       packedmvbench projections-widening [iters]",
     "       packedmvbench pga-motor-point [iters]",
     "       packedmvbench pga-motor-point-dense [iters]",
     "       packedmvbench pga-motor-point-packed [iters]",
@@ -869,6 +1082,10 @@ def main (args : List String) : IO Unit := do
       Grassmann.PackedMVBench.runPackedHodgeDual
   | ["hodge-dual", itersStr] =>
       Grassmann.PackedMVBench.runPackedHodgeDual (← parseItersArg itersStr)
+  | ["projections-widening"] =>
+      Grassmann.PackedMVBench.runPackedProjectionsWidening
+  | ["projections-widening", itersStr] =>
+      Grassmann.PackedMVBench.runPackedProjectionsWidening (← parseItersArg itersStr)
   | ["pga-motor-point"] =>
       Grassmann.PackedMVBench.runPGA3MotorPointTransform
         Grassmann.PackedMVBench.defaultMotorPointIters
