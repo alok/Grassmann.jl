@@ -15,6 +15,7 @@ def defaultMotorPointIters : Nat := 100000
 def defaultSubtractionIters : Nat := 250000
 def defaultLinearArithmeticIters : Nat := 500000
 def defaultUnaryInvolutionIters : Nat := 100000
+def defaultHodgeDualIters : Nat := 100000
 def defaultXYZBatchPoints : Nat := 4096
 def defaultXYZBatchIters : Nat := 100
 
@@ -513,6 +514,46 @@ def runPackedUnaryInvolutions
   IO.println s!"  odd conjugate speedup: {boxedConjugateOddNs / directConjugateOddNs}x"
   IO.println ""
 
+/-! ### Packed Hodge-dual allocation baseline -/
+
+/-- Exact pre-ALOK-768 boxed Hodge shape retained only as a benchmark baseline. -/
+@[noinline]
+def boxedHodgeFullData (m : @& MV CGA3 .full) : DataArray :=
+  let size := storageSize 5 .full
+  DataArray.ofArray <| (Array.range size).map fun mask =>
+    let outBlade : Blade CGA3 := ⟨BitVec.ofNat 5 mask⟩
+    let dualBits := outBlade.bits ^^^ pseudoscalar
+    let dualIdx := dualBits.toNat
+    let sign := leftComplementSign CGA3 ⟨dualBits⟩
+    let coeff := m.coeffs.get! dualIdx
+    if sign < 0 then -coeff else coeff
+
+@[noinline]
+def directHodgeFullData (m : @& MV CGA3 .full) : DataArray :=
+  (MV.hodgeDual m).coeffs
+
+/-- Compare the packed CGA3 Hodge kernel with its former boxed-array shape. -/
+def runPackedHodgeDual (iters : Nat := defaultHodgeDualIters) : IO Unit := do
+  IO.println "=== CGA3 packed Hodge dual ==="
+  let samples : Nat := 16
+  let dense : Array (Multivector CGA3 Float) :=
+    Array.ofFn (n := samples) fun k => denseCGA3 (Float.ofNat (k.val + 1))
+  let full : Array (MV CGA3 .full) := dense.map fun m => MV.ofMultivector m .full
+  let defaultFull : MV CGA3 .full := MV.ofMultivector (denseCGA3 1.0) .full
+  let diff := unaryBaselineDiff samples full defaultFull
+    boxedHodgeFullData directHodgeFullData
+  IO.println s!"  hodge dual l1 diff: {diff}"
+  if diff.isNaN || diff > tolerance then
+    throw <| IO.userError "packed Hodge-dual baseline mismatch"
+  let positive := positiveIters iters
+  let warmup := positiveIters (positive / 10)
+  let boxedNs ← timeit "boxed CGA3 full hodge dual" warmup positive fun i =>
+    packedDataProbe (boxedHodgeFullData (full.getD (i % samples) defaultFull))
+  let directNs ← timeit "direct CGA3 full hodge dual" warmup positive fun i =>
+    packedDataProbe (directHodgeFullData (full.getD (i % samples) defaultFull))
+  IO.println s!"  hodge dual speedup: {boxedNs / directNs}x"
+  IO.println ""
+
 /-- Compare the one-buffer subtraction kernel with the old add-neg composition.
 
 CGA3 full storage exercises 32 contiguous coefficients, the largest standard
@@ -778,6 +819,7 @@ def runAll (baseIters : Nat := defaultBaseIters) : IO Unit := do
   runPackedSubtraction (positiveIters baseIters)
   runPackedLinearArithmetic (positiveIters baseIters)
   runPackedUnaryInvolutions (positiveIters baseIters)
+  runPackedHodgeDual (positiveIters baseIters)
   runR3 (positiveIters baseIters)
   runPGA3 (positiveIters (baseIters / 2))
   runPGA3MotorPointTransform (positiveIters (baseIters / 2))
@@ -798,6 +840,7 @@ def usage : String :=
     "       packedmvbench subtraction [iters]",
     "       packedmvbench linear-arithmetic [iters]",
     "       packedmvbench unary-involutions [iters]",
+    "       packedmvbench hodge-dual [iters]",
     "       packedmvbench pga-motor-point [iters]",
     "       packedmvbench pga-motor-point-dense [iters]",
     "       packedmvbench pga-motor-point-packed [iters]",
@@ -822,6 +865,10 @@ def main (args : List String) : IO Unit := do
       Grassmann.PackedMVBench.runPackedUnaryInvolutions
   | ["unary-involutions", itersStr] =>
       Grassmann.PackedMVBench.runPackedUnaryInvolutions (← parseItersArg itersStr)
+  | ["hodge-dual"] =>
+      Grassmann.PackedMVBench.runPackedHodgeDual
+  | ["hodge-dual", itersStr] =>
+      Grassmann.PackedMVBench.runPackedHodgeDual (← parseItersArg itersStr)
   | ["pga-motor-point"] =>
       Grassmann.PackedMVBench.runPGA3MotorPointTransform
         Grassmann.PackedMVBench.defaultMotorPointIters

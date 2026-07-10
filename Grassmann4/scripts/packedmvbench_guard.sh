@@ -22,6 +22,7 @@ motor_iters="${PACKED_MV_BENCH_MOTOR_ITERS:-5000}"
 subtraction_iters="${PACKED_MV_BENCH_SUBTRACTION_ITERS:-100000}"
 linear_iters="${PACKED_MV_BENCH_LINEAR_ITERS:-500000}"
 unary_iters="${PACKED_MV_BENCH_UNARY_ITERS:-100000}"
+hodge_iters="${PACKED_MV_BENCH_HODGE_ITERS:-100000}"
 max_correctness_diff="${MAX_PACKED_MV_CORRECTNESS_DIFF:-1e-6}"
 max_packed_motor_ns="${MAX_PACKED_PGA_MOTOR_POINT_NS:-20000}"
 min_motor_speedup="${MIN_PACKED_PGA_MOTOR_POINT_SPEEDUP:-5}"
@@ -43,6 +44,10 @@ max_packed_parity_unary_ns="${MAX_PACKED_MV_PARITY_UNARY_NS:-500}"
 max_packed_even_involute_ns="${MAX_PACKED_MV_EVEN_INVOLUTE_NS:-100}"
 max_packed_odd_involute_ns="${MAX_PACKED_MV_ODD_INVOLUTE_NS:-150}"
 min_packed_unary_speedup="${MIN_PACKED_MV_UNARY_SPEEDUP:-20}"
+# Four repeated 100k CGA3 runs measured the one-buffer orientation-mask kernel
+# at 79-81 ns/iter and the exact old boxed shape at 26.7-27.8 us/iter.
+max_packed_hodge_ns="${MAX_PACKED_MV_HODGE_NS:-250}"
+min_packed_hodge_speedup="${MIN_PACKED_MV_HODGE_SPEEDUP:-100}"
 
 bench_log="${PACKED_MV_BENCH_GUARD_LOG:-}"
 if [[ -z "$bench_log" ]]; then
@@ -170,7 +175,9 @@ write_summary_json() {
     printf '    "max_packed_parity_unary_ns": %s,\n' "$max_packed_parity_unary_ns"
     printf '    "max_packed_even_involute_ns": %s,\n' "$max_packed_even_involute_ns"
     printf '    "max_packed_odd_involute_ns": %s,\n' "$max_packed_odd_involute_ns"
-    printf '    "min_packed_unary_speedup": %s\n' "$min_packed_unary_speedup"
+    printf '    "min_packed_unary_speedup": %s,\n' "$min_packed_unary_speedup"
+    printf '    "max_packed_hodge_ns": %s,\n' "$max_packed_hodge_ns"
+    printf '    "min_packed_hodge_speedup": %s\n' "$min_packed_hodge_speedup"
     printf '  },\n'
     printf '  "metrics": {\n'
     printf '    "pga_motor_point_diff": %s,\n' "$motor_point_diff"
@@ -210,7 +217,10 @@ write_summary_json() {
     printf '    "packed_boxed_conjugate_even_ns": %s,\n' "$boxed_conjugate_even_ns"
     printf '    "packed_direct_conjugate_even_ns": %s,\n' "$direct_conjugate_even_ns"
     printf '    "packed_boxed_conjugate_odd_ns": %s,\n' "$boxed_conjugate_odd_ns"
-    printf '    "packed_direct_conjugate_odd_ns": %s\n' "$direct_conjugate_odd_ns"
+    printf '    "packed_direct_conjugate_odd_ns": %s,\n' "$direct_conjugate_odd_ns"
+    printf '    "hodge_dual_l1_diff": %s,\n' "$hodge_dual_diff"
+    printf '    "packed_boxed_hodge_dual_ns": %s,\n' "$boxed_hodge_dual_ns"
+    printf '    "packed_direct_hodge_dual_ns": %s\n' "$direct_hodge_dual_ns"
     printf '  },\n'
     printf '  "speedups": {\n'
     printf '    "pga_motor_point": %s,\n' "$motor_speedup"
@@ -226,7 +236,8 @@ write_summary_json() {
     printf '    "packed_involute_odd": %s,\n' "$involute_odd_speedup"
     printf '    "packed_conjugate_full": %s,\n' "$conjugate_full_speedup"
     printf '    "packed_conjugate_even": %s,\n' "$conjugate_even_speedup"
-    printf '    "packed_conjugate_odd": %s\n' "$conjugate_odd_speedup"
+    printf '    "packed_conjugate_odd": %s,\n' "$conjugate_odd_speedup"
+    printf '    "packed_hodge_dual": %s\n' "$hodge_dual_speedup"
     printf '  }\n'
     printf '}\n'
   } > "$summary_json"
@@ -261,6 +272,12 @@ fi
 
 if ! lake exe packedmvbench unary-involutions "$unary_iters" >> "$bench_log" 2>&1; then
   printf 'lake exe packedmvbench unary-involutions failed; benchmark log follows:\n' >&2
+  cat "$bench_log" >&2
+  exit 1
+fi
+
+if ! lake exe packedmvbench hodge-dual "$hodge_iters" >> "$bench_log" 2>&1; then
+  printf 'lake exe packedmvbench hodge-dual failed; benchmark log follows:\n' >&2
   cat "$bench_log" >&2
   exit 1
 fi
@@ -317,6 +334,10 @@ involute_odd_speedup="$(ratio "$boxed_involute_odd_ns" "$direct_involute_odd_ns"
 conjugate_full_speedup="$(ratio "$boxed_conjugate_full_ns" "$direct_conjugate_full_ns")"
 conjugate_even_speedup="$(ratio "$boxed_conjugate_even_ns" "$direct_conjugate_even_ns")"
 conjugate_odd_speedup="$(ratio "$boxed_conjugate_odd_ns" "$direct_conjugate_odd_ns")"
+hodge_dual_diff="$(get_last_metric "hodge dual l1 diff")"
+boxed_hodge_dual_ns="$(get_timed_metric "boxed CGA3 full hodge dual")"
+direct_hodge_dual_ns="$(get_timed_metric "direct CGA3 full hodge dual")"
+hodge_dual_speedup="$(ratio "$boxed_hodge_dual_ns" "$direct_hodge_dual_ns")"
 
 check_le "PGA3 motor point transform diff" "$motor_point_diff" "$max_correctness_diff" ""
 check_le "Packed PGA3 motor point transform" "$packed_motor_ns" "$max_packed_motor_ns" "ns/iter"
@@ -372,6 +393,12 @@ check_le "Packed even involute" "$direct_involute_even_ns" \
   "$max_packed_even_involute_ns" "ns/iter"
 check_le "Packed odd involute" "$direct_involute_odd_ns" \
   "$max_packed_odd_involute_ns" "ns/iter"
+check_le "Packed Hodge dual baseline diff" "$hodge_dual_diff" \
+  "$max_correctness_diff" ""
+check_le "Packed Hodge dual" "$direct_hodge_dual_ns" \
+  "$max_packed_hodge_ns" "ns/iter"
+check_ge "Packed Hodge dual speedup" "$hodge_dual_speedup" \
+  "$min_packed_hodge_speedup" "x"
 
 status="passed"
 if [[ ${#failures[@]} -ne 0 ]]; then
@@ -416,3 +443,5 @@ for ((i = 0; i < ${#unary_diff_labels[@]}; i++)); do
     "${unary_diff_labels[$i]}" "${unary_direct_ns[$i]}" \
     "${unary_boxed_ns[$i]}" "${unary_speedups[$i]}"
 done
+printf '  Packed Hodge dual: %s ns/iter direct vs %s ns/iter boxed (%sx)\n' \
+  "$direct_hodge_dual_ns" "$boxed_hodge_dual_ns" "$hodge_dual_speedup"
