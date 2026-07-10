@@ -13,6 +13,7 @@ def tolerance : Float := 1e-6
 def defaultBaseIters : Nat := 20000
 def defaultMotorPointIters : Nat := 100000
 def defaultSubtractionIters : Nat := 250000
+def defaultLinearArithmeticIters : Nat := 500000
 def defaultXYZBatchPoints : Nat := 4096
 def defaultXYZBatchIters : Nat := 100
 
@@ -76,6 +77,18 @@ def denseProbe {n : Nat} {sig : Signature n} (m : Multivector sig Float) : Float
 def packedProbe {n : Nat} {sig : Signature n} {p : Parity} (m : MV sig p) : Float :=
   MV.scalarPart m + m.coeff 1 + m.coeff 2 + m.coeff 3 +
     m.coeff 5 + m.coeff 7 + m.coeff 15 + m.coeff 31
+
+@[inline]
+def packedDataProbe (a : @& DataArray) : Float :=
+  a.get! 0 + a.get! 1 + a.get! 2 + a.get! 3 +
+    a.get! 7 + a.get! 15 + a.get! 23 + a.get! 31
+
+def dataL1Diff (a b : @& DataArray) : Float :=
+  if a.size != b.size then
+    1e300
+  else
+    (List.range a.size).foldl (init := 0.0) fun acc i =>
+      acc + Float.abs (a.get! i - b.get! i)
 
 def denseL1Diff {n : Nat} {sig : Signature n}
     (a b : Multivector sig Float) : Float :=
@@ -205,6 +218,89 @@ def compare (denseName packedName : String) (warmupIters iters : Nat)
 
 def positiveIters (n : Nat) : Nat :=
   if n = 0 then 1 else n
+
+/-! ### Packed linear-arithmetic allocation baselines -/
+
+/-- Pre-ALOK-766 addition shape retained only as a benchmark baseline. -/
+@[noinline]
+def boxedAddData (a b : @& MV CGA3 .full) : DataArray :=
+  let size := storageSize 5 .full
+  DataArray.ofArray <| (Array.range size).map fun i => a.coeffs.get! i + b.coeffs.get! i
+
+/-- Pre-ALOK-766 negation shape retained only as a benchmark baseline. -/
+@[noinline]
+def boxedNegData (a : @& MV CGA3 .full) : DataArray :=
+  let size := storageSize 5 .full
+  DataArray.ofArray <| (Array.range size).map fun i => -a.coeffs.get! i
+
+/-- Pre-ALOK-766 scalar-multiplication shape retained only as a benchmark baseline. -/
+@[noinline]
+def boxedSmulData (s : Float) (a : @& MV CGA3 .full) : DataArray :=
+  let size := storageSize 5 .full
+  DataArray.ofArray <| (Array.range size).map fun i => s * a.coeffs.get! i
+
+@[noinline]
+def directAddData (a b : @& MV CGA3 .full) : DataArray :=
+  (MV.add a b).coeffs
+
+@[noinline]
+def directNegData (a : @& MV CGA3 .full) : DataArray :=
+  (MV.neg a).coeffs
+
+@[noinline]
+def directSmulData (s : Float) (a : @& MV CGA3 .full) : DataArray :=
+  (MV.smul s a).coeffs
+
+/-- Compare one-buffer CGA3 full linear kernels with their old boxed-array shape. -/
+def runPackedLinearArithmetic
+    (iters : Nat := defaultLinearArithmeticIters) : IO Unit := do
+  IO.println "=== CGA3 full packed linear arithmetic ==="
+  let samples : Nat := 16
+  let denseA : Array (Multivector CGA3 Float) :=
+    Array.ofFn (n := samples) fun k => denseCGA3 (Float.ofNat (k.val + 1))
+  let denseB : Array (Multivector CGA3 Float) :=
+    Array.ofFn (n := samples) fun k => denseCGA3 (Float.ofNat (k.val + 17))
+  let packedA : Array (MV CGA3 .full) := denseA.map fun m => MV.ofMultivector m .full
+  let packedB : Array (MV CGA3 .full) := denseB.map fun m => MV.ofMultivector m .full
+  let defaultA : MV CGA3 .full := MV.ofMultivector (denseCGA3 1.0) .full
+  let defaultB : MV CGA3 .full := MV.ofMultivector (denseCGA3 2.0) .full
+  let scale : Float := 1.75
+  let addDiff := (List.range samples).foldl (init := 0.0) fun acc i =>
+    let a := packedA.getD i defaultA
+    let b := packedB.getD i defaultB
+    acc + dataL1Diff (boxedAddData a b) (directAddData a b)
+  let negDiff := (List.range samples).foldl (init := 0.0) fun acc i =>
+    let a := packedA.getD i defaultA
+    acc + dataL1Diff (boxedNegData a) (directNegData a)
+  let smulDiff := (List.range samples).foldl (init := 0.0) fun acc i =>
+    let a := packedA.getD i defaultA
+    acc + dataL1Diff (boxedSmulData scale a) (directSmulData scale a)
+  IO.println s!"  add l1 diff: {addDiff}"
+  IO.println s!"  neg l1 diff: {negDiff}"
+  IO.println s!"  smul l1 diff: {smulDiff}"
+  if addDiff.isNaN || negDiff.isNaN || smulDiff.isNaN ||
+      addDiff > tolerance || negDiff > tolerance || smulDiff > tolerance then
+    throw <| IO.userError "packed linear-arithmetic baseline mismatch"
+  let positive := positiveIters iters
+  let warmup := positiveIters (positive / 10)
+  let boxedAddNs ← timeit "boxed CGA3 full add" warmup positive fun i =>
+    let idx := i % samples
+    packedDataProbe (boxedAddData (packedA.getD idx defaultA) (packedB.getD idx defaultB))
+  let directAddNs ← timeit "direct CGA3 full add" warmup positive fun i =>
+    let idx := i % samples
+    packedDataProbe (directAddData (packedA.getD idx defaultA) (packedB.getD idx defaultB))
+  let boxedNegNs ← timeit "boxed CGA3 full neg" warmup positive fun i =>
+    packedDataProbe (boxedNegData (packedA.getD (i % samples) defaultA))
+  let directNegNs ← timeit "direct CGA3 full neg" warmup positive fun i =>
+    packedDataProbe (directNegData (packedA.getD (i % samples) defaultA))
+  let boxedSmulNs ← timeit "boxed CGA3 full smul" warmup positive fun i =>
+    packedDataProbe (boxedSmulData scale (packedA.getD (i % samples) defaultA))
+  let directSmulNs ← timeit "direct CGA3 full smul" warmup positive fun i =>
+    packedDataProbe (directSmulData scale (packedA.getD (i % samples) defaultA))
+  IO.println s!"  add speedup: {boxedAddNs / directAddNs}x"
+  IO.println s!"  neg speedup: {boxedNegNs / directNegNs}x"
+  IO.println s!"  smul speedup: {boxedSmulNs / directSmulNs}x"
+  IO.println ""
 
 /-- Compare the one-buffer subtraction kernel with the old add-neg composition.
 
@@ -469,6 +565,7 @@ def runAll (baseIters : Nat := defaultBaseIters) : IO Unit := do
   IO.println ""
   verifyCorrectness
   runPackedSubtraction (positiveIters baseIters)
+  runPackedLinearArithmetic (positiveIters baseIters)
   runR3 (positiveIters baseIters)
   runPGA3 (positiveIters (baseIters / 2))
   runPGA3MotorPointTransform (positiveIters (baseIters / 2))
@@ -487,6 +584,7 @@ def usage : String :=
     "Usage: packedmvbench [base-iters]",
     "       packedmvbench all [base-iters]",
     "       packedmvbench subtraction [iters]",
+    "       packedmvbench linear-arithmetic [iters]",
     "       packedmvbench pga-motor-point [iters]",
     "       packedmvbench pga-motor-point-dense [iters]",
     "       packedmvbench pga-motor-point-packed [iters]",
@@ -503,6 +601,10 @@ def main (args : List String) : IO Unit := do
       Grassmann.PackedMVBench.runPackedSubtraction
   | ["subtraction", itersStr] =>
       Grassmann.PackedMVBench.runPackedSubtraction (← parseItersArg itersStr)
+  | ["linear-arithmetic"] =>
+      Grassmann.PackedMVBench.runPackedLinearArithmetic
+  | ["linear-arithmetic", itersStr] =>
+      Grassmann.PackedMVBench.runPackedLinearArithmetic (← parseItersArg itersStr)
   | ["pga-motor-point"] =>
       Grassmann.PackedMVBench.runPGA3MotorPointTransform
         Grassmann.PackedMVBench.defaultMotorPointIters

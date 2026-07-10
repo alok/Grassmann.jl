@@ -20,11 +20,20 @@ done
 smoke_iters="${PACKED_MV_BENCH_SMOKE_ITERS:-200}"
 motor_iters="${PACKED_MV_BENCH_MOTOR_ITERS:-5000}"
 subtraction_iters="${PACKED_MV_BENCH_SUBTRACTION_ITERS:-100000}"
+linear_iters="${PACKED_MV_BENCH_LINEAR_ITERS:-500000}"
 max_correctness_diff="${MAX_PACKED_MV_CORRECTNESS_DIFF:-1e-6}"
 max_packed_motor_ns="${MAX_PACKED_PGA_MOTOR_POINT_NS:-20000}"
 min_motor_speedup="${MIN_PACKED_PGA_MOTOR_POINT_SPEEDUP:-5}"
 max_packed_subtraction_ns="${MAX_PACKED_MV_SUBTRACTION_NS:-500}"
-min_subtraction_speedup="${MIN_PACKED_MV_SUBTRACTION_SPEEDUP:-3}"
+# The composed baseline is now two optimized one-buffer kernels. Direct
+# subtraction must still save one traversal and one result buffer.
+min_subtraction_speedup="${MIN_PACKED_MV_SUBTRACTION_SPEEDUP:-1.5}"
+max_packed_add_ns="${MAX_PACKED_MV_ADD_NS:-500}"
+min_packed_add_speedup="${MIN_PACKED_MV_ADD_SPEEDUP:-2.5}"
+max_packed_neg_ns="${MAX_PACKED_MV_NEG_NS:-500}"
+min_packed_neg_speedup="${MIN_PACKED_MV_NEG_SPEEDUP:-2.5}"
+max_packed_smul_ns="${MAX_PACKED_MV_SMUL_NS:-500}"
+min_packed_smul_speedup="${MIN_PACKED_MV_SMUL_SPEEDUP:-2.5}"
 
 bench_log="${PACKED_MV_BENCH_GUARD_LOG:-}"
 if [[ -z "$bench_log" ]]; then
@@ -43,7 +52,7 @@ numeric_ge() {
 
 ratio() {
   awk -v numerator="$1" -v denominator="$2" \
-    'BEGIN { if (denominator == 0) exit 1; printf "%.1f", numerator / denominator }'
+    'BEGIN { if (denominator == 0) exit 1; printf "%.3f", numerator / denominator }'
 }
 
 extract_timed_value() {
@@ -141,18 +150,33 @@ write_summary_json() {
     printf '    "max_packed_motor_ns": %s,\n' "$max_packed_motor_ns"
     printf '    "min_motor_speedup": %s,\n' "$min_motor_speedup"
     printf '    "max_packed_subtraction_ns": %s,\n' "$max_packed_subtraction_ns"
-    printf '    "min_subtraction_speedup": %s\n' "$min_subtraction_speedup"
+    printf '    "min_subtraction_speedup": %s,\n' "$min_subtraction_speedup"
+    printf '    "max_packed_add_ns": %s,\n' "$max_packed_add_ns"
+    printf '    "min_packed_add_speedup": %s,\n' "$min_packed_add_speedup"
+    printf '    "max_packed_neg_ns": %s,\n' "$max_packed_neg_ns"
+    printf '    "min_packed_neg_speedup": %s,\n' "$min_packed_neg_speedup"
+    printf '    "max_packed_smul_ns": %s,\n' "$max_packed_smul_ns"
+    printf '    "min_packed_smul_speedup": %s\n' "$min_packed_smul_speedup"
     printf '  },\n'
     printf '  "metrics": {\n'
     printf '    "pga_motor_point_diff": %s,\n' "$motor_point_diff"
     printf '    "dense_motor_point_ns": %s,\n' "$dense_motor_ns"
     printf '    "packed_motor_point_ns": %s,\n' "$packed_motor_ns"
     printf '    "packed_add_neg_subtraction_ns": %s,\n' "$composed_subtraction_ns"
-    printf '    "packed_direct_subtraction_ns": %s\n' "$direct_subtraction_ns"
+    printf '    "packed_direct_subtraction_ns": %s,\n' "$direct_subtraction_ns"
+    printf '    "packed_boxed_add_ns": %s,\n' "$boxed_add_ns"
+    printf '    "packed_direct_add_ns": %s,\n' "$direct_add_ns"
+    printf '    "packed_boxed_neg_ns": %s,\n' "$boxed_neg_ns"
+    printf '    "packed_direct_neg_ns": %s,\n' "$direct_neg_ns"
+    printf '    "packed_boxed_smul_ns": %s,\n' "$boxed_smul_ns"
+    printf '    "packed_direct_smul_ns": %s\n' "$direct_smul_ns"
     printf '  },\n'
     printf '  "speedups": {\n'
     printf '    "pga_motor_point": %s,\n' "$motor_speedup"
-    printf '    "packed_subtraction": %s\n' "$subtraction_speedup"
+    printf '    "packed_subtraction": %s,\n' "$subtraction_speedup"
+    printf '    "packed_add": %s,\n' "$add_speedup"
+    printf '    "packed_neg": %s,\n' "$neg_speedup"
+    printf '    "packed_smul": %s\n' "$smul_speedup"
     printf '  }\n'
     printf '}\n'
   } > "$summary_json"
@@ -179,6 +203,12 @@ if ! lake exe packedmvbench subtraction "$subtraction_iters" >> "$bench_log" 2>&
   exit 1
 fi
 
+if ! lake exe packedmvbench linear-arithmetic "$linear_iters" >> "$bench_log" 2>&1; then
+  printf 'lake exe packedmvbench linear-arithmetic failed; benchmark log follows:\n' >&2
+  cat "$bench_log" >&2
+  exit 1
+fi
+
 motor_point_diff="$(get_last_metric "PGA3 motor point transform")"
 dense_motor_ns="$(get_timed_metric "dense motor point transform")"
 packed_motor_ns="$(get_timed_metric "packed MV motor point transform")"
@@ -186,6 +216,15 @@ motor_speedup="$(ratio "$dense_motor_ns" "$packed_motor_ns")"
 composed_subtraction_ns="$(get_timed_metric "packed add-neg subtraction")"
 direct_subtraction_ns="$(get_timed_metric "packed direct subtraction")"
 subtraction_speedup="$(ratio "$composed_subtraction_ns" "$direct_subtraction_ns")"
+boxed_add_ns="$(get_timed_metric "boxed CGA3 full add")"
+direct_add_ns="$(get_timed_metric "direct CGA3 full add")"
+boxed_neg_ns="$(get_timed_metric "boxed CGA3 full neg")"
+direct_neg_ns="$(get_timed_metric "direct CGA3 full neg")"
+boxed_smul_ns="$(get_timed_metric "boxed CGA3 full smul")"
+direct_smul_ns="$(get_timed_metric "direct CGA3 full smul")"
+add_speedup="$(ratio "$boxed_add_ns" "$direct_add_ns")"
+neg_speedup="$(ratio "$boxed_neg_ns" "$direct_neg_ns")"
+smul_speedup="$(ratio "$boxed_smul_ns" "$direct_smul_ns")"
 
 check_le "PGA3 motor point transform diff" "$motor_point_diff" "$max_correctness_diff" ""
 check_le "Packed PGA3 motor point transform" "$packed_motor_ns" "$max_packed_motor_ns" "ns/iter"
@@ -194,6 +233,14 @@ check_le "Packed direct subtraction" "$direct_subtraction_ns" \
   "$max_packed_subtraction_ns" "ns/iter"
 check_ge "Packed subtraction speedup" "$subtraction_speedup" \
   "$min_subtraction_speedup" "x"
+check_le "Packed direct addition" "$direct_add_ns" "$max_packed_add_ns" "ns/iter"
+check_ge "Packed addition speedup" "$add_speedup" "$min_packed_add_speedup" "x"
+check_le "Packed direct negation" "$direct_neg_ns" "$max_packed_neg_ns" "ns/iter"
+check_ge "Packed negation speedup" "$neg_speedup" "$min_packed_neg_speedup" "x"
+check_le "Packed direct scalar multiplication" "$direct_smul_ns" \
+  "$max_packed_smul_ns" "ns/iter"
+check_ge "Packed scalar multiplication speedup" "$smul_speedup" \
+  "$min_packed_smul_speedup" "x"
 
 status="passed"
 if [[ ${#failures[@]} -ne 0 ]]; then
@@ -217,3 +264,9 @@ printf '  PGA3 motor point: %s ns/iter packed vs %s ns/iter dense (%sx)\n' \
   "$packed_motor_ns" "$dense_motor_ns" "$motor_speedup"
 printf '  Packed subtraction: %s ns/iter direct vs %s ns/iter add-neg (%sx)\n' \
   "$direct_subtraction_ns" "$composed_subtraction_ns" "$subtraction_speedup"
+printf '  Packed addition: %s ns/iter direct vs %s ns/iter boxed (%sx)\n' \
+  "$direct_add_ns" "$boxed_add_ns" "$add_speedup"
+printf '  Packed negation: %s ns/iter direct vs %s ns/iter boxed (%sx)\n' \
+  "$direct_neg_ns" "$boxed_neg_ns" "$neg_speedup"
+printf '  Packed scalar multiplication: %s ns/iter direct vs %s ns/iter boxed (%sx)\n' \
+  "$direct_smul_ns" "$boxed_smul_ns" "$smul_speedup"
