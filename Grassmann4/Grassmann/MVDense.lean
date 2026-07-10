@@ -51,17 +51,87 @@ theorem toMultivector_coeff_of_parity (m : MV sig p) {i : Fin (2 ^ n)}
   unfold toMultivector
   cases p <;> simp_all [packIdx, packIdxValid, i.isLt]
 
-/-- Convert from a proof-friendly dense `Multivector`. -/
+/-- Tail-recursive dense ingress for identity-indexed full storage. -/
+private def ofMultivectorFullAux (m : @& Multivector sig Float) (i : Nat) :
+    (remaining : Nat) → i + remaining ≤ 2 ^ n → FloatArray → FloatArray
+  | 0, _hbound, out => out
+  | remaining + 1, hbound, out =>
+      have hmask : i < 2 ^ n := by omega
+      have hnext : i + 1 + remaining ≤ 2 ^ n := by omega
+      ofMultivectorFullAux m (i + 1) remaining hnext
+        (out.push (m.coeffs ⟨i, hmask⟩))
+
+private theorem ofMultivectorFullAux_size (m : Multivector sig Float) (i remaining : Nat)
+    (hbound : i + remaining ≤ 2 ^ n) (out : FloatArray) :
+    (ofMultivectorFullAux m i remaining hbound out).size = out.size + remaining := by
+  induction remaining generalizing i out with
+  | zero => simp [ofMultivectorFullAux]
+  | succ remaining ih =>
+      simp only [ofMultivectorFullAux]
+      rw [ih]
+      simp [FloatArray.push, FloatArray.size, Nat.add_comm,
+        Nat.add_left_comm]
+
+/-- Tail-recursive dense ingress for even or odd packed storage. -/
+private def ofMultivectorPackedAux (p : Parity)
+    (m : @& Multivector sig Float) (i : Nat) :
+    (remaining : Nat) → i + remaining ≤ storageSize n p → FloatArray → FloatArray
+  | 0, _hbound, out => out
+  | remaining + 1, hbound, out =>
+      have hi : i < storageSize n p := by omega
+      let mask := unpackIdxValid n p i
+      have hmask : mask < 2 ^ n := unpackIdxValid_lt n p i hi
+      have hnext : i + 1 + remaining ≤ storageSize n p := by omega
+      ofMultivectorPackedAux p m (i + 1) remaining hnext
+        (out.push (m.coeffs ⟨mask, hmask⟩))
+
+private theorem ofMultivectorPackedAux_size (p : Parity) (m : Multivector sig Float)
+    (i remaining : Nat) (hbound : i + remaining ≤ storageSize n p) (out : FloatArray) :
+    (ofMultivectorPackedAux p m i remaining hbound out).size = out.size + remaining := by
+  induction remaining generalizing i out with
+  | zero => simp [ofMultivectorPackedAux]
+  | succ remaining ih =>
+      simp only [ofMultivectorPackedAux]
+      rw [ih]
+      simp [FloatArray.push, FloatArray.size, Nat.add_comm,
+        Nat.add_left_comm]
+
+/-- Convert from a proof-friendly dense `Multivector`.
+
+The dense coefficient closure is consumed synchronously into one native result
+buffer and does not escape in the packed value, so the input can be borrowed.
+This differs intentionally from `toMultivector`, whose returned closure owns
+the packed value that it captures. -/
 @[inline]
-def ofMultivector (m : Multivector sig Float) (p : Parity) : MV sig p :=
-  let sz := storageSize n p
-  let coeffs := DataArray.ofArray ((Array.range sz).map fun pi =>
-    let mask := unpackIdxValid n p pi
-    if hmask : mask < 2 ^ n then
-      m.coeffs ⟨mask, hmask⟩
-    else
-      0.0)
-  (ofDataArray? sig p coeffs).getD (zero sig p)
+def ofMultivector (m : @& Multivector sig Float) (p : Parity) : MV sig p :=
+  match p with
+  | .full =>
+      let sz := storageSize n .full
+      let coeffs := ofMultivectorFullAux m 0 sz (by simp [sz, storageSize])
+        (FloatArray.emptyWithCapacity sz)
+      have hsize : coeffs.size = storageSize n .full := by
+        dsimp only [coeffs]
+        rw [ofMultivectorFullAux_size]
+        simp [sz, FloatArray.emptyWithCapacity, FloatArray.size]
+      ofDataArray sig .full coeffs hsize
+  | .even =>
+      let sz := storageSize n .even
+      let coeffs := ofMultivectorPackedAux .even m 0 sz (by simp [sz])
+        (FloatArray.emptyWithCapacity sz)
+      have hsize : coeffs.size = storageSize n .even := by
+        dsimp only [coeffs]
+        rw [ofMultivectorPackedAux_size]
+        simp [sz, FloatArray.emptyWithCapacity, FloatArray.size]
+      ofDataArray sig .even coeffs hsize
+  | .odd =>
+      let sz := storageSize n .odd
+      let coeffs := ofMultivectorPackedAux .odd m 0 sz (by simp [sz])
+        (FloatArray.emptyWithCapacity sz)
+      have hsize : coeffs.size = storageSize n .odd := by
+        dsimp only [coeffs]
+        rw [ofMultivectorPackedAux_size]
+        simp [sz, FloatArray.emptyWithCapacity, FloatArray.size]
+      ofDataArray sig .odd coeffs hsize
 
 instance instCoeEvenToMV : Coe (MV sig .even) (Multivector sig Float) :=
   ⟨toMultivector⟩

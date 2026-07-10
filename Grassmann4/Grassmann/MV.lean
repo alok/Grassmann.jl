@@ -165,6 +165,41 @@ def unpackIdxValid (n : Nat) (p : Parity) (pi : Nat) : Nat :=
   | .even | .odd =>
       pi + pi + packedLowBit n p (popcount pi)
 
+/-- A packed rank inside its physical buffer decodes to a valid dense mask. -/
+theorem unpackIdxValid_lt (n : Nat) (p : Parity) (pi : Nat)
+    (hpi : pi < storageSize n p) : unpackIdxValid n p pi < 2 ^ n := by
+  cases p with
+  | full => simpa [storageSize, unpackIdxValid] using hpi
+  | even =>
+      cases n with
+      | zero =>
+          simp [storageSize] at hpi
+          simp [unpackIdxValid, packedLowBit]
+          omega
+      | succ n =>
+          have hlow : popcount pi % 2 < 2 := Nat.mod_lt _ (by decide)
+          simp only [storageSize, Nat.succ_sub_one] at hpi
+          simp only [unpackIdxValid, packedLowBit]
+          change pi + pi + popcount pi % 2 < 2 ^ n * 2
+          omega
+  | odd =>
+      cases n with
+      | zero =>
+          simp [storageSize] at hpi
+          simp [unpackIdxValid, packedLowBit]
+          omega
+      | succ n =>
+          have hlow : popcount pi % 2 < 2 := Nat.mod_lt _ (by decide)
+          have hcases : popcount pi % 2 = 0 ∨ popcount pi % 2 = 1 := by omega
+          simp only [storageSize, Nat.succ_sub_one] at hpi
+          simp only [unpackIdxValid, packedLowBit]
+          change pi + pi + (popcount pi % 2 ^^^ 1) < 2 ^ n * 2
+          rcases hcases with hzero | hone
+          · simp [hzero]
+            omega
+          · simp [hone]
+            omega
+
 /-- Allocation-free packed rank for a caller-validated blade mask. -/
 @[inline, always_inline]
 def packIdxValid (_n : Nat) (p : Parity) (mask : Nat) : Nat :=
@@ -231,6 +266,17 @@ def ofDataArray? (sig : Signature n) (p : Parity) (coeffs : DataArray) : Option 
     some ⟨coeffs⟩
   else
     none
+
+/-- Construct a packed multivector from a buffer whose exact layout size has
+already been proved.
+
+This is the proof-carrying internal-builder boundary. Foreign or otherwise
+untrusted buffers should continue to use `ofDataArray?`; trusted builders can
+avoid a duplicate runtime size check without exposing the raw constructor. -/
+@[inline, always_inline]
+def ofDataArray (sig : Signature n) (p : Parity) (coeffs : DataArray)
+    (_hsize : coeffs.size = storageSize n p) : MV sig p :=
+  ⟨coeffs⟩
 
 /-!
 These fixed PGA3 constructors keep the raw `MV` constructor private while
