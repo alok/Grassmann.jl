@@ -40,6 +40,8 @@ This gives the project a single Float-oriented multivector type with:
 - borrowed, single-result-buffer `add`, `sub`, `neg`, and Float scalar kernels,
 - borrowed reverse and Clifford-conjugation kernels, plus parity-specialized
   grade involution that returns even inputs and negates odd inputs directly,
+- a borrowed, one-buffer full-storage Hodge dual with a compact orientation
+  bit stream through dimension 6 and a direct parity fallback above it,
 - standard `Zero`, `Inhabited`, and `SMul Float` interfaces for every parity,
   plus `One` for even and full storage only,
 - an opt-in bridge back to dense `Multivector` values when reference comparisons or proof-oriented code matter more than runtime.
@@ -179,6 +181,7 @@ lake exe packedmvbench pga-motor-point 5000
 lake exe packedmvbench subtraction 250000
 lake exe packedmvbench linear-arithmetic 500000
 lake exe packedmvbench unary-involutions 100000
+lake exe packedmvbench hodge-dual 100000
 ```
 
 The subtraction benchmark compares the borrowed, one-buffer `MV.sub` kernel
@@ -188,7 +191,9 @@ one result buffer. The linear-arithmetic mode compares the one-buffer add,
 negation, and scalar kernels with their former boxed `Array.range`/`Array.map`
 shape. The unary-involutions mode does the same for full/even/odd reverse,
 grade involution, and Clifford conjugation. The thresholded guard checks
-absolute ceilings and relative speedups.
+absolute ceilings and relative speedups. The Hodge mode compares the one-buffer
+full-storage kernel with its former boxed complement/map implementation over all
+32 CGA3 coefficients.
 
 `packed_linear_codegen_guard.sh` complements timing with a compiler-structural
 gate. It checks the exact non-boxed generated-C bodies for one final
@@ -196,7 +201,8 @@ gate. It checks the exact non-boxed generated-C bodies for one final
 coefficient, and a tail jump, while excluding legitimate typeclass dictionary
 closures and boxed ABI adapters. It also pins the unary loops and verifies that
 even involution retains and returns its input while odd involution allocates one
-negation result.
+negation result. The Hodge checks pin the unboxed `UInt64` orientation selector,
+the dimension <= 6 and fallback tail loops, and the single public result buffer.
 
 The guard thresholds are intentionally conservative but still depend on the
 host and build state; use their environment-variable overrides when establishing
@@ -227,6 +233,14 @@ returned its input in `20.438340 ns/iter`, and odd involution used direct
 negation in `51.632500 ns/iter`. Compared with the retained boxed shapes, the
 nine speedups ranged from `33.439x` to `351.206x`. The generated-C guard passed
 all five unary helper loops and all three public involution branches.
+
+The 2026-07-09 packed-Hodge acceptance run had zero L1 drift over all 32 CGA3
+coefficients. The one-buffer kernel measured `79.200830 ns/iter` versus
+`27113.287500 ns/iter` for the retained boxed shape (`342.336x`). Dimensions
+0--6 use a signature-independent orientation bit stream; dimensions 7 and
+above use the direct parity fallback. This is the exterior left complement,
+not a metric pseudoscalar inverse, so degenerate PGA null blades remain
+nonzero. The generated-C guard passed both loops and the public dispatch.
 
 Other useful entrypoints:
 

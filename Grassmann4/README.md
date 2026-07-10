@@ -61,6 +61,13 @@ immutable fixed points and return directly, odd values use the one-buffer
 negation kernel, and full storage uses one dedicated loop. Valid full packed
 indices decode directly to the same blade mask.
 
+Packed Hodge dual is a full-storage exterior left complement. It borrows its
+input and builds one final `FloatArray`; dimensions 0--6 consume a compact
+`UInt64` orientation bit stream, while larger dimensions compute the same sign
+with a direct parity loop. The operation is signature independent rather than a
+metric pseudoscalar inverse, so degenerate PGA null blades keep their
+combinatorial complements.
+
 ## Quick Start
 
 The examples below opt into the dense/reference surface because they mix blade
@@ -316,6 +323,7 @@ lake exe packedmvbench pga-motor-point 5000
 lake exe packedmvbench subtraction 250000
 lake exe packedmvbench linear-arithmetic 500000
 lake exe packedmvbench unary-involutions 100000
+lake exe packedmvbench hodge-dual 100000
 ```
 
 `Grassmann4/scripts/packedmvbench_guard.sh` runs a small correctness smoke test,
@@ -325,14 +333,17 @@ and relative thresholds. The linear and full/even/odd unary kernels are compared
 with their former boxed-array shapes; subtraction is compared with the
 now-optimized two-buffer `add`/`neg` composition. Iteration counts and thresholds
 have corresponding `PACKED_MV_BENCH_*`, `MAX_PACKED_*`, and `MIN_PACKED_*`
-overrides in the script.
+overrides in the script. Hodge dual is checked over full CGA3 storage against
+its former boxed complement/map shape.
 
-`Grassmann4/scripts/packed_linear_codegen_guard.sh` builds `Grassmann.MV` and
-audits only the exact non-boxed generated-C bodies for the linear and unary
-kernels. For each nontrivial constructor it requires one final result
+`Grassmann4/scripts/packed_linear_codegen_guard.sh` materializes the current
+`Grassmann.MV` C facet without Lake's shared artifact cache and audits only the
+exact non-boxed generated-C bodies for the linear, unary, and Hodge kernels. For
+each nontrivial constructor it requires one final result
 allocation, direct unboxed Float arithmetic, borrowed inputs, a single push per
 coefficient, and tail-loop codegen. It separately verifies the allocation-free
-even-involution return and the one-allocation odd/full branches. It deliberately
+even-involution return, the one-allocation odd/full branches, the unboxed Hodge
+orientation selector, and both sides of its dimension dispatch. It deliberately
 excludes typeclass dictionary closures and boxed ABI adapters.
 
 A local `Grassmann4/scripts/bench_guard.sh` run on 2026-06-05 passed with zero
@@ -373,6 +384,13 @@ its input in `20.438340 ns/iter`, and odd involution used direct negation in
 `51.632500 ns/iter`. Compared with the retained boxed shapes, the nine speedups
 ranged from `33.439x` to `351.206x`. The generated-C guard passed all five unary
 helper loops and all three public involution branches.
+
+The 2026-07-09 packed-Hodge acceptance run had zero L1 drift over all 32 CGA3
+coefficients and measured `79.200830 ns/iter` direct versus
+`27113.287500 ns/iter` boxed (`342.336x`). The generated-C guard passed the
+unboxed dimension-0--6 sign selector, its one-read/one-push loop, the
+dimension-7-and-above parity fallback, and the single-allocation public
+dispatch.
 
 See `docs/PackedMVPerformance.md` for the focused PGA3 motor-point profiling
 commands and a current process-level `time -l` footprint snapshot.

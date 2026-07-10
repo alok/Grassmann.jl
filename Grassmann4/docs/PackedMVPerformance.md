@@ -1,7 +1,7 @@
 # Packed MV Performance Evidence
 
 This note records the repeatable checks for the packed `MV` backend's PGA3
-motor-point path, basic linear kernels, and unary involutions. These paths
+motor-point path, basic linear kernels, unary involutions, and Hodge dual. These paths
 exercise the port's hot native representation: projective transforms over
 `MV PGA3 .even` and `MV PGA3 .odd`, plus full/even/odd arithmetic over
 contiguous `FloatArray` storage.
@@ -22,6 +22,7 @@ lake exe packedmvbench pga-motor-point "$PACKED_MV_BENCH_MOTOR_ITERS"
 lake exe packedmvbench subtraction "$PACKED_MV_BENCH_SUBTRACTION_ITERS"
 lake exe packedmvbench linear-arithmetic "$PACKED_MV_BENCH_LINEAR_ITERS"
 lake exe packedmvbench unary-involutions "$PACKED_MV_BENCH_UNARY_ITERS"
+lake exe packedmvbench hodge-dual "$PACKED_MV_BENCH_HODGE_ITERS"
 ```
 
 Default thresholds:
@@ -40,6 +41,8 @@ Default thresholds:
 | Even involute identity | `<= 100 ns/iter` |
 | Odd involute negation | `<= 150 ns/iter` |
 | Direct-vs-boxed unary speedup | `>= 20x` each |
+| Direct full Hodge dual | `<= 250 ns/iter` |
+| Direct-vs-boxed Hodge speedup | `>= 100x` |
 
 The subtraction comparator is intentionally the current optimized
 `MV.add a (MV.neg b)` composition. Its relative threshold is lower than the
@@ -54,6 +57,14 @@ delegates to the one-buffer negation kernel. Their separate ceilings preserve
 those stronger parity fast paths instead of hiding them behind one loose unary
 threshold.
 
+Hodge preflight compares every coefficient of 16 varied full CGA3 values with
+the retained boxed complement/map implementation. The direct kernel borrows
+its input and allocates one result buffer. Its dimension-0--6 path consumes a
+signature-independent orientation bit stream; dimensions 7 and above compute
+the same exterior-complement sign directly. This is not a metric pseudoscalar
+inverse: the combinatorial complement remains defined for degenerate PGA null
+blades.
+
 ## Generated-C Structure Guard
 
 Timing is not an allocation counter. Run the compiler-structural gate as a
@@ -63,9 +74,10 @@ separate acceptance check:
 scripts/packed_linear_codegen_guard.sh
 ```
 
-After Lake establishes a current `Grassmann.MV` artifact, the script extracts
-only the non-boxed linear loops, the five full/packed unary loops, and the
-public constructors or parity branches that own their result. It requires:
+The script disables Lake's shared artifact cache, materializes the current
+`Grassmann.MV` C facet, and extracts only the non-boxed linear loops, the five
+full/packed unary loops, both Hodge loops, and the public constructors or parity
+branches that own their result. It requires:
 
 - one final `lean_mk_empty_float_array` in each nontrivial public constructor;
 - direct `lean_float_array_get`, one unboxed Float operation, and one
@@ -76,6 +88,8 @@ public constructors or parity branches that own their result. It requires:
 - an unboxed C `double` scalar through `smulAux`.
 - a retained direct return for even involution, and exactly one result
   allocation feeding `negAux` or `involuteFullAux` for odd or full storage.
+- an unboxed `UInt64` Hodge orientation selector, one-read/one-push small and
+  fallback loops, and one result allocation in the public Hodge dispatch.
 
 The audit does not scan the whole generated module. Typeclass dictionaries may
 legitimately allocate closures, and boxed wrappers may legitimately unbox and
@@ -165,3 +179,18 @@ nine comparisons had zero L1 drift:
 Generated C independently showed one native output loop for each nontrivial
 path, no boxed range/map callbacks in those helpers, an allocation-free retained
 return for even involution, and one output allocation for odd/full involution.
+
+## 2026-07-09 Packed Hodge Audit
+
+The thresholded guard compared all 32 coefficients of every full CGA3 Hodge
+result with the retained boxed implementation before timing 100,000 iterations:
+
+| Operation/layout | Direct | Boxed comparator | Speedup | L1 diff |
+| --- | ---: | ---: | ---: | ---: |
+| Hodge dual full | `79.200830 ns/iter` | `27113.287500 ns/iter` | `342.336x` | `0.000000` |
+
+Generated C independently showed an unboxed `UInt64` sign selector for
+dimensions 0--6, a one-read/one-push tail loop for that sign stream, a separate
+direct-parity tail loop for dimensions 7 and above, and exactly one result
+allocation in the public dispatch. Neither loop reconstructs blades or uses the
+former boxed range/map callback path.
