@@ -529,6 +529,100 @@ function cmd_pga3_translate_point(
 end
 
 """
+Return an even PGA3 multivector in Lean's packed coefficient order:
+`[1, e12, e13, e23, e01, e02, e03, e0123]`.
+
+Grassmann.jl stores its null-last spinors by grade-lexicographic order as
+`[1, e12, e13, e14, e23, e24, e34, e1234]`, so the two middle channels must
+be swapped when crossing the oracle boundary.
+"""
+function pga3_lean_motor_coefficients(motor)
+    vals = Float64.(collect(value(motor)))
+    if length(vals) != 8
+        error("Expected a PGA3 spinor with 8 coefficients, got $(length(vals))")
+    end
+    return vals[[1, 2, 3, 5, 4, 6, 7, 8]]
+end
+
+"""
+Extract coordinates using the Lean port's raw packed PGA3 convention.
+
+For a grade-3 chain Grassmann.jl stores `[e123, e124, e134, e234]`, which
+corresponds to Lean's `(w, z, y, x)` coefficient channels.
+"""
+function pga3_extract_lean_point(p)
+    vals = Float64.(collect(value(p)))
+    if length(vals) != 4
+        error("Expected a PGA3 grade-3 point with 4 coefficients, got $(length(vals))")
+    end
+
+    w = vals[1]
+    if abs(w) < 1e-12
+        error("Cannot extract coordinates from a point at infinity")
+    end
+
+    return [vals[4] / w, vals[3] / w, vals[2] / w]
+end
+
+"""
+Independently construct, normalize, and invert a scaled composed PGA3 motor.
+
+The constructor deliberately follows Lean's raw packed blade signs rather
+than the historical semantic `pga3_translator` convention above. This makes
+the returned coefficient arrays a direct oracle for `PGA.Motor.normalize3?`
+and `PGA.Motor.inverse3?`, while the inverse sandwich checks a point
+round-trip in the same representation.
+"""
+function cmd_pga3_checked_motor(
+    scale::Float64,
+    axis_x::Float64,
+    axis_y::Float64,
+    axis_z::Float64,
+    angle::Float64,
+    tx::Float64,
+    ty::Float64,
+    tz::Float64,
+    x::Float64,
+    y::Float64,
+    z::Float64,
+)
+    alg = get_algebra("PGA3")
+    e1 = basis_vector(alg, 1)
+    e2 = basis_vector(alg, 2)
+    e3 = basis_vector(alg, 3)
+    e4 = basis_vector(alg, 4)
+
+    half_angle = angle / 2
+    rotor = cos(half_angle) * alg[1] + sin(half_angle) * (
+        axis_z * e1 * e2 + axis_y * e1 * e3 + axis_x * e2 * e3
+    )
+    translator = 1.0 * alg[1] - (tx / 2) * e1 * e4 +
+                 (ty / 2) * e2 * e4 - (tz / 2) * e3 * e4
+    motor = scale * (translator * rotor)
+
+    norm_sq = Float64(scalar(motor * ~motor))
+    if !isfinite(norm_sq) || norm_sq <= 0
+        error("Expected a finite positive motor norm, got $norm_sq")
+    end
+
+    normalized = motor / sqrt(norm_sq)
+    inverse_motor = inv(motor)
+    point = e1 * e2 * e3 + z * e1 * e2 * e4 +
+            y * e1 * e3 * e4 + x * e2 * e3 * e4
+    transformed = motor >>> point
+    restored = inverse_motor >>> transformed
+
+    return Dict(
+        "operation" => "pga3_checked_motor",
+        "motor_coefficients" => pga3_lean_motor_coefficients(motor),
+        "normalization" => pga3_lean_motor_coefficients(normalized),
+        "inverse" => pga3_lean_motor_coefficients(inverse_motor),
+        "norm_sq" => norm_sq,
+        "roundtrip_coords" => pga3_extract_lean_point(restored),
+    )
+end
+
+"""
 Verify rotor normalization and action.
 """
 function cmd_verify_rotor(sig_name::String, angle::Float64)
@@ -752,6 +846,18 @@ function main()
                                      parse(Float64, ARGS[5]),
                                      parse(Float64, ARGS[6]),
                                      parse(Float64, ARGS[7]))
+        elseif cmd == "pga3_checked_motor" && length(ARGS) >= 12
+            cmd_pga3_checked_motor(parse(Float64, ARGS[2]),
+                                   parse(Float64, ARGS[3]),
+                                   parse(Float64, ARGS[4]),
+                                   parse(Float64, ARGS[5]),
+                                   parse(Float64, ARGS[6]),
+                                   parse(Float64, ARGS[7]),
+                                   parse(Float64, ARGS[8]),
+                                   parse(Float64, ARGS[9]),
+                                   parse(Float64, ARGS[10]),
+                                   parse(Float64, ARGS[11]),
+                                   parse(Float64, ARGS[12]))
         elseif cmd == "verify_rotor" && length(ARGS) >= 3
             cmd_verify_rotor(ARGS[2], parse(Float64, ARGS[3]))
         elseif cmd == "signature_check" && length(ARGS) >= 2
@@ -792,6 +898,8 @@ function main()
                                         - Compose two CGA translations
   pga3_translate_point <x> <y> <z> <tx> <ty> <tz>
                                         - Translate a PGA3 point
+  pga3_checked_motor <scale> <axis-x> <axis-y> <axis-z> <angle> <tx> <ty> <tz> <x> <y> <z>
+                                        - Normalize/invert a composed PGA3 motor
   verify_rotor <sig> <angle>            - Verify rotor
   signature_check <sig>                 - Check basis squares
   bivector_exp <sig> <i> <j> <angle>    - exp(angle*eij)

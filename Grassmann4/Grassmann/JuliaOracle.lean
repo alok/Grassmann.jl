@@ -149,6 +149,31 @@ instance : ToString TestResult where
 def floatsMatch (a b : Float) (tol : Float := defaultTolerance) : Bool :=
   (a - b).abs < tol
 
+/-- Compare two coefficient arrays and report one oracle result per channel. -/
+def compareFloatArrays (name : String) (leanValues juliaValues : Array Float)
+    (tol : Float := defaultTolerance) : Array TestResult :=
+  if leanValues.size != juliaValues.size then
+    #[{
+      name := name
+      passed := false
+      leanValue := leanValues.size.toFloat
+      juliaValue := juliaValues.size.toFloat
+      difference := 0.0
+      message := "Coefficient count mismatch"
+    }]
+  else
+    (Array.range leanValues.size).map fun i =>
+      let leanValue := leanValues.getD i 0.0
+      let juliaValue := juliaValues.getD i 0.0
+      let diff := (leanValue - juliaValue).abs
+      {
+        name := s!"{name}[{i}]"
+        passed := floatsMatch leanValue juliaValue (tol := tol)
+        leanValue := leanValue
+        juliaValue := juliaValue
+        difference := diff
+      }
+
 /-! ## Verification Functions -/
 
 /-- Verify geometric product scalar part against Julia -/
@@ -410,6 +435,101 @@ def verifyPGA3Translator (x y z tx ty tz : Float) : IO (Array TestResult) := do
       juliaValue := 0.0
       difference := 0.0
       message := s!"Parse failed: {result.stdout}"
+    }]
+
+/-- Return the eight native PGA3 motor coefficients in packed-index order. -/
+def packedPGA3MotorCoefficients (motor : PGA.Motor PGA3) : Array Float :=
+  (Array.range 8).map fun i => motor.toMV.coeffPacked i
+
+/--
+Verify a scaled, composed PGA3 rigid motor against Grassmann.jl.
+
+This independently checks the composed input coefficients, checked
+normalization, checked inverse, and inverse point round-trip. The Julia command
+uses the same raw null-last blade basis and explicitly converts its
+grade-lexicographic spinor storage to Lean's packed coefficient order.
+-/
+def verifyPGA3CheckedMotor : IO (Array TestResult) := do
+  let scale : Float := 3.0
+  let axisX : Float := 0.6666666666666666
+  let axisY : Float := -0.3333333333333333
+  let axisZ : Float := 0.6666666666666666
+  let angle : Float := 0.7
+  let tx : Float := 1.25
+  let ty : Float := -0.75
+  let tz : Float := 2.0
+  let x : Float := 0.25
+  let y : Float := -1.5
+  let z : Float := 2.25
+  let rigid := PGA.rigidMotor3 axisX axisY axisZ angle tx ty tz
+  let motor : PGA.Motor PGA3 := MV.smul scale rigid
+  let result ← callOracle [
+    "pga3_checked_motor",
+    "3.0",
+    "0.6666666666666666", "-0.3333333333333333", "0.6666666666666666",
+    "0.7",
+    "1.25", "-0.75", "2.0",
+    "0.25", "-1.5", "2.25"
+  ]
+  if !result.success then
+    return #[{
+      name := "pga3_checked_motor"
+      passed := false
+      leanValue := 0.0
+      juliaValue := 0.0
+      difference := 0.0
+      message := s!"Oracle error: {result.stderr}"
+    }]
+  match PGA.Motor.normalize3? motor 1e-9, PGA.Motor.inverse3? motor 1e-9 with
+  | some normalized, some inverseMotor =>
+    match parseJson result.stdout with
+    | some json =>
+      match getJsonFloatArray json "motor_coefficients",
+          getJsonFloatArray json "normalization",
+          getJsonFloatArray json "inverse",
+          getJsonFloatArray json "roundtrip_coords" with
+      | some juliaMotor, some juliaNormalized, some juliaInverse, some juliaRoundtrip =>
+        let point := PGA.point3 x y z
+        let transformed := PGA.Motor.transformPoint motor point
+        let restored := PGA.Motor.transformPoint inverseMotor transformed
+        let coords := PGA.extractPoint3 restored
+        let leanRoundtrip := #[coords.1, coords.2.1, coords.2.2]
+        let comparisons :=
+          compareFloatArrays "pga3_checked_motor.input"
+              (packedPGA3MotorCoefficients motor) juliaMotor (tol := 1e-8) ++
+          compareFloatArrays "pga3_checked_motor.normalized"
+              (packedPGA3MotorCoefficients normalized) juliaNormalized (tol := 1e-8) ++
+          compareFloatArrays "pga3_checked_motor.inverse"
+              (packedPGA3MotorCoefficients inverseMotor) juliaInverse (tol := 1e-8) ++
+          compareFloatArrays "pga3_checked_motor.roundtrip"
+              leanRoundtrip juliaRoundtrip (tol := 1e-8)
+        return comparisons
+      | _, _, _, _ =>
+        return #[{
+          name := "pga3_checked_motor"
+          passed := false
+          leanValue := 0.0
+          juliaValue := 0.0
+          difference := 0.0
+          message := s!"Missing coefficient arrays: {result.stdout}"
+        }]
+    | none =>
+      return #[{
+        name := "pga3_checked_motor"
+        passed := false
+        leanValue := 0.0
+        juliaValue := 0.0
+        difference := 0.0
+        message := s!"Parse failed: {result.stdout}"
+      }]
+  | _, _ =>
+    return #[{
+      name := "pga3_checked_motor"
+      passed := false
+      leanValue := 0.0
+      juliaValue := 0.0
+      difference := 0.0
+      message := "Lean rejected a finite scaled rigid motor"
     }]
 
 /-- Verify composed CGA point translations against Grassmann.jl. -/
@@ -820,6 +940,10 @@ def testPGA3Translators : IO (Array TestResult) := do
   let r2 ← verifyPGA3Translator (-2.0) 0.5 3.0 1.25 0.0 (-2.5)
   return r1 ++ r2
 
+/-- Test checked PGA3 motor normalization and inversion against Grassmann.jl. -/
+def testPGA3CheckedMotors : IO (Array TestResult) :=
+  verifyPGA3CheckedMotor
+
 /-- Test signature verification -/
 def testSignatures : IO (Array TestResult) := do
   let r1 ← verifySignature "R3" #[1.0, 1.0, 1.0]
@@ -1006,6 +1130,11 @@ def runAllTests : IO Unit := do
   let pgaTranslatorResults ← testPGA3Translators
   for r in pgaTranslatorResults do IO.println s!"│ {r}"
   IO.println "└──────────────────────────────────────────┘"
+  -- Checked PGA3 motors
+  IO.println "\n┌─ PGA3 Checked Motors ────────────────────┐"
+  let pgaCheckedMotorResults ← testPGA3CheckedMotors
+  for r in pgaCheckedMotorResults do IO.println s!"│ {r}"
+  IO.println "└──────────────────────────────────────────┘"
   -- Signatures
   IO.println "\n┌─ Signature Verification ─────────────────┐"
   let sigResults ← testSignatures
@@ -1043,6 +1172,7 @@ def runAllTests : IO Unit := do
   IO.println "└──────────────────────────────────────────┘"
   -- Summary
   let all := r3Results ++ coeffResults ++ pgaResults ++ pgaTranslatorResults ++
+    pgaCheckedMotorResults ++
     sigResults ++ cgaResults ++ cgaDistanceResults ++ cgaTranslatorResults ++
     rotorResults ++ linearResults ++
     plotSampleResults
