@@ -13,17 +13,14 @@
 -/
 import Grassmann.Multivector
 import Grassmann.Parity
-import Grassmann.Proof
 import Grassmann.BladeIndex
 import Grassmann.GradeSet
 import Grassmann.SignTables
 import Grassmann.EvenKernelTables
 
-open Grassmann.Proof
-
 namespace Grassmann
 
-variable {n : ℕ} {sig : Signature n} {F : Type*} [Ring F]
+variable {n : ℕ} {sig : Signature n} {F : Type*} [CoeffOps F]
 
 /-- Packed even multivector: coefficients for even-grade blades only.
 
