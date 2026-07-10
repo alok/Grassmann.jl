@@ -1,15 +1,15 @@
--- Kitchen-sink import for development.
+-- Broad development and validation aggregate for the canonical workspace.
 --
 -- `import Grassmann` is meant to be reasonably lightweight for downstream users.
--- If you want *all* demos, stress tests, and property tests (many of which run
--- `#eval` at compile time), import this module instead.
+-- Import this module for the dense/reference API and the in-repository validation
+-- suites. Application experiments and modules with optional dependencies remain
+-- explicit imports by design.
 import Grassmann.Reference
 
--- Tests / demos (compile-time `#eval` heavy)
+-- Validation suites (many run `#eval` at compile time).
 import Grassmann.StressTests
 import Grassmann.Tests
+import Grassmann.MVArithmeticTests
 import Grassmann.OracleTests
 import Grassmann.DSLTests
-import Grassmann.CoffeeshopExamples
 import Grassmann.PropertyTests
-import Grassmann.CurveShortening
