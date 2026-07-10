@@ -940,6 +940,8 @@ def prop_mv_full_linear_ops_dense : Gen Bool := do
   let packedB : MV R3 .full := MV.ofMultivector b.mv .full
   let scale : Float := 2.5
   return packedMatchesDense (packedA + packedB) (a.mv + b.mv) &&
+    packedMatchesDense (MV.sub packedA packedB) (Multivector.sub a.mv b.mv) &&
+    packedMatchesDense (packedA - packedB) (a.mv - b.mv) &&
     packedMatchesDense (-packedA) (-a.mv) &&
     packedMatchesDense (scale * packedA) (a.mv.smul scale)
 
@@ -953,6 +955,8 @@ def prop_mv_even_linear_ops_dense : Gen Bool := do
   let packedB : MV R3 .even := MV.ofMultivector denseB .even
   let scale : Float := -3.0
   return packedMatchesDense (packedA + packedB) (denseA + denseB) &&
+    packedMatchesDense (MV.sub packedA packedB) (Multivector.sub denseA denseB) &&
+    packedMatchesDense (packedA - packedB) (denseA - denseB) &&
     packedMatchesDense (-packedA) (-denseA) &&
     packedMatchesDense (scale * packedA) (denseA.smul scale)
 
@@ -966,6 +970,8 @@ def prop_mv_odd_linear_ops_dense : Gen Bool := do
   let packedB : MV R3 .odd := MV.ofMultivector denseB .odd
   let scale : Float := 0.25
   return packedMatchesDense (packedA + packedB) (denseA + denseB) &&
+    packedMatchesDense (MV.sub packedA packedB) (Multivector.sub denseA denseB) &&
+    packedMatchesDense (packedA - packedB) (denseA - denseB) &&
     packedMatchesDense (-packedA) (-denseA) &&
     packedMatchesDense (scale * packedA) (denseA.smul scale)
 
@@ -1337,6 +1343,8 @@ def prop_mv_pga3_full_linear_ops_dense : Gen Bool := do
   let packedB : MV PGA3 .full := MV.ofMultivector b.mv .full
   let scale : Float := 1.75
   return packedMatchesDense (packedA + packedB) (a.mv + b.mv) &&
+    packedMatchesDense (MV.sub packedA packedB) (Multivector.sub a.mv b.mv) &&
+    packedMatchesDense (packedA - packedB) (a.mv - b.mv) &&
     packedMatchesDense (-packedA) (-a.mv) &&
     packedMatchesDense (scale * packedA) (a.mv.smul scale)
 
@@ -1350,6 +1358,8 @@ def prop_mv_pga3_even_linear_ops_dense : Gen Bool := do
   let packedB : MV PGA3 .even := MV.ofMultivector denseB .even
   let scale : Float := -2.25
   return packedMatchesDense (packedA + packedB) (denseA + denseB) &&
+    packedMatchesDense (MV.sub packedA packedB) (Multivector.sub denseA denseB) &&
+    packedMatchesDense (packedA - packedB) (denseA - denseB) &&
     packedMatchesDense (-packedA) (-denseA) &&
     packedMatchesDense (scale * packedA) (denseA.smul scale)
 
@@ -1363,6 +1373,8 @@ def prop_mv_pga3_odd_linear_ops_dense : Gen Bool := do
   let packedB : MV PGA3 .odd := MV.ofMultivector denseB .odd
   let scale : Float := 0.5
   return packedMatchesDense (packedA + packedB) (denseA + denseB) &&
+    packedMatchesDense (MV.sub packedA packedB) (Multivector.sub denseA denseB) &&
+    packedMatchesDense (packedA - packedB) (denseA - denseB) &&
     packedMatchesDense (-packedA) (-denseA) &&
     packedMatchesDense (scale * packedA) (denseA.smul scale)
 
@@ -2010,6 +2022,8 @@ def prop_mv_cga3_full_linear_ops_dense : Gen Bool := do
   let packedB : MV CGA3 .full := MV.ofMultivector b.mv .full
   let scale : Float := 1.75
   return packedMatchesDense (packedA + packedB) (a.mv + b.mv) &&
+    packedMatchesDense (MV.sub packedA packedB) (Multivector.sub a.mv b.mv) &&
+    packedMatchesDense (packedA - packedB) (a.mv - b.mv) &&
     packedMatchesDense (-packedA) (-a.mv) &&
     packedMatchesDense (scale * packedA) (a.mv.smul scale)
 
@@ -2023,6 +2037,8 @@ def prop_mv_cga3_even_linear_ops_dense : Gen Bool := do
   let packedB : MV CGA3 .even := MV.ofMultivector denseB .even
   let scale : Float := -2.25
   return packedMatchesDense (packedA + packedB) (denseA + denseB) &&
+    packedMatchesDense (MV.sub packedA packedB) (Multivector.sub denseA denseB) &&
+    packedMatchesDense (packedA - packedB) (denseA - denseB) &&
     packedMatchesDense (-packedA) (-denseA) &&
     packedMatchesDense (scale * packedA) (denseA.smul scale)
 
@@ -2036,6 +2052,8 @@ def prop_mv_cga3_odd_linear_ops_dense : Gen Bool := do
   let packedB : MV CGA3 .odd := MV.ofMultivector denseB .odd
   let scale : Float := 0.5
   return packedMatchesDense (packedA + packedB) (denseA + denseB) &&
+    packedMatchesDense (MV.sub packedA packedB) (Multivector.sub denseA denseB) &&
+    packedMatchesDense (packedA - packedB) (denseA - denseB) &&
     packedMatchesDense (-packedA) (-denseA) &&
     packedMatchesDense (scale * packedA) (denseA.smul scale)
 
