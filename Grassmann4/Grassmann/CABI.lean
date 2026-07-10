@@ -50,4 +50,30 @@ def motorApplyPoint (motor point : FloatArray) : FloatArray :=
 def extractPoint (point : FloatArray) : FloatArray :=
   PGA3Kernel.extractPoint point
 
+/-!
+ABI v1.1 implementation symbols. The public C shim validates pointers, packed
+sizes, finite coefficients, the Study condition, and batch length before these
+owned arrays cross into Lean.
+-/
+
+/-- Check the unit and Study conditions for a packed motor. -/
+@[export grassmann_pga3_motor_is_unit_impl_v1]
+def motorIsUnit (motor : FloatArray) (tolerance : Float) : Bool :=
+  PGA3Kernel.motorIsUnit motor tolerance
+
+/-- Normalize a packed motor already validated by the public C shim. -/
+@[export grassmann_pga3_motor_normalize_impl_v1]
+def motorNormalize (motor : FloatArray) : FloatArray :=
+  PGA3Kernel.motorNormalizeUnchecked motor
+
+/-- Invert a packed motor already validated by the public C shim. -/
+@[export grassmann_pga3_motor_inverse_impl_v1]
+def motorInverse (motor : FloatArray) : FloatArray :=
+  PGA3Kernel.motorInverseUnchecked motor
+
+/-- Transform validated flat XYZ triples with a packed motor. -/
+@[export grassmann_pga3_motor_apply_xyz_batch_impl_v1]
+def motorApplyXYZBatch (motor xyz : FloatArray) : FloatArray :=
+  PGA3Kernel.motorApplyXYZBatch motor xyz
+
 end Grassmann.CABI
