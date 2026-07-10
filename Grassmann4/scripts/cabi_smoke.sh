@@ -110,7 +110,11 @@ expected_symbols=(
   grassmann_pga3_make_translator_v1
   grassmann_pga3_motor_compose_v1
   grassmann_pga3_motor_reverse_v1
+  grassmann_pga3_motor_is_unit_v1
+  grassmann_pga3_motor_normalize_v1
+  grassmann_pga3_motor_inverse_v1
   grassmann_pga3_motor_apply_point_v1
+  grassmann_pga3_motor_apply_xyz_batch_v1
 )
 symbol_dump="$(nm -g "$wrapper_shared")"
 for symbol in "${expected_symbols[@]}"; do

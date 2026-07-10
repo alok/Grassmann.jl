@@ -4,8 +4,10 @@
 
 #include <math.h>
 #include <pthread.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #define CHECK_STATUS(call)                                                     \
@@ -28,6 +30,21 @@ static int coordinates_match(
   return approximately(actual[0], expected[0], tolerance) &&
     approximately(actual[1], expected[1], tolerance) &&
     approximately(actual[2], expected[2], tolerance);
+}
+
+static int motor_is_identity(
+    const grassmann_pga3_motor_v1 *motor,
+    double tolerance) {
+  if (!approximately(
+        motor->coeff[GRASSMANN_PGA3_MOTOR_SCALAR_V1], 1.0, tolerance)) {
+    return 0;
+  }
+  for (size_t i = 1; i < 8; ++i) {
+    if (!approximately(motor->coeff[i], 0.0, tolerance)) {
+      return 0;
+    }
+  }
+  return 1;
 }
 
 static int extract_coordinates(
@@ -75,13 +92,20 @@ typedef struct worker_result {
   grassmann_status_v1 initialize_status;
   grassmann_status_v1 make_point_status;
   grassmann_status_v1 extract_status;
+  grassmann_status_v1 make_translator_status;
+  grassmann_status_v1 inverse_status;
+  grassmann_status_v1 batch_status;
   grassmann_status_v1 finalize_status;
   double xyz[3];
+  double batch_xyz[3];
 } worker_result;
 
 static void *run_worker_smoke(void *opaque) {
   worker_result *result = (worker_result *)opaque;
   grassmann_pga3_point_v1 point;
+  grassmann_pga3_motor_v1 translator;
+  grassmann_pga3_motor_v1 inverse;
+  const double batch_in[3] = {7.0, 8.0, 9.0};
 
   result->initialize_status = grassmann_thread_initialize_v1();
   if (result->initialize_status != GRASSMANN_OK_V1) {
@@ -93,6 +117,14 @@ static void *run_worker_smoke(void *opaque) {
   if (result->make_point_status == GRASSMANN_OK_V1) {
     result->extract_status = grassmann_pga3_extract_point_v1(
       &point, result->xyz);
+  }
+  result->make_translator_status =
+    grassmann_pga3_make_translator_v1(1.0, -2.0, 0.5, &translator);
+  if (result->make_translator_status == GRASSMANN_OK_V1) {
+    result->inverse_status =
+      grassmann_pga3_motor_inverse_v1(&translator, &inverse);
+    result->batch_status = grassmann_pga3_motor_apply_xyz_batch_v1(
+      &translator, batch_in, 1, result->batch_xyz);
   }
   result->finalize_status = grassmann_thread_finalize_v1();
   return NULL;
@@ -112,9 +144,17 @@ int main(void) {
     return EXIT_FAILURE;
   }
 
+  grassmann_pga3_motor_v1 preinit_identity = {
+    {1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
+  };
+  double preinit_xyz[3];
+
   grassmann_pga3_point_v1 preinit_point;
   if (grassmann_pga3_make_point_v1(0.0, 0.0, 0.0, &preinit_point) !=
       GRASSMANN_NOT_INITIALIZED_V1 ||
+      grassmann_pga3_motor_apply_xyz_batch_v1(
+        &preinit_identity, preinit_xyz, 1, preinit_xyz) !=
+        GRASSMANN_NOT_INITIALIZED_V1 ||
       grassmann_thread_initialize_v1() != GRASSMANN_NOT_INITIALIZED_V1) {
     fprintf(stderr, "pre-initialization guard failed\n");
     return EXIT_FAILURE;
@@ -124,11 +164,15 @@ int main(void) {
   CHECK_STATUS(grassmann_initialize_v1());
 
   worker_result worker = {
-    GRASSMANN_INIT_FAILED_V1,
-    GRASSMANN_INIT_FAILED_V1,
-    GRASSMANN_INIT_FAILED_V1,
-    GRASSMANN_INIT_FAILED_V1,
-    {0.0, 0.0, 0.0}
+    .initialize_status = GRASSMANN_INIT_FAILED_V1,
+    .make_point_status = GRASSMANN_INIT_FAILED_V1,
+    .extract_status = GRASSMANN_INIT_FAILED_V1,
+    .make_translator_status = GRASSMANN_INIT_FAILED_V1,
+    .inverse_status = GRASSMANN_INIT_FAILED_V1,
+    .batch_status = GRASSMANN_INIT_FAILED_V1,
+    .finalize_status = GRASSMANN_INIT_FAILED_V1,
+    .xyz = {0.0, 0.0, 0.0},
+    .batch_xyz = {0.0, 0.0, 0.0}
   };
   pthread_t worker_thread;
   if (pthread_create(&worker_thread, NULL, run_worker_smoke, &worker) != 0 ||
@@ -137,11 +181,17 @@ int main(void) {
     return EXIT_FAILURE;
   }
   const double worker_expected[3] = {7.0, 8.0, 9.0};
+  const double worker_batch_expected[3] = {8.0, 6.0, 9.5};
   if (worker.initialize_status != GRASSMANN_OK_V1 ||
       worker.make_point_status != GRASSMANN_OK_V1 ||
       worker.extract_status != GRASSMANN_OK_V1 ||
+      worker.make_translator_status != GRASSMANN_OK_V1 ||
+      worker.inverse_status != GRASSMANN_OK_V1 ||
+      worker.batch_status != GRASSMANN_OK_V1 ||
       worker.finalize_status != GRASSMANN_OK_V1 ||
-      !coordinates_match(worker.xyz, worker_expected, tolerance)) {
+      !coordinates_match(worker.xyz, worker_expected, tolerance) ||
+      !coordinates_match(
+        worker.batch_xyz, worker_batch_expected, tolerance)) {
     fprintf(stderr, "foreign worker thread ABI check failed\n");
     return EXIT_FAILURE;
   }
@@ -237,13 +287,161 @@ int main(void) {
     return EXIT_FAILURE;
   }
 
+  int is_unit = -1;
+  CHECK_STATUS(grassmann_pga3_motor_is_unit_v1(
+    &composed, tolerance, &is_unit));
+  if (is_unit != 1) {
+    fprintf(stderr, "constructed rigid motor was not reported unit\n");
+    return EXIT_FAILURE;
+  }
+
+  grassmann_pga3_motor_v1 scaled_motor = composed;
+  for (size_t i = 0; i < 8; ++i) {
+    scaled_motor.coeff[i] *= 3.0;
+  }
+  CHECK_STATUS(grassmann_pga3_motor_is_unit_v1(
+    &scaled_motor, tolerance, &is_unit));
+  if (is_unit != 0) {
+    fprintf(stderr, "scaled motor was incorrectly reported unit\n");
+    return EXIT_FAILURE;
+  }
+  CHECK_STATUS(grassmann_pga3_motor_is_unit_v1(
+    &scaled_motor, -1.0, &is_unit));
+  if (is_unit != 0) {
+    fprintf(stderr, "negative unit tolerance did not report false\n");
+    return EXIT_FAILURE;
+  }
+
+  grassmann_pga3_motor_v1 normalized_motor;
+  grassmann_pga3_motor_v1 scaled_inverse;
+  grassmann_pga3_motor_v1 inverse_identity;
+  CHECK_STATUS(grassmann_pga3_motor_normalize_v1(
+    &scaled_motor, &normalized_motor));
+  CHECK_STATUS(grassmann_pga3_motor_is_unit_v1(
+    &normalized_motor, tolerance, &is_unit));
+  CHECK_STATUS(grassmann_pga3_motor_inverse_v1(
+    &scaled_motor, &scaled_inverse));
+  CHECK_STATUS(grassmann_pga3_motor_compose_v1(
+    &scaled_motor, &scaled_inverse, &inverse_identity));
+  if (is_unit != 1 || !motor_is_identity(&inverse_identity, tolerance)) {
+    fprintf(stderr, "checked motor normalize/inverse check failed\n");
+    return EXIT_FAILURE;
+  }
+
+  grassmann_pga3_motor_v1 pure_ideal_motor = {{0.0}};
+  grassmann_pga3_motor_v1 study_invalid_motor = {{0.0}};
+  grassmann_pga3_motor_v1 nonfinite_motor = composed;
+  pure_ideal_motor.coeff[GRASSMANN_PGA3_MOTOR_TRANSLATION_X_V1] = 1.0;
+  study_invalid_motor.coeff[GRASSMANN_PGA3_MOTOR_SCALAR_V1] = 1.0;
+  study_invalid_motor.coeff[GRASSMANN_PGA3_MOTOR_PSEUDOSCALAR_V1] = 1.0;
+  nonfinite_motor.coeff[GRASSMANN_PGA3_MOTOR_SCALAR_V1] = NAN;
+
+  CHECK_STATUS(grassmann_pga3_motor_is_unit_v1(
+    &study_invalid_motor, tolerance, &is_unit));
+  if (is_unit != 0 ||
+      grassmann_pga3_motor_normalize_v1(
+        &pure_ideal_motor, &normalized_motor) !=
+        GRASSMANN_INVALID_MOTOR_V1 ||
+      grassmann_pga3_motor_inverse_v1(
+        &study_invalid_motor, &scaled_inverse) !=
+        GRASSMANN_INVALID_MOTOR_V1 ||
+      grassmann_pga3_motor_normalize_v1(
+        &nonfinite_motor, &normalized_motor) !=
+        GRASSMANN_INVALID_MOTOR_V1) {
+    fprintf(stderr, "invalid motor guards failed\n");
+    return EXIT_FAILURE;
+  }
+
+  if (grassmann_pga3_motor_is_unit_v1(NULL, tolerance, &is_unit) !=
+        GRASSMANN_NULL_POINTER_V1 ||
+      grassmann_pga3_motor_is_unit_v1(&composed, tolerance, NULL) !=
+        GRASSMANN_NULL_POINTER_V1 ||
+      grassmann_pga3_motor_normalize_v1(NULL, &normalized_motor) !=
+        GRASSMANN_NULL_POINTER_V1 ||
+      grassmann_pga3_motor_inverse_v1(&composed, NULL) !=
+        GRASSMANN_NULL_POINTER_V1) {
+    fprintf(stderr, "checked motor null-pointer guards failed\n");
+    return EXIT_FAILURE;
+  }
+
+  const double batch_input[] = {
+    1.0, 2.0, 3.0,
+    -4.0, 5.5, 0.25,
+    0.0, 0.0, 0.0,
+    1e3, -1e-3, 7.0
+  };
+  double batch_output[sizeof(batch_input) / sizeof(batch_input[0])];
+  double batch_scaled_output[sizeof(batch_input) / sizeof(batch_input[0])];
+  double batch_in_place[sizeof(batch_input) / sizeof(batch_input[0])];
+  double scalar_batch_output[sizeof(batch_input) / sizeof(batch_input[0])];
+  const size_t small_batch_count =
+    sizeof(batch_input) / (3u * sizeof(batch_input[0]));
+
+  CHECK_STATUS(grassmann_pga3_motor_apply_xyz_batch_v1(
+    &composed, batch_input, small_batch_count, batch_output));
+  CHECK_STATUS(grassmann_pga3_motor_apply_xyz_batch_v1(
+    &scaled_motor, batch_input, small_batch_count, batch_scaled_output));
+  memcpy(batch_in_place, batch_input, sizeof(batch_input));
+  CHECK_STATUS(grassmann_pga3_motor_apply_xyz_batch_v1(
+    &composed, batch_in_place, small_batch_count, batch_in_place));
+
+  for (size_t i = 0; i < small_batch_count; ++i) {
+    grassmann_pga3_point_v1 scalar_point;
+    grassmann_pga3_point_v1 scalar_transformed;
+    CHECK_STATUS(grassmann_pga3_make_point_v1(
+      batch_input[3u * i],
+      batch_input[3u * i + 1u],
+      batch_input[3u * i + 2u],
+      &scalar_point));
+    CHECK_STATUS(grassmann_pga3_motor_apply_point_v1(
+      &composed, &scalar_point, &scalar_transformed));
+    CHECK_STATUS(grassmann_pga3_extract_point_v1(
+      &scalar_transformed, &scalar_batch_output[3u * i]));
+  }
+  for (size_t i = 0; i < 3u * small_batch_count; ++i) {
+    if (!approximately(batch_output[i], scalar_batch_output[i], tolerance) ||
+        !approximately(batch_scaled_output[i], batch_output[i], tolerance) ||
+        !approximately(batch_in_place[i], batch_output[i], tolerance)) {
+      fprintf(stderr, "batch transform mismatch at coordinate %zu\n", i);
+      return EXIT_FAILURE;
+    }
+  }
+
+  double length_dummy = 0.0;
+  CHECK_STATUS(grassmann_pga3_motor_apply_xyz_batch_v1(
+    &composed, NULL, 0, NULL));
+  if (grassmann_pga3_motor_apply_xyz_batch_v1(
+        NULL, NULL, 0, NULL) != GRASSMANN_NULL_POINTER_V1 ||
+      grassmann_pga3_motor_apply_xyz_batch_v1(
+        &composed, NULL, 1, &length_dummy) !=
+        GRASSMANN_NULL_POINTER_V1 ||
+      grassmann_pga3_motor_apply_xyz_batch_v1(
+        &composed, &length_dummy, 1, NULL) !=
+        GRASSMANN_NULL_POINTER_V1 ||
+      grassmann_pga3_motor_apply_xyz_batch_v1(
+        &composed,
+        &length_dummy,
+        SIZE_MAX / 3u + 1u,
+        &length_dummy) != GRASSMANN_BAD_LENGTH_V1 ||
+      grassmann_pga3_motor_apply_xyz_batch_v1(
+        &study_invalid_motor, NULL, 0, NULL) !=
+        GRASSMANN_INVALID_MOTOR_V1) {
+    fprintf(stderr, "batch boundary guards failed\n");
+    return EXIT_FAILURE;
+  }
+
   enum { rc_stress_iterations = 100000, timing_iterations = 10000 };
   struct timespec started;
   struct timespec stopped;
   grassmann_pga3_motor_v1 stress_motor;
   grassmann_pga3_motor_v1 stress_reversed;
+  grassmann_pga3_motor_v1 stress_normalized;
+  grassmann_pga3_motor_v1 stress_inverse;
   grassmann_pga3_point_v1 stress_point;
   double stress_xyz[3];
+  const double stress_batch_in[3] = {1.0, 2.0, 3.0};
+  double stress_batch_out[3];
+  int stress_is_unit = 0;
 
   if (clock_gettime(CLOCK_MONOTONIC, &started) != 0) {
     fprintf(stderr, "monotonic clock is unavailable\n");
@@ -259,9 +457,19 @@ int main(void) {
     CHECK_STATUS(grassmann_pga3_motor_apply_point_v1(
       &stress_motor, &point, &stress_point));
     CHECK_STATUS(grassmann_pga3_extract_point_v1(&stress_point, stress_xyz));
+    CHECK_STATUS(grassmann_pga3_motor_normalize_v1(
+      &stress_motor, &stress_normalized));
+    CHECK_STATUS(grassmann_pga3_motor_inverse_v1(
+      &stress_motor, &stress_inverse));
+    CHECK_STATUS(grassmann_pga3_motor_is_unit_v1(
+      &stress_motor, tolerance, &stress_is_unit));
+    CHECK_STATUS(grassmann_pga3_motor_apply_xyz_batch_v1(
+      &stress_motor, stress_batch_in, 1, stress_batch_out));
   }
   if (clock_gettime(CLOCK_MONOTONIC, &stopped) != 0 ||
-      !coordinates_match(stress_xyz, composed_xyz, tolerance)) {
+      stress_is_unit != 1 ||
+      !coordinates_match(stress_xyz, composed_xyz, tolerance) ||
+      !coordinates_match(stress_batch_out, composed_xyz, tolerance)) {
     fprintf(stderr, "repeated-call ownership stress failed\n");
     return EXIT_FAILURE;
   }
@@ -295,6 +503,122 @@ int main(void) {
   const double extract_point_ns =
     elapsed_nanoseconds(&started, &stopped) / timing_iterations;
 
+  enum {
+    batch_perf_points = 4096,
+    batch_timing_iterations = 200,
+    scalar_timing_iterations = 5
+  };
+  const size_t batch_perf_coordinates = 3u * batch_perf_points;
+  double *batch_perf_input =
+    (double *)malloc(batch_perf_coordinates * sizeof(double));
+  double *batch_perf_output =
+    (double *)malloc(batch_perf_coordinates * sizeof(double));
+  double *scalar_perf_output =
+    (double *)malloc(batch_perf_coordinates * sizeof(double));
+  if (batch_perf_input == NULL || batch_perf_output == NULL ||
+      scalar_perf_output == NULL) {
+    fprintf(stderr, "could not allocate batch benchmark buffers\n");
+    free(batch_perf_input);
+    free(batch_perf_output);
+    free(scalar_perf_output);
+    return EXIT_FAILURE;
+  }
+  for (size_t i = 0; i < batch_perf_points; ++i) {
+    batch_perf_input[3u * i] = (double)(i % 97u) * 0.125 - 6.0;
+    batch_perf_input[3u * i + 1u] = (double)(i % 53u) * -0.25 + 4.0;
+    batch_perf_input[3u * i + 2u] = (double)(i % 31u) * 0.5 - 2.0;
+  }
+
+  CHECK_STATUS(grassmann_pga3_motor_apply_xyz_batch_v1(
+    &composed, batch_perf_input, batch_perf_points, batch_perf_output));
+  for (size_t i = 0; i < batch_perf_points; ++i) {
+    grassmann_pga3_point_v1 scalar_point;
+    grassmann_pga3_point_v1 scalar_transformed;
+    CHECK_STATUS(grassmann_pga3_make_point_v1(
+      batch_perf_input[3u * i],
+      batch_perf_input[3u * i + 1u],
+      batch_perf_input[3u * i + 2u],
+      &scalar_point));
+    CHECK_STATUS(grassmann_pga3_motor_apply_point_v1(
+      &composed, &scalar_point, &scalar_transformed));
+    CHECK_STATUS(grassmann_pga3_extract_point_v1(
+      &scalar_transformed, &scalar_perf_output[3u * i]));
+  }
+  for (size_t i = 0; i < batch_perf_coordinates; ++i) {
+    if (!approximately(
+          batch_perf_output[i], scalar_perf_output[i], tolerance)) {
+      fprintf(stderr, "large batch mismatch at coordinate %zu\n", i);
+      free(batch_perf_input);
+      free(batch_perf_output);
+      free(scalar_perf_output);
+      return EXIT_FAILURE;
+    }
+  }
+
+  if (clock_gettime(CLOCK_MONOTONIC, &started) != 0) {
+    fprintf(stderr, "monotonic clock is unavailable\n");
+    free(batch_perf_input);
+    free(batch_perf_output);
+    free(scalar_perf_output);
+    return EXIT_FAILURE;
+  }
+  for (int repeat = 0; repeat < batch_timing_iterations; ++repeat) {
+    CHECK_STATUS(grassmann_pga3_motor_apply_xyz_batch_v1(
+      &composed, batch_perf_input, batch_perf_points, batch_perf_output));
+  }
+  if (clock_gettime(CLOCK_MONOTONIC, &stopped) != 0) {
+    fprintf(stderr, "monotonic clock is unavailable\n");
+    free(batch_perf_input);
+    free(batch_perf_output);
+    free(scalar_perf_output);
+    return EXIT_FAILURE;
+  }
+  const double batch_ns_per_cloud =
+    elapsed_nanoseconds(&started, &stopped) / batch_timing_iterations;
+
+  if (clock_gettime(CLOCK_MONOTONIC, &started) != 0) {
+    fprintf(stderr, "monotonic clock is unavailable\n");
+    free(batch_perf_input);
+    free(batch_perf_output);
+    free(scalar_perf_output);
+    return EXIT_FAILURE;
+  }
+  for (int repeat = 0; repeat < scalar_timing_iterations; ++repeat) {
+    for (size_t i = 0; i < batch_perf_points; ++i) {
+      grassmann_pga3_point_v1 scalar_point;
+      grassmann_pga3_point_v1 scalar_transformed;
+      CHECK_STATUS(grassmann_pga3_make_point_v1(
+        batch_perf_input[3u * i],
+        batch_perf_input[3u * i + 1u],
+        batch_perf_input[3u * i + 2u],
+        &scalar_point));
+      CHECK_STATUS(grassmann_pga3_motor_apply_point_v1(
+        &composed, &scalar_point, &scalar_transformed));
+      CHECK_STATUS(grassmann_pga3_extract_point_v1(
+        &scalar_transformed, &scalar_perf_output[3u * i]));
+    }
+  }
+  if (clock_gettime(CLOCK_MONOTONIC, &stopped) != 0) {
+    fprintf(stderr, "monotonic clock is unavailable\n");
+    free(batch_perf_input);
+    free(batch_perf_output);
+    free(scalar_perf_output);
+    return EXIT_FAILURE;
+  }
+  const double scalar_ns_per_cloud =
+    elapsed_nanoseconds(&started, &stopped) / scalar_timing_iterations;
+  const double batch_speedup = scalar_ns_per_cloud / batch_ns_per_cloud;
+
+  free(batch_perf_input);
+  free(batch_perf_output);
+  free(scalar_perf_output);
+  if (!isfinite(batch_speedup) || batch_speedup < 3.0) {
+    fprintf(stderr,
+      "batch boundary speedup %.2fx is below the 3x acceptance floor\n",
+      batch_speedup);
+    return EXIT_FAILURE;
+  }
+
   printf(
     "Grassmann C ABI v%u.%u smoke test passed; translated point "
     "[%.6f, %.6f, %.6f]\n",
@@ -308,6 +632,13 @@ int main(void) {
     timing_iterations, make_point_ns, extract_point_ns);
   printf(
     "Ownership stress passed: %d iterations / %d consuming calls in %.1f ms\n",
-    rc_stress_iterations, rc_stress_iterations * 5, rc_stress_ns / 1e6);
+    rc_stress_iterations, rc_stress_iterations * 9, rc_stress_ns / 1e6);
+  printf(
+    "PGA3 XYZ batch boundary: %d points in %.1f us vs scalar %.1f us "
+    "(%.2fx, threshold 3x)\n",
+    batch_perf_points,
+    batch_ns_per_cloud / 1e3,
+    scalar_ns_per_cloud / 1e3,
+    batch_speedup);
   return EXIT_SUCCESS;
 }

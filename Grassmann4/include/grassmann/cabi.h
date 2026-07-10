@@ -1,6 +1,7 @@
 #ifndef GRASSMANN_CABI_H
 #define GRASSMANN_CABI_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 #if defined(_WIN32)
@@ -20,7 +21,7 @@ extern "C" {
 #endif
 
 /* Encoded as major << 16 | minor. */
-#define GRASSMANN_CABI_VERSION_V1 UINT32_C(0x00010000)
+#define GRASSMANN_CABI_VERSION_V1 UINT32_C(0x00010001)
 
 typedef int32_t grassmann_status_v1;
 
@@ -29,6 +30,14 @@ typedef int32_t grassmann_status_v1;
 #define GRASSMANN_NOT_INITIALIZED_V1 INT32_C(2)
 #define GRASSMANN_INIT_FAILED_V1     INT32_C(3)
 #define GRASSMANN_BAD_RESULT_V1      INT32_C(4)
+#define GRASSMANN_BAD_LENGTH_V1      INT32_C(5)
+#define GRASSMANN_INVALID_MOTOR_V1   INT32_C(6)
+
+/*
+ * Fixed relative Study-condition tolerance used by checked motor operations
+ * and batch transforms.
+ */
+#define GRASSMANN_PGA3_MOTOR_VALIDITY_TOLERANCE_V1 1e-12
 
 /* Native packed order for `MV PGA3 .even`: masks [0,3,5,6,9,10,12,15]. */
 typedef struct grassmann_pga3_motor_v1 {
@@ -140,10 +149,50 @@ GRASSMANN_CABI_API grassmann_status_v1 grassmann_pga3_motor_reverse_v1(
   const grassmann_pga3_motor_v1 *motor,
   grassmann_pga3_motor_v1 *out);
 
+/*
+ * Test both the unit rotor norm and the PGA Study condition. `out_is_unit` is
+ * set to either zero or one. A negative or non-finite tolerance reports false.
+ */
+GRASSMANN_CABI_API grassmann_status_v1 grassmann_pga3_motor_is_unit_v1(
+  const grassmann_pga3_motor_v1 *motor,
+  double tolerance,
+  int *out_is_unit);
+
+/*
+ * Normalize/invert a finite rigid PGA3 motor. These functions return
+ * GRASSMANN_INVALID_MOTOR_V1 when the rotor norm is not finite, invertible,
+ * and above the fixed tolerance, or when
+ * `abs(2 * study) <= tolerance * rotor_norm_sq` fails using
+ * GRASSMANN_PGA3_MOTOR_VALIDITY_TOLERANCE_V1.
+ */
+GRASSMANN_CABI_API grassmann_status_v1 grassmann_pga3_motor_normalize_v1(
+  const grassmann_pga3_motor_v1 *motor,
+  grassmann_pga3_motor_v1 *out);
+
+GRASSMANN_CABI_API grassmann_status_v1 grassmann_pga3_motor_inverse_v1(
+  const grassmann_pga3_motor_v1 *motor,
+  grassmann_pga3_motor_v1 *out);
+
 GRASSMANN_CABI_API grassmann_status_v1 grassmann_pga3_motor_apply_point_v1(
   const grassmann_pga3_motor_v1 *motor,
   const grassmann_pga3_point_v1 *point,
   grassmann_pga3_point_v1 *out);
+
+/*
+ * Transform `point_count` tightly packed AoS triples
+ * `[x0, y0, z0, x1, y1, z1, ...]` in one Lean boundary crossing. Exact
+ * in-place operation (`xyz_in == xyz_out`) is supported. The data pointers may
+ * be null only when `point_count == 0`; the motor must always be non-null.
+ * Counts for which `3 * point_count` would overflow `size_t` return
+ * GRASSMANN_BAD_LENGTH_V1. Invalid motors return
+ * GRASSMANN_INVALID_MOTOR_V1.
+ */
+GRASSMANN_CABI_API grassmann_status_v1
+grassmann_pga3_motor_apply_xyz_batch_v1(
+  const grassmann_pga3_motor_v1 *motor,
+  const double *xyz_in,
+  size_t point_count,
+  double *xyz_out);
 
 #ifdef __cplusplus
 } /* extern "C" */
