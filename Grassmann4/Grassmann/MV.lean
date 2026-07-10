@@ -263,6 +263,11 @@ def scalar (sig : Signature n) (x : Float) : MV sig .even :=
 @[inline]
 def one (sig : Signature n) : MV sig .even := scalar sig 1.0
 
+/-- Unit scalar in full storage. -/
+@[inline]
+def oneFull (sig : Signature n) : MV sig .full :=
+  ⟨(DataArray.zeros (storageSize n .full)).set! 0 1.0⟩
+
 /-! ### Accessors -/
 
 /-- Get coefficient at blade mask (user-friendly interface). -/
@@ -914,6 +919,18 @@ def oddToFull (m : MV sig .odd) : MV sig .full :=
 
 /-! ### Typeclass Instances -/
 
+instance instZero : Zero (MV sig p) where
+  zero := zero sig p
+
+instance instOneEven : One (MV sig .even) where
+  one := one sig
+
+instance instOneFull : One (MV sig .full) where
+  one := oneFull sig
+
+instance instInhabited : Inhabited (MV sig p) where
+  default := zero sig p
+
 -- NOTE: Using mulDirect instead of mul (typeclass) for better runtime performance.
 -- Typeclass dispatch adds ~1.5x overhead vs direct dispatch.
 instance instHMulMV : HMul (MV sig p1) (MV sig p2) (MV sig (p1 * p2)) where
@@ -927,6 +944,9 @@ instance instMulFull : Mul (MV sig .full) where
 
 instance instHMulFloat : HMul Float (MV sig p) (MV sig p) where
   hMul := smul
+
+instance instSMulFloat : SMul Float (MV sig p) where
+  smul := smul
 
 instance instAdd : Add (MV sig p) where
   add := add
@@ -949,7 +969,7 @@ instance instGAlgebraFull : GAlgebra sig (MV sig .full) Float where
   basisVector i := ofPairs sig .full [(1 <<< i.val, 1.0)]
   scalar x := ofPairs sig .full [(0, x)]
   zero := zero sig .full
-  one := ofPairs sig .full [(0, 1.0)]
+  one := oneFull sig
   blade bits := ofPairs sig .full [(bits.toNat, 1.0)]
   mul := fun a b => mulDirect a b
   wedge := fun a b => wedge a b
