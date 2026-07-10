@@ -839,36 +839,101 @@ def antiCommutator (a b : MV sig .full) : MV sig .full :=
 
 /-! ### Reverse (Dagger) -/
 
+/-- Whether reverse negates the coefficient at a blade mask. -/
+@[inline]
+private def reverseNegates (mask : Nat) : Bool :=
+  let g := popcount mask
+  (g * (g - 1) / 2) % 2 != 0
+
+/-- Tail-recursive reverse loop for identity-indexed full storage. -/
+private def revFullAux (m : @& DataArray) (i : Nat) :
+    Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      let value := m.get! i
+      let result := if reverseNegates i then -value else value
+      revFullAux m (i + 1) remaining (out.push result)
+
+/-- Tail-recursive reverse loop over one hoisted parity index map. -/
+private def revPackedAux (idx : @& Array Nat) (m : @& DataArray) (i : Nat) :
+    Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      let value := m.get! i
+      let result := if reverseNegates (idx.getD i 0) then -value else value
+      revPackedAux idx m (i + 1) remaining (out.push result)
+
 /-- Reverse operation: reverses the order of basis vectors in each blade.
     For grade k, this multiplies by (-1)^(k(k-1)/2). -/
 @[inline]
-def rev (m : MV sig p) : MV sig p :=
+def rev (m : @& MV sig p) : MV sig p :=
   let sz := storageSize n p
-  ⟨DataArray.ofArray ((Array.range sz).map fun pi =>
-    let mask := unpackIdx n p pi  -- get blade mask from packed index
-    let g := popcount mask
-    let sign := if (g * (g - 1) / 2) % 2 == 0 then 1.0 else -1.0
-    sign * m.coeffs.get! pi)⟩
+  match p with
+  | .full =>
+      ⟨revFullAux m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
+  | .even =>
+      let idx := indices n .even
+      ⟨revPackedAux idx m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
+  | .odd =>
+      let idx := indices n .odd
+      ⟨revPackedAux idx m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
+
+/-- Tail-recursive grade-involution loop for full storage. -/
+private def involuteFullAux (m : @& DataArray) (i : Nat) :
+    Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      let value := m.get! i
+      let result := if popcount i % 2 == 0 then value else -value
+      involuteFullAux m (i + 1) remaining (out.push result)
 
 /-- Grade involution: multiplies each grade-k blade by `(-1)^k`. -/
 @[inline]
-def involute (m : MV sig p) : MV sig p :=
-  let sz := storageSize n p
-  ⟨DataArray.ofArray ((Array.range sz).map fun pi =>
-    let mask := unpackIdx n p pi
-    let g := popcount mask
-    let sign := if g % 2 == 0 then 1.0 else -1.0
-    sign * m.coeffs.get! pi)⟩
+def involute (m : @& MV sig p) : MV sig p :=
+  match p with
+  | .even => m
+  | .odd => neg m
+  | .full =>
+      let sz := storageSize n .full
+      ⟨involuteFullAux m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
+
+/-- Whether Clifford conjugation negates the coefficient at a blade mask. -/
+@[inline]
+private def conjugateNegates (mask : Nat) : Bool :=
+  let g := popcount mask
+  (g * (g + 1) / 2) % 2 != 0
+
+/-- Tail-recursive Clifford-conjugation loop for full storage. -/
+private def conjugateFullAux (m : @& DataArray) (i : Nat) :
+    Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      let value := m.get! i
+      let result := if conjugateNegates i then -value else value
+      conjugateFullAux m (i + 1) remaining (out.push result)
+
+/-- Tail-recursive Clifford-conjugation loop over one parity index map. -/
+private def conjugatePackedAux (idx : @& Array Nat) (m : @& DataArray) (i : Nat) :
+    Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      let value := m.get! i
+      let result := if conjugateNegates (idx.getD i 0) then -value else value
+      conjugatePackedAux idx m (i + 1) remaining (out.push result)
 
 /-- Clifford conjugate: multiplies each grade-k blade by `(-1)^(k(k+1)/2)`. -/
 @[inline]
-def conjugate (m : MV sig p) : MV sig p :=
+def conjugate (m : @& MV sig p) : MV sig p :=
   let sz := storageSize n p
-  ⟨DataArray.ofArray ((Array.range sz).map fun pi =>
-    let mask := unpackIdx n p pi
-    let g := popcount mask
-    let sign := if (g * (g + 1) / 2) % 2 == 0 then 1.0 else -1.0
-    sign * m.coeffs.get! pi)⟩
+  match p with
+  | .full =>
+      ⟨conjugateFullAux m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
+  | .even =>
+      let idx := indices n .even
+      ⟨conjugatePackedAux idx m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
+  | .odd =>
+      let idx := indices n .odd
+      ⟨conjugatePackedAux idx m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
 
 /-! ### Grade Projection -/
 
