@@ -24,6 +24,7 @@ linear_iters="${PACKED_MV_BENCH_LINEAR_ITERS:-500000}"
 unary_iters="${PACKED_MV_BENCH_UNARY_ITERS:-100000}"
 hodge_iters="${PACKED_MV_BENCH_HODGE_ITERS:-100000}"
 projection_iters="${PACKED_MV_BENCH_PROJECTION_ITERS:-100000}"
+dense_ingress_iters="${PACKED_MV_BENCH_DENSE_INGRESS_ITERS:-100000}"
 max_correctness_diff="${MAX_PACKED_MV_CORRECTNESS_DIFF:-1e-6}"
 max_packed_motor_ns="${MAX_PACKED_PGA_MOTOR_POINT_NS:-20000}"
 min_motor_speedup="${MIN_PACKED_PGA_MOTOR_POINT_SPEEDUP:-5}"
@@ -57,6 +58,13 @@ max_packed_full_projection_ns="${MAX_PACKED_MV_FULL_PROJECTION_NS:-500}"
 max_packed_half_projection_ns="${MAX_PACKED_MV_HALF_PROJECTION_NS:-300}"
 max_packed_widening_ns="${MAX_PACKED_MV_WIDENING_NS:-300}"
 min_packed_projection_speedup="${MIN_PACKED_MV_PROJECTION_SPEEDUP:-3.0}"
+# Dense ingress invokes an arbitrary coefficient closure once per output slot,
+# so source computation dominates these timings. The one-buffer implementation
+# must remain non-regressing while its generated-C guard separately proves that
+# the intermediate boxed Array, copy, and fallback path stay absent.
+max_packed_dense_ingress_full_ns="${MAX_PACKED_MV_DENSE_INGRESS_FULL_NS:-7500}"
+max_packed_dense_ingress_half_ns="${MAX_PACKED_MV_DENSE_INGRESS_HALF_NS:-4000}"
+min_packed_dense_ingress_speedup="${MIN_PACKED_MV_DENSE_INGRESS_SPEEDUP:-0.95}"
 
 bench_log="${PACKED_MV_BENCH_GUARD_LOG:-}"
 if [[ -z "$bench_log" ]]; then
@@ -190,7 +198,13 @@ write_summary_json() {
     printf '    "max_packed_full_projection_ns": %s,\n' "$max_packed_full_projection_ns"
     printf '    "max_packed_half_projection_ns": %s,\n' "$max_packed_half_projection_ns"
     printf '    "max_packed_widening_ns": %s,\n' "$max_packed_widening_ns"
-    printf '    "min_packed_projection_speedup": %s\n' "$min_packed_projection_speedup"
+    printf '    "min_packed_projection_speedup": %s,\n' "$min_packed_projection_speedup"
+    printf '    "max_packed_dense_ingress_full_ns": %s,\n' \
+      "$max_packed_dense_ingress_full_ns"
+    printf '    "max_packed_dense_ingress_half_ns": %s,\n' \
+      "$max_packed_dense_ingress_half_ns"
+    printf '    "min_packed_dense_ingress_speedup": %s\n' \
+      "$min_packed_dense_ingress_speedup"
     printf '  },\n'
     printf '  "metrics": {\n'
     printf '    "pga_motor_point_diff": %s,\n' "$motor_point_diff"
@@ -254,7 +268,22 @@ write_summary_json() {
     printf '    "packed_boxed_even_to_full_ns": %s,\n' "$boxed_even_to_full_widening_ns"
     printf '    "packed_direct_even_to_full_ns": %s,\n' "$direct_even_to_full_widening_ns"
     printf '    "packed_boxed_odd_to_full_ns": %s,\n' "$boxed_odd_to_full_widening_ns"
-    printf '    "packed_direct_odd_to_full_ns": %s\n' "$direct_odd_to_full_widening_ns"
+    printf '    "packed_direct_odd_to_full_ns": %s,\n' "$direct_odd_to_full_widening_ns"
+    printf '    "dense_ingress_full_l1_diff": %s,\n' "$dense_ingress_full_diff"
+    printf '    "dense_ingress_even_l1_diff": %s,\n' "$dense_ingress_even_diff"
+    printf '    "dense_ingress_odd_l1_diff": %s,\n' "$dense_ingress_odd_diff"
+    printf '    "packed_boxed_full_dense_ingress_ns": %s,\n' \
+      "$boxed_full_dense_ingress_ns"
+    printf '    "packed_direct_full_dense_ingress_ns": %s,\n' \
+      "$direct_full_dense_ingress_ns"
+    printf '    "packed_boxed_even_dense_ingress_ns": %s,\n' \
+      "$boxed_even_dense_ingress_ns"
+    printf '    "packed_direct_even_dense_ingress_ns": %s,\n' \
+      "$direct_even_dense_ingress_ns"
+    printf '    "packed_boxed_odd_dense_ingress_ns": %s,\n' \
+      "$boxed_odd_dense_ingress_ns"
+    printf '    "packed_direct_odd_dense_ingress_ns": %s\n' \
+      "$direct_odd_dense_ingress_ns"
     printf '  },\n'
     printf '  "speedups": {\n'
     printf '    "pga_motor_point": %s,\n' "$motor_speedup"
@@ -278,7 +307,10 @@ write_summary_json() {
     printf '    "packed_even_part": %s,\n' "$even_part_speedup"
     printf '    "packed_odd_part": %s,\n' "$odd_part_speedup"
     printf '    "packed_even_to_full": %s,\n' "$even_to_full_widening_speedup"
-    printf '    "packed_odd_to_full": %s\n' "$odd_to_full_widening_speedup"
+    printf '    "packed_odd_to_full": %s,\n' "$odd_to_full_widening_speedup"
+    printf '    "packed_full_dense_ingress": %s,\n' "$full_dense_ingress_speedup"
+    printf '    "packed_even_dense_ingress": %s,\n' "$even_dense_ingress_speedup"
+    printf '    "packed_odd_dense_ingress": %s\n' "$odd_dense_ingress_speedup"
     printf '  }\n'
     printf '}\n'
   } > "$summary_json"
@@ -325,6 +357,12 @@ fi
 
 if ! lake exe packedmvbench projections-widening "$projection_iters" >> "$bench_log" 2>&1; then
   printf 'lake exe packedmvbench projections-widening failed; benchmark log follows:\n' >&2
+  cat "$bench_log" >&2
+  exit 1
+fi
+
+if ! lake exe packedmvbench dense-ingress "$dense_ingress_iters" >> "$bench_log" 2>&1; then
+  printf 'lake exe packedmvbench dense-ingress failed; benchmark log follows:\n' >&2
   cat "$bench_log" >&2
   exit 1
 fi
@@ -418,6 +456,21 @@ even_to_full_widening_speedup="$(ratio "$boxed_even_to_full_widening_ns" \
   "$direct_even_to_full_widening_ns")"
 odd_to_full_widening_speedup="$(ratio "$boxed_odd_to_full_widening_ns" \
   "$direct_odd_to_full_widening_ns")"
+dense_ingress_full_diff="$(get_last_metric "full ingress l1 diff")"
+dense_ingress_even_diff="$(get_last_metric "even ingress l1 diff")"
+dense_ingress_odd_diff="$(get_last_metric "odd ingress l1 diff")"
+boxed_full_dense_ingress_ns="$(get_timed_metric "boxed CGA3 full dense ingress")"
+direct_full_dense_ingress_ns="$(get_timed_metric "direct CGA3 full dense ingress")"
+boxed_even_dense_ingress_ns="$(get_timed_metric "boxed CGA3 even dense ingress")"
+direct_even_dense_ingress_ns="$(get_timed_metric "direct CGA3 even dense ingress")"
+boxed_odd_dense_ingress_ns="$(get_timed_metric "boxed CGA3 odd dense ingress")"
+direct_odd_dense_ingress_ns="$(get_timed_metric "direct CGA3 odd dense ingress")"
+full_dense_ingress_speedup="$(ratio "$boxed_full_dense_ingress_ns" \
+  "$direct_full_dense_ingress_ns")"
+even_dense_ingress_speedup="$(ratio "$boxed_even_dense_ingress_ns" \
+  "$direct_even_dense_ingress_ns")"
+odd_dense_ingress_speedup="$(ratio "$boxed_odd_dense_ingress_ns" \
+  "$direct_odd_dense_ingress_ns")"
 
 check_le "PGA3 motor point transform diff" "$motor_point_diff" "$max_correctness_diff" ""
 check_le "Packed PGA3 motor point transform" "$packed_motor_ns" "$max_packed_motor_ns" "ns/iter"
@@ -517,6 +570,28 @@ check_le "Packed even-to-full widening" "$direct_even_to_full_widening_ns" \
 check_le "Packed odd-to-full widening" "$direct_odd_to_full_widening_ns" \
   "$max_packed_widening_ns" "ns/iter"
 
+dense_ingress_labels=("full" "even" "odd")
+dense_ingress_diffs=(
+  "$dense_ingress_full_diff" "$dense_ingress_even_diff" "$dense_ingress_odd_diff"
+)
+dense_ingress_speedups=(
+  "$full_dense_ingress_speedup" "$even_dense_ingress_speedup"
+  "$odd_dense_ingress_speedup"
+)
+for ((i = 0; i < ${#dense_ingress_labels[@]}; i++)); do
+  label="Packed ${dense_ingress_labels[$i]} dense ingress"
+  check_le "$label baseline diff" "${dense_ingress_diffs[$i]}" \
+    "$max_correctness_diff" ""
+  check_ge "$label speedup" "${dense_ingress_speedups[$i]}" \
+    "$min_packed_dense_ingress_speedup" "x"
+done
+check_le "Packed full dense ingress" "$direct_full_dense_ingress_ns" \
+  "$max_packed_dense_ingress_full_ns" "ns/iter"
+check_le "Packed even dense ingress" "$direct_even_dense_ingress_ns" \
+  "$max_packed_dense_ingress_half_ns" "ns/iter"
+check_le "Packed odd dense ingress" "$direct_odd_dense_ingress_ns" \
+  "$max_packed_dense_ingress_half_ns" "ns/iter"
+
 status="passed"
 if [[ ${#failures[@]} -ne 0 ]]; then
   status="failed"
@@ -576,4 +651,17 @@ for ((i = 0; i < ${#projection_diff_labels[@]}; i++)); do
   printf '  Packed %s: %s ns/iter direct vs %s ns/iter boxed (%sx)\n' \
     "${projection_diff_labels[$i]}" "${projection_direct_ns[$i]}" \
     "${projection_boxed_ns[$i]}" "${projection_speedups[$i]}"
+done
+dense_ingress_boxed_ns=(
+  "$boxed_full_dense_ingress_ns" "$boxed_even_dense_ingress_ns"
+  "$boxed_odd_dense_ingress_ns"
+)
+dense_ingress_direct_ns=(
+  "$direct_full_dense_ingress_ns" "$direct_even_dense_ingress_ns"
+  "$direct_odd_dense_ingress_ns"
+)
+for ((i = 0; i < ${#dense_ingress_labels[@]}; i++)); do
+  printf '  Packed %s dense ingress: %s ns/iter direct vs %s ns/iter boxed (%sx)\n' \
+    "${dense_ingress_labels[$i]}" "${dense_ingress_direct_ns[$i]}" \
+    "${dense_ingress_boxed_ns[$i]}" "${dense_ingress_speedups[$i]}"
 done
