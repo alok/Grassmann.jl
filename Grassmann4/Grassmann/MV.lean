@@ -747,17 +747,30 @@ def regressiveProduct (a b : MV sig .full) : MV sig .full :=
 
 /-! ### Scalar Multiplication -/
 
+/-- Tail-recursive coefficient loop for packed scalar multiplication. -/
+private def smulAux (s : Float) (m : @& DataArray) (i : Nat) :
+    Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      smulAux s m (i + 1) remaining (out.push (s * m.get! i))
+
 @[inline]
-def smul (s : Float) (m : MV sig p) : MV sig p :=
+def smul (s : Float) (m : @& MV sig p) : MV sig p :=
   let sz := storageSize n p
-  ⟨DataArray.ofArray ((Array.range sz).map fun pi => s * m.coeffs.get! pi)⟩
+  ⟨smulAux s m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
 
 /-! ### Addition -/
 
+/-- Tail-recursive coefficient loop for packed addition. -/
+private def addAux (a b : @& DataArray) (i : Nat) : Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      addAux a b (i + 1) remaining (out.push (a.get! i + b.get! i))
+
 @[inline]
-def add (a b : MV sig p) : MV sig p :=
+def add (a : @& MV sig p) (b : @& MV sig p) : MV sig p :=
   let sz := storageSize n p
-  ⟨DataArray.ofArray ((Array.range sz).map fun pi => a.coeffs.get! pi + b.coeffs.get! pi)⟩
+  ⟨addAux a.coeffs b.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
 
 /-! ### Subtraction -/
 
@@ -779,10 +792,16 @@ def sub (a : @& MV sig p) (b : @& MV sig p) : MV sig p :=
 
 /-! ### Negation -/
 
+/-- Tail-recursive coefficient loop for packed negation. -/
+private def negAux (m : @& DataArray) (i : Nat) : Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      negAux m (i + 1) remaining (out.push (-m.get! i))
+
 @[inline]
-def neg (m : MV sig p) : MV sig p :=
+def neg (m : @& MV sig p) : MV sig p :=
   let sz := storageSize n p
-  ⟨DataArray.ofArray ((Array.range sz).map fun pi => -m.coeffs.get! pi)⟩
+  ⟨negAux m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
 
 /-! ### More Full-Storage Derived Products -/
 
