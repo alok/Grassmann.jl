@@ -45,51 +45,27 @@ def e0123 : Blade PGA3 := ⟨0b1111⟩
 /-- Create a packed PGA3 point at Euclidean coordinates `(x, y, z)`. -/
 @[inline, always_inline]
 def point3 (x y z : Float) : Point PGA3 :=
-  MV.zero PGA3 .odd
-    |>.setCoeff 7 1.0
-    |>.setCoeff 14 x
-    |>.setCoeff 13 y
-    |>.setCoeff 11 z
+  MV.pga3Point x y z
 
 /-- Create a packed PGA3 plane with normal `(nx, ny, nz)` and offset `d`. -/
 @[inline, always_inline]
 def plane3 (nx ny nz d : Float) : Plane PGA3 :=
-  MV.zero PGA3 .odd
-    |>.setCoeff 1 nx
-    |>.setCoeff 2 ny
-    |>.setCoeff 4 nz
-    |>.setCoeff 8 d
+  MV.pga3Plane nx ny nz d
 
 /-- Create a packed PGA3 line from direction and moment channels. -/
 @[inline, always_inline]
 def line3 (dx dy dz mx my mz : Float) : Line PGA3 :=
-  MV.zero PGA3 .even
-    |>.setCoeff 6 dx
-    |>.setCoeff 5 dy
-    |>.setCoeff 3 dz
-    |>.setCoeff 9 mx
-    |>.setCoeff 10 my
-    |>.setCoeff 12 mz
+  MV.pga3Line dx dy dz mx my mz
 
 /-- Create a packed PGA3 rotor.  The axis is expected to be normalized. -/
 @[inline, always_inline]
 def motor3 (axisX axisY axisZ angle : Float) : Motor PGA3 :=
-  let halfAngle := angle / 2.0
-  let c := Float.cos halfAngle
-  let s := Float.sin halfAngle
-  MV.zero PGA3 .even
-    |>.setCoeff 0 c
-    |>.setCoeff 6 (s * axisX)
-    |>.setCoeff 5 (s * axisY)
-    |>.setCoeff 3 (s * axisZ)
+  MV.pga3Rotor axisX axisY axisZ angle
 
 /-- Create a packed PGA3 translator for displacement `(tx, ty, tz)`. -/
 @[inline, always_inline]
 def translator3 (tx ty tz : Float) : Motor PGA3 :=
-  MV.one PGA3
-    |>.setCoeff 9 (-(tx / 2.0))
-    |>.setCoeff 10 (ty / 2.0)
-    |>.setCoeff 12 (-(tz / 2.0))
+  MV.pga3Translator tx ty tz
 
 /-- Create a rigid motor that rotates first and then translates. -/
 @[inline, always_inline]
@@ -101,11 +77,48 @@ def rigidMotor3 (axisX axisY axisZ angle tx ty tz : Float) : Motor PGA3 :=
 The zero triple represents a point at infinity (`weight = 0`). -/
 @[inline, always_inline]
 def extractPoint3 (p : Point PGA3) : Float × Float × Float :=
-  let mv := p.toMV
-  let w := mv.coeff 7
-  if w == 0.0 then
-    (0.0, 0.0, 0.0)
+  PGA3Kernel.pointCoordinates p.toMV.coeffs
+
+/-! ## Checked motor operations -/
+
+namespace Motor
+
+/-- Check that a packed PGA3 motor is finite, invertible, and satisfies the Study condition. -/
+@[inline, always_inline]
+def isValid3 (motor : @& Motor PGA3) (tolerance : Float := 1.0e-12) : Bool :=
+  PGA3Kernel.motorIsValid motor.toMV.coeffs tolerance
+
+/-- Check that a packed PGA3 motor is unit length and satisfies the Study condition. -/
+@[inline, always_inline]
+def isUnit3 (motor : @& Motor PGA3) (tolerance : Float := 1.0e-12) : Bool :=
+  PGA3Kernel.motorIsUnit motor.toMV.coeffs tolerance
+
+/-- Normalize a valid packed PGA3 motor. -/
+@[inline]
+def normalize3? (motor : @& Motor PGA3) (tolerance : Float := 1.0e-12) : Option (Motor PGA3) :=
+  match PGA3Kernel.motorNormalize? motor.toMV.coeffs tolerance with
+  | some coeffs => MV.ofDataArray? PGA3 .even coeffs
+  | none => none
+
+/-- Invert a valid packed PGA3 motor. -/
+@[inline]
+def inverse3? (motor : @& Motor PGA3) (tolerance : Float := 1.0e-12) : Option (Motor PGA3) :=
+  match PGA3Kernel.motorInverse? motor.toMV.coeffs tolerance with
+  | some coeffs => MV.ofDataArray? PGA3 .even coeffs
+  | none => none
+
+/--
+Transform a flat array of `(x, y, z)` triples after validating both its length
+and the motor. The returned array has the same length as the input.
+-/
+@[inline]
+def transformXYZBatch3? (motor : @& Motor PGA3) (xyz : @& FloatArray)
+    (tolerance : Float := 1.0e-12) : Option FloatArray :=
+  if xyz.size % 3 == 0 && isValid3 motor tolerance then
+    some (PGA3Kernel.motorApplyXYZBatch motor.toMV.coeffs xyz)
   else
-    (mv.coeff 14 / w, mv.coeff 13 / w, mv.coeff 11 / w)
+    none
+
+end Motor
 
 end Grassmann.PGA

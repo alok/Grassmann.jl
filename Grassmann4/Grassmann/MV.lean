@@ -213,6 +213,37 @@ def ofDataArray? (sig : Signature n) (p : Parity) (coeffs : DataArray) : Option 
   else
     none
 
+/-!
+These fixed PGA3 constructors keep the raw `MV` constructor private while
+letting the supported high-level API share the same straight-line buffers as
+the native binding layer.
+-/
+
+/-- Construct a well-formed packed PGA3 point without generic index updates. -/
+@[inline, always_inline]
+def pga3Point (x y z : Float) : MV PGA3 .odd :=
+  ⟨PGA3Kernel.point x y z⟩
+
+/-- Construct a well-formed packed PGA3 plane without generic index updates. -/
+@[inline, always_inline]
+def pga3Plane (nx ny nz d : Float) : MV PGA3 .odd :=
+  ⟨PGA3Kernel.plane nx ny nz d⟩
+
+/-- Construct a well-formed packed PGA3 line without generic index updates. -/
+@[inline, always_inline]
+def pga3Line (dx dy dz mx my mz : Float) : MV PGA3 .even :=
+  ⟨PGA3Kernel.line dx dy dz mx my mz⟩
+
+/-- Construct a well-formed packed PGA3 rotor without generic index updates. -/
+@[inline, always_inline]
+def pga3Rotor (axisX axisY axisZ angle : Float) : MV PGA3 .even :=
+  ⟨PGA3Kernel.rotor axisX axisY axisZ angle⟩
+
+/-- Construct a well-formed packed PGA3 translator without generic index updates. -/
+@[inline, always_inline]
+def pga3Translator (x y z : Float) : MV PGA3 .even :=
+  ⟨PGA3Kernel.translator x y z⟩
+
 /-- Number of packed coefficients required by this multivector's layout. -/
 @[inline, always_inline]
 def coefficientCount (_m : MV sig p) : Nat := storageSize n p

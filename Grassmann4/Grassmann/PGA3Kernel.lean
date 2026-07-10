@@ -39,6 +39,32 @@ def point (x y z : Float) : FloatArray :=
     |>.push y
     |>.push x
 
+/-- Construct the native packed plane with normal `(nx, ny, nz)` and offset `d`. -/
+@[inline, always_inline]
+def plane (nx ny nz d : Float) : FloatArray :=
+  FloatArray.emptyWithCapacity 8
+    |>.push nx
+    |>.push ny
+    |>.push nz
+    |>.push 0.0
+    |>.push d
+    |>.push 0.0
+    |>.push 0.0
+    |>.push 0.0
+
+/-- Construct the native packed line from direction and moment channels. -/
+@[inline, always_inline]
+def line (dx dy dz mx my mz : Float) : FloatArray :=
+  FloatArray.emptyWithCapacity 8
+    |>.push 0.0
+    |>.push dz
+    |>.push dy
+    |>.push dx
+    |>.push mx
+    |>.push my
+    |>.push mz
+    |>.push 0.0
+
 /-- Construct a native packed rotor. The axis is expected to be normalized. -/
 @[inline, always_inline]
 def rotor (axisX axisY axisZ angle : Float) : FloatArray :=
@@ -126,6 +152,96 @@ def motorReverse (motor : @& FloatArray) : FloatArray :=
     |>.push (-(motor.get! 5))
     |>.push (-(motor.get! 6))
     |>.push (motor.get! 7)
+
+/-- Squared norm of the real quaternion part of a packed PGA3 motor. -/
+@[inline, always_inline]
+def motorNormSq (motor : @& FloatArray) : Float :=
+  let a0 := motor.get! 0
+  let a1 := motor.get! 1
+  let a2 := motor.get! 2
+  let a3 := motor.get! 3
+  a0 * a0 + a1 * a1 + a2 * a2 + a3 * a3
+
+/--
+Study scalar of a packed PGA3 motor.
+
+For packed coefficients `[a0, ..., a7]`, the reverse product is
+`motor * reverse motor = q + 2 * motorStudy motor * e0123`.
+-/
+@[inline, always_inline]
+def motorStudy (motor : @& FloatArray) : Float :=
+  let a0 := motor.get! 0
+  let a1 := motor.get! 1
+  let a2 := motor.get! 2
+  let a3 := motor.get! 3
+  let a4 := motor.get! 4
+  let a5 := motor.get! 5
+  let a6 := motor.get! 6
+  let a7 := motor.get! 7
+  a0 * a7 - a1 * a6 + a2 * a5 - a3 * a4
+
+/-- Check that a packed motor represents a finite, invertible rigid motion. -/
+@[inline, always_inline]
+def motorIsValid (motor : @& FloatArray) (tolerance : Float) : Bool :=
+  if motor.size != 8 || !tolerance.isFinite || tolerance < 0.0 then
+    false
+  else
+    let q := motorNormSq motor
+    let residual := 2.0 * motorStudy motor
+    let invQ := 1.0 / q
+    let bound := tolerance * q
+    q.isFinite && invQ.isFinite && residual.isFinite && bound.isFinite &&
+      q > tolerance && Float.abs residual ≤ bound
+
+/-- Check the unit-motor and Study conditions at the requested tolerance. -/
+@[inline, always_inline]
+def motorIsUnit (motor : @& FloatArray) (tolerance : Float) : Bool :=
+  let q := motorNormSq motor
+  motorIsValid motor tolerance && Float.abs (q - 1.0) ≤ tolerance
+
+/-- Normalize a motor already known to satisfy `motorIsValid`. -/
+@[inline, always_inline]
+def motorNormalizeUnchecked (motor : @& FloatArray) : FloatArray :=
+  let scale := 1.0 / Float.sqrt (motorNormSq motor)
+  FloatArray.emptyWithCapacity 8
+    |>.push (motor.get! 0 * scale)
+    |>.push (motor.get! 1 * scale)
+    |>.push (motor.get! 2 * scale)
+    |>.push (motor.get! 3 * scale)
+    |>.push (motor.get! 4 * scale)
+    |>.push (motor.get! 5 * scale)
+    |>.push (motor.get! 6 * scale)
+    |>.push (motor.get! 7 * scale)
+
+/-- Normalize a finite rigid motor, rejecting ideal or Study-invalid inputs. -/
+@[inline, always_inline]
+def motorNormalize? (motor : @& FloatArray) (tolerance : Float) : Option FloatArray :=
+  if motorIsValid motor tolerance then
+    some (motorNormalizeUnchecked motor)
+  else
+    none
+
+/-- Invert a motor already known to satisfy `motorIsValid`. -/
+@[inline, always_inline]
+def motorInverseUnchecked (motor : @& FloatArray) : FloatArray :=
+  let scale := 1.0 / motorNormSq motor
+  FloatArray.emptyWithCapacity 8
+    |>.push (motor.get! 0 * scale)
+    |>.push (-(motor.get! 1) * scale)
+    |>.push (-(motor.get! 2) * scale)
+    |>.push (-(motor.get! 3) * scale)
+    |>.push (-(motor.get! 4) * scale)
+    |>.push (-(motor.get! 5) * scale)
+    |>.push (-(motor.get! 6) * scale)
+    |>.push (motor.get! 7 * scale)
+
+/-- Invert a finite rigid motor, rejecting ideal or Study-invalid inputs. -/
+@[inline, always_inline]
+def motorInverse? (motor : @& FloatArray) (tolerance : Float) : Option FloatArray :=
+  if motorIsValid motor tolerance then
+    some (motorInverseUnchecked motor)
+  else
+    none
 
 /--
 Fixed native packed even-by-odd geometric product.
@@ -308,5 +424,54 @@ def extractPoint (p : @& FloatArray) : FloatArray :=
     |>.push x
     |>.push y
     |>.push z
+
+/--
+Transform a flat array of Euclidean `(x, y, z)` triples with one packed motor.
+
+The input length is assumed to be divisible by three. The motor's homogeneous
+3x4 transform is computed once, then applied without allocating a packed point
+or sandwich intermediate for each triple. A zero-norm motor maps every input
+to the zero triple; checked callers should reject it with `motorIsValid`.
+-/
+@[inline]
+def motorApplyXYZBatch (motor : @& FloatArray) (xyz : @& FloatArray) : FloatArray := Id.run do
+  let m0 := motor.get! 0
+  let m1 := motor.get! 1
+  let m2 := motor.get! 2
+  let m3 := motor.get! 3
+  let m4 := motor.get! 4
+  let m5 := motor.get! 5
+  let m6 := motor.get! 6
+  let m7 := motor.get! 7
+  let q := m0 * m0 + m1 * m1 + m2 * m2 + m3 * m3
+  let pointCount := xyz.size / 3
+  let mut out := FloatArray.emptyWithCapacity (pointCount * 3)
+  if q == 0.0 then
+    for _ in [0:pointCount] do
+      out := out.push 0.0 |>.push 0.0 |>.push 0.0
+  else
+    let invQ := 1.0 / q
+    let xx := (m0 * m0 - m1 * m1 - m2 * m2 + m3 * m3) * invQ
+    let xy := (-2.0 * (m0 * m1 - m2 * m3)) * invQ
+    let xz := (2.0 * (m0 * m2 + m1 * m3)) * invQ
+    let xt := (-2.0 * (m0 * m4 + m1 * m5 + m2 * m6 + m3 * m7)) * invQ
+    let yx := (2.0 * (m0 * m1 + m2 * m3)) * invQ
+    let yy := (m0 * m0 - m1 * m1 + m2 * m2 - m3 * m3) * invQ
+    let yz := (-2.0 * (m0 * m3 - m1 * m2)) * invQ
+    let yt := (2.0 * (m0 * m5 - m1 * m4 - m2 * m7 + m3 * m6)) * invQ
+    let zx := (-2.0 * (m0 * m2 - m1 * m3)) * invQ
+    let zy := (2.0 * (m0 * m3 + m1 * m2)) * invQ
+    let zz := (m0 * m0 + m1 * m1 - m2 * m2 - m3 * m3) * invQ
+    let zt := (-2.0 * (m0 * m6 + m1 * m7 - m2 * m4 - m3 * m5)) * invQ
+    for i in [0:pointCount] do
+      let base := i * 3
+      let x := xyz.get! base
+      let y := xyz.get! (base + 1)
+      let z := xyz.get! (base + 2)
+      out := out
+        |>.push (xx * x + xy * y + xz * z + xt)
+        |>.push (yx * x + yy * y + yz * z + yt)
+        |>.push (zx * x + zy * y + zz * z + zt)
+  return out
 
 end Grassmann.PGA3Kernel

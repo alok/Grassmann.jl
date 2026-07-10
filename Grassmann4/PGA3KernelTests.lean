@@ -18,6 +18,35 @@ private def maxAbsDiff (a b : FloatArray) : Float :=
 private def basisPacked (index : Nat) : FloatArray :=
   PGA3Kernel.zero.set! index 1.0
 
+private def scalePacked (a : FloatArray) (scale : Float) : FloatArray := Id.run do
+  let mut out := FloatArray.emptyWithCapacity a.size
+  for i in [0:a.size] do
+    out := out.push (a.get! i * scale)
+  return out
+
+private def xyzInput (pointCount : Nat) : FloatArray := Id.run do
+  let mut out := FloatArray.emptyWithCapacity (pointCount * 3)
+  for i in [0:pointCount] do
+    let f := Float.ofNat i
+    out := out
+      |>.push (f * 0.25 - 7.0)
+      |>.push (f * (-0.125) + 3.0)
+      |>.push (f * 0.0625 - 1.0)
+  return out
+
+private def scalarTransformXYZBatch
+    (motor : FloatArray) (xyz : FloatArray) : FloatArray := Id.run do
+  let pointCount := xyz.size / 3
+  let mut out := FloatArray.emptyWithCapacity (pointCount * 3)
+  for i in [0:pointCount] do
+    let base := i * 3
+    let p := PGA3Kernel.point
+      (xyz.get! base) (xyz.get! (base + 1)) (xyz.get! (base + 2))
+    let (x, y, z) :=
+      PGA3Kernel.pointCoordinates (PGA3Kernel.motorApplyPoint motor p)
+    out := out.push x |>.push y |>.push z
+  return out
+
 private def composedMotorSandwichOdd
     (motor : FloatArray) (odd : FloatArray) : FloatArray :=
   PGA3Kernel.oddEvenMul
@@ -219,10 +248,159 @@ private def checkComposition : IO Unit := do
   requireArrays "composition packed point versus high-level"
     kernelComposedResult highComposedResult.toMV.coeffs
 
+private def checkMotorValidation : IO Unit := do
+  let tol := 1.0e-12
+  let rotor := PGA3Kernel.rotor 0.0 0.0 1.0 (pi / 3.0)
+  let translator := PGA3Kernel.translator 2.0 (-3.0) 4.0
+  let composed := PGA3Kernel.motorMul translator rotor
+  let identity := PGA3Kernel.zero.set! 0 1.0
+  for (label, motor) in
+      #[("identity", identity), ("rotor", rotor),
+        ("translator", translator), ("composed", composed)] do
+    require s!"{label} motor is valid" (PGA3Kernel.motorIsValid motor tol)
+    require s!"{label} motor is unit" (PGA3Kernel.motorIsUnit motor tol)
+  let scaled := scalePacked composed 3.0
+  require "scaled rigid motor remains valid" (PGA3Kernel.motorIsValid scaled tol)
+  require "scaled rigid motor is not unit" (!PGA3Kernel.motorIsUnit scaled tol)
+  let normalized ←
+    match PGA3Kernel.motorNormalize? scaled tol with
+    | some motor => pure motor
+    | none => throw <| IO.userError "PGA3 kernel regression: valid motor failed normalization"
+  require "normalized motor is unit" (PGA3Kernel.motorIsUnit normalized tol)
+  requireArrays "normalization removes uniform scale" normalized composed 1.0e-12
+  let inverse ←
+    match PGA3Kernel.motorInverse? scaled tol with
+    | some motor => pure motor
+    | none => throw <| IO.userError "PGA3 kernel regression: valid motor failed inversion"
+  requireArrays "scaled motor times inverse is identity"
+    (PGA3Kernel.motorMul scaled inverse) identity 1.0e-12
+  requireArrays "inverse times scaled motor is identity"
+    (PGA3Kernel.motorMul inverse scaled) identity 1.0e-12
+  let point := PGA3Kernel.point (-1.25) 2.5 7.0
+  let transformed := PGA3Kernel.motorApplyPoint scaled point
+  let roundTrip := PGA3Kernel.motorApplyPoint inverse transformed
+  requireCoords "checked inverse point round-trip"
+    (PGA3Kernel.pointCoordinates roundTrip)
+    (PGA3Kernel.pointCoordinates point)
+  let pureIdeal := PGA3Kernel.zero.set! 4 1.0
+  require "pure ideal motor is invalid" (!PGA3Kernel.motorIsValid pureIdeal tol)
+  require "pure ideal motor cannot normalize"
+    (PGA3Kernel.motorNormalize? pureIdeal tol).isNone
+  require "pure ideal motor cannot invert"
+    (PGA3Kernel.motorInverse? pureIdeal tol).isNone
+  let studyInvalid := identity.set! 7 1.0
+  require "Study-invalid motor is rejected"
+    (!PGA3Kernel.motorIsValid studyInvalid tol)
+  require "Study-invalid motor cannot normalize"
+    (PGA3Kernel.motorNormalize? studyInvalid tol).isNone
+  require "Study-invalid motor cannot invert"
+    (PGA3Kernel.motorInverse? studyInvalid tol).isNone
+  let tinyResidual := identity.set! 7 1.0e-14
+  require "sub-tolerance Study residual is accepted"
+    (PGA3Kernel.motorIsValid tinyResidual tol)
+  let nan := 0.0 / 0.0
+  let infinity := 1.0 / 0.0
+  require "NaN motor is rejected"
+    (!PGA3Kernel.motorIsValid (identity.set! 0 nan) tol)
+  require "infinite motor is rejected"
+    (!PGA3Kernel.motorIsValid (identity.set! 4 infinity) tol)
+  require "negative tolerance is rejected"
+    (!PGA3Kernel.motorIsValid identity (-tol))
+  require "NaN tolerance is rejected"
+    (!PGA3Kernel.motorIsValid identity nan)
+  require "infinite tolerance is rejected"
+    (!PGA3Kernel.motorIsValid identity infinity)
+  let short := FloatArray.empty.push 1.0
+  let long := identity.push 0.0
+  require "short motor buffer is rejected"
+    (!PGA3Kernel.motorIsValid short tol)
+  require "long motor buffer is rejected"
+    (!PGA3Kernel.motorIsValid long tol)
+  let scaleAdversary := PGA3Kernel.zero
+    |>.set! 0 0.001
+    |>.set! 7 2.5e-7
+  require "Study validation is invariant under normalization scale"
+    (!PGA3Kernel.motorIsValid scaleAdversary 1.0e-9)
+  let reciprocalOverflow := PGA3Kernel.zero.set! 0 1.0e-160
+  require "motor with overflowing reciprocal norm is rejected"
+    (!PGA3Kernel.motorIsValid reciprocalOverflow 0.0)
+  let formulaAnchor := PGA3Kernel.zero
+    |>.set! 0 1.25
+    |>.set! 1 (-2.0)
+    |>.set! 2 0.75
+    |>.set! 3 4.5
+    |>.set! 4 3.0
+    |>.set! 5 (-1.5)
+    |>.set! 6 2.0
+    |>.set! 7 0.25
+  requireArrays "reverse product exact packed formula"
+    (PGA3Kernel.motorMul formulaAnchor (PGA3Kernel.motorReverse formulaAnchor))
+    (PGA3Kernel.zero |>.set! 0 26.375 |>.set! 7 (-20.625))
+    0.0
+  let reverseProduct :=
+    PGA3Kernel.motorMul composed (PGA3Kernel.motorReverse composed)
+  let expectedReverseProduct := PGA3Kernel.zero
+    |>.set! 0 (PGA3Kernel.motorNormSq composed)
+    |>.set! 7 (2.0 * PGA3Kernel.motorStudy composed)
+  requireArrays "reverse product exposes norm and Study channels"
+    reverseProduct expectedReverseProduct 1.0e-12
+  let highScaled ←
+    match MV.ofDataArray? PGA3 .even scaled with
+    | some motor => pure motor
+    | none => throw <| IO.userError "PGA3 kernel regression: failed to import valid motor"
+  require "high-level scaled motor validity"
+    (PGA.Motor.isValid3 highScaled tol)
+  require "high-level scaled motor is not unit"
+    (!PGA.Motor.isUnit3 highScaled tol)
+  let highNormalized ←
+    match PGA.Motor.normalize3? highScaled tol with
+    | some motor => pure motor
+    | none => throw <| IO.userError "PGA3 kernel regression: high-level normalization failed"
+  requireArrays "high-level normalization versus kernel"
+    highNormalized.toMV.coeffs normalized 0.0
+  let highInverse ←
+    match PGA.Motor.inverse3? highScaled tol with
+    | some motor => pure motor
+    | none => throw <| IO.userError "PGA3 kernel regression: high-level inversion failed"
+  requireArrays "high-level inverse versus kernel"
+    highInverse.toMV.coeffs inverse 0.0
+
+private def checkXYZBatch : IO Unit := do
+  let rotor := PGA3Kernel.rotor 0.0 0.0 1.0 (pi / 3.0)
+  let translator := PGA3Kernel.translator 2.0 (-3.0) 4.0
+  -- Uniform motor scaling must not affect extracted Euclidean coordinates.
+  let motor := scalePacked (PGA3Kernel.motorMul translator rotor) 2.75
+  for pointCount in #[0, 1, 2, 7, 16, 17, 257] do
+    let xyz := xyzInput pointCount
+    let batched := PGA3Kernel.motorApplyXYZBatch motor xyz
+    let scalar := scalarTransformXYZBatch motor xyz
+    require s!"XYZ batch size for {pointCount} points"
+      (batched.size == pointCount * 3)
+    requireArrays s!"XYZ batch versus scalar sandwich for {pointCount} points"
+      batched scalar 2.0e-12
+    let highMotor ←
+      match MV.ofDataArray? PGA3 .even motor with
+      | some packed => pure packed
+      | none => throw <| IO.userError "PGA3 kernel regression: failed to import batch motor"
+    let highBatched ←
+      match PGA.Motor.transformXYZBatch3? highMotor xyz with
+      | some result => pure result
+      | none => throw <| IO.userError "PGA3 kernel regression: high-level batch rejected input"
+    requireArrays s!"high-level XYZ batch versus kernel for {pointCount} points"
+      highBatched batched 0.0
+  let highMotor ←
+    match MV.ofDataArray? PGA3 .even motor with
+    | some packed => pure packed
+    | none => throw <| IO.userError "PGA3 kernel regression: failed to import batch motor"
+  require "high-level XYZ batch rejects non-triple input"
+    (PGA.Motor.transformXYZBatch3? highMotor (xyzInput 2 |>.push 1.0)).isNone
+
 def run : IO Unit := do
   checkMotorMulBasis
   checkTranslation
   checkComposition
+  checkMotorValidation
+  checkXYZBatch
   checkAxisRotation "+90 degrees around x" 1.0 0.0 0.0
     0.0 1.0 0.0 (0.0, 0.0, 1.0)
   checkAxisRotation "+90 degrees around y" 0.0 1.0 0.0
