@@ -228,4 +228,75 @@ NEXT
    formulations before attempting proofs.
 3. Continue draining explicit proof placeholders in bounded, executable slices.
 
+2026-07-09 ALOK-765 PACKED SUBTRACTION AND BROAD IMPORT STARTED
+
+- Closed ALOK-763 in Linear after commit `f11f5d2` and moved to branch
+  `codex/alok-765-packed-sub-all`.
+- Created high-priority Linear issue ALOK-765, "Add packed subtraction and make
+  the broad Lean import buildable".
+- The post-firewall kitchen-sink audit found one clean-tree blocker:
+  `CoffeeshopExamples` unconditionally imports LeanPlot even though the
+  canonical package deliberately disables that dependency. The exact committed
+  CurveShortening module builds; Alok's dirty packed rewrite separately exposes
+  the missing `Grassmann.MV.sub` primitive.
+- Packed `MV` already had addition and negation but no subtraction function or
+  `Sub` instance. The active design is a same-parity, one-native-buffer
+  coefficient loop, not `add a (neg b)`.
+- `Grassmann.All` will remain broad over dependency-free Reference and
+  validation modules. CurveShortening and LeanPlot-bound application modules
+  stay explicitly importable so unrelated experiments cannot break the
+  canonical aggregate.
+
+NEXT
+
+1. Land one-pass packed subtraction and standard dispatch.
+2. Add independent parity/layout/dense regressions.
+3. Repair the All aggregation and rebuild the dirty curve without staging it.
+4. Run performance and acceptance gates, then record exact results.
+
+2026-07-09 ALOK-765 PACKED SUBTRACTION AND BROAD IMPORT COMPLETE
+
+- `822d3a0` adds parity-preserving `MV.sub` over borrowed inputs and the
+  standard homogeneous `Sub` instance. `58f24e8` tightens its builder to a
+  structurally terminating tail loop; generated C contains one capacity-sized
+  `FloatArray`, a direct `goto` loop, two native reads, one subtraction, and one
+  push per coefficient, with no call to `MV.add` or `MV.neg`.
+- `116fe87` adds exact R2-odd, R3-full, PGA3-even, and CGA3-odd layout checks,
+  plus direct/operator/dense agreement in every R3, PGA3, and CGA3
+  full/even/odd random linear-operation group. All nine subtraction-bearing
+  groups passed 100 generated cases each.
+- `978d265` makes `Grassmann.All` the canonical Reference and validation
+  aggregate. CurveShortening, CoffeeshopExamples, and LeanPlotDemo remain
+  explicit application imports, so the supported root does not acquire a
+  broken or maintainer-local LeanPlot dependency.
+- `58f24e8` also adds a permanent CGA3 full subtraction benchmark and guard.
+  The final guard measured 89.908340 ns direct versus 624.512920 ns for the
+  old add-neg composition, a 6.9x speedup, under the 500 ns ceiling and above
+  the 3x threshold.
+- `509becb` and `b7244e6` document the supported import layers, broad build,
+  explicit experiments, and honest standalone status of clean CurveShortening.
+- Canonical `lake build` passed 483 jobs. The combined Reference soundness,
+  theorem-draft, exact arithmetic, dirty CurveShortening, and All build passed
+  632 jobs. The full runtime suite passed 302/302 property groups and
+  20,951/20,951 cases, then 6/6 optimization categories and 600/600 cases.
+- Fixed packed kernels, fat dot, and the Init-only PGA3 kernels passed. The
+  main performance guard retained zero rotor/sandwich drift: packed rotor
+  123.482500 ns (304.9x dense), sandwich 97.785000 ns (1174.9x), motor
+  444.590420 ns, and analytic gradient 737.722080 ns (7.7x finite difference).
+- C ABI v1.1 smoke, public symbols, foreign-thread use, and 100,000-iteration
+  ownership stress passed. The 4,096-point C batch took 32.5 us versus 295.6 us
+  scalar (9.10x); boundary copies measured 13.2 ns and 18.7 ns.
+- All unrelated dirty curve, optimizer, physics, Metal, Unreal, SciLean-AD,
+  nested-workspace, and Lake edits remain unstaged and uncommitted.
+
+NEXT
+
+1. Replace boxed-intermediate packed add, negation, and scalar multiplication
+   with borrowed single-buffer loops and put them under the same benchmark
+   discipline as subtraction.
+2. Fill the lawless packed API gaps for `Zero`, `SMul Float`, and `Inhabited`
+   without inventing an invalid odd-parity multiplicative identity.
+3. Continue auditing supported callers for Julia-port API gaps before widening
+   application or optional-dependency surfaces.
+
 <promise>COMPLETE</promise>

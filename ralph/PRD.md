@@ -175,3 +175,32 @@ laws.
 
 Only emit a new `<promise>COMPLETE</promise>` after ALOK-763 is axiom-firewalled,
 fully verified, committed atomically, and updated in Linear with exact results.
+
+## Continuation: ALOK-765 packed subtraction and broad import
+
+The Reference firewall is complete. The active continuation closes a basic
+packed arithmetic omission exposed by the curve-shortening port and makes the
+broad dependency-free aggregation build honestly.
+
+### Required outcomes
+
+- Add parity-preserving `MV.sub` and standard subtraction notation using one
+  coefficient traversal and one final native result buffer, not an allocated
+  negation followed by addition.
+- Independently cover even, odd, and full packed layouts across representative
+  dimensions/signatures, including direct and typeclass dispatch and dense
+  agreement.
+- Prove the API repair against Alok's dirty CurveShortening rewrite without
+  staging or absorbing that experiment.
+- Make `Grassmann.All` aggregate the broad dependency-free Reference and
+  validation surface while leaving CurveShortening and LeanPlot-bound
+  application modules as explicit opt-in imports.
+- Keep a thresholded CGA3 full-storage subtraction benchmark so future changes
+  cannot silently restore the two-result add-neg path.
+- Re-run canonical, Reference, CurveShortening, All, packed/property, fixed
+  kernel, and performance gates.
+
+### Continuation completion rule
+
+Only emit a new `<promise>COMPLETE</promise>` after ALOK-765 is implemented,
+fully verified, committed atomically, and updated in Linear with exact results.
