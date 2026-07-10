@@ -314,6 +314,7 @@ checks:
 Grassmann4/scripts/bench_guard.sh
 Grassmann4/scripts/packedmvbench_guard.sh
 Grassmann4/scripts/packed_linear_codegen_guard.sh
+Grassmann4/scripts/mvdense_codegen_guard.sh
 ```
 
 `Grassmann4/scripts/bench_guard.sh` runs the core `lake exe bench` suite, checks
@@ -335,6 +336,7 @@ lake exe packedmvbench linear-arithmetic 500000
 lake exe packedmvbench unary-involutions 100000
 lake exe packedmvbench hodge-dual 100000
 lake exe packedmvbench projections-widening 100000
+lake exe packedmvbench dense-ingress 100000
 ```
 
 `Grassmann4/scripts/packedmvbench_guard.sh` runs a small correctness smoke test,
@@ -347,7 +349,10 @@ have corresponding `PACKED_MV_BENCH_*`, `MAX_PACKED_*`, and `MIN_PACKED_*`
 overrides in the script. Hodge dual is checked over full CGA3 storage against
 its former boxed complement/map shape. Grade projection, full-to-parity
 projection, and parity widening are checked over seven CGA3 full/even/odd
-shapes against their former boxed implementations.
+shapes against their former boxed implementations. Dense-to-packed ingress is
+checked over full/even/odd CGA3 storage against the former range/map/copy path;
+its timing floor is intentionally conservative because the arbitrary dense
+coefficient closure dominates both implementations.
 
 `Grassmann4/scripts/packed_linear_codegen_guard.sh` materializes the current
 `Grassmann.MV` C facet without Lake's shared artifact cache and audits only the
@@ -359,6 +364,13 @@ coefficient, and tail-loop codegen. It separately verifies the allocation-free
 even-involution return, the one-allocation odd/full branches, the unboxed Hodge
 orientation selector, and both sides of its dimension dispatch. It deliberately
 excludes typeclass dictionary closures and boxed ABI adapters.
+
+`Grassmann4/scripts/mvdense_codegen_guard.sh` separately materializes the
+current `Grassmann.MVDense` C facet. It pins dense ingress to one native output
+buffer, one coefficient-closure application and one push per slot, arithmetic
+packed decoding with the dimension-zero compatibility path, and a generated
+tail jump. It rejects the former boxed `Array.range`/map/copy, duplicate size
+validation, and zero-fallback path.
 
 A local `Grassmann4/scripts/bench_guard.sh` run on 2026-06-05 passed with zero
 checked correctness drift, `156.632080 ns/iter` MV rotor composition versus
@@ -414,6 +426,15 @@ widening `157.757500`--`164.021250 ns/iter`; speedups over the retained boxed
 shapes were `3.209x`--`12.716x`. The generated-C guard independently pins
 array-free arithmetic indexing, one-buffer projection loops, two-push widening,
 and the dimension-zero retain/zero branches.
+
+The 2026-07-09 dense-ingress acceptance run had zero L1 drift across every
+physical full/even/odd coefficient of 16 varied CGA3 values. Direct ingress
+measured `6337.973750 ns/iter` full, `3294.365420 ns/iter` even, and
+`3317.837500 ns/iter` odd, versus `6518.802090`, `3386.238750`, and
+`3427.283750 ns/iter` for the exact former boxed implementation (`1.028x`--
+`1.033x`). The dedicated generated-C guard independently pins the stronger
+allocation result: one native buffer and no intermediate boxed coefficient
+array, copy, runtime size recheck, or fallback construction.
 
 See `docs/PackedMVPerformance.md` for the focused PGA3 motor-point profiling
 commands and a current process-level `time -l` footprint snapshot.

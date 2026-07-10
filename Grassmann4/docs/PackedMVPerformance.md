@@ -2,8 +2,8 @@
 
 This note records the repeatable checks for the packed `MV` backend's PGA3
 motor-point path, basic linear kernels, unary involutions, Hodge dual, grade and
-parity projection, and parity widening. These paths exercise the port's hot
-native representation: projective transforms over
+parity projection, parity widening, and dense-to-packed ingress. These paths
+exercise the port's hot native representation: projective transforms over
 `MV PGA3 .even` and `MV PGA3 .odd`, plus full/even/odd arithmetic over
 contiguous `FloatArray` storage.
 
@@ -25,6 +25,7 @@ lake exe packedmvbench linear-arithmetic "$PACKED_MV_BENCH_LINEAR_ITERS"
 lake exe packedmvbench unary-involutions "$PACKED_MV_BENCH_UNARY_ITERS"
 lake exe packedmvbench hodge-dual "$PACKED_MV_BENCH_HODGE_ITERS"
 lake exe packedmvbench projections-widening "$PACKED_MV_BENCH_PROJECTION_ITERS"
+lake exe packedmvbench dense-ingress "$PACKED_MV_BENCH_DENSE_INGRESS_ITERS"
 ```
 
 Default thresholds:
@@ -49,6 +50,9 @@ Default thresholds:
 | Direct half-storage grade/parity projection | `<= 300 ns/iter` |
 | Direct parity widening | `<= 300 ns/iter` |
 | Direct-vs-boxed projection/widening speedup | `>= 3x` each |
+| Direct full dense ingress | `<= 7500 ns/iter` |
+| Direct even/odd dense ingress | `<= 4000 ns/iter` each |
+| Direct-vs-boxed dense-ingress speedup | `>= 0.95x` each |
 
 The subtraction comparator is intentionally the current optimized
 `MV.add a (MV.neg b)` composition. Its relative threshold is lower than the
@@ -79,6 +83,13 @@ default-zero behavior, and the dimension-zero compatibility slot. Each direct
 projector allocates one final buffer; each widening loop reads one packed
 coefficient and pushes its two adjacent full-storage slots.
 
+Dense-ingress preflight compares every physically stored coefficient of 16
+varied CGA3 closures in full, even, and odd layouts with the exact former
+`Array.range`/map/`DataArray.ofArray` implementation. Since both paths must call
+the arbitrary coefficient closure once per result slot, closure computation
+dominates wall-clock timing and the relative floor only rejects regressions.
+The generated-C gate below provides the stronger allocation guarantee.
+
 ## Generated-C Structure Guard
 
 Timing is not an allocation counter. Run the compiler-structural gate as a
@@ -86,9 +97,10 @@ separate acceptance check:
 
 ```bash
 scripts/packed_linear_codegen_guard.sh
+scripts/mvdense_codegen_guard.sh
 ```
 
-The script disables Lake's shared artifact cache, materializes the current
+The first script disables Lake's shared artifact cache, materializes the current
 `Grassmann.MV` C facet, and extracts only arithmetic rank/unrank, the non-boxed
 linear loops, the five full/packed unary loops, both Hodge loops, projection and
 widening loops, and the public constructors or parity branches that own their
@@ -107,6 +119,13 @@ result. It requires:
   fallback loops, and one result allocation in the public Hodge dispatch.
 - no cached arrays or linear searches in valid packed rank/unrank, one
   read/one-push projection loops, and one read/two-push widening loops.
+
+The dense-ingress script independently materializes the current
+`Grassmann.MVDense` C facet. It requires one native output buffer in either
+public branch, one dense closure application and one push in each helper
+iteration, a tail jump, arithmetic packed decoding, and the explicit
+dimension-zero compatibility branch. It rejects the former boxed range/map
+array, second copy, duplicate runtime size check, and zero fallback.
 
 The audit does not scan the whole generated module. Typeclass dictionaries may
 legitimately allocate closures, and boxed wrappers may legitimately unbox and
@@ -233,3 +252,24 @@ the same valid mask as `rank + rank + lowBit` reduced it to the final
 `164 ns/iter` range. Generated C independently confirms no cached index arrays,
 searches, boxed coefficient arrays, callback applications, second-pass writes,
 or borrowed-input reference-count churn in the hot helpers.
+
+## 2026-07-09 Dense Ingress Audit
+
+Four isolated 100,000-iteration runs compared every physical coefficient of 16
+varied CGA3 sources with the exact former boxed ingress. All full, even, and odd
+L1 diffs were zero. The final thresholded guard recorded:
+
+| Layout | Direct | Boxed comparator | Speedup |
+| --- | ---: | ---: | ---: |
+| Full | `6337.973750 ns/iter` | `6518.802090 ns/iter` | `1.029x` |
+| Even | `3294.365420 ns/iter` | `3386.238750 ns/iter` | `1.028x` |
+| Odd | `3317.837500 ns/iter` | `3427.283750 ns/iter` | `1.033x` |
+
+The timing difference is deliberately modest: the `sin`/`cos` coefficient
+closure is evaluated once per output coefficient by both implementations. The
+fresh generated-C audit supplies the allocator evidence. Each selected public
+branch creates exactly one `FloatArray`; the full and packed helpers each make
+one closure call, push once, and tail-jump. There is no boxed coefficient array,
+range/map callback, second collection pass, runtime size validation, or zero
+fallback. Exact regression coverage separately pins dimensions 0, 1, 5, 6, and
+12, including the dimension-zero odd hidden storage slot and dense round trips.
