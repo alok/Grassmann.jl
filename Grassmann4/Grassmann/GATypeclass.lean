@@ -139,11 +139,21 @@ def versorInverseFloat [inst : GAlgebra sig M Float] (x : M) : M :=
   let n := inst.scalarPart (inst.mul x (inst.reverse x))
   inst.smul (1.0 / n) (inst.reverse x)
 
-/-- Grade extraction notation -/
-scoped notation "⟨" m "⟩₀" => GAlgebra.gradeProject m 0
-scoped notation "⟨" m "⟩₁" => GAlgebra.gradeProject m 1
-scoped notation "⟨" m "⟩₂" => GAlgebra.gradeProject m 2
-scoped notation "⟨" m "⟩₃" => GAlgebra.gradeProject m 3
+/-- Carrier-indexed grade projection used where the signature and coefficient
+types must be inferred from the multivector itself. -/
+class GAGradeProject (M : Type*) where
+  gradeProject : M → Nat → M
+
+/-- Inference-friendly grade projection for notation. -/
+@[inline]
+def gradePart {M : Type*} [inst : GAGradeProject M] (m : M) (k : Nat) : M :=
+  inst.gradeProject m k
+
+/-- Grade extraction notation. -/
+scoped notation "⟨" m "⟩₀" => gradePart m 0
+scoped notation "⟨" m "⟩₁" => gradePart m 1
+scoped notation "⟨" m "⟩₂" => gradePart m 2
+scoped notation "⟨" m "⟩₃" => gradePart m 3
 
 /-! ## Signature Utilities -/
 

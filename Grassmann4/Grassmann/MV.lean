@@ -125,29 +125,6 @@ private def fullIdx4 : Array Nat := #[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 
 private def evenIdx5 : Array Nat := #[0, 3, 5, 6, 9, 10, 12, 15, 17, 18, 20, 23, 24, 27, 29, 30]
 private def oddIdx5 : Array Nat := #[1, 2, 4, 7, 8, 11, 13, 14, 16, 19, 21, 22, 25, 26, 28, 31]
 
-/-! ### Cached Pack Maps (blade mask → packed index) -/
-
--- n=2: even masks [0,3] → packed [0,1], odd masks [1,2] → packed [0,1]
-private def evenPackMap2 : Array Nat := #[0, 0, 0, 1]
-private def oddPackMap2 : Array Nat := #[0, 0, 1, 0]
-
--- n=3: even masks [0,3,5,6] → packed [0,1,2,3], odd masks [1,2,4,7] → packed [0,1,2,3]
-private def evenPackMap3 : Array Nat := #[0, 0, 0, 1, 0, 2, 3, 0]
-private def oddPackMap3 : Array Nat := #[0, 0, 1, 0, 2, 0, 0, 3]
-
--- n=4: even masks [0,3,5,6,9,10,12,15] → packed [0..7]
-private def evenPackMap4 : Array Nat := #[0, 0, 0, 1, 0, 2, 3, 0, 0, 4, 5, 0, 6, 0, 0, 7]
--- n=4: odd masks [1,2,4,7,8,11,13,14] → packed [0..7]
-private def oddPackMap4 : Array Nat := #[0, 0, 1, 0, 2, 0, 0, 3, 4, 0, 0, 5, 0, 6, 7, 0]
-
--- n=5: 32 entries each, 16 packed indices
-private def evenPackMap5 : Array Nat := #[
-  0, 0, 0, 1, 0, 2, 3, 0, 0, 4, 5, 0, 6, 0, 0, 7,
-  0, 8, 9, 0, 10, 0, 0, 11, 12, 0, 0, 13, 0, 14, 15, 0]
-private def oddPackMap5 : Array Nat := #[
-  0, 0, 1, 0, 2, 0, 0, 3, 4, 0, 0, 5, 0, 6, 7, 0,
-  8, 0, 0, 9, 0, 10, 11, 0, 0, 12, 13, 0, 14, 0, 0, 15]
-
 /-- Get cached indices or compute on-the-fly. Inlined for specialization. -/
 @[inline]
 def indices (n : Nat) (p : Parity) : Array Nat :=
@@ -165,39 +142,75 @@ def indices (n : Nat) (p : Parity) : Array Nat :=
   | 5, .odd  => oddIdx5
   | _, _     => computeIndices n p
 
-/-- Unpack a valid packed index into its blade mask.
+/-- Reconstruct the discarded low mask bit from a packed rank's popcount. -/
+@[inline, always_inline]
+private def packedLowBit (n : Nat) (p : Parity) (rankPopcount : Nat) : Nat :=
+  if n == 0 then 0 else
+    match p with
+    | .even => rankPopcount % 2
+    | .odd => (rankPopcount % 2) ^^^ 1
+    | .full => 0
 
-Full storage is already indexed by blade mask, so its unpacking map is the
-identity and must not materialize or consult an index array. -/
+/-- Allocation-free packed-index decoding for a caller-validated index.
+
+For `n >= 1`, each adjacent mask pair contains exactly one even and one odd
+popcount. The high bits are the packed index and the reconstructed low bit is
+therefore determined by the packed index's own popcount parity. Dimension zero
+keeps the historical one-slot parity layout and decodes that compatibility slot
+as mask zero. -/
+@[inline, always_inline]
+def unpackIdxValid (n : Nat) (p : Parity) (pi : Nat) : Nat :=
+  match p with
+  | .full => pi
+  | .even | .odd =>
+      (pi <<< 1) ||| packedLowBit n p (popcount pi)
+
+/-- Allocation-free packed rank for a caller-validated blade mask. -/
+@[inline, always_inline]
+def packIdxValid (_n : Nat) (p : Parity) (mask : Nat) : Nat :=
+  match p with
+  | .full => mask
+  | .even | .odd => mask >>> 1
+
+/-- Unpack a packed index into its blade mask.
+
+Full storage is identity-indexed for every input. Parity storage returns zero
+for an out-of-range index and preserves the historical dimension-zero
+compatibility behavior. -/
 @[inline]
 def unpackIdx (n : Nat) (p : Parity) (pi : Nat) : Nat :=
   match p with
   | .full => pi
-  | .even => (indices n .even).getD pi 0
-  | .odd => (indices n .odd).getD pi 0
+  | .even =>
+      if n == 0 then 0
+      else if pi < storageSize n .even then unpackIdxValid n .even pi else 0
+  | .odd =>
+      if n == 0 then 0
+      else if pi < storageSize n .odd then unpackIdxValid n .odd pi else 0
 
-/-- Compute pack index on the fly (for dimensions without cached tables). -/
+/-- Checked arithmetic pack index, returning zero for an invalid blade mask. -/
 @[inline]
 def computePackIdx (n : Nat) (p : Parity) (mask : Nat) : Nat :=
-  let idx := indices n p
-  match idx.findIdx? (· == mask) with
-  | some i => i
-  | none => 0  -- Should not happen for valid masks
+  if mask < 2 ^ n && Parity.containsMask p mask then
+    packIdxValid n p mask
+  else
+    0
 
-/-- Pack: blade mask → packed index. Uses cached tables for common dimensions. -/
+/-- Pack a blade mask, preserving full storage's public identity behavior. -/
 @[inline]
 def packIdx (n : Nat) (p : Parity) (mask : Nat) : Nat :=
-  match n, p with
-  | 2, .even => evenPackMap2.getD mask 0
-  | 2, .odd  => oddPackMap2.getD mask 0
-  | 3, .even => evenPackMap3.getD mask 0
-  | 3, .odd  => oddPackMap3.getD mask 0
-  | 4, .even => evenPackMap4.getD mask 0
-  | 4, .odd  => oddPackMap4.getD mask 0
-  | 5, .even => evenPackMap5.getD mask 0
-  | 5, .odd  => oddPackMap5.getD mask 0
-  | _, .full => mask  -- Identity for full
-  | _, _     => computePackIdx n p mask
+  match p with
+  | .full => mask
+  | .even =>
+      if mask < 2 ^ n && Parity.containsMask .even mask then
+        packIdxValid n .even mask
+      else
+        0
+  | .odd =>
+      if mask < 2 ^ n && Parity.containsMask .odd mask then
+        packIdxValid n .odd mask
+      else
+        0
 
 /-! ### Constructors -/
 
@@ -281,7 +294,7 @@ def oneFull (sig : Signature n) : MV sig .full :=
 def coeff (m : MV sig p) (bladeMask : Nat) : Float :=
   if bladeMask < 2 ^ n then
     if Parity.containsMask p bladeMask then
-      let pi := packIdx n p bladeMask
+      let pi := packIdxValid n p bladeMask
       m.coeffs.get! pi
     else 0.0
   else 0.0
@@ -305,7 +318,7 @@ def scalarPart (m : MV sig p) : Float :=
 def setCoeff (m : MV sig p) (bladeMask : Nat) (x : Float) : MV sig p :=
   if bladeMask < 2 ^ n then
     if Parity.containsMask p bladeMask then
-      let pi := packIdx n p bladeMask
+      let pi := packIdxValid n p bladeMask
       ⟨m.coeffs.set! pi x⟩
     else m
   else m
@@ -366,15 +379,15 @@ def mulKernelGeneric (sig : Signature n) (p1 p2 : Parity) (a b : DataArray) : Da
   match cachedSignTable (n := n) sig with
   | some table =>
     for pi in [:size1] do
-      let mi := unpackIdx n p1 pi  -- packed → blade mask
+      let mi := unpackIdxValid n p1 pi  -- packed → blade mask
       let ai := a.get! pi
       if ai != 0.0 then  -- Skip zero coefficients
         for pj in [:size2] do
-          let mj := unpackIdx n p2 pj  -- packed → blade mask
+          let mj := unpackIdxValid n p2 pj  -- packed → blade mask
           let sign := table.lookup mi mj
           if sign != 0 then
             let mk := mi ^^^ mj  -- result blade mask
-            let pk := packIdx n pOut mk  -- blade mask → packed
+            let pk := packIdxValid n pOut mk  -- blade mask → packed
             let bj := b.get! pj
             let contrib := if sign < 0 then -ai * bj else ai * bj
             out := out.set! pk (out.get! pk + contrib)
@@ -382,17 +395,17 @@ def mulKernelGeneric (sig : Signature n) (p1 p2 : Parity) (a b : DataArray) : Da
   | none =>
     -- Fallback: compute signs on the fly
     for pi in [:size1] do
-      let mi := unpackIdx n p1 pi
+      let mi := unpackIdxValid n p1 pi
       let ai := a.get! pi
       if ai != 0.0 then
         let bi : Blade sig := ⟨BitVec.ofNat n mi⟩
         for pj in [:size2] do
-          let mj := unpackIdx n p2 pj
+          let mj := unpackIdxValid n p2 pj
           let bj_blade : Blade sig := ⟨BitVec.ofNat n mj⟩
           let sign := geometricSign sig bi bj_blade
           if sign != 0 then
             let mk := mi ^^^ mj
-            let pk := packIdx n pOut mk
+            let pk := packIdxValid n pOut mk
             let bj := b.get! pj
             let contrib := (Float.ofInt sign) * ai * bj
             out := out.set! pk (out.get! pk + contrib)
@@ -410,35 +423,35 @@ def wedgeKernelGeneric (sig : Signature n) (p1 p2 : Parity)
   match cachedSignTable (n := n) sig with
   | some table =>
     for pi in [:size1] do
-      let mi := unpackIdx n p1 pi
+      let mi := unpackIdxValid n p1 pi
       let ai := a.get! pi
       if ai != 0.0 then
         for pj in [:size2] do
-          let mj := unpackIdx n p2 pj
+          let mj := unpackIdxValid n p2 pj
           let bj := b.get! pj
           if bj != 0.0 && (mi &&& mj) == 0 then
             let sign := table.lookup mi mj
             if sign != 0 then
               let mk := mi ||| mj
-              let pk := packIdx n pOut mk
+              let pk := packIdxValid n pOut mk
               let contrib := if sign < 0 then -ai * bj else ai * bj
               out := out.set! pk (out.get! pk + contrib)
     out
   | none =>
     for pi in [:size1] do
-      let mi := unpackIdx n p1 pi
+      let mi := unpackIdxValid n p1 pi
       let ai := a.get! pi
       if ai != 0.0 then
         let bi : Blade sig := ⟨BitVec.ofNat n mi⟩
         for pj in [:size2] do
-          let mj := unpackIdx n p2 pj
+          let mj := unpackIdxValid n p2 pj
           let bj := b.get! pj
           if bj != 0.0 && (mi &&& mj) == 0 then
             let bjBlade : Blade sig := ⟨BitVec.ofNat n mj⟩
             let sign := wedgeSign sig bi bjBlade
             if sign != 0 then
               let mk := mi ||| mj
-              let pk := packIdx n pOut mk
+              let pk := packIdxValid n pOut mk
               let contrib := if sign < 0 then -ai * bj else ai * bj
               out := out.set! pk (out.get! pk + contrib)
     out
@@ -454,17 +467,17 @@ def leftContractKernelGeneric (sig : Signature n) (p1 p2 : Parity)
   match cachedSignTable (n := n) sig with
   | some table =>
     for pi in [:size1] do
-      let mi := unpackIdx n p1 pi
+      let mi := unpackIdxValid n p1 pi
       let ai := a.get! pi
       if ai != 0.0 then
         for pj in [:size2] do
-          let mj := unpackIdx n p2 pj
+          let mj := unpackIdxValid n p2 pj
           let bj := b.get! pj
           if bj != 0.0 && (mi &&& mj) == mi && popcount mi <= popcount mj then
             let sign := table.lookup mi mj
             if sign != 0 then
               let mk := mi ^^^ mj
-              let pk := packIdx n pOut mk
+              let pk := packIdxValid n pOut mk
               let reverseNeg := reverseSign (popcount mi) < 0
               let geometricNeg := sign < 0
               let contrib := if reverseNeg != geometricNeg then -ai * bj else ai * bj
@@ -472,19 +485,19 @@ def leftContractKernelGeneric (sig : Signature n) (p1 p2 : Parity)
     out
   | none =>
     for pi in [:size1] do
-      let mi := unpackIdx n p1 pi
+      let mi := unpackIdxValid n p1 pi
       let ai := a.get! pi
       if ai != 0.0 then
         let bi : Blade sig := ⟨BitVec.ofNat n mi⟩
         for pj in [:size2] do
-          let mj := unpackIdx n p2 pj
+          let mj := unpackIdxValid n p2 pj
           let bj := b.get! pj
           if bj != 0.0 && (mi &&& mj) == mi && popcount mi <= popcount mj then
             let bjBlade : Blade sig := ⟨BitVec.ofNat n mj⟩
             let sign := leftContractionSign sig bi bjBlade
             if sign != 0 then
               let mk := mi ^^^ mj
-              let pk := packIdx n pOut mk
+              let pk := packIdxValid n pOut mk
               let contrib := if sign < 0 then -ai * bj else ai * bj
               out := out.set! pk (out.get! pk + contrib)
     out
@@ -500,17 +513,17 @@ def rightContractKernelGeneric (sig : Signature n) (p1 p2 : Parity)
   match cachedSignTable (n := n) sig with
   | some table =>
     for pi in [:size1] do
-      let mi := unpackIdx n p1 pi
+      let mi := unpackIdxValid n p1 pi
       let ai := a.get! pi
       if ai != 0.0 then
         for pj in [:size2] do
-          let mj := unpackIdx n p2 pj
+          let mj := unpackIdxValid n p2 pj
           let bj := b.get! pj
           if bj != 0.0 && (mj &&& mi) == mj && popcount mj <= popcount mi then
             let sign := table.lookup mj mi
             if sign != 0 then
               let mk := mi ^^^ mj
-              let pk := packIdx n pOut mk
+              let pk := packIdxValid n pOut mk
               let reverseNeg := reverseSign (popcount mj) < 0
               let geometricNeg := sign < 0
               let contrib := if reverseNeg != geometricNeg then -ai * bj else ai * bj
@@ -518,19 +531,19 @@ def rightContractKernelGeneric (sig : Signature n) (p1 p2 : Parity)
     out
   | none =>
     for pi in [:size1] do
-      let mi := unpackIdx n p1 pi
+      let mi := unpackIdxValid n p1 pi
       let ai := a.get! pi
       if ai != 0.0 then
         let bi : Blade sig := ⟨BitVec.ofNat n mi⟩
         for pj in [:size2] do
-          let mj := unpackIdx n p2 pj
+          let mj := unpackIdxValid n p2 pj
           let bj := b.get! pj
           if bj != 0.0 && (mj &&& mi) == mj && popcount mj <= popcount mi then
             let bjBlade : Blade sig := ⟨BitVec.ofNat n mj⟩
             let sign := rightContractionSign sig bi bjBlade
             if sign != 0 then
               let mk := mi ^^^ mj
-              let pk := packIdx n pOut mk
+              let pk := packIdxValid n pOut mk
               let contrib := if sign < 0 then -ai * bj else ai * bj
               out := out.set! pk (out.get! pk + contrib)
     out
@@ -889,14 +902,14 @@ private def revFullAux (m : @& DataArray) (i : Nat) :
       let result := if reverseNegates i then -value else value
       revFullAux m (i + 1) remaining (out.push result)
 
-/-- Tail-recursive reverse loop over one hoisted parity index map. -/
-private def revPackedAux (idx : @& Array Nat) (m : @& DataArray) (i : Nat) :
+/-- Tail-recursive reverse loop with arithmetic parity-index decoding. -/
+private def revPackedAux (n : Nat) (p : Parity) (m : @& DataArray) (i : Nat) :
     Nat → FloatArray → FloatArray
   | 0, out => out
   | remaining + 1, out =>
       let value := m.get! i
-      let result := if reverseNegates (idx.getD i 0) then -value else value
-      revPackedAux idx m (i + 1) remaining (out.push result)
+      let result := if reverseNegates (unpackIdxValid n p i) then -value else value
+      revPackedAux n p m (i + 1) remaining (out.push result)
 
 /-- Reverse operation: reverses the order of basis vectors in each blade.
     For grade k, this multiplies by (-1)^(k(k-1)/2). -/
@@ -907,11 +920,9 @@ def rev (m : @& MV sig p) : MV sig p :=
   | .full =>
       ⟨revFullAux m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
   | .even =>
-      let idx := indices n .even
-      ⟨revPackedAux idx m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
+      ⟨revPackedAux n .even m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
   | .odd =>
-      let idx := indices n .odd
-      ⟨revPackedAux idx m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
+      ⟨revPackedAux n .odd m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
 
 /-- Tail-recursive grade-involution loop for full storage. -/
 private def involuteFullAux (m : @& DataArray) (i : Nat) :
@@ -947,14 +958,14 @@ private def conjugateFullAux (m : @& DataArray) (i : Nat) :
       let result := if conjugateNegates i then -value else value
       conjugateFullAux m (i + 1) remaining (out.push result)
 
-/-- Tail-recursive Clifford-conjugation loop over one parity index map. -/
-private def conjugatePackedAux (idx : @& Array Nat) (m : @& DataArray) (i : Nat) :
+/-- Tail-recursive Clifford-conjugation loop with arithmetic parity decoding. -/
+private def conjugatePackedAux (n : Nat) (p : Parity) (m : @& DataArray) (i : Nat) :
     Nat → FloatArray → FloatArray
   | 0, out => out
   | remaining + 1, out =>
       let value := m.get! i
-      let result := if conjugateNegates (idx.getD i 0) then -value else value
-      conjugatePackedAux idx m (i + 1) remaining (out.push result)
+      let result := if conjugateNegates (unpackIdxValid n p i) then -value else value
+      conjugatePackedAux n p m (i + 1) remaining (out.push result)
 
 /-- Clifford conjugate: multiplies each grade-k blade by `(-1)^(k(k+1)/2)`. -/
 @[inline]
@@ -964,64 +975,117 @@ def conjugate (m : @& MV sig p) : MV sig p :=
   | .full =>
       ⟨conjugateFullAux m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
   | .even =>
-      let idx := indices n .even
-      ⟨conjugatePackedAux idx m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
+      ⟨conjugatePackedAux n .even m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
   | .odd =>
-      let idx := indices n .odd
-      ⟨conjugatePackedAux idx m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
+      ⟨conjugatePackedAux n .odd m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
 
 /-! ### Grade Projection -/
 
+/-- Tail-recursive full-to-parity projection with arithmetic rank decoding. -/
+private def parityPartAux (n : Nat) (p : Parity) (m : @& DataArray) (i : Nat) :
+    Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      let mask := unpackIdxValid n p i
+      parityPartAux n p m (i + 1) remaining (out.push (m.get! mask))
+
 /-- Project to even part (from full MV, extracting even-grade components) -/
 @[inline]
-def evenPart (m : MV sig .full) : MV sig .even :=
-  -- Full storage uses identity mapping, so we can read directly by blade mask
-  -- Even output is packed, so we iterate over even packed indices
-  let szEven := storageSize n .even
-  ⟨DataArray.ofArray ((Array.range szEven).map fun pi =>
-    let mask := unpackIdx n .even pi  -- Get blade mask for this even index
-    m.coeffs.get! mask)⟩  -- Full uses identity: coeffs[mask] is the value
+def evenPart (m : @& MV sig .full) : MV sig .even :=
+  if n == 0 then
+    ⟨m.coeffs⟩
+  else
+    let sz := storageSize n .even
+    ⟨parityPartAux n .even m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
 
 /-- Project to odd part (from full MV, extracting odd-grade components) -/
 @[inline]
-def oddPart (m : MV sig .full) : MV sig .odd :=
-  let szOdd := storageSize n .odd
-  ⟨DataArray.ofArray ((Array.range szOdd).map fun pi =>
-    let mask := unpackIdx n .odd pi
-    m.coeffs.get! mask)⟩
+def oddPart (m : @& MV sig .full) : MV sig .odd :=
+  if n == 0 then
+    ⟨m.coeffs⟩
+  else
+    let sz := storageSize n .odd
+    ⟨parityPartAux n .odd m.coeffs 0 sz (FloatArray.emptyWithCapacity sz)⟩
+
+/-- Tail-recursive grade projection for identity-indexed full storage. -/
+private def gradeProjectFullAux (m : @& DataArray) (k i : Nat) :
+    Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      let value := if popcount i == k then m.get! i else 0.0
+      gradeProjectFullAux m k (i + 1) remaining (out.push value)
+
+/-- Tail-recursive grade projection for even or odd packed storage. -/
+private def gradeProjectPackedAux (n : Nat) (p : Parity) (m : @& DataArray)
+    (k i : Nat) : Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      let rankPopcount := popcount i
+      let bladeGrade := rankPopcount + packedLowBit n p rankPopcount
+      let value := if bladeGrade == k then m.get! i else 0.0
+      gradeProjectPackedAux n p m k (i + 1) remaining (out.push value)
 
 /-- Project to a single grade while preserving the packed parity storage.
 
 For `.even` or `.odd`, projecting to a grade outside the parity simply produces
 zero because every packed index already has the opposite parity filtered out. -/
 @[inline]
-def gradeProject (m : MV sig p) (k : Nat) : MV sig p :=
-  let sz := storageSize n p
-  ⟨DataArray.ofArray ((Array.range sz).map fun pi =>
-    let mask := unpackIdx n p pi
-    if popcount mask == k then m.coeffs.get! pi else 0.0)⟩
+def gradeProject (m : @& MV sig p) (k : Nat) : MV sig p :=
+  if n == 0 then
+    if k == 0 then ⟨m.coeffs⟩ else zero sig p
+  else if k > n || !Parity.contains p k then
+    zero sig p
+  else
+    let sz := storageSize n p
+    match p with
+    | .full =>
+        ⟨gradeProjectFullAux m.coeffs k 0 sz (FloatArray.emptyWithCapacity sz)⟩
+    | .even =>
+        ⟨gradeProjectPackedAux n .even m.coeffs k 0 sz
+          (FloatArray.emptyWithCapacity sz)⟩
+    | .odd =>
+        ⟨gradeProjectPackedAux n .odd m.coeffs k 0 sz
+          (FloatArray.emptyWithCapacity sz)⟩
+
+instance instGAGradeProject : GAGradeProject (MV sig p) where
+  gradeProject := gradeProject
 
 /-! ### Parity Widening -/
 
+/-- Tail-recursive parity widening. Each packed rank owns one adjacent pair of
+full-storage masks, so one input read emits two output coefficients. -/
+private def parityToFullAux (n : Nat) (p : Parity) (m : @& DataArray) (i : Nat) :
+    Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      let value := m.get! i
+      let low := packedLowBit n p (popcount i)
+      let out' :=
+        if low == 0 then
+          (out.push value).push 0.0
+        else
+          (out.push 0.0).push value
+      parityToFullAux n p m (i + 1) remaining out'
+
 /-- Widen even to full (unpacks even storage into full storage) -/
 @[inline]
-def evenToFull (m : MV sig .even) : MV sig .full :=
-  let szFull := storageSize n .full
-  ⟨DataArray.ofArray ((Array.range szFull).map fun mask =>
-    if Parity.containsMask .even mask then
-      let pi := packIdx n .even mask
-      m.coeffs.get! pi
-    else 0.0)⟩
+def evenToFull (m : @& MV sig .even) : MV sig .full :=
+  if n == 0 then
+    ⟨m.coeffs⟩
+  else
+    let sz := storageSize n .even
+    ⟨parityToFullAux n .even m.coeffs 0 sz
+      (FloatArray.emptyWithCapacity (storageSize n .full))⟩
 
 /-- Widen odd to full (unpacks odd storage into full storage) -/
 @[inline]
-def oddToFull (m : MV sig .odd) : MV sig .full :=
-  let szFull := storageSize n .full
-  ⟨DataArray.ofArray ((Array.range szFull).map fun mask =>
-    if Parity.containsMask .odd mask then
-      let pi := packIdx n .odd mask
-      m.coeffs.get! pi
-    else 0.0)⟩
+def oddToFull (m : @& MV sig .odd) : MV sig .full :=
+  if n == 0 then
+    zero sig .full
+  else
+    let sz := storageSize n .odd
+    ⟨parityToFullAux n .odd m.coeffs 0 sz
+      (FloatArray.emptyWithCapacity (storageSize n .full))⟩
 
 /-! ### Typeclass Instances -/
 

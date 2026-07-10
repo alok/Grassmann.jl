@@ -22,7 +22,7 @@ def toMultivector (m : MV sig p) : Multivector sig Float :=
   ⟨fun i =>
     let mask := i.val
     if Parity.containsMask p mask then
-      let pi := packIdx n p mask
+      let pi := packIdxValid n p mask
       m.coeffs.get! pi
     else 0.0⟩
 
@@ -49,14 +49,14 @@ theorem toMultivector_coeff_of_parity (m : MV sig p) {i : Fin (2 ^ n)}
     (hparity : Parity.containsMask p i.val = true) :
     (toMultivector m).coeffs i = m.coeffs.get! (packIdx n p i.val) := by
   unfold toMultivector
-  simp [hparity]
+  cases p <;> simp_all [packIdx, packIdxValid, i.isLt]
 
 /-- Convert from a proof-friendly dense `Multivector`. -/
 @[inline]
 def ofMultivector (m : Multivector sig Float) (p : Parity) : MV sig p :=
   let sz := storageSize n p
   let coeffs := DataArray.ofArray ((Array.range sz).map fun pi =>
-    let mask := unpackIdx n p pi
+    let mask := unpackIdxValid n p pi
     if hmask : mask < 2 ^ n then
       m.coeffs ⟨mask, hmask⟩
     else
