@@ -414,185 +414,552 @@ The generic kernel uses pack/unpack for all parity combinations.
 For even×even with cached signature tables, we have a fast path that
 reuses the production even-kernel tables directly. -/
 
-/-- Generic packed geometric product kernel (uses pack/unpack) -/
-@[inline]
-def mulKernelGeneric (sig : Signature n) (p1 p2 : Parity) (a b : DataArray) : DataArray := Id.run do
-  let pOut := p1 * p2
+/-- Whether a valid dense mask has a physical slot in a packed layout.
+
+For positive dimensions this is exactly grade parity. Dimension zero keeps the
+historical one-slot odd buffer, whose compatibility coefficient is addressed
+as mask zero even though mask zero is algebraically even. Product kernels use
+this predicate only for masks already known to be below `2^n`. -/
+@[inline, always_inline]
+private def containsPhysicalMask (n : Nat) (p : Parity) (mask : Nat) : Bool :=
+  if n == 0 then mask == 0 else Parity.containsMask p mask
+
+/-- Whether reversion negates the blade represented by `mask`. -/
+@[inline, always_inline]
+private def reverseNegative (mask : Nat) : Bool :=
+  let r := popcount mask % 4
+  r == 2 || r == 3
+
+/-! ### Cached product plans
+
+Canonical signatures use closed, output-major byte plans for geometric,
+exterior, and contraction products.
+Each byte describes one `(output rank, scanned rank)` candidate:
+
+* `0` means that the XOR partner is absent, the operation constraint fails, or
+  the metric makes the blade product zero;
+* bits `0..6` contain `partnerRank + 1`;
+* bit `7` is set exactly when the final contribution is negative.
+
+Dimensions through five have at most 32 physical slots, so the payload fits in
+seven bits. Plan sets contain the nine ordered parity pairs first for geometric
+product, then exterior product, left contraction, and right contraction. The
+hot path derives the same smaller-side choice as the builder and therefore
+indexes each plan with `outRank * min(size1, size2) + scanRank`. -/
+
+private inductive ProductPlanKind where
+  | geometric
+  | wedge
+  | leftContract
+  | rightContract
+
+@[inline, always_inline]
+private def parityPlanIndex : Parity → Nat
+  | .even => 0
+  | .odd => 1
+  | .full => 2
+
+@[inline, always_inline]
+private def productPlanIndex (kind : ProductPlanKind) (p1 p2 : Parity) : Nat :=
+  let offset :=
+    match kind with
+    | .geometric => 0
+    | .wedge => 9
+    | .leftContract => 18
+    | .rightContract => 27
+  offset + parityPlanIndex p1 * 3 + parityPlanIndex p2
+
+/-- Build one closed output-major product plan. Not used in a hot loop. -/
+private def buildProductPlan (sig : Signature n) (kind : ProductPlanKind)
+    (p1 p2 : Parity) : ByteArray := Id.run do
   let size1 := storageSize n p1
   let size2 := storageSize n p2
-  let mut out := DataArray.zeros (storageSize n pOut)
-  -- Use cached sign table if available, otherwise fall back to direct computation
-  match cachedSignTable (n := n) sig with
-  | some table =>
-    for pi in [:size1] do
-      let mi := unpackIdxValid n p1 pi  -- packed → blade mask
-      let ai := a.get! pi
-      if ai != 0.0 then  -- Skip zero coefficients
-        for pj in [:size2] do
-          let mj := unpackIdxValid n p2 pj  -- packed → blade mask
-          let sign := table.lookup mi mj
-          if sign != 0 then
-            let mk := mi ^^^ mj  -- result blade mask
-            let pk := packIdxValid n pOut mk  -- blade mask → packed
-            let bj := b.get! pj
-            let contrib := if sign < 0 then -ai * bj else ai * bj
-            out := out.set! pk (out.get! pk + contrib)
-    out
+  let sizeOut := storageSize n (p1 * p2)
+  let scanLeft := size1 <= size2
+  let scanSize := if scanLeft then size1 else size2
+  let mut codes := ByteArray.emptyWithCapacity (sizeOut * scanSize)
+  for outRank in [:sizeOut] do
+    let outMask := unpackIdxValid n (p1 * p2) outRank
+    for scanRank in [:scanSize] do
+      let leftMask :=
+        if scanLeft then unpackIdxValid n p1 scanRank
+        else outMask ^^^ unpackIdxValid n p2 scanRank
+      let rightMask :=
+        if scanLeft then outMask ^^^ leftMask
+        else unpackIdxValid n p2 scanRank
+      let partnerPresent :=
+        if scanLeft then containsPhysicalMask n p2 rightMask
+        else containsPhysicalMask n p1 leftMask
+      let candidateValid :=
+        match kind with
+        | .geometric => true
+        | .wedge => (leftMask &&& rightMask) == 0
+        | .leftContract => (leftMask &&& rightMask) == leftMask
+        | .rightContract => (rightMask &&& leftMask) == rightMask
+      let mut code : UInt8 := 0
+      if partnerPresent && candidateValid then
+        let leftBlade : Blade sig := ⟨BitVec.ofNat n leftMask⟩
+        let rightBlade : Blade sig := ⟨BitVec.ofNat n rightMask⟩
+        let sign :=
+          match kind with
+          | .geometric => geometricSign sig leftBlade rightBlade
+          | .wedge => wedgeSign sig leftBlade rightBlade
+          | .leftContract => leftContractionSign sig leftBlade rightBlade
+          | .rightContract => rightContractionSign sig leftBlade rightBlade
+        if sign != 0 then
+          let partnerRank :=
+            if scanLeft then packIdxValid n p2 rightMask
+            else packIdxValid n p1 leftMask
+          let payload := (partnerRank + 1).toUInt8
+          code := if sign < 0 then payload ||| (0x80 : UInt8) else payload
+      codes := codes.push code
+  return codes
+
+/-- Build all ordered parity plans for all four product operations. -/
+private def buildProductPlanSet (sig : Signature n) : Array ByteArray :=
+  #[
+    buildProductPlan sig .geometric .even .even,
+    buildProductPlan sig .geometric .even .odd,
+    buildProductPlan sig .geometric .even .full,
+    buildProductPlan sig .geometric .odd .even,
+    buildProductPlan sig .geometric .odd .odd,
+    buildProductPlan sig .geometric .odd .full,
+    buildProductPlan sig .geometric .full .even,
+    buildProductPlan sig .geometric .full .odd,
+    buildProductPlan sig .geometric .full .full,
+    buildProductPlan sig .wedge .even .even,
+    buildProductPlan sig .wedge .even .odd,
+    buildProductPlan sig .wedge .even .full,
+    buildProductPlan sig .wedge .odd .even,
+    buildProductPlan sig .wedge .odd .odd,
+    buildProductPlan sig .wedge .odd .full,
+    buildProductPlan sig .wedge .full .even,
+    buildProductPlan sig .wedge .full .odd,
+    buildProductPlan sig .wedge .full .full,
+    buildProductPlan sig .leftContract .even .even,
+    buildProductPlan sig .leftContract .even .odd,
+    buildProductPlan sig .leftContract .even .full,
+    buildProductPlan sig .leftContract .odd .even,
+    buildProductPlan sig .leftContract .odd .odd,
+    buildProductPlan sig .leftContract .odd .full,
+    buildProductPlan sig .leftContract .full .even,
+    buildProductPlan sig .leftContract .full .odd,
+    buildProductPlan sig .leftContract .full .full,
+    buildProductPlan sig .rightContract .even .even,
+    buildProductPlan sig .rightContract .even .odd,
+    buildProductPlan sig .rightContract .even .full,
+    buildProductPlan sig .rightContract .odd .even,
+    buildProductPlan sig .rightContract .odd .odd,
+    buildProductPlan sig .rightContract .odd .full,
+    buildProductPlan sig .rightContract .full .even,
+    buildProductPlan sig .rightContract .full .odd,
+    buildProductPlan sig .rightContract .full .full
+  ]
+
+private def productPlansR2 : Array ByteArray := buildProductPlanSet R2
+private def productPlansR3 : Array ByteArray := buildProductPlanSet R3
+private def productPlansR4 : Array ByteArray := buildProductPlanSet R4
+private def productPlansSTA : Array ByteArray := buildProductPlanSet STA
+private def productPlansPGA3 : Array ByteArray := buildProductPlanSet PGA3
+private def productPlansCGA3 : Array ByteArray := buildProductPlanSet CGA3
+
+/-- Select the closed plan corresponding exactly to `cachedSignTable` coverage. -/
+@[inline]
+private def cachedProductPlan {m : Nat} (metric : Signature m) (kind : ProductPlanKind)
+    (p1 p2 : Parity) : Option ByteArray :=
+  let index := productPlanIndex kind p1 p2
+  match m with
+  | 2 => if metric == R2 then productPlansR2[index]? else none
+  | 3 => if metric == R3 then productPlansR3[index]? else none
+  | 4 =>
+      if metric == R4 then productPlansR4[index]?
+      else if metric == STA then productPlansSTA[index]?
+      else if metric == PGA3 then productPlansPGA3[index]?
+      else none
+  | 5 => if metric == CGA3 then productPlansCGA3[index]? else none
+  | _ => none
+
+/-- Accumulate one planned coefficient when the physical left input is scanned. -/
+private def productPlanCoeffLeftAux (codes : @& ByteArray)
+    (a b : @& DataArray) (entryIndex scanRank : Nat) : Nat → Float → Float
+  | 0, acc => acc
+  | remaining + 1, acc =>
+      let code := codes.get! entryIndex
+      let nextAcc :=
+        if code == 0 then
+          acc
+        else
+          let partnerRank := (code &&& (0x7f : UInt8)).toNat - 1
+          let ai := a.get! scanRank
+          let bj := b.get! partnerRank
+          if ai != 0.0 && bj != 0.0 then
+            let contribution :=
+              if code &&& (0x80 : UInt8) != 0 then -ai * bj else ai * bj
+            acc + contribution
+          else
+            acc
+      productPlanCoeffLeftAux codes a b (entryIndex + 1) (scanRank + 1)
+        remaining nextAcc
+
+/-- Accumulate one planned coefficient when the physical right input is scanned. -/
+private def productPlanCoeffRightAux (codes : @& ByteArray)
+    (a b : @& DataArray) (entryIndex scanRank : Nat) : Nat → Float → Float
+  | 0, acc => acc
+  | remaining + 1, acc =>
+      let code := codes.get! entryIndex
+      let nextAcc :=
+        if code == 0 then
+          acc
+        else
+          let partnerRank := (code &&& (0x7f : UInt8)).toNat - 1
+          let ai := a.get! partnerRank
+          let bj := b.get! scanRank
+          if ai != 0.0 && bj != 0.0 then
+            let contribution :=
+              if code &&& (0x80 : UInt8) != 0 then -ai * bj else ai * bj
+            acc + contribution
+          else
+            acc
+      productPlanCoeffRightAux codes a b (entryIndex + 1) (scanRank + 1)
+        remaining nextAcc
+
+/-- Build planned product coefficients in packed output order. -/
+private def productPlanOutputAux (codes : @& ByteArray) (a b : @& DataArray)
+    (scanLeft : Bool) (scanSize entryIndex : Nat) :
+    Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      let coefficient :=
+        if scanLeft then
+          productPlanCoeffLeftAux codes a b entryIndex 0 scanSize 0.0
+        else
+          productPlanCoeffRightAux codes a b entryIndex 0 scanSize 0.0
+      productPlanOutputAux codes a b scanLeft scanSize
+        (entryIndex + scanSize) remaining (out.push coefficient)
+
+/-- Accumulate one uncached geometric coefficient while scanning left ranks. -/
+private def mulCoeffDirectLeftAux (sig : @& Signature n) (p1 p2 : Parity)
+    (a b : @& DataArray) (outMask leftRank : Nat) : Nat → Float → Float
+  | 0, acc => acc
+  | remaining + 1, acc =>
+      let leftMask := unpackIdxValid n p1 leftRank
+      let rightMask := outMask ^^^ leftMask
+      let nextAcc :=
+        if containsPhysicalMask n p2 rightMask then
+          let ai := a.get! leftRank
+          if ai != 0.0 &&
+              !hasSharedDegenerate leftMask rightMask sig.degenerate.toNat then
+            let bj := b.get! (packIdxValid n p2 rightMask)
+            let contribution :=
+              if parityJoin leftMask rightMask n sig.metric.toNat then
+                -ai * bj
+              else
+                ai * bj
+            acc + contribution
+          else
+            acc
+        else
+          acc
+      mulCoeffDirectLeftAux sig p1 p2 a b outMask (leftRank + 1)
+        remaining nextAcc
+
+/-- Accumulate one uncached geometric coefficient while scanning right ranks. -/
+private def mulCoeffDirectRightAux (sig : @& Signature n) (p1 p2 : Parity)
+    (a b : @& DataArray) (outMask rightRank : Nat) : Nat → Float → Float
+  | 0, acc => acc
+  | remaining + 1, acc =>
+      let rightMask := unpackIdxValid n p2 rightRank
+      let leftMask := outMask ^^^ rightMask
+      let nextAcc :=
+        if containsPhysicalMask n p1 leftMask then
+          let ai := a.get! (packIdxValid n p1 leftMask)
+          if ai != 0.0 &&
+              !hasSharedDegenerate leftMask rightMask sig.degenerate.toNat then
+            let bj := b.get! rightRank
+            let contribution :=
+              if parityJoin leftMask rightMask n sig.metric.toNat then
+                -ai * bj
+              else
+                ai * bj
+            acc + contribution
+          else
+            acc
+        else
+          acc
+      mulCoeffDirectRightAux sig p1 p2 a b outMask (rightRank + 1)
+        remaining nextAcc
+
+/-- Build uncached geometric coefficients in ascending packed output order. -/
+private def mulOutputDirectAux (sig : @& Signature n) (p1 p2 : Parity)
+    (a b : @& DataArray) (scanLeft : Bool) (scanSize outRank : Nat) :
+    Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      let outMask := unpackIdxValid n (p1 * p2) outRank
+      let coefficient :=
+        if scanLeft then
+          mulCoeffDirectLeftAux sig p1 p2 a b outMask 0 scanSize 0.0
+        else
+          mulCoeffDirectRightAux sig p1 p2 a b outMask 0 scanSize 0.0
+      mulOutputDirectAux sig p1 p2 a b scanLeft scanSize (outRank + 1)
+        remaining (out.push coefficient)
+
+/-- Generic packed geometric product kernel.
+
+Each output coefficient is accumulated in one unboxed `Float` and pushed once.
+The smaller physical input is scanned so mixed full/parity products retain the
+same asymptotic work as the forward all-pairs implementation. -/
+@[inline]
+def mulKernelGeneric (sig : Signature n) (p1 p2 : Parity)
+    (a b : @& DataArray) : DataArray :=
+  let size1 := storageSize n p1
+  let size2 := storageSize n p2
+  let sizeOut := storageSize n (p1 * p2)
+  let scanLeft := size1 <= size2
+  let scanSize := if scanLeft then size1 else size2
+  let out := FloatArray.emptyWithCapacity sizeOut
+  match cachedProductPlan sig .geometric p1 p2 with
+  | some codes =>
+      productPlanOutputAux codes a b scanLeft scanSize 0 sizeOut out
   | none =>
-    -- Fallback: compute signs on the fly
-    for pi in [:size1] do
-      let mi := unpackIdxValid n p1 pi
-      let ai := a.get! pi
-      if ai != 0.0 then
-        let bi : Blade sig := ⟨BitVec.ofNat n mi⟩
-        for pj in [:size2] do
-          let mj := unpackIdxValid n p2 pj
-          let bj_blade : Blade sig := ⟨BitVec.ofNat n mj⟩
-          let sign := geometricSign sig bi bj_blade
-          if sign != 0 then
-            let mk := mi ^^^ mj
-            let pk := packIdxValid n pOut mk
-            let bj := b.get! pj
-            let contrib := (Float.ofInt sign) * ai * bj
-            out := out.set! pk (out.get! pk + contrib)
-    out
+      mulOutputDirectAux sig p1 p2 a b scanLeft scanSize 0 sizeOut out
+
+/-- Accumulate one exterior-product output coefficient.
+
+Every contributing pair is a unique partition of `outMask`: the left blade is
+a submask and the right blade is its XOR complement. The submask successor
+`(leftMask - 1) &&& outMask` visits exactly those partitions. `fuel` is a
+simple structural termination witness; descending submasks reach zero before
+the initial `outMask + 1` budget can be exhausted. -/
+private def wedgeCoeffDirectAux (n : Nat) (p1 p2 : Parity)
+    (a b : @& DataArray) (outMask : Nat) : Nat → Nat → Float → Float
+  | 0, _, acc => acc
+  | fuel + 1, leftMask, acc =>
+      let rightMask := outMask ^^^ leftMask
+      let nextAcc :=
+        if containsPhysicalMask n p1 leftMask &&
+            containsPhysicalMask n p2 rightMask then
+          let ai := a.get! (packIdxValid n p1 leftMask)
+          let bj := b.get! (packIdxValid n p2 rightMask)
+          let contribution :=
+            if parityJoinBasic leftMask rightMask n then -ai * bj else ai * bj
+          acc + contribution
+        else
+          acc
+      if leftMask == 0 then
+        nextAcc
+      else
+        wedgeCoeffDirectAux n p1 p2 a b outMask fuel
+          ((leftMask - 1) &&& outMask) nextAcc
+
+/-- Build direct-sign exterior coefficients in ascending packed output order. -/
+private def wedgeOutputDirectAux (n : Nat) (p1 p2 : Parity)
+    (a b : @& DataArray) (outRank : Nat) : Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      let outMask := unpackIdxValid n (p1 * p2) outRank
+      let coefficient :=
+        wedgeCoeffDirectAux n p1 p2 a b outMask (outMask + 1) outMask 0.0
+      wedgeOutputDirectAux n p1 p2 a b (outRank + 1) remaining
+        (out.push coefficient)
 
 /-- Generic packed wedge-product kernel.
-    Only disjoint blades contribute, and the output parity is the grade-sum parity. -/
+
+The result is output-stationary: each coefficient is accumulated in one
+unboxed `Float` and pushed once into one native buffer. Canonical signatures
+use closed plans; the uncached fallback enumerates output submasks and computes
+the signature-independent exterior orientation directly. -/
 @[inline]
-def wedgeKernelGeneric (sig : Signature n) (p1 p2 : Parity)
-    (a b : DataArray) : DataArray := Id.run do
-  let pOut := p1 * p2
+def wedgeKernelGeneric (_sig : Signature n) (p1 p2 : Parity)
+    (a b : @& DataArray) : DataArray :=
   let size1 := storageSize n p1
   let size2 := storageSize n p2
-  let mut out := DataArray.zeros (storageSize n pOut)
-  match cachedSignTable (n := n) sig with
-  | some table =>
-    for pi in [:size1] do
-      let mi := unpackIdxValid n p1 pi
-      let ai := a.get! pi
-      if ai != 0.0 then
-        for pj in [:size2] do
-          let mj := unpackIdxValid n p2 pj
-          let bj := b.get! pj
-          if bj != 0.0 && (mi &&& mj) == 0 then
-            let sign := table.lookup mi mj
-            if sign != 0 then
-              let mk := mi ||| mj
-              let pk := packIdxValid n pOut mk
-              let contrib := if sign < 0 then -ai * bj else ai * bj
-              out := out.set! pk (out.get! pk + contrib)
-    out
-  | none =>
-    for pi in [:size1] do
-      let mi := unpackIdxValid n p1 pi
-      let ai := a.get! pi
-      if ai != 0.0 then
-        let bi : Blade sig := ⟨BitVec.ofNat n mi⟩
-        for pj in [:size2] do
-          let mj := unpackIdxValid n p2 pj
-          let bj := b.get! pj
-          if bj != 0.0 && (mi &&& mj) == 0 then
-            let bjBlade : Blade sig := ⟨BitVec.ofNat n mj⟩
-            let sign := wedgeSign sig bi bjBlade
-            if sign != 0 then
-              let mk := mi ||| mj
-              let pk := packIdxValid n pOut mk
-              let contrib := if sign < 0 then -ai * bj else ai * bj
-              out := out.set! pk (out.get! pk + contrib)
-    out
+  let sizeOut := storageSize n (p1 * p2)
+  let scanLeft := size1 <= size2
+  let scanSize := if scanLeft then size1 else size2
+  let out := FloatArray.emptyWithCapacity sizeOut
+  match cachedProductPlan _sig .wedge p1 p2 with
+  | some codes =>
+      productPlanOutputAux codes a b scanLeft scanSize 0 sizeOut out
+  | none => wedgeOutputDirectAux n p1 p2 a b 0 sizeOut out
 
-/-- Generic packed left-contraction kernel. -/
+/-- Accumulate one uncached left-contraction coefficient while scanning left ranks. -/
+private def leftContractCoeffDirectLeftAux (sig : @& Signature n)
+    (p1 p2 : Parity) (a b : @& DataArray) (outMask leftRank : Nat) :
+    Nat → Float → Float
+  | 0, acc => acc
+  | remaining + 1, acc =>
+      let leftMask := unpackIdxValid n p1 leftRank
+      let rightMask := outMask ^^^ leftMask
+      let nextAcc :=
+        if containsPhysicalMask n p2 rightMask &&
+            (leftMask &&& rightMask) == leftMask then
+          let ai := a.get! leftRank
+          let bj := b.get! (packIdxValid n p2 rightMask)
+          if ai != 0.0 && bj != 0.0 &&
+              !hasSharedDegenerate leftMask rightMask sig.degenerate.toNat then
+            let reverseNeg := reverseNegative leftMask
+            let geometricNeg := parityJoin leftMask rightMask n sig.metric.toNat
+            let contribution :=
+              if reverseNeg != geometricNeg then -ai * bj else ai * bj
+            acc + contribution
+          else
+            acc
+        else
+          acc
+      leftContractCoeffDirectLeftAux sig p1 p2 a b outMask
+        (leftRank + 1) remaining nextAcc
+
+/-- Accumulate one uncached left-contraction coefficient while scanning right ranks. -/
+private def leftContractCoeffDirectRightAux (sig : @& Signature n)
+    (p1 p2 : Parity) (a b : @& DataArray) (outMask rightRank : Nat) :
+    Nat → Float → Float
+  | 0, acc => acc
+  | remaining + 1, acc =>
+      let rightMask := unpackIdxValid n p2 rightRank
+      let leftMask := outMask ^^^ rightMask
+      let nextAcc :=
+        if containsPhysicalMask n p1 leftMask &&
+            (leftMask &&& rightMask) == leftMask then
+          let ai := a.get! (packIdxValid n p1 leftMask)
+          let bj := b.get! rightRank
+          if ai != 0.0 && bj != 0.0 &&
+              !hasSharedDegenerate leftMask rightMask sig.degenerate.toNat then
+            let reverseNeg := reverseNegative leftMask
+            let geometricNeg := parityJoin leftMask rightMask n sig.metric.toNat
+            let contribution :=
+              if reverseNeg != geometricNeg then -ai * bj else ai * bj
+            acc + contribution
+          else
+            acc
+        else
+          acc
+      leftContractCoeffDirectRightAux sig p1 p2 a b outMask
+        (rightRank + 1) remaining nextAcc
+
+/-- Build uncached left-contraction coefficients in packed output order. -/
+private def leftContractOutputDirectAux (sig : @& Signature n) (p1 p2 : Parity)
+    (a b : @& DataArray) (scanLeft : Bool) (scanSize outRank : Nat) :
+    Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      let outMask := unpackIdxValid n (p1 * p2) outRank
+      let coefficient :=
+        if scanLeft then
+          leftContractCoeffDirectLeftAux sig p1 p2 a b outMask 0 scanSize 0.0
+        else
+          leftContractCoeffDirectRightAux sig p1 p2 a b outMask 0 scanSize 0.0
+      leftContractOutputDirectAux sig p1 p2 a b scanLeft scanSize
+        (outRank + 1) remaining (out.push coefficient)
+
+/-- Generic packed left-contraction kernel.
+
+Each output coefficient scans the smaller physical input, derives its unique
+XOR partner, and accumulates only pairs satisfying `left ⊆ right`. -/
 @[inline]
 def leftContractKernelGeneric (sig : Signature n) (p1 p2 : Parity)
-    (a b : DataArray) : DataArray := Id.run do
-  let pOut := p1 * p2
+    (a b : @& DataArray) : DataArray :=
   let size1 := storageSize n p1
   let size2 := storageSize n p2
-  let mut out := DataArray.zeros (storageSize n pOut)
-  match cachedSignTable (n := n) sig with
-  | some table =>
-    for pi in [:size1] do
-      let mi := unpackIdxValid n p1 pi
-      let ai := a.get! pi
-      if ai != 0.0 then
-        for pj in [:size2] do
-          let mj := unpackIdxValid n p2 pj
-          let bj := b.get! pj
-          if bj != 0.0 && (mi &&& mj) == mi && popcount mi <= popcount mj then
-            let sign := table.lookup mi mj
-            if sign != 0 then
-              let mk := mi ^^^ mj
-              let pk := packIdxValid n pOut mk
-              let reverseNeg := reverseSign (popcount mi) < 0
-              let geometricNeg := sign < 0
-              let contrib := if reverseNeg != geometricNeg then -ai * bj else ai * bj
-              out := out.set! pk (out.get! pk + contrib)
-    out
+  let sizeOut := storageSize n (p1 * p2)
+  let scanLeft := size1 <= size2
+  let scanSize := if scanLeft then size1 else size2
+  let out := FloatArray.emptyWithCapacity sizeOut
+  match cachedProductPlan sig .leftContract p1 p2 with
+  | some codes =>
+      productPlanOutputAux codes a b scanLeft scanSize 0 sizeOut out
   | none =>
-    for pi in [:size1] do
-      let mi := unpackIdxValid n p1 pi
-      let ai := a.get! pi
-      if ai != 0.0 then
-        let bi : Blade sig := ⟨BitVec.ofNat n mi⟩
-        for pj in [:size2] do
-          let mj := unpackIdxValid n p2 pj
-          let bj := b.get! pj
-          if bj != 0.0 && (mi &&& mj) == mi && popcount mi <= popcount mj then
-            let bjBlade : Blade sig := ⟨BitVec.ofNat n mj⟩
-            let sign := leftContractionSign sig bi bjBlade
-            if sign != 0 then
-              let mk := mi ^^^ mj
-              let pk := packIdxValid n pOut mk
-              let contrib := if sign < 0 then -ai * bj else ai * bj
-              out := out.set! pk (out.get! pk + contrib)
-    out
+      leftContractOutputDirectAux sig p1 p2 a b scanLeft scanSize
+        0 sizeOut out
 
-/-- Generic packed right-contraction kernel. -/
+/-- Accumulate one uncached right-contraction coefficient while scanning left ranks. -/
+private def rightContractCoeffDirectLeftAux (sig : @& Signature n)
+    (p1 p2 : Parity) (a b : @& DataArray) (outMask leftRank : Nat) :
+    Nat → Float → Float
+  | 0, acc => acc
+  | remaining + 1, acc =>
+      let leftMask := unpackIdxValid n p1 leftRank
+      let rightMask := outMask ^^^ leftMask
+      let nextAcc :=
+        if containsPhysicalMask n p2 rightMask &&
+            (rightMask &&& leftMask) == rightMask then
+          let ai := a.get! leftRank
+          let bj := b.get! (packIdxValid n p2 rightMask)
+          if ai != 0.0 && bj != 0.0 &&
+              !hasSharedDegenerate rightMask leftMask sig.degenerate.toNat then
+            let reverseNeg := reverseNegative rightMask
+            let geometricNeg := parityJoin rightMask leftMask n sig.metric.toNat
+            let contribution :=
+              if reverseNeg != geometricNeg then -ai * bj else ai * bj
+            acc + contribution
+          else
+            acc
+        else
+          acc
+      rightContractCoeffDirectLeftAux sig p1 p2 a b outMask
+        (leftRank + 1) remaining nextAcc
+
+/-- Accumulate one uncached right-contraction coefficient while scanning right ranks. -/
+private def rightContractCoeffDirectRightAux (sig : @& Signature n)
+    (p1 p2 : Parity) (a b : @& DataArray) (outMask rightRank : Nat) :
+    Nat → Float → Float
+  | 0, acc => acc
+  | remaining + 1, acc =>
+      let rightMask := unpackIdxValid n p2 rightRank
+      let leftMask := outMask ^^^ rightMask
+      let nextAcc :=
+        if containsPhysicalMask n p1 leftMask &&
+            (rightMask &&& leftMask) == rightMask then
+          let ai := a.get! (packIdxValid n p1 leftMask)
+          let bj := b.get! rightRank
+          if ai != 0.0 && bj != 0.0 &&
+              !hasSharedDegenerate rightMask leftMask sig.degenerate.toNat then
+            let reverseNeg := reverseNegative rightMask
+            let geometricNeg := parityJoin rightMask leftMask n sig.metric.toNat
+            let contribution :=
+              if reverseNeg != geometricNeg then -ai * bj else ai * bj
+            acc + contribution
+          else
+            acc
+        else
+          acc
+      rightContractCoeffDirectRightAux sig p1 p2 a b outMask
+        (rightRank + 1) remaining nextAcc
+
+/-- Build uncached right-contraction coefficients in packed output order. -/
+private def rightContractOutputDirectAux (sig : @& Signature n) (p1 p2 : Parity)
+    (a b : @& DataArray) (scanLeft : Bool) (scanSize outRank : Nat) :
+    Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      let outMask := unpackIdxValid n (p1 * p2) outRank
+      let coefficient :=
+        if scanLeft then
+          rightContractCoeffDirectLeftAux sig p1 p2 a b outMask 0 scanSize 0.0
+        else
+          rightContractCoeffDirectRightAux sig p1 p2 a b outMask 0 scanSize 0.0
+      rightContractOutputDirectAux sig p1 p2 a b scanLeft scanSize
+        (outRank + 1) remaining (out.push coefficient)
+
+/-- Generic packed right-contraction kernel.
+
+Each output coefficient scans the smaller physical input, derives its unique
+XOR partner, and accumulates only pairs satisfying `right ⊆ left`. -/
 @[inline]
 def rightContractKernelGeneric (sig : Signature n) (p1 p2 : Parity)
-    (a b : DataArray) : DataArray := Id.run do
-  let pOut := p1 * p2
+    (a b : @& DataArray) : DataArray :=
   let size1 := storageSize n p1
   let size2 := storageSize n p2
-  let mut out := DataArray.zeros (storageSize n pOut)
-  match cachedSignTable (n := n) sig with
-  | some table =>
-    for pi in [:size1] do
-      let mi := unpackIdxValid n p1 pi
-      let ai := a.get! pi
-      if ai != 0.0 then
-        for pj in [:size2] do
-          let mj := unpackIdxValid n p2 pj
-          let bj := b.get! pj
-          if bj != 0.0 && (mj &&& mi) == mj && popcount mj <= popcount mi then
-            let sign := table.lookup mj mi
-            if sign != 0 then
-              let mk := mi ^^^ mj
-              let pk := packIdxValid n pOut mk
-              let reverseNeg := reverseSign (popcount mj) < 0
-              let geometricNeg := sign < 0
-              let contrib := if reverseNeg != geometricNeg then -ai * bj else ai * bj
-              out := out.set! pk (out.get! pk + contrib)
-    out
+  let sizeOut := storageSize n (p1 * p2)
+  let scanLeft := size1 <= size2
+  let scanSize := if scanLeft then size1 else size2
+  let out := FloatArray.emptyWithCapacity sizeOut
+  match cachedProductPlan sig .rightContract p1 p2 with
+  | some codes =>
+      productPlanOutputAux codes a b scanLeft scanSize 0 sizeOut out
   | none =>
-    for pi in [:size1] do
-      let mi := unpackIdxValid n p1 pi
-      let ai := a.get! pi
-      if ai != 0.0 then
-        let bi : Blade sig := ⟨BitVec.ofNat n mi⟩
-        for pj in [:size2] do
-          let mj := unpackIdxValid n p2 pj
-          let bj := b.get! pj
-          if bj != 0.0 && (mj &&& mi) == mj && popcount mj <= popcount mi then
-            let bjBlade : Blade sig := ⟨BitVec.ofNat n mj⟩
-            let sign := rightContractionSign sig bi bjBlade
-            if sign != 0 then
-              let mk := mi ^^^ mj
-              let pk := packIdxValid n pOut mk
-              let contrib := if sign < 0 then -ai * bj else ai * bj
-              out := out.set! pk (out.get! pk + contrib)
-    out
+      rightContractOutputDirectAux sig p1 p2 a b scanLeft scanSize
+        0 sizeOut out
 
 /-- Fast path even×even kernel using the shared precomputed tables.
     Matches EvenMVDA.geometricProduct exactly. -/
