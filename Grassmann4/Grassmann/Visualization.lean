@@ -1,9 +1,13 @@
 /-
-  Grassmann/Visualization.lean - Vector Field Visualization
+  Grassmann/Visualization.lean - Legacy Vector Field Visualization
 
-  Replicates Grassmann.jl's vectorfield visualization:
+  Contains the repository's older Euclidean vector-field experiments:
   - Compute how a rotor transforms vectors across a 2D grid
   - Output SVG for visualization
+
+  The 3D `e12 + e23` rotor below is a Euclidean compound rotation. It is not
+  the exact projective Grassmann.jl `v12 + v∞3` example, whose infinity blade
+  has no counterpart in `Cl(3, 0)`.
 
   Usage:
     #eval generateVectorFieldSVG (expBivector bivector) gridSize range
@@ -172,11 +176,19 @@ def e13_3D : MultivectorS R3Viz Float :=
   let e3 : MultivectorS R3Viz Float := MultivectorS.basis ⟨2, by omega⟩
   e1 * e3
 
-/-- Create the Grassmann.jl example rotor: exp(π/4 * (e12 + e23))
-    This rotates simultaneously in the xy-plane and yz-plane -/
-def grassmannExampleRotor : MultivectorS R3Viz Float :=
+/-- Euclidean compound rotor `exp(π/4 * (e12 + e23))` in `Cl(3, 0)`.
+
+This rotates simultaneously in the xy- and yz-planes. It is intentionally not
+identified with the projective Grassmann.jl `v12 + v∞3` motor.
+-/
+def euclideanCompoundRotor : MultivectorS R3Viz Float :=
   let B := e12_3D + e23_3D
   expBivector (B.smul (pi / 4))
+
+/-- Compatibility name for the historically mislabeled Euclidean rotor. -/
+@[deprecated euclideanCompoundRotor (since := "2026-07-20")]
+abbrev grassmannExampleRotor : MultivectorS R3Viz Float :=
+  euclideanCompoundRotor
 
 /-- Compute 3D vector field -/
 def computeVectorField3D (R : MultivectorS R3Viz Float)
@@ -215,7 +227,7 @@ def generateHTML3D (points : List Vector3AtPoint) : String :=
   "<!DOCTYPE html>\n" ++
   "<html>\n" ++
   "<head>\n" ++
-  "  <title>3D Vector Field - Grassmann.jl Example</title>\n" ++
+  "  <title>3D Vector Field - Euclidean Compound Rotor</title>\n" ++
   s!"  <style>body {lb} margin: 0; overflow: hidden; {rb}</style>\n" ++
   "</head>\n" ++
   "<body>\n" ++
@@ -286,49 +298,10 @@ def generateHTML3D (points : List Vector3AtPoint) : String :=
   "</body>\n" ++
   "</html>"
 
-/-- Generate 3D vector field visualization (Grassmann.jl example)
-    Rotor: exp(π/4 * (e12 + e23)) -/
+/-- Generate the legacy Euclidean 3D vector-field visualization. -/
 def generateVectorField3D (gridSize : Nat := 10) (range : Float := 1.5) : String :=
-  let R := grassmannExampleRotor
+  let R := euclideanCompoundRotor
   let points := computeVectorField3D R gridSize range
   generateHTML3D points
-
-/-! ## Tests -/
-
--- Test 3D vector creation
-#eval! let v := vec3 1.0 2.0 3.0
-       (getX3 v, getY3 v, getZ3 v)
-
--- Test bivector creation
-#eval! e12_3D.nnz  -- Should be 1 (just e12)
-#eval! e23_3D.nnz  -- Should be 1 (just e23)
-#eval! (e12_3D + e23_3D).nnz  -- Should be 2
-
--- Test the Grassmann.jl rotor
-#eval! let R := grassmannExampleRotor
-       R.nnz  -- Should have multiple components
-
--- Test 3D rotation
-#eval! let R := grassmannExampleRotor
-       let v := vec3 1.0 0.0 0.0  -- e1
-       let rotated := applyRotor3D R v
-       (getX3 rotated, getY3 rotated, getZ3 rotated)
-
--- Test vector at origin (should have zero displacement)
-#eval! let R := grassmannExampleRotor
-       let v := vec3 0.0 0.0 0.0
-       let rotated := applyRotor3D R v
-       (getX3 rotated, getY3 rotated, getZ3 rotated)
-
--- Generate small 3D field
-#eval! let points := computeVectorField3D grassmannExampleRotor 3 1.0
-       points.length  -- Should be 27 (3x3x3)
-
--- Generate JSON preview
-#eval! let points := computeVectorField3D grassmannExampleRotor 2 1.0
-       (generateJSON3D points).length
-
--- Output HTML (use #eval IO.println to see full output)
-#eval IO.println (generateVectorField3D 8 1.5)
 
 end Grassmann.Visualization
