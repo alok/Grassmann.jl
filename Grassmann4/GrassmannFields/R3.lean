@@ -61,8 +61,8 @@ structure R3Grades where
 
 namespace R3Grades
 
-/-- Project a packed full-storage multivector onto renderer-independent grades. -/
-def ofMV (m : MV R3 .full) : R3Grades :=
+/-- Project a packed multivector of any supported parity onto semantic grades. -/
+def ofMV {parity : Parity} (m : MV R3 parity) : R3Grades :=
   {
     scalar := m.coeff 0
     vector := { x := m.coeff 1, y := m.coeff 2, z := m.coeff 4 }
@@ -168,8 +168,8 @@ def samplePlanar (grid : PlanarGrid) (field : Field3 R3Grades) :
     Except String (Array Sample3) :=
   samplePlanarWith grid field id
 
-/-- Sample the primary packed full-storage `Cl(3, 0)` runtime. -/
-def samplePlanarMV (grid : PlanarGrid) (field : Field3 (MV R3 .full)) :
+/-- Sample a packed `Cl(3, 0)` field of any supported parity. -/
+def samplePlanarMV {parity : Parity} (grid : PlanarGrid) (field : Field3 (MV R3 parity)) :
     Except String (Array Sample3) :=
   samplePlanarWith grid field R3Grades.ofMV
 

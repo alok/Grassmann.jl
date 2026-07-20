@@ -73,6 +73,12 @@ private def testGradeMapping : IO Unit := do
   for (mask, expected) in basisCases do
     require s!"basis mask {mask} grade mapping"
       (R3Grades.ofMV (MV.ofPairs R3 .full [(mask, 9.0)]) == expected)
+  let even : MV R3 .even := MV.ofPairs R3 .even [(0, 2.0), (3, 13.0), (5, 11.0), (6, 7.0)]
+  require "even packed storage maps absent odd grades to zero"
+    (R3Grades.ofMV even == gradeRecord 2.0 0.0 0.0 0.0 7.0 (-11.0) 13.0 0.0)
+  let odd : MV R3 .odd := MV.ofPairs R3 .odd [(1, 3.0), (2, 4.0), (4, 5.0), (7, 17.0)]
+  require "odd packed storage maps absent even grades to zero"
+    (R3Grades.ofMV odd == gradeRecord 0.0 3.0 4.0 5.0 0.0 0.0 0.0 17.0)
 
 private def testGrid : IO Unit := do
   let points ← IO.ofExcept defaultGrid.points
@@ -160,6 +166,8 @@ private def testFrames : IO Unit := do
   let oversizedScene := Array.replicate 132 mediumFrame
   require "total scene sample cap rejects oversized payloads"
     ((validateFrames oversizedScene) matches .error _)
+  require "frame builder rejects an oversized total before sampling"
+    ((buildFrames mediumGrid 17) matches .error _)
 
 private def testScene : IO Unit := do
   let scene ← IO.ofExcept defaultScene

@@ -81,6 +81,10 @@ def buildFrames (grid : PlanarGrid := defaultGrid)
     throw "frameCount must be positive"
   if frameCount > maxFrameCount then
     throw s!"frameCount must not exceed {maxFrameCount}"
+  grid.validate
+  let sampleCount := grid.xCount * grid.yCount
+  if sampleCount * frameCount > maxTotalSamples then
+    throw s!"scene has more than {maxTotalSamples} total samples"
   let mut frames := Array.emptyWithCapacity frameCount
   for index in [:frameCount] do
     let theta := frameParameter index frameCount

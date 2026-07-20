@@ -123,7 +123,7 @@ Lake package can construct its own `Field3`, `PlanarGrid`, and frames.
 
 ## 4. Exact `Cl(3, 0)` grade mapping
 
-`MV R3 .full` coefficients use logical blade masks. The semantic adapter reads
+`MV R3 parity` coefficients use logical blade masks. The semantic adapter reads
 only `MV.coeff`, never packed indices:
 
 | Semantic component | Blade | Logical mask | Exported value |
@@ -143,10 +143,12 @@ This makes the renderer's oriented disk convention explicit and preserves the
 existing `R3Utils` axis-to-plane convention
 `nx*e23 - ny*e13 + nz*e12`.
 
-The primary adapter accepts the library's packed full-storage runtime,
-`MV R3 .full`. If a dense/reference adapter is supplied for tests, the packed
-and reference adapters must agree coefficient-for-coefficient; reference data
-is not the production source.
+The adapter accepts the library's packed full, even, or odd storage. Grades
+absent from a parity are exported as zero. The demonstration itself computes
+`MV R3 .full` values because its field intentionally mixes all four grades. If
+a dense/reference adapter is supplied for tests, packed and reference adapters
+must agree coefficient-for-coefficient; reference data is not the production
+source.
 
 ## 5. Demonstration field
 
@@ -306,6 +308,7 @@ evidence that the live widget works.
 Focused Lean tests cover:
 
 - each of the eight grade-map coefficients;
+- zero-filled grade mapping from even and odd packed storage;
 - the mixed anchor
   `2 + 3e1 + 4e2 + 5e3 + 13e12 + 11e13 + 7e23 + 17e123`, whose exported
   record is scalar `2`, vector `(3,4,5)`, bivector normal `(7,-11,13)`, and
