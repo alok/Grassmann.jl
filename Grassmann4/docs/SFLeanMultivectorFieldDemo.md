@@ -159,9 +159,10 @@ stage.
 
 ### 9:20-12:00 — close on the visual and the reusable split
 
-Briefly show the three imports used by this stage program (the package also
-exposes `GrassmannReference` and `GrassmannTests` for opt-in reference and test
-APIs):
+Briefly show the three public layers behind the stage program. The tiny stage
+anchor imports only the `GrassmannViz` facade, which follows this dependency
+chain; the package also exposes `GrassmannReference` and `GrassmannTests` for
+opt-in reference and test APIs:
 
 ```lean
 import Grassmann       -- packed Clifford-algebra runtime
