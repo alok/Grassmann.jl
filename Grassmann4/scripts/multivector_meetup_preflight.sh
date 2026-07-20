@@ -35,7 +35,7 @@ fi
 run git -C "$package_root/.." diff --check
 run git -C "$package_root/.." diff --cached --check
 
-stage_status=$(git -C "$package_root/.." status --short --untracked-files=all -- README.md Grassmann4)
+stage_status=$(git -C "$package_root/.." status --short --untracked-files=all)
 if [[ -n "$stage_status" ]]; then
   echo "$stage_status" >&2
   echo "stage sources are not clean; commit intended work and restore the 5x5 demo" >&2

@@ -1,5 +1,5 @@
 import GrassmannViz
-
+set_option linter.hashCommand false
 /-!
 # SF Lean meetup stage anchor
 

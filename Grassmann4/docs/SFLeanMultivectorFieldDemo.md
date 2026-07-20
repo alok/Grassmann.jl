@@ -46,8 +46,11 @@ Then prepare the editor:
 3. Drag the empty SVG background, wheel, click a sample, toggle each grade,
    press Play, pause, and scrub. Restore all four grade toggles before leaving
    the rehearsal view.
-4. Set the editor font to 18 px. Make the InfoView at least 60 percent of the
-   window and confirm title, controls, field, and inspector are readable.
+4. Set the editor font to 18 px. Make the InfoView at least **1080 CSS px
+   wide** and confirm the title, controls, field, inspector, and timeline are
+   visible without scrolling. That is 60 percent of an 1800 px window but 75
+   percent of a 1440 px projector window. At 1280 px, widen the visual almost
+   full-screen for interaction and restore the code split only for the edit.
 5. Confirm the InfoView is updating rather than paused or pinned. Moving
    between `#eval` and `#html` must change the displayed output.
 6. Turn networking off and repeat the reveal. Nothing in the demo uses it.

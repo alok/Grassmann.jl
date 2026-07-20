@@ -3,8 +3,9 @@ import GrassmannViz.InfoView
 /-!
 # Embedded renderer freshness check
 
-Lake does not track an `include_str` JavaScript asset as a Lean module input.
-This executable check detects an OLean built from stale renderer source.
+The `GrassmannViz` Lake target tracks the JavaScript asset as an input. This
+independent executable check still detects an OLean built from stale renderer
+source before a live demonstration.
 -/
 
 open GrassmannViz
@@ -20,5 +21,5 @@ open GrassmannViz
     IO.println "embedded multivector renderer matches its JavaScript source"
   else
     throw <| IO.userError
-      "stale multivector renderer: from Grassmann4 run `sleep 1 && touch GrassmannViz/InfoView.lean && \
-      LAKE_ARTIFACT_CACHE=false lake build +GrassmannViz.InfoView`, then rerun this check"
+      "stale multivector renderer: from Grassmann4 run \
+      `LAKE_ARTIFACT_CACHE=false lake build +GrassmannViz.InfoView`, then rerun this check"
