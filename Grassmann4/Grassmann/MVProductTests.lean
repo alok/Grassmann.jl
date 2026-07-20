@@ -180,6 +180,50 @@ private def checkAllParityPairs {n : Nat} (sig : Signature n) : Bool :=
 #guard checkAllParityPairs CGA3
 #guard checkAllParityPairs (Signature.euclidean 6)
 
+/-! ## Non-finite geometric zero policy -/
+
+/--
+The geometric kernel historically skips a zero left coefficient, but does not
+skip a zero right coefficient after a nonzero left coefficient. Preserve that
+asymmetry for both physical scan directions: `nonFinite * 0` is `NaN`, while
+`0 * nonFinite` is skipped and remains zero.
+-/
+private def checkGeometricNonFiniteZeroPolicy {n : Nat} (sig : Signature n)
+    (p1 p2 : Parity) (nonFinite : Float) : Bool :=
+  let leftNonFinite :=
+    (DataArray.zeros (physicalSize n p1)).set! 0 nonFinite
+  let rightZero := DataArray.zeros (physicalSize n p2)
+  let leftZero := DataArray.zeros (physicalSize n p1)
+  let rightNonFinite :=
+    (DataArray.zeros (physicalSize n p2)).set! 0 nonFinite
+  let nonFiniteTimesZero :=
+    MV.mulKernelGeneric sig p1 p2 leftNonFinite rightZero
+  let zeroTimesNonFinite :=
+    MV.mulKernelGeneric sig p1 p2 leftZero rightNonFinite
+  nonFiniteTimesZero.size == physicalSize n (p1 * p2) &&
+    zeroTimesNonFinite.size == physicalSize n (p1 * p2) &&
+    (nonFiniteTimesZero.get! 0).isNaN &&
+    !(zeroTimesNonFinite.get! 0).isNaN &&
+    zeroTimesNonFinite.get! 0 == 0.0
+
+-- R3 uses closed plans. These layouts force the left-scan and right-scan paths.
+#guard
+  let infinity := 1.0 / 0.0
+  let nan := 0.0 / 0.0
+  checkGeometricNonFiniteZeroPolicy R3 .even .full infinity &&
+    checkGeometricNonFiniteZeroPolicy R3 .even .full nan &&
+    checkGeometricNonFiniteZeroPolicy R3 .full .even infinity &&
+    checkGeometricNonFiniteZeroPolicy R3 .full .even nan
+
+-- R1 has no closed plan and therefore exercises both direct fallback scans.
+#guard
+  let infinity := 1.0 / 0.0
+  let nan := 0.0 / 0.0
+  checkGeometricNonFiniteZeroPolicy R1 .even .full infinity &&
+    checkGeometricNonFiniteZeroPolicy R1 .even .full nan &&
+    checkGeometricNonFiniteZeroPolicy R1 .full .even infinity &&
+    checkGeometricNonFiniteZeroPolicy R1 .full .even nan
+
 /-! ## Dimension-zero odd phantom slot -/
 
 /-

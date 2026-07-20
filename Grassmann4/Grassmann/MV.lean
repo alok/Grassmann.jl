@@ -637,6 +637,68 @@ private def productPlanOutputAux (codes : @& ByteArray) (a b : @& DataArray)
       productPlanOutputAux codes a b scanLeft scanSize
         (entryIndex + scanSize) remaining (out.push coefficient)
 
+/-- Accumulate one planned geometric coefficient while scanning left ranks.
+
+Unlike wedge and contractions, the historical geometric kernel skips only a
+zero left coefficient. It still evaluates a nonzero or non-finite left
+coefficient times a zero right coefficient, preserving IEEE `NaN` behavior. -/
+private def geometricPlanCoeffLeftAux (codes : @& ByteArray)
+    (a b : @& DataArray) (entryIndex scanRank : Nat) : Nat → Float → Float
+  | 0, acc => acc
+  | remaining + 1, acc =>
+      let code := codes.get! entryIndex
+      let nextAcc :=
+        if code == 0 then
+          acc
+        else
+          let ai := a.get! scanRank
+          if ai != 0.0 then
+            let partnerRank := (code &&& (0x7f : UInt8)).toNat - 1
+            let bj := b.get! partnerRank
+            let contribution :=
+              if code &&& (0x80 : UInt8) != 0 then -ai * bj else ai * bj
+            acc + contribution
+          else
+            acc
+      geometricPlanCoeffLeftAux codes a b (entryIndex + 1) (scanRank + 1)
+        remaining nextAcc
+
+/-- Accumulate one planned geometric coefficient while scanning right ranks. -/
+private def geometricPlanCoeffRightAux (codes : @& ByteArray)
+    (a b : @& DataArray) (entryIndex scanRank : Nat) : Nat → Float → Float
+  | 0, acc => acc
+  | remaining + 1, acc =>
+      let code := codes.get! entryIndex
+      let nextAcc :=
+        if code == 0 then
+          acc
+        else
+          let partnerRank := (code &&& (0x7f : UInt8)).toNat - 1
+          let ai := a.get! partnerRank
+          if ai != 0.0 then
+            let bj := b.get! scanRank
+            let contribution :=
+              if code &&& (0x80 : UInt8) != 0 then -ai * bj else ai * bj
+            acc + contribution
+          else
+            acc
+      geometricPlanCoeffRightAux codes a b (entryIndex + 1) (scanRank + 1)
+        remaining nextAcc
+
+/-- Build planned geometric coefficients while preserving left-zero semantics. -/
+private def geometricPlanOutputAux (codes : @& ByteArray) (a b : @& DataArray)
+    (scanLeft : Bool) (scanSize entryIndex : Nat) :
+    Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      let coefficient :=
+        if scanLeft then
+          geometricPlanCoeffLeftAux codes a b entryIndex 0 scanSize 0.0
+        else
+          geometricPlanCoeffRightAux codes a b entryIndex 0 scanSize 0.0
+      geometricPlanOutputAux codes a b scanLeft scanSize
+        (entryIndex + scanSize) remaining (out.push coefficient)
+
 /-- Accumulate one uncached geometric coefficient while scanning left ranks. -/
 private def mulCoeffDirectLeftAux (sig : @& Signature n) (p1 p2 : Parity)
     (a b : @& DataArray) (outMask leftRank : Nat) : Nat → Float → Float
@@ -720,7 +782,7 @@ def mulKernelGeneric (sig : Signature n) (p1 p2 : Parity)
   let out := FloatArray.emptyWithCapacity sizeOut
   match cachedProductPlan sig .geometric p1 p2 with
   | some codes =>
-      productPlanOutputAux codes a b scanLeft scanSize 0 sizeOut out
+      geometricPlanOutputAux codes a b scanLeft scanSize 0 sizeOut out
   | none =>
       mulOutputDirectAux sig p1 p2 a b scanLeft scanSize 0 sizeOut out
 
