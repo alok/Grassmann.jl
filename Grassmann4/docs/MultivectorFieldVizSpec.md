@@ -318,6 +318,8 @@ Renderer guards cover:
 - JavaScript syntax with `node --check`;
 - absence of URL schemes, `fetch`, `XMLHttpRequest`, WebSocket, Three.js,
   Ganja.js, LeanPlot, WebGL, and dynamic `eval`;
+- a Lake input-file dependency from `GrassmannViz` to the JavaScript embedded
+  by `include_str`, so renderer edits invalidate the owning OLean;
 - byte-for-byte equality between the checked-in JavaScript and the source
   embedded by `include_str` in the built OLean;
 - stable `data-region`, `data-grade`, `data-glyph`, and `data-sample-index`

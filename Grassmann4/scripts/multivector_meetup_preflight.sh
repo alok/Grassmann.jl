@@ -13,10 +13,8 @@ run() {
 
 run "$script_dir/multivector_widget_guard.sh"
 
-# Lake does not track the JavaScript named by `include_str` as a module input.
-# Touching the Lean owner is the portable, non-destructive force-rebuild step.
-run sleep 1
-run touch GrassmannViz/InfoView.lean
+# The GrassmannViz library declares the embedded JavaScript as a Lake input.
+# A source change therefore invalidates the OLean that owns `include_str`.
 run env LAKE_ARTIFACT_CACHE=false lake build +GrassmannViz.InfoView
 
 # Materialize local OLeans even when the surrounding developer shell defaults

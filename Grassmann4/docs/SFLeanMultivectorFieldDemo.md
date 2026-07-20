@@ -221,12 +221,10 @@ widget; it is a separate Lean SVG renderer over the same validated scene.
 From the nested `Grassmann4` package root:
 
 ```bash
-sleep 1
-touch GrassmannViz/InfoView.lean
 LAKE_ARTIFACT_CACHE=false lake build +GrassmannViz.InfoView
 lake env lean MultivectorWidgetCheck.lean
 ```
 
-The first command changes only a timestamp. It forces the module containing
-`include_str` to embed the current JavaScript; the final check compares the
+`GrassmannViz` declares the JavaScript as a Lake input, so changing it
+invalidates the module containing `include_str`. The final check compares the
 source file with the string in the rebuilt OLean byte-for-byte.

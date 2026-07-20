@@ -15,6 +15,11 @@ name = "mathlib"
 git = "https://github.com/leanprover-community/mathlib4.git"
 rev = "32d24245c7a12ded17325299fd41d412022cd3fe"
 
+[[input_file]]
+name = "multivectorFieldWidget"
+path = "GrassmannViz/multivectorField.js"
+text = true
+
 [[lean_lib]]
 name = "Grassmann"
 
@@ -26,6 +31,7 @@ name = "GrassmannFields"
 
 [[lean_lib]]
 name = "GrassmannViz"
+needs = ["multivectorFieldWidget"]
 
 [[lean_lib]]
 name = "GrassmannTests"
