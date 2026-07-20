@@ -68,6 +68,33 @@ def MultivectorFieldProps.validate (props : MultivectorFieldProps) : Except Stri
   if props.initialSample >= sampleCount then
     throw s!"initialSample {props.initialSample} is outside {sampleCount} samples"
 
+/-- Validate the decimal JSON payload that the InfoView will actually receive.
+
+Core `Float` JSON uses a compact decimal representation. Two distinct source
+coordinates can therefore round to one wire coordinate even though both are
+finite. Revalidating the decoded value prevents a source-valid lattice from
+becoming overlapping or incomplete at the presentation boundary.
+-/
+def MultivectorFieldProps.prepareForWidget (props : MultivectorFieldProps) :
+    Except String MultivectorFieldProps := do
+  props.validate
+  let decoded : MultivectorFieldProps ←
+    match (fromJson? (toJson props) : Except String MultivectorFieldProps) with
+    | .ok value => pure value
+    | .error message => throw s!"multivector-field JSON could not be decoded: {message}"
+  match decoded.validate with
+  -- `Html.ofComponent` applies this same `toJson` operation to `props`. Return
+  -- the source value so the payload we validated is exactly the next encoding,
+  -- rather than relying on a second encode/decode cycle being idempotent.
+  | .ok () => pure props
+  | .error message => throw s!"serialized multivector-field scene is invalid: {message}"
+
+/-- Check that the widget's serialized payload remains a valid scene. -/
+def MultivectorFieldProps.validateSerialized (props : MultivectorFieldProps) :
+    Except String Unit := do
+  let _ ← props.prepareForWidget
+  pure ()
+
 /-- Construct scene props only after checking the full frame sequence. -/
 def mkScene (title subtitle formula : String) (frames : Array Frame3)
     (initialFrame : Nat := 0) (parameterLabel : String := "parameter")

@@ -158,6 +158,7 @@ private def testFrames : IO Unit := do
 private def testScene : IO Unit := do
   let scene ← IO.ofExcept defaultScene
   require "scene validates" (scene.validate matches .ok ())
+  require "serialized scene validates" (scene.validateSerialized matches .ok ())
   require "scene schema version" (scene.schemaVersion == currentSchemaVersion)
   require "scene has 24 by 25 samples"
     (scene.frames.size == 24 && scene.frames.all fun frame => frame.samples.size == 25)
@@ -185,6 +186,26 @@ private def testScene : IO Unit := do
   require "incomplete rectangular lattice rejected"
     (({ scene with frames := #[{ parameter := 0.0, samples := sparseSamples }] }).validate
       matches .error _)
+  let tinyGrid : PlanarGrid := {
+    defaultGrid with
+    xMin := 0.0
+    xMax := 1e-7
+    yMin := 0.0
+    yMax := 1.0
+    xCount := 2
+    yCount := 2
+  }
+  let tinyFrames ← IO.ofExcept (buildFrames tinyGrid 1)
+  let wireCollapsed : MultivectorFieldProps := {
+    scene with
+    frames := tinyFrames
+    initialFrame := 0
+    initialSample := 0
+  }
+  require "close source coordinates form a valid lattice"
+    (wireCollapsed.validate matches .ok ())
+  require "JSON coordinate collapse is rejected before rendering"
+    (wireCollapsed.validateSerialized matches .error _)
   let encoded := toJson scene
   let decoded : MultivectorFieldProps ← IO.ofExcept (fromJson? encoded)
   require "decoded widget props validate" (decoded.validate matches .ok ())

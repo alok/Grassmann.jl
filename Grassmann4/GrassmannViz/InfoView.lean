@@ -5,8 +5,8 @@ import ProofWidgets.Component.HtmlDisplay
 # Offline InfoView renderer for multivector fields
 
 Lean supplies a validated, versioned scene. The embedded component performs
-only view work: camera projection, depth sorting, SVG glyph construction, and
-interaction.
+only view work: guide inference, display normalization, glyph construction,
+camera projection, depth sorting, SVG painting, and interaction.
 -/
 
 namespace GrassmannViz
@@ -29,10 +29,10 @@ private def errorHtml (message : String) : Html :=
     <pre style={json% { whiteSpace: "pre-wrap" }}>{.text message}</pre>
   </div>
 
-/-- Convert validated props into the offline component. -/
+/-- Validate the component's exact wire encoding before constructing it. -/
 def MultivectorFieldProps.toHtml (props : MultivectorFieldProps) : Html :=
-  match props.validate with
-  | .ok () => Html.ofComponent MultivectorFieldWidget props #[]
+  match props.prepareForWidget with
+  | .ok validatedProps => Html.ofComponent MultivectorFieldWidget validatedProps #[]
   | .error message => errorHtml message
 
 /-- Render either a complete scene or an explicit local error panel. -/

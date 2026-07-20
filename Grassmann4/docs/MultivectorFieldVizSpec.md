@@ -245,6 +245,8 @@ following holds:
 - the frame array is empty;
 - frames disagree on sample count or sample positions;
 - the first frame is not one complete rectangular lattice at a shared `z`;
+- decimal JSON encoding collapses distinct lattice positions, so the decoded
+  wire payload is no longer one complete rectangular lattice;
 - the generic frame-parameter label is empty;
 - `initialFrame` is outside the frame array;
 - `initialSample` is outside the selected frame's sample array;
@@ -310,6 +312,8 @@ Focused Lean tests cover:
 - frame count, shared sample positions, and finite coefficients;
 - JSON round-trip for widget props within `1e-5`, because core `Float` JSON
   uses a decimal `Float.toString` representation rather than bit encoding;
+- rejection when that decimal representation collapses distinct source
+  coordinates into one wire coordinate;
 - rejection of nonplanar and incomplete rectangular scenes;
 - a quarter-turn vector and bivector-normal rotation anchor;
 - out-of-range initial-frame rejection.
