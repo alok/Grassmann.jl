@@ -8,9 +8,11 @@ validate, serialize, and interactively display a geometric-algebra program.
 ## 1. Scope and claim boundary
 
 The demo visualizes a small field of full `Cl(3, 0)` multivectors. Lean owns
-the domain model, the geometric-algebra computation, sampling, validation, and
-the complete JSON payload. A local ProofWidgets component owns only camera and
-SVG presentation concerns.
+the domain model, geometric-algebra computation, sampling, validation, and the
+complete serialized props. A local ProofWidgets component owns view-layer
+presentation and interaction: guide inference for the validated lattice,
+display normalization, glyph geometry, selection, camera projection,
+depth-sorting, and SVG painting.
 
 This is a runtime-computation demo, not a theorem-proof demo. Float results are
 ordinary machine computations. The talk must not describe a rendered frame as
@@ -236,8 +238,8 @@ following holds:
 - a grid axis has fewer than two samples;
 - a grid axis is inverted or has zero width;
 - a grid endpoint or fixed `z` is NaN or infinite;
-- the sample count exceeds the documented stage-safe cap;
-- total samples across all frames exceed 65,536;
+- the per-frame sample count exceeds its hard safety ceiling;
+- total samples across all frames exceed 8,192;
 - a frame parameter, sample position, or grade coefficient is NaN or infinite;
 - the frame array is empty;
 - frames disagree on sample count or sample positions;
@@ -247,10 +249,11 @@ following holds:
 - `initialSample` is outside the selected frame's sample array;
 - a scene schema version is unsupported.
 
-The caps are small enough for an InfoView demo: at most 4,096 samples per frame,
-240 frames, and 65,536 total serialized samples. Validation errors are
-human-readable and name the rejected field. Error HTML is local and explicit
-rather than a blank panel.
+These are hard denial-of-service ceilings, not recommended display sizes: at
+most 4,096 samples per frame, 240 frames, and 8,192 total serialized samples.
+The rehearsed scene is intentionally much smaller at 24 frames by 25 samples.
+Validation errors are human-readable and name the rejected field. Error HTML
+is local and explicit rather than a blank panel.
 
 ## 8. Stage choreography
 

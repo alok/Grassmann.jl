@@ -94,14 +94,14 @@ structure Frame3 where
   samples : Array Sample3
   deriving Repr, BEq, Inhabited
 
-/-- Maximum number of samples accepted in one stage-safe frame. -/
+/-- Hard validation ceiling for samples in one frame. -/
 def maxSamplesPerFrame : Nat := 4096
 
 /-- Maximum number of frames accepted by the reusable validator. -/
 def maxFrameCount : Nat := 240
 
-/-- Maximum number of samples serialized across one complete scene. -/
-def maxTotalSamples : Nat := 65536
+/-- Hard validation ceiling for samples serialized across one complete scene. -/
+def maxTotalSamples : Nat := 8192
 
 private def validateFinite (label : String) (x : Float) : Except String Unit := do
   unless x.isFinite do
