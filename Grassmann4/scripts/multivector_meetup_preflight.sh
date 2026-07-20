@@ -26,6 +26,7 @@ run lake exe multivectorfieldtests
 run lake env lean DownstreamLibrarySmoke.lean
 run lake env lean MultivectorWidgetCheck.lean
 run lake env lean MultivectorFallbackCheck.lean
+run lake env lean OrdinaryProgrammingDemo.lean
 run lake env lean MultivectorFieldDemo.lean
 
 if command -v xmllint >/dev/null 2>&1; then
@@ -44,5 +45,5 @@ fi
 
 echo
 echo "PASS: multivector field demo is compiled, fresh, offline-guarded, and stage-ready"
-echo "Open MultivectorFieldDemo.lean and place the cursor on #html."
+echo "Open OrdinaryProgrammingDemo.lean and MultivectorFieldDemo.lean; place the latter on #html."
 echo "If an already-open editor reports stale imports, click Restart File once."
