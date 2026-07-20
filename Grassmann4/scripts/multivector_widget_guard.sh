@@ -35,6 +35,9 @@ required_contract=(
   "props.parameterLabel"
   "props.initialSample"
   "event.preventDefault()"
+  "vectorMetrics"
+  "fitPlanarLattice"
+  "onLostPointerCapture"
   "userSelect: 'none'"
 )
 for token in "${required_contract[@]}"; do

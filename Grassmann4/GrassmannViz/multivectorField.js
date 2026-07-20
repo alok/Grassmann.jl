@@ -10,14 +10,36 @@ function clamp(value, low, high) {
   return Math.max(low, Math.min(high, value));
 }
 
+function vectorMetrics(vector) {
+  const maximum = Math.max(Math.abs(vector.x), Math.abs(vector.y), Math.abs(vector.z));
+  if (maximum < EPSILON) {
+    return { magnitude: 0, direction: { x: 0, y: 0, z: 0 } };
+  }
+  const scaled = {
+    x: vector.x / maximum,
+    y: vector.y / maximum,
+    z: vector.z / maximum,
+  };
+  const scaledLength = Math.sqrt(
+    scaled.x * scaled.x + scaled.y * scaled.y + scaled.z * scaled.z,
+  );
+  const rawMagnitude = maximum * scaledLength;
+  return {
+    magnitude: Number.isFinite(rawMagnitude) ? rawMagnitude : Number.MAX_VALUE,
+    direction: {
+      x: scaled.x / scaledLength,
+      y: scaled.y / scaledLength,
+      z: scaled.z / scaledLength,
+    },
+  };
+}
+
 function magnitude(vector) {
-  return Math.sqrt(vector.x * vector.x + vector.y * vector.y + vector.z * vector.z);
+  return vectorMetrics(vector).magnitude;
 }
 
 function normalize(vector) {
-  const length = magnitude(vector);
-  if (length < EPSILON) return { x: 0, y: 0, z: 0 };
-  return { x: vector.x / length, y: vector.y / length, z: vector.z / length };
+  return vectorMetrics(vector).direction;
 }
 
 function add(a, b) {
@@ -38,6 +60,37 @@ function cross(a, b) {
 
 function signColor(value) {
   return value < 0 ? '#38bdf8' : '#f59e0b';
+}
+
+function fitPlanarLattice(frame) {
+  const xs = frame.samples.map(sample => sample.position.x);
+  const ys = frame.samples.map(sample => sample.position.y);
+  const xMinimum = Math.min(...xs);
+  const xMaximum = Math.max(...xs);
+  const yMinimum = Math.min(...ys);
+  const yMaximum = Math.max(...ys);
+  const rawScale = Math.max(
+    Math.abs(xMinimum), Math.abs(xMaximum), Math.abs(yMinimum), Math.abs(yMaximum),
+  );
+  if (rawScale === 0 || !Number.isFinite(rawScale)) {
+    return () => ({ x: 0, y: 0, z: 0 });
+  }
+  const scaledXMinimum = xMinimum / rawScale;
+  const scaledXMaximum = xMaximum / rawScale;
+  const scaledYMinimum = yMinimum / rawScale;
+  const scaledYMaximum = yMaximum / rawScale;
+  const centerX = scaledXMinimum + (scaledXMaximum - scaledXMinimum) * 0.5;
+  const centerY = scaledYMinimum + (scaledYMaximum - scaledYMinimum) * 0.5;
+  const halfSpan = Math.max(
+    (scaledXMaximum - scaledXMinimum) * 0.5,
+    (scaledYMaximum - scaledYMinimum) * 0.5,
+  );
+  const divisor = halfSpan > 0 && Number.isFinite(halfSpan) ? halfSpan : 1;
+  return position => ({
+    x: (position.x / rawScale - centerX) / divisor,
+    y: (position.y / rawScale - centerY) / divisor,
+    z: 0,
+  });
 }
 
 function project(point, camera) {
@@ -120,7 +173,7 @@ function frameScales(frame) {
   return maxima;
 }
 
-function gridElements(frame, camera) {
+function gridElements(frame, camera, toDisplay) {
   const xs = [...new Set(frame.samples.map(sample => sample.position.x))].sort((a, b) => a - b);
   const ys = [...new Set(frame.samples.map(sample => sample.position.y))].sort((a, b) => a - b);
   const z = frame.samples[0].position.z;
@@ -130,8 +183,8 @@ function gridElements(frame, camera) {
   const yMax = ys[ys.length - 1];
   const elements = [];
   xs.forEach((x, index) => {
-    const start = project({ x, y: yMin, z }, camera);
-    const end = project({ x, y: yMax, z }, camera);
+    const start = project(toDisplay({ x, y: yMin, z }), camera);
+    const end = project(toDisplay({ x, y: yMax, z }), camera);
     elements.push(h('line', {
       key: `grid-x-${index}`,
       x1: start.x,
@@ -143,8 +196,8 @@ function gridElements(frame, camera) {
     }));
   });
   ys.forEach((y, index) => {
-    const start = project({ x: xMin, y, z }, camera);
-    const end = project({ x: xMax, y, z }, camera);
+    const start = project(toDisplay({ x: xMin, y, z }), camera);
+    const end = project(toDisplay({ x: xMax, y, z }), camera);
     elements.push(h('line', {
       key: `grid-y-${index}`,
       x1: start.x,
@@ -182,10 +235,11 @@ function sampleGlyph(entry, camera, scales, visible, selectedIndex, selectSample
     }));
   }
 
-  const bivectorMagnitude = magnitude(value.bivectorNormal);
+  const bivectorMetrics = vectorMetrics(value.bivectorNormal);
+  const bivectorMagnitude = bivectorMetrics.magnitude;
   if (visible[2] && bivectorMagnitude > EPSILON) {
     const ratio = clamp(bivectorMagnitude / scales.bivector, 0, 1);
-    const normal = normalize(value.bivectorNormal);
+    const normal = bivectorMetrics.direction;
     const reference = Math.abs(normal.z) < 0.82
       ? { x: 0, y: 0, z: 1 }
       : { x: 1, y: 0, z: 0 };
@@ -199,7 +253,7 @@ function sampleGlyph(entry, camera, scales, visible, selectedIndex, selectSample
         scale(radius * Math.cos(angle), tangentU),
         scale(radius * Math.sin(angle), tangentV),
       );
-      const diskPoint = project(add(sample.position, offset), camera);
+      const diskPoint = project(add(entry.displayPosition, offset), camera);
       diskPoints.push(`${diskPoint.x},${diskPoint.y}`);
     }
     const color = '#f59e0b';
@@ -215,7 +269,10 @@ function sampleGlyph(entry, camera, scales, visible, selectedIndex, selectSample
       strokeOpacity: 0.82,
       strokeWidth: 1.7,
     }));
-    const normalTip = project(add(sample.position, scale(0.16 + 0.12 * ratio, normal)), camera);
+    const normalTip = project(
+      add(entry.displayPosition, scale(0.16 + 0.12 * ratio, normal)),
+      camera,
+    );
     children.push(...arrowParts('bivector-normal', center, normalTip, color, 1.6, {
       'data-grade': 2,
       'data-glyph': 'bivector-normal',
@@ -223,11 +280,15 @@ function sampleGlyph(entry, camera, scales, visible, selectedIndex, selectSample
     }));
   }
 
-  const vectorMagnitude = magnitude(value.vector);
+  const vectorMetrics = vectorMetrics(value.vector);
+  const vectorMagnitude = vectorMetrics.magnitude;
   if (visible[1] && vectorMagnitude > EPSILON) {
     const ratio = clamp(vectorMagnitude / scales.vector, 0, 1);
-    const direction = normalize(value.vector);
-    const tip = project(add(sample.position, scale(0.15 + 0.32 * ratio, direction)), camera);
+    const direction = vectorMetrics.direction;
+    const tip = project(
+      add(entry.displayPosition, scale(0.15 + 0.32 * ratio, direction)),
+      camera,
+    );
     children.push(...arrowParts('vector', center, tip, '#a78bfa', 2.6, {
       'data-grade': 1,
       'data-glyph': 'vector-arrow',
@@ -314,7 +375,7 @@ function inspector(sample, index) {
   ]);
   const show = number => String(number);
   return h('div', {
-    'data-region': 'multivector-field',
+    'data-region': 'inspector-card',
     style: {
       minWidth: 276,
       border: '1px solid #334155',
@@ -368,11 +429,16 @@ export default function MultivectorField(props) {
   }, [playing, frameCount]);
 
   const scales = frameScales(frame);
-  const entries = frame.samples.map((sample, index) => ({
-    sample,
-    index,
-    projected: project(sample.position, camera),
-  })).sort((a, b) => b.projected.depth - a.projected.depth);
+  const toDisplay = fitPlanarLattice(frame);
+  const entries = frame.samples.map((sample, index) => {
+    const displayPosition = toDisplay(sample.position);
+    return {
+      sample,
+      index,
+      displayPosition,
+      projected: project(displayPosition, camera),
+    };
+  }).sort((a, b) => b.projected.depth - a.projected.depth);
 
   const pointerDown = event => {
     event.preventDefault();
@@ -394,6 +460,10 @@ export default function MultivectorField(props) {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+    drag.current = null;
+    setDragging(false);
+  };
+  const lostPointerCapture = () => {
     drag.current = null;
     setDragging(false);
   };
@@ -424,6 +494,7 @@ export default function MultivectorField(props) {
   };
 
   return h('div', {
+    'data-region': 'multivector-field',
     style: {
       boxSizing: 'border-box',
       width: '100%',
@@ -490,6 +561,7 @@ export default function MultivectorField(props) {
         onPointerMove: pointerMove,
         onPointerUp: pointerUp,
         onPointerCancel: pointerUp,
+        onLostPointerCapture: lostPointerCapture,
         onWheel: wheel,
         style: {
           flex: '1 1 650px',
@@ -505,7 +577,7 @@ export default function MultivectorField(props) {
       }, [
         h('rect', { key: 'background', x: 0, y: 0, width: WIDTH, height: HEIGHT, fill: '#0b1120' }),
         h('g', { key: 'grid', 'data-region': 'guide-grid', pointerEvents: 'none' },
-          gridElements(frame, camera)),
+          gridElements(frame, camera, toDisplay)),
         h('g', { key: 'glyphs', 'data-region': 'glyphs' }, entries.map(entry =>
           sampleGlyph(entry, camera, scales, visible, safeSelectedIndex, setSelectedIndex))),
         h('text', {

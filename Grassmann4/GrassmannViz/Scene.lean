@@ -42,6 +42,8 @@ private def validatePlanarLattice (samples : Array Sample3) : Except String Unit
     throw "the InfoView renderer requires one shared planar z coordinate"
   let xs := samples.foldl (fun values sample => pushUnique values sample.position.x) #[]
   let ys := samples.foldl (fun values sample => pushUnique values sample.position.y) #[]
+  unless xs.size >= 2 && ys.size >= 2 do
+    throw "the InfoView renderer requires at least two distinct x and y coordinates"
   unless xs.size * ys.size == samples.size do
     throw "the InfoView renderer requires a complete rectangular x/y lattice"
   for y in ys do

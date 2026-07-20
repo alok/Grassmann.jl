@@ -229,7 +229,11 @@ The visual grammar is fixed:
 
 Near-zero values are omitted using one documented view-layer epsilon. Display
 lengths are clamped so one outlier cannot make the field illegible; the
-unclamped serialized values remain available in the inspector.
+unclamped serialized values remain available in the inspector. The view fits
+the validated planar lattice into display space with one shared x/y scale
+before projection; this display-only normalization preserves planar aspect,
+keeps far-offset and extreme finite domains visible, and does not change the
+positions shown by the inspector.
 
 ## 7. Validation contract
 
@@ -315,6 +319,8 @@ Focused Lean tests cover:
 - rejection when that decimal representation collapses distinct source
   coordinates into one wire coordinate;
 - rejection of nonplanar and incomplete rectangular scenes;
+- finite SVG geometry for extreme finite coordinates and coefficients in the
+  static fallback renderer;
 - a quarter-turn vector and bivector-normal rotation anchor;
 - out-of-range initial-frame rejection.
 
@@ -328,7 +334,9 @@ Renderer guards cover:
 - byte-for-byte equality between the checked-in JavaScript and the source
   embedded by `include_str` in the built OLean;
 - stable `data-region`, `data-grade`, `data-glyph`, and `data-sample-index`
-  attributes for interaction and layout QA.
+  attributes for interaction and layout QA;
+- overflow-safe coefficient normalization, finite planar display fitting, and
+  lost-pointer-capture recovery hooks.
 
 ## 10. Acceptance criteria
 

@@ -32,9 +32,18 @@ def add (a b : Vec3) : Vec3 :=
 def smul (s : Float) (v : Vec3) : Vec3 :=
   { x := s * v.x, y := s * v.y, z := s * v.z }
 
-/-- Euclidean magnitude, used only for presentation metadata and tests. -/
+/-- Euclidean magnitude with max-component scaling to avoid premature overflow. -/
 def norm (v : Vec3) : Float :=
-  Float.sqrt (v.x * v.x + v.y * v.y + v.z * v.z)
+  let xyMaximum :=
+    if Float.abs v.x > Float.abs v.y then Float.abs v.x else Float.abs v.y
+  let maximum :=
+    if xyMaximum > Float.abs v.z then xyMaximum else Float.abs v.z
+  if maximum == 0.0 then 0.0
+  else
+    let x := v.x / maximum
+    let y := v.y / maximum
+    let z := v.z / maximum
+    maximum * Float.sqrt (x * x + y * y + z * z)
 
 end Vec3
 

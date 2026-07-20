@@ -18,6 +18,9 @@ set_option linter.style.longLine false
 private def clamp (value low high : Float) : Float :=
   if value < low then low else if value > high then high else value
 
+private def maxFloat (a b : Float) : Float :=
+  if a > b then a else b
+
 private def fmt (value : Float) : String :=
   toString ((value * 100.0).round / 100.0)
 
@@ -32,6 +35,44 @@ private structure Point2 where
   x : Float
   y : Float
 
+private structure PlanarFit where
+  rawScale : Float
+  centerX : Float
+  centerY : Float
+  divisor : Float
+
+private def planarFit (frame : Frame3) : PlanarFit :=
+  let first := frame.samples[0]!.position
+  let xMinimum := frame.samples.foldl
+    (fun result sample => if sample.position.x < result then sample.position.x else result) first.x
+  let xMaximum := frame.samples.foldl
+    (fun result sample => if sample.position.x > result then sample.position.x else result) first.x
+  let yMinimum := frame.samples.foldl
+    (fun result sample => if sample.position.y < result then sample.position.y else result) first.y
+  let yMaximum := frame.samples.foldl
+    (fun result sample => if sample.position.y > result then sample.position.y else result) first.y
+  let rawScale := maxFloat (maxFloat (Float.abs xMinimum) (Float.abs xMaximum)) <|
+    maxFloat (Float.abs yMinimum) (Float.abs yMaximum)
+  let safeScale := if rawScale > 0.0 && rawScale.isFinite then rawScale else 1.0
+  let scaledXMinimum := xMinimum / safeScale
+  let scaledXMaximum := xMaximum / safeScale
+  let scaledYMinimum := yMinimum / safeScale
+  let scaledYMaximum := yMaximum / safeScale
+  let centerX := scaledXMinimum + (scaledXMaximum - scaledXMinimum) * 0.5
+  let centerY := scaledYMinimum + (scaledYMaximum - scaledYMinimum) * 0.5
+  let halfSpan := maxFloat
+    ((scaledXMaximum - scaledXMinimum) * 0.5)
+    ((scaledYMaximum - scaledYMinimum) * 0.5)
+  let divisor := if halfSpan > 0.0 && halfSpan.isFinite then halfSpan else 1.0
+  { rawScale := safeScale, centerX, centerY, divisor }
+
+private def PlanarFit.apply (fit : PlanarFit) (position : Vec3) : Vec3 :=
+  {
+    x := (position.x / fit.rawScale - fit.centerX) / fit.divisor
+    y := (position.y / fit.rawScale - fit.centerY) / fit.divisor
+    z := 0.0
+  }
+
 private def project (point : Vec3) : Point2 :=
   {
     x := 390.0 + 210.0 * (0.866 * point.x - 0.5 * point.y)
@@ -43,7 +84,17 @@ private def signColor (value : Float) : String :=
 
 private def normalized (vector : Vec3) : Vec3 :=
   let length := vector.norm
-  if length < 1e-8 then default else Vec3.smul (1.0 / length) vector
+  if length < 1e-8 then default
+  else if length.isFinite then Vec3.smul (1.0 / length) vector
+  else
+    let maximum := maxFloat (Float.abs vector.x) <|
+      maxFloat (Float.abs vector.y) (Float.abs vector.z)
+    let scaled : Vec3 := {
+      x := vector.x / maximum
+      y := vector.y / maximum
+      z := vector.z / maximum
+    }
+    Vec3.smul (1.0 / scaled.norm) scaled
 
 private def cross (a b : Vec3) : Vec3 := {
   x := a.y * b.z - a.z * b.y
@@ -80,17 +131,18 @@ private def planeDisk (center normal : Vec3) (radius : Float) (color : String) :
   s!"<polygon points=\"{String.intercalate " " points.toList}\" " ++
     s!"fill=\"{color}\" fill-opacity=\"0.24\" stroke=\"{color}\" stroke-width=\"1.1\"/>"
 
-private def sampleGlyph (index : Nat) (sample : Sample3) : String :=
-  let center := project sample.position
+private def sampleGlyph (fit : PlanarFit) (index : Nat) (sample : Sample3) : String :=
+  let displayPosition := fit.apply sample.position
+  let center := project displayPosition
   let value := sample.value
   let vectorMagnitude := value.vector.norm
   let vectorLength := 0.11 + 0.22 * clamp (vectorMagnitude / 1.8) 0.0 1.0
   let vectorTip :=
-    project (sample.position.add (Vec3.smul vectorLength (normalized value.vector)))
+    project (displayPosition.add (Vec3.smul vectorLength (normalized value.vector)))
   let bivectorMagnitude := value.bivectorNormal.norm
   let normalLength := 0.09 + 0.16 * clamp (bivectorMagnitude / 2.4) 0.0 1.0
   let normalTip :=
-    project (sample.position.add (Vec3.smul normalLength (normalized value.bivectorNormal)))
+    project (displayPosition.add (Vec3.smul normalLength (normalized value.bivectorNormal)))
   let scalarRadius := 2.8 + 5.0 * clamp (Float.abs value.scalar / 0.35) 0.0 1.0
   let planeRadius := 0.035 + 0.045 * clamp (bivectorMagnitude / 2.4) 0.0 1.0
   let volumeRadius :=
@@ -108,7 +160,7 @@ private def sampleGlyph (index : Nat) (sample : Sample3) : String :=
   let plane :=
     if bivectorMagnitude < 1e-8 then "" else
       let color := "#f59e0b"
-      planeDisk sample.position value.bivectorNormal planeRadius color ++
+      planeDisk displayPosition value.bivectorNormal planeRadius color ++
         line "grade-two-normal" center normalTip color 1.3 "arrow-warm"
   let vector :=
     if vectorMagnitude < 1e-8 then "" else
@@ -119,7 +171,7 @@ private def sampleGlyph (index : Nat) (sample : Sample3) : String :=
         s!"fill=\"{signColor value.scalar}\" stroke=\"#f8fafc\" stroke-width=\"0.8\"/>"
   s!"<g><title>{title}</title>{volume}{plane}{vector}{scalar}</g>"
 
-private def gridSvg (frame : Frame3) : String :=
+private def gridSvg (fit : PlanarFit) (frame : Frame3) : String :=
   let first := frame.samples[0]!.position
   let xs := frame.samples.foldl (fun values sample => pushUnique values sample.position.x) #[]
   let ys := frame.samples.foldl (fun values sample => pushUnique values sample.position.y) #[]
@@ -128,13 +180,13 @@ private def gridSvg (frame : Frame3) : String :=
   let yMin := ys.foldl (fun result value => if value < result then value else result) first.y
   let yMax := ys.foldl (fun result value => if value > result then value else result) first.y
   let vertical := xs.toList.map fun x =>
-    line "grid" (project { x, y := yMin, z := first.z })
-      (project { x, y := yMax, z := first.z })
+    line "grid" (project <| fit.apply { x, y := yMin, z := first.z })
+      (project <| fit.apply { x, y := yMax, z := first.z })
       (if Float.abs x < 1e-8 then "#64748b" else "#334155")
       (if Float.abs x < 1e-8 then 1.5 else 1.0)
   let horizontal := ys.toList.map fun y =>
-    line "grid" (project { x := xMin, y, z := first.z })
-      (project { x := xMax, y, z := first.z })
+    line "grid" (project <| fit.apply { x := xMin, y, z := first.z })
+      (project <| fit.apply { x := xMax, y, z := first.z })
       (if Float.abs y < 1e-8 then "#64748b" else "#334155")
       (if Float.abs y < 1e-8 then 1.5 else 1.0)
   String.intercalate "\n" (vertical ++ horizontal)
@@ -148,9 +200,10 @@ private def legendItem (y : Nat) (color label detail : String) : String :=
 def fallbackSvg (props : MultivectorFieldProps) : Except String String := do
   props.validate
   let frame := props.frames[0]!
+  let fit := planarFit frame
   let glyphs := String.intercalate "\n" <|
     (Array.range frame.samples.size).toList.map fun index =>
-      sampleGlyph index frame.samples[index]!
+      sampleGlyph fit index frame.samples[index]!
   return s!"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1100\" height=\"760\" " ++
     "viewBox=\"0 0 1100 760\">\n" ++
     "<defs>\n" ++
@@ -163,7 +216,7 @@ def fallbackSvg (props : MultivectorFieldProps) : Except String String := do
     s!"<text x=\"30\" y=\"45\" class=\"title\">{xmlEscape props.title}</text>\n" ++
     s!"<text x=\"30\" y=\"72\" class=\"subtitle\">offline fallback · frame 1 / {props.frames.size} · {frame.samples.size} Lean-computed samples</text>\n" ++
     s!"<text x=\"30\" y=\"103\" class=\"formula\">{xmlEscape props.formula}</text>\n" ++
-    gridSvg frame ++ "\n" ++ glyphs ++ "\n" ++
+    gridSvg fit frame ++ "\n" ++ glyphs ++ "\n" ++
     "<text x=\"822\" y=\"155\" class=\"legend-label\">Four grades, one value</text>\n" ++
     legendItem 195 "#f59e0b" "grade 0 · scalar" "signed dot contribution" ++ "\n" ++
     legendItem 270 "#a78bfa" "grade 1 · vector" "direction arrow" ++ "\n" ++

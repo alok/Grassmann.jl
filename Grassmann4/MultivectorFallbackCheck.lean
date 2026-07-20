@@ -34,4 +34,27 @@ open GrassmannViz
     throw <| IO.userError "fallback SVG did not XML-escape scene text"
   unless smallSvg.contains "<polygon points=" && smallSvg.contains "arrow-warm" do
     throw <| IO.userError "fallback SVG is missing projected planes or matching markers"
+
+  let extremeGrid : GrassmannFields.PlanarGrid := {
+    GrassmannFields.Examples.MixedRotor.defaultGrid with
+    xMin := -1e308
+    xMax := 1e308
+    yMin := 1e307
+    yMax := 1e308
+    xCount := 2
+    yCount := 2
+  }
+  let extremeSamples ← IO.ofExcept <| GrassmannFields.samplePlanar extremeGrid fun _ => {
+    scalar := 1e308
+    vector := { x := 1e308, y := -1e308, z := 1e308 }
+    bivectorNormal := { x := -1e308, y := 1e308, z := 1e308 }
+    pseudoscalar := -1e308
+  }
+  let extremeScene ← IO.ofExcept <| mkScene "Extreme" "finite" "F" #[{
+    parameter := 0.0
+    samples := extremeSamples
+  }]
+  let extremeSvg ← IO.ofExcept (fallbackSvg extremeScene)
+  if extremeSvg.contains "nan" || extremeSvg.contains "inf" then
+    throw <| IO.userError "fallback SVG emitted non-finite geometry for finite extreme input"
   IO.println "fallback SVG derives metadata, escapes text, and projects bivector planes"

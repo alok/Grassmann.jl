@@ -37,6 +37,12 @@ private def approxScene (a b : MultivectorFieldProps) (tolerance : Float := 1e-9
     a.frames.size == b.frames.size &&
     (Array.range a.frames.size).all fun i => approxFrame a.frames[i]! b.frames[i]! tolerance
 
+private def testVec3 : IO Unit := do
+  require "zero vector has zero norm" ((default : Vec3).norm == 0.0)
+  let large : Vec3 := { x := 1e200, y := -1e200, z := 0.0 }
+  require "large finite vector norm does not overflow prematurely"
+    (large.norm.isFinite && approx large.norm (Float.sqrt 2.0 * 1e200) 1e186)
+
 private def testGradeMapping : IO Unit := do
   let mixed : MV R3 .full := MV.ofPairs R3 .full [
     (0, 2.0), (1, 3.0), (2, 4.0), (4, 5.0),
@@ -186,6 +192,10 @@ private def testScene : IO Unit := do
   require "incomplete rectangular lattice rejected"
     (({ scene with frames := #[{ parameter := 0.0, samples := sparseSamples }] }).validate
       matches .error _)
+  let oneColumnSamples := #[scene.frames[0]!.samples[0]!, scene.frames[0]!.samples[5]!]
+  require "one-column lattice rejected"
+    (({ scene with frames := #[{ parameter := 0.0, samples := oneColumnSamples }] }).validate
+      matches .error _)
   let tinyGrid : PlanarGrid := {
     defaultGrid with
     xMin := 0.0
@@ -218,6 +228,7 @@ private def testScene : IO Unit := do
   require "scene summary reports sample count" (summary.contains "25 samples/frame")
 
 def run : IO Unit := do
+  testVec3
   testGradeMapping
   testGrid
   testFieldFormula
