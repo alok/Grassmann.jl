@@ -376,11 +376,423 @@ def runGenericProductSignature {n : Nat} (label : String) (sig : Signature n)
   IO.println ""
 
 /-- Reproducible full-layout baseline for the remaining generic product kernels. -/
-def runGenericProducts (iters : Nat := defaultGenericProductIters) : IO Unit := do
+def runGenericProductsLegacyFull (iters : Nat := defaultGenericProductIters) : IO Unit := do
   let positive := positiveIters iters
   runGenericProductSignature "R3" R3 denseR3 positive
   runGenericProductSignature "PGA3" PGA3 densePGA3 positive
   runGenericProductSignature "CGA3" CGA3 denseCGA3 positive
+
+/-! ### ALOK-771 generic-product rewrite baselines -/
+
+/-- The four generic product families measured by the ALOK-771 guard. -/
+inductive GenericProductOp where
+  | mul
+  | wedge
+  | leftContract
+  | rightContract
+  deriving Repr
+
+def GenericProductOp.label : GenericProductOp → String
+  | .mul => "mul"
+  | .wedge => "wedge"
+  | .leftContract => "left"
+  | .rightContract => "right"
+
+def parityLabel : Parity → String
+  | .full => "full"
+  | .even => "even"
+  | .odd => "odd"
+
+/--
+The pre-ALOK-771 geometric-product kernel, retained only as a benchmark
+baseline. It scans input pairs in forward order and performs one random write
+for each nonzero contribution.
+-/
+@[inline]
+def forwardMulKernel (sig : Signature n) (p1 p2 : Parity)
+    (a b : DataArray) : DataArray := Id.run do
+  let pOut := p1 * p2
+  let size1 := storageSize n p1
+  let size2 := storageSize n p2
+  let mut out := DataArray.zeros (storageSize n pOut)
+  match cachedSignTable (n := n) sig with
+  | some table =>
+    for pi in [:size1] do
+      let mi := MV.unpackIdxValid n p1 pi
+      let ai := a.get! pi
+      if ai != 0.0 then
+        for pj in [:size2] do
+          let mj := MV.unpackIdxValid n p2 pj
+          let sign := table.lookup mi mj
+          if sign != 0 then
+            let mk := mi ^^^ mj
+            let pk := MV.packIdxValid n pOut mk
+            let bj := b.get! pj
+            let contribution := if sign < 0 then -ai * bj else ai * bj
+            out := out.set! pk (out.get! pk + contribution)
+    out
+  | none =>
+    for pi in [:size1] do
+      let mi := MV.unpackIdxValid n p1 pi
+      let ai := a.get! pi
+      if ai != 0.0 then
+        let leftBlade : Blade sig := ⟨BitVec.ofNat n mi⟩
+        for pj in [:size2] do
+          let mj := MV.unpackIdxValid n p2 pj
+          let rightBlade : Blade sig := ⟨BitVec.ofNat n mj⟩
+          let sign := geometricSign sig leftBlade rightBlade
+          if sign != 0 then
+            let mk := mi ^^^ mj
+            let pk := MV.packIdxValid n pOut mk
+            let bj := b.get! pj
+            let contribution := Float.ofInt sign * ai * bj
+            out := out.set! pk (out.get! pk + contribution)
+    out
+
+/-- The pre-ALOK-771 forward/random-write exterior-product kernel. -/
+@[inline]
+def forwardWedgeKernel (sig : Signature n) (p1 p2 : Parity)
+    (a b : DataArray) : DataArray := Id.run do
+  let pOut := p1 * p2
+  let size1 := storageSize n p1
+  let size2 := storageSize n p2
+  let mut out := DataArray.zeros (storageSize n pOut)
+  match cachedSignTable (n := n) sig with
+  | some table =>
+    for pi in [:size1] do
+      let mi := MV.unpackIdxValid n p1 pi
+      let ai := a.get! pi
+      if ai != 0.0 then
+        for pj in [:size2] do
+          let mj := MV.unpackIdxValid n p2 pj
+          let bj := b.get! pj
+          if bj != 0.0 && (mi &&& mj) == 0 then
+            let sign := table.lookup mi mj
+            if sign != 0 then
+              let mk := mi ||| mj
+              let pk := MV.packIdxValid n pOut mk
+              let contribution := if sign < 0 then -ai * bj else ai * bj
+              out := out.set! pk (out.get! pk + contribution)
+    out
+  | none =>
+    for pi in [:size1] do
+      let mi := MV.unpackIdxValid n p1 pi
+      let ai := a.get! pi
+      if ai != 0.0 then
+        let leftBlade : Blade sig := ⟨BitVec.ofNat n mi⟩
+        for pj in [:size2] do
+          let mj := MV.unpackIdxValid n p2 pj
+          let bj := b.get! pj
+          if bj != 0.0 && (mi &&& mj) == 0 then
+            let rightBlade : Blade sig := ⟨BitVec.ofNat n mj⟩
+            let sign := wedgeSign sig leftBlade rightBlade
+            if sign != 0 then
+              let mk := mi ||| mj
+              let pk := MV.packIdxValid n pOut mk
+              let contribution := if sign < 0 then -ai * bj else ai * bj
+              out := out.set! pk (out.get! pk + contribution)
+    out
+
+/-- The pre-ALOK-771 forward/random-write left-contraction kernel. -/
+@[inline]
+def forwardLeftContractKernel (sig : Signature n) (p1 p2 : Parity)
+    (a b : DataArray) : DataArray := Id.run do
+  let pOut := p1 * p2
+  let size1 := storageSize n p1
+  let size2 := storageSize n p2
+  let mut out := DataArray.zeros (storageSize n pOut)
+  match cachedSignTable (n := n) sig with
+  | some table =>
+    for pi in [:size1] do
+      let mi := MV.unpackIdxValid n p1 pi
+      let ai := a.get! pi
+      if ai != 0.0 then
+        for pj in [:size2] do
+          let mj := MV.unpackIdxValid n p2 pj
+          let bj := b.get! pj
+          if bj != 0.0 && (mi &&& mj) == mi && popcount mi <= popcount mj then
+            let sign := table.lookup mi mj
+            if sign != 0 then
+              let mk := mi ^^^ mj
+              let pk := MV.packIdxValid n pOut mk
+              let reverseNegative := reverseSign (popcount mi) < 0
+              let geometricNegative := sign < 0
+              let contribution :=
+                if reverseNegative != geometricNegative then -ai * bj else ai * bj
+              out := out.set! pk (out.get! pk + contribution)
+    out
+  | none =>
+    for pi in [:size1] do
+      let mi := MV.unpackIdxValid n p1 pi
+      let ai := a.get! pi
+      if ai != 0.0 then
+        let leftBlade : Blade sig := ⟨BitVec.ofNat n mi⟩
+        for pj in [:size2] do
+          let mj := MV.unpackIdxValid n p2 pj
+          let bj := b.get! pj
+          if bj != 0.0 && (mi &&& mj) == mi && popcount mi <= popcount mj then
+            let rightBlade : Blade sig := ⟨BitVec.ofNat n mj⟩
+            let sign := leftContractionSign sig leftBlade rightBlade
+            if sign != 0 then
+              let mk := mi ^^^ mj
+              let pk := MV.packIdxValid n pOut mk
+              let contribution := if sign < 0 then -ai * bj else ai * bj
+              out := out.set! pk (out.get! pk + contribution)
+    out
+
+/-- The pre-ALOK-771 forward/random-write right-contraction kernel. -/
+@[inline]
+def forwardRightContractKernel (sig : Signature n) (p1 p2 : Parity)
+    (a b : DataArray) : DataArray := Id.run do
+  let pOut := p1 * p2
+  let size1 := storageSize n p1
+  let size2 := storageSize n p2
+  let mut out := DataArray.zeros (storageSize n pOut)
+  match cachedSignTable (n := n) sig with
+  | some table =>
+    for pi in [:size1] do
+      let mi := MV.unpackIdxValid n p1 pi
+      let ai := a.get! pi
+      if ai != 0.0 then
+        for pj in [:size2] do
+          let mj := MV.unpackIdxValid n p2 pj
+          let bj := b.get! pj
+          if bj != 0.0 && (mj &&& mi) == mj && popcount mj <= popcount mi then
+            let sign := table.lookup mj mi
+            if sign != 0 then
+              let mk := mi ^^^ mj
+              let pk := MV.packIdxValid n pOut mk
+              let reverseNegative := reverseSign (popcount mj) < 0
+              let geometricNegative := sign < 0
+              let contribution :=
+                if reverseNegative != geometricNegative then -ai * bj else ai * bj
+              out := out.set! pk (out.get! pk + contribution)
+    out
+  | none =>
+    for pi in [:size1] do
+      let mi := MV.unpackIdxValid n p1 pi
+      let ai := a.get! pi
+      if ai != 0.0 then
+        let leftBlade : Blade sig := ⟨BitVec.ofNat n mi⟩
+        for pj in [:size2] do
+          let mj := MV.unpackIdxValid n p2 pj
+          let bj := b.get! pj
+          if bj != 0.0 && (mj &&& mi) == mj && popcount mj <= popcount mi then
+            let rightBlade : Blade sig := ⟨BitVec.ofNat n mj⟩
+            let sign := rightContractionSign sig leftBlade rightBlade
+            if sign != 0 then
+              let mk := mi ^^^ mj
+              let pk := MV.packIdxValid n pOut mk
+              let contribution := if sign < 0 then -ai * bj else ai * bj
+              out := out.set! pk (out.get! pk + contribution)
+    out
+
+/-- Invoke a rewritten product kernel behind a stable, non-inlined boundary. -/
+@[noinline]
+def rewrittenProductData {n : Nat} (op : GenericProductOp) (sig : Signature n)
+    (p1 p2 : Parity) (a : @& MV sig p1) (b : @& MV sig p2) : DataArray :=
+  match op with
+  | .mul => MV.mulKernelGeneric sig p1 p2 a.coeffs b.coeffs
+  | .wedge => MV.wedgeKernelGeneric sig p1 p2 a.coeffs b.coeffs
+  | .leftContract => MV.leftContractKernelGeneric sig p1 p2 a.coeffs b.coeffs
+  | .rightContract => MV.rightContractKernelGeneric sig p1 p2 a.coeffs b.coeffs
+
+/-- Invoke a forward/random-write baseline behind the same call boundary. -/
+@[noinline]
+def forwardProductData {n : Nat} (op : GenericProductOp) (sig : Signature n)
+    (p1 p2 : Parity) (a : @& MV sig p1) (b : @& MV sig p2) : DataArray :=
+  match op with
+  | .mul => forwardMulKernel sig p1 p2 a.coeffs b.coeffs
+  | .wedge => forwardWedgeKernel sig p1 p2 a.coeffs b.coeffs
+  | .leftContract => forwardLeftContractKernel sig p1 p2 a.coeffs b.coeffs
+  | .rightContract => forwardRightContractKernel sig p1 p2 a.coeffs b.coeffs
+
+/-- Independent dense operation used for both correctness and timing. -/
+@[noinline]
+def denseGenericProduct {n : Nat} (op : GenericProductOp)
+    {sig : Signature n} (a b : Multivector sig Float) : Multivector sig Float :=
+  match op with
+  | .mul => Multivector.geometricProduct a b
+  | .wedge => Multivector.wedgeProduct a b
+  | .leftContract => Multivector.leftContract a b
+  | .rightContract => Multivector.rightContract a b
+
+/-- Dense checksum in the physical order of a requested packed layout. -/
+def denseLayoutChecksum {n : Nat} {sig : Signature n} (p : Parity)
+    (m : Multivector sig Float) : Float :=
+  (List.range (storageSize n p)).foldl (init := 0.0) fun acc i =>
+    let mask := MV.unpackIdxValid n p i
+    acc + Float.ofNat (i + 1) * denseCoeff m mask
+
+/-- Compare every physical packed coefficient with its dense reference slot. -/
+def productLayoutDenseL1Diff {n : Nat} {sig : Signature n} (p : Parity)
+    (actual : @& DataArray) (expected : Multivector sig Float) : Float :=
+  if actual.size != storageSize n p then
+    1e300
+  else
+    (List.range actual.size).foldl (init := 0.0) fun acc i =>
+      let mask := MV.unpackIdxValid n p i
+      acc + Float.abs (actual.get! i - denseCoeff expected mask)
+
+structure ProductAgreement where
+  rewrittenForwardL1 : Float
+  rewrittenDenseL1 : Float
+  forwardDenseL1 : Float
+  rewrittenChecksum : Float
+  forwardChecksum : Float
+  denseChecksum : Float
+
+/-- Check varied inputs for one operation and one ordered parity layout. -/
+def productAgreement {n : Nat} (op : GenericProductOp) (sig : Signature n)
+    (p1 p2 : Parity) (samples : Nat)
+    (packedA : Array (MV sig p1)) (packedB : Array (MV sig p2))
+    (denseA denseB : Array (Multivector sig Float))
+    (defaultPackedA : MV sig p1) (defaultPackedB : MV sig p2)
+    (defaultDenseA defaultDenseB : Multivector sig Float) : ProductAgreement := Id.run do
+  let pOut := p1 * p2
+  let mut rewrittenForwardL1 := 0.0
+  let mut rewrittenDenseL1 := 0.0
+  let mut forwardDenseL1 := 0.0
+  let mut rewrittenChecksum := 0.0
+  let mut forwardChecksum := 0.0
+  let mut denseChecksum := 0.0
+  for i in [0:samples] do
+    let packedLeft := packedA.getD i defaultPackedA
+    let packedRight := packedB.getD i defaultPackedB
+    let denseLeft := denseA.getD i defaultDenseA
+    let denseRight := denseB.getD i defaultDenseB
+    let rewritten := rewrittenProductData op sig p1 p2 packedLeft packedRight
+    let forward := forwardProductData op sig p1 p2 packedLeft packedRight
+    let dense := denseGenericProduct op denseLeft denseRight
+    rewrittenForwardL1 := rewrittenForwardL1 + dataL1Diff rewritten forward
+    rewrittenDenseL1 :=
+      rewrittenDenseL1 + productLayoutDenseL1Diff pOut rewritten dense
+    forwardDenseL1 := forwardDenseL1 + productLayoutDenseL1Diff pOut forward dense
+    rewrittenChecksum := rewrittenChecksum + productDataChecksum rewritten
+    forwardChecksum := forwardChecksum + productDataChecksum forward
+    denseChecksum := denseChecksum + denseLayoutChecksum pOut dense
+  return {
+    rewrittenForwardL1
+    rewrittenDenseL1
+    forwardDenseL1
+    rewrittenChecksum
+    forwardChecksum
+    denseChecksum
+  }
+
+/--
+Validate and time one ordered parity layout. Checks and timings all consume
+every physical output coefficient, and projected dense inputs are prepared
+outside the timed regions.
+-/
+def runGenericProductLayout {n : Nat} (signatureLabel : String)
+    (sig : Signature n) (makeDense : Float → Multivector sig Float)
+    (p1 p2 : Parity) (iters : Nat) : IO Unit := do
+  let layoutLabel := s!"{parityLabel p1}-{parityLabel p2}"
+  IO.println s!"=== {signatureLabel} {layoutLabel} generic packed products ==="
+  let samples : Nat := 8
+  let sourceA : Array (Multivector sig Float) :=
+    Array.ofFn (n := samples) fun k => makeDense (Float.ofNat (k.val + 1))
+  let sourceB : Array (Multivector sig Float) :=
+    Array.ofFn (n := samples) fun k => makeDense (Float.ofNat (k.val + 17))
+  let packedA : Array (MV sig p1) := sourceA.map fun m => MV.ofMultivector m p1
+  let packedB : Array (MV sig p2) := sourceB.map fun m => MV.ofMultivector m p2
+  let denseA : Array (Multivector sig Float) := packedA.map MV.toMultivector
+  let denseB : Array (Multivector sig Float) := packedB.map MV.toMultivector
+  let defaultPackedA : MV sig p1 := MV.ofMultivector (makeDense 1.0) p1
+  let defaultPackedB : MV sig p2 := MV.ofMultivector (makeDense 17.0) p2
+  let defaultDenseA := MV.toMultivector defaultPackedA
+  let defaultDenseB := MV.toMultivector defaultPackedB
+  let positive := positiveIters iters
+  let warmup := positiveIters (positive / 10)
+  for op in #[.mul, .wedge, .leftContract, .rightContract] do
+    let agreement := productAgreement op sig p1 p2 samples packedA packedB denseA denseB
+      defaultPackedA defaultPackedB defaultDenseA defaultDenseB
+    let rewrittenForwardChecksumDiff :=
+      Float.abs (agreement.rewrittenChecksum - agreement.forwardChecksum)
+    let rewrittenDenseChecksumDiff :=
+      Float.abs (agreement.rewrittenChecksum - agreement.denseChecksum)
+    let forwardDenseChecksumDiff :=
+      Float.abs (agreement.forwardChecksum - agreement.denseChecksum)
+    IO.println <| String.intercalate " " [
+      "GENERIC_PRODUCT_CHECK",
+      s!"signature={signatureLabel}",
+      s!"layout={layoutLabel}",
+      s!"op={op.label}",
+      s!"rewritten_forward_l1={agreement.rewrittenForwardL1}",
+      s!"rewritten_dense_l1={agreement.rewrittenDenseL1}",
+      s!"forward_dense_l1={agreement.forwardDenseL1}",
+      s!"rewritten_checksum={agreement.rewrittenChecksum}",
+      s!"forward_checksum={agreement.forwardChecksum}",
+      s!"dense_checksum={agreement.denseChecksum}",
+      s!"rewritten_forward_checksum_diff={rewrittenForwardChecksumDiff}",
+      s!"rewritten_dense_checksum_diff={rewrittenDenseChecksumDiff}",
+      s!"forward_dense_checksum_diff={forwardDenseChecksumDiff}"
+    ]
+    let l1Diffs := #[agreement.rewrittenForwardL1, agreement.rewrittenDenseL1,
+      agreement.forwardDenseL1]
+    let checksumDiffs := #[rewrittenForwardChecksumDiff, rewrittenDenseChecksumDiff,
+      forwardDenseChecksumDiff]
+    let checksumTolerance :=
+      tolerance * Float.ofNat (samples * (storageSize n (p1 * p2) + 1))
+    if l1Diffs.any fun diff => diff.isNaN || diff > tolerance then
+      throw <| IO.userError
+        s!"{signatureLabel} {layoutLabel} {op.label} coefficient mismatch"
+    if checksumDiffs.any fun diff => diff.isNaN || diff > checksumTolerance then
+      throw <| IO.userError
+        s!"{signatureLabel} {layoutLabel} {op.label} checksum mismatch"
+    let forwardNs ← timeit
+      s!"generic-product {signatureLabel} {layoutLabel} {op.label} forward"
+      warmup positive fun i =>
+        let idx := i % samples
+        productDataChecksum <| forwardProductData op sig p1 p2
+          (packedA.getD idx defaultPackedA) (packedB.getD idx defaultPackedB)
+    let rewrittenNs ← timeit
+      s!"generic-product {signatureLabel} {layoutLabel} {op.label} rewritten"
+      warmup positive fun i =>
+        let idx := i % samples
+        productDataChecksum <| rewrittenProductData op sig p1 p2
+          (packedA.getD idx defaultPackedA) (packedB.getD idx defaultPackedB)
+    let denseNs ← timeit
+      s!"generic-product {signatureLabel} {layoutLabel} {op.label} dense"
+      warmup positive fun i =>
+        let idx := i % samples
+        denseLayoutChecksum (p1 * p2) <| denseGenericProduct op
+          (denseA.getD idx defaultDenseA) (denseB.getD idx defaultDenseB)
+    IO.println <| String.intercalate " " [
+      "GENERIC_PRODUCT_RATIO",
+      s!"signature={signatureLabel}",
+      s!"layout={layoutLabel}",
+      s!"op={op.label}",
+      s!"forward_over_rewritten={forwardNs / rewrittenNs}",
+      s!"dense_over_rewritten={denseNs / rewrittenNs}"
+    ]
+  IO.println ""
+
+def genericProductLayouts : Array (Parity × Parity) := #[
+  (.full, .full),
+  (.full, .even),
+  (.full, .odd),
+  (.even, .full),
+  (.odd, .full),
+  (.even, .even),
+  (.even, .odd),
+  (.odd, .even),
+  (.odd, .odd)
+]
+
+/--
+ALOK-771 benchmark matrix: three canonical signatures, all nine ordered
+full/even/odd layouts, and all four generic product families.
+-/
+def runGenericProducts (iters : Nat := defaultGenericProductIters) : IO Unit := do
+  let positive := positiveIters iters
+  for (p1, p2) in genericProductLayouts do
+    runGenericProductLayout "R3" R3 denseR3 p1 p2 positive
+  for (p1, p2) in genericProductLayouts do
+    runGenericProductLayout "PGA3" PGA3 densePGA3 p1 p2 positive
+  for (p1, p2) in genericProductLayouts do
+    runGenericProductLayout "CGA3" CGA3 denseCGA3 p1 p2 positive
 
 /-! ### Dense-to-packed ingress allocation baselines -/
 
