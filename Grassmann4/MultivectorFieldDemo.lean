@@ -1,0 +1,26 @@
+import GrassmannViz
+
+/-!
+# SF Lean meetup stage anchor
+
+Move the cursor between the executable summary and `#html` command. The safe
+live edit is `xCount := 5` to `xCount := 6`; Lean recomputes every sample.
+-/
+
+open GrassmannFields GrassmannViz
+open GrassmannFields.Examples.MixedRotor
+
+/-- Small enough to recompute live, large enough to read from the room. -/
+def stageGrid : PlanarGrid := {
+  defaultGrid with
+  xCount := 5
+  yCount := 5
+}
+
+/-- Twenty-four Lean-computed frames over one rotor turn. -/
+def stageScene : Except String MultivectorFieldProps :=
+  defaultScene stageGrid 24
+
+#eval stageScene.bind MultivectorFieldProps.summary
+
+#html sceneResultHtml stageScene
