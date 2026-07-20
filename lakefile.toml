@@ -27,6 +27,10 @@ srcDir = "Grassmann4"
 name = "GrassmannFields"
 srcDir = "Grassmann4"
 
+[[lean_lib]]
+name = "GrassmannViz"
+srcDir = "Grassmann4"
+
 [[lean_exe]]
 name = "genmetalshaders"
 root = "GenMetalShaders"
