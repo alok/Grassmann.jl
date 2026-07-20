@@ -1,9 +1,10 @@
-import GrassmannFields
+import GrassmannViz.Scene
 
 namespace MultivectorFieldTests
 
 open Grassmann GrassmannFields
 open GrassmannFields.Examples.MixedRotor
+open GrassmannViz Lean
 
 private def require (label : String) (condition : Bool) : IO Unit :=
   unless condition do
@@ -15,6 +16,25 @@ private def approx (a b : Float) (tolerance : Float := 1e-9) : Bool :=
 
 private def approxVec (a b : Vec3) (tolerance : Float := 1e-9) : Bool :=
   approx a.x b.x tolerance && approx a.y b.y tolerance && approx a.z b.z tolerance
+
+private def approxGrades (a b : R3Grades) (tolerance : Float := 1e-9) : Bool :=
+  approx a.scalar b.scalar tolerance && approxVec a.vector b.vector tolerance &&
+    approxVec a.bivectorNormal b.bivectorNormal tolerance &&
+    approx a.pseudoscalar b.pseudoscalar tolerance
+
+private def approxSample (a b : Sample3) (tolerance : Float := 1e-9) : Bool :=
+  approxVec a.position b.position tolerance && approxGrades a.value b.value tolerance
+
+private def approxFrame (a b : Frame3) (tolerance : Float := 1e-9) : Bool :=
+  approx a.parameter b.parameter tolerance && a.samples.size == b.samples.size &&
+    (Array.range a.samples.size).all fun i =>
+      approxSample a.samples[i]! b.samples[i]! tolerance
+
+private def approxScene (a b : MultivectorFieldProps) (tolerance : Float := 1e-9) : Bool :=
+  a.schemaVersion == b.schemaVersion && a.title == b.title && a.subtitle == b.subtitle &&
+    a.formula == b.formula && a.initialFrame == b.initialFrame &&
+    a.frames.size == b.frames.size &&
+    (Array.range a.frames.size).all fun i => approxFrame a.frames[i]! b.frames[i]! tolerance
 
 private def testGradeMapping : IO Unit := do
   let mixed : MV R3 .full := MV.ofPairs R3 .full [
@@ -119,11 +139,31 @@ private def testFrames : IO Unit := do
   require "inconsistent frame positions rejected"
     ((validateFrames badPositions) matches .error _)
 
+private def testScene : IO Unit := do
+  let scene ← IO.ofExcept defaultScene
+  require "scene validates" (scene.validate matches .ok ())
+  require "scene schema version" (scene.schemaVersion == currentSchemaVersion)
+  require "scene has 24 by 25 samples"
+    (scene.frames.size == 24 && scene.frames.all fun frame => frame.samples.size == 25)
+  require "out-of-range initial frame rejected"
+    (({ scene with initialFrame := scene.frames.size }).validate matches .error _)
+  require "unsupported schema rejected"
+    (({ scene with schemaVersion := currentSchemaVersion + 1 }).validate matches .error _)
+  let encoded := toJson scene
+  let decoded : MultivectorFieldProps ← IO.ofExcept (fromJson? encoded)
+  require "decoded widget props validate" (decoded.validate matches .ok ())
+  require "widget props JSON round-trip preserves semantic values"
+    (approxScene decoded scene 1e-5)
+  let summary ← IO.ofExcept scene.summary
+  require "scene summary reports frame count" (summary.contains "24 frames")
+  require "scene summary reports sample count" (summary.contains "25 samples/frame")
+
 def run : IO Unit := do
   testGradeMapping
   testGrid
   testFieldFormula
   testFrames
+  testScene
   IO.println "multivector field tests passed"
 
 end MultivectorFieldTests
