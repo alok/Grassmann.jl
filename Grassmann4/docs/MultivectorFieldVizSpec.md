@@ -189,8 +189,8 @@ formula.
 ## 6. Renderer ownership and visual grammar
 
 Lean sends a versioned scene with title, formula label, frames, initial frame,
-and optional explanatory text. Each sample contains its exact Float position
-and four semantic grade values.
+and optional explanatory text. Each sample contains its serialized Float
+position and four semantic grade values.
 
 The embedded React/SVG component may:
 
@@ -199,7 +199,7 @@ The embedded React/SVG component may:
 - map signed magnitudes to colors and clamped display sizes;
 - respond to pointer drag, wheel zoom, reset, play/pause, slider, and grade
   visibility controls;
-- display the selected sample's exact coefficients as provided by Lean.
+- display the selected sample's serialized coefficients as provided by Lean.
 
 It must not:
 
@@ -219,8 +219,8 @@ The visual grammar is fixed:
 | 3 pseudoscalar | translucent halo/ring | radius and stroke width | warm/cool color |
 
 Near-zero values are omitted using one documented view-layer epsilon. Display
-lengths are clamped so one outlier cannot make the field illegible; the exact
-unclamped values remain available in the inspector.
+lengths are clamped so one outlier cannot make the field illegible; the
+unclamped serialized values remain available in the inspector.
 
 ## 7. Validation contract
 
@@ -234,6 +234,8 @@ following holds:
 - a frame parameter, sample position, or grade coefficient is NaN or infinite;
 - the frame array is empty;
 - frames disagree on sample count or sample positions;
+- the first frame is not one complete rectangular lattice at a shared `z`;
+- the generic frame-parameter label is empty;
 - `initialFrame` is outside the frame array;
 - a scene schema version is unsupported.
 
@@ -255,16 +257,16 @@ The 15-minute route is:
 4. **8:00-11:30 — InfoView reveal.** Place the cursor on the prepared `#html`
    command. Drag, zoom, toggle each grade, and click one glyph to inspect the
    Lean-computed coefficients.
-5. **11:30-13:30 — one safe live edit.** Change the pseudoscalar amplitude from
-   `0.20` to `0.35` (or the grid from 5-by-5 to 6-by-6), wait for elaboration,
-   and show the updated halos. Revert using the editor rather than Git.
+5. **11:30-13:30 — one safe live edit.** Change the grid from 5-by-5 to
+   6-by-5, wait for elaboration, and show the new column. Revert using the
+   editor rather than Git.
 6. **13:30-15:00 — close.** Scrub the rotor frames and summarize ownership:
    Lean computes/validates; a tiny local SVG view presents.
 
-Stage preflight keeps the demo file and InfoView already elaborated, disables
-network access, runs the source-freshness and static-offline checks, and leaves
-the editor zoomed so the title and controls are readable from the back of the
-room.
+Stage preflight keeps the demo file and InfoView already elaborated, runs the
+source-freshness and static-offline checks, and rehearses once with network
+access disabled. It leaves the editor zoomed so the title and controls are
+readable from the back of the room.
 
 Fallback order, without changing the talk's claim, is:
 
@@ -291,7 +293,10 @@ Focused Lean tests cover:
 - 5-by-5 sample count and deterministic row-major order;
 - invalid, non-finite, and oversized grid rejection;
 - frame count, shared sample positions, and finite coefficients;
-- JSON round-trip for widget props;
+- JSON round-trip for widget props within `1e-5`, because core `Float` JSON
+  uses a decimal `Float.toString` representation rather than bit encoding;
+- rejection of nonplanar and incomplete rectangular scenes;
+- a quarter-turn vector and bivector-normal rotation anchor;
 - out-of-range initial-frame rejection.
 
 Renderer guards cover:
