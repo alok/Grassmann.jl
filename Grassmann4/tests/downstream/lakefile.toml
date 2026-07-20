@@ -1,0 +1,11 @@
+name = "GrassmannDownstreamSmoke"
+version = "0.1.0"
+defaultTargets = ["grassmann-downstream-smoke"]
+
+[[require]]
+name = "Grassmann"
+path = "../../.."
+
+[[lean_exe]]
+name = "grassmann-downstream-smoke"
+root = "Main"
