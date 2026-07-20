@@ -19,9 +19,9 @@ deriving instance ToJson, FromJson for Sample3
 deriving instance ToJson, FromJson for Frame3
 
 /-- Current wire-format version for the offline component. -/
-def currentSchemaVersion : Nat := 1
+def currentSchemaVersion : Nat := 2
 
-/-- Complete, validated props consumed by the local InfoView renderer. -/
+/-- Complete props for a rectangular planar lattice consumed by the InfoView. -/
 structure MultivectorFieldProps where
   schemaVersion : Nat := currentSchemaVersion
   title : String
@@ -30,6 +30,7 @@ structure MultivectorFieldProps where
   parameterLabel : String := "parameter"
   frames : Array Frame3
   initialFrame : Nat := 0
+  initialSample : Nat := 0
   deriving Repr, BEq, ToJson, FromJson
 
 private def pushUnique (values : Array Float) (value : Float) : Array Float :=
@@ -63,10 +64,14 @@ def MultivectorFieldProps.validate (props : MultivectorFieldProps) : Except Stri
   validatePlanarLattice props.frames[0]!.samples
   if props.initialFrame >= props.frames.size then
     throw s!"initialFrame {props.initialFrame} is outside {props.frames.size} frames"
+  let sampleCount := props.frames[props.initialFrame]!.samples.size
+  if props.initialSample >= sampleCount then
+    throw s!"initialSample {props.initialSample} is outside {sampleCount} samples"
 
 /-- Construct scene props only after checking the full frame sequence. -/
 def mkScene (title subtitle formula : String) (frames : Array Frame3)
-    (initialFrame : Nat := 0) (parameterLabel : String := "parameter") :
+    (initialFrame : Nat := 0) (parameterLabel : String := "parameter")
+    (initialSample : Nat := 0) :
     Except String MultivectorFieldProps := do
   let props : MultivectorFieldProps := {
     title
@@ -75,19 +80,25 @@ def mkScene (title subtitle formula : String) (frames : Array Frame3)
     parameterLabel
     frames
     initialFrame
+    initialSample
   }
   props.validate
   return props
 
+/-- Off-center default whose scalar, vector, bivector, and pseudoscalar parts are nonzero. -/
+def defaultInitialSample : Nat := 9
+
 /-- Build the default meetup scene entirely in Lean. -/
 def defaultScene (grid : PlanarGrid := defaultGrid)
-    (frameCount : Nat := defaultFrameCount) : Except String MultivectorFieldProps := do
+    (frameCount : Nat := defaultFrameCount)
+    (initialSample : Nat := defaultInitialSample) : Except String MultivectorFieldProps := do
   let frames ← buildFrames grid frameCount
   mkScene
     "A multivector field, computed by Lean"
     "Cl(3,0) · packed MV runtime · every frame precomputed"
-    "Fθ(p) = Rθ · (v(p) + p·v(p) + τ(p)I) · reverse(Rθ)"
+    "Fθ(p) = Rθ * (v(p) + p * v(p) + τ(p) I) * reverse(Rθ)"
     frames
+    (initialSample := initialSample)
     (parameterLabel := "θ")
 
 /-- Small executable summary used as the no-webview fallback. -/

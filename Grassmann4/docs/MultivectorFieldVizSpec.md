@@ -180,23 +180,29 @@ and computes
 Ftheta(x,y) = R(theta) F0(x,y) reverse(R(theta)).
 ```
 
-This rotates every grade of the multivector value about the `e3` axis while
-leaving the sample lattice fixed, making grade-preserving conjugation visible.
+This rotates the vector and bivector grades about the `e3` axis while leaving
+the scalar, pseudoscalar, and sample lattice invariant. The result makes
+grade-preserving conjugation visible.
 The checked-in demo uses a 5-by-5 grid and 24 precomputed frames over one turn.
 The JavaScript slider selects one of those frames; it does not evaluate this
 formula.
 
 ## 6. Renderer ownership and visual grammar
 
-Lean sends a versioned scene with title, formula label, frames, initial frame,
-and optional explanatory text. Each sample contains its serialized Float
-position and four semantic grade values.
+Lean sends a versioned scene with title, formula, generic frame-parameter label,
+frames, initial frame, initial selected sample, and optional explanatory text.
+Each sample contains its serialized Float position and four semantic grade
+values. The default meetup scene selects off-center sample 9, whose four grades
+are nonzero, rather than asking JavaScript to guess an interesting sample.
 
 The embedded React/SVG component may:
 
+- infer rectangular guide lines from the validated planar lattice;
 - project 3D points through a local orbit camera;
 - depth-sort SVG glyph groups;
-- map signed magnitudes to colors and clamped display sizes;
+- derive tangent bases and glyph geometry from semantic grade records;
+- normalize each frame for clamped display sizes and map scalar/pseudoscalar
+  signs to colors;
 - respond to pointer drag, wheel zoom, reset, play/pause, slider, and grade
   visibility controls;
 - display the selected sample's serialized coefficients as provided by Lean.
@@ -215,7 +221,7 @@ The visual grammar is fixed:
 | --- | --- | --- | --- |
 | 0 scalar | filled circle at the sample | radius | warm/cool color |
 | 1 vector | shaft plus arrow head | shaft length | 3D direction |
-| 2 bivector | translucent oriented ellipse/disk plus normal needle | disk radius | dual-normal direction and sign color |
+| 2 bivector | translucent oriented ellipse/disk plus normal needle | disk radius | dual-normal direction; fixed orange grade color |
 | 3 pseudoscalar | translucent halo/ring | radius and stroke width | warm/cool color |
 
 Near-zero values are omitted using one documented view-layer epsilon. Display
@@ -231,37 +237,42 @@ following holds:
 - a grid axis is inverted or has zero width;
 - a grid endpoint or fixed `z` is NaN or infinite;
 - the sample count exceeds the documented stage-safe cap;
+- total samples across all frames exceed 65,536;
 - a frame parameter, sample position, or grade coefficient is NaN or infinite;
 - the frame array is empty;
 - frames disagree on sample count or sample positions;
 - the first frame is not one complete rectangular lattice at a shared `z`;
 - the generic frame-parameter label is empty;
 - `initialFrame` is outside the frame array;
+- `initialSample` is outside the selected frame's sample array;
 - a scene schema version is unsupported.
 
-The default cap is small enough for an InfoView demo (at most 4,096 samples per
-frame and at most 240 frames). Validation errors are human-readable and name
-the rejected field. Error HTML is local and explicit rather than a blank panel.
+The caps are small enough for an InfoView demo: at most 4,096 samples per frame,
+240 frames, and 65,536 total serialized samples. Validation errors are
+human-readable and name the rejected field. Error HTML is local and explicit
+rather than a blank panel.
 
 ## 8. Stage choreography
 
-The 15-minute route is:
+The talk uses a rehearsed 12-minute core and reserves the last three minutes
+for recovery or questions:
 
-1. **0:00-2:00 — thesis.** Open the demo module and state the claim boundary:
-   ordinary Float computation in Lean, rendered in the editor.
-2. **2:00-5:00 — ordinary data and functions.** Show `Vec3`, `PlanarGrid`, the
-   reusable `Field3` sampler, and an `#eval` summary. Emphasize that this is a
-   Lake library API rather than a one-off generated HTML string.
-3. **5:00-8:00 — geometric algebra.** Show `F0` and the rotor sandwich. Point at
-   the grade mapping test, especially `e31 = -e13`.
-4. **8:00-11:30 — InfoView reveal.** Place the cursor on the prepared `#html`
-   command. Drag, zoom, toggle each grade, and click one glyph to inspect the
-   Lean-computed coefficients.
-5. **11:30-13:30 — one safe live edit.** Change the grid from 5-by-5 to
-   6-by-5, wait for elaboration, and show the new column. Revert using the
-   editor rather than Git.
-6. **13:30-15:00 — close.** Scrub the rotor frames and summarize ownership:
-   Lean computes/validates; a tiny local SVG view presents.
+1. **0:00-0:55 — cold-open visual.** State the Float/not-proof boundary and
+   orbit once from empty SVG background.
+2. **0:55-2:55 — ordinary data and loops.** Show `Vec3`, `PlanarGrid`, and the
+   reusable `Field3` sampler. Keep the downstream consumer for questions.
+3. **2:55-4:25 — geometric algebra.** Show `F0` and the rotor sandwich,
+   including the `e31 = -e13` semantic mapping.
+4. **4:25-5:15 — typed presentation boundary.** Show the scene props and
+   validation of both initial indices.
+5. **5:15-7:35 — focused interaction.** Use the rich selected sample, toggle
+   only grades two and three, play/pause/scrub, orbit, and restore every grade.
+6. **7:35-9:20 — one safe live edit.** Change the grid from 5-by-5 to 6-by-5,
+   wait for elaboration, and leave the successful 30-sample view on screen.
+7. **9:20-12:00 — ownership and close.** Briefly show the three imports, then
+   return to and close on the visual. Revert to 5-by-5 after the talk.
+8. **12:00-15:00 — recovery or questions.** Use the consumer and tests only if
+   a question calls for them.
 
 Stage preflight keeps the demo file and InfoView already elaborated, runs the
 source-freshness and static-offline checks, and rehearses once with network
@@ -305,7 +316,9 @@ Renderer guards cover:
 - absence of URL schemes, `fetch`, `XMLHttpRequest`, WebSocket, Three.js,
   Ganja.js, LeanPlot, WebGL, and dynamic `eval`;
 - byte-for-byte equality between the checked-in JavaScript and the source
-  embedded by `include_str` in the built OLean.
+  embedded by `include_str` in the built OLean;
+- stable `data-region`, `data-grade`, `data-glyph`, and `data-sample-index`
+  attributes for interaction and layout QA.
 
 ## 10. Acceptance criteria
 

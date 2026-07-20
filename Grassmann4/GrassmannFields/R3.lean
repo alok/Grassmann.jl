@@ -100,6 +100,9 @@ def maxSamplesPerFrame : Nat := 4096
 /-- Maximum number of frames accepted by the reusable validator. -/
 def maxFrameCount : Nat := 240
 
+/-- Maximum number of samples serialized across one complete scene. -/
+def maxTotalSamples : Nat := 65536
+
 private def validateFinite (label : String) (x : Float) : Except String Unit := do
   unless x.isFinite do
     throw s!"{label} must be finite"
@@ -187,6 +190,9 @@ def validateFrames (frames : Array Frame3) : Except String Unit := do
     throw s!"scene has more than {maxFrameCount} frames"
   for frame in frames do
     frame.validate
+  let totalSamples := frames.foldl (fun total frame => total + frame.samples.size) 0
+  if totalSamples > maxTotalSamples then
+    throw s!"scene has more than {maxTotalSamples} total samples"
   let expected := frames[0]!.samples
   for frame in frames do
     unless matchingPositions expected frame.samples do

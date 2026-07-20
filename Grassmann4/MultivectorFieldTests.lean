@@ -33,7 +33,7 @@ private def approxFrame (a b : Frame3) (tolerance : Float := 1e-9) : Bool :=
 private def approxScene (a b : MultivectorFieldProps) (tolerance : Float := 1e-9) : Bool :=
   a.schemaVersion == b.schemaVersion && a.title == b.title && a.subtitle == b.subtitle &&
     a.formula == b.formula && a.parameterLabel == b.parameterLabel &&
-    a.initialFrame == b.initialFrame &&
+    a.initialFrame == b.initialFrame && a.initialSample == b.initialSample &&
     a.frames.size == b.frames.size &&
     (Array.range a.frames.size).all fun i => approxFrame a.frames[i]! b.frames[i]! tolerance
 
@@ -144,6 +144,16 @@ private def testFrames : IO Unit := do
   }
   require "inconsistent frame positions rejected"
     ((validateFrames badPositions) matches .error _)
+  let mediumGrid : PlanarGrid := {
+    defaultGrid with
+    xCount := 25
+    yCount := 20
+  }
+  let mediumSamples ← IO.ofExcept <| samplePlanar mediumGrid fun _ => default
+  let mediumFrame : Frame3 := { parameter := 0.0, samples := mediumSamples }
+  let oversizedScene := Array.replicate 132 mediumFrame
+  require "total scene sample cap rejects oversized payloads"
+    ((validateFrames oversizedScene) matches .error _)
 
 private def testScene : IO Unit := do
   let scene ← IO.ofExcept defaultScene
@@ -151,8 +161,15 @@ private def testScene : IO Unit := do
   require "scene schema version" (scene.schemaVersion == currentSchemaVersion)
   require "scene has 24 by 25 samples"
     (scene.frames.size == 24 && scene.frames.all fun frame => frame.samples.size == 25)
+  require "default scene selects a rich off-center sample"
+    (scene.initialSample == 9 &&
+      let value := scene.frames[scene.initialFrame]!.samples[scene.initialSample]!.value
+      value.scalar != 0.0 && value.vector.norm != 0.0 &&
+        value.bivectorNormal.norm != 0.0 && value.pseudoscalar != 0.0)
   require "out-of-range initial frame rejected"
     (({ scene with initialFrame := scene.frames.size }).validate matches .error _)
+  require "out-of-range initial sample rejected"
+    (({ scene with initialSample := scene.frames[0]!.samples.size }).validate matches .error _)
   require "unsupported schema rejected"
     (({ scene with schemaVersion := currentSchemaVersion + 1 }).validate matches .error _)
   require "empty parameter label rejected"

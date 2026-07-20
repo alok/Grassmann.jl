@@ -41,10 +41,6 @@ private def project (point : Vec3) : Point2 :=
 private def signColor (value : Float) : String :=
   if value < 0.0 then "#38bdf8" else "#f59e0b"
 
-private def dominantSignedComponent (vector : Vec3) : Float :=
-  let best := if Float.abs vector.x >= Float.abs vector.y then vector.x else vector.y
-  if Float.abs best >= Float.abs vector.z then best else vector.z
-
 private def normalized (vector : Vec3) : Vec3 :=
   let length := vector.norm
   if length < 1e-8 then default else Vec3.smul (1.0 / length) vector
@@ -111,10 +107,9 @@ private def sampleGlyph (index : Nat) (sample : Sample3) : String :=
         "stroke-opacity=\"0.62\" stroke-dasharray=\"4 3\"/>"
   let plane :=
     if bivectorMagnitude < 1e-8 then "" else
-      let color := signColor (dominantSignedComponent value.bivectorNormal)
-      let marker := if color == "#38bdf8" then "arrow-cool" else "arrow-warm"
+      let color := "#f59e0b"
       planeDisk sample.position value.bivectorNormal planeRadius color ++
-        line "grade-two-normal" center normalTip color 1.3 marker
+        line "grade-two-normal" center normalTip color 1.3 "arrow-warm"
   let vector :=
     if vectorMagnitude < 1e-8 then "" else
       line "grade-one-vector" center vectorTip "#a78bfa" 2.1 "arrow-purple"
@@ -161,7 +156,6 @@ def fallbackSvg (props : MultivectorFieldProps) : Except String String := do
     "<defs>\n" ++
     "<marker id=\"arrow-purple\" markerWidth=\"7\" markerHeight=\"7\" refX=\"6\" refY=\"3.5\" orient=\"auto\"><path d=\"M0,0 L0,7 L7,3.5 z\" fill=\"#a78bfa\"/></marker>\n" ++
     "<marker id=\"arrow-warm\" markerWidth=\"6\" markerHeight=\"6\" refX=\"5\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L0,6 L6,3 z\" fill=\"#f59e0b\"/></marker>\n" ++
-    "<marker id=\"arrow-cool\" markerWidth=\"6\" markerHeight=\"6\" refX=\"5\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L0,6 L6,3 z\" fill=\"#38bdf8\"/></marker>\n" ++
     "<style>.title{font:700 27px system-ui,sans-serif;fill:#f8fafc}.subtitle{font:16px system-ui,sans-serif;fill:#94a3b8}.formula{font:15px ui-monospace,monospace;fill:#c4b5fd}.legend-label{font:700 16px system-ui,sans-serif;fill:#f8fafc}.legend-detail{font:14px system-ui,sans-serif;fill:#94a3b8}.footer{font:14px system-ui,sans-serif;fill:#94a3b8}</style>\n" ++
     "</defs>\n" ++
     "<rect width=\"1100\" height=\"760\" rx=\"18\" fill=\"#0f172a\"/>\n" ++

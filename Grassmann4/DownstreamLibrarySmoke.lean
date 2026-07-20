@@ -5,9 +5,11 @@ import GrassmannViz
 /-!
 # Public library smoke check
 
-This module intentionally imports only the three Lake-library roots, then
-constructs a new field and visualization scene without touching implementation
-modules or packed storage. It is compiled by the meetup preflight.
+This module intentionally imports the three stage-facing roots from the
+five-library package, then constructs a new field and visualization scene
+without touching implementation modules or packed storage. The separate
+`tests/downstream` package exercises all five public roots; this fast module is
+compiled by the meetup preflight without creating another dependency cache.
 -/
 
 open GrassmannFields GrassmannViz
@@ -37,4 +39,3 @@ def consumerScene : Except String MultivectorFieldProps := do
     #[{ parameter := 0.0, samples }]
 
 #eval consumerScene.bind MultivectorFieldProps.summary
-
