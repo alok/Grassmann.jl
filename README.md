@@ -77,6 +77,9 @@ import Grassmann.All
 `Grassmann.SignTablesCore` contains the proof-free cached sign tables used by
 `MV`; `Grassmann.SignTables` adds the dense `Multivector` integration. Import
 `Grassmann.MVDense` directly when only packed/dense conversions are needed.
+The `GrassmannTests` Lake target builds the broad `Grassmann.All` aggregate,
+while its `import GrassmannTests` marker stays lightweight so a downstream
+native program does not execute closed property checks during initialization.
 
 ## Repository layout
 

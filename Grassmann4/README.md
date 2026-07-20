@@ -47,6 +47,11 @@ use `import Grassmann.All` or run `lake build Grassmann.All` from the outer root
 Application experiments and optional-dependency modules are deliberately not
 part of that aggregate.
 
+`import GrassmannTests` is intentionally a lightweight package marker. The
+`GrassmannTests` Lake target also builds `Grassmann.All`, but a native
+application does not initialize the closed property checks unless it imports
+that aggregate explicitly.
+
 Packed linear arithmetic uses borrowed inputs and one final `FloatArray` for
 `MV.add`, `MV.sub`, `MV.neg`, and `MV.smul`. Standard `Zero`, `Inhabited`, and
 `SMul Float` instances work for full, even, and odd storage. `One` exists only

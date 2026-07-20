@@ -47,7 +47,7 @@ package uses that directory as its root:
 | `GrassmannReference` | `GrassmannReference.lean` | Opt-in dense representations and extended geometric-algebra API |
 | `GrassmannFields` | `GrassmannFields.lean` | Pure field geometry, grade projection, sampling, validation, and example data |
 | `GrassmannViz` | `GrassmannViz.lean` | ProofWidgets props and offline InfoView renderer |
-| `GrassmannTests` | `GrassmannTests.lean` | Broad validation aggregate for repository and downstream smoke checks |
+| `GrassmannTests` | `GrassmannTests.lean`, `Grassmann.All` | Lightweight import marker plus the broad opt-in validation aggregate |
 
 The intended module dependency graph is:
 
@@ -72,9 +72,10 @@ GrassmannFields.R3 -----> GrassmannFields.Examples.MixedRotor
 semantic records exported by `GrassmannFields`; it must not inspect `DataArray`
 or depend on the packed storage layout. Downstream users can therefore sample
 fields without acquiring a UI abstraction, and can replace the renderer while
-preserving the scene schema. `GrassmannReference` and `GrassmannTests` remain
-opt-in so ordinary runtime users do not acquire dense models or validation
-modules transitively.
+preserving the scene schema. `GrassmannReference` remains opt-in. The
+`GrassmannTests` target builds `Grassmann.All`, but its root import is a
+lightweight marker so downstream native programs do not initialize the broad
+validation modules transitively.
 
 The implementation must not modify `Grassmann/MV.lean` or
 `RunPackedMVBench.lean`.

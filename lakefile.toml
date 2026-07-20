@@ -45,6 +45,7 @@ needs = ["multivectorFieldWidget"]
 [[lean_lib]]
 name = "GrassmannTests"
 srcDir = "Grassmann4"
+roots = ["GrassmannTests", "Grassmann.All"]
 
 [[lean_exe]]
 name = "genmetalshaders"
