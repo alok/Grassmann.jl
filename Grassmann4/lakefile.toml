@@ -86,6 +86,10 @@ root = "MultivectorFieldTests"
 name = "multivectorfallback"
 root = "GenerateMultivectorFallback"
 
+[[lean_exe]]
+name = "multivectorscenejson"
+root = "ExportMultivectorScene"
+
 
 # Note: Verso documentation setup is available but requires
 # additional build configuration. See Manual/ folder for content.
