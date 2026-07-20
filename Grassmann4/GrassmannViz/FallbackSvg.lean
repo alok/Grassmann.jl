@@ -21,6 +21,13 @@ private def clamp (value low high : Float) : Float :=
 private def fmt (value : Float) : String :=
   toString ((value * 100.0).round / 100.0)
 
+private def xmlEscape (text : String) : String :=
+  text.replace "&" "&amp;"
+    |>.replace "<" "&lt;"
+    |>.replace ">" "&gt;"
+    |>.replace "\"" "&quot;"
+    |>.replace "'" "&apos;"
+
 private structure Point2 where
   x : Float
   y : Float
@@ -42,12 +49,40 @@ private def normalized (vector : Vec3) : Vec3 :=
   let length := vector.norm
   if length < 1e-8 then default else Vec3.smul (1.0 / length) vector
 
+private def cross (a b : Vec3) : Vec3 := {
+  x := a.y * b.z - a.z * b.y
+  y := a.z * b.x - a.x * b.z
+  z := a.x * b.y - a.y * b.x
+}
+
+private def planeBasis (normal : Vec3) : Vec3 × Vec3 :=
+  let reference : Vec3 :=
+    if Float.abs normal.z < 0.9 then { x := 0.0, y := 0.0, z := 1.0 }
+    else { x := 1.0, y := 0.0, z := 0.0 }
+  let first := normalized (cross normal reference)
+  (first, normalized (cross normal first))
+
+private def pushUnique (values : Array Float) (value : Float) : Array Float :=
+  if values.any fun existing => existing == value then values else values.push value
+
 private def line (className : String) (start finish : Point2) (color : String)
     (width : Float) (marker : String := "") : String :=
   let markerAttr := if marker.isEmpty then "" else s!" marker-end=\"url(#{marker})\""
   s!"<line class=\"{className}\" x1=\"{fmt start.x}\" y1=\"{fmt start.y}\" " ++
     s!"x2=\"{fmt finish.x}\" y2=\"{fmt finish.y}\" stroke=\"{color}\" " ++
     s!"stroke-width=\"{fmt width}\" stroke-linecap=\"round\"{markerAttr}/>"
+
+private def planeDisk (center normal : Vec3) (radius : Float) (color : String) : String :=
+  let (first, second) := planeBasis (normalized normal)
+  let points := (Array.range 18).map fun index =>
+    let angle := 2.0 * 3.14159265358979323846 * index.toFloat / 18.0
+    let offset := Vec3.add
+      (Vec3.smul (radius * Float.cos angle) first)
+      (Vec3.smul (radius * Float.sin angle) second)
+    let point := project (center.add offset)
+    s!"{fmt point.x},{fmt point.y}"
+  s!"<polygon points=\"{String.intercalate " " points.toList}\" " ++
+    s!"fill=\"{color}\" fill-opacity=\"0.24\" stroke=\"{color}\" stroke-width=\"1.1\"/>"
 
 private def sampleGlyph (index : Nat) (sample : Sample3) : String :=
   let center := project sample.position
@@ -61,12 +96,10 @@ private def sampleGlyph (index : Nat) (sample : Sample3) : String :=
   let normalTip :=
     project (sample.position.add (Vec3.smul normalLength (normalized value.bivectorNormal)))
   let scalarRadius := 2.8 + 5.0 * clamp (Float.abs value.scalar / 0.35) 0.0 1.0
-  let planeRadius := 5.0 + 9.0 * clamp (bivectorMagnitude / 2.4) 0.0 1.0
-  let planeAngle :=
-    Float.atan2 value.bivectorNormal.y value.bivectorNormal.x * 57.295779513
+  let planeRadius := 0.035 + 0.045 * clamp (bivectorMagnitude / 2.4) 0.0 1.0
   let volumeRadius :=
     7.0 + 10.0 * clamp (Float.abs value.pseudoscalar / 0.2) 0.0 1.0
-  let title :=
+  let title := xmlEscape <|
     s!"sample {index}: g0={value.scalar}; " ++
       s!"g1=({value.vector.x},{value.vector.y},{value.vector.z}); " ++
       s!"g2=({value.bivectorNormal.x},{value.bivectorNormal.y},{value.bivectorNormal.z}); " ++
@@ -79,10 +112,9 @@ private def sampleGlyph (index : Nat) (sample : Sample3) : String :=
   let plane :=
     if bivectorMagnitude < 1e-8 then "" else
       let color := signColor (dominantSignedComponent value.bivectorNormal)
-      s!"<ellipse cx=\"{fmt center.x}\" cy=\"{fmt center.y}\" rx=\"{fmt planeRadius}\" " ++
-        s!"ry=\"4\" transform=\"rotate({fmt planeAngle} {fmt center.x} {fmt center.y})\" " ++
-        s!"fill=\"{color}\" fill-opacity=\"0.22\" stroke=\"{color}\"/>" ++
-        line "grade-two-normal" center normalTip color 1.3 "arrow-orange"
+      let marker := if color == "#38bdf8" then "arrow-cool" else "arrow-warm"
+      planeDisk sample.position value.bivectorNormal planeRadius color ++
+        line "grade-two-normal" center normalTip color 1.3 marker
   let vector :=
     if vectorMagnitude < 1e-8 then "" else
       line "grade-one-vector" center vectorTip "#a78bfa" 2.1 "arrow-purple"
@@ -92,16 +124,22 @@ private def sampleGlyph (index : Nat) (sample : Sample3) : String :=
         s!"fill=\"{signColor value.scalar}\" stroke=\"#f8fafc\" stroke-width=\"0.8\"/>"
   s!"<g><title>{title}</title>{volume}{plane}{vector}{scalar}</g>"
 
-private def gridSvg : String :=
-  let values : List Float := [-1.0, -0.5, 0.0, 0.5, 1.0]
-  let vertical := values.map fun x =>
-    line "grid" (project { x, y := -1.0, z := 0.0 })
-      (project { x, y := 1.0, z := 0.0 })
+private def gridSvg (frame : Frame3) : String :=
+  let first := frame.samples[0]!.position
+  let xs := frame.samples.foldl (fun values sample => pushUnique values sample.position.x) #[]
+  let ys := frame.samples.foldl (fun values sample => pushUnique values sample.position.y) #[]
+  let xMin := xs.foldl (fun result value => if value < result then value else result) first.x
+  let xMax := xs.foldl (fun result value => if value > result then value else result) first.x
+  let yMin := ys.foldl (fun result value => if value < result then value else result) first.y
+  let yMax := ys.foldl (fun result value => if value > result then value else result) first.y
+  let vertical := xs.toList.map fun x =>
+    line "grid" (project { x, y := yMin, z := first.z })
+      (project { x, y := yMax, z := first.z })
       (if Float.abs x < 1e-8 then "#64748b" else "#334155")
       (if Float.abs x < 1e-8 then 1.5 else 1.0)
-  let horizontal := values.map fun y =>
-    line "grid" (project { x := -1.0, y, z := 0.0 })
-      (project { x := 1.0, y, z := 0.0 })
+  let horizontal := ys.toList.map fun y =>
+    line "grid" (project { x := xMin, y, z := first.z })
+      (project { x := xMax, y, z := first.z })
       (if Float.abs y < 1e-8 then "#64748b" else "#334155")
       (if Float.abs y < 1e-8 then 1.5 else 1.0)
   String.intercalate "\n" (vertical ++ horizontal)
@@ -122,15 +160,16 @@ def fallbackSvg (props : MultivectorFieldProps) : Except String String := do
     "viewBox=\"0 0 1100 760\">\n" ++
     "<defs>\n" ++
     "<marker id=\"arrow-purple\" markerWidth=\"7\" markerHeight=\"7\" refX=\"6\" refY=\"3.5\" orient=\"auto\"><path d=\"M0,0 L0,7 L7,3.5 z\" fill=\"#a78bfa\"/></marker>\n" ++
-    "<marker id=\"arrow-orange\" markerWidth=\"6\" markerHeight=\"6\" refX=\"5\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L0,6 L6,3 z\" fill=\"#f59e0b\"/></marker>\n" ++
+    "<marker id=\"arrow-warm\" markerWidth=\"6\" markerHeight=\"6\" refX=\"5\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L0,6 L6,3 z\" fill=\"#f59e0b\"/></marker>\n" ++
+    "<marker id=\"arrow-cool\" markerWidth=\"6\" markerHeight=\"6\" refX=\"5\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L0,6 L6,3 z\" fill=\"#38bdf8\"/></marker>\n" ++
     "<style>.title{font:700 27px system-ui,sans-serif;fill:#f8fafc}.subtitle{font:16px system-ui,sans-serif;fill:#94a3b8}.formula{font:15px ui-monospace,monospace;fill:#c4b5fd}.legend-label{font:700 16px system-ui,sans-serif;fill:#f8fafc}.legend-detail{font:14px system-ui,sans-serif;fill:#94a3b8}.footer{font:14px system-ui,sans-serif;fill:#94a3b8}</style>\n" ++
     "</defs>\n" ++
     "<rect width=\"1100\" height=\"760\" rx=\"18\" fill=\"#0f172a\"/>\n" ++
     "<rect x=\"24\" y=\"126\" width=\"760\" height=\"560\" rx=\"13\" fill=\"#0b1120\" stroke=\"#334155\"/>\n" ++
-    s!"<text x=\"30\" y=\"45\" class=\"title\">{props.title}</text>\n" ++
-    "<text x=\"30\" y=\"72\" class=\"subtitle\">offline fallback · frame 1 / 24 · 25 Lean-computed samples</text>\n" ++
-    s!"<text x=\"30\" y=\"103\" class=\"formula\">{props.formula}</text>\n" ++
-    gridSvg ++ "\n" ++ glyphs ++ "\n" ++
+    s!"<text x=\"30\" y=\"45\" class=\"title\">{xmlEscape props.title}</text>\n" ++
+    s!"<text x=\"30\" y=\"72\" class=\"subtitle\">offline fallback · frame 1 / {props.frames.size} · {frame.samples.size} Lean-computed samples</text>\n" ++
+    s!"<text x=\"30\" y=\"103\" class=\"formula\">{xmlEscape props.formula}</text>\n" ++
+    gridSvg frame ++ "\n" ++ glyphs ++ "\n" ++
     "<text x=\"822\" y=\"155\" class=\"legend-label\">Four grades, one value</text>\n" ++
     legendItem 195 "#f59e0b" "grade 0 · scalar" "signed dot contribution" ++ "\n" ++
     legendItem 270 "#a78bfa" "grade 1 · vector" "direction arrow" ++ "\n" ++

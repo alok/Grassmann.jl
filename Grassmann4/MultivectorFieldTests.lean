@@ -32,7 +32,8 @@ private def approxFrame (a b : Frame3) (tolerance : Float := 1e-9) : Bool :=
 
 private def approxScene (a b : MultivectorFieldProps) (tolerance : Float := 1e-9) : Bool :=
   a.schemaVersion == b.schemaVersion && a.title == b.title && a.subtitle == b.subtitle &&
-    a.formula == b.formula && a.initialFrame == b.initialFrame &&
+    a.formula == b.formula && a.parameterLabel == b.parameterLabel &&
+    a.initialFrame == b.initialFrame &&
     a.frames.size == b.frames.size &&
     (Array.range a.frames.size).all fun i => approxFrame a.frames[i]! b.frames[i]! tolerance
 
@@ -112,6 +113,11 @@ private def testFieldFormula : IO Unit := do
   require "rotor sandwich preserves scalar" (approx rotated.scalar grades.scalar)
   require "rotor sandwich preserves pseudoscalar"
     (approx rotated.pseudoscalar grades.pseudoscalar)
+  let quarterTurn := R3Grades.ofMV (fieldAt (pi / 2.0) p)
+  require "quarter-turn rotates the visible vector counterclockwise"
+    (approxVec quarterTurn.vector { x := -0.5, y := 0.6, z := 0.25 })
+  require "quarter-turn rotates the visible bivector normal counterclockwise"
+    (approxVec quarterTurn.bivectorNormal { x := 0.125, y := -0.0625, z := 0.4 })
 
 private def testFrames : IO Unit := do
   let frames ← IO.ofExcept buildFrames
@@ -149,10 +155,25 @@ private def testScene : IO Unit := do
     (({ scene with initialFrame := scene.frames.size }).validate matches .error _)
   require "unsupported schema rejected"
     (({ scene with schemaVersion := currentSchemaVersion + 1 }).validate matches .error _)
+  require "empty parameter label rejected"
+    (({ scene with parameterLabel := " " }).validate matches .error _)
+  let nonplanarSamples := scene.frames[0]!.samples.set! 0 {
+    scene.frames[0]!.samples[0]! with position := { x := -1.0, y := -1.0, z := 0.25 }
+  }
+  require "nonplanar scene rejected"
+    (({ scene with frames := #[{ parameter := 0.0, samples := nonplanarSamples }] }).validate
+      matches .error _)
+  let sparseSamples := #[scene.frames[0]!.samples[0]!, scene.frames[0]!.samples[1]!,
+    scene.frames[0]!.samples[5]!]
+  require "incomplete rectangular lattice rejected"
+    (({ scene with frames := #[{ parameter := 0.0, samples := sparseSamples }] }).validate
+      matches .error _)
   let encoded := toJson scene
   let decoded : MultivectorFieldProps ← IO.ofExcept (fromJson? encoded)
   require "decoded widget props validate" (decoded.validate matches .ok ())
-  require "widget props JSON round-trip preserves semantic values"
+  -- Core Float JSON uses decimal `Float.toString`, so this is a documented
+  -- numeric tolerance rather than bit-exact Float round-tripping.
+  require "widget props JSON round-trip preserves semantic values within 1e-5"
     (approxScene decoded scene 1e-5)
   let summary ← IO.ofExcept scene.summary
   require "scene summary reports frame count" (summary.contains "24 frames")

@@ -15,4 +15,5 @@ open GrassmannViz
     IO.println "embedded multivector renderer matches its JavaScript source"
   else
     throw <| IO.userError
-      "stale multivector renderer: rebuild GrassmannViz.InfoView before presenting"
+      "stale multivector renderer: run `touch Grassmann4/GrassmannViz/InfoView.lean && \
+      LAKE_ARTIFACT_CACHE=false lake build +GrassmannViz.InfoView`, then rerun this check"

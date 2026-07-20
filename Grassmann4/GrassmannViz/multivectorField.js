@@ -327,9 +327,18 @@ export default function MultivectorField(props) {
   );
   const drag = React.useRef(null);
 
+  // Validated props always contain frames and samples. Clamp synchronously so
+  // an InfoView hot update cannot index old UI state before effects run.
+  const safeFrameIndex = clamp(frameIndex, 0, frameCount - 1);
+  const frame = props.frames[safeFrameIndex];
+  const safeSelectedIndex = clamp(selectedIndex, 0, frame.samples.length - 1);
+
   React.useEffect(() => {
-    setFrameIndex(index => clamp(index, 0, frameCount - 1));
-  }, [frameCount]);
+    setPlaying(false);
+    setFrameIndex(props.initialFrame);
+    const initial = props.frames[props.initialFrame];
+    setSelectedIndex(Math.floor(initial.samples.length / 2));
+  }, [props.frames, props.initialFrame]);
 
   React.useEffect(() => {
     if (!playing || frameCount < 2) return undefined;
@@ -339,7 +348,6 @@ export default function MultivectorField(props) {
     return () => clearInterval(timer);
   }, [playing, frameCount]);
 
-  const frame = props.frames[frameIndex];
   const scales = frameScales(frame);
   const entries = frame.samples.map((sample, index) => ({
     sample,
@@ -420,9 +428,11 @@ export default function MultivectorField(props) {
       ]),
       h('div', { key: 'badges', style: { display: 'flex', alignItems: 'flex-start', gap: 7, flexWrap: 'wrap' } }, [
         h('span', { key: 'lean', style: badgeStyle }, 'Lean Float runtime'),
-        h('span', { key: 'frames', style: badgeStyle }, `${frameCount} Lean frames`),
+        h('span', { key: 'frames', style: badgeStyle },
+          `${frameCount} Lean frame${frameCount === 1 ? '' : 's'}`),
         h('span', { key: 'samples', style: badgeStyle }, `${frame.samples.length} samples`),
-        h('span', { key: 'theta', style: badgeStyle }, `θ = ${frame.parameter.toFixed(3)}`),
+        h('span', { key: 'parameter', style: badgeStyle },
+          `${props.parameterLabel} = ${frame.parameter.toFixed(3)}`),
       ]),
     ]),
     h('div', {
@@ -465,7 +475,7 @@ export default function MultivectorField(props) {
         h('rect', { key: 'background', x: 0, y: 0, width: WIDTH, height: HEIGHT, fill: '#0b1120' }),
         h('g', { key: 'grid', pointerEvents: 'none' }, gridElements(frame, camera)),
         h('g', { key: 'glyphs' }, entries.map(entry =>
-          sampleGlyph(entry, camera, scales, visible, selectedIndex, setSelectedIndex))),
+          sampleGlyph(entry, camera, scales, visible, safeSelectedIndex, setSelectedIndex))),
         h('text', {
           key: 'hint',
           x: 18,
@@ -476,9 +486,9 @@ export default function MultivectorField(props) {
         }, 'drag to orbit · wheel to zoom · click a sample to inspect'),
       ]),
       h('div', { key: 'inspector', style: { flex: '0 1 300px', alignSelf: 'flex-start' } },
-        inspector(frame.samples[selectedIndex], selectedIndex)),
+        inspector(frame.samples[safeSelectedIndex], safeSelectedIndex)),
     ]),
-    h('div', {
+    frameCount > 1 ? h('div', {
       key: 'timeline',
       style: { display: 'flex', gap: 10, alignItems: 'center', marginTop: 11 },
     }, [
@@ -494,17 +504,20 @@ export default function MultivectorField(props) {
         min: 0,
         max: frameCount - 1,
         step: 1,
-        value: frameIndex,
+        value: safeFrameIndex,
         onChange: event => {
           setPlaying(false);
           setFrameIndex(Number(event.target.value));
         },
-        'aria-label': 'Lean-computed rotor frame',
+        'aria-label': `Lean-computed ${props.parameterLabel} frame`,
         style: { flex: 1, minWidth: 180 },
       }),
       h('span', { key: 'frame', style: { color: '#cbd5e1', fontSize: 14, minWidth: 92, textAlign: 'right' } },
-        `frame ${frameIndex + 1} / ${frameCount}`),
-    ]),
+        `frame ${safeFrameIndex + 1} / ${frameCount}`),
+    ]) : h('div', {
+      key: 'timeline-static',
+      style: { color: '#94a3b8', fontSize: 14, marginTop: 11 },
+    }, 'frame 1 / 1 · static scene'),
     h('div', {
       key: 'ownership',
       style: { color: '#94a3b8', fontSize: 14, lineHeight: 1.45, marginTop: 10 },

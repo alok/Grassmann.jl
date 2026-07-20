@@ -27,9 +27,27 @@ structure MultivectorFieldProps where
   title : String
   subtitle : String
   formula : String
+  parameterLabel : String := "parameter"
   frames : Array Frame3
   initialFrame : Nat := 0
   deriving Repr, BEq, ToJson, FromJson
+
+private def pushUnique (values : Array Float) (value : Float) : Array Float :=
+  if values.any fun existing => existing == value then values else values.push value
+
+private def validatePlanarLattice (samples : Array Sample3) : Except String Unit := do
+  let first := samples[0]!.position
+  unless samples.all fun sample => sample.position.z == first.z do
+    throw "the InfoView renderer requires one shared planar z coordinate"
+  let xs := samples.foldl (fun values sample => pushUnique values sample.position.x) #[]
+  let ys := samples.foldl (fun values sample => pushUnique values sample.position.y) #[]
+  unless xs.size * ys.size == samples.size do
+    throw "the InfoView renderer requires a complete rectangular x/y lattice"
+  for y in ys do
+    for x in xs do
+      unless samples.any fun sample =>
+          sample.position.x == x && sample.position.y == y && sample.position.z == first.z do
+        throw "the InfoView renderer requires every x/y lattice position exactly once"
 
 /-- Validate a complete renderer payload. -/
 def MultivectorFieldProps.validate (props : MultivectorFieldProps) : Except String Unit := do
@@ -39,17 +57,22 @@ def MultivectorFieldProps.validate (props : MultivectorFieldProps) : Except Stri
     throw "scene title must not be empty"
   if props.formula.trimAscii.isEmpty then
     throw "scene formula must not be empty"
+  if props.parameterLabel.trimAscii.isEmpty then
+    throw "scene parameterLabel must not be empty"
   validateFrames props.frames
+  validatePlanarLattice props.frames[0]!.samples
   if props.initialFrame >= props.frames.size then
     throw s!"initialFrame {props.initialFrame} is outside {props.frames.size} frames"
 
 /-- Construct scene props only after checking the full frame sequence. -/
 def mkScene (title subtitle formula : String) (frames : Array Frame3)
-    (initialFrame : Nat := 0) : Except String MultivectorFieldProps := do
+    (initialFrame : Nat := 0) (parameterLabel : String := "parameter") :
+    Except String MultivectorFieldProps := do
   let props : MultivectorFieldProps := {
     title
     subtitle
     formula
+    parameterLabel
     frames
     initialFrame
   }
@@ -65,6 +88,7 @@ def defaultScene (grid : PlanarGrid := defaultGrid)
     "Cl(3,0) · packed MV runtime · every frame precomputed"
     "Fθ(p) = Rθ · (v(p) + p·v(p) + τ(p)I) · reverse(Rθ)"
     frames
+    (parameterLabel := "θ")
 
 /-- Small executable summary used as the no-webview fallback. -/
 def MultivectorFieldProps.summary (props : MultivectorFieldProps) : Except String String := do
