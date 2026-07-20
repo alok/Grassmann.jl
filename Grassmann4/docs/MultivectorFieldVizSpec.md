@@ -229,7 +229,9 @@ The visual grammar is fixed:
 | 2 bivector | translucent oriented ellipse/disk plus normal needle | disk radius | dual-normal direction; fixed orange grade color |
 | 3 pseudoscalar | translucent halo/ring | radius and stroke width | warm/cool color |
 
-Near-zero values are omitted using one documented view-layer epsilon. Display
+Values with absolute scalar magnitude or Euclidean vector magnitude strictly
+below the view-layer epsilon `1e-8` are omitted; values equal to the epsilon
+remain visible. The widget and static fallback use this same rule. Display
 lengths are clamped so one outlier cannot make the field illegible; the
 unclamped serialized values remain available in the inspector. The view fits
 the validated planar lattice into display space with one shared x/y scale

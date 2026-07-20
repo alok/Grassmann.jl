@@ -55,6 +55,7 @@ open GrassmannViz
     samples := extremeSamples
   }]
   let extremeSvg ← IO.ofExcept (fallbackSvg extremeScene)
-  if extremeSvg.contains "nan" || extremeSvg.contains "inf" then
+  let nonFiniteTokens := #["NaN", "nan", "Infinity", "-Infinity", "inf", "-inf"]
+  if nonFiniteTokens.any fun token => extremeSvg.contains token then
     throw <| IO.userError "fallback SVG emitted non-finite geometry for finite extreme input"
   IO.println "fallback SVG derives metadata, escapes text, and projects bivector planes"

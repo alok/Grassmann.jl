@@ -12,7 +12,7 @@ function clamp(value, low, high) {
 
 function vectorMetrics(vector) {
   const maximum = Math.max(Math.abs(vector.x), Math.abs(vector.y), Math.abs(vector.z));
-  if (maximum < EPSILON) {
+  if (maximum === 0) {
     return { magnitude: 0, direction: { x: 0, y: 0, z: 0 } };
   }
   const scaled = {
@@ -24,8 +24,12 @@ function vectorMetrics(vector) {
     scaled.x * scaled.x + scaled.y * scaled.y + scaled.z * scaled.z,
   );
   const rawMagnitude = maximum * scaledLength;
+  const magnitude = Number.isFinite(rawMagnitude) ? rawMagnitude : Number.MAX_VALUE;
+  if (magnitude < EPSILON) {
+    return { magnitude: 0, direction: { x: 0, y: 0, z: 0 } };
+  }
   return {
-    magnitude: Number.isFinite(rawMagnitude) ? rawMagnitude : Number.MAX_VALUE,
+    magnitude,
     direction: {
       x: scaled.x / scaledLength,
       y: scaled.y / scaledLength,
@@ -217,7 +221,7 @@ function sampleGlyph(entry, camera, scales, visible, selectedIndex, selectSample
   const center = entry.projected;
   const children = [];
 
-  if (visible[3] && Math.abs(value.pseudoscalar) > EPSILON) {
+  if (visible[3] && Math.abs(value.pseudoscalar) >= EPSILON) {
     const ratio = clamp(Math.abs(value.pseudoscalar) / scales.pseudoscalar, 0, 1);
     children.push(h('circle', {
       key: 'pseudoscalar',
@@ -237,7 +241,7 @@ function sampleGlyph(entry, camera, scales, visible, selectedIndex, selectSample
 
   const bivectorMetrics = vectorMetrics(value.bivectorNormal);
   const bivectorMagnitude = bivectorMetrics.magnitude;
-  if (visible[2] && bivectorMagnitude > EPSILON) {
+  if (visible[2] && bivectorMagnitude >= EPSILON) {
     const ratio = clamp(bivectorMagnitude / scales.bivector, 0, 1);
     const normal = bivectorMetrics.direction;
     const reference = Math.abs(normal.z) < 0.82
@@ -282,7 +286,7 @@ function sampleGlyph(entry, camera, scales, visible, selectedIndex, selectSample
 
   const vectorInfo = vectorMetrics(value.vector);
   const vectorMagnitude = vectorInfo.magnitude;
-  if (visible[1] && vectorMagnitude > EPSILON) {
+  if (visible[1] && vectorMagnitude >= EPSILON) {
     const ratio = clamp(vectorMagnitude / scales.vector, 0, 1);
     const direction = vectorInfo.direction;
     const tip = project(
@@ -296,7 +300,7 @@ function sampleGlyph(entry, camera, scales, visible, selectedIndex, selectSample
     }));
   }
 
-  if (visible[0] && Math.abs(value.scalar) > EPSILON) {
+  if (visible[0] && Math.abs(value.scalar) >= EPSILON) {
     const ratio = clamp(Math.abs(value.scalar) / scales.scalar, 0, 1);
     children.push(h('circle', {
       key: 'scalar',
