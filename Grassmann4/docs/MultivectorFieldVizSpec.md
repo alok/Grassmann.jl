@@ -1,7 +1,7 @@
 # Multivector Field InfoView Demo Specification
 
-Status: implementation contract for ALOK-793  
-Audience: SF Lean meetup, 15-minute live demonstration  
+Status: implementation contract for ALOK-793
+Audience: SF Lean meetup, 15-minute live demonstration
 Primary claim: Lean is an ordinary programming language that can compute,
 validate, serialize, and interactively display a geometric-algebra program.
 
