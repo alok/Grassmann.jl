@@ -2,14 +2,13 @@
 
 A Lean 4 port of [Grassmann.jl](https://github.com/chakravala/Grassmann.jl) - a Clifford/Geometric Algebra library.
 
-This directory contains the Lean sources. The authoritative Lake workspace is
-the repository root (`../lakefile.toml`), which pins Lean `v4.27.0-rc1` and
-mathlib commit `32d24245c7a12ded17325299fd41d412022cd3fe`. Run the commands in
-this README from that outer repository root.
-
-The nested `Grassmann4/lakefile.toml` is an experimental, noncanonical
-workspace with maintainer-local path dependencies. Those dependencies are not
-required by the supported outer build.
+This directory contains the Lean sources and the supported editor-local Lake
+workspace. It mirrors the distribution workspace at `../lakefile.toml`: both
+pin Lean `v4.27.0-rc1`, mathlib commit
+`32d24245c7a12ded17325299fd41d412022cd3fe`, the same five public libraries,
+and the same executable targets. Neither workspace has required local path
+dependencies. Use the outer root for broad repository commands; editors
+intentionally select this nearer package for files in `Grassmann4`.
 
 ## Features
 
@@ -144,8 +143,8 @@ open Grassmann
 
 `Grassmann.All` imports `Grassmann.Reference` plus the dependency-free stress,
 unit, exact packed-arithmetic, oracle-anchor, DSL, and property-test modules.
-It is designed to build in the authoritative outer workspace without local
-SciLean, LeanPlot, or LeviCivita checkouts.
+It builds in both supported workspaces without local SciLean, LeanPlot, or
+LeviCivita checkouts.
 
 These application modules remain explicit entry points:
 
@@ -153,8 +152,9 @@ These application modules remain explicit entry points:
 - `Grassmann.CoffeeshopExamples` and `Grassmann.LeanPlotDemo` require a
   separately compatible LeanPlot package profile.
 
-The experimental nested Lake workspace does not currently provide a supported
-LeanPlot profile; use the outer workspace for canonical build results.
+LeanPlot is deliberately absent from both supported dependency closures. Treat
+the LeanPlot demo modules as explicit experiments that require a separately
+compatible downstream package profile.
 
 ## Signatures
 
@@ -301,9 +301,11 @@ lake build
 lake build Grassmann.MV Grassmann.MVDense
 ```
 
-The root workspace fetches its pinned mathlib revision and has no required local
-path dependencies. Do not use the nested experimental Lake workspace as the
-normal build entrypoint.
+The root workspace fetches its pinned mathlib revision and has no required
+local path dependencies. From this directory, the corresponding supported
+editor-local commands omit the `Grassmann4/` source prefix; for example,
+`lake build Grassmann GrassmannFields GrassmannViz` and
+`lake env lean MultivectorFieldDemo.lean`.
 
 ## Benchmarks
 

@@ -4,10 +4,13 @@ Lean 4 experiments in geometric algebra, Clifford algebras, and numerics-oriente
 
 This repository is no longer a Julia package mirror. The active codebase is a Lean 4 library centered on a fast `MV` representation for Float-heavy workloads, together with a proof-friendly dense `Multivector` type, PGA/CGA constructions, benchmark tooling, and a growing set of geometry and physics experiments.
 
-The repository root is the authoritative Lake workspace. It pins Lean
+The repository root is the distribution Lake workspace. The supported nested
+`Grassmann4` workspace mirrors its Lean toolchain, mathlib pin, five public
+libraries, and executable targets because editors resolve these sources
+against the nearest Lake package. Both entry points use Lean
 `v4.27.0-rc1` and mathlib commit
-`32d24245c7a12ded17325299fd41d412022cd3fe`; normal builds do not require any
-local path dependencies.
+`32d24245c7a12ded17325299fd41d412022cd3fe`; neither requires local path
+dependencies.
 
 ## What is here
 
@@ -112,13 +115,11 @@ by the repository:
 - mathlib: `32d24245c7a12ded17325299fd41d412022cd3fe` (from the root
   `lakefile.toml` and `lake-manifest.json`)
 
-Lake fetches the pinned mathlib dependency. The canonical root workspace has no
-required local path dependencies; SciLean, LeanPlot, and LeviCivita checkouts are
-not prerequisites for the supported build.
-
-`Grassmann4/lakefile.toml` is a separate experimental, noncanonical workspace
-with maintainer-local path dependencies. Do not use it for ordinary builds or
-dependency resolution.
+Lake fetches the pinned mathlib dependency. SciLean, LeanPlot, and LeviCivita
+checkouts are not prerequisites for either supported workspace. Use the root
+workspace for distribution and broad repository commands; Cursor and other
+editors intentionally select the mirrored `Grassmann4` workspace for files
+under that directory.
 
 ## Build and run
 
@@ -325,10 +326,11 @@ This codebase is active and exploratory. A few important realities:
 ## Notes for contributors
 
 - Lean sources live under `Grassmann4/`.
-- The root `lakefile.toml` is the main build entrypoint for this checkout.
-- The nested `Grassmann4/lakefile.toml` is experimental and noncanonical; it
-  contains local path dependencies and is not part of the supported root build
-  contract.
+- The root `lakefile.toml` is the distribution and broad repository build
+  entrypoint.
+- The supported `Grassmann4/lakefile.toml` mirrors the root toolchain,
+  dependency pin, public libraries, and executables for editor/LSP discovery.
+  Keep both manifests and toolchains synchronized.
 - If you are trying to understand the intent of a subsystem quickly, `Grassmann4/CLAUDE.md` summarizes the architecture and current priorities.
 
 ## Why this exists
