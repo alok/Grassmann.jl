@@ -1,0 +1,120 @@
+import GrassmannFields
+
+namespace MultivectorFieldTests
+
+open Grassmann GrassmannFields
+open GrassmannFields.Examples.MixedRotor
+
+private def require (label : String) (condition : Bool) : IO Unit :=
+  unless condition do
+    throw <| IO.userError s!"FAIL: {label}"
+
+private def approx (a b : Float) (tolerance : Float := 1e-9) : Bool :=
+  let difference := Float.abs (a - b)
+  difference.isFinite && difference <= tolerance
+
+private def approxVec (a b : Vec3) (tolerance : Float := 1e-9) : Bool :=
+  approx a.x b.x tolerance && approx a.y b.y tolerance && approx a.z b.z tolerance
+
+private def testGradeMapping : IO Unit := do
+  let mixed : MV R3 .full := MV.ofPairs R3 .full [
+    (0, 2.0), (1, 3.0), (2, 4.0), (4, 5.0),
+    (6, 7.0), (5, 11.0), (3, 13.0), (7, 17.0)
+  ]
+  let grades := R3Grades.ofMV mixed
+  require "grade map scalar" (grades.scalar == 2.0)
+  require "grade map vector" (grades.vector == { x := 3.0, y := 4.0, z := 5.0 })
+  require "grade map e23/e31/e12 normal"
+    (grades.bivectorNormal == { x := 7.0, y := -11.0, z := 13.0 })
+  require "grade map pseudoscalar" (grades.pseudoscalar == 17.0)
+  let gradeRecord (scalar vx vy vz bx byCoeff bz pseudoscalar : Float) : R3Grades := {
+    scalar
+    vector := { x := vx, y := vy, z := vz }
+    bivectorNormal := { x := bx, y := byCoeff, z := bz }
+    pseudoscalar
+  }
+  let basisCases : List (Nat × R3Grades) := [
+    (0, gradeRecord 9.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0),
+    (1, gradeRecord 0.0 9.0 0.0 0.0 0.0 0.0 0.0 0.0),
+    (2, gradeRecord 0.0 0.0 9.0 0.0 0.0 0.0 0.0 0.0),
+    (4, gradeRecord 0.0 0.0 0.0 9.0 0.0 0.0 0.0 0.0),
+    (6, gradeRecord 0.0 0.0 0.0 0.0 9.0 0.0 0.0 0.0),
+    (5, gradeRecord 0.0 0.0 0.0 0.0 0.0 (-9.0) 0.0 0.0),
+    (3, gradeRecord 0.0 0.0 0.0 0.0 0.0 0.0 9.0 0.0),
+    (7, gradeRecord 0.0 0.0 0.0 0.0 0.0 0.0 0.0 9.0)
+  ]
+  for (mask, expected) in basisCases do
+    require s!"basis mask {mask} grade mapping"
+      (R3Grades.ofMV (MV.ofPairs R3 .full [(mask, 9.0)]) == expected)
+
+private def testGrid : IO Unit := do
+  let points ← IO.ofExcept defaultGrid.points
+  require "5x5 grid has 25 points" (points.size == 25)
+  require "row-major first point" (points[0]! == { x := -1.0, y := -1.0, z := 0.0 })
+  require "row-major x changes first" (points[1]! == { x := -0.5, y := -1.0, z := 0.0 })
+  require "row-major next row" (points[5]! == { x := -1.0, y := -0.5, z := 0.0 })
+  require "row-major final point" (points[24]! == { x := 1.0, y := 1.0, z := 0.0 })
+  require "xCount underflow rejected"
+    (({ defaultGrid with xCount := 1 }).points matches .error _)
+  require "zero-width x range rejected"
+    (({ defaultGrid with xMax := defaultGrid.xMin }).points matches .error _)
+  require "non-finite grid rejected"
+    (({ defaultGrid with yMax := 1.0 / 0.0 }).points matches .error _)
+  require "oversized grid rejected"
+    (({ defaultGrid with xCount := 65, yCount := 65 }).points matches .error _)
+
+private def testFieldFormula : IO Unit := do
+  let p : Vec3 := { x := 0.5, y := -0.25, z := 0.0 }
+  let grades := R3Grades.ofMV (baseField p)
+  require "base scalar formula" (approx grades.scalar (0.35 * p.x))
+  require "base vector formula"
+    (approxVec grades.vector { x := -p.y + 0.35, y := p.x, z := 0.25 })
+  require "base bivector formula"
+    (approxVec grades.bivectorNormal {
+      x := 0.25 * p.y
+      y := -(0.25 * p.x)
+      z := p.x * p.x + p.y * p.y - 0.35 * p.y
+    })
+  require "base pseudoscalar formula"
+    (approx grades.pseudoscalar (0.20 * Float.sin (pi * (p.x + p.y))))
+  let theta := pi / 3.0
+  let rotated := R3Grades.ofMV (fieldAt theta p)
+  require "rotor sandwich preserves scalar" (approx rotated.scalar grades.scalar)
+  require "rotor sandwich preserves pseudoscalar"
+    (approx rotated.pseudoscalar grades.pseudoscalar)
+
+private def testFrames : IO Unit := do
+  let frames ← IO.ofExcept buildFrames
+  require "default frame count" (frames.size == defaultFrameCount)
+  require "default samples per frame" (frames.all fun frame => frame.samples.size == 25)
+  require "every frame is finite"
+    (frames.all fun frame => frame.parameter.isFinite && frame.samples.all fun sample =>
+      sample.position.isFinite && sample.value.isFinite)
+  require "zero frames rejected" ((buildFrames (frameCount := 0) matches .error _))
+  require "non-finite field output rejected"
+    ((samplePlanar defaultGrid fun _ => {
+      scalar := 0.0 / 0.0
+      vector := { x := 0.0, y := 0.0, z := 0.0 }
+      bivectorNormal := { x := 0.0, y := 0.0, z := 0.0 }
+      pseudoscalar := 0.0
+    }) matches .error _)
+  let badPositions := frames.set! 1 {
+    frames[1]! with
+    samples := frames[1]!.samples.set! 0 {
+      frames[1]!.samples[0]! with position := { x := 99.0, y := 0.0, z := 0.0 }
+    }
+  }
+  require "inconsistent frame positions rejected"
+    ((validateFrames badPositions) matches .error _)
+
+def run : IO Unit := do
+  testGradeMapping
+  testGrid
+  testFieldFormula
+  testFrames
+  IO.println "multivector field tests passed"
+
+end MultivectorFieldTests
+
+def main : IO Unit :=
+  MultivectorFieldTests.run
