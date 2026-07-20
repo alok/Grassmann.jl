@@ -2,7 +2,8 @@
 
 This note records the repeatable checks for the packed `MV` backend's PGA3
 motor-point path, basic linear kernels, unary involutions, Hodge dual, grade and
-parity projection, parity widening, and dense-to-packed ingress. These paths
+parity projection, parity widening, dense-to-packed ingress, and generic
+geometric, exterior, and contraction products. These paths
 exercise the port's hot native representation: projective transforms over
 `MV PGA3 .even` and `MV PGA3 .odd`, plus full/even/odd arithmetic over
 contiguous `FloatArray` storage.
@@ -273,3 +274,58 @@ one closure call, push once, and tail-jump. There is no boxed coefficient array,
 range/map callback, second collection pass, runtime size validation, or zero
 fallback. Exact regression coverage separately pins dimensions 0, 1, 5, 6, and
 12, including the dimension-zero odd hidden storage slot and dense round trips.
+
+## 2026-07-20 Generic Product Audit
+
+The generic `MV` product kernels are now output-stationary. For each output
+coefficient they scan the smaller physical operand, derive the unique XOR
+partner, accumulate in one unboxed `Float`, and push once into one final
+`FloatArray`. R2, R3, R4, STA, PGA3, and CGA3 use closed byte plans for all four
+operations and all nine ordered full/even/odd layout pairs. Arbitrary
+signatures retain direct output-stationary fallbacks.
+
+An independent compile-time oracle enumerates physical input buffers and calls
+only the scalar blade-product definitions. It covers dimensions zero through
+six, cached and uncached signatures, every ordered layout pair, all four
+products, and the dimension-zero odd compatibility slot. Separate guards pin
+the historical IEEE behavior of geometric multiplication: a zero left
+coefficient is skipped, while a non-finite left coefficient multiplied by a
+zero right coefficient propagates `NaN`.
+
+Run the structural and repeated runtime gates from the outer repository root:
+
+```bash
+Grassmann4/scripts/generic_product_codegen_guard.sh
+GENERIC_PRODUCT_BENCH_ITERS=1000 \
+GENERIC_PRODUCT_BENCH_REPEATS=3 \
+  Grassmann4/scripts/generic_product_bench_guard.sh
+```
+
+The runtime guard requires exactly 108 unique cases per repeat: R3, PGA3, and
+CGA3; nine ordered layouts; and multiplication, wedge, left contraction, and
+right contraction. It checks every coefficient and three independent
+checksums against both the retained pre-rewrite kernel and the dense model,
+then evaluates the median of an odd number of runs. The default floors reject
+a median forward/rewrite ratio below `0.80` or dense/rewrite ratio below
+`1.00`; the acceptance run used the stricter observed condition that every
+forward/rewrite median remained above `1.00`.
+
+The final 3-by-1000 run had coefficient and checksum differences at most
+`1e-6` and these worst per-operation medians:
+
+| Operation | Worst measured layout | Forward / rewritten |
+| --- | --- | ---: |
+| Geometric product | R3 odd x odd | `1.054x` |
+| Wedge product | PGA3 even x full | `1.061x` |
+| Left contraction | R3 even x full | `1.182x` |
+| Right contraction | R3 even x full | `1.199x` |
+
+The generated-C guard freshly materializes `Grassmann.MV:c`. It separately
+audits the geometric loops, whose one-sided zero policy is observable for
+non-finite inputs, and the shared wedge/contraction loops. All coefficient
+loops are closed tail loops with byte-plan and direct `FloatArray` reads; both
+output loops push exactly once per coefficient. The planned hot region has no
+pack/unpack, sign lookup, parity or popcount recomputation, random result
+writes, closure allocation, generic iterator machinery, or borrowed-input
+reference-count churn. Every public generic kernel owns exactly one result
+buffer.

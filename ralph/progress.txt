@@ -659,3 +659,37 @@ NEXT
    the versioned PGA3 ABI.
 
 <promise>COMPLETE</promise>
+
+2026-07-20 ALOK-771 OUTPUT-STATIONARY GENERIC PRODUCTS COMPLETE
+
+- `3f0e3be` adds an independent physical-buffer and scalar-blade oracle for all
+  four products, all nine ordered layouts, cached and uncached signatures,
+  dimensions 0--6, and the dimension-zero odd compatibility slot.
+- `86243bf` and `5cc3d87` add the 108-case R3/PGA3/CGA3 benchmark matrix and
+  exact retained pre-rewrite comparators. Every coefficient and checksum is
+  compared with the retained and dense results before timing.
+- `332cf6a` makes all four generic products output-stationary. Six canonical
+  signatures use closed byte plans; arbitrary signatures retain direct
+  smaller-side scans and one push per output coefficient.
+- `6dcb1ce` repairs the sole hostile-audit regression: planned geometric
+  multiplication now preserves `nonfinite * 0 -> NaN` while a zero left
+  coefficient remains skipped. Cached/uncached and both scan directions are
+  pinned.
+- `81e8642` and `ba2f52f` add fresh generated-C and repeated median gates. The
+  final 3-by-1000 run passed all 108 cases with differences at most `1e-6`;
+  worst forward/rewrite medians were `1.054x` mul, `1.061x` wedge, `1.182x`
+  left, and `1.199x` right. No threshold was weakened.
+- The broad 1,235-job build passed. The complete property executable passed
+  305/305 groups and 600/600 optimization cases; fixed packed kernels, fat
+  dot, the Init-only PGA3 suite, and the authoritative 188/188 Julia oracle
+  also passed.
+- The original dirty checkout, including CurveShortening, physics, Metal,
+  Unreal, SciLean, and optimizer experiments, remains byte-for-byte unchanged.
+
+NEXT
+
+1. Publish portable Lake library boundaries for runtime, reference, fields,
+   visualization, and validation imports.
+2. Finish and rehearse the offline multivector-field InfoView for ALOK-793.
+
+<promise>COMPLETE</promise>
