@@ -34,7 +34,8 @@ actual `#html` stage file.
 
 Then prepare the editor:
 
-1. Open these tabs in order: `GrassmannFields/R3.lean`,
+1. Dismiss any Cursor update or notification toast and close unrelated side
+   panels. Then open these tabs in order: `GrassmannFields/R3.lean`,
    `GrassmannFields/Examples/MixedRotor.lean`, and
    `MultivectorFieldDemo.lean`.
 2. Put the cursor on the final `#html` line and wait for the InfoView to show
