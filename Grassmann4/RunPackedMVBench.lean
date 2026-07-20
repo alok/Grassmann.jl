@@ -18,6 +18,7 @@ def defaultUnaryInvolutionIters : Nat := 100000
 def defaultHodgeDualIters : Nat := 100000
 def defaultProjectionWideningIters : Nat := 100000
 def defaultDenseIngressIters : Nat := 100000
+def defaultGenericProductIters : Nat := 2000
 def defaultXYZBatchPoints : Nat := 4096
 def defaultXYZBatchIters : Nat := 100
 
@@ -227,6 +228,159 @@ def compare (denseName packedName : String) (warmupIters iters : Nat)
 
 def positiveIters (n : Nat) : Nat :=
   if n = 0 then 1 else n
+
+/-! ### Generic full-product baseline -/
+
+/-- Keep the generic geometric kernel behind a stable call boundary. -/
+@[noinline]
+def genericMulFullData {n : Nat} (sig : Signature n)
+    (a b : @& MV sig .full) : DataArray :=
+  MV.mulKernelGeneric sig .full .full a.coeffs b.coeffs
+
+/-- Keep the generic exterior kernel behind a stable call boundary. -/
+@[noinline]
+def genericWedgeFullData {n : Nat} (sig : Signature n)
+    (a b : @& MV sig .full) : DataArray :=
+  MV.wedgeKernelGeneric sig .full .full a.coeffs b.coeffs
+
+/-- Keep the generic left-contraction kernel behind a stable call boundary. -/
+@[noinline]
+def genericLeftContractFullData {n : Nat} (sig : Signature n)
+    (a b : @& MV sig .full) : DataArray :=
+  MV.leftContractKernelGeneric sig .full .full a.coeffs b.coeffs
+
+/-- Keep the generic right-contraction kernel behind a stable call boundary. -/
+@[noinline]
+def genericRightContractFullData {n : Nat} (sig : Signature n)
+    (a b : @& MV sig .full) : DataArray :=
+  MV.rightContractKernelGeneric sig .full .full a.coeffs b.coeffs
+
+/-- Weighted checksum that observes every physical result coefficient. -/
+@[noinline]
+def productDataChecksum (data : @& DataArray) : Float :=
+  (List.range data.size).foldl (init := 0.0) fun acc i =>
+    acc + Float.ofNat (i + 1) * data.get! i
+
+/-- The same weighted checksum over a dense full-layout reference. -/
+def denseProductChecksum {n : Nat} {sig : Signature n}
+    (m : Multivector sig Float) : Float :=
+  (List.finRange (2 ^ n)).foldl (init := 0.0) fun acc i =>
+    acc + Float.ofNat (i.val + 1) * m.coeffs i
+
+/-- Compare a raw full packed result against every dense reference coefficient. -/
+def productDataDenseL1Diff {n : Nat} {sig : Signature n}
+    (actual : @& DataArray) (expected : Multivector sig Float) : Float :=
+  if actual.size != 2 ^ n then
+    1e300
+  else
+    (List.finRange (2 ^ n)).foldl (init := 0.0) fun acc i =>
+      acc + Float.abs (actual.get! i.val - expected.coeffs i)
+
+/--
+Validate and time all four full-layout generic product kernels for one signature.
+
+Sixteen varied inputs prevent one fixed expression from being constant-folded.
+The preflight compares every coefficient with the independent dense API, while
+the timed checksum consumes every physical output slot.
+-/
+def runGenericProductSignature {n : Nat} (label : String) (sig : Signature n)
+    (makeDense : Float → Multivector sig Float) (iters : Nat) : IO Unit := do
+  IO.println s!"=== {label} full generic packed products ==="
+  let samples : Nat := 16
+  let denseA : Array (Multivector sig Float) :=
+    Array.ofFn (n := samples) fun k => makeDense (Float.ofNat (k.val + 1))
+  let denseB : Array (Multivector sig Float) :=
+    Array.ofFn (n := samples) fun k => makeDense (Float.ofNat (k.val + 17))
+  let packedA : Array (MV sig .full) :=
+    denseA.map fun m => MV.ofMultivector m .full
+  let packedB : Array (MV sig .full) :=
+    denseB.map fun m => MV.ofMultivector m .full
+  let defaultDenseA := makeDense 1.0
+  let defaultDenseB := makeDense 17.0
+  let defaultPackedA : MV sig .full := MV.ofMultivector defaultDenseA .full
+  let defaultPackedB : MV sig .full := MV.ofMultivector defaultDenseB .full
+  let mut mulDiff := 0.0
+  let mut wedgeDiff := 0.0
+  let mut leftDiff := 0.0
+  let mut rightDiff := 0.0
+  let mut mulChecksum := 0.0
+  let mut wedgeChecksum := 0.0
+  let mut leftChecksum := 0.0
+  let mut rightChecksum := 0.0
+  let mut denseMulChecksum := 0.0
+  let mut denseWedgeChecksum := 0.0
+  let mut denseLeftChecksum := 0.0
+  let mut denseRightChecksum := 0.0
+  for i in [0:samples] do
+    let denseLeft := denseA.getD i defaultDenseA
+    let denseRight := denseB.getD i defaultDenseB
+    let packedLeft := packedA.getD i defaultPackedA
+    let packedRight := packedB.getD i defaultPackedB
+    let actualMul := genericMulFullData sig packedLeft packedRight
+    let actualWedge := genericWedgeFullData sig packedLeft packedRight
+    let actualLeft := genericLeftContractFullData sig packedLeft packedRight
+    let actualRight := genericRightContractFullData sig packedLeft packedRight
+    let expectedMul := Multivector.geometricProduct denseLeft denseRight
+    let expectedWedge := Multivector.wedgeProduct denseLeft denseRight
+    let expectedLeft := Multivector.leftContract denseLeft denseRight
+    let expectedRight := Multivector.rightContract denseLeft denseRight
+    mulDiff := mulDiff + productDataDenseL1Diff actualMul expectedMul
+    wedgeDiff := wedgeDiff + productDataDenseL1Diff actualWedge expectedWedge
+    leftDiff := leftDiff + productDataDenseL1Diff actualLeft expectedLeft
+    rightDiff := rightDiff + productDataDenseL1Diff actualRight expectedRight
+    mulChecksum := mulChecksum + productDataChecksum actualMul
+    wedgeChecksum := wedgeChecksum + productDataChecksum actualWedge
+    leftChecksum := leftChecksum + productDataChecksum actualLeft
+    rightChecksum := rightChecksum + productDataChecksum actualRight
+    denseMulChecksum := denseMulChecksum + denseProductChecksum expectedMul
+    denseWedgeChecksum := denseWedgeChecksum + denseProductChecksum expectedWedge
+    denseLeftChecksum := denseLeftChecksum + denseProductChecksum expectedLeft
+    denseRightChecksum := denseRightChecksum + denseProductChecksum expectedRight
+  IO.println s!"  {label} generic mul l1 diff: {mulDiff}"
+  IO.println s!"  {label} generic wedge l1 diff: {wedgeDiff}"
+  IO.println s!"  {label} generic left contraction l1 diff: {leftDiff}"
+  IO.println s!"  {label} generic right contraction l1 diff: {rightDiff}"
+  IO.println s!"  {label} generic mul checksum: {mulChecksum} (dense {denseMulChecksum})"
+  IO.println s!"  {label} generic wedge checksum: {wedgeChecksum} (dense {denseWedgeChecksum})"
+  IO.println s!"  {label} generic left checksum: {leftChecksum} (dense {denseLeftChecksum})"
+  IO.println s!"  {label} generic right checksum: {rightChecksum} (dense {denseRightChecksum})"
+  let diffs := #[mulDiff, wedgeDiff, leftDiff, rightDiff]
+  let checksumDiffs := #[
+    Float.abs (mulChecksum - denseMulChecksum),
+    Float.abs (wedgeChecksum - denseWedgeChecksum),
+    Float.abs (leftChecksum - denseLeftChecksum),
+    Float.abs (rightChecksum - denseRightChecksum)]
+  let checksumTolerance := tolerance * Float.ofNat (samples * (2 ^ n) + 1)
+  if diffs.any fun diff => diff.isNaN || diff > tolerance then
+    throw <| IO.userError s!"{label} generic product dense-reference mismatch"
+  if checksumDiffs.any fun diff => diff.isNaN || diff > checksumTolerance then
+    throw <| IO.userError s!"{label} generic product checksum mismatch"
+  let positive := positiveIters iters
+  let warmup := positiveIters (positive / 10)
+  let _ ← timeit s!"generic {label} full mul" warmup positive fun i =>
+    let idx := i % samples
+    productDataChecksum <| genericMulFullData sig
+      (packedA.getD idx defaultPackedA) (packedB.getD idx defaultPackedB)
+  let _ ← timeit s!"generic {label} full wedge" warmup positive fun i =>
+    let idx := i % samples
+    productDataChecksum <| genericWedgeFullData sig
+      (packedA.getD idx defaultPackedA) (packedB.getD idx defaultPackedB)
+  let _ ← timeit s!"generic {label} full left contraction" warmup positive fun i =>
+    let idx := i % samples
+    productDataChecksum <| genericLeftContractFullData sig
+      (packedA.getD idx defaultPackedA) (packedB.getD idx defaultPackedB)
+  let _ ← timeit s!"generic {label} full right contraction" warmup positive fun i =>
+    let idx := i % samples
+    productDataChecksum <| genericRightContractFullData sig
+      (packedA.getD idx defaultPackedA) (packedB.getD idx defaultPackedB)
+  IO.println ""
+
+/-- Reproducible full-layout baseline for the remaining generic product kernels. -/
+def runGenericProducts (iters : Nat := defaultGenericProductIters) : IO Unit := do
+  let positive := positiveIters iters
+  runGenericProductSignature "R3" R3 denseR3 positive
+  runGenericProductSignature "PGA3" PGA3 densePGA3 positive
+  runGenericProductSignature "CGA3" CGA3 denseCGA3 positive
 
 /-! ### Dense-to-packed ingress allocation baselines -/
 
@@ -1149,6 +1303,7 @@ def usage : String :=
     "       packedmvbench hodge-dual [iters]",
     "       packedmvbench projections-widening [iters]",
     "       packedmvbench dense-ingress [iters]",
+    "       packedmvbench generic-products [iters]",
     "       packedmvbench pga-motor-point [iters]",
     "       packedmvbench pga-motor-point-dense [iters]",
     "       packedmvbench pga-motor-point-packed [iters]",
@@ -1185,6 +1340,10 @@ def main (args : List String) : IO Unit := do
       Grassmann.PackedMVBench.runDenseIngress
   | ["dense-ingress", itersStr] =>
       Grassmann.PackedMVBench.runDenseIngress (← parseItersArg itersStr)
+  | ["generic-products"] =>
+      Grassmann.PackedMVBench.runGenericProducts
+  | ["generic-products", itersStr] =>
+      Grassmann.PackedMVBench.runGenericProducts (← parseItersArg itersStr)
   | ["pga-motor-point"] =>
       Grassmann.PackedMVBench.runPGA3MotorPointTransform
         Grassmann.PackedMVBench.defaultMotorPointIters
