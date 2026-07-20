@@ -20,11 +20,6 @@ name = "multivectorFieldWidget"
 path = "Grassmann4/GrassmannViz/multivectorField.js"
 text = true
 
-# Temporarily disabled - Verso dependency issues
-# [[require]]
-# name = "LeanPlot"
-# path = "/Users/alokbeniwal/leanplot"
-
 [[lean_lib]]
 name = "Grassmann"
 srcDir = "Grassmann4"
