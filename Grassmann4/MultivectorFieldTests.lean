@@ -62,6 +62,16 @@ private def testGrid : IO Unit := do
     (({ defaultGrid with yMax := 1.0 / 0.0 }).points matches .error _)
   require "oversized grid rejected"
     (({ defaultGrid with xCount := 65, yCount := 65 }).points matches .error _)
+  let extremeGrid : PlanarGrid := {
+    defaultGrid with
+    xMin := -1e308
+    xMax := 1e308
+    xCount := 3
+    yCount := 2
+  }
+  let extremePoints ← IO.ofExcept extremeGrid.points
+  require "finite extreme endpoints interpolate to finite positions"
+    (extremePoints.all Vec3.isFinite)
 
 private def testFieldFormula : IO Unit := do
   let p : Vec3 := { x := 0.5, y := -0.25, z := 0.0 }
@@ -91,6 +101,8 @@ private def testFrames : IO Unit := do
     (frames.all fun frame => frame.parameter.isFinite && frame.samples.all fun sample =>
       sample.position.isFinite && sample.value.isFinite)
   require "zero frames rejected" ((buildFrames (frameCount := 0) matches .error _))
+  require "public zero-count frame parameter is finite and guarded"
+    (frameParameter 0 0 == 0.0)
   require "non-finite field output rejected"
     ((samplePlanar defaultGrid fun _ => {
       scalar := 0.0 / 0.0

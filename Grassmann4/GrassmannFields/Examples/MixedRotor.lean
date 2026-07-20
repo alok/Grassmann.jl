@@ -58,9 +58,14 @@ def defaultGrid : PlanarGrid :=
 /-- Number of precomputed rotor frames in the meetup scene. -/
 def defaultFrameCount : Nat := 24
 
-/-- Frame parameter over one complete turn, without duplicating the endpoint. -/
+/-- Frame parameter over one complete turn, without duplicating the endpoint.
+
+The public helper returns zero for a zero frame count. `buildFrames` rejects
+that invalid count before constructing any frames.
+-/
 def frameParameter (index frameCount : Nat) : Float :=
-  2.0 * pi * index.toFloat / frameCount.toFloat
+  if frameCount == 0 then 0.0
+  else 2.0 * pi * index.toFloat / frameCount.toFloat
 
 /-- Compute and validate one sampled frame in Lean. -/
 def buildFrame (grid : PlanarGrid) (theta : Float) : Except String Frame3 := do

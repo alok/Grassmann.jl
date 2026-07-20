@@ -123,7 +123,8 @@ def PlanarGrid.validate (grid : PlanarGrid) : Except String Unit := do
     throw s!"grid has more than {maxSamplesPerFrame} samples"
 
 private def axisCoordinate (lo hi : Float) (index count : Nat) : Float :=
-  lo + (hi - lo) * index.toFloat / (count - 1).toFloat
+  let t := index.toFloat / (count - 1).toFloat
+  (1.0 - t) * lo + t * hi
 
 /-- Generate validated points in deterministic row-major order: y, then x. -/
 def PlanarGrid.points (grid : PlanarGrid) : Except String (Array Vec3) := do
@@ -133,7 +134,10 @@ def PlanarGrid.points (grid : PlanarGrid) : Except String (Array Vec3) := do
     let y := axisCoordinate grid.yMin grid.yMax yi grid.yCount
     for xi in [:grid.xCount] do
       let x := axisCoordinate grid.xMin grid.xMax xi grid.xCount
-      points := points.push { x, y, z := grid.z }
+      let point : Vec3 := { x, y, z := grid.z }
+      unless point.isFinite do
+        throw "grid interpolation produced a non-finite sample position"
+      points := points.push point
   return points
 
 /-- Sample any field after adapting its result to semantic `Cl(3, 0)` grades. -/
