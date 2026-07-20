@@ -40,6 +40,9 @@ required_contract=(
   "fitPlanarLattice"
   "onLostPointerCapture"
   "userSelect: 'none'"
+  "height: 372"
+  "minHeight: 372"
+  "maxHeight: 372"
 )
 for token in "${required_contract[@]}"; do
   if ! rg --fixed-strings --quiet "$token" "$renderer"; then
