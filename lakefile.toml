@@ -88,6 +88,11 @@ name = "multivectorfieldtests"
 root = "MultivectorFieldTests"
 srcDir = "Grassmann4"
 
+[[lean_exe]]
+name = "multivectorfallback"
+root = "GenerateMultivectorFallback"
+srcDir = "Grassmann4"
+
 
 # Note: Verso documentation setup is available but requires
 # additional build configuration. See Manual/ folder for content.

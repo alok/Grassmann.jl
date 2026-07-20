@@ -1,5 +1,6 @@
 import GrassmannViz.Scene
 import GrassmannViz.InfoView
+import GrassmannViz.FallbackSvg
 
 /-!
 # Visualization boundary for sampled multivector fields
