@@ -280,11 +280,11 @@ function sampleGlyph(entry, camera, scales, visible, selectedIndex, selectSample
     }));
   }
 
-  const vectorMetrics = vectorMetrics(value.vector);
-  const vectorMagnitude = vectorMetrics.magnitude;
+  const vectorInfo = vectorMetrics(value.vector);
+  const vectorMagnitude = vectorInfo.magnitude;
   if (visible[1] && vectorMagnitude > EPSILON) {
     const ratio = clamp(vectorMagnitude / scales.vector, 0, 1);
-    const direction = vectorMetrics.direction;
+    const direction = vectorInfo.direction;
     const tip = project(
       add(entry.displayPosition, scale(0.15 + 0.32 * ratio, direction)),
       camera,

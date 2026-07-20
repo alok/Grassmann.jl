@@ -6,6 +6,7 @@ package_root=$(cd "$script_dir/.." && pwd -P)
 renderer="$package_root/GrassmannViz/multivectorField.js"
 
 node --check "$renderer"
+node "$script_dir/multivector_renderer_runtime_check.mjs"
 
 forbidden='https?://|//[[:alnum:]][^[:space:]]*\.(com|org|net)|\bfetch[[:space:]]*\(|XMLHttpRequest|WebSocket|\beval[[:space:]]*\(|WebGL|\bTHREE\b'
 if rg --line-number --regexp "$forbidden" "$renderer"; then

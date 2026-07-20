@@ -327,6 +327,8 @@ Focused Lean tests cover:
 Renderer guards cover:
 
 - JavaScript syntax with `node --check`;
+- execution of the actual renderer helpers and glyph builder over extreme
+  finite coefficients and coordinates in a local Node VM;
 - absence of URL schemes, `fetch`, `XMLHttpRequest`, WebSocket, Three.js,
   Ganja.js, LeanPlot, WebGL, and dynamic `eval`;
 - a Lake input-file dependency from `GrassmannViz` to the JavaScript embedded
