@@ -13,6 +13,7 @@ import Grassmann.MVArithmeticTests
 import Grassmann.MVUnaryTests
 import Grassmann.MVHodgeTests
 import Grassmann.MVProjectionTests
+import Grassmann.MVProductTests
 import Grassmann.MVDenseTests
 import Grassmann.OracleTests
 import Grassmann.DSLTests
