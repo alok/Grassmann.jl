@@ -18,6 +18,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: leanprover/lean-action@v1
+      - name: Share the outer Lake workspace with package-layout checks
+        run: |
+          test -d .lake
+          ln -s ../.lake Grassmann4/.lake
+          ln -s ../../../.lake Grassmann4/tests/downstream/.lake
+          test "$(readlink Grassmann4/.lake)" = "../.lake"
+          test "$(readlink Grassmann4/tests/downstream/.lake)" = "../../../.lake"
       - name: Verify public libraries and offline field demo
         run: |
           lake build Grassmann GrassmannReference GrassmannFields GrassmannViz GrassmannTests
