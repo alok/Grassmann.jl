@@ -39,6 +39,9 @@ Then prepare the editor:
    `MultivectorFieldDemo.lean`.
 2. Put the cursor on the final `#html` line and wait for the InfoView to show
    the title, four grade buttons, field, inspector, and frame slider.
+   If Cursor says that imports are out of date after the preflight rebuild,
+   click its `Restart File` button once and wait for this view; do not reload
+   the whole editor.
 3. Drag the empty SVG background, wheel, click a sample, toggle each grade,
    press Play, pause, and scrub. Restore all four grade toggles before leaving
    the rehearsal view.

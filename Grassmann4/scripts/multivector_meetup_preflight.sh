@@ -45,3 +45,4 @@ fi
 echo
 echo "PASS: multivector field demo is compiled, fresh, offline-guarded, and stage-ready"
 echo "Open MultivectorFieldDemo.lean and place the cursor on #html."
+echo "If an already-open editor reports stale imports, click Restart File once."
