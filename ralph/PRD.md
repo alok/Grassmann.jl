@@ -394,3 +394,47 @@ final thresholded CGA3 ingress measurements were `6337.973750 ns/iter` full,
 and `1.029x`/`1.028x`/`1.033x` speedups over the retained boxed shapes.
 
 <promise>COMPLETE</promise>
+
+## Continuation: ALOK-771 output-stationary generic products
+
+Allocation-tight dense ingress is complete. This continuation removes random
+result-buffer writes and repeated rank/sign work from the four generic packed
+products without changing the public `MV` API or the fixed canonical kernels.
+
+### Required outcomes
+
+- Make geometric multiplication, wedge, left contraction, and right
+  contraction output-stationary for all full/even/odd input combinations.
+- Preserve exact physical storage, arbitrary-signature fallbacks,
+  dimension-zero odd compatibility, degenerate metrics, and observable IEEE
+  non-finite behavior.
+- Add an independent blade-level oracle that does not call a production packed
+  product kernel while constructing its expected buffers.
+- Retain the exact pre-rewrite implementations as executable benchmark
+  comparators across R3, PGA3, CGA3, all nine ordered layouts, and all four
+  products.
+- Gate correctness, repeated median performance, one-result-buffer ownership,
+  closed tail loops, and the absence of packing, sign, callback, and random
+  write work from canonical hot loops.
+- Re-run canonical and broad builds, complete properties, fixed kernels, and
+  the Grassmann.jl oracle before completion.
+
+### Completion
+
+ALOK-771 is complete. Canonical signatures now use closed output-major byte
+plans and arbitrary signatures use direct output-stationary fallbacks. The
+independent oracle covers dimensions 0, 1, 2, 3, 4, 5, and 6 and every ordered
+layout pair; focused regressions preserve the geometric kernel's historical
+`nonfinite * 0` and `0 * nonfinite` asymmetry. The generated-C guard confirms
+closed geometric and shared sparse coefficient loops, single-push output
+loops, and one result buffer per public kernel.
+
+The final 108-case, 3-run, 1000-iteration median guard had correctness and
+checksum differences at most `1e-6`. Worst forward/rewrite medians were
+`1.054x` multiplication, `1.061x` wedge, `1.182x` left contraction, and
+`1.199x` right contraction, so every measured rewritten case beat its retained
+baseline. The 1,235-job broad build, all 305 property groups and 600
+optimization cases, fixed/fat-dot/PGA3 kernels, and the 188-result Julia oracle
+passed.
+
+<promise>COMPLETE</promise>
