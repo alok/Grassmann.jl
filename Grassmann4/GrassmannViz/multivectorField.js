@@ -375,6 +375,7 @@ export default function MultivectorField(props) {
   })).sort((a, b) => b.projected.depth - a.projected.depth);
 
   const pointerDown = event => {
+    event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     drag.current = { x: event.clientX, y: event.clientY, camera };
     setDragging(true);
@@ -499,6 +500,7 @@ export default function MultivectorField(props) {
           background: '#0b1120',
           cursor: dragging ? 'grabbing' : 'grab',
           touchAction: 'none',
+          userSelect: 'none',
         },
       }, [
         h('rect', { key: 'background', x: 0, y: 0, width: WIDTH, height: HEIGHT, fill: '#0b1120' }),

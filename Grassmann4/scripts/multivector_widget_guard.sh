@@ -34,6 +34,8 @@ required_contract=(
   "frameCount > 1"
   "props.parameterLabel"
   "props.initialSample"
+  "event.preventDefault()"
+  "userSelect: 'none'"
 )
 for token in "${required_contract[@]}"; do
   if ! rg --fixed-strings --quiet "$token" "$renderer"; then
