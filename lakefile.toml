@@ -23,6 +23,10 @@ rev = "32d24245c7a12ded17325299fd41d412022cd3fe"
 name = "Grassmann"
 srcDir = "Grassmann4"
 
+[[lean_lib]]
+name = "GrassmannFields"
+srcDir = "Grassmann4"
+
 [[lean_exe]]
 name = "genmetalshaders"
 root = "GenMetalShaders"
@@ -72,6 +76,11 @@ precompileModules = false
 [[lean_exe]]
 name = "jlexamples"
 root = "RunJuliaExamples"
+srcDir = "Grassmann4"
+
+[[lean_exe]]
+name = "multivectorfieldtests"
+root = "MultivectorFieldTests"
 srcDir = "Grassmann4"
 
 
