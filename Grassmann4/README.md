@@ -312,6 +312,12 @@ editor-local commands omit the `Grassmann4/` source prefix; for example,
 `lake build Grassmann GrassmannFields GrassmannViz` and
 `lake env lean MultivectorFieldDemo.lean`.
 
+The SF Lean meetup material has two stage anchors over the same libraries:
+`OrdinaryProgrammingDemo.lean` is the basic record/function/array/error
+warm-up, and `MultivectorFieldDemo.lean` is the offline interactive field. The
+recommended minute-by-minute route is in `docs/SFLeanBasicFirstTalk.md`; run
+`scripts/multivector_meetup_preflight.sh` before presenting.
+
 ## Benchmarks
 
 Use the benchmark guards for repeatable local correctness and performance

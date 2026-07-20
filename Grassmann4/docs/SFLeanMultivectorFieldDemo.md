@@ -6,6 +6,11 @@ Stage anchor: `Grassmann4/MultivectorFieldDemo.lean`
 
 Static backup: `Grassmann4/docs/MultivectorFieldFallback.svg`
 
+Recommended route: `Grassmann4/docs/SFLeanBasicFirstTalk.md`. It keeps this
+visual but replaces the internal-library tour and 5-by-5 to 6-by-5 edit with a
+beginner-safe record/function/array/error warm-up. The rest of this document is
+the optional, more algebra-heavy route.
+
 ## One-sentence thesis
 
 Here Lean is the ordinary programming language that represents, computes,
@@ -28,7 +33,7 @@ same package root that Cursor selects for these files. Its final line must
 begin with `PASS`. It builds all five public Lake roots—`Grassmann`,
 `GrassmannReference`, `GrassmannFields`, `GrassmannViz`, and `GrassmannTests`—
 then checks grade/rotation and validation tests, a stage-root consumer module,
-JavaScript syntax and the
+the basic stage file, JavaScript syntax and the
 offline policy, embedded-source freshness, generated SVG freshness, and the
 actual `#html` stage file.
 
@@ -37,7 +42,7 @@ Then prepare the editor:
 1. Dismiss any Cursor update or notification toast. Hide both the Explorer and
    Agent/auxiliary sidebars for the visual; the pre-opened tabs make them
    unnecessary. Then open these tabs in order: `GrassmannFields/R3.lean`,
-   `GrassmannFields/Examples/MixedRotor.lean`, and
+   `GrassmannFields/Examples/MixedRotor.lean`, `GrassmannViz/Scene.lean`, and
    `MultivectorFieldDemo.lean`.
 2. Put the cursor on the final `#html` line and wait for the InfoView to show
    the title, four grade buttons, field, inspector, and frame slider.
