@@ -29,18 +29,23 @@ The demo is intentionally self-contained:
 
 ## 2. Lake-library boundaries
 
-The outer repository Lake package is authoritative. The nested
-`Grassmann4/.git` metadata and nested Lake configuration are not part of this
-change.
+The outer repository Lake package is authoritative for distribution. The
+nested `Grassmann4` Lake package mirrors its toolchain, mathlib pin, and public
+library boundary because editors resolve a source file against the nearest
+Lake workspace. The stale nested `Grassmann4/.git` metadata is not
+authoritative.
 
-The outer `lakefile.toml` exposes three importable libraries with the shared
-`Grassmann4` source directory:
+Both Lake entry points expose five importable libraries. The outer
+`lakefile.toml` uses the shared `Grassmann4` source directory; the nested
+package uses that directory as its root:
 
 | Lake library | Root module | Responsibility |
 | --- | --- | --- |
 | `Grassmann` | `Grassmann.lean` | Existing packed geometric-algebra runtime |
+| `GrassmannReference` | `GrassmannReference.lean` | Opt-in dense representations and extended geometric-algebra API |
 | `GrassmannFields` | `GrassmannFields.lean` | Pure field geometry, grade projection, sampling, validation, and example data |
 | `GrassmannViz` | `GrassmannViz.lean` | ProofWidgets props and offline InfoView renderer |
+| `GrassmannTests` | `GrassmannTests.lean` | Broad validation aggregate for repository and downstream smoke checks |
 
 The intended module dependency graph is:
 
@@ -65,7 +70,9 @@ GrassmannFields.R3 -----> GrassmannFields.Examples.MixedRotor
 semantic records exported by `GrassmannFields`; it must not inspect `DataArray`
 or depend on the packed storage layout. Downstream users can therefore sample
 fields without acquiring a UI abstraction, and can replace the renderer while
-preserving the scene schema.
+preserving the scene schema. `GrassmannReference` and `GrassmannTests` remain
+opt-in so ordinary runtime users do not acquire dense models or validation
+modules transitively.
 
 The implementation must not modify `Grassmann/MV.lean` or
 `RunPackedMVBench.lean`.
@@ -299,15 +306,18 @@ Renderer guards cover:
 
 The milestone is complete when all of the following are true:
 
+- `lake build Grassmann GrassmannReference GrassmannFields GrassmannViz
+  GrassmannTests` succeeds from both the repository root and `Grassmann4`;
 - `lake build GrassmannFields` succeeds;
 - `lake build GrassmannViz` succeeds;
 - the focused field/scene test executable succeeds;
-- `lake env lean Grassmann4/MultivectorFieldDemo.lean` succeeds and displays
-  the widget from its `#html` command in a compatible editor;
+- from `Grassmann4`, `lake env lean MultivectorFieldDemo.lean` succeeds and a
+  compatible editor's Lean LSP displays the widget from its `#html` command;
 - the renderer-source freshness check succeeds after a clean widget rebuild;
 - JavaScript syntax and offline static guards succeed;
-- a downstream smoke module imports `Grassmann`, `GrassmannFields`, and
-  `GrassmannViz` without private-path imports;
+- a separate downstream Lake package imports `Grassmann`,
+  `GrassmannReference`, `GrassmannFields`, `GrassmannViz`, and `GrassmannTests`
+  without private-path imports;
 - the default scene contains 24 frames of 25 finite samples and every frame has
   identical positions;
 - grade toggles, orbit drag, wheel zoom, reset, frame scrubber, playback, and
@@ -315,4 +325,3 @@ The milestone is complete when all of the following are true:
 - a checked-in fallback SVG is legible and names all four grades;
 - no unrelated source files, especially `Grassmann/MV.lean` and
   `RunPackedMVBench.lean`, are changed.
-
