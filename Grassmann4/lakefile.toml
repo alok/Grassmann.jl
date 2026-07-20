@@ -2,28 +2,33 @@ name = "Grassmann"
 version = "0.1.0"
 keywords = ["math"]
 defaultTargets = ["Grassmann"]
+restoreAllArtifacts = true
 
 [leanOptions]
-pp.unicode.fun = true # pretty-prints `fun a ↦ b`
+pp.unicode.fun = true                 # pretty-prints `fun a ↦ b`
 relaxedAutoImplicit = false
 weak.linter.mathlibStandardSet = true
 maxSynthPendingDepth = 3
 
-# Build in release mode for optimizations
-[buildOptions]
-release = true
-
-# SciLean brings in mathlib, so we don't need to specify it separately
 [[require]]
-name = "scilean"
-path = "/Users/alokbeniwal/scilean"
-
-[[require]]
-name = "LeanPlot"
-path = "/Users/alokbeniwal/leanplot"
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4.git"
+rev = "32d24245c7a12ded17325299fd41d412022cd3fe"
 
 [[lean_lib]]
 name = "Grassmann"
+
+[[lean_lib]]
+name = "GrassmannReference"
+
+[[lean_lib]]
+name = "GrassmannFields"
+
+[[lean_lib]]
+name = "GrassmannViz"
+
+[[lean_lib]]
+name = "GrassmannTests"
 
 [[lean_exe]]
 name = "genmetalshaders"
@@ -34,31 +39,45 @@ name = "genvectorfield"
 root = "Grassmann.GenVectorField"
 
 [[lean_exe]]
-name = "jlexamples"
-root = "RunJuliaExamples"
-
-[[lean_exe]]
 name = "oracletests"
 root = "RunOracleTests"
-moreLinkArgs = ["-L/opt/homebrew/opt/openblas/lib", "-lblas"]
 
 [[lean_exe]]
 name = "propertytests"
 root = "RunPropertyTests"
-moreLinkArgs = ["-L/opt/homebrew/opt/openblas/lib", "-lblas"]
+
+[[lean_exe]]
+name = "fixedkerneltests"
+root = "FixedKernelTests"
+
+[[lean_exe]]
+name = "fatdottests"
+root = "FatDotTests"
+
+[[lean_exe]]
+name = "pga3kerneltests"
+root = "PGA3KernelTests"
+
+[[lean_exe]]
+name = "bench"
+root = "Grassmann.Bench"
 
 [[lean_exe]]
 name = "packedmvbench"
 root = "RunPackedMVBench"
 precompileModules = false
-moreLinkArgs = ["-L/opt/homebrew/opt/openblas/lib", "-lblas"]
 
 [[lean_exe]]
-name = "bench"
-root = "Grassmann.Bench"
-precompileModules = false
-# BLAS linking for SciLean-backed DataArray operations
-moreLinkArgs = ["-L/opt/homebrew/opt/openblas/lib", "-lblas"]
+name = "jlexamples"
+root = "RunJuliaExamples"
+
+[[lean_exe]]
+name = "multivectorfieldtests"
+root = "MultivectorFieldTests"
+
+[[lean_exe]]
+name = "multivectorfallback"
+root = "GenerateMultivectorFallback"
 
 
 # Note: Verso documentation setup is available but requires
