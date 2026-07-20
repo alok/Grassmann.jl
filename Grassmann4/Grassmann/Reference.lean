@@ -38,7 +38,6 @@ import Grassmann.Calculus
 import Grassmann.SpecialFunctions
 import Grassmann.VectorUtils
 import Grassmann.R3Utils
-import Grassmann.Visualization
 import Grassmann.SignTables
 import Grassmann.GradeSet
 import Grassmann.BladeIndex

@@ -25,11 +25,19 @@ name = "Grassmann"
 srcDir = "Grassmann4"
 
 [[lean_lib]]
+name = "GrassmannReference"
+srcDir = "Grassmann4"
+
+[[lean_lib]]
 name = "GrassmannFields"
 srcDir = "Grassmann4"
 
 [[lean_lib]]
 name = "GrassmannViz"
+srcDir = "Grassmann4"
+
+[[lean_lib]]
+name = "GrassmannTests"
 srcDir = "Grassmann4"
 
 [[lean_exe]]
