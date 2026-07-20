@@ -570,7 +570,9 @@ export default function MultivectorField(props) {
         style: {
           flex: '1 1 650px',
           minWidth: 0,
-          minHeight: 430,
+          height: 372,
+          minHeight: 372,
+          maxHeight: 372,
           border: '1px solid #334155',
           borderRadius: 11,
           background: '#0b1120',

@@ -342,6 +342,8 @@ Renderer guards cover:
   embedded by `include_str` in the built OLean;
 - stable `data-region`, `data-grade`, `data-glyph`, and `data-sample-index`
   attributes for interaction and layout QA;
+- a fixed-height field surface that keeps the controls, inspector, timeline,
+  and ownership boundary in a 1080-by-720 CSS-pixel stage pane;
 - overflow-safe coefficient normalization, finite planar display fitting, and
   lost-pointer-capture recovery hooks.
 

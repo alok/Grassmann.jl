@@ -34,8 +34,9 @@ actual `#html` stage file.
 
 Then prepare the editor:
 
-1. Dismiss any Cursor update or notification toast and close unrelated side
-   panels. Then open these tabs in order: `GrassmannFields/R3.lean`,
+1. Dismiss any Cursor update or notification toast. Hide both the Explorer and
+   Agent/auxiliary sidebars for the visual; the pre-opened tabs make them
+   unnecessary. Then open these tabs in order: `GrassmannFields/R3.lean`,
    `GrassmannFields/Examples/MixedRotor.lean`, and
    `MultivectorFieldDemo.lean`.
 2. Put the cursor on the final `#html` line and wait for the InfoView to show
@@ -43,14 +44,16 @@ Then prepare the editor:
    If Cursor says that imports are out of date after the preflight rebuild,
    click its `Restart File` button once and wait for this view; do not reload
    the whole editor.
-3. Drag the empty SVG background, wheel, click a sample, toggle each grade,
+3. Collapse the InfoView's `Expected type` disclosure and leave `HTML Display`
+   open. Drag the empty SVG background, wheel, click a sample, toggle each grade,
    press Play, pause, and scrub. Restore all four grade toggles before leaving
    the rehearsal view.
 4. Set the editor font to 18 px. Make the InfoView at least **1080 CSS px
-   wide** and confirm the title, controls, field, inspector, and timeline are
-   visible without scrolling. That is 60 percent of an 1800 px window but 75
-   percent of a 1440 px projector window. At 1280 px, widen the visual almost
-   full-screen for interaction and restore the code split only for the edit.
+   wide** and about **720 CSS px high**, and confirm the title, controls, field,
+   inspector, timeline, and ownership sentence are visible without scrolling.
+   That is 60 percent of an 1800 px window but 75 percent of a 1440 px projector
+   window. At 1280 px, widen the visual almost full-screen for interaction and
+   restore the code split only for the edit.
 5. Confirm the InfoView is updating rather than paused or pinned. Moving
    between `#eval` and `#html` must change the displayed output.
 6. Turn networking off and repeat the reveal. Nothing in the demo uses it.
