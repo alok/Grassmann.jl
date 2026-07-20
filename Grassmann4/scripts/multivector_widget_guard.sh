@@ -2,8 +2,8 @@
 set -euo pipefail
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
-repo_root=$(cd "$script_dir/../.." && pwd -P)
-renderer="$repo_root/Grassmann4/GrassmannViz/multivectorField.js"
+package_root=$(cd "$script_dir/.." && pwd -P)
+renderer="$package_root/GrassmannViz/multivectorField.js"
 
 node --check "$renderer"
 
@@ -23,5 +23,23 @@ if rg --line-number '^import' "$renderer" |
   echo "renderer imports a module other than the InfoView-provided React runtime" >&2
   exit 1
 fi
+
+required_contract=(
+  "'data-region'"
+  "'data-grade'"
+  "'data-glyph'"
+  "'data-sample-index'"
+  "safeFrameIndex"
+  "safeSelectedIndex"
+  "frameCount > 1"
+  "props.parameterLabel"
+  "props.initialSample"
+)
+for token in "${required_contract[@]}"; do
+  if ! rg --fixed-strings --quiet "$token" "$renderer"; then
+    echo "renderer is missing QA or state-safety contract: $token" >&2
+    exit 1
+  fi
+done
 
 echo "multivector renderer syntax and offline guards passed"

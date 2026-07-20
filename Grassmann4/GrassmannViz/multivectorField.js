@@ -36,12 +36,6 @@ function cross(a, b) {
   };
 }
 
-function dominantSignedComponent(vector) {
-  const entries = [vector.x, vector.y, vector.z];
-  return entries.reduce((best, value) =>
-    Math.abs(value) > Math.abs(best) ? value : best, 0);
-}
-
 function signColor(value) {
   return value < 0 ? '#38bdf8' : '#f59e0b';
 }
@@ -65,7 +59,7 @@ function project(point, camera) {
   };
 }
 
-function arrowParts(key, start, end, color, width) {
+function arrowParts(key, start, end, color, width, data = {}) {
   const dx = end.x - start.x;
   const dy = end.y - start.y;
   const length = Math.sqrt(dx * dx + dy * dy);
@@ -83,6 +77,8 @@ function arrowParts(key, start, end, color, width) {
   return [
     h('line', {
       key: key + '-shaft',
+      ...data,
+      'data-glyph-part': 'shaft',
       x1: start.x,
       y1: start.y,
       x2: end.x - ux * (headLength * 0.55),
@@ -93,6 +89,8 @@ function arrowParts(key, start, end, color, width) {
     }),
     h('polygon', {
       key: key + '-head',
+      ...data,
+      'data-glyph-part': 'head',
       points: `${end.x},${end.y} ${leftX},${leftY} ${rightX},${rightY}`,
       fill: color,
     }),
@@ -170,6 +168,9 @@ function sampleGlyph(entry, camera, scales, visible, selectedIndex, selectSample
     const ratio = clamp(Math.abs(value.pseudoscalar) / scales.pseudoscalar, 0, 1);
     children.push(h('circle', {
       key: 'pseudoscalar',
+      'data-grade': 3,
+      'data-glyph': 'pseudoscalar-halo',
+      'data-sample-index': entry.index,
       cx: center.x,
       cy: center.y,
       r: (10 + 17 * ratio) * camera.zoom * center.perspective,
@@ -201,9 +202,12 @@ function sampleGlyph(entry, camera, scales, visible, selectedIndex, selectSample
       const diskPoint = project(add(sample.position, offset), camera);
       diskPoints.push(`${diskPoint.x},${diskPoint.y}`);
     }
-    const color = signColor(dominantSignedComponent(value.bivectorNormal));
+    const color = '#f59e0b';
     children.push(h('polygon', {
       key: 'bivector-disk',
+      'data-grade': 2,
+      'data-glyph': 'bivector-disk',
+      'data-sample-index': entry.index,
       points: diskPoints.join(' '),
       fill: color,
       fillOpacity: 0.20,
@@ -212,7 +216,11 @@ function sampleGlyph(entry, camera, scales, visible, selectedIndex, selectSample
       strokeWidth: 1.7,
     }));
     const normalTip = project(add(sample.position, scale(0.16 + 0.12 * ratio, normal)), camera);
-    children.push(...arrowParts('bivector-normal', center, normalTip, color, 1.6));
+    children.push(...arrowParts('bivector-normal', center, normalTip, color, 1.6, {
+      'data-grade': 2,
+      'data-glyph': 'bivector-normal',
+      'data-sample-index': entry.index,
+    }));
   }
 
   const vectorMagnitude = magnitude(value.vector);
@@ -220,13 +228,20 @@ function sampleGlyph(entry, camera, scales, visible, selectedIndex, selectSample
     const ratio = clamp(vectorMagnitude / scales.vector, 0, 1);
     const direction = normalize(value.vector);
     const tip = project(add(sample.position, scale(0.15 + 0.32 * ratio, direction)), camera);
-    children.push(...arrowParts('vector', center, tip, '#a78bfa', 2.6));
+    children.push(...arrowParts('vector', center, tip, '#a78bfa', 2.6, {
+      'data-grade': 1,
+      'data-glyph': 'vector-arrow',
+      'data-sample-index': entry.index,
+    }));
   }
 
   if (visible[0] && Math.abs(value.scalar) > EPSILON) {
     const ratio = clamp(Math.abs(value.scalar) / scales.scalar, 0, 1);
     children.push(h('circle', {
       key: 'scalar',
+      'data-grade': 0,
+      'data-glyph': 'scalar-dot',
+      'data-sample-index': entry.index,
       cx: center.x,
       cy: center.y,
       r: (3.5 + 7.5 * ratio) * Math.sqrt(center.perspective),
@@ -240,6 +255,8 @@ function sampleGlyph(entry, camera, scales, visible, selectedIndex, selectSample
   if (entry.index === selectedIndex) {
     children.push(h('circle', {
       key: 'selected',
+      'data-glyph': 'selection',
+      'data-sample-index': entry.index,
       cx: center.x,
       cy: center.y,
       r: 15,
@@ -253,6 +270,8 @@ function sampleGlyph(entry, camera, scales, visible, selectedIndex, selectSample
   children.push(h('title', { key: 'title' }, coefficientText(sample, entry.index)));
   return h('g', {
     key: `sample-${entry.index}`,
+    'data-region': 'sample',
+    'data-sample-index': entry.index,
     onPointerDown: event => event.stopPropagation(),
     onClick: event => {
       event.stopPropagation();
@@ -267,6 +286,8 @@ function gradeButton(grade, label, color, visible, setVisible) {
   return h('button', {
     key: grade,
     type: 'button',
+    'data-region': 'grade-toggle',
+    'data-grade': grade,
     onClick: () => setVisible(current => ({ ...current, [grade]: !current[grade] })),
     'aria-pressed': active,
     style: {
@@ -293,6 +314,7 @@ function inspector(sample, index) {
   ]);
   const show = number => String(number);
   return h('div', {
+    'data-region': 'multivector-field',
     style: {
       minWidth: 276,
       border: '1px solid #334155',
@@ -322,9 +344,7 @@ export default function MultivectorField(props) {
   const [visible, setVisible] = React.useState({ 0: true, 1: true, 2: true, 3: true });
   const [camera, setCamera] = React.useState(DEFAULT_CAMERA);
   const [dragging, setDragging] = React.useState(false);
-  const [selectedIndex, setSelectedIndex] = React.useState(
-    Math.floor(props.frames[props.initialFrame].samples.length / 2),
-  );
+  const [selectedIndex, setSelectedIndex] = React.useState(props.initialSample);
   const drag = React.useRef(null);
 
   // Validated props always contain frames and samples. Clamp synchronously so
@@ -336,9 +356,8 @@ export default function MultivectorField(props) {
   React.useEffect(() => {
     setPlaying(false);
     setFrameIndex(props.initialFrame);
-    const initial = props.frames[props.initialFrame];
-    setSelectedIndex(Math.floor(initial.samples.length / 2));
-  }, [props.frames, props.initialFrame]);
+    setSelectedIndex(props.initialSample);
+  }, [props.frames, props.initialFrame, props.initialSample]);
 
   React.useEffect(() => {
     if (!playing || frameCount < 2) return undefined;
@@ -417,7 +436,11 @@ export default function MultivectorField(props) {
       fontFamily: 'var(--vscode-font-family, system-ui, sans-serif)',
     },
   }, [
-    h('div', { key: 'header', style: { display: 'flex', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' } }, [
+    h('div', {
+      key: 'header',
+      'data-region': 'header',
+      style: { display: 'flex', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' },
+    }, [
       h('div', { key: 'titles', style: { minWidth: 320, flex: '1 1 520px' } }, [
         h('div', { key: 'title', style: { fontSize: 22, lineHeight: 1.25, fontWeight: 760 } }, props.title),
         h('div', { key: 'subtitle', style: { color: '#94a3b8', fontSize: 15, marginTop: 5 } }, props.subtitle),
@@ -437,6 +460,7 @@ export default function MultivectorField(props) {
     ]),
     h('div', {
       key: 'controls',
+      'data-region': 'grade-controls',
       style: { display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap', margin: '13px 0 9px' },
     }, [
       gradeButton(0, 'grade 0 · scalar', '#f59e0b', visible, setVisible),
@@ -450,9 +474,14 @@ export default function MultivectorField(props) {
         style: buttonStyle,
       }, 'Reset view'),
     ]),
-    h('div', { key: 'content', style: { display: 'flex', gap: 13, alignItems: 'stretch', flexWrap: 'wrap' } }, [
+    h('div', {
+      key: 'content',
+      'data-region': 'field-and-inspector',
+      style: { display: 'flex', gap: 13, alignItems: 'stretch', flexWrap: 'wrap' },
+    }, [
       h('svg', {
         key: 'svg',
+        'data-region': 'field-svg',
         viewBox: `0 0 ${WIDTH} ${HEIGHT}`,
         role: 'img',
         'aria-label': 'Interactive three-dimensional multivector field',
@@ -473,8 +502,9 @@ export default function MultivectorField(props) {
         },
       }, [
         h('rect', { key: 'background', x: 0, y: 0, width: WIDTH, height: HEIGHT, fill: '#0b1120' }),
-        h('g', { key: 'grid', pointerEvents: 'none' }, gridElements(frame, camera)),
-        h('g', { key: 'glyphs' }, entries.map(entry =>
+        h('g', { key: 'grid', 'data-region': 'guide-grid', pointerEvents: 'none' },
+          gridElements(frame, camera)),
+        h('g', { key: 'glyphs', 'data-region': 'glyphs' }, entries.map(entry =>
           sampleGlyph(entry, camera, scales, visible, safeSelectedIndex, setSelectedIndex))),
         h('text', {
           key: 'hint',
@@ -485,11 +515,16 @@ export default function MultivectorField(props) {
           pointerEvents: 'none',
         }, 'drag to orbit · wheel to zoom · click a sample to inspect'),
       ]),
-      h('div', { key: 'inspector', style: { flex: '0 1 300px', alignSelf: 'flex-start' } },
+      h('div', {
+        key: 'inspector',
+        'data-region': 'inspector',
+        style: { flex: '0 1 300px', alignSelf: 'flex-start' },
+      },
         inspector(frame.samples[safeSelectedIndex], safeSelectedIndex)),
     ]),
     frameCount > 1 ? h('div', {
       key: 'timeline',
+      'data-region': 'timeline',
       style: { display: 'flex', gap: 10, alignItems: 'center', marginTop: 11 },
     }, [
       h('button', {
@@ -516,11 +551,13 @@ export default function MultivectorField(props) {
         `frame ${safeFrameIndex + 1} / ${frameCount}`),
     ]) : h('div', {
       key: 'timeline-static',
+      'data-region': 'timeline-static',
       style: { color: '#94a3b8', fontSize: 14, marginTop: 11 },
     }, 'frame 1 / 1 · static scene'),
     h('div', {
       key: 'ownership',
+      'data-region': 'ownership',
       style: { color: '#94a3b8', fontSize: 14, lineHeight: 1.45, marginTop: 10 },
-    }, 'Lean computed and validated every position and grade coefficient. This local SVG view only projects, depth-sorts, sizes, colors, and paints those serialized values.'),
+    }, 'Lean computed and validated every position and grade coefficient. This local SVG view infers rectangular guides from the validated lattice, normalizes display scales, constructs glyph geometry, projects, depth-sorts, and paints those serialized values.'),
   ]);
 }

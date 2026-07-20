@@ -39,7 +39,7 @@ def rotor (theta : Float) : MV R3 .even :=
   let half := theta / 2.0
   MV.ofPairs R3 .even [(0, Float.cos half), (3, -Float.sin half)]
 
-/-- Rotate every grade of the base value while leaving the sample lattice fixed. -/
+/-- Rotate vector and bivector grades while scalar and pseudoscalar stay invariant. -/
 def fieldAt (theta : Float) (p : Vec3) : MV R3 .full :=
   mvSandwich (rotor theta) (baseField p)
 
