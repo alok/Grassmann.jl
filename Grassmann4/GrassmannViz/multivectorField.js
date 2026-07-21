@@ -625,7 +625,7 @@ export default function MultivectorField(props) {
           setFrameIndex(Number(event.target.value));
         },
         'aria-label': `Lean-computed ${props.parameterLabel} frame`,
-        style: { flex: 1, minWidth: 180 },
+        style: { flex: '1 1 140px', minWidth: 80 },
       }),
       h('span', { key: 'frame', style: { color: '#cbd5e1', fontSize: 14, minWidth: 92, textAlign: 'right' } },
         `frame ${safeFrameIndex + 1} / ${frameCount}`),
