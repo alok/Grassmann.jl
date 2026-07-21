@@ -81,7 +81,7 @@ def storageSize (n : Nat) (p : Parity) : Nat :=
 /-- The unified multivector type.
 
 `MV sig p` is a multivector over signature `sig` with grade parity `p`.
-Coefficients are stored in a contiguous `DataArray` of size 2^n.
+Coefficients use contiguous `DataArray` storage: `2^n` slots when full, `2^(n-1)` when even or odd.
 
 The parity `p` is a type-level tag that:
 1. Guides sparse iteration (only visit indices with matching parity)

@@ -145,7 +145,7 @@ The other key definitions are:
   literally the ordinary function type `Vec3 → M`;
 - [`Sample3` and `Frame3`, lines 95–104](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/GrassmannFields/R3.lean#L95-L104),
   renderer-neutral sampled data;
-- [`PlanarGrid.validate`, lines 120–138](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/GrassmannFields/R3.lean#L120-L138),
+- [`PlanarGrid.validate`, lines 120–135](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/GrassmannFields/R3.lean#L120-L135),
   finite bounds, minimum dimensions, increasing ranges, and a size ceiling;
 - [`PlanarGrid.points`, lines 142–153](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/GrassmannFields/R3.lean#L142-L153),
   deterministic row-major point generation;
@@ -183,7 +183,7 @@ The sentence to say is:
 There are also ordinary theorems adjacent to the runtime representation. The
 packed-index decoder is at
 [`unpackIdxValid`, lines 154–166](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/Grassmann/MV.lean#L154-L166),
-and [`unpackIdxValid_lt`, lines 168–170](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/Grassmann/MV.lean#L168-L170)
+and [`unpackIdxValid_lt`, lines 168–201](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/Grassmann/MV.lean#L168-L201)
 proves that any packed rank inside its physical buffer decodes to a valid dense
 blade mask.
 
@@ -235,7 +235,7 @@ The visualization library begins with a normal JSON-facing data model.
 derives JSON encoders for renderer-neutral records, declares schema version 2,
 and defines complete widget props.
 
-[`MultivectorFieldProps.validate`, lines 56–74](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/GrassmannViz/Scene.lean#L56-L74)
+[`MultivectorFieldProps.validate`, lines 56–71](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/GrassmannViz/Scene.lean#L56-L71)
 checks schema, labels, frame validity, rectangular-lattice shape, and initial
 selection bounds.
 
@@ -439,7 +439,9 @@ Yes. The Lake roots are separate and an independent downstream package consumes
 them through a path dependency. See
 [`lakefile.toml`, lines 18–34](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/lakefile.toml#L18-L34)
 and the external consumer at
-[`tests/downstream/Main.lean`, lines 1–20](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/tests/downstream/Main.lean#L1-L20).
+[`tests/downstream/Main.lean`, lines 1–19](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/tests/downstream/Main.lean#L1-L19).
+Its independent package declares the repository as a
+[`path` dependency](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/tests/downstream/lakefile.toml#L5-L7).
 
 ## What not to say
 
