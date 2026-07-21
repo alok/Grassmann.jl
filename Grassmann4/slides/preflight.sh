@@ -10,6 +10,7 @@ test -s _site/index.html
 test -s _site/slides/index.html
 test -s _site/slides/sflean-talk.css
 test -d _site/slides/lib
+test -s _site/follow-along.svg
 test -s _site/demo/app.js
 test -s _site/demo/scene.json
 test -s _site/demo/fallback.svg

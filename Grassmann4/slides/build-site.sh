@@ -25,6 +25,7 @@ mkdir -p \
 rsync -a --delete "$script_dir/_slides/" "$output_dir/slides/"
 cp "$script_dir/site/site.css" "$output_dir/site.css"
 cp "$script_dir/site/favicon.svg" "$output_dir/favicon.svg"
+cp "$script_dir/site/follow-along.svg" "$output_dir/follow-along.svg"
 cp "$script_dir/site/demo/index.html" "$output_dir/demo/index.html"
 cp "$package_root/docs/MultivectorFieldFallback.svg" "$output_dir/demo/fallback.svg"
 

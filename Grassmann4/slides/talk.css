@@ -65,6 +65,35 @@
   margin-top: 2.2em;
 }
 
+.follow-along {
+  align-items: center;
+  bottom: 0;
+  display: flex;
+  gap: 0.45em;
+  position: absolute;
+  right: 0;
+}
+
+.follow-along img {
+  background: #fff;
+  border-radius: 10px;
+  height: 2.25em;
+  padding: 0.12em;
+  width: 2.25em;
+}
+
+.follow-along p {
+  color: var(--warm);
+  font-size: 0.42em;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.follow-along span {
+  color: var(--muted);
+  font-size: 0.82em;
+}
+
 .fact-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

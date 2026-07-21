@@ -8,22 +8,24 @@ is built.
 ## The talk in one paragraph
 
 Scarf’s recent [Haskell-to-Python account](https://avi.press/posts/2026-07-10-after-7-years-in-production-scarf-has-reluctantly-moved-away-from-haskell.html)
-is the provocation, not the conclusion.
-The reported strengths of Haskell—reliability, types, and performance—held up;
-the costs were compilation time, ecosystem friction, and slower feedback in an
-agent-heavy workflow. Your inference is that a language becomes vulnerable when
-its distinctive value is organizationally substitutable. Lean is better
-positioned because it is both an [ordinary functional programming language](https://lean-lang.org/functional_programming_in_lean/Introduction/)
-**and** a proof assistant that can carry
-machine-checked specifications and proofs in the same language. The demo first
-earns the “ordinary programming” claim with records, functions, arrays, and
-explicit errors, then shows a packed Clifford program feeding an editor-native
-visualization.
+is a 30-second hook. It is not the argument. Haskell’s reliability, types, and
+performance held up. Scarf moved new API work to Python because the development
+loop became expensive. Then leave Scarf behind.
+
+The central comparison is a choice of direction. For a conventional
+application, use Python. If you choose type-driven functional programming for
+mathematical software, go farther than Haskell. Lean is an
+[ordinary functional programming language](https://lean-lang.org/functional_programming_in_lean/Introduction/)
+with dependent types and an integrated prover. In this program, the types carry
+dimension, metric signature, and parity through the multilinear algebra. A
+proof belongs in the development loop only when later code can reuse the fact.
+The demo starts with records, functions, arrays, and explicit errors. It then
+sends the output of a packed multivector program to an editor view.
 
 Your exact closing claim is:
 
-> Lean is not better than Haskell at everything. It is better differentiated:
-> an ordinary programming language whose second job is not ordinary.
+> The point is not to prove everything. The point is to make the next change
+> easier.
 
 ## What now exists
 
@@ -47,6 +49,21 @@ import GrassmannViz    -- versioned scene plus opt-in InfoView component
 The Verso dependencies and React package do **not** enter those library import
 closures. They live in the nested `Grassmann4/slides` presentation package.
 
+## How the audience uses the website
+
+The opening slide contains a QR code and the short URL
+`alok.github.io/talks/lean-unfair-advantage/`. Tell the audience:
+
+> Open the address on your phone. Swipe through the slides, or tap Demo. In the
+> demo, drag an empty part of the field to orbit it. Tap a sample to inspect its
+> coefficients. Toggle grade 2, scrub the timeline, or tap Play. The Code links
+> open the Lean source.
+
+The site is a companion to the live editor. It is not an online Lean editor.
+Lean generated and validated the complete scene before deployment. The browser
+draws the values and handles the controls. The same renderer also runs in
+InfoView during the live demo.
+
 ## The architecture to keep in your head
 
 ```text
@@ -58,7 +75,7 @@ validated Array of samples and frames
     ↓
 typed, versioned scene props
     ↓
-validated JSON wire payload
+validated JSON data
     ↓
 local React/SVG view: glyphs, camera, animation, interaction
 ```
@@ -69,13 +86,13 @@ That diagram encodes the most important claim boundary:
   coefficients, 24 frames, validation, and serialization.
 - **JavaScript presents:** display normalization, glyph geometry, camera
   projection, depth sorting, SVG painting, and interaction.
-- **This particular visual is numerical:** it uses `Float`. It is runtime
-  evidence supported by tests, not a theorem about exact real arithmetic.
+- **This visual uses `Float`:** tests cover its numerical behavior. It is not a
+  theorem about exact real arithmetic.
 
 Do not say “Lean does the 3D rendering.” Say “Lean computes and validates the
 field; the local component turns those values into an interactive SVG.”
 
-## Part I — the deliberately boring program
+## Part I — the ordinary program
 
 Open [`OrdinaryProgrammingDemo.lean`, lines 15–47](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/OrdinaryProgrammingDemo.lean#L15-L47).
 It imports only `GrassmannFields`, not the visualization package.
@@ -160,7 +177,7 @@ sampling pipeline through an adapter to semantic grades.
 
 ## Part III — where dependent types become concrete
 
-This is the answer to “where is Lean’s second job in *this* program?”
+This section shows which facts are in types and which facts have proofs.
 
 [`Signature (n : ℕ)`, lines 39–44](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/Grassmann/Manifold.lean#L39-L44)
 contains `BitVec n` metric data. The dimension is not a comment or a runtime
@@ -193,7 +210,7 @@ checked and private construction boundaries, not represented as a dependent
 vector. Lean lets one codebase combine these confidence levels without
 pretending they are the same thing.
 
-## Part IV — the actual Clifford field
+## Part IV — the multivector field
 
 The algebra-heavy example is compact, but keep it verbal during the timed core.
 It is excellent Q&A material.
@@ -349,37 +366,38 @@ typechecked teaching example inside the deck. The real complete grid begins at
 
 ## The exact 12-minute choreography
 
-### 0:00–2:35 — deck
+### 0:00–3:15 — deck
 
-1. **Title:** “Lean may be better positioned than Haskell because it has a
-   second job that is harder to replace.”
-2. **Scarf:** strengths held; new API work goes to Python; old Haskell remains;
-   build/ecosystem/feedback cost changed the decision.
-3. **Inference:** explicitly label the substitutability argument as yours.
-4. **Two jobs:** ordinary program + checked specification/proof.
-5. **Boring code:** one record, `Except`, and two `#eval`s; the slide itself is
-   compiled by Lean.
+1. **Title:** record → function → error → array → InfoView.
+2. **Scarf:** one recent Haskell exit. Give the facts in 30 seconds, then leave it.
+3. **Direction:** use Python for the conventional route; if types are the tool,
+   go farther with Lean.
+4. **Programming tools:** routine Lean code plus `MV signature parity`.
+5. **Core values:** hover the four small data types in the Verso code panel.
+6. **Checked code:** one record, `Except`, and two `#eval`s; Lean compiles the
+   slide source.
 
-### 2:35–5:50 — ordinary Cursor demo
+### 3:15–5:45 — ordinary Cursor demo
 
 Follow `OrdinaryProgrammingDemo.lean` top to bottom. Show the grid, function,
 sample count, 9→12 edit, immediate undo, and invalid-grid error. If anything
 takes more than five seconds to update, narrate the expected result and move on.
 
-### 5:50–6:30 — verbal bridge only
+### 5:45–6:15 — verbal bridge only
 
 Say:
 
-> The teaching field returned a named grade record. The flagship returns a
-> packed `Cl(3,0)` multivector. One geometric product contributes scalar and
-> oriented-plane parts; one even rotor sandwich transforms the complete value.
+> The teaching field returns a named grade record. The visual returns a packed
+> multivector. Its type records the dimension, metric signature, and parity. The
+> grid, function, validation, and array shape stay the same.
 
 Do not open `MixedRotor.lean` in the timed core. It is Q&A material.
 
-### 6:30–9:45 — InfoView
+### 6:15–9:15 — InfoView
 
 Show the summary first: 24 frames, 25 samples per frame, 600 Lean-computed
-multivectors. Say “Float runtime evidence, not a theorem.” Then perform only:
+multivectors. Say, “The animation uses floating-point computation. It is not a
+theorem about real numbers.” Then perform only:
 
 1. grade 2 off and on;
 2. Play, then Pause;
@@ -390,11 +408,12 @@ multivectors. Say “Float runtime evidence, not a theorem.” Then perform only
 The rehearsal tests wheel zoom, grade 3, and scrubbing too; the talk does not
 need every motor action.
 
-### 9:45–12:00 — deck and stop
+### 9:15–12:00 — deck and stop
 
-Explain the three libraries and the ownership boundary. Close with the narrow
-claim. Stop at 12 minutes; the remaining three minutes are questions, not an
-invitation to add another live branch.
+Explain the three libraries and the ownership boundary. Then show the four
+places that remove repeated work: `MV sig p`, computed output parity, generic
+fields, and one reusable packed-index lemma. Stop at 12 minutes. Use the
+remaining three minutes for questions.
 
 ## Likely questions and short answers
 
@@ -405,13 +424,13 @@ inside `do`, native `Float` computation, `Except`, IO executables, JSON, Lake
 libraries, and an editor component. The more interesting question is ecosystem
 and ergonomics, not whether the language can execute programs.
 
-### “Why is this better than Haskell plus tests?”
+### “Why is this easier than Haskell here?”
 
-Do not claim every Lean program automatically beats Haskell. Say that Lean
-supports a continuum: begin with executable code and tests, then move selected
-invariants into dependent types and proofs checked by the same kernel. Replacing
-the application while preserving that checked specification becomes a different
-organizational proposition.
+Do not make a universal claim. In this program, `MV sig p` carries the
+signature and parity. Multiplication computes its output parity in the type.
+Field sampling stays generic. A packed-index lemma gives kernel code one fact to
+reuse. These features remove explicit tags, repeated checks, and repeated
+boundary arguments from later code. That is the development-speed claim.
 
 ### “What here is actually proved?”
 
@@ -452,7 +471,7 @@ Its independent package declares the repository as a
 - Not “Lean proved this animation.” It computed and validated `Float` values.
 - Not “Lean renders the 3D geometry.” JavaScript builds and projects glyphs.
 - Not “JSON is typed.” Lean has typed scene props which are serialized into a
-  JSON wire payload.
+  JSON data.
 - Not “the 3→4 edit makes 600 values.” It makes 12 samples; the separate visual
   has 24×25 = 600 multivectors.
 - Not “all invariants are dependent.” The code intentionally combines types,
@@ -482,8 +501,7 @@ card. Never turn the talk into a live debugging session.
 
 ## Final mental model
 
-The achievement is not merely “a Clifford algebra demo in Lean.” It is a small
-vertical software system:
+The project is a small software system:
 
 ```text
 dependent indices and theorems
@@ -497,7 +515,5 @@ versioned serialization
 an editor extension and public visual surface
 ```
 
-That is the argument embodied as software. Lean’s niche is not that it imitates
-Haskell more beautifully. Its niche is that routine code, high-assurance types,
-proofs, tooling, and domain-specific interfaces can remain one connected
-program.
+Routine code, indexed types, proofs, tooling, and a domain-specific interface
+use one set of Lean definitions. That is the point of the demo.

@@ -23,10 +23,16 @@
   <main class="demo-shell">
     <div class="demo-intro">
       <div>
-        <p class="eyebrow">THE SAME COMPONENT, OUTSIDE THE EDITOR</p>
-        <h1>Lean computed the field.<br><span>The browser paints it.</span></h1>
+        <p class="eyebrow">BROWSER DEMO</p>
+        <h1>600 multivectors.<br><span>24 frames × 25 samples.</span></h1>
       </div>
-      <p>The page loads a versioned JSON scene generated and validated by Lean, then mounts the same local React/SVG component used in the InfoView. No Clifford product, rotor step, resampling, or frame interpolation happens in the browser.</p>
+      <p>This page loads a versioned JSON scene that Lean generated and validated. It then runs the same local React/SVG component as the Lean InfoView. The browser does not compute Clifford products, apply rotors, resample the field, or interpolate frames.</p>
+    </div>
+    <div class="phone-guide">
+      <strong>Phone controls</strong>
+      <span>Drag an empty part of the field to orbit.</span>
+      <span>Tap a sample to inspect its coefficients.</span>
+      <span>Tap grade 2 to show or hide plane values. Drag the timeline slider or tap Play.</span>
     </div>
     <div id="demo-status" class="demo-status" role="status">Loading the Lean-generated scene…</div>
     <div id="demo-root" class="demo-root" aria-live="polite"></div>
@@ -34,8 +40,8 @@
       <p class="demo-error">JavaScript is disabled. <a href="fallback.svg">Open the Lean-generated static SVG fallback.</a></p>
     </noscript>
     <div class="demo-footnotes">
-      <span><b>Field:</b> Lean <code>Float</code> runtime evidence</span>
-      <span><b>Payload:</b> 24 frames × 25 samples</span>
+      <span><b>Field:</b> Lean-computed <code>Float</code> values</span>
+      <span><b>Scene:</b> 24 frames × 25 samples</span>
       <span><b>Fallback:</b> <a href="fallback.svg">static SVG</a></span>
     </div>
   </main>
