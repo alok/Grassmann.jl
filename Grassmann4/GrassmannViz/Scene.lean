@@ -123,8 +123,8 @@ def defaultScene (grid : PlanarGrid := defaultGrid)
     (initialSample : Nat := defaultInitialSample) : Except String MultivectorFieldProps := do
   let frames ← buildFrames grid frameCount
   mkScene
-    "A multivector field, computed by Lean"
-    "Cl(3,0) · packed MV runtime · every frame precomputed"
+    "Packed multivector field"
+    "positions and coefficients computed and validated in Lean"
     "Fθ(p) = Rθ * (v(p) + p * v(p) + τ(p) I) * reverse(Rθ)"
     frames
     (initialSample := initialSample)

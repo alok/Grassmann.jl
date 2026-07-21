@@ -227,7 +227,7 @@ def fallbackSvg (props : MultivectorFieldProps) : Except String String := do
     "<text x=\"832\" y=\"552\" class=\"legend-detail\">Lean computed every position,</text>\n" ++
     "<text x=\"832\" y=\"575\" class=\"legend-detail\">Clifford product, rotor frame,</text>\n" ++
     "<text x=\"832\" y=\"598\" class=\"legend-detail\">and grade coefficient.</text>\n" ++
-    "<text x=\"30\" y=\"724\" class=\"footer\">Lean Float runtime evidence, not a formal proof. Interactive orbit, toggles, scrubbing, and inspection live in the InfoView version.</text>\n" ++
+    "<text x=\"30\" y=\"724\" class=\"footer\">Lean computes the Float field values. The InfoView adds orbit, grade controls, a timeline, and inspection.</text>\n" ++
     "</svg>\n"
 
 /-- Generate the checked-in backup from the same default scene as the widget. -/

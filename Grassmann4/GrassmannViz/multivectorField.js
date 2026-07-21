@@ -526,7 +526,7 @@ export default function MultivectorField(props) {
         }, props.formula),
       ]),
       h('div', { key: 'badges', style: { display: 'flex', alignItems: 'flex-start', gap: 7, flexWrap: 'wrap' } }, [
-        h('span', { key: 'lean', style: badgeStyle }, 'Lean Float runtime'),
+        h('span', { key: 'lean', style: badgeStyle }, 'Lean-computed Float'),
         h('span', { key: 'frames', style: badgeStyle },
           `${frameCount} Lean frame${frameCount === 1 ? '' : 's'}`),
         h('span', { key: 'samples', style: badgeStyle }, `${frame.samples.length} samples`),
@@ -593,7 +593,7 @@ export default function MultivectorField(props) {
           fill: '#64748b',
           fontSize: 14,
           pointerEvents: 'none',
-        }, 'drag to orbit · wheel to zoom · click a sample to inspect'),
+        }, 'drag empty space to orbit · wheel to zoom · tap a sample to inspect'),
       ]),
       h('div', {
         key: 'inspector',
@@ -638,6 +638,6 @@ export default function MultivectorField(props) {
       key: 'ownership',
       'data-region': 'ownership',
       style: { color: '#94a3b8', fontSize: 14, lineHeight: 1.45, marginTop: 10 },
-    }, 'Lean computed and validated every position and grade coefficient. This local SVG view infers rectangular guides from the validated lattice, normalizes display scales, constructs glyph geometry, projects, depth-sorts, and paints those serialized values.'),
+    }, 'Field data: positions and four grade coefficients from Lean. View work: glyph construction, camera projection, depth sorting, and SVG.'),
   ]);
 }

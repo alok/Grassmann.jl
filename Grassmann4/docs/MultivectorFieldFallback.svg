@@ -6,7 +6,7 @@
 </defs>
 <rect width="1100" height="760" rx="18" fill="#0f172a"/>
 <rect x="24" y="126" width="760" height="560" rx="13" fill="#0b1120" stroke="#334155"/>
-<text x="30" y="45" class="title">A multivector field, computed by Lean</text>
+<text x="30" y="45" class="title">Packed multivector field</text>
 <text x="30" y="72" class="subtitle">offline fallback · frame 1 / 24 · 25 Lean-computed samples</text>
 <text x="30" y="103" class="formula">Fθ(p) = Rθ * (v(p) + p * v(p) + τ(p) I) * reverse(Rθ)</text>
 <line class="grid" x1="313.140000" y1="221.080000" x2="103.140000" y2="428.920000" stroke="#334155" stroke-width="1.000000" stroke-linecap="round"/>
@@ -54,5 +54,5 @@
 <text x="832" y="552" class="legend-detail">Lean computed every position,</text>
 <text x="832" y="575" class="legend-detail">Clifford product, rotor frame,</text>
 <text x="832" y="598" class="legend-detail">and grade coefficient.</text>
-<text x="30" y="724" class="footer">Lean Float runtime evidence, not a formal proof. Interactive orbit, toggles, scrubbing, and inspection live in the InfoView version.</text>
+<text x="30" y="724" class="footer">Lean computes the Float field values. The InfoView adds orbit, grade controls, a timeline, and inspection.</text>
 </svg>
