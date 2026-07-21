@@ -1,0 +1,13 @@
+{
+  "name": "sflean-grassmann-talk-site",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "./build-site.sh",
+    "preflight": "./preflight.sh"
+  },
+  "dependencies": {
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  }
+}

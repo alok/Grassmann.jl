@@ -1,0 +1,5 @@
+/.lake/
+/_slides/
+/node_modules/
+/_site/
+/site/demo/grassmann-demo-test.js*

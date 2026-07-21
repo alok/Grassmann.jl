@@ -1,0 +1,22 @@
+name = "sflean-grassmann-talk"
+version = "0.1.0"
+defaultTargets = ["sflean-slides"]
+
+[[require]]
+name = "verso-slides"
+git = "https://github.com/leanprover/verso-slides.git"
+rev = "v4.32.0"
+
+[[input_file]]
+name = "talkCss"
+path = "talk.css"
+text = true
+
+[[lean_lib]]
+name = "SFLeanTalk"
+roots = ["SFLeanTalk"]
+
+[[lean_exe]]
+name = "sflean-slides"
+root = "Main"
+needs = ["talkCss"]

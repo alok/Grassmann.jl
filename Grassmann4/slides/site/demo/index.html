@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0b1120">
+  <meta name="description" content="Interactive browser rendering of a Clifford multivector field computed and validated by Lean.">
+  <title>Interactive multivector field · Lean’s unfair advantage</title>
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+  <link rel="stylesheet" href="../site.css">
+</head>
+<body class="demo-page">
+  <header class="site-nav">
+    <a class="wordmark" href="../">Lean’s unfair advantage</a>
+    <nav aria-label="Talk resources">
+      <a href="../slides/">Slides</a>
+      <a aria-current="page" href="./">Demo</a>
+      <a href="../tutorial/">Tutorial</a>
+      <a href="../cue-card/">Cue card</a>
+    </nav>
+  </header>
+  <main class="demo-shell">
+    <div class="demo-intro">
+      <div>
+        <p class="eyebrow">THE SAME COMPONENT, OUTSIDE THE EDITOR</p>
+        <h1>Lean computed the field.<br><span>The browser paints it.</span></h1>
+      </div>
+      <p>The page loads a versioned JSON scene generated and validated by Lean, then mounts the same local React/SVG component used in the InfoView. No Clifford product, rotor step, resampling, or frame interpolation happens in the browser.</p>
+    </div>
+    <div id="demo-status" class="demo-status" role="status">Loading the Lean-generated scene…</div>
+    <div id="demo-root" class="demo-root" aria-live="polite"></div>
+    <noscript>
+      <p class="demo-error">JavaScript is disabled. <a href="fallback.svg">Open the Lean-generated static SVG fallback.</a></p>
+    </noscript>
+    <div class="demo-footnotes">
+      <span><b>Field:</b> Lean <code>Float</code> runtime evidence</span>
+      <span><b>Payload:</b> 24 frames × 25 samples</span>
+      <span><b>Fallback:</b> <a href="fallback.svg">static SVG</a></span>
+    </div>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
