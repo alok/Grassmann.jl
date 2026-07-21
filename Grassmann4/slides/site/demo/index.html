@@ -35,7 +35,35 @@
       <span>Tap grade 2 to show or hide plane values. Drag the timeline slider or tap Play.</span>
     </div>
     <div id="demo-status" class="demo-status" role="status">Loading the Lean-generated scene…</div>
-    <div id="demo-root" class="demo-root" aria-live="polite"></div>
+    <div class="demo-workbench">
+      <aside class="demo-source" aria-labelledby="demo-source-title">
+        <div class="demo-source-heading">
+          <span>LEAN SOURCE</span>
+          <a href="https://github.com/alok/Grassmann.jl/blob/codex/alok-793-field-viz/Grassmann4/GrassmannFields/Examples/MixedRotor.lean">open file ↗</a>
+        </div>
+        <h2 id="demo-source-title">The program beside the view</h2>
+        <pre><code><span class="src-comment">-- The algebra stays in the type.</span>
+<span class="src-keyword">def</span> fieldAt (θ : Float) (p : Vec3) :
+    MV R3 .full :=
+  mvSandwich (rotor θ) (baseField p)
+
+<span class="src-comment">-- Stage-safe: compute 24 frames first.</span>
+<span class="src-keyword">def</span> stageScene :
+    Except String MultivectorFieldProps :=
+  defaultScene stageGrid 24
+
+<span class="src-command">#eval</span> stageScene.bind
+  MultivectorFieldProps.summary
+
+<span class="src-command">#html</span> sceneResultHtml stageScene</code></pre>
+        <div class="slider-note">
+          <strong>The slider can live in the editor.</strong>
+          <p>This demo’s slider selects one of 24 Lean-computed frames. A custom InfoView slider could send <code>θ</code> through RPC and reevaluate <code>fieldAt θ</code> live. I precomputed the frames for stage reliability.</p>
+        </div>
+        <p class="demo-source-foot">The Verso slides contain type-checked code with hover information. This panel shows the shorter stage path.</p>
+      </aside>
+      <div id="demo-root" class="demo-root" aria-live="polite"></div>
+    </div>
     <noscript>
       <p class="demo-error">JavaScript is disabled. <a href="fallback.svg">Open the Lean-generated static SVG fallback.</a></p>
     </noscript>
