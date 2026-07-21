@@ -10,6 +10,12 @@ live edit is `xCount := 5` to `xCount := 6`; Lean recomputes every sample.
 open GrassmannFields GrassmannViz
 open GrassmannFields.Examples.MixedRotor
 
+-- The minimal dependent-typing story for the demo:
+--   fieldAt : Float → Vec3 → MV R3 .full
+--   rotor   : Float → MV R3 .even
+#check fieldAt
+#check rotor
+
 /-- Small enough to recompute live, large enough to read from the room. -/
 def stageGrid : PlanarGrid := {
   defaultGrid with

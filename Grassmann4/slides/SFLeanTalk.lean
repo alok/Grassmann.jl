@@ -83,9 +83,9 @@ save later work, and editor views built around the same values.”
   <div class="job proof-job">
     <p class="job-kicker">DOMAIN TYPES</p>
     <h3>Let types carry the algebra</h3>
-    <p><code>MV signature parity</code></p>
+    <p><code>MV R3 .full</code></p>
     <p>multiplication computes result parity</p>
-    <p>field and sampler code reuse those types</p>
+    <p>the renderer receives a plain projection</p>
   </div>
 </div>
 <div class="ownership"><b>Loop:</b> edit → elaborate → evaluate → inspect.<br><b>Tools:</b> metaprograms and AI can act on the same typed program state.</div>
@@ -100,7 +100,7 @@ functional code, but the domain types carry facts that I would otherwise pass,
 check, and keep synchronized by hand.”
 :::
 
-# The values in this demo
+# Plain view data; one typed algebra
 
 ```lean
 structure Vec3 where
@@ -122,16 +122,20 @@ structure Sample3 where
 ```
 
 ```html
-<p class="slide-meta">Hover these names in Verso's code panel. They are ordinary records and a function type.</p>
+<div class="ownership"><b>Computed field:</b> <code>fieldAt : Float → Vec3 → MV R3 .full</code><br><b>View boundary:</b> <code>MV R3 p → R3Grades</code></div>
+<p class="slide-meta">Hover the ordinary view types here. In Cursor, hover <code>fieldAt</code> for the one dependent type used by the computation.</p>
 ```
 
 :::notes
 2:10-2:50. Open Verso's code panel and hover `Vec3`, `R3Grades`, `Field3`, and
-`Sample3`. These have the same fields as the stage-facing library types.
+`Sample3`. Call these plain renderer-facing types, not dependent types. In
+Cursor, `#check fieldAt` shows `Float → Vec3 → MV R3 .full`.
 
 Say: “A field is just a function from a point to a value. Here the value can
 hold a number, a directed segment, an oriented plane segment, and an oriented
-volume. That is all the Clifford algebra we need tonight.”
+volume. The computation returns `MV R3 .full`; one adapter projects that value
+to this plain record for the renderer. That is the only dependent-typing move
+I need for this demo.”
 :::
 
 # Start with the program
@@ -211,14 +215,14 @@ the scene and InfoView. Lean sends positions and coefficients; the view turns
 them into marks on the screen.”
 :::
 
-# Types that remove bookkeeping
+# The one dependent type in this demo
 
 ```html
 <div class="fact-grid">
-  <div class="fact"><b><code>MV sig p</code></b><span>dimension, metric, and parity travel with the value</span></div>
-  <div class="fact"><b><code>p₁ * p₂</code></b><span>multiplication computes the result parity</span></div>
-  <div class="fact"><b><code>Field3 M</code></b><span>sampling stays generic in the field value</span></div>
-  <div class="fact accent"><b>one lemma</b><span>packed-index code reuses a proved bound</span></div>
+  <div class="fact"><b><code>MV R3 .full</code></b><span>this field has the R3 metric and may contain every grade</span></div>
+  <div class="fact"><b><code>MV R3 .even</code></b><span>the rotor can contain only even grades</span></div>
+  <div class="fact"><b><code>.even * .full = .full</code></b><span>multiplication computes the result parity</span></div>
+  <div class="fact accent"><b><code>R3Grades.ofMV</code></b><span>one explicit boundary produces plain view data</span></div>
 </div>
 ```
 
@@ -229,11 +233,12 @@ them into marks on the screen.”
 :::notes
 10:45-12:00.
 
-Say: “These types remove bookkeeping from call sites. The packed-index lemma
-earns its place because later kernel code can reuse the bound. The point is not
-to prove everything. The point is to make the next change easier. This demo is
-my evidence: edit, elaborate, evaluate, inspect, and extend the editor in one
-typed loop.”
+Say: “I am not claiming that every record here is dependently typed. `Vec3` and
+`R3Grades` are deliberately plain. The useful type is `MV R3 .full`: the field's
+dimension, metric, and allowed grades travel together. The rotor is
+`MV R3 .even`, and multiplication determines that the result is full. Then one
+explicit adapter produces plain renderer data. The point is to use just enough
+type structure to make the next change easier.”
 
 Stop at 12:00 and use the remaining three minutes for questions.
 :::

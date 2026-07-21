@@ -7,7 +7,7 @@ demo. Do not teach the algebra.
 | Time | Surface | Do / say |
 |---:|---|---|
 | 0:00 | Slides 1–4 | Scarf is a 30-second example of leaving Haskell for Python. Then leave it. “For a conventional app, use Python. If I start with types for mathematical software, I want to go all the way to Lean.” |
-| 1:40 | Slide 5 | Hover `Vec3`, `R3Grades`, `Field3`, `Sample3`. Number · directed segment · oriented plane · oriented volume. |
+| 1:40 | Slide 5 | `Vec3` and `R3Grades` are plain view data. In Cursor, hover `fieldAt : Float → Vec3 → MV R3 .full`. This is the one dependent type in the demo. |
 | 2:20 | Slide 6 | Point at the checked record, `Except`, and two `#eval`s. Verso checked this code when it built the deck. |
 | 2:50 | Cursor · ordinary | [`tinyGrid`, line 15](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/OrdinaryProgrammingDemo.lean#L15-L25): configuration record. |
 | 3:30 | Cursor · ordinary | [`swirlField`, line 28](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/OrdinaryProgrammingDemo.lean#L28-L37): “A field is a function: point in, value out.” |

@@ -125,7 +125,7 @@ def defaultScene (grid : PlanarGrid := defaultGrid)
   mkScene
     "Packed multivector field"
     "positions and coefficients computed and validated in Lean"
-    "Fθ(p) = Rθ * (v(p) + p * v(p) + τ(p) I) * reverse(Rθ)"
+    "p=(x,y,0); v=(-y+0.35,x,0.25); τ=0.20 sin(π(x+y)); Fθ(p)=Rθ (v+p*v+τI) reverse(Rθ)"
     frames
     (initialSample := initialSample)
     (parameterLabel := "θ")
