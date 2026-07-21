@@ -56,6 +56,19 @@
   MultivectorFieldProps.summary
 
 <span class="src-command">#html</span> sceneResultHtml stageScene</code></pre>
+        <div class="live-examples">
+          <h3>Two points to explain live</h3>
+          <article>
+            <strong><code>θ=0, p=0</code> · only a vector</strong>
+            <code>F₀(0) = 0.35e₁ + 0.25e₃</code>
+            <p>Both <code>p*v</code> and <code>τI</code> vanish.</p>
+          </article>
+          <article>
+            <strong><code>θ=0, p=e₁</code> · scalar + vector + plane</strong>
+            <code>e₁e₁=1</code> · <code>e₁e₂=e₁₂</code>
+            <p><code>p*v = 0.35 + e₁₂ + 0.25e₁₃</code>. The repeated direction makes the scalar; the new direction makes the plane.</p>
+          </article>
+        </div>
         <div class="slider-note">
           <strong>The slider can live in the editor.</strong>
           <p>This demo’s slider selects one of 24 Lean-computed frames. A custom InfoView slider could send <code>θ</code> through RPC and reevaluate <code>fieldAt θ</code> live. I precomputed the frames for stage reliability.</p>

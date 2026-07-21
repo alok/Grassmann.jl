@@ -16,6 +16,16 @@ open GrassmannFields.Examples.MixedRotor
 #check fieldAt
 #check rotor
 
+-- Two small points to explain before the full field.
+def originExample : Vec3 := { x := 0.0, y := 0.0, z := 0.0 }
+def e1Example : Vec3 := { x := 1.0, y := 0.0, z := 0.0 }
+
+-- At the origin, p*v and tau*I vanish: only the vector v remains.
+#eval R3Grades.ofMV (fieldAt 0.0 originExample)
+
+-- At p=e1, e1*e1 contributes a scalar and e1*e2 contributes the e12 plane.
+#eval R3Grades.ofMV (fieldAt 0.0 e1Example)
+
 /-- Small enough to recompute live, large enough to read from the room. -/
 def stageGrid : PlanarGrid := {
   defaultGrid with

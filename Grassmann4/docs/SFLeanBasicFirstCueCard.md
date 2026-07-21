@@ -21,6 +21,14 @@ demo. Do not teach the algebra.
 | 10:45 | Close | “The point is not to prove everything. The point is to make the next change easier. This demo is the evidence: edit, elaborate, evaluate, inspect.” |
 | 12:00 | Stop | Questions. Do not fill the three-minute buffer with another demo. |
 
+## Two 15-second examples
+
+1. At `θ=0, p=0`, both `p*v` and `τI` vanish, so
+   `F₀(0) = 0.35e₁ + 0.25e₃`: only a vector.
+2. At `θ=0, p=e₁`, `e₁e₁=1` makes the scalar and `e₁e₂=e₁₂` makes the
+   plane. Say: “Repeated direction gives a number; a new direction spans a
+   plane.”
+
 ## Four factual anchors
 
 1. **Program:** record → function → `Except` → `Array`.

@@ -228,6 +228,12 @@ kbd { border: 1px solid var(--line); border-radius: 5px; padding: 0.08rem 0.35re
 .demo-source code { color: #dce5f2; }
 .src-comment { color: #77839a; }
 .src-keyword, .src-command { color: #c4b5fd; font-weight: 700; }
+.live-examples { border-top: 1px solid var(--line); margin-top: 1rem; padding-top: 1rem; }
+.live-examples h3 { color: var(--text); font-size: 0.95rem; margin: 0 0 0.65rem; }
+.live-examples article { background: rgba(255, 255, 255, 0.035); border-radius: 9px; margin-top: 0.55rem; padding: 0.7rem; }
+.live-examples article > code { color: var(--cyan); display: block; font-size: 0.76rem; margin-top: 0.4rem; }
+.live-examples strong { display: block; font-size: 0.8rem; }
+.live-examples p { color: var(--muted); font-size: 0.75rem; line-height: 1.4; margin: 0.4rem 0 0; }
 .slider-note { background: rgba(114, 231, 255, 0.06); border-left: 3px solid var(--cyan); margin-top: 1rem; padding: 0.8rem 0.9rem; }
 .slider-note strong { color: var(--cyan); }
 .slider-note p, .demo-source-foot { color: var(--muted); font-size: 0.78rem; line-height: 1.5; margin: 0.5rem 0 0; }
