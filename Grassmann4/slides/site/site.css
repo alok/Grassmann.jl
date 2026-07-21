@@ -228,6 +228,13 @@ kbd { border: 1px solid var(--line); border-radius: 5px; padding: 0.08rem 0.35re
 .demo-source code { color: #dce5f2; }
 .src-comment { color: #77839a; }
 .src-keyword, .src-command { color: #c4b5fd; font-weight: 700; }
+.core-type { border-top: 1px solid var(--line); margin-top: 1rem; padding-top: 1rem; }
+.core-type-heading { align-items: baseline; display: flex; gap: 0.7rem; justify-content: space-between; }
+.core-type-heading h3 { color: var(--text); font-size: 0.95rem; margin: 0; }
+.core-type-heading a, .core-type-links a { font-size: 0.72rem; text-decoration: none; }
+.core-type-kicker, .core-type > p { color: var(--muted); font-size: 0.75rem; line-height: 1.45; margin: 0.45rem 0 0.7rem; }
+.core-type pre { font-size: 0.68rem; line-height: 1.48; }
+.core-type-links { display: flex; flex-wrap: wrap; gap: 0.45rem 0.8rem; }
 .live-examples { border-top: 1px solid var(--line); margin-top: 1rem; padding-top: 1rem; }
 .live-examples h3 { color: var(--text); font-size: 0.95rem; margin: 0 0 0.65rem; }
 .live-examples article { background: rgba(255, 255, 255, 0.035); border-radius: 9px; margin-top: 0.55rem; padding: 0.7rem; }

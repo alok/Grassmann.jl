@@ -56,6 +56,31 @@
   MultivectorFieldProps.summary
 
 <span class="src-command">#html</span> sceneResultHtml stageScene</code></pre>
+        <section class="core-type" aria-labelledby="core-type-title">
+          <div class="core-type-heading">
+            <h3 id="core-type-title">The Clifford type underneath</h3>
+            <a href="https://github.com/alok/Grassmann.jl/blob/codex/alok-793-field-viz/Grassmann4/Grassmann/MV.lean#L26-L93">MV.lean ↗</a>
+          </div>
+          <p class="core-type-kicker">Compact excerpts from the real declarations. The links open their full context.</p>
+          <pre><code><span class="src-keyword">inductive</span> Parity where
+  | even | odd | full
+
+<span class="src-keyword">structure</span> MV {n : ℕ}
+    (sig : Signature n) (p : Parity) where
+  private mk ::
+  coeffs : DataArray
+
+<span class="src-keyword">instance</span> instHMulMV :
+    HMul (MV sig p1) (MV sig p2)
+      (MV sig (p1 * p2)) where
+  hMul := mulDirect</code></pre>
+          <p><code>Signature 3</code> carries the metric. <code>Parity</code> records which grades may occur. <code>DataArray</code> is Lean’s contiguous <code>FloatArray</code>. Thus <code>MV R3 .full</code> stores 8 coefficients; <code>MV R3 .even</code> stores 4.</p>
+          <div class="core-type-links">
+            <a href="https://github.com/alok/Grassmann.jl/blob/codex/alok-793-field-viz/Grassmann4/Grassmann/Manifold.lean#L39-L49">metric signature ↗</a>
+            <a href="https://github.com/alok/Grassmann.jl/blob/codex/alok-793-field-viz/Grassmann4/Grassmann/DataArray.lean#L19-L20">native storage ↗</a>
+            <a href="https://github.com/alok/Grassmann.jl/blob/codex/alok-793-field-viz/Grassmann4/Grassmann/MV.lean#L1591-L1600">product instance ↗</a>
+          </div>
+        </section>
         <div class="live-examples">
           <h3>Two points to explain live</h3>
           <article>

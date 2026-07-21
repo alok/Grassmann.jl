@@ -29,6 +29,17 @@ demo. Do not teach the algebra.
    plane. Say: “Repeated direction gives a number; a new direction spans a
    plane.”
 
+## The underlying type, if asked
+
+- [`MV`, `Parity`, and packed size](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/Grassmann/MV.lean#L26-L93)
+- [`Signature` and Euclidean `R3`](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/Grassmann/Manifold.lean#L39-L49)
+- [`DataArray := FloatArray`](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/Grassmann/DataArray.lean#L19-L20)
+- [`MV` multiplication computes its result parity](https://github.com/alok/Grassmann.jl/blob/__SOURCE_COMMIT__/Grassmann4/Grassmann/MV.lean#L1591-L1594)
+
+Say: “`Signature 3` carries the metric; `Parity` records which grades may
+occur; the runtime payload is one contiguous Lean `FloatArray`; multiplication
+computes the result parity in its return type.”
+
 ## Four factual anchors
 
 1. **Program:** record → function → `Except` → `Array`.
