@@ -1,267 +1,255 @@
 # SF Lean: Basic-First 15-Minute Route
 
-This is the recommended stage route. It keeps the A1 multivector visual, but
-the live coding is deliberately routine: a record, a function, an array, an
-explicit error, and one small edit. No Clifford-algebra derivation is required.
+This is the recommended route: **12 minutes speaking, 3 minutes questions**.
+The Verso deck is the spine. Cursor is one contained excursion with one safe
+edit; the multivector field is the visual payoff. Present from the
+[one-screen cue card](SFLeanBasicFirstCueCard.md), and use this document to
+rehearse.
 
-Stage files, in this order:
+## Talk order
 
-1. `Grassmann4/MultivectorFieldDemo.lean` — the visual destination;
-2. `Grassmann4/OrdinaryProgrammingDemo.lean` — the basic live program;
-3. `Grassmann4/GrassmannFields/Examples/MixedRotor.lean` — optional depth only.
+1. `Grassmann4/slides/_site/slides/index.html` — framing and typechecked warm-up;
+2. `Grassmann4/OrdinaryProgrammingDemo.lean` — routine live program;
+3. `Grassmann4/MultivectorFieldDemo.lean` — InfoView payoff;
+4. return to the deck for ownership and the closing claim.
 
-Static backup: `Grassmann4/docs/MultivectorFieldFallback.svg`
+`GrassmannFields/Examples/MixedRotor.lean` is **Q&A only**. The static backup is
+`Grassmann4/docs/MultivectorFieldFallback.svg`.
 
-## The whole argument in one line
+## The whole pipeline
 
 ```text
-record + function -> validated Array -> typed JSON -> local SVG in the InfoView
+record + function → validated Array → typed scene props → JSON wire payload → local SVG
 ```
 
-The warm-up field is a small hand-written grade record chosen for teaching.
-The flagship visual is the stronger example: its samples and 24 animation
-frames come from the packed Clifford-algebra runtime. Keep that distinction
-clear.
+The warm-up is a hand-written semantic grade record chosen for teaching. The
+flagship is stronger: a packed Clifford runtime computes its field, geometric
+products, rotor sandwiches, and 24 frames. Keep those two demos distinct.
 
-## What to prepare
+Lean owns the data types, numerical program, error handling, validation, and
+typed widget boundary. A local React/SVG component presents the values inside
+Lean’s InfoView. The numerical visual is `Float` runtime evidence, not a proof
+about exact real arithmetic.
 
-From the authoritative outer repository root, run:
+## Preparation
+
+From the outer repository root:
 
 ```bash
 Grassmann4/scripts/multivector_meetup_preflight.sh
 ```
 
-Do not present until its last status line begins with `PASS`. The preflight now
-compiles both stage files as well as the public libraries, tests, offline
-renderer checks, and static fallback.
+From the slide package:
 
-In Cursor:
+```bash
+cd Grassmann4/slides
+./preflight.sh
+uv run python -m http.server 8765 --directory _site
+```
 
-1. Open `OrdinaryProgrammingDemo.lean`, `MixedRotor.lean`, and
-   `MultivectorFieldDemo.lean` in that order. End on the final file.
-2. Put the cursor on `#html` and wait for the visual to finish loading.
-3. Set the editor font to 18 px. Hide Explorer and the Agent sidebar. Give the
-   visual about 1080 by 720 CSS pixels and verify that the ownership sentence
-   at the bottom is visible without scrolling.
-4. Exercise Play, the slider, one grade toggle, one drag, one wheel zoom, and
-   Reset. Restore all four grades and reset the camera.
-5. In `OrdinaryProgrammingDemo.lean`, verify the four useful InfoView results:
-   the grid record, the field value, `Except.ok 9`, and the explicit invalid
-   grid error.
-6. Open the fallback SVG in Preview or a browser and leave it one app switch
-   away. Repeat the reveal with networking disabled.
-7. Restore `tinyGrid.xCount` to `3` after every rehearsal. A clean tree is part
-   of the preflight contract.
+Do not present unless both commands end with a line beginning `PASS`.
+
+### Tab-opening order
+
+Open these surfaces left to right, then return to the deck:
+
+1. browser deck at `http://127.0.0.1:8765/slides/`;
+2. `OrdinaryProgrammingDemo.lean`;
+3. `MultivectorFieldDemo.lean`, already focused on `#html` with the widget loaded;
+4. public browser demo or fallback SVG.
+
+In Cursor, use an 18 px editor font, hide Explorer and the Agent sidebar, and
+give the visual roughly 1080×720 CSS pixels. Verify these five ordinary-demo
+anchors before leaving:
+
+1. the grid record;
+2. `swirlField : Vec3 → R3Grades` from `#check`;
+3. the concrete field value;
+4. `Except.ok 9`;
+5. `Except.error "grid.xCount must be at least 2"`.
+
+Rehearse Play, slider, grades 0–3, drag, wheel, Reset, and a sample click. On
+stage use only grade 2, Play/Pause, one drag, Reset, and the inspector. Restore
+all grades, frame 1, the default camera, and `tinyGrid.xCount := 3` afterward.
 
 ## Exact 12-minute script
 
-The core ends at 12 minutes. The remaining 3 minutes are for questions or
-recovery. Actions are marked **Do**; the quoted text is safe to say nearly
-verbatim.
+### 0:00–0:20 — slide 1: title
 
-### 0:00-0:40 — show the destination first
+> This is a talk about Lean as a normal programming language. The spicy version
+> is that Lean may be better positioned than Haskell—not because it is a better
+> Haskell, but because it has a second job that is much harder to replace.
 
-**Do:** Start with the cursor on `#html`. Drag the empty background once.
+### 0:20–1:05 — slide 2: the Scarf story, accurately
 
-> This is program output inside Lean's editor: a field of three-dimensional
-> multivectors. Lean computed 24 frames times 25 points—600 values—and then a
-> local SVG component displayed them.
+> Haskell ran in Scarf production for seven years. Its reliability, type
+> checking, and performance held up. Scarf now puts new API work in Python while
+> the old Haskell server continues and shrinks gradually. The reported tax was
+> build time, ecosystem friction, and slower feedback—especially with parallel
+> coding agents.
 
-Do not define a multivector yet. Let the result create the question.
+Do not say “Scarf deleted Haskell” or “Haskell’s types failed.”
 
-### 0:40-1:10 — state the claim boundary
+### 1:05–1:40 — slide 3: label the inference
 
-> My claim is very ordinary: Lean can own the data types, numerical program,
-> error handling, tests, serialization, and editor UI. These are floating-point
-> computations, not formally proved real-number facts.
+> This next part is my inference, not Scarf’s. When code generation makes an
+> application cheap to port, what distinctive value is hard to substitute? My
+> bet is that Lean has a stronger answer.
 
-That is enough proof-theory discussion for the core talk.
+Reveal the answer: executable model → checked specification → proof.
 
-### 1:10-2:10 — a record is a record
+### 1:40–2:10 — slide 4: one language, two jobs
 
-**Do:** Switch to `OrdinaryProgrammingDemo.lean`. Show `tinyGrid`, then put the
-cursor on `#eval tinyGrid`.
+> Lean’s first job is normal strict functional programming: arrays, loops, IO,
+> errors, native executables, and Lake libraries. Its second job is dependent
+> types, propositions, proofs, and a small kernel checking the result. Lean only
+> earns that second advantage if job one is real.
 
-> This is a normal configuration record: five floating-point coordinates and
-> two natural-number counts. `#eval` runs it and the InfoView shows the value.
+### 2:10–2:35 — slide 5: the boring part
 
-If useful, point at `PlanarGrid` and say “roughly, a struct.” Do not open its
-library definition unless someone asks.
+Point at the record, `Except`, and the two `#eval`s.
 
-### 2:10-3:25 — a field is a function
+> This slide is a Lean source file; Verso checked this block while building the
+> deck. A record, a function, an explicit error, and evaluated results. The
+> boring part is the point. Now I’ll run the less toy version live.
 
-**Do:** Show `swirlField`, then put the cursor on `#check swirlField` and finally
-on its `#eval`.
+### 2:35–3:15 — Cursor: a record is a record
 
-> Here a field is just a function from a point to a value. The value is another
-> record with scalar, vector, oriented-plane, and pseudoscalar channels. Lean
-> infers and displays the function's type, and it can execute the function at a
-> concrete point.
+Switch to `OrdinaryProgrammingDemo.lean`. Show `tinyGrid`, then `#eval tinyGrid`.
 
-For a basic audience, translate the four channels once:
+> This is a normal configuration record: floating-point coordinates and two
+> natural-number counts. `#eval` runs it and the InfoView shows the value.
 
-> Think number, arrow, oriented plane, and oriented volume. We do not need the
-> algebra behind them yet.
+### 3:15–4:10 — Cursor: a field is a function
 
-### 3:25-4:35 — ordinary arrays and explicit errors
+Show `swirlField`, `#check swirlField`, then its concrete `#eval`.
 
-**Do:** Show `sampleCount` and put the cursor on `#eval sampleCount tinyGrid`.
+> A field is just a function from a point to a value. This value has scalar,
+> vector, oriented-plane, and pseudoscalar channels: number, arrow, plane,
+> volume. Lean shows the type and executes the function at a concrete point.
 
-> `samplePlanar` accepts the grid and the function. It runs nested loops,
-> returns an array of samples, and can report a string error. The `do` block
-> propagates an error or returns the array size. Three by three gives
-> `Except.ok 9`.
+### 4:10–4:45 — Cursor: arrays and explicit errors
 
-The only concepts needed are function application, an array, and a result type
-that distinguishes success from failure.
+Show `sampleCount` and `Except.ok 9`.
 
-### 4:35-5:20 — the one live edit
+> `samplePlanar` runs the field over a validated grid and returns an array or a
+> string error. This `do` block propagates an error or returns the array size.
+> Three by three gives `Except.ok 9`.
 
-**Do:** Change only `xCount := 3` to `xCount := 4`. Press Escape to dismiss any
-inline completion, then return the cursor to `#eval sampleCount tinyGrid`.
+### 4:45–5:20 — the only live edit
 
-> I changed an ordinary input value. Lean reran the program, and nine samples
-> became twelve.
+Change only `xCount := 3` on line 21 to `4`, dismiss inline completion, and put
+the cursor on line 44. Show `Except.ok 12`, then **undo immediately**.
 
-Use a five-second rule. If `Except.ok 12` does not appear, undo once and move
-on. This edit is the required live coding; the larger visual does not need a
-live source edit.
+> I changed an ordinary input. Lean reran the program, and nine samples became
+> twelve.
 
-### 5:20-6:05 — failure is a value
+If 12 does not appear in five seconds, undo, narrate it, and continue.
 
-**Do:** Put the cursor on the final invalid-grid `#eval`.
+### 5:20–5:50 — failure is a value
 
-> A one-column grid cannot support this sampler, so the same program returns
-> `Except.error` with a useful message. The invalid state is handled before any
-> renderer sees it.
+Put the cursor on line 47.
 
-This is the most basic and strongest “ordinary language” moment in the talk.
+> A one-column grid cannot support this sampler, so the same program returns an
+> explicit error before any renderer sees the input. Invalid input is data too.
 
-### 6:05-7:00 — connect the toy program to the real one
+### 5:50–6:30 — verbal Clifford bridge only
 
-The safe route is verbal; no tab switch is necessary:
+> The visual uses the same grid, function, array, and error pipeline. The key
+> difference is that its function returns a packed Clifford multivector. One
+> geometric product contributes scalar and oriented-plane parts; one even rotor
+> sandwich transforms the complete mixed-grade value.
 
-> The visual uses the same grid, function, array, and error pipeline. The one
-> difference is that its field function returns a packed Clifford-algebra
-> value. One geometric product supplies scalar and oriented-plane parts; a
-> rotor sandwich supplies the animation.
+Do not open `MixedRotor.lean` in the core. It is available for questions.
 
-If the room wants code, briefly open `MixedRotor.lean` and show only these
-definitions:
+### 6:30–9:45 — InfoView payoff
 
-```lean
-def baseField (p : Vec3) : MV R3 .full :=
-  let position := positionMV p
-  let velocity := velocityMV p
-  let product : MV R3 .full := position * velocity
-  velocity + product + pseudoscalarMV p
+Switch to `MultivectorFieldDemo.lean`. Point first at the textual summary:
 
-def fieldAt (theta : Float) (p : Vec3) : MV R3 .full :=
-  mvSandwich (rotor theta) (baseField p)
-```
+> Twenty-four frames, 25 samples per frame: 600 Lean-computed multivector
+> samples. These are floating-point runtime results, not a formal theorem.
 
-Say “one multiplication and one sandwich,” then leave. Do not explain blade
-masks, storage parity, or the sign table in the scripted core.
+Click `#html`, then do only:
 
-### 7:00-9:25 — make the output legible
+1. point at the selected sample and its four exact grade rows;
+2. grade 2 off, then on;
+3. Play, then Pause;
+4. one empty-background drag;
+5. Reset view.
 
-**Do:** Return to `MultivectorFieldDemo.lean` and click `#html`.
+Say:
 
-1. Point at the selected sample and its four grade rows.
-2. Turn grade 2 off and on to isolate the orange oriented planes.
-3. Turn grade 3 off and on to isolate the signed halos.
-4. Press Play, pause, and move the frame slider once.
-5. Drag the empty background, wheel once, and press Reset.
+> Lean already supplied every position and coefficient for every frame. This
+> local component constructs glyphs, projects, depth-sorts, handles interaction,
+> and paints SVG. It does not multiply multivectors or interpolate frames.
 
-Narrate with plain ownership language:
+### 9:45–10:45 — slide 7: three reusable boundaries
 
-> Lean already supplied every position and coefficient for every frame. The
-> local component only turns those values into arrows, disks, halos, colors,
-> projection, and SVG. It does not multiply multivectors or interpolate frames.
-
-### 9:25-10:30 — show that these are libraries
-
-**Do:** Keep the visual on screen if the room is engaged. You can state the
-split without opening more source:
-
-```lean
-import Grassmann       -- packed numerical runtime
-import GrassmannFields -- records, functions, grids, sampling, validation
-import GrassmannViz    -- typed scene plus offline InfoView component
-```
+Return to the deck.
 
 > The basic file imports only `GrassmannFields`; it has no widget dependency.
-> The visual layer is a separate Lake library, and a downstream project can use
-> either boundary.
+> `Grassmann` is the packed numerical runtime. `GrassmannFields` owns
+> renderer-neutral functions, grids, sampling, and validation. `GrassmannViz`
+> opts into the typed scene and local InfoView component. They are actual Lake
+> libraries exercised by an independent downstream package.
 
-### 10:30-12:00 — close on the thesis
+Explain only one algebraic fact: `p*v` contributes scalar and oriented-plane
+parts. Leave packed masks and kernels for Q&A.
 
-**Do:** Leave the working visual visible.
+### 10:45–12:00 — slide 8: close and stop
 
-> The unusual object here is a multivector field. The programming story is not
-> unusual: records, functions, arrays, errors, libraries, tests, JSON, and a UI.
-> Lean is the ordinary language joining those pieces. The numerical output is
-> runtime evidence; Lean can add proofs where the application actually needs
-> them.
+> My claim is narrower than “Lean beats Haskell at everything,” and more
+> interesting. Lean is better differentiated. You can start with records,
+> functions, arrays, errors, and a UI; then move selected invariants into
+> dependent types and proofs without changing languages. Lean is an ordinary
+> language whose second job is not ordinary.
 
-Stop. Use 12:00-15:00 for questions.
+Repeat “runtime evidence, not formal proof.” Stop. Use 12:00–15:00 for questions.
 
-## Seven-minute rescue version
+## Seven-minute rescue route
 
-If the previous speaker runs long or the editor becomes stressful:
+1. Slides 1–5 in two minutes.
+2. Show `tinyGrid`, `swirlField`, `Except.ok 9`, and the explicit error in two
+   minutes. **Skip the live edit and all internal Clifford code.**
+3. Show the loaded widget, toggle grade 2, Play/Pause, and point at one inspector
+   value in two minutes.
+4. Give the ownership boundary and closing line in one minute.
 
-1. Show the visual and say the 600-value sentence — 45 seconds.
-2. Show `tinyGrid`, `swirlField`, and `Except.ok 9` — 2 minutes.
-3. Show the explicit invalid-grid error — 45 seconds.
-4. Return to the visual; toggle grade 2, press Play, and inspect one sample —
-   2 minutes.
-5. Give the records/functions/arrays/errors/libraries closing — 1 minute.
+## Short Q&A answers
 
-Skip both live edits and all internal Clifford code. This still demonstrates
-the thesis.
+**What is a multivector?** A value that can carry scalar, vector,
+oriented-plane, and oriented-volume parts together. In 3D that is eight logical
+coefficients.
 
-## Five likely questions, in plain language
+**What is proved?** Dimension, metric signature, and parity occur in types;
+there are checked theorems around packed indexing. Grid/scene validity is
+runtime `Except` validation. The `Float` animation is numerical evidence backed
+by regression tests.
 
-**What is a multivector?**
+**Is JavaScript doing the algebra?** No. Lean computes positions, products,
+coefficients, validation, and every frame. JavaScript does display geometry,
+projection, depth sorting, interaction, and SVG.
 
-A typed value that can hold scalar, vector, oriented-plane, and oriented-volume
-parts together. In three dimensions those are eight logical coefficients.
+**Why not Haskell plus tests?** That can be an excellent engineering choice.
+The distinction is that a Lean application can also be its checked
+specification; selected invariants can move from tests into types and proofs
+without changing languages.
 
-**Is JavaScript doing the algebra?**
-
-No. Lean computes the grid, Clifford products, grade coefficients, validation,
-and all frames. The embedded local component does camera and SVG presentation.
-
-**What is formally proved here?**
-
-The visual itself makes a numerical runtime claim, not a formal theorem. The
-talk is about using Lean for an ordinary executable software pipeline while
-retaining the option to prove selected properties.
-
-**Why use Lean rather than another language?**
-
-For this talk, the concrete answer is one environment for typed libraries,
-execution, validation, tests, serialization, and an extensible editor. Do not
-claim that every numerical UI should be rewritten in Lean.
-
-**Can the field library be used without the widget?**
-
-Yes. `GrassmannFields` is renderer-neutral and does not depend on ProofWidgets.
-`GrassmannViz` is an opt-in presentation library.
+**Can I use the field code without the widget?** Yes. `GrassmannFields` is
+renderer-neutral; `GrassmannViz` is opt-in.
 
 ## Recovery rules
 
-- If a basic `#eval` result is stale, undo the edit, save, and click the command
-  once. Then continue without live coding.
-- If the InfoView visual disappears, run `Lean 4: InfoView: Toggle InfoView`
-  once and click `#html`.
-- If the visual does not return within five seconds, switch to the pre-opened
-  fallback SVG. It is a separate Lean renderer over the same default scene,
-  not a screenshot.
-- Do not reload Cursor, update dependencies, or diagnose the language server
-  in front of the room.
-- After the talk, restore `tinyGrid.xCount` to `3` before running preflight or
-  committing anything.
+- Five seconds maximum on any failure.
+- Stale `#eval`: undo, narrate the expected result, continue.
+- Blank InfoView: toggle it once and click `#html`; if still blank, switch to
+  the pre-opened static SVG or public browser demo.
+- Broken deck: speak from the one-screen cue card.
+- Never update dependencies, rebuild caches, or diagnose the language server on
+  stage.
+- End with `tinyGrid.xCount := 3`, frame 1, all grades visible, default camera,
+  paused.
 
-For the more algebra-heavy route and exact view-layer claim boundaries, see
-`SFLeanMultivectorFieldDemo.md`.
+For a source-by-source explanation, read
+[`SFLeanPresenterTutorial.md`](SFLeanPresenterTutorial.md). For the algebra-heavy
+optional route, see `SFLeanMultivectorFieldDemo.md`.

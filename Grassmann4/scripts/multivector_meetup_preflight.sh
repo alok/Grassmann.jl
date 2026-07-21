@@ -39,11 +39,11 @@ run git -C "$package_root/.." diff --cached --check
 stage_status=$(git -C "$package_root/.." status --short --untracked-files=all)
 if [[ -n "$stage_status" ]]; then
   echo "$stage_status" >&2
-  echo "stage sources are not clean; commit intended work and restore the 5x5 demo" >&2
+  echo "stage sources are not clean; commit intended work, restore tinyGrid.xCount := 3, and restore the 5x5 visual demo" >&2
   exit 1
 fi
 
 echo
-echo "PASS: multivector field demo is compiled, fresh, offline-guarded, and stage-ready"
 echo "Open OrdinaryProgrammingDemo.lean and MultivectorFieldDemo.lean; place the latter on #html."
 echo "If an already-open editor reports stale imports, click Restart File once."
+echo "PASS: multivector field demo is compiled, fresh, offline-guarded, and stage-ready"
