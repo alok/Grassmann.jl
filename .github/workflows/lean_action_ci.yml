@@ -18,6 +18,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: leanprover/lean-action@v1
+      - name: Install repository script dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ripgrep
       - name: Share the outer Lake workspace with package-layout checks
         run: |
           test -d .lake
