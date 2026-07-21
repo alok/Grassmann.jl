@@ -44,7 +44,105 @@
       <span><b>Scene:</b> 24 frames × 25 samples</span>
       <span><b>Fallback:</b> <a href="fallback.svg">static SVG</a></span>
     </div>
+    <section class="linear-lab" aria-labelledby="linear-lab-title">
+      <div class="linear-lab-heading">
+        <div>
+          <p class="eyebrow">OPTIONAL SIDE LAB · BROWSER-SIDE</p>
+          <h2 id="linear-lab-title">An eigenvector makes no new plane.</h2>
+        </div>
+        <p><code>A = diag(2, ½)</code><br><code>v(φ) = cos φ e₁ + sin φ e₂</code><br><code>v ∧ Av = −¾ sin(2φ) e₁₂</code></p>
+      </div>
+      <div class="linear-lab-controls">
+        <label for="linear-angle">Direction <b id="linear-angle-label">φ = 35°</b></label>
+        <input id="linear-angle" type="range" min="0" max="180" step="1" value="35">
+        <div class="linear-presets" aria-label="Direction presets">
+          <button type="button" data-linear-angle="0">e₁ · λ = 2</button>
+          <button type="button" data-linear-angle="35">generic</button>
+          <button type="button" data-linear-angle="90">e₂ · λ = ½</button>
+        </div>
+      </div>
+      <output id="linear-result" class="linear-result" for="linear-angle"></output>
+      <div class="linear-panels">
+        <article>
+          <h3>1 · Eigenvectors</h3>
+          <p><code>Av</code> is parallel to <code>v</code> only on an eigenline.</p>
+          <svg id="eigen-map" viewBox="0 0 320 250" role="img" aria-label="A vector and its image under a diagonal linear map">
+            <defs><marker id="linear-arrow-map" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="context-stroke"/></marker></defs>
+            <line class="linear-axis" x1="24" y1="125" x2="296" y2="125"/><line class="linear-axis" x1="160" y1="226" x2="160" y2="24"/>
+            <line class="linear-eigenline" x1="24" y1="125" x2="296" y2="125"/><line class="linear-eigenline secondary" x1="160" y1="226" x2="160" y2="24"/>
+            <text x="240" y="116">e₁ · λ=2</text><text x="168" y="34">e₂ · λ=½</text>
+            <line id="eigen-v" class="linear-vector v" x1="160" y1="125" x2="160" y2="125" marker-end="url(#linear-arrow-map)"/>
+            <line id="eigen-av" class="linear-vector av" x1="160" y1="125" x2="160" y2="125" marker-end="url(#linear-arrow-map)"/>
+            <text id="eigen-v-label" class="v-label">v</text><text id="eigen-av-label" class="av-label">Av</text>
+          </svg>
+        </article>
+        <article>
+          <h3>2 · The multivector test</h3>
+          <p><code>v ∧ Av</code> is the oriented plane swept out by the two vectors. It is zero exactly on an eigenline.</p>
+          <svg id="wedge-map" viewBox="0 0 320 250" role="img" aria-label="Oriented parallelogram represented by the bivector v wedge A v">
+            <defs><marker id="linear-arrow-area" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="context-stroke"/></marker></defs>
+            <line class="linear-axis" x1="24" y1="150" x2="296" y2="150"/><line class="linear-axis" x1="120" y1="226" x2="120" y2="24"/>
+            <polygon id="wedge-area" points="120,150 120,150 120,150 120,150"/>
+            <line id="wedge-v" class="linear-vector v" x1="120" y1="150" x2="120" y2="150" marker-end="url(#linear-arrow-area)"/>
+            <line id="wedge-av" class="linear-vector av" x1="120" y1="150" x2="120" y2="150" marker-end="url(#linear-arrow-area)"/>
+            <text id="wedge-coefficient" x="18" y="28"></text>
+          </svg>
+        </article>
+      </div>
+      <p class="linear-boundary">This side lab evaluates the displayed elementary formulas in the browser. The multivector field above remains the Lean-generated computation.</p>
+    </section>
   </main>
   <script type="module" src="app.js"></script>
+  <script>
+    (() => {
+      const slider = document.getElementById('linear-angle');
+      const angleLabel = document.getElementById('linear-angle-label');
+      const result = document.getElementById('linear-result');
+      const mapV = document.getElementById('eigen-v');
+      const mapAv = document.getElementById('eigen-av');
+      const mapVLabel = document.getElementById('eigen-v-label');
+      const mapAvLabel = document.getElementById('eigen-av-label');
+      const wedgeV = document.getElementById('wedge-v');
+      const wedgeAv = document.getElementById('wedge-av');
+      const wedgeArea = document.getElementById('wedge-area');
+      const wedgeCoefficient = document.getElementById('wedge-coefficient');
+      const setLine = (line, originX, originY, x, y, scale) => {
+        line.setAttribute('x1', originX); line.setAttribute('y1', originY);
+        line.setAttribute('x2', originX + scale * x); line.setAttribute('y2', originY - scale * y);
+      };
+      const point = (originX, originY, x, y, scale) => `${originX + scale * x},${originY - scale * y}`;
+      const update = () => {
+        const degrees = Number(slider.value);
+        const phi = degrees * Math.PI / 180;
+        const vx = Math.cos(phi), vy = Math.sin(phi);
+        const avx = 2 * vx, avy = 0.5 * vy;
+        const wedge = vx * avy - vy * avx;
+        setLine(mapV, 160, 125, vx, vy, 62);
+        setLine(mapAv, 160, 125, avx, avy, 62);
+        mapVLabel.setAttribute('x', 166 + 62 * vx); mapVLabel.setAttribute('y', 119 - 62 * vy);
+        mapAvLabel.setAttribute('x', 166 + 62 * avx); mapAvLabel.setAttribute('y', 119 - 62 * avy);
+        setLine(wedgeV, 120, 150, vx, vy, 54);
+        setLine(wedgeAv, 120, 150, avx, avy, 54);
+        wedgeArea.setAttribute('points', [
+          point(120, 150, 0, 0, 54), point(120, 150, vx, vy, 54),
+          point(120, 150, vx + avx, vy + avy, 54), point(120, 150, avx, avy, 54)
+        ].join(' '));
+        wedgeArea.classList.toggle('positive', wedge > 0);
+        const onE1 = Math.abs(vy) < 1e-9;
+        const onE2 = Math.abs(vx) < 1e-9;
+        const eigen = onE1 || onE2;
+        const eigenText = onE1 ? 'eigenvector · λ = 2' : onE2 ? 'eigenvector · λ = ½' : 'not an eigenvector';
+        angleLabel.textContent = `φ = ${degrees}°`;
+        result.textContent = `${eigenText} · v ∧ Av = ${Math.abs(wedge) < 1e-9 ? '0' : wedge.toFixed(3)} e₁₂`;
+        result.classList.toggle('is-eigen', eigen);
+        wedgeCoefficient.textContent = `v ∧ Av = ${Math.abs(wedge) < 1e-9 ? '0' : wedge.toFixed(3)} e₁₂`;
+      };
+      slider.addEventListener('input', update);
+      document.querySelectorAll('[data-linear-angle]').forEach(button => button.addEventListener('click', () => {
+        slider.value = button.dataset.linearAngle; update();
+      }));
+      update();
+    })();
+  </script>
 </body>
 </html>
