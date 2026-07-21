@@ -18,7 +18,7 @@ demo. Do not teach the algebra.
 | 6:15 | Cursor · `#html` | Show `24 frames; 25 samples/frame; 600 Lean-computed multivectors`, then open the view. |
 | 6:45 | InfoView | Grade 2 off/on → Play/Pause → one drag → Reset. Point at one sample. “Lean computes and validates the values. The view draws them.” |
 | 9:15 | Slides 8–9 | Three Lake libraries. Then show how `MV sig p`, result parity, generic fields, and one reusable index lemma remove repeated work. |
-| 10:45 | Close | “The point is not to prove everything. The point is to make the next change easier.” |
+| 10:45 | Close | “The point is not to prove everything. The point is to make the next change easier. This demo is the evidence: edit, elaborate, evaluate, inspect.” |
 | 12:00 | Stop | Questions. Do not fill the three-minute buffer with another demo. |
 
 ## Four factual anchors
@@ -26,7 +26,8 @@ demo. Do not teach the algebra.
 1. **Program:** record → function → `Except` → `Array`.
 2. **Multivector:** number · directed segment · oriented plane · oriented volume.
 3. **UI boundary:** Lean computes and validates · view draws and interacts.
-4. **Development speed:** types remove bookkeeping · add proofs only when later code reuses them.
+4. **Development speed:** edit → elaborate → evaluate → inspect · metaprograms
+   and AI use the same typed program state.
 
 State the numerical boundary once, beside the visual: “The animation uses
 floating-point computation. It is not a theorem about real numbers.”

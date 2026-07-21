@@ -114,7 +114,9 @@ Do not build the talk on Scarf. It is a current example. Move on.
 
 > Lean has data, functions, arrays, loops, IO, errors, executables, and
 > libraries. For this program, `MV sig p` also carries the algebraic context.
-> The caller does not pass separate dimension, metric, and parity tags.
+> The caller does not pass separate dimension, metric, and parity tags. The
+> development loop is edit, elaborate, evaluate, inspect. Metaprograms,
+> InfoView, and AI can work against that typed program state.
 
 ### 2:10–2:50 — slide 5: the values
 
@@ -215,7 +217,8 @@ Return to the deck.
 Close:
 
 > The point is not to prove everything. The point is to make the next change
-> easier.
+> easier. This demo is the evidence: edit, elaborate, evaluate, inspect, and
+> extend the editor in one typed loop.
 
 Stop. Use 12:00–15:00 for questions.
 

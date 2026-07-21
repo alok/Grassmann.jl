@@ -19,6 +19,9 @@ mathematical software, go farther than Haskell. Lean is an
 with dependent types and an integrated prover. In this program, the types carry
 dimension, metric signature, and parity through the multilinear algebra. A
 proof belongs in the development loop only when later code can reuse the fact.
+Lean also exposes elaborated program state to `#check`, `#eval`, InfoView, and
+metaprograms. AI can use the same source, types, diagnostics, values, and goals.
+Together these tools can shorten the edit-to-feedback loop.
 The demo starts with records, functions, arrays, and explicit errors. It then
 sends the output of a packed multivector program to an editor view.
 

@@ -88,6 +88,7 @@ save later work, and editor views built around the same values.”
     <p>field and sampler code reuse those types</p>
   </div>
 </div>
+<div class="ownership"><b>Loop:</b> edit → elaborate → evaluate → inspect.<br><b>Tools:</b> metaprograms and AI can act on the same typed program state.</div>
 <p class="source"><a href="https://lean-lang.org/">Lean is officially described as both a programming language and proof assistant · lean-lang.org</a></p>
 ```
 
@@ -230,7 +231,9 @@ them into marks on the screen.”
 
 Say: “These types remove bookkeeping from call sites. The packed-index lemma
 earns its place because later kernel code can reuse the bound. The point is not
-to prove everything. The point is to make the next change easier.”
+to prove everything. The point is to make the next change easier. This demo is
+my evidence: edit, elaborate, evaluate, inspect, and extend the editor in one
+typed loop.”
 
 Stop at 12:00 and use the remaining three minutes for questions.
 :::
