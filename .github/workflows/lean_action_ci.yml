@@ -39,3 +39,7 @@ jobs:
           lake build
           lake exe grassmann-downstream-smoke
       - uses: leanprover-community/docgen-action@v1
+        with:
+          # `docs/` belongs to Julia's Documenter, not to Jekyll. Keep Lean's
+          # generated API site in its own staging directory.
+          homepage: home_page
