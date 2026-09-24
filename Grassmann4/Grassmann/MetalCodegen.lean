@@ -381,4 +381,460 @@ try main()
 -- R3,0,1: 3 positive, 0 negative, 1 zero (e4² = 0)
 def PGA3D : Signature 4 := Signature.clr 3 0 1  -- e₁,e₂,e₃ positive, e₄ degenerate
 
+/-! ## Physics Kernels
+
+Batch physics kernels for rigid body simulation.
+Uses PGA motors for transforms and motor velocity for dynamics.
+-/
+
+/-- Generate batch motor integration kernel.
+    Integrates motor velocity to update motor pose: M' = exp(dt * V) * M -/
+def motorIntegrationKernelMetal : String :=
+  "// Batch motor integration: motors[gid] = exp(dt * velocities[gid]) * motors[gid]
+// Uses first-order approximation: exp(B) ≈ 1 + B for small timesteps
+
+struct MotorVelocity {
+    float omega12;  // angular velocity components
+    float omega13;
+    float omega23;
+    float v01;      // linear velocity components
+    float v02;
+    float v03;
+};
+
+kernel void integrateMotors(
+    device Multivector_PGA3* motors [[buffer(0)]],
+    device const MotorVelocity* velocities [[buffer(1)]],
+    constant float& dt [[buffer(2)]],
+    uint gid [[thread_position_in_grid]]
+) {
+    MotorVelocity v = velocities[gid];
+    Multivector_PGA3 M = motors[gid];
+
+    // Build velocity bivector: dt * (angular + linear)
+    Multivector_PGA3 B;
+    for (uint i = 0; i < 16; i++) B.coeffs[i] = 0.0f;
+
+    // Bivector indices in PGA3: e01=3, e02=5, e03=9, e12=6, e13=10, e23=12
+    B.coeffs[3] = dt * v.v01;
+    B.coeffs[5] = dt * v.v02;
+    B.coeffs[9] = dt * v.v03;
+    B.coeffs[6] = dt * v.omega12;
+    B.coeffs[10] = dt * v.omega13;
+    B.coeffs[12] = dt * v.omega23;
+
+    // First-order exponential: exp(B) ≈ 1 + B
+    Multivector_PGA3 expB;
+    for (uint i = 0; i < 16; i++) expB.coeffs[i] = B.coeffs[i];
+    expB.coeffs[0] = 1.0f;  // scalar part = 1
+
+    // M' = expB * M (geometric product)
+    Multivector_PGA3 out;
+    for (uint k = 0; k < 16; k++) out.coeffs[k] = 0.0f;
+
+    for (uint i = 0; i < 16; i++) {
+        float ai = expB.coeffs[i];
+        if (ai == 0.0f) continue;
+        for (uint j = 0; j < 16; j++) {
+            float bj = M.coeffs[j];
+            if (bj == 0.0f) continue;
+            int sign = signs_PGA3[i][j];
+            if (sign != 0) {
+                uint k = outputIdx[i][j];
+                out.coeffs[k] += float(sign) * ai * bj;
+            }
+        }
+    }
+
+    motors[gid] = out;
+}
+"
+
+/-- Generate batch sphere-sphere collision detection kernel.
+    Outputs collision pairs with penetration depth and normal. -/
+def sphereCollisionKernelMetal : String :=
+  "// Batch sphere-sphere collision detection
+// Input: sphere positions (xyz) and radii
+// Output: collision info for each pair
+
+struct Sphere {
+    float x, y, z, radius;
+};
+
+struct CollisionInfo {
+    uint i, j;           // indices of colliding spheres
+    float penetration;   // penetration depth
+    float nx, ny, nz;    // contact normal (from i to j)
+    float cx, cy, cz;    // contact point
+};
+
+// Kernel to detect collision between two specific spheres
+kernel void detectSphereCollision(
+    device const Sphere* spheres [[buffer(0)]],
+    device CollisionInfo* collisions [[buffer(1)]],
+    device atomic_uint* collisionCount [[buffer(2)]],
+    constant uint& numSpheres [[buffer(3)]],
+    uint2 gid [[thread_position_in_grid]]
+) {
+    uint i = gid.x;
+    uint j = gid.y;
+
+    // Only check upper triangle (i < j)
+    if (i >= j || j >= numSpheres) return;
+
+    Sphere si = spheres[i];
+    Sphere sj = spheres[j];
+
+    float dx = sj.x - si.x;
+    float dy = sj.y - si.y;
+    float dz = sj.z - si.z;
+    float distSq = dx*dx + dy*dy + dz*dz;
+    float minDist = si.radius + sj.radius;
+
+    if (distSq < minDist * minDist && distSq > 1e-10f) {
+        float dist = sqrt(distSq);
+        float invDist = 1.0f / dist;
+
+        // Allocate collision slot
+        uint slot = atomic_fetch_add_explicit(collisionCount, 1, memory_order_relaxed);
+
+        CollisionInfo info;
+        info.i = i;
+        info.j = j;
+        info.penetration = minDist - dist;
+        info.nx = dx * invDist;
+        info.ny = dy * invDist;
+        info.nz = dz * invDist;
+
+        // Contact point at surface of sphere i toward sphere j
+        info.cx = si.x + si.radius * info.nx;
+        info.cy = si.y + si.radius * info.ny;
+        info.cz = si.z + si.radius * info.nz;
+
+        collisions[slot] = info;
+    }
+}
+"
+
+/-- Generate floor collision kernel.
+    Detects sphere-floor collisions and computes bounce impulse. -/
+def floorCollisionKernelMetal : String :=
+  "// Batch floor collision detection and response
+// Input: sphere positions, velocities, floor y-coordinate
+// Output: updated velocities after bounce
+
+kernel void handleFloorCollision(
+    device float3* positions [[buffer(0)]],
+    device float3* velocities [[buffer(1)]],
+    constant float& floorY [[buffer(2)]],
+    constant float& radius [[buffer(3)]],
+    constant float& restitution [[buffer(4)]],
+    uint gid [[thread_position_in_grid]]
+) {
+    float3 pos = positions[gid];
+    float3 vel = velocities[gid];
+
+    float penetration = floorY + radius - pos.y;
+
+    if (penetration > 0.0f) {
+        // Collision detected
+        if (vel.y < 0.0f) {
+            // Bounce: reflect y velocity
+            vel.y = -vel.y * restitution;
+        }
+
+        // Push out of floor
+        pos.y = floorY + radius;
+
+        positions[gid] = pos;
+        velocities[gid] = vel;
+    }
+}
+"
+
+/-- Generate batch gravity application kernel -/
+def gravityKernelMetal : String :=
+  "// Apply gravity to all bodies
+kernel void applyGravity(
+    device float3* velocities [[buffer(0)]],
+    constant float& gravity [[buffer(1)]],
+    constant float& dt [[buffer(2)]],
+    uint gid [[thread_position_in_grid]]
+) {
+    velocities[gid].y -= gravity * dt;
+}
+"
+
+/-- Generate batch position integration kernel -/
+def positionIntegrationKernelMetal : String :=
+  "// Integrate positions using velocities
+kernel void integratePositions(
+    device float3* positions [[buffer(0)]],
+    device const float3* velocities [[buffer(1)]],
+    constant float& dt [[buffer(2)]],
+    uint gid [[thread_position_in_grid]]
+) {
+    positions[gid] += velocities[gid] * dt;
+}
+"
+
+/-! ## Constraint Solver Kernels
+
+GPU-accelerated constraint solving using motor gradient descent.
+-/
+
+/-- Ball joint data structure for GPU -/
+def ballJointStructMetal : String :=
+  "// Ball joint constraint
+struct BallJoint {
+    uint body1Idx;    // First body index
+    uint body2Idx;    // Second body index
+    float3 anchor1;   // Anchor in body1 local frame
+    float3 anchor2;   // Anchor in body2 local frame
+};
+"
+
+/-- Kernel to compute ball joint residuals in batch -/
+def ballJointResidualKernelMetal : String :=
+  "// Compute ball joint residual (distance between world-space anchors)
+kernel void computeBallJointResidual(
+    device const Multivector_PGA3* motors [[buffer(0)]],
+    device const BallJoint* joints [[buffer(1)]],
+    device float* residuals [[buffer(2)]],
+    uint gid [[thread_position_in_grid]]
+) {
+    BallJoint joint = joints[gid];
+    Multivector_PGA3 m1 = motors[joint.body1Idx];
+    Multivector_PGA3 m2 = motors[joint.body2Idx];
+
+    // Transform anchor1 by motor1 (simplified - assumes motor encodes position)
+    float3 p1 = float3(
+        2.0f * m1.coeffs[3] + joint.anchor1.x,   // e01 component + local
+        2.0f * m1.coeffs[5] + joint.anchor1.y,   // e02 component
+        2.0f * m1.coeffs[9] + joint.anchor1.z    // e03 component
+    );
+
+    // Transform anchor2 by motor2
+    float3 p2 = float3(
+        2.0f * m2.coeffs[3] + joint.anchor2.x,
+        2.0f * m2.coeffs[5] + joint.anchor2.y,
+        2.0f * m2.coeffs[9] + joint.anchor2.z
+    );
+
+    float3 d = p2 - p1;
+    residuals[gid] = sqrt(d.x*d.x + d.y*d.y + d.z*d.z);
+}
+"
+
+/-- Kernel to compute motor gradients for constraint solving -/
+def motorGradientKernelMetal : String :=
+  "// Compute gradient of total residual w.r.t. motor coefficients
+// Uses finite differences (ε = 1e-6)
+kernel void computeMotorGradient(
+    device const Multivector_PGA3* motors [[buffer(0)]],
+    device const BallJoint* joints [[buffer(1)]],
+    constant uint& numJoints [[buffer(2)]],
+    device float* gradients [[buffer(3)]],  // 16 floats per body
+    constant float& epsilon [[buffer(4)]],
+    uint gid [[thread_position_in_grid]]
+) {
+    uint bodyIdx = gid / 16;
+    uint coeffIdx = gid % 16;
+
+    // Compute base residual
+    float baseResidual = 0.0f;
+    for (uint j = 0; j < numJoints; j++) {
+        if (joints[j].body1Idx == bodyIdx || joints[j].body2Idx == bodyIdx) {
+            // Compute this joint's contribution
+            Multivector_PGA3 m1 = motors[joints[j].body1Idx];
+            Multivector_PGA3 m2 = motors[joints[j].body2Idx];
+
+            float3 p1 = float3(
+                2.0f * m1.coeffs[3] + joints[j].anchor1.x,
+                2.0f * m1.coeffs[5] + joints[j].anchor1.y,
+                2.0f * m1.coeffs[9] + joints[j].anchor1.z
+            );
+            float3 p2 = float3(
+                2.0f * m2.coeffs[3] + joints[j].anchor2.x,
+                2.0f * m2.coeffs[5] + joints[j].anchor2.y,
+                2.0f * m2.coeffs[9] + joints[j].anchor2.z
+            );
+            float3 d = p2 - p1;
+            baseResidual += sqrt(d.x*d.x + d.y*d.y + d.z*d.z);
+        }
+    }
+
+    // Perturb coefficient and recompute
+    float perturbedResidual = 0.0f;
+    for (uint j = 0; j < numJoints; j++) {
+        if (joints[j].body1Idx == bodyIdx || joints[j].body2Idx == bodyIdx) {
+            Multivector_PGA3 m1 = motors[joints[j].body1Idx];
+            Multivector_PGA3 m2 = motors[joints[j].body2Idx];
+
+            // Apply perturbation
+            if (joints[j].body1Idx == bodyIdx) {
+                m1.coeffs[coeffIdx] += epsilon;
+            }
+            if (joints[j].body2Idx == bodyIdx) {
+                m2.coeffs[coeffIdx] += epsilon;
+            }
+
+            float3 p1 = float3(
+                2.0f * m1.coeffs[3] + joints[j].anchor1.x,
+                2.0f * m1.coeffs[5] + joints[j].anchor1.y,
+                2.0f * m1.coeffs[9] + joints[j].anchor1.z
+            );
+            float3 p2 = float3(
+                2.0f * m2.coeffs[3] + joints[j].anchor2.x,
+                2.0f * m2.coeffs[5] + joints[j].anchor2.y,
+                2.0f * m2.coeffs[9] + joints[j].anchor2.z
+            );
+            float3 d = p2 - p1;
+            perturbedResidual += sqrt(d.x*d.x + d.y*d.y + d.z*d.z);
+        }
+    }
+
+    gradients[gid] = (perturbedResidual - baseResidual) / epsilon;
+}
+"
+
+/-- Kernel to update motors using gradient descent -/
+def motorUpdateKernelMetal : String :=
+  "// Update motors using gradient descent step
+kernel void updateMotors(
+    device Multivector_PGA3* motors [[buffer(0)]],
+    device const float* gradients [[buffer(1)]],  // 16 floats per body
+    constant float& stepSize [[buffer(2)]],
+    uint gid [[thread_position_in_grid]]
+) {
+    uint bodyIdx = gid / 16;
+    uint coeffIdx = gid % 16;
+
+    motors[bodyIdx].coeffs[coeffIdx] -= stepSize * gradients[gid];
+
+    // Normalize motor (ensure M·M† ≈ 1)
+    // For simplicity, just normalize scalar + pseudoscalar part
+    if (coeffIdx == 0) {
+        Multivector_PGA3 m = motors[bodyIdx];
+        float normSq = m.coeffs[0] * m.coeffs[0];
+        for (uint i = 1; i < 16; i++) {
+            normSq += m.coeffs[i] * m.coeffs[i];
+        }
+        if (normSq > 1e-10f) {
+            float scale = 1.0f / sqrt(normSq);
+            for (uint i = 0; i < 16; i++) {
+                motors[bodyIdx].coeffs[i] *= scale;
+            }
+        }
+    }
+}
+"
+
+/-- Complete constraint solver iteration kernel -/
+def constraintSolverKernelMetal : String :=
+  "// Single iteration of constraint solver
+// Combines gradient computation and motor update
+kernel void constraintSolverStep(
+    device Multivector_PGA3* motors [[buffer(0)]],
+    device const BallJoint* joints [[buffer(1)]],
+    constant uint& numJoints [[buffer(2)]],
+    constant uint& numBodies [[buffer(3)]],
+    constant float& stepSize [[buffer(4)]],
+    device float* tempGradients [[buffer(5)]],  // Workspace
+    uint gid [[thread_position_in_grid]]
+) {
+    uint bodyIdx = gid;
+    if (bodyIdx >= numBodies) return;
+
+    const float epsilon = 1e-6f;
+
+    // Compute gradient for this body (all 16 coefficients)
+    for (uint coeffIdx = 0; coeffIdx < 16; coeffIdx++) {
+        float baseResidual = 0.0f;
+        float perturbedResidual = 0.0f;
+
+        for (uint j = 0; j < numJoints; j++) {
+            BallJoint joint = joints[j];
+            if (joint.body1Idx != bodyIdx && joint.body2Idx != bodyIdx) continue;
+
+            Multivector_PGA3 m1 = motors[joint.body1Idx];
+            Multivector_PGA3 m2 = motors[joint.body2Idx];
+
+            // Base residual
+            float3 p1 = float3(2.0f*m1.coeffs[3], 2.0f*m1.coeffs[5], 2.0f*m1.coeffs[9])
+                      + joint.anchor1;
+            float3 p2 = float3(2.0f*m2.coeffs[3], 2.0f*m2.coeffs[5], 2.0f*m2.coeffs[9])
+                      + joint.anchor2;
+            float3 d = p2 - p1;
+            baseResidual += length(d);
+
+            // Perturbed residual
+            if (joint.body1Idx == bodyIdx) m1.coeffs[coeffIdx] += epsilon;
+            if (joint.body2Idx == bodyIdx) m2.coeffs[coeffIdx] += epsilon;
+
+            p1 = float3(2.0f*m1.coeffs[3], 2.0f*m1.coeffs[5], 2.0f*m1.coeffs[9])
+               + joint.anchor1;
+            p2 = float3(2.0f*m2.coeffs[3], 2.0f*m2.coeffs[5], 2.0f*m2.coeffs[9])
+               + joint.anchor2;
+            d = p2 - p1;
+            perturbedResidual += length(d);
+        }
+
+        float grad = (perturbedResidual - baseResidual) / epsilon;
+        motors[bodyIdx].coeffs[coeffIdx] -= stepSize * grad;
+    }
+
+    // Normalize motor
+    float normSq = 0.0f;
+    for (uint i = 0; i < 16; i++) {
+        normSq += motors[bodyIdx].coeffs[i] * motors[bodyIdx].coeffs[i];
+    }
+    if (normSq > 1e-10f) {
+        float scale = 1.0f / sqrt(normSq);
+        for (uint i = 0; i < 16; i++) {
+            motors[bodyIdx].coeffs[i] *= scale;
+        }
+    }
+}
+"
+
+/-- Generate complete physics shader file -/
+def generatePhysicsShader : String :=
+  "// Auto-generated Metal physics shaders for Grassmann algebra
+// Generated from Lean specifications
+
+#include <metal_stdlib>
+using namespace metal;
+
+" ++ motorIntegrationKernelMetal ++ "\n" ++
+    sphereCollisionKernelMetal ++ "\n" ++
+    floorCollisionKernelMetal ++ "\n" ++
+    gravityKernelMetal ++ "\n" ++
+    positionIntegrationKernelMetal
+
+/-- Generate constraint solver shader file -/
+def generateConstraintShader : String :=
+  "// Auto-generated Metal constraint solver shaders
+// Generated from Lean specifications
+
+#include <metal_stdlib>
+using namespace metal;
+
+// PGA3 Multivector struct
+struct Multivector_PGA3 {
+    float coeffs[16];
+};
+
+" ++ ballJointStructMetal ++ "\n" ++
+    ballJointResidualKernelMetal ++ "\n" ++
+    motorGradientKernelMetal ++ "\n" ++
+    motorUpdateKernelMetal ++ "\n" ++
+    constraintSolverKernelMetal
+
+-- Output physics shader
+#eval IO.println generatePhysicsShader
+
+-- Output constraint solver shader
+#eval IO.println generateConstraintShader
+
 end Grassmann.Metal

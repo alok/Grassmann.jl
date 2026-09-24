@@ -250,6 +250,41 @@ def benchPGA3Motor : IO Unit := do
 
   IO.println ""
 
+def benchGradients : IO Unit := do
+  IO.println "=== Gradient Computation (Tier 3 AD) ==="
+  let samples : Nat := 16
+
+  -- Test vectors
+  let vecs : Array (Multivector R3 Float) :=
+    Array.ofFn (n := samples) fun k =>
+      testVector (Float.ofNat (k.val + 1))
+  let defaultVec := testVector 1.0
+
+  -- Finite difference gradient (naive)
+  let finiteDiffGrad (v : Multivector R3 Float) (eps : Float := 0.0001) : Multivector R3 Float :=
+    let normSq := vectorSquaredScalar v
+    ⟨fun i =>
+      if i.val = 1 || i.val = 2 || i.val = 4 then
+        -- Perturb component i
+        let vPlusDelta : Multivector R3 Float := ⟨fun j => v.coeffs j + if j = i then eps else 0⟩
+        let normSqPlus := vectorSquaredScalar vPlusDelta
+        (normSqPlus - normSq) / eps
+      else 0.0⟩
+
+  let _ ← timeit "Finite diff gradient" warmupIters iters fun i =>
+    let idx := i % samples
+    let v := vecs.getD idx defaultVec
+    let grad := finiteDiffGrad v
+    grad.scalarPart + (grad.coeffs ⟨1, by decide⟩)
+
+  let _ ← timeit "Compile-time kernel gradient (R3)" warmupIters iters fun i =>
+    let idx := i % samples
+    let v := vecs.getD idx defaultVec
+    let grad := R3DerivOpt.normSquaredGradient v
+    grad.scalarPart + (grad.coeffs ⟨1, by decide⟩)
+
+  IO.println ""
+
 /-- Run all benchmarks -/
 def runAll : IO Unit := do
   IO.println "╔════════════════════════════════════════════════════════════╗"
@@ -261,6 +296,7 @@ def runAll : IO Unit := do
   benchRotorComposition
   benchSandwich
   benchPGA3Motor
+  benchGradients
 
   IO.println "Done!"
 
@@ -349,6 +385,42 @@ def runMVMotor (iters : Nat := singleBenchIters) : IO Unit := do
     MV.scalarPart (m1 * m2)
   blackhole result
 
+/-- Run finite difference gradient (slow) -/
+def runFiniteDiffGrad (iters : Nat := singleBenchIters) : IO Unit := do
+  let samples : Nat := 16
+  let vecs : Array (Multivector R3 Float) :=
+    Array.ofFn (n := samples) fun k =>
+      testVector (Float.ofNat (k.val + 1))
+  let defaultVec := testVector 1.0
+  let finiteDiffGrad (v : Multivector R3 Float) (eps : Float := 0.0001) : Multivector R3 Float :=
+    let normSq := vectorSquaredScalar v
+    ⟨fun i =>
+      if i.val = 1 || i.val = 2 || i.val = 4 then
+        let vPlusDelta : Multivector R3 Float := ⟨fun j => v.coeffs j + if j = i then eps else 0⟩
+        let normSqPlus := vectorSquaredScalar vPlusDelta
+        (normSqPlus - normSq) / eps
+      else 0.0⟩
+  let result := runN iters fun i =>
+    let idx := i % samples
+    let v := vecs.getD idx defaultVec
+    let grad := finiteDiffGrad v
+    grad.coeffs ⟨1, by decide⟩
+  blackhole result
+
+/-- Run compile-time kernel gradient (fast) -/
+def runKernelGrad (iters : Nat := singleBenchIters) : IO Unit := do
+  let samples : Nat := 16
+  let vecs : Array (Multivector R3 Float) :=
+    Array.ofFn (n := samples) fun k =>
+      testVector (Float.ofNat (k.val + 1))
+  let defaultVec := testVector 1.0
+  let result := runN iters fun i =>
+    let idx := i % samples
+    let v := vecs.getD idx defaultVec
+    let grad := R3DerivOpt.normSquaredGradient v
+    grad.coeffs ⟨1, by decide⟩
+  blackhole result
+
 end Grassmann.Bench
 
 /-- Main entry point -/
@@ -383,6 +455,14 @@ def main (args : List String) : IO Unit := do
   | ["mv-motor", itersStr] =>
     let iters ← parseNatArg itersStr
     Grassmann.Bench.runMVMotor iters
+  | ["finite-diff-grad"] => Grassmann.Bench.runFiniteDiffGrad
+  | ["finite-diff-grad", itersStr] =>
+    let iters ← parseNatArg itersStr
+    Grassmann.Bench.runFiniteDiffGrad iters
+  | ["kernel-grad"] => Grassmann.Bench.runKernelGrad
+  | ["kernel-grad", itersStr] =>
+    let iters ← parseNatArg itersStr
+    Grassmann.Bench.runKernelGrad iters
   | _ => do
     IO.println "Usage: bench [command]"
     IO.println ""
@@ -394,6 +474,8 @@ def main (args : List String) : IO Unit := do
     IO.println "  naive-sandwich [n] Multivector sandwich"
     IO.println "  mv-sandwich [n]   MV sandwich"
     IO.println "  mv-motor [n]      MV PGA3 motor mul"
+    IO.println "  finite-diff-grad [n]  Finite difference gradient (slow)"
+    IO.println "  kernel-grad [n]   Compile-time kernel gradient (fast)"
     IO.println ""
     IO.println "Example:"
     IO.println "  hyperfine '.lake/build/bin/bench naive-rotor' '.lake/build/bin/bench mv-rotor'"

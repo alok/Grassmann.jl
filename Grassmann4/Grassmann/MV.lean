@@ -414,6 +414,16 @@ The generic kernel uses pack/unpack for all parity combinations.
 For even×even with cached signature tables, we have a fast path that
 reuses the production even-kernel tables directly. -/
 
+/-- Whether a valid dense mask has a physical slot in a packed layout.
+
+For positive dimensions this is exactly grade parity. Dimension zero keeps the
+historical one-slot odd buffer, whose compatibility coefficient is addressed
+as mask zero even though mask zero is algebraically even. Product kernels use
+this predicate only for masks already known to be below `2^n`. -/
+@[inline, always_inline]
+private def containsPhysicalMask (n : Nat) (p : Parity) (mask : Nat) : Bool :=
+  if n == 0 then mask == 0 else Parity.containsMask p mask
+
 /-- Generic packed geometric product kernel (uses pack/unpack) -/
 @[inline]
 def mulKernelGeneric (sig : Signature n) (p1 p2 : Parity) (a b : DataArray) : DataArray := Id.run do
@@ -457,50 +467,95 @@ def mulKernelGeneric (sig : Signature n) (p1 p2 : Parity) (a b : DataArray) : Da
             out := out.set! pk (out.get! pk + contrib)
     out
 
+/-- Accumulate one exterior-product output coefficient.
+
+Every contributing pair is a unique partition of `outMask`: the left blade is
+a submask and the right blade is its XOR complement. The submask successor
+`(leftMask - 1) &&& outMask` visits exactly those partitions. `fuel` is a
+simple structural termination witness; descending submasks reach zero before
+the initial `outMask + 1` budget can be exhausted. -/
+private def wedgeCoeffDirectAux (n : Nat) (p1 p2 : Parity)
+    (a b : @& DataArray) (outMask : Nat) : Nat → Nat → Float → Float
+  | 0, _, acc => acc
+  | fuel + 1, leftMask, acc =>
+      let rightMask := outMask ^^^ leftMask
+      let nextAcc :=
+        if containsPhysicalMask n p1 leftMask &&
+            containsPhysicalMask n p2 rightMask then
+          let ai := a.get! (packIdxValid n p1 leftMask)
+          let bj := b.get! (packIdxValid n p2 rightMask)
+          let contribution :=
+            if parityJoinBasic leftMask rightMask n then -ai * bj else ai * bj
+          acc + contribution
+        else
+          acc
+      if leftMask == 0 then
+        nextAcc
+      else
+        wedgeCoeffDirectAux n p1 p2 a b outMask fuel
+          ((leftMask - 1) &&& outMask) nextAcc
+
+/-- Cached-sign variant of `wedgeCoeffDirectAux` for canonical signatures. -/
+private def wedgeCoeffCachedAux (n : Nat) (p1 p2 : Parity)
+    (table : @& SignTable n) (a b : @& DataArray) (outMask : Nat) :
+    Nat → Nat → Float → Float
+  | 0, _, acc => acc
+  | fuel + 1, leftMask, acc =>
+      let rightMask := outMask ^^^ leftMask
+      let nextAcc :=
+        if containsPhysicalMask n p1 leftMask &&
+            containsPhysicalMask n p2 rightMask then
+          let ai := a.get! (packIdxValid n p1 leftMask)
+          let bj := b.get! (packIdxValid n p2 rightMask)
+          let contribution :=
+            if table.lookup leftMask rightMask < 0 then -ai * bj else ai * bj
+          acc + contribution
+        else
+          acc
+      if leftMask == 0 then
+        nextAcc
+      else
+        wedgeCoeffCachedAux n p1 p2 table a b outMask fuel
+          ((leftMask - 1) &&& outMask) nextAcc
+
+/-- Build direct-sign exterior coefficients in ascending packed output order. -/
+private def wedgeOutputDirectAux (n : Nat) (p1 p2 : Parity)
+    (a b : @& DataArray) (outRank : Nat) : Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      let outMask := unpackIdxValid n (p1 * p2) outRank
+      let coefficient :=
+        wedgeCoeffDirectAux n p1 p2 a b outMask (outMask + 1) outMask 0.0
+      wedgeOutputDirectAux n p1 p2 a b (outRank + 1) remaining
+        (out.push coefficient)
+
+/-- Build cached-sign exterior coefficients in ascending packed output order. -/
+private def wedgeOutputCachedAux (n : Nat) (p1 p2 : Parity)
+    (table : @& SignTable n) (a b : @& DataArray) (outRank : Nat) :
+    Nat → FloatArray → FloatArray
+  | 0, out => out
+  | remaining + 1, out =>
+      let outMask := unpackIdxValid n (p1 * p2) outRank
+      let coefficient :=
+        wedgeCoeffCachedAux n p1 p2 table a b outMask
+          (outMask + 1) outMask 0.0
+      wedgeOutputCachedAux n p1 p2 table a b (outRank + 1) remaining
+        (out.push coefficient)
+
 /-- Generic packed wedge-product kernel.
-    Only disjoint blades contribute, and the output parity is the grade-sum parity. -/
+
+The result is output-stationary: each coefficient is accumulated in one
+unboxed `Float` and pushed once into one native buffer. Exterior orientation is
+signature-independent, so this path needs neither a geometric sign table nor
+per-term `Blade` construction. -/
 @[inline]
-def wedgeKernelGeneric (sig : Signature n) (p1 p2 : Parity)
-    (a b : DataArray) : DataArray := Id.run do
-  let pOut := p1 * p2
-  let size1 := storageSize n p1
-  let size2 := storageSize n p2
-  let mut out := DataArray.zeros (storageSize n pOut)
-  match cachedSignTable (n := n) sig with
-  | some table =>
-    for pi in [:size1] do
-      let mi := unpackIdxValid n p1 pi
-      let ai := a.get! pi
-      if ai != 0.0 then
-        for pj in [:size2] do
-          let mj := unpackIdxValid n p2 pj
-          let bj := b.get! pj
-          if bj != 0.0 && (mi &&& mj) == 0 then
-            let sign := table.lookup mi mj
-            if sign != 0 then
-              let mk := mi ||| mj
-              let pk := packIdxValid n pOut mk
-              let contrib := if sign < 0 then -ai * bj else ai * bj
-              out := out.set! pk (out.get! pk + contrib)
-    out
-  | none =>
-    for pi in [:size1] do
-      let mi := unpackIdxValid n p1 pi
-      let ai := a.get! pi
-      if ai != 0.0 then
-        let bi : Blade sig := ⟨BitVec.ofNat n mi⟩
-        for pj in [:size2] do
-          let mj := unpackIdxValid n p2 pj
-          let bj := b.get! pj
-          if bj != 0.0 && (mi &&& mj) == 0 then
-            let bjBlade : Blade sig := ⟨BitVec.ofNat n mj⟩
-            let sign := wedgeSign sig bi bjBlade
-            if sign != 0 then
-              let mk := mi ||| mj
-              let pk := packIdxValid n pOut mk
-              let contrib := if sign < 0 then -ai * bj else ai * bj
-              out := out.set! pk (out.get! pk + contrib)
-    out
+def wedgeKernelGeneric (_sig : Signature n) (p1 p2 : Parity)
+    (a b : @& DataArray) : DataArray :=
+  let sizeOut := storageSize n (p1 * p2)
+  let out := FloatArray.emptyWithCapacity sizeOut
+  match cachedSignTable (n := n) _sig with
+  | some table => wedgeOutputCachedAux n p1 p2 table a b 0 sizeOut out
+  | none => wedgeOutputDirectAux n p1 p2 a b 0 sizeOut out
 
 /-- Generic packed left-contraction kernel. -/
 @[inline]

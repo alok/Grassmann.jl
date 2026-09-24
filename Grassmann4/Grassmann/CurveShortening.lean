@@ -1,5 +1,5 @@
 /-
-  Grassmann/CurveShortening.lean - Curve Shortening Flow Demo
+  Grassmann/CurveShortening.lean - Curve Shortening Flow using Geometric Algebra
 
   Curve shortening flow is a geometric evolution where each point on a curve
   moves in the direction of its curvature vector with speed proportional to
@@ -9,85 +9,113 @@
 
   where κ is the curvature and N is the unit normal.
 
-  For a discrete curve (polygon), the mean curvature at vertex vᵢ is approximated
-  by the discrete Laplacian:
+  This implementation uses Grassmann's geometric algebra primitives:
+  - Vectors as grade-1 multivectors (MV R2 .odd)
+  - Normal computed via pseudoscalar: N = T * I (rotate tangent by 90°)
+  - Curvature approximated by discrete Laplacian
 
-    κN ≈ (v_{i+1} - 2vᵢ + v_{i-1}) / L
-
-  This causes:
-  - Convex regions to shrink inward
-  - Concave regions to expand outward
-  - The curve to become more circular over time
-  - Eventually collapse to a "round point" (Grayson's theorem)
-
-  This demo implements curve shortening on 2D curves using geometric algebra
-  primitives for vector operations.
+  Key GA insight: Rotation by 90° is multiplication by the pseudoscalar I = e₁₂:
+    v * I rotates v counter-clockwise by 90°
+    I * v rotates v clockwise by 90°
 -/
+import Grassmann.MV
 
 namespace Grassmann.CurveShortening
 
-/-! ## Float utilities (not in stdlib) -/
+open Grassmann
+
+/-! ## Float utilities -/
 
 def Float.pi : Float := 3.14159265358979323846
 def Float.inf : Float := 1.0 / 0.0
-def Float.negInf : Float := -1.0 / 0.0
-
 @[inline] def Float.min (a b : Float) : Float := if a ≤ b then a else b
 @[inline] def Float.max (a b : Float) : Float := if a ≥ b then a else b
 
-/-! ## 2D Vector Operations
+/-! ## 2D Geometric Algebra using MV
 
-Simple 2D vector type for curve representation.
-Uses Float for compatibility with MV-based operations. -/
+We use MV R2 .odd for vectors (grade-1 elements have odd parity).
+In 2D R2:
+- e₁ has blade mask 1 (binary 01)
+- e₂ has blade mask 2 (binary 10)
+- e₁₂ has blade mask 3 (binary 11), which is even parity (grade 2) -/
 
-structure Vec2 where
-  x : Float
-  y : Float
-  deriving Repr, BEq, Inhabited
+/-- Create a 2D vector from components using MV.
+    For .odd parity in 2D, we have 2 packed coefficients. -/
+@[inline]
+def vec2 (x y : Float) : MV R2 .odd :=
+  let m := MV.zero R2 .odd
+  let m := m.setCoeff 1 x  -- e₁ at mask 1
+  m.setCoeff 2 y           -- e₂ at mask 2
 
-namespace Vec2
+/-- Get x component of a 2D vector (e₁ coefficient) -/
+@[inline]
+def getX (v : MV R2 .odd) : Float := v.coeff 1
 
-@[inline] def zero : Vec2 := ⟨0.0, 0.0⟩
+/-- Get y component of a 2D vector (e₂ coefficient) -/
+@[inline]
+def getY (v : MV R2 .odd) : Float := v.coeff 2
 
-@[inline] def add (a b : Vec2) : Vec2 := ⟨a.x + b.x, a.y + b.y⟩
+/-- Add two vectors -/
+@[inline]
+def vadd (a b : MV R2 .odd) : MV R2 .odd := MV.add a b
 
-@[inline] def sub (a b : Vec2) : Vec2 := ⟨a.x - b.x, a.y - b.y⟩
+/-- Subtract vectors -/
+@[inline]
+def vsub (a b : MV R2 .odd) : MV R2 .odd := MV.sub a b
 
-@[inline] def scale (s : Float) (v : Vec2) : Vec2 := ⟨s * v.x, s * v.y⟩
+/-- Scale vector -/
+@[inline]
+def vsmul (s : Float) (v : MV R2 .odd) : MV R2 .odd := MV.smul s v
 
-@[inline] def scaleR (v : Vec2) (s : Float) : Vec2 := ⟨s * v.x, s * v.y⟩
+/-- Rotate vector 90° counter-clockwise (conceptually: v * I)
+    In 2D: (a·e₁ + b·e₂) * e₁₂ = -b·e₁ + a·e₂ -/
+@[inline]
+def rotateCCW (v : MV R2 .odd) : MV R2 .odd :=
+  let a := getX v
+  let b := getY v
+  vec2 (-b) a
 
-@[inline] def dot (a b : Vec2) : Float := a.x * b.x + a.y * b.y
+/-- Rotate vector 90° clockwise (conceptually: I * v)
+    In 2D: e₁₂ * (a·e₁ + b·e₂) = b·e₁ - a·e₂ -/
+@[inline]
+def rotateCW (v : MV R2 .odd) : MV R2 .odd :=
+  let a := getX v
+  let b := getY v
+  vec2 b (-a)
 
-@[inline] def normSq (v : Vec2) : Float := v.dot v
+/-- Dot product of two vectors: a · b = a₁b₁ + a₂b₂ -/
+@[inline]
+def dot2 (a b : MV R2 .odd) : Float :=
+  getX a * getX b + getY a * getY b
 
-@[inline] def norm (v : Vec2) : Float := Float.sqrt v.normSq
+/-- Squared norm -/
+@[inline]
+def normSq2 (v : MV R2 .odd) : Float := dot2 v v
 
-@[inline] def normalize (v : Vec2) : Vec2 :=
-  let n := v.norm
-  if n > 1e-10 then ⟨v.x / n, v.y / n⟩ else zero
+/-- Norm (magnitude) -/
+@[inline]
+def norm2 (v : MV R2 .odd) : Float := Float.sqrt (normSq2 v)
 
-/-- Cross product (returns scalar z-component in 2D) -/
-@[inline] def cross (a b : Vec2) : Float := a.x * b.y - a.y * b.x
+/-- Normalize a vector -/
+@[inline]
+def normalize2 (v : MV R2 .odd) : MV R2 .odd :=
+  let n := norm2 v
+  if n > 1e-10 then vsmul (1.0 / n) v else MV.zero R2 .odd
 
-/-- Perpendicular vector (rotate 90° counter-clockwise) -/
-@[inline] def perp (v : Vec2) : Vec2 := ⟨-v.y, v.x⟩
+/-- Cross product in 2D (returns scalar z-component) -/
+@[inline]
+def cross2 (a b : MV R2 .odd) : Float :=
+  getX a * getY b - getY a * getX b
 
-instance : Add Vec2 := ⟨add⟩
-instance : Sub Vec2 := ⟨sub⟩
-instance : Neg Vec2 := ⟨fun v => ⟨-v.x, -v.y⟩⟩
-instance : HMul Float Vec2 Vec2 := ⟨scale⟩
-instance : HMul Vec2 Float Vec2 := ⟨scaleR⟩
+/-! ## Discrete Curve using MV Vectors
 
-end Vec2
-
-/-! ## Discrete Curve
-
-A closed curve represented as an array of vertices. -/
+A closed curve represented as an array of 2D multivectors. -/
 
 structure Curve where
-  vertices : Array Vec2
-  deriving Repr
+  vertices : Array (MV R2 .odd)
+
+-- Provide Inhabited instance for MV to enable array access with !
+instance : Inhabited (MV R2 .odd) := ⟨MV.zero R2 .odd⟩
 
 namespace Curve
 
@@ -95,18 +123,10 @@ namespace Curve
 @[inline] def numVertices (c : Curve) : Nat := c.vertices.size
 
 /-- Get vertex with wrapping for closed curves -/
-@[inline] def vertex (c : Curve) (i : Nat) : Vec2 :=
+@[inline] def vertex (c : Curve) (i : Nat) : MV R2 .odd :=
   let n := c.numVertices
-  if n = 0 then Vec2.zero
+  if n = 0 then MV.zero R2 .odd
   else c.vertices[i % n]!
-
-/-- Get vertex with signed index (for i-1 style access) -/
-@[inline] def vertexSigned (c : Curve) (i : Int) : Vec2 :=
-  let n := c.numVertices
-  if n = 0 then Vec2.zero
-  else
-    let idx := (i % n + n) % n
-    c.vertices[idx.toNat]!
 
 /-- Total arc length of the curve -/
 def arcLength (c : Curve) : Float :=
@@ -114,29 +134,30 @@ def arcLength (c : Curve) : Float :=
   (List.range n).foldl (init := 0.0) fun acc i =>
     let p0 := c.vertex i
     let p1 := c.vertex (i + 1)
-    acc + (p1 - p0).norm
+    acc + norm2 (vsub p1 p0)
 
 /-- Centroid (center of mass) of the curve vertices -/
-def centroid (c : Curve) : Vec2 :=
+def centroid (c : Curve) : MV R2 .odd :=
   let n := c.numVertices
-  if n = 0 then Vec2.zero
+  if n = 0 then MV.zero R2 .odd
   else
-    let sum := c.vertices.foldl (init := Vec2.zero) (· + ·)
-    (1.0 / n.toFloat) * sum
+    let sum := c.vertices.foldl (init := MV.zero R2 .odd) vadd
+    vsmul (1.0 / n.toFloat) sum
 
-/-- Enclosed area (signed, positive for counter-clockwise) using shoelace formula -/
+/-- Enclosed area using the wedge product (shoelace formula via GA)
+    Area = ½ Σᵢ (pᵢ ∧ p_{i+1}) where ∧ extracts signed area -/
 def signedArea (c : Curve) : Float :=
   let n := c.numVertices
   let sum := (List.range n).foldl (init := 0.0) fun acc i =>
     let p0 := c.vertex i
     let p1 := c.vertex (i + 1)
-    acc + p0.cross p1
+    acc + cross2 p0 p1
   sum / 2.0
 
 /-- Absolute enclosed area -/
 def area (c : Curve) : Float := Float.abs c.signedArea
 
-/-! ## Curvature Computation -/
+/-! ## Curvature Computation using GA -/
 
 /-- Discrete curvature vector at vertex i using the discrete Laplacian.
     κN ≈ (v_{i+1} - 2vᵢ + v_{i-1})
@@ -144,17 +165,36 @@ def area (c : Curve) : Float := Float.abs c.signedArea
     This points toward the center of curvature with magnitude proportional
     to the curvature κ. -/
 @[inline]
-def curvatureVector (c : Curve) (i : Nat) : Vec2 :=
+def curvatureVector (c : Curve) (i : Nat) : MV R2 .odd :=
   let n := c.numVertices
-  if n < 3 then Vec2.zero
+  if n < 3 then MV.zero R2 .odd
   else
     let prev := c.vertex ((i + n - 1) % n)
     let curr := c.vertex i
     let next := c.vertex ((i + 1) % n)
-    next - (2.0 * curr) + prev
+    -- Discrete Laplacian: second derivative approximation
+    vadd (vsub next (vsmul 2.0 curr)) prev
+
+/-- Tangent vector at vertex i (unit vector along curve)
+    T = normalize((v_{i+1} - v_{i-1}) / 2) -/
+def tangent (c : Curve) (i : Nat) : MV R2 .odd :=
+  let n := c.numVertices
+  if n < 3 then MV.zero R2 .odd
+  else
+    let prev := c.vertex ((i + n - 1) % n)
+    let next := c.vertex ((i + 1) % n)
+    normalize2 (vsmul 0.5 (vsub next prev))
+
+/-- Normal vector at vertex i using pseudoscalar rotation.
+    N = T * I (rotate tangent CCW by 90°)
+
+    This is the key GA insight: multiplication by the pseudoscalar
+    rotates vectors in the plane. -/
+def normal (c : Curve) (i : Nat) : MV R2 .odd :=
+  rotateCCW (c.tangent i)
 
 /-- Discrete curvature magnitude at vertex i.
-    Approximated as |curvature vector| / average edge length. -/
+    κ ≈ |curvature vector| / average edge length -/
 def curvature (c : Curve) (i : Nat) : Float :=
   let n := c.numVertices
   if n < 3 then 0.0
@@ -163,21 +203,8 @@ def curvature (c : Curve) (i : Nat) : Float :=
     let curr := c.vertex i
     let next := c.vertex ((i + 1) % n)
     let kVec := c.curvatureVector i
-    let L := ((curr - prev).norm + (next - curr).norm) / 2.0
-    if L > 1e-10 then kVec.norm / L else 0.0
-
-/-- Tangent vector at vertex i (pointing forward along curve) -/
-def tangent (c : Curve) (i : Nat) : Vec2 :=
-  let n := c.numVertices
-  if n < 3 then Vec2.zero
-  else
-    let prev := c.vertex ((i + n - 1) % n)
-    let next := c.vertex ((i + 1) % n)
-    ((next - prev) * 0.5).normalize
-
-/-- Normal vector at vertex i (perpendicular to tangent, pointing "outward") -/
-def normal (c : Curve) (i : Nat) : Vec2 :=
-  (c.tangent i).perp
+    let L := (norm2 (vsub curr prev) + norm2 (vsub next curr)) / 2.0
+    if L > 1e-10 then norm2 kVec / L else 0.0
 
 /-! ## Curve Shortening Flow -/
 
@@ -185,16 +212,13 @@ def normal (c : Curve) (i : Nat) : Vec2 :=
 
     v_i(t+Δt) = v_i(t) + Δt * κN_i
 
-    where κN_i is the discrete curvature vector at vertex i.
-
-    The timestep should be small enough for stability:
-    Δt < min(edge_length²) / 4 is a common stability criterion. -/
+    where κN_i is the discrete curvature vector (Laplacian) at vertex i. -/
 def step (c : Curve) (dt : Float) : Curve :=
   let n := c.numVertices
   let newVerts := (Array.range n).map fun i =>
     let v := c.vertex i
     let kVec := c.curvatureVector i
-    v + dt * kVec
+    vadd v (vsmul dt kVec)
   ⟨newVerts⟩
 
 /-- Adaptive timestep based on minimum edge length.
@@ -204,7 +228,7 @@ def adaptiveTimestep (c : Curve) (alpha : Float := 0.1) : Float :=
   if n < 2 then 0.01
   else
     let minLenSq := (List.range n).foldl (init := Float.inf) fun acc i =>
-      let L := (c.vertex (i + 1) - c.vertex i).normSq
+      let L := normSq2 (vsub (c.vertex (i + 1)) (c.vertex i))
       Float.min acc L
     alpha * minLenSq
 
@@ -212,42 +236,32 @@ def adaptiveTimestep (c : Curve) (alpha : Float := 0.1) : Float :=
 def evolve (c : Curve) (steps : Nat) (dt : Float := 0.01) : Curve :=
   (List.range steps).foldl (init := c) fun curve _ => curve.step dt
 
-/-- Run curve shortening with adaptive timestep until area reaches threshold -/
-partial def evolveUntilArea (c : Curve) (targetArea : Float) (maxSteps : Nat := 10000) : Curve × Nat :=
-  let rec go (curve : Curve) (stepNum : Nat) : Curve × Nat :=
-    if stepNum >= maxSteps then (curve, stepNum)
-    else if curve.area < targetArea then (curve, stepNum)
-    else
-      let dt := curve.adaptiveTimestep 0.1
-      go (curve.step dt) (stepNum + 1)
-  go c 0
-
-/-! ## Curve Constructors -/
+/-! ## Curve Constructors using GA -/
 
 /-- Create a regular n-gon centered at origin with given radius -/
-def regularPolygon (n : Nat) (radius : Float := 1.0) (center : Vec2 := Vec2.zero) : Curve :=
+def regularPolygon (n : Nat) (radius : Float := 1.0) (center : MV R2 .odd := MV.zero R2 .odd) : Curve :=
   if n < 3 then ⟨#[]⟩
   else
     let verts := (Array.range n).map fun i =>
       let θ := 2.0 * Float.pi * i.toFloat / n.toFloat
-      ⟨center.x + radius * Float.cos θ, center.y + radius * Float.sin θ⟩
+      vadd center (vec2 (radius * Float.cos θ) (radius * Float.sin θ))
     ⟨verts⟩
 
 /-- Create an ellipse approximation -/
-def ellipse (a b : Float) (n : Nat := 64) (center : Vec2 := Vec2.zero) : Curve :=
+def ellipse (a b : Float) (n : Nat := 64) (center : MV R2 .odd := MV.zero R2 .odd) : Curve :=
   let verts := (Array.range n).map fun i =>
     let θ := 2.0 * Float.pi * i.toFloat / n.toFloat
-    ⟨center.x + a * Float.cos θ, center.y + b * Float.sin θ⟩
+    vadd center (vec2 (a * Float.cos θ) (b * Float.sin θ))
   ⟨verts⟩
 
 /-- Create a star-shaped curve -/
-def star (n : Nat) (outerRadius innerRadius : Float) (center : Vec2 := Vec2.zero) : Curve :=
+def star (n : Nat) (outerRadius innerRadius : Float) (center : MV R2 .odd := MV.zero R2 .odd) : Curve :=
   if n < 3 then ⟨#[]⟩
   else
     let verts := (Array.range (2 * n)).map fun i =>
       let θ := Float.pi * i.toFloat / n.toFloat
       let r := if i % 2 = 0 then outerRadius else innerRadius
-      ⟨center.x + r * Float.cos θ, center.y + r * Float.sin θ⟩
+      vadd center (vec2 (r * Float.cos θ) (r * Float.sin θ))
     ⟨verts⟩
 
 /-- Create a figure-8 (lemniscate-like) curve -/
@@ -256,7 +270,7 @@ def figure8 (scale : Float := 1.0) (n : Nat := 64) : Curve :=
     let t := 2.0 * Float.pi * i.toFloat / n.toFloat
     let x := scale * Float.sin t
     let y := scale * Float.sin t * Float.cos t
-    ⟨x, y⟩
+    vec2 x y
   ⟨verts⟩
 
 end Curve
@@ -264,21 +278,21 @@ end Curve
 /-! ## Visualization Helpers -/
 
 /-- Convert curve to SVG path string -/
-def curveToSVGPath (c : Curve) (scale : Float := 100.0) (offset : Vec2 := ⟨200.0, 200.0⟩) : String :=
+def curveToSVGPath (c : Curve) (scale : Float := 100.0) (offsetX offsetY : Float := 200.0) : String :=
   if c.numVertices = 0 then ""
   else
     let start := c.vertex 0
-    let startStr := s!"M {offset.x + scale * start.x} {offset.y - scale * start.y}"
+    let startStr := s!"M {offsetX + scale * getX start} {offsetY - scale * getY start}"
     let pathStr := (List.range (c.numVertices - 1)).foldl (init := startStr) fun acc i =>
       let p := c.vertex (i + 1)
-      acc ++ s!" L {offset.x + scale * p.x} {offset.y - scale * p.y}"
+      acc ++ s!" L {offsetX + scale * getX p} {offsetY - scale * getY p}"
     pathStr ++ " Z"
 
-/-- Generate SVG showing curve evolution -/
-def evolutionSVG (initial : Curve) (steps : Nat) (dt : Float := 0.005) (everyNth : Nat := 50) : String :=
+/-- Generate SVG showing curve evolution with rainbow colors -/
+def evolutionSVG (initial : Curve) (steps : Nat) (dt : Float := 0.005)
+    (everyNth : Nat := 50) : String :=
   let header := "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 400 400\">\n"
   let header := header ++ "  <rect width=\"400\" height=\"400\" fill=\"white\"/>\n"
-
   let rec go (c : Curve) (stepNum : Nat) (paths : String) (hue : Float) : String :=
     if stepNum >= steps then paths
     else
@@ -286,12 +300,13 @@ def evolutionSVG (initial : Curve) (steps : Nat) (dt : Float := 0.005) (everyNth
       let newPaths := if stepNum % everyNth = 0 then
         let color := s!"hsl({hue}, 70%, 50%)"
         let opacity := 1.0 - (stepNum.toFloat / steps.toFloat) * 0.7
-        paths ++ s!"  <path d=\"{curveToSVGPath newC}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"1\" opacity=\"{opacity}\"/>\n"
+        paths ++ s!"  <path d=\"{curveToSVGPath newC}\" fill=\"none\" \
+                     stroke=\"{color}\" stroke-width=\"1\" opacity=\"{opacity}\"/>\n"
       else paths
       go newC (stepNum + 1) newPaths (hue + 360.0 / (steps.toFloat / everyNth.toFloat))
   termination_by steps - stepNum
-
-  let initialPath := s!"  <path d=\"{curveToSVGPath initial}\" fill=\"none\" stroke=\"blue\" stroke-width=\"2\"/>\n"
+  let initialPath := s!"  <path d=\"{curveToSVGPath initial}\" fill=\"none\" \
+                         stroke=\"blue\" stroke-width=\"2\"/>\n"
   let allPaths := go initial 0 initialPath 0.0
   let footer := "</svg>"
   header ++ allPaths ++ footer
@@ -300,26 +315,36 @@ def evolutionSVG (initial : Curve) (steps : Nat) (dt : Float := 0.005) (everyNth
 
 section Demo
 
-/-- Demo: Curve shortening on a square -/
+/-- Demo: Curve shortening on a square using MV vectors -/
 def demoSquare : IO Unit := do
   let square := Curve.regularPolygon 4 1.5
-  IO.println s!"Initial square:"
+  IO.println s!"Initial square (using MV R2 .odd):"
   IO.println s!"  Vertices: {square.numVertices}"
   IO.println s!"  Arc length: {square.arcLength}"
   IO.println s!"  Area: {square.area}"
-
   let evolved := square.evolve 100 0.01
-  IO.println s!"\nAfter 100 steps:"
+  IO.println s!"\nAfter 100 steps of curve shortening flow:"
   IO.println s!"  Arc length: {evolved.arcLength}"
   IO.println s!"  Area: {evolved.area}"
-
   -- Check vertices are becoming more circular
-  let centroid := evolved.centroid
-  let distances := evolved.vertices.map fun v => (v - centroid).norm
+  let cent := evolved.centroid
+  let distances := evolved.vertices.map fun v => norm2 (vsub v cent)
   let minDist := distances.foldl Float.min Float.inf
   let maxDist := distances.foldl Float.max 0.0
   IO.println s!"  Distance ratio (max/min): {maxDist / minDist}"
-  IO.println s!"  (Should approach 1.0 as curve becomes circular)"
+  IO.println s!"  (Approaches 1.0 as curve becomes circular)"
+
+/-- Demo: Show tangent and normal computation using pseudoscalar -/
+def demoTangentNormal : IO Unit := do
+  IO.println s!"\n--- Tangent and Normal via Pseudoscalar ---"
+  let circle := Curve.regularPolygon 8 1.0
+  for i in [:4] do
+    let T := circle.tangent i
+    let N := circle.normal i  -- N = rotateCCW(T) = T * I conceptually
+    IO.println s!"Vertex {i}: T = ({getX T}, {getY T}), N = ({getX N}, {getY N})"
+    -- Verify N is perpendicular to T
+    let dotTN := dot2 T N
+    IO.println s!"  T·N = {dotTN} (should be ≈0)"
 
 /-- Demo: Curve shortening on a star -/
 def demoStar : IO Unit := do
@@ -328,64 +353,47 @@ def demoStar : IO Unit := do
   IO.println s!"  Vertices: {star.numVertices}"
   IO.println s!"  Arc length: {star.arcLength}"
   IO.println s!"  Area: {star.area}"
-
   -- Evolve with adaptive timestep
   let mut curve := star
-  for _ in [:500] do
+  for _ in [:200] do
     let dt := curve.adaptiveTimestep 0.08
     curve := curve.step dt
-
-  IO.println s!"\nAfter 500 adaptive steps:"
+  IO.println s!"\nAfter 200 adaptive steps:"
   IO.println s!"  Arc length: {curve.arcLength}"
   IO.println s!"  Area: {curve.area}"
-
-  let centroid := curve.centroid
-  let distances := curve.vertices.map fun v => (v - centroid).norm
+  let cent := curve.centroid
+  let distances := curve.vertices.map fun v => norm2 (vsub v cent)
   let minDist := distances.foldl Float.min Float.inf
   let maxDist := distances.foldl Float.max 0.0
   IO.println s!"  Distance ratio (max/min): {maxDist / minDist}"
 
-/-- Demo: Generate SVG visualization -/
-def demoSVG : IO Unit := do
-  let star := Curve.star 6 1.5 0.6
-  let svg := evolutionSVG star 1000 0.002 100
-  IO.println s!"\nGenerated SVG for curve evolution ({svg.length} chars)"
-  IO.println "To view: save output to file.svg and open in browser"
-
 /-- Run all demos -/
 def runAllDemos : IO Unit := do
-  IO.println "=== Curve Shortening Flow Demo ===\n"
+  IO.println "=== Curve Shortening Flow Demo (using Grassmann MV) ===\n"
   demoSquare
+  demoTangentNormal
   demoStar
-  demoSVG
   IO.println "\n=== Demo Complete ==="
 
 end Demo
 
-/-! ## Integration with Grassmann.MV (TODO)
+/-! ## Extension to 3D and Surfaces
 
-To integrate with the MV-based geometric algebra:
+The GA formulation naturally extends to higher dimensions:
 
-1. Use MV sig .odd for 2D vectors (grade-1 multivectors)
-2. The discrete curvature vector computation remains the same
-3. The flow evolution can use GA operations:
-   - Vector addition: MV.add
-   - Scalar multiplication: MV.smul
-   - Norm: sqrt(v ⋅ v) where ⋅ is the inner product
+1. **3D Space Curves**: Use MV R3 .odd for vectors
+   - Tangent T, Normal N, Binormal B form the Frenet frame
+   - Curvature: κN ≈ d²γ/ds² = discrete Laplacian
+   - Torsion: τB involves third derivatives
 
-Example (pseudocode with MV):
-```lean
-def curvatureVectorGA (c : MVCurve) (i : Nat) : MV R2 .odd :=
-  let prev := c.vertex (i - 1)
-  let curr := c.vertex i
-  let next := c.vertex (i + 1)
-  next + (-2.0 * curr) + prev  -- Using MV arithmetic
-```
+2. **Surface Mean Curvature Flow**: Use MV R3 .odd for mesh vertices
+   - Each vertex moves by: v += dt * H * n
+   - H = mean curvature = (κ₁ + κ₂)/2
+   - Can be computed via cotangent Laplacian on mesh
 
-The advantage of the GA formulation:
-- Works in any dimension without code changes
-- Curvature normal is automatically in the correct subspace
-- Can extend to surface flow (mean curvature flow) naturally
+The pseudoscalar multiplication extends naturally:
+- In R3: I = e₁₂₃, and v * I gives the Hodge dual
+- For surfaces: the normal n = (∂σ/∂u ∧ ∂σ/∂v) / |∂σ/∂u ∧ ∂σ/∂v|
 -/
 
 end Grassmann.CurveShortening

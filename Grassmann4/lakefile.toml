@@ -15,12 +15,18 @@ release = true
 
 # SciLean brings in mathlib, so we don't need to specify it separately
 [[require]]
-name = "scilean"
-path = "/Users/alokbeniwal/scilean"
+name = "SciLean"
+path = "/Users/alokbeniwal/SciLean"
 
+# LeviCivita numbers for smooth collision detection & higher-order derivatives
 [[require]]
-name = "LeanPlot"
-path = "/Users/alokbeniwal/leanplot"
+name = "LeviCivita"
+path = "/Users/alokbeniwal/levicivita"
+
+# Temporarily disabled - Verso dependency issues
+# [[require]]
+# name = "LeanPlot"
+# path = "/Users/alokbeniwal/leanplot"
 
 [[lean_lib]]
 name = "Grassmann"
@@ -58,6 +64,12 @@ name = "bench"
 root = "Grassmann.Bench"
 precompileModules = false
 # BLAS linking for SciLean-backed DataArray operations
+moreLinkArgs = ["-L/opt/homebrew/opt/openblas/lib", "-lblas"]
+
+[[lean_exe]]
+name = "gpuphysics"
+root = "GPUPhysics"
+precompileModules = false
 moreLinkArgs = ["-L/opt/homebrew/opt/openblas/lib", "-lblas"]
 
 

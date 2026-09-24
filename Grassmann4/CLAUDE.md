@@ -23,6 +23,8 @@ A Lean 4 implementation of Clifford/Grassmann algebras with:
 - [ ] Fill `sorry` proofs in `AnchorTheorems.lean` - these are the key algebraic identities
 - [ ] Profile PGA motor transforms with `hwatch` to verify no unexpected allocations
 - [ ] Extend packed `MV` vs dense `Multivector` property tests when adding new operations or signatures
+- [ ] Add Hodge theory analysis (e.g., star operator identities, Hodge decomposition, harmonic forms)
+- [ ] Add DEC analysis with interior Clifford part incorporated (discrete exterior calculus + Clifford interior products)
 
 ### Medium Priority
 - [ ] Add `@[inline]` to remaining hot-path functions in `LinearAlgebra.lean`

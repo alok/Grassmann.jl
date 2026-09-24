@@ -70,8 +70,18 @@ srcDir = "Grassmann4"
 precompileModules = false
 
 [[lean_exe]]
+name = "curvedemo"
+root = "RunCurveDemo"
+srcDir = "Grassmann4"
+
+[[lean_exe]]
 name = "jlexamples"
 root = "RunJuliaExamples"
+srcDir = "Grassmann4"
+
+[[lean_exe]]
+name = "hat"
+root = "HatOptimizer"
 srcDir = "Grassmann4"
 
 
