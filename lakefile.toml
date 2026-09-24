@@ -1,68 +1,20 @@
 name = "Grassmann"
 version = "0.1.0"
-keywords = ["math"]
-defaultTargets = ["Grassmann"]
+description = "Lean 4 port of Michael Reed's Grassmann.jl ecosystem (DirectSum, Leibniz, AbstractTensors, Grassmann, Cartan, ...)"
+keywords = ["math", "geometric-algebra", "clifford-algebra", "differential-geometry"]
+license = "AGPL-3.0-or-later"
+defaultTargets = ["StaticVectors", "Leibniz", "DirectSum"]
 
 [leanOptions]
-pp.unicode.fun = true                 # pretty-prints `fun a ↦ b`
+autoImplicit = false
 relaxedAutoImplicit = false
-weak.linter.mathlibStandardSet = true
-maxSynthPendingDepth = 3
-
-[[require]]
-name = "mathlib"
-scope = "leanprover-community"
-rev = "master"
-
-[[require]]
-name = "SciLean"
-path = "/Users/alokbeniwal/scilean"
-
-[[require]]
-name = "LeanPlot"
-path = "/Users/alokbeniwal/leanplot"
+pp.unicode.fun = true
 
 [[lean_lib]]
-name = "Grassmann"
-srcDir = "Grassmann4"
+name = "StaticVectors"
 
-[[lean_exe]]
-name = "genmetalshaders"
-root = "GenMetalShaders"
-srcDir = "Grassmann4"
+[[lean_lib]]
+name = "DirectSum"
 
-[[lean_exe]]
-name = "genvectorfield"
-root = "Grassmann.GenVectorField"
-srcDir = "Grassmann4"
-
-[[lean_exe]]
-name = "oracletests"
-root = "RunOracleTests"
-srcDir = "Grassmann4"
-
-[[lean_exe]]
-name = "propertytests"
-root = "RunPropertyTests"
-srcDir = "Grassmann4"
-
-[[lean_exe]]
-name = "bench"
-root = "Grassmann.Bench"
-srcDir = "Grassmann4"
-
-
-# Note: Verso documentation setup is available but requires
-# additional build configuration. See Manual/ folder for content.
-# To enable: add verso dependency and uncomment Manual targets.
-# [[require]]
-# name = "verso"
-# git = "https://github.com/leanprover/verso"
-# rev = "main"
-
-# [[lean_lib]]
-# name = "Manual"
-
-# [[lean_exe]]
-# name = "manual"
-# root = "Manual.Main"
+[[lean_lib]]
+name = "Leibniz"

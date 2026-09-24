@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lean:
+    name: build + test (Lean)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+        with:
+          build-args: "--wfail"
+          test: true
+          use-mathlib-cache: false
+      - name: benchmarks (smoke)
+        run: lake exe bench --smoke
+
+  oracle:
+    name: regenerate Julia goldens and diff
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: "1.11"
+      - name: instantiate oracle env
+        run: julia --startup-file=no --project=oracle -e 'using Pkg; Pkg.instantiate()'
+      - name: regenerate goldens
+        run: julia --startup-file=no --project=oracle oracle/generate_all.jl
+      - name: goldens unchanged
+        run: git diff --stat --exit-code oracle/golden

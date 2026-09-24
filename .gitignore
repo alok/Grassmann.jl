@@ -1,4 +1,9 @@
-*.jl.cov
-*.jl.*.cov
-*.jl.mem
 /.lake
+**/.lake
+*.olean
+.DS_Store
+/gallery/out/
+/bench/out/
+/oracle/.julia/
+*.jl.cov
+*.jl.mem
