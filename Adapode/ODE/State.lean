@@ -110,20 +110,11 @@ instance {M : Type} [FrameBundle M] {m : M} {F : Type} [FlatFiber F] : OdeState 
 
 /-! ## Flat buffers -/
 
-/-- Append `n` zeros. -/
-def pushZeros : Nat → FloatArray → FloatArray
-  | 0, a => a
-  | n + 1, a => pushZeros n (a.push 0)
+/-- `n` zeros. Built from `Array.replicate` (one shared boxed `0.0`, unboxed by `FloatArray.mk`): three
+times faster than `n` pushes, and it touches the pages of a large trajectory buffer up front. -/
+@[inline] def zeros (n : Nat) : FloatArray := ⟨Array.replicate n 0⟩
 
-@[simp] theorem size_pushZeros : ∀ (n : Nat) (a : FloatArray), (pushZeros n a).size = a.size + n
-  | 0, _ => rfl
-  | n + 1, a => by rw [pushZeros, size_pushZeros n, FloatArray.size_push']; omega
-
-/-- `n` zeros (unboxed from the start). -/
-@[inline] def zeros (n : Nat) : FloatArray := pushZeros n (FloatArray.emptyWithCapacity n)
-
-@[simp] theorem size_zeros (n : Nat) : (zeros n).size = n := by
-  simp [zeros]; rfl
+@[simp] theorem size_zeros (n : Nat) : (zeros n).size = n := by simp [zeros, FloatArray.size]
 
 /-- `dst[off + j] := src[j]` for `j < k` (in place when `dst` is unshared). -/
 def copyLoop (src : FloatArray) (off : Nat) : (k j : Nat) → FloatArray → FloatArray
@@ -214,76 +205,156 @@ instance : FlatFiber (Phase V) where
 
 end Phase
 
-/-! ## Julia's `weights` and the step combinations -/
+/-! ## Julia's `weights` and the step combinations
 
-/-- The tail of Julia's `weights(h*c, fx)` for component `j`: `acc + (h c[co+l]) K_l[j]` for the
-remaining stages, left to right (`K_l` at `ks[l·d …]`). -/
-def wsumLoop (h : Float) (c : FloatArray) (co : Nat) (ks : FloatArray) (d j : Nat) :
+`linComb` is Julia's `x + weights(h*w, K)` (`Adapode.jl:224-241`): component by component,
+`x[j] + (((c₀ K₀[j] + c₁ K₁[j]) + c₂ K₂[j]) + …)` with `cₗ = h·w[l]`. The stage values `K_l` sit in
+one flat array at offsets `oₗ` (stage-major for Runge–Kutta, ring slots for Adams). For up to
+seven terms (every table of Adapode) the sum is unrolled, with the coefficients and offsets
+computed once per combination (the same products Julia forms in `h*c`), so a combination is one
+tight loop over the components. -/
+
+section Lin
+
+/-- `y[j] := x[j] + c₀K[o₀+j]`. -/
+def lin1Loop (c0 : Float) (o0 : Nat) (K x : FloatArray) : (n j : Nat) → FloatArray → FloatArray
+  | 0, _, y => y
+  | n + 1, j, y => lin1Loop c0 o0 K x n (j + 1) (y.set! j (x.get! j + c0 * K.get! (o0 + j)))
+
+/-- Two terms. -/
+def lin2Loop (c0 c1 : Float) (o0 o1 : Nat) (K x : FloatArray) : (n j : Nat) → FloatArray → FloatArray
+  | 0, _, y => y
+  | n + 1, j, y =>
+    lin2Loop c0 c1 o0 o1 K x n (j + 1)
+      (y.set! j (x.get! j + (c0 * K.get! (o0 + j) + c1 * K.get! (o1 + j))))
+
+/-- Three terms. -/
+def lin3Loop (c0 c1 c2 : Float) (o0 o1 o2 : Nat) (K x : FloatArray) :
+    (n j : Nat) → FloatArray → FloatArray
+  | 0, _, y => y
+  | n + 1, j, y =>
+    lin3Loop c0 c1 c2 o0 o1 o2 K x n (j + 1)
+      (y.set! j (x.get! j + ((c0 * K.get! (o0 + j) + c1 * K.get! (o1 + j)) + c2 * K.get! (o2 + j))))
+
+/-- Four terms. -/
+def lin4Loop (c0 c1 c2 c3 : Float) (o0 o1 o2 o3 : Nat) (K x : FloatArray) :
+    (n j : Nat) → FloatArray → FloatArray
+  | 0, _, y => y
+  | n + 1, j, y =>
+    lin4Loop c0 c1 c2 c3 o0 o1 o2 o3 K x n (j + 1)
+      (y.set! j (x.get! j + (((c0 * K.get! (o0 + j) + c1 * K.get! (o1 + j)) + c2 * K.get! (o2 + j))
+        + c3 * K.get! (o3 + j))))
+
+/-- Five terms. -/
+def lin5Loop (c0 c1 c2 c3 c4 : Float) (o0 o1 o2 o3 o4 : Nat) (K x : FloatArray) :
+    (n j : Nat) → FloatArray → FloatArray
+  | 0, _, y => y
+  | n + 1, j, y =>
+    lin5Loop c0 c1 c2 c3 c4 o0 o1 o2 o3 o4 K x n (j + 1)
+      (y.set! j (x.get! j + ((((c0 * K.get! (o0 + j) + c1 * K.get! (o1 + j)) + c2 * K.get! (o2 + j))
+        + c3 * K.get! (o3 + j)) + c4 * K.get! (o4 + j))))
+
+/-- Six terms. -/
+def lin6Loop (c0 c1 c2 c3 c4 c5 : Float) (o0 o1 o2 o3 o4 o5 : Nat) (K x : FloatArray) :
+    (n j : Nat) → FloatArray → FloatArray
+  | 0, _, y => y
+  | n + 1, j, y =>
+    lin6Loop c0 c1 c2 c3 c4 c5 o0 o1 o2 o3 o4 o5 K x n (j + 1)
+      (y.set! j (x.get! j + (((((c0 * K.get! (o0 + j) + c1 * K.get! (o1 + j)) + c2 * K.get! (o2 + j))
+        + c3 * K.get! (o3 + j)) + c4 * K.get! (o4 + j)) + c5 * K.get! (o5 + j))))
+
+/-- Seven terms. -/
+def lin7Loop (c0 c1 c2 c3 c4 c5 c6 : Float) (o0 o1 o2 o3 o4 o5 o6 : Nat) (K x : FloatArray) :
+    (n j : Nat) → FloatArray → FloatArray
+  | 0, _, y => y
+  | n + 1, j, y =>
+    lin7Loop c0 c1 c2 c3 c4 c5 c6 o0 o1 o2 o3 o4 o5 o6 K x n (j + 1)
+      (y.set! j (x.get! j + ((((((c0 * K.get! (o0 + j) + c1 * K.get! (o1 + j)) + c2 * K.get! (o2 + j))
+        + c3 * K.get! (o3 + j)) + c4 * K.get! (o4 + j)) + c5 * K.get! (o5 + j)) + c6 * K.get! (o6 + j))))
+
+/-- The offset of term `l`: `((l + base) mod m)·d` for `l + base < 2m` (stage `l` of a Runge–Kutta
+workspace with `base = 0`, `m = k`; ring slot `(l + s + 1) mod (o + 1)` of an Adams ring, `s ≤ o + 1`).
+A formula rather than a function argument, so that no closure is built per combination, and a
+conditional subtraction rather than a division. -/
+@[inline] def termOffset (base m d l : Nat) : Nat :=
+  let q := l + base
+  (if q < m then q else q - m) * d
+
+/-- The tail of the sum for component `j` beyond seven terms: `acc + cₗK[off l + j]`. -/
+def linTailLoop (h : Float) (w : FloatArray) (wo base m d : Nat) (K : FloatArray) (j : Nat) :
     (k l : Nat) → Float → Float
   | 0, _, acc => acc
-  | k + 1, l, acc => wsumLoop h c co ks d j k (l + 1) (acc + (h * c.get! (co + l)) * ks.get! (l * d + j))
+  | k + 1, l, acc =>
+    linTailLoop h w wo base m d K j k (l + 1)
+      (acc + (h * w.get! (wo + l)) * K.get! (termOffset base m d l + j))
 
-/-- Julia `weights(h*c, fx)` (`Adapode.jl:224-230`) for component `j`, over the first `k ≥ 1`
-stages: `(h c₀) K₀[j] + (h c₁) K₁[j] + …`. -/
-@[inline] def wsum (h : Float) (c : FloatArray) (co : Nat) (ks : FloatArray) (d j k : Nat) : Float :=
-  wsumLoop h c co ks d j (k - 1) 1 ((h * c.get! co) * ks.get! j)
-
-/-- `y[j] := x[j] + weights(h*c, K)[j]` for every component (Julia `explicit(x, h, c, fx)`,
-`Adapode.jl:234-237`). -/
-def combLoop (h : Float) (c : FloatArray) (co : Nat) (ks x : FloatArray) (d k : Nat) :
+/-- Any number `k ≥ 1` of terms (the generic path; Adapode's tables have at most seven). -/
+def linAnyLoop (h : Float) (w : FloatArray) (wo base m d : Nat) (K x : FloatArray) (k : Nat) :
     (n j : Nat) → FloatArray → FloatArray
   | 0, _, y => y
   | n + 1, j, y =>
-    combLoop h c co ks x d k n (j + 1) (y.set! j (x.get! j + wsum h c co ks d j k))
+    let acc := linTailLoop h w wo base m d K j (k - 1) 1
+      ((h * w.get! wo) * K.get! (termOffset base m d 0 + j))
+    linAnyLoop h w wo base m d K x k n (j + 1) (y.set! j (x.get! j + acc))
 
-@[simp] theorem size_combLoop (h : Float) (c : FloatArray) (co : Nat) (ks x : FloatArray) (d k : Nat) :
-    ∀ (n j : Nat) (y : FloatArray), (combLoop h c co ks x d k n j y).size = y.size
-  | 0, _, _ => rfl
-  | n + 1, j, y => by rw [combLoop, size_combLoop h c co ks x d k n (j + 1), FloatArray.size_set!']
+/-- Julia `x + weights(h*w, K)` over `d` components: `y[j] := x[j] + Σₗ (h·w[wo+l]) K[oₗ + j]` for
+`l < k` (`k ≥ 1`, `oₗ = termOffset base m d l`), the first product starting the sum and the rest
+added left to right. -/
+@[inline] def linComb (h : Float) (w : FloatArray) (wo base m : Nat) (K x : FloatArray)
+    (d k : Nat) (y : FloatArray) : FloatArray :=
+  let c (l : Nat) := h * w.get! (wo + l)
+  let off (l : Nat) := termOffset base m d l
+  match k with
+  | 1 => lin1Loop (c 0) (off 0) K x d 0 y
+  | 2 => lin2Loop (c 0) (c 1) (off 0) (off 1) K x d 0 y
+  | 3 => lin3Loop (c 0) (c 1) (c 2) (off 0) (off 1) (off 2) K x d 0 y
+  | 4 => lin4Loop (c 0) (c 1) (c 2) (c 3) (off 0) (off 1) (off 2) (off 3) K x d 0 y
+  | 5 => lin5Loop (c 0) (c 1) (c 2) (c 3) (c 4) (off 0) (off 1) (off 2) (off 3) (off 4) K x d 0 y
+  | 6 => lin6Loop (c 0) (c 1) (c 2) (c 3) (c 4) (c 5) (off 0) (off 1) (off 2) (off 3) (off 4) (off 5) K x d 0 y
+  | 7 => lin7Loop (c 0) (c 1) (c 2) (c 3) (c 4) (c 5) (c 6) (off 0) (off 1) (off 2) (off 3) (off 4)
+      (off 5) (off 6) K x d 0 y
+  | _ => linAnyLoop h w wo base m d K x k d 0 y
 
-/-- `y := x + weights(h*c[co …], K₀ … K_{k-1})`. -/
-@[inline] def comb (h : Float) (c : FloatArray) (co : Nat) (ks x : FloatArray) (d k : Nat)
+/-- A Runge–Kutta combination: the stages at `ks[l·d …]`. -/
+@[inline] def comb (h : Float) (w : FloatArray) (wo : Nat) (ks x : FloatArray) (d k : Nat)
     (y : FloatArray) : FloatArray :=
-  combLoop h c co ks x d k d 0 y
+  linComb h w wo 0 (Nat.max k 1) ks x d k y
 
-/-- The embedded-pair error of `explicit!` (`Adapode.jl:434`), from component `j` on:
-`max(acc, |h · (db₀ K₀[j] + db₁ K₁[j] + …)|)` (StaticVectors' `dot`, a left fold, then the step). -/
-def errLoop (h : Float) (db ks : FloatArray) (d s : Nat) : (n j : Nat) → Float → Float
+end Lin
+
+/-- `max(acc, |h z[j]|)` over the components from `j` on (Julia's NaN-propagating `max`). -/
+def maxAbsScaledLoop (h : Float) (z : FloatArray) : (n j : Nat) → Float → Float
   | 0, _, acc => acc
-  | n + 1, j, acc =>
-    let dot := wsumLoop 1 db 0 ks d j (s - 1) 1 (db.get! 0 * ks.get! j)
-    errLoop h db ks d s n (j + 1) (F64.max acc (h * dot).abs)
+  | n + 1, j, acc => maxAbsScaledLoop h z n (j + 1) (F64.max acc (h * z.get! j).abs)
 
-/-- Julia `maximum(abs.(step(t)*value(b[end]⋅fx)))` over the `d` components (`s` stages). The
-first component starts the maximum. -/
-@[inline] def errEmbedded (h : Float) (db ks : FloatArray) (d s : Nat) : Float :=
-  if d = 0 then 0
-  else
-    let dot0 := wsumLoop 1 db 0 ks d 0 (s - 1) 1 (db.get! 0 * ks.get! 0)
-    errLoop h db ks d s (d - 1) 1 (h * dot0).abs
+/-- The embedded-pair error of `explicit!` (`Adapode.jl:434`): `maximum(abs.(h * (db · K)))`, with
+`db · K` StaticVectors' `dot` (the same left fold as `weights`). `z` is scratch and `zero` a zero
+state: `z = 0 + db·K` has the value of `db·K` up to the sign of a zero, which `abs` removes. (A
+maximum started at `0` equals Julia's, started at the first element, on values `≥ 0` and `NaN`.) -/
+@[inline] def errEmbedded (h : Float) (db ks zero : FloatArray) (d s : Nat) (z : FloatArray) :
+    Float × FloatArray :=
+  let z := comb 1 db 0 ks zero d s z
+  (maxAbsScaledLoop h z d 0 0, z)
 
-/-- Heun's final combination, from component `j` on: `x[j] + (h K₀[j] + h K₁[j]) / 2`
-(`heun`, `Adapode.jl:243-246`; Grassmann divides by `2` as `* (1/2)`). -/
-def heunLoop (h : Float) (ks x : FloatArray) (d : Nat) : (n j : Nat) → FloatArray → FloatArray
+/-- `a[i]` with a machine-word index (`0` past the end): one comparison, no `Nat` tagging. -/
+@[inline] def rdU (a : FloatArray) (i : USize) : Float := if h : i.toNat < a.size then a.uget i h else 0
+
+/-- `a[i] := v` with a machine-word index (no change past the end; in place when unshared). -/
+@[inline] def wrU (a : FloatArray) (i : USize) (v : Float) : FloatArray :=
+  if h : i.toNat < a.size then a.uset i v h else a
+
+/-- Heun's final combination (`heun`, `Adapode.jl:243-246`): `x[j] + (h K₁[j] + h K₂[j]) / 2`, the
+division by `2` as Grassmann's `* (1/2)`. -/
+def heunLoop (h : Float) (K1 K2 x : FloatArray) : (n : Nat) → (j : USize) → FloatArray → FloatArray
   | 0, _, y => y
   | n + 1, j, y =>
-    heunLoop h ks x d n (j + 1) (y.set! j (x.get! j + (h * ks.get! j + h * ks.get! (d + j)) * f64! 0.5))
+    heunLoop h K1 K2 x n (j + 1) (wrU y j (rdU x j + (h * rdU K1 j + h * rdU K2 j) * f64! 0.5))
 
-@[simp] theorem size_heunLoop (h : Float) (ks x : FloatArray) (d : Nat) :
-    ∀ (n j : Nat) (y : FloatArray), (heunLoop h ks x d n j y).size = y.size
-  | 0, _, _ => rfl
-  | n + 1, j, y => by rw [heunLoop, size_heunLoop h ks x d n (j + 1), FloatArray.size_set!']
-
-/-- `y[j] := x[j] + h K[j]` (Euler; Heun's predictor `x + hfx`), `K` at `ks[off …]`. -/
-def eulerLoop (h : Float) (ks : FloatArray) (off : Nat) (x : FloatArray) :
-    (n j : Nat) → FloatArray → FloatArray
+/-- `y[j] := x[j] + h K[off + j]` (Euler; Heun's predictor `x + hfx`). -/
+def eulerLoop (h : Float) (ks : FloatArray) (off : USize) (x : FloatArray) :
+    (n : Nat) → (j : USize) → FloatArray → FloatArray
   | 0, _, y => y
-  | n + 1, j, y => eulerLoop h ks off x n (j + 1) (y.set! j (x.get! j + h * ks.get! (off + j)))
-
-@[simp] theorem size_eulerLoop (h : Float) (ks : FloatArray) (off : Nat) (x : FloatArray) :
-    ∀ (n j : Nat) (y : FloatArray), (eulerLoop h ks off x n j y).size = y.size
-  | 0, _, _ => rfl
-  | n + 1, j, y => by rw [eulerLoop, size_eulerLoop h ks off x n (j + 1), FloatArray.size_set!']
+  | n + 1, j, y => eulerLoop h ks off x n (j + 1) (wrU y j (rdU x j + h * rdU ks (off + j)))
 
 /-! ## Adams ring buffers -/
 
@@ -291,57 +362,32 @@ def eulerLoop (h : Float) (ks : FloatArray) (off : Nat) (x : FloatArray) :
 of the `q`-th oldest of the `o` values ending at the 1-based slot `s`, in a ring of `o + 1`. -/
 @[inline] def ringSlot (o s q : Nat) : Nat := (q + s + 1) % (o + 1)
 
-/-- The tail of the Adams sum for component `j`: `acc + (h w[q]) F[slot(q)][j]`. -/
-def adamsLoop (h : Float) (w F : FloatArray) (o s d j : Nat) : (k q : Nat) → Float → Float
-  | 0, _, acc => acc
-  | k + 1, q, acc =>
-    adamsLoop h w F o s d j k (q + 1) (acc + (h * w.get! q) * F.get! (ringSlot o s q * d + j))
+/-- Julia `x + explicit(x, h, w, fx, s)` (`multistep!`, `Adapode.jl:238-241, 298-301`):
+`x + weights(h*w, F)` over the `o` ring values ending at slot `s`, oldest first. -/
+@[inline] def adamsComb (h : Float) (w F x : FloatArray) (o s d : Nat) (y : FloatArray) : FloatArray :=
+  linComb h w 0 (s + 1) (o + 1) F x d o y
 
-/-- Julia `explicit(x, h, c, fx, i)` (`Adapode.jl:238-241`) for component `j`: `weights(h*w, F)`
-over the `o` ring values ending at slot `s`, oldest first. -/
-@[inline] def adamsSum (h : Float) (w F : FloatArray) (o s d j : Nat) : Float :=
-  adamsLoop h w F o s d j (o - 1) 1 ((h * w.get! 0) * F.get! (ringSlot o s 0 * d + j))
-
-/-- The Adams–Bashforth predictor `y := x + Σ` (`multistep!` with `CAB`, `Adapode.jl:298-301`). -/
-def predictLoop (h : Float) (w F x : FloatArray) (o s d : Nat) : (n j : Nat) → FloatArray → FloatArray
-  | 0, _, y => y
-  | n + 1, j, y => predictLoop h w F x o s d n (j + 1) (y.set! j (x.get! j + adamsSum h w F o s d j))
-
-@[simp] theorem size_predictLoop (h : Float) (w F x : FloatArray) (o s d : Nat) :
-    ∀ (n j : Nat) (y : FloatArray), (predictLoop h w F x o s d n j y).size = y.size
-  | 0, _, _ => rfl
-  | n + 1, j, y => by rw [predictLoop, size_predictLoop h w F x o s d n (j + 1), FloatArray.size_set!']
-
-/-- The Adams–Moulton corrector over the predictor held in `y`: `y[j] := c[j] = x[j] + Σ`, and the
-running error `max |(c[j] - p[j]) / c[j]|` (`predictcorrect!`, `Adapode.jl:437-447`). -/
-def correctLoop (h : Float) (w F x : FloatArray) (o s d : Nat) :
-    (n j : Nat) → FloatArray → Float → FloatArray × Float
-  | 0, _, y, e => (y, e)
-  | n + 1, j, y, e =>
-    let p := y.get! j
-    let c := x.get! j + adamsSum h w F o s d j
-    correctLoop h w F x o s d n (j + 1) (y.set! j c) (F64.max e ((c - p) / c).abs)
-
-theorem size_correctLoop (h : Float) (w F x : FloatArray) (o s d : Nat) :
-    ∀ (n j : Nat) (y : FloatArray) (e : Float), (correctLoop h w F x o s d n j y e).1.size = y.size
-  | 0, _, _, _ => rfl
-  | n + 1, j, y, e => by
-    rw [correctLoop, size_correctLoop h w F x o s d n (j + 1), FloatArray.size_set!']
-
-/-- The relative predictor–corrector gap `maximum(abs.((c - p) ./ c))` for the Euler/backward-Euler
-pair (`predictcorrect!` at `Val(1)`, `Adapode.jl:449-458`), `c` in `x'`, `p` in `y`. -/
+/-- `max(acc, |(c[j] - p[j]) / c[j]|)` over the components from `j` on: the relative
+predictor–corrector gap `maximum(abs.(value(c-p)./value(c)))` of `predictcorrect!`
+(`Adapode.jl:447, 457`), started at `0` (as `maxAbsScaledLoop`). -/
 def relGapLoop (c p : FloatArray) : (n j : Nat) → Float → Float
   | 0, _, e => e
   | n + 1, j, e =>
     let cj := c.get! j
     relGapLoop c p n (j + 1) (F64.max e ((cj - p.get! j) / cj).abs)
 
-/-- `maximum(abs.((c - p) ./ c))` over `d ≥ 1` components (the first starts the maximum). -/
-@[inline] def relGap (c p : FloatArray) (d : Nat) : Float :=
-  if d = 0 then 0
-  else
-    let c0 := c.get! 0
-    relGapLoop c p (d - 1) 1 ((c0 - p.get! 0) / c0).abs
+/-! ## Time grids -/
+
+/-- Element `i` (0-based) of Julia's `StepRangeLen` `r` (`Axis.stepLenGet`), with the index
+conversion done in `Float` (`offF = Float64(r.offset)`: `i + 1 - offset` is a small integer, so the
+difference of the two exact conversions is Julia's `convert(Float64, i - offset)`). -/
+@[inline] def rangeAt (r : StepRangeLen) (offF : Float) (i : Nat) : Float :=
+  let u := (i + 1).toUInt64.toFloat - offF
+  let x := TwicePrecision.add12 r.ref.hi (u * r.step.hi)
+  x.hi + (x.lo + (u * r.step.lo + r.ref.lo))
+
+/-- `Float64(r.offset)`. -/
+@[inline] def rangeOffset (r : StepRangeLen) : Float := Axis.intToFloat r.offset
 
 /-! ## Systems -/
 

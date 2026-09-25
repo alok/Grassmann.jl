@@ -164,9 +164,9 @@ applied there). -/
   match I with
   | .eulerHeun i =>
     fixedResult d hd x0 t0 i.tol T i.skip
-      (rkSolve f B heunTableau true d xf t0 i.tol T i.skip (if i.compat then 1 else i.skip))
+      (heunSolve f B d xf t0 i.tol T i.skip (if i.compat then 1 else i.skip))
   | .explicit (o := o) i =>
-    fixedResult d hd x0 t0 i.tol T i.skip (rkSolve f B (CB o) false d xf t0 i.tol T i.skip i.skip)
+    fixedResult d hd x0 t0 i.tol T i.skip (rkSolve f B (CB o) d xf t0 i.tol T i.skip i.skip)
   | .explicitAdaptor (o := o) i =>
     adaptiveResult d (rkaSolve f (if i.fixed then CBA.fixed o else CBA o) d xf t0 i.tol T i.skip i.compat)
   | .multistep (o := o) i =>

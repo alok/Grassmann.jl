@@ -75,12 +75,12 @@ more than `i`, else all of them. Here `i` is 0-based. -/
 the stages, phase `s + 1` the new point and its error (`explicit!`). `i` is the 0-based index of
 the current point (`x`, `t`), `cap` Julia's allocated length, `final` (default end rule) marks a
 step shortened onto `tmax`. -/
-@[specialize] def rkaRun (f : FlatSystem) (a c b db : FloatArray) (s d : Nat)
+@[specialize] def rkaRun (f : FlatSystem) (a c b db zero : FloatArray) (s d : Nat)
     (tmax hmin hmax emin emax : Float) (compat : Bool) :
-    (fuel phase i cap : Nat) → (h e t : Float) → (final : Bool) → (x y kb ks T X : FloatArray) →
+    (fuel phase i cap : Nat) → (h e t : Float) → (final : Bool) → (x y kb ks z T X : FloatArray) →
       AdaptiveRun
-  | 0, _, i, _, _, _, _, _, _, _, _, _, T, X => ⟨i + 1, T, X⟩
-  | fuel + 1, phase, i, cap, h, e, t, final, x, y, kb, ks, T, X =>
+  | 0, _, i, _, _, _, _, _, _, _, _, _, _, T, X => ⟨i + 1, T, X⟩
+  | fuel + 1, phase, i, cap, h, e, t, final, x, y, kb, ks, z, T, X =>
     if phase == 0 then
       let h := if e < emin then h * f64! 2 else h
       let reject := e > emax && (compat || h.abs > hmin)
@@ -95,7 +95,7 @@ step shortened onto `tmax`. -/
         if dd ≤ hmax then ⟨compatLength i cap, T, X⟩
         else
           let cap := if cap < i + 2 then i + 1 + 10000 else cap
-          rkaRun f a c b db s d tmax hmin hmax emin emax compat fuel 1 i cap h e t final x y kb ks T X
+          rkaRun f a c b db zero s d tmax hmin hmax emin emax compat fuel 1 i cap h e t final x y kb ks z T X
       else if final && !reject then ⟨i + 1, T, X⟩
       else
         let dd := tmax - t
@@ -103,25 +103,25 @@ step shortened onto `tmax`. -/
         else
           let final := dd ≤ h
           let h := if final then dd else h
-          rkaRun f a c b db s d tmax hmin hmax emin emax compat fuel 1 i cap h e t final x y kb ks T X
+          rkaRun f a c b db zero s d tmax hmin hmax emin emax compat fuel 1 i cap h e t final x y kb ks z T X
     else if phase ≤ s then
       let l := phase - 1
       if l == 0 then
         let kb := f h t x kb
-        rkaRun f a c b db s d tmax hmin hmax emin emax compat fuel 2 i cap h e t final x y kb
-          (copyInto ks 0 d kb) T X
+        rkaRun f a c b db zero s d tmax hmin hmax emin emax compat fuel 2 i cap h e t final x y kb
+          (copyInto ks 0 d kb) z T X
       else
         let y := comb h a (l * (l - 1) / 2) ks x d l y
         let kb := f h (t + h * c.get! l) y kb
-        rkaRun f a c b db s d tmax hmin hmax emin emax compat fuel (phase + 1) i cap h e t final x y kb
-          (copyInto ks (l * d) d kb) T X
+        rkaRun f a c b db zero s d tmax hmin hmax emin emax compat fuel (phase + 1) i cap h e t final x y kb
+          (copyInto ks (l * d) d kb) z T X
     else
-      let e := errEmbedded h db ks d s
+      let (e, z) := errEmbedded h db ks zero d s z
       let y := comb h b 0 ks x d s y
       let tn := if final then tmax else t + h
       let T := writeTime T (i + 1) tn
       let X := writePoint X (i + 1) d y
-      rkaRun f a c b db s d tmax hmin hmax emin emax compat fuel 0 (i + 1) cap h e tn final y x kb ks T X
+      rkaRun f a c b db zero s d tmax hmin hmax emin emax compat fuel 0 (i + 1) cap h e tn final y x kb ks z T X
 
 /-- Adaptive Runge–Kutta with the pair `tab` from `(t0, x0)` towards `tmax`, initial step `h0`
 (Julia `ExplicitAdaptor{o}(h0, skip)`; `skip` only sizes Julia's preallocation). -/
@@ -130,27 +130,11 @@ step shortened onto `tmax`. -/
   let ts := TimeStep.new h0 skip
   let x := copyInto (zeros d) 0 d x0
   let s := tab.s
-  rkaRun f tab.a tab.c tab.b tab.db s d tmax ts.hmin ts.hmax ts.emin ts.emax compat (2 ^ 60) 0 0
-    (initialCapacity t0 ts.h tmax skip) ts.h ts.e t0 false x (zeros d) (zeros d) (zeros (s * d))
+  rkaRun f tab.a tab.c tab.b tab.db (zeros d) s d tmax ts.hmin ts.hmax ts.emin ts.emax compat (2 ^ 60) 0 0
+    (initialCapacity t0 ts.h tmax skip) ts.h ts.e t0 false x (zeros d) (zeros d) (zeros (s * d)) (zeros d)
     (FloatArray.empty.push t0) (copyInto (zeros d) 0 d x0)
 
 /-! ## Adaptive Adams–Bashforth–Moulton -/
-
-/-- `max(acc, |(c[j] - p[j]) / c[j]|)` over the components from `j` on, for the Adams–Moulton
-corrector `c = x + weights(h*w, F[ring(s)])` against the predictor `p` (computed without writing
-`c`, so that the loop returns a single `Float`). -/
-def abmGapLoop (h : Float) (w F x p : FloatArray) (o s d : Nat) : (n j : Nat) → Float → Float
-  | 0, _, e => e
-  | n + 1, j, e =>
-    let c := x.get! j + adamsSum h w F o s d j
-    abmGapLoop h w F x p o s d n (j + 1) (F64.max e ((c - p.get! j) / c).abs)
-
-/-- The same for the order-1 corrector `c = x + h K`. -/
-def eulerGapLoop (h : Float) (K x p : FloatArray) : (n j : Nat) → Float → Float
-  | 0, _, e => e
-  | n + 1, j, e =>
-    let c := x.get! j + h * K.get! j
-    eulerGapLoop h K x p n (j + 1) (F64.max e ((c - p.get! j) / c).abs)
 
 /-- The adaptive ABM machine: phase `0` controller (`timeloop!` at `Val(o)`), phases `1 … 5` an
 RK4 bootstrap step (stages, then the stored point; `boot` steps remain), `6` predictor, `7`
@@ -159,9 +143,9 @@ invalid). -/
 @[specialize] def abmaRun (f : FlatSystem) (a4 c4 b4 cab cam : FloatArray) (o d : Nat)
     (tmax hmin hmax emin emax : Float) (compat : Bool) :
     (fuel phase i cap s boot : Nat) → (h e t : Float) → (final : Bool) →
-      (x y kb ks F T X : FloatArray) → AdaptiveRun
-  | 0, _, i, _, _, _, _, _, _, _, _, _, _, _, _, T, X => ⟨i + 1, T, X⟩
-  | fuel + 1, phase, i, cap, s, boot, h, e, t, final, x, y, kb, ks, F, T, X =>
+      (x y z kb ks F T X : FloatArray) → AdaptiveRun
+  | 0, _, i, _, _, _, _, _, _, _, _, _, _, _, _, _, T, X => ⟨i + 1, T, X⟩
+  | fuel + 1, phase, i, cap, s, boot, h, e, t, final, x, y, z, kb, ks, F, T, X =>
     if phase == 0 then
       let grow := e < emin
       let h := if grow then h * f64! 2 else h
@@ -181,26 +165,26 @@ invalid). -/
         if dd ≤ hmax then ⟨compatLength i cap, T, X⟩
         else if o == 1 then
           abmaRun f a4 c4 b4 cab cam o d tmax hmin hmax emin emax compat fuel 6 i cap s boot h e t final
-            x y kb ks F T X
+            x y z kb ks F T X
         else
           let cap := if cap < i + o + 2 then i + 1 + o + 10000 else cap
           if s == 0 then
             abmaRun f a4 c4 b4 cab cam o d tmax hmin hmax emin emax compat fuel 1 i cap s (o - 1) h e t
-              final x y kb ks F T X
+              final x y z kb ks F T X
           else
             abmaRun f a4 c4 b4 cab cam o d tmax hmin hmax emin emax compat fuel 6 i cap s boot h e t
-              final x y kb ks F T X
+              final x y z kb ks F T X
       else if dd ≤ 0 then ⟨i + 1, T, X⟩
       else if dd ≤ h then
         -- the last step: one RK4 step onto tmax
         abmaRun f a4 c4 b4 cab cam o d tmax hmin hmax emin emax compat fuel 1 i cap s 1 dd e t true
-          x y kb ks F T X
+          x y z kb ks F T X
       else if o == 1 || s != 0 then
         abmaRun f a4 c4 b4 cab cam o d tmax hmin hmax emin emax compat fuel 6 i cap s boot h e t final
-          x y kb ks F T X
+          x y z kb ks F T X
       else
         abmaRun f a4 c4 b4 cab cam o d tmax hmin hmax emin emax compat fuel 1 i cap s (o - 1) h e t
-          final x y kb ks F T X
+          final x y z kb ks F T X
     else if phase ≤ 5 then
       if phase == 1 then
         -- a bootstrap step; by default a step that would pass `tmax` is shortened onto it
@@ -210,13 +194,13 @@ invalid). -/
         let kb := f h t x kb
         let F := copyInto F ((o - 1 - boot) * d) d kb
         abmaRun f a4 c4 b4 cab cam o d tmax hmin hmax emin emax compat fuel 2 i cap s boot h e t final
-          x y kb (copyInto ks 0 d kb) F T X
+          x y z kb (copyInto ks 0 d kb) F T X
       else if phase ≤ 4 then
         let l := phase - 1
         let y := comb h a4 (l * (l - 1) / 2) ks x d l y
         let kb := f h (t + h * c4.get! l) y kb
         abmaRun f a4 c4 b4 cab cam o d tmax hmin hmax emin emax compat fuel (phase + 1) i cap s boot h
-          e t final x y kb (copyInto ks (l * d) d kb) F T X
+          e t final x y z kb (copyInto ks (l * d) d kb) F T X
       else
         let y := comb h b4 0 ks x d 4 y
         let tn := if final then tmax else t + h
@@ -227,39 +211,32 @@ invalid). -/
           let boot := boot - 1
           if boot == 0 then
             abmaRun f a4 c4 b4 cab cam o d tmax hmin hmax emin emax compat fuel 6 (i + 1) cap o 0 h e tn
-              final y x kb ks F T X
+              final y x z kb ks F T X
           else
             abmaRun f a4 c4 b4 cab cam o d tmax hmin hmax emin emax compat fuel 1 (i + 1) cap s boot h e
-              tn final y x kb ks F T X
+              tn final y x z kb ks F T X
     else if phase == 6 then
       let kb := f h t x kb
       if o == 1 then
         abmaRun f a4 c4 b4 cab cam o d tmax hmin hmax emin emax compat fuel 7 i cap s boot h e t final
-          x (eulerLoop h kb 0 x d 0 y) kb ks F T X
+          x (eulerLoop h kb 0 x d 0 y) z kb ks F T X
       else
         let F := copyInto F ((s - 1) * d) d kb
-        let y := predictLoop h cab F x o s d d 0 y
+        let y := adamsComb h cab F x o s d y
         abmaRun f a4 c4 b4 cab cam o d tmax hmin hmax emin emax compat fuel 7 i cap (s % (o + 1) + 1)
-          boot h e t final x y kb ks F T X
+          boot h e t final x y z kb ks F T X
     else
       let kb := f h (t + h) y kb
       let tn := t + h
-      if o == 1 then
-        let e := eulerGapLoop h kb x y d 0 0
-        let y := eulerLoop h kb 0 x d 0 y
-        let cap := if cap < i + 3 then i + 2 + 10000 else cap
-        let T := writeTime T (i + 1) tn
-        let X := writePoint X (i + 1) d y
-        abmaRun f a4 c4 b4 cab cam o d tmax hmin hmax emin emax compat fuel 0 (i + 1) cap s boot h e tn
-          final y x kb ks F T X
-      else
-        let F := copyInto F ((s - 1) * d) d kb
-        let e := abmGapLoop h cam F x y o s d d 0 0
-        let y := predictLoop h cam F x o s d d 0 y
-        let T := writeTime T (i + 1) tn
-        let X := writePoint X (i + 1) d y
-        abmaRun f a4 c4 b4 cab cam o d tmax hmin hmax emin emax compat fuel 0 (i + 1) cap s boot h e tn
-          final y x kb ks F T X
+      let F := if o == 1 then F else copyInto F ((s - 1) * d) d kb
+      -- the corrector into `z`, its gap to the predictor in `y`, then `z` is the new point
+      let z := if o == 1 then eulerLoop h kb 0 x d 0 z else adamsComb h cam F x o s d z
+      let e := relGapLoop z y d 0 0
+      let cap := if o == 1 && cap < i + 3 then i + 2 + 10000 else cap
+      let T := writeTime T (i + 1) tn
+      let X := writePoint X (i + 1) d z
+      abmaRun f a4 c4 b4 cab cam o d tmax hmin hmax emin emax compat fuel 0 (i + 1) cap s boot h e tn
+        final z x y kb ks F T X
 
 /-- Adaptive ABM of order `o` from `(t0, x0)` towards `tmax`, initial step `h0` (Julia
 `MultistepAdaptor{o}(h0, skip)`). -/
@@ -269,6 +246,6 @@ invalid). -/
   let T4 := CB 4
   abmaRun f T4.a T4.c T4.b (CAB o) (CAM o) o d tmax ts.hmin ts.hmax ts.emin ts.emax compat (2 ^ 60) 0 0
     (initialCapacity t0 ts.h tmax skip) 0 0 ts.h ts.e t0 false (copyInto (zeros d) 0 d x0) (zeros d)
-    (zeros d) (zeros (4 * d)) (zeros ((o + 1) * d)) (FloatArray.empty.push t0) (copyInto (zeros d) 0 d x0)
+    (zeros d) (zeros d) (zeros (4 * d)) (zeros ((o + 1) * d)) (FloatArray.empty.push t0) (copyInto (zeros d) 0 d x0)
 
 end Adapode

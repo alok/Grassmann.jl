@@ -38,11 +38,11 @@ namespace Adapode
 open JuliaBase Cartan
 
 /-- The Adams–Bashforth–Moulton machine. Phases `0 … 4`: an RK4 bootstrap step (stages `0 … 3`,
-then the new state; `boot` bootstrap steps remain); phase `5`: predictor; phase `6`: corrector.
+then the new state; `boot` bootstrap steps remain); phase `5`: one predictor–corrector step.
 `gridTimes`: the multistep steps take the grid time of the segment's first point (`skip = 1`). -/
 @[specialize] def abmRun (f : FlatSystem) (bc : FloatArray → FloatArray)
-    (a4 c4 b4 cab cam : FloatArray) (o d : Nat) (h : Float) (r : StepRangeLen) (k nseg : Nat)
-    (store : Bool) :
+    (a4 c4 b4 cab cam : FloatArray) (o d : Nat) (h : Float) (r : StepRangeLen) (offF : Float)
+    (k nseg : Nat) (store : Bool) :
     (fuel seg inner phase boot s : Nat) → (t : Float) → (x y kb ks F out : FloatArray) → FlatRun
   | 0, _, _, _, _, _, t, x, _, _, _, _, out => ⟨t, x, out⟩
   | fuel + 1, seg, inner, phase, boot, s, t, x, y, kb, ks, F, out =>
@@ -51,11 +51,11 @@ then the new state; `boot` bootstrap steps remain); phase `5`: predictor; phase 
         let kb := f h t x kb
         let ks := copyInto ks 0 d kb
         let F := copyInto F ((o - 1 - boot) * d) d kb
-        abmRun f bc a4 c4 b4 cab cam o d h r k nseg store fuel seg inner 1 boot s t x y kb ks F out
+        abmRun f bc a4 c4 b4 cab cam o d h r offF k nseg store fuel seg inner 1 boot s t x y kb ks F out
       else if phase < 4 then
         let y := comb h a4 (phase * (phase - 1) / 2) ks x d phase y
         let kb := f h (t + h * c4.get! phase) y kb
-        abmRun f bc a4 c4 b4 cab cam o d h r k nseg store fuel seg inner (phase + 1) boot s t x y kb
+        abmRun f bc a4 c4 b4 cab cam o d h r offF k nseg store fuel seg inner (phase + 1) boot s t x y kb
           (copyInto ks (phase * d) d kb) F out
       else
         -- a bootstrap state (Julia `initsteps!`: no `bc`)
@@ -67,35 +67,33 @@ then the new state; `boot` bootstrap steps remain); phase `5`: predictor; phase 
         if inner ≤ 1 then
           let out := if store then copyInto out ((seg + 1) * d) d x' else out
           if seg + 1 < nseg then
-            abmRun f bc a4 c4 b4 cab cam o d h r k nseg store fuel (seg + 1) k phase' boot s t x' x kb
+            abmRun f bc a4 c4 b4 cab cam o d h r offF k nseg store fuel (seg + 1) k phase' boot s t x' x kb
               ks F out
           else ⟨t, x', out⟩
         else
-          abmRun f bc a4 c4 b4 cab cam o d h r k nseg store fuel seg (inner - 1) phase' boot s t x' x
+          abmRun f bc a4 c4 b4 cab cam o d h r offF k nseg store fuel seg (inner - 1) phase' boot s t x' x
             kb ks F out
-    else if phase == 5 then
-      let t := if store && inner == k then Axis.stepLenGet r seg else t
-      let kb := f h t x kb
-      if o == 1 then
-        abmRun f bc a4 c4 b4 cab cam o d h r k nseg store fuel seg inner 6 boot s t x
-          (eulerLoop h kb 0 x d 0 y) kb ks F out
-      else
-        let F := copyInto F ((s - 1) * d) d kb
-        let y := predictLoop h cab F x o s d d 0 y
-        abmRun f bc a4 c4 b4 cab cam o d h r k nseg store fuel seg inner 6 boot (s % (o + 1) + 1) t x
-          y kb ks F out
     else
+      -- one predictor–corrector step (order 1 through the same ring: `CAB[1] = CAM[1] = (1)`, and
+      -- `(h·1)·K = h·K`, Julia's special case bit for bit)
+      let t := if store && inner == k then rangeAt r offF seg else t
+      let kb := f h t x kb
+      let F := copyInto F ((s - 1) * d) d kb
+      let y := adamsComb h cab F x o s d y
+      let s := s % (o + 1) + 1
       let kb := f h (t + h) y kb
-      let F := if o == 1 then F else copyInto F ((s - 1) * d) d kb
-      let x' := bc (if o == 1 then eulerLoop h kb 0 x d 0 y else predictLoop h cam F x o s d d 0 y)
+      let F := copyInto F ((s - 1) * d) d kb
+      let x' := bc (adamsComb h cam F x o s d y)
       let t := t + h
       if inner ≤ 1 then
         let out := if store then copyInto out ((seg + 1) * d) d x' else out
         if seg + 1 < nseg then
-          abmRun f bc a4 c4 b4 cab cam o d h r k nseg store fuel (seg + 1) k 5 boot s t x' x kb ks F out
+          abmRun f bc a4 c4 b4 cab cam o d h r offF k nseg store fuel (seg + 1) k 5 boot s t x' x kb ks
+            F out
         else ⟨t, x', out⟩
       else
-        abmRun f bc a4 c4 b4 cab cam o d h r k nseg store fuel seg (inner - 1) 5 boot s t x' x kb ks F out
+        abmRun f bc a4 c4 b4 cab cam o d h r offF k nseg store fuel seg (inner - 1) 5 boot s t x' x kb ks F
+          out
 
 /-- Fixed-step ABM of order `o` (`1 ≤ o ≤ 5`) from `(t0, x0)` to `tmax` with step `h` and stride
 `skip` (module doc). -/
@@ -106,7 +104,7 @@ then the new state; `boot` bootstrap steps remain); phase `5`: predictor; phase 
   let boot0 := if o ≤ 1 then 0 else o - 1
   let run (hs : Float) (r : StepRangeLen) (k nseg : Nat) (store : Bool) (t : Float) (out : FloatArray) :=
     let boot := Nat.min boot0 (k * nseg)
-    abmRun f bc T.a T.c T.b (CAB o) (CAM o) o d hs r k nseg store (5 * boot + 2 * k * nseg + 1) 0 k
+    abmRun f bc T.a T.c T.b (CAB o) (CAM o) o d hs r (rangeOffset r) k nseg store (5 * boot + k * nseg + 1) 0 k
       (if boot == 0 then 5 else 0) boot (if boot == 0 then o else 0) t x (zeros d) (zeros d)
       (zeros (4 * d)) (zeros ((o + 1) * d)) out
   if skip == 0 then
@@ -118,12 +116,12 @@ then the new state; `boot` bootstrap steps remain); phase `5`: predictor; phase 
     let r := outputGrid t0 h tmax skip
     let n := r.len
     let out := copyInto (zeros (n * d)) 0 d x
-    if n ≤ 1 then ⟨t0, x, out⟩ else run h r skip (n - 1) true (Axis.stepLenGet r 0) out
+    if n ≤ 1 then ⟨t0, x, out⟩ else run h r skip (n - 1) true (rangeAt r (rangeOffset r) 0) out
 
 /-- One RK4 step with allocation (for the compatibility path below). -/
 @[specialize] def rk4Once (f : FlatSystem) (d : Nat) (h t : Float) (x : FloatArray) : FloatArray :=
   let T := CB 4
-  (rkRun f id T.a T.c T.b T.s d false h default 1 1 false (T.s + 2) 0 1 0 t
+  (rkRun f id T.a T.c T.b T.s d h default 0 1 1 false (T.s + 2) 0 1 0 t
     (copyInto (zeros d) 0 d x) (zeros d) (zeros d) (zeros (T.s * d)) .empty).x
 
 /-- The PECE steps of `abmCompatFinal`: `m` steps of `+h` from `(t, x)` with the ring `F` at slot
@@ -140,10 +138,10 @@ then the new state; `boot` bootstrap steps remain); phase `5`: predictor; phase 
       abmCompatLoop f bc o d h sh m s lb lb (bc (eulerLoop h k2 0 x d 0 (zeros d))) F
     else
       let F := copyInto F ((s - 1) * d) d (f h t x (zeros d))
-      let p := predictLoop h (CAB o) F x o s d d 0 (zeros d)
+      let p := adamsComb h (CAB o) F x o s d (zeros d)
       let s := s % (o + 1) + 1
       let F := copyInto F ((s - 1) * d) d (f h (t + h) p (zeros d))
-      let c := predictLoop h (CAM o) F x o s d d 0 (zeros d)
+      let c := adamsComb h (CAM o) F x o s d (zeros d)
       abmCompatLoop f bc o d h sh m s lb lb (bc c) F
 
 /-- The RK4 bootstrap history of `abmCompatFinal`: `F[j] = f(tⱼ ↦ xⱼ)` along RK4 steps of `+h`

@@ -103,7 +103,7 @@ def oscError (T : Tableau) (h : Float) : Float :=
   have hd : d = OdeState.dim (Chain ℝ2 1 Float) := by decide
   let x0 : Chain ℝ2 1 Float := chainOf [1, 0]
   let f := flatSystem d hd x0 oscFlow.f
-  let r := rkSolve f id T false d (toFlat x0) 0 h 1 0 0
+  let r := rkSolve f id T d (toFlat x0) 0 h 1 0 0
   let (xe, ve) := oscExact r.t
   (r.x.get! 0 - xe).abs + (r.x.get! 1 - ve).abs
 
