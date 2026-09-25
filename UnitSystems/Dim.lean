@@ -14,7 +14,9 @@ is computed by type class resolution.
 For that the representation matters. The elaborator's unifier runs type class
 problems at `instances` transparency, where `Int` arithmetic does not reduce
 but `Nat` literal arithmetic does. So each exponent `e` is stored as the natural
-number `e + 2^20` and every operation is a `@[reducible]` definition on these
+number `12·e + 2^20`: twelfths make square and cube roots exact (Julia's
+`Rational` exponents `½`, `⅓`, `¼`, `⅙` all occur), and the bias keeps negative
+exponents natural. Every operation is a `@[reducible]` definition on these
 biased naturals; `USQ.F * USQ.L` then unifies with `Dim.energy` during
 instance search, and the compiler erases the index entirely.
 
@@ -27,12 +29,15 @@ exactly this dimension.
 
 namespace UnitSystems
 
-/-- The exponent bias `2^20`: an exponent `e` is stored as `e + dimBias`. -/
+/-- The exponent bias `2^20`: an exponent `e` is stored as `12·e + dimBias`. -/
 @[reducible] def dimBias : Nat := 1048576
 
+/-- Exponents are stored in twelfths (`dimDen · e`), so `½, ⅓, ¼, ⅙` are exact. -/
+@[reducible] def dimDen : Nat := 12
+
 /-- A USQ dimension: exponents of `F M L T Q Θ N J A R C`, each stored as
-`exponent + 2^20` so that dimension arithmetic reduces during type class
-resolution. Build values with `USQ.F`, `*`, `/`, `^` (or `Dim.ofInts`). -/
+`12·exponent + 2^20` so that dimension arithmetic reduces during type class
+resolution. Build values with `USQ.F`, `*`, `/`, `^`, `Dim.root` (or `Dim.ofInts`). -/
 structure Dim where
   /-- force exponent (biased) -/
   F : Nat := dimBias
@@ -72,12 +77,16 @@ namespace Dim
    2 * dimBias - a.Q, 2 * dimBias - a.Θ, 2 * dimBias - a.N, 2 * dimBias - a.J,
    2 * dimBias - a.A, 2 * dimBias - a.R, 2 * dimBias - a.C⟩
 
-/-- Halve every exponent (the dimension of a square root; exact when all
-exponents are even, see `Dim.IsSquare`). -/
-@[reducible] def half (a : Dim) : Dim :=
-  ⟨(a.F + dimBias) / 2, (a.M + dimBias) / 2, (a.L + dimBias) / 2, (a.T + dimBias) / 2,
-   (a.Q + dimBias) / 2, (a.Θ + dimBias) / 2, (a.N + dimBias) / 2, (a.J + dimBias) / 2,
-   (a.A + dimBias) / 2, (a.R + dimBias) / 2, (a.C + dimBias) / 2⟩
+/-- Divide every exponent by `k` (the dimension of a `k`-th root; exact when
+every stored twelfth is divisible by `k`, see `Dim.HasRoot`). -/
+@[reducible] def root (k : Nat) (a : Dim) : Dim :=
+  ⟨(a.F + (k - 1) * dimBias) / k, (a.M + (k - 1) * dimBias) / k, (a.L + (k - 1) * dimBias) / k,
+   (a.T + (k - 1) * dimBias) / k, (a.Q + (k - 1) * dimBias) / k, (a.Θ + (k - 1) * dimBias) / k,
+   (a.N + (k - 1) * dimBias) / k, (a.J + (k - 1) * dimBias) / k, (a.A + (k - 1) * dimBias) / k,
+   (a.R + (k - 1) * dimBias) / k, (a.C + (k - 1) * dimBias) / k⟩
+
+/-- Halve every exponent (the dimension of a square root). -/
+@[reducible] def half (a : Dim) : Dim := root 2 a
 
 /-- Dimensionless. -/
 @[reducible] def one : Dim := {}
@@ -93,19 +102,36 @@ exponents are even, see `Dim.IsSquare`). -/
 @[reducible] instance : HPow Dim Nat Dim := ⟨npow⟩
 @[reducible] instance : One Dim := ⟨one⟩
 
-/-- The exponents `[F, M, L, T, Q, Θ, N, J, A, R, C]` as integers. -/
-def toInts (d : Dim) : List Int :=
+/-- The stored exponents `[F, M, L, T, Q, Θ, N, J, A, R, C]` in twelfths. -/
+def toTwelfths (d : Dim) : List Int :=
   [d.F, d.M, d.L, d.T, d.Q, d.Θ, d.N, d.J, d.A, d.R, d.C].map fun (x : Nat) => (x : Int) - dimBias
 
-/-- Build a dimension from integer exponents `[F, M, L, T, Q, Θ, N, J, A, R, C]`. -/
-def ofInts (xs : List Int) : Dim :=
+/-- The exponents `[F, M, L, T, Q, Θ, N, J, A, R, C]` (truncated to integers). -/
+def toInts (d : Dim) : List Int := d.toTwelfths.map (·.tdiv dimDen)
+
+/-- The exact exponents `[F, M, L, T, Q, Θ, N, J, A, R, C]`. -/
+def toRats (d : Dim) : List Rat := d.toTwelfths.map fun e => mkRat e dimDen
+
+/-- Build a dimension from exponents in twelfths. -/
+def ofTwelfths (xs : List Int) : Dim :=
   let e (i : Nat) : Nat := (xs.getD i 0 + dimBias).toNat
   ⟨e 0, e 1, e 2, e 3, e 4, e 5, e 6, e 7, e 8, e 9, e 10⟩
 
-/-- Every exponent is even: the dimension has a square root. -/
-def IsSquare (d : Dim) : Prop := d.half * d.half = d
+/-- Build a dimension from integer exponents `[F, M, L, T, Q, Θ, N, J, A, R, C]`. -/
+def ofInts (xs : List Int) : Dim := ofTwelfths (xs.map (· * dimDen))
 
-instance (d : Dim) : Decidable d.IsSquare := inferInstanceAs (Decidable (_ = _))
+/-- Build a dimension from rational exponents (exact when every exponent is a
+multiple of `1/12`). -/
+def ofRats (xs : List Rat) : Dim :=
+  ofTwelfths (xs.map fun q => let t : Rat := q * (dimDen : Rat); t.num / (t.den : Int))
+
+/-- The `k`-th root is exact: `(root k d)^k = d`. -/
+def HasRoot (k : Nat) (d : Dim) : Prop := (d.root k) ^ k = d
+
+instance (k : Nat) (d : Dim) : Decidable (d.HasRoot k) := inferInstanceAs (Decidable (_ = _))
+
+/-- The square root is exact. -/
+abbrev IsSquare (d : Dim) : Prop := d.HasRoot 2
 
 /-- The USQ letters, in order. -/
 def letters : List String := ["F", "M", "L", "T", "Q", "Θ", "N", "J", "A", "R", "C"]
@@ -116,9 +142,17 @@ def supInt (n : Int) : String :=
   let digits := (toString n.natAbs).toList.map fun c => ds[c.toNat - '0'.toNat]!
   if n == 1 then "" else (if n < 0 then "⁻" else "") ++ String.ofList digits
 
-/-- The dimension as a USQ monomial, as Similitude prints it (`ML²T⁻²`, `𝟙`). -/
+/-- Superscript rational (Julia `printexpo` of a `Rational`: `¹ᐟ²`). -/
+def supRat (q : Rat) : String :=
+  if q.den == 1 then supInt q.num
+  else
+    let ds := "⁰¹²³⁴⁵⁶⁷⁸⁹".toList
+    let sup (n : Nat) := String.ofList ((toString n).toList.map fun c => ds[c.toNat - '0'.toNat]!)
+    (if q.num < 0 then "⁻" else "") ++ sup q.num.natAbs ++ "ᐟ" ++ sup q.den
+
+/-- The dimension as a USQ monomial, as Similitude prints it (`ML²T⁻²`, `M¹ᐟ²`, `𝟙`). -/
 protected def toString (d : Dim) : String :=
-  let parts := (letters.zip d.toInts).filterMap fun (s, e) => if e == 0 then none else some (s ++ supInt e)
+  let parts := (letters.zip d.toRats).filterMap fun (s, e) => if e == 0 then none else some (s ++ supRat e)
   if parts.isEmpty then "𝟙" else String.join parts
 
 instance : ToString Dim := ⟨Dim.toString⟩
@@ -129,17 +163,17 @@ end Dim
 /-! The eleven USQ base dimensions (Julia `Similitude.USQ`). -/
 namespace USQ
 /-- dimensionless `𝟙` -/ @[reducible] def one : Dim := {}
-/-- force -/ @[reducible] def F : Dim := { F := dimBias + 1 }
-/-- mass -/ @[reducible] def M : Dim := { M := dimBias + 1 }
-/-- length -/ @[reducible] def L : Dim := { L := dimBias + 1 }
-/-- time -/ @[reducible] def T : Dim := { T := dimBias + 1 }
-/-- charge -/ @[reducible] def Q : Dim := { Q := dimBias + 1 }
-/-- temperature -/ @[reducible] def Θ : Dim := { Θ := dimBias + 1 }
-/-- molar amount -/ @[reducible] def N : Dim := { N := dimBias + 1 }
-/-- luminous flux -/ @[reducible] def J : Dim := { J := dimBias + 1 }
-/-- angle -/ @[reducible] def A : Dim := { A := dimBias + 1 }
-/-- rationalization (demagnetizing factor) -/ @[reducible] def R : Dim := { R := dimBias + 1 }
-/-- nonstandard dimension (inverse Lorentz constant) -/ @[reducible] def C : Dim := { C := dimBias + 1 }
+/-- force -/ @[reducible] def F : Dim := { F := dimBias + dimDen }
+/-- mass -/ @[reducible] def M : Dim := { M := dimBias + dimDen }
+/-- length -/ @[reducible] def L : Dim := { L := dimBias + dimDen }
+/-- time -/ @[reducible] def T : Dim := { T := dimBias + dimDen }
+/-- charge -/ @[reducible] def Q : Dim := { Q := dimBias + dimDen }
+/-- temperature -/ @[reducible] def Θ : Dim := { Θ := dimBias + dimDen }
+/-- molar amount -/ @[reducible] def N : Dim := { N := dimBias + dimDen }
+/-- luminous flux -/ @[reducible] def J : Dim := { J := dimBias + dimDen }
+/-- angle -/ @[reducible] def A : Dim := { A := dimBias + dimDen }
+/-- rationalization (demagnetizing factor) -/ @[reducible] def R : Dim := { R := dimBias + dimDen }
+/-- nonstandard dimension (inverse Lorentz constant) -/ @[reducible] def C : Dim := { C := dimBias + dimDen }
 end USQ
 
 namespace Dim

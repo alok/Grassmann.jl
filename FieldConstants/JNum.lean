@@ -121,8 +121,8 @@ def fpow (x : JNum) (y : Float) : JNum := float (pow x.toFloat y)
 
 /-- Julia `sqrt`. -/
 def sqrt (x : JNum) : JNum := float x.toFloat.sqrt
-/-- Julia `cbrt` (libm). -/
-def cbrt (x : JNum) : JNum := float x.toFloat.cbrt
+/-- Julia `cbrt` (Julia's own, via `JuliaBase.F64.cbrt`). -/
+def cbrt (x : JNum) : JNum := float (JuliaBase.F64.cbrt x.toFloat)
 /-- Julia `log`. -/
 def log (x : JNum) : JNum := float (Julia.log x.toFloat)
 /-- Julia `log10`. -/

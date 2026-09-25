@@ -71,4 +71,11 @@ theorem elementarycharge_dim : dimOf (fun U => elementarycharge U) = .ofDim USQ.
 /-- Planck's constant is an action `FLT` (with the angle unit folded in by `turn`). -/
 theorem planck_dim : dimOf planck = .ofDim (USQ.F * USQ.L * USQ.T) := by decide
 
+/-! ### Roots are exact in the twelfths representation -/
+
+example : Dim.energy.half * Dim.energy.half = Dim.energy := by decide
+example : (Dim.volume.root 3) = Dim.length := by decide
+example : Dim.area.IsSquare := by decide
+example : (USQ.Q.root 2).toRats = [0, 0, 0, 0, mkRat 1 2, 0, 0, 0, 0, 0, 0] := by decide
+
 end UnitSystems

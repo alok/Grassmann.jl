@@ -53,7 +53,7 @@ namespace HalfDim
 
 /-- The doubled exponents of a USQ dimension. -/
 def ofDim (d : Dim) : HalfDim :=
-  let e (n : Nat) : Int := 2 * ((n : Int) - dimBias)
+  let e (n : Nat) : Int := ((n : Int) - dimBias) / 6
   ⟨e d.F, e d.M, e d.L, e d.T, e d.Q, e d.Θ, e d.N, e d.J, e d.A, e d.R, e d.C⟩
 
 /-- The doubled exponents as a list. -/
