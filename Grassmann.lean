@@ -14,6 +14,7 @@ import Grassmann.Algebra.Unary
 import Grassmann.Algebra.Products
 import Grassmann.Algebra.Norms
 import Grassmann.Notation
+import Grassmann.Basis
 
 /-!
 # Grassmann: ⟨Grassmann-Clifford-Hodge⟩ differential geometric algebra
@@ -36,6 +37,7 @@ types, the coefficient classes and the operator notation
   coefficient type; `class Kernels V` dispatches every typed operation, with a
   low-priority reference instance for every space and a documented extension
   point for generated kernels.
+* **Basis** (`Grassmann.Basis`): `basis! S!"+++"` declares `V`, `v`, `v₁`, `v₁₂`, ... (Julia `@basis`).
 * **Algebra** (`Grassmann.Algebra.*`): `+ - *` and scalar actions, the
   geometric/exterior/regressive products, contractions, sandwiches, complements,
   involutions and grade projections with the static result types of DESIGN.md
