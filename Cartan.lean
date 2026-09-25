@@ -50,6 +50,7 @@ def T := Cartan.Parameter.torus #v[60, 60]
 | `Cartan.Bundle` | `FrameBundle`/`Coordinates` classes; `GridBundle N P G` (with `QuotientTopology N`), `PointCloud`, `SimplexBundle`, `FaceBundle`, `MetricStore` (Julia `Global`) |
 | `Cartan.Field` | `TensorField m F` (indexed by its base `m`), constructors C1-C16, maps, coordinates, components |
 | `Cartan.Kernel` | Grassmann plans evaluated over whole fields (bit-identical to the pointwise products) |
+| `Cartan.Codegen`, `Cartan.Generated` | `cartan_field_kernels`: straight-line field kernels generated from the plans at elaboration time (`ℝ2`, `ℝ3`, `ℝ4`) |
 | `Cartan.Algebra` | the lifted algebra: `+ - * /`, `∧ ∨ ⋅ × ⊘ ⋆ ~`, grade projections, scalar functions, norms, reductions |
 | `Cartan.Parameters` | `TorusParameter` and the other parameter domains |
 | `Cartan.Slice` | slices, `leaf`, `boundaryComponents`, `extract`, `variation`, re-gluing |
@@ -67,8 +68,9 @@ def T := Cartan.Parameter.torus #v[60, 60]
   packs fields with their bases (`AnyField`) and re-bases after a runtime check (`cast?`).
 * **Fibers are flat**: `width F` floats per point in one `FloatArray`, point-major (Julia's
   `Vector{Chain}` layout; `component`/`split` give the scalar component fields). `+`, `-`,
-  scaling, scalar-field products and norms run on the raw arrays; Grassmann products evaluate the
-  product's plan over the whole field (`Cartan.Kernel`).
+  scaling, scalar-field products and norms run on the raw arrays; Grassmann products run a
+  kernel generated from the product's plan (`ℝ2`-`ℝ4`) or interpret the plan over the whole field
+  (`Cartan.Kernel`), bit-identical to the pointwise product.
 * **Julia's rounding is followed**: lazy range fibers keep `TwicePrecision` elements, Grassmann
   fibers divide by a real as `x * (1/s)` (Grassmann `algebra.jl:704`), reductions sum pairwise
   in Julia's vectorized order; every golden is compared bit for bit (libm functions: 2 ulps).
