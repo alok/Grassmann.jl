@@ -189,6 +189,10 @@ structure Env where
   sandbox : Nat := 0
   /-- Recursion budget for user functions. -/
   fuel : Nat := 64
+  /-- Whether the current statement ran a series or an iteration (`exp`, `log`, … of a
+  non-term): its value is compared with a tolerance (Julia's generated loops sum in another
+  order). -/
+  approx : Bool := false
 
 /-- The evaluation monad. -/
 abbrev EvalM := StateT Env (Except String)

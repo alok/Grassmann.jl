@@ -46,7 +46,14 @@ def mapElem (v : Val) (f : {V : TensorBundle} → AnyTA V → Option (AnyTA V)) 
   | _ => unsupported "element expected"
 
 /-- Julia's `Float64` composite functions on an element. -/
-def floatFn (v : Val) (f : {V : TensorBundle} → [Kernels V] → TA V Float → Option (TA V Float)) : EvalM Val :=
+def floatFn (v : Val) (f : {V : TensorBundle} → [Kernels V] → TA V Float → Option (TA V Float)) : EvalM Val := do
+  -- a composite function of a container runs a series or a dense closed form: tolerance
+  match v with
+  | .elem _ _ _ x =>
+    match x.encode.kind with
+    | .zero | .one | .submanifold | .single | .couple => pure ()
+    | _ => modify fun e => { e with approx := true }
+  | _ => pure ()
   mapElem v fun x => viaFloat x f
 
 /-- The elements a collection value iterates over (a tuple, a vector, the blades of a
@@ -263,6 +270,15 @@ partial def callVal (f : Val) (args : Array Val) : EvalM Val := do
       if V.istangent || V.isdyadic then unsupported "∇ of a tangent space"
       let V' := V
       return mkElem V' (← mkContainer V' (.chain 1) (Array.replicate V'.n (.int 1)))
+    | #[.elem W _ _ x] =>
+      -- Julia `W(x)` for a subspace `W`: the chain restricted to `W`'s generators
+      if W == V then
+        match x with
+        | .float (.chain g c) =>
+          let y : TA V Float := .chain g (TA.chainOf V g fun b => if b &&& ~~~m == 0 then c.coeff b else 0)
+          return .elem V (V.showSub m) m (AnyTA.float y)
+        | _ => unsupported "subspace of a non-chain"
+      else unsupported "subspace of another space"
     | _ =>
       -- Julia `V(i, j, …)`: the subspace spanned by generators `i, j, …`
       let ks ← args.mapM intArg
@@ -369,6 +385,8 @@ partial def unVal (op : String) (a : Val) : EvalM Val := do
   | "!", .elem V hdl m x => return .elem V hdl m (x.complement fun y => TA.complementright y)
   | "⋆", .elem V hdl m x => return .elem V hdl m (x.un fun y => TA.hodge y)
   | "√", v => callBuiltin "sqrt" #[] #[v]
+  | "↑", v => callBuiltin "project" #[] #[v]
+  | "↓", v => callBuiltin "reject" #[] #[v]
   | _, _ => unsupported s!"prefix {op}"
 
 /-- Built-in functions and constructors (`params`: `Chain{V,1}`'s type parameters). -/
@@ -596,6 +614,14 @@ partial def callBuiltin (name : String) (params : Array Val) (args : Array Val) 
       return .elem V hdl m (.float (.phasor a θ))
     | _ => unsupported "∠"
   | "abs" => ffn fun t => TA.abs? t
+  | "project" =>
+    match args with
+    | #[v@(.elem ..)] => floatFn v fun t => TA.project? t
+    | _ => unsupported "project"
+  | "reject" =>
+    match args with
+    | #[v@(.elem ..)] => floatFn v fun t => TA.reject? t
+    | _ => unsupported "reject"
   | "unit" => ffn fun t => (TA.abs? t).bind (TA.div? t)
   | "cos" =>
     match args with
@@ -626,14 +652,15 @@ def evalStatement (input : String) : EvalM Val := do
 
 /-- Replay a shard's statements in order; the result of each is its oracle encoding
 (`none` when the statement is not modelled). -/
-def runStatements (sandbox : Nat) (inputs : Array String) : Array (Option GoldenElem) := Id.run do
+def runStatements (sandbox : Nat) (inputs : Array String) : Array (Option (GoldenElem × Bool)) :=
+  Id.run do
   let mut env : Env := { sandbox }
-  let mut out : Array (Option GoldenElem) := #[]
+  let mut out : Array (Option (GoldenElem × Bool)) := #[]
   for inp in inputs do
-    match (evalStatement inp).run env with
+    match (evalStatement inp).run { env with approx := false } with
     | .ok (v, env') =>
       env := env'
-      out := out.push (encodeVal sandbox v)
+      out := out.push ((encodeVal sandbox v).map (·, env'.approx))
     | .error _ => out := out.push none
   return out
 

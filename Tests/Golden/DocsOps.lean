@@ -24,8 +24,19 @@ def typeName (t : CoeffType) : String :=
       | .int64 => "Int64" | .rational => "Rational{Int64}" | .float64 => "Float64" | _ => "?") ++ "}"
   | .other s => s
 
+/-- Julia's display of a chain of the subspace `mask` (only the subspace's blades, with the
+parent's labels: `V(2,3,4)(x)` of `S"∞+++"` prints `1.40532v₁ + …` without `v∞`). -/
+def subChainStr {V : TensorBundle} (mask : UInt64) (compact : Bool) (x : AnyTA V) : Option String :=
+  let go := fun {α : Type} [Coeff α] [JuliaShow α] (t : TA V α) => match t with
+    | .chain g c =>
+      some (TA.showTerms V compact ((layoutTerms V (.chain g) c.v).filter fun (b, _) => b &&& ~~~mask == 0))
+    | _ => none
+  match x with
+  | .int t => go t | .rat t => go t | .float t => go t | .bool t => go t
+  | .cint t => go t | .crat t => go t | .cfloat t => go t
+
 /-- The encoded element (kind, grade, bits, dense, strings) of an element value, with its
-space display and, for an element of a subspace, the subspace's own layout. -/
+space display and, for an element of a subspace, the subspace's own layout and display. -/
 def encodeElem (V : TensorBundle) (hdl : String) (mask : UInt64) (x : AnyTA V) : GoldenElem :=
   let e := x.encode
   let e := { e with V := some hdl }
@@ -46,7 +57,10 @@ def encodeElem (V : TensorBundle) (hdl : String) (mask : UInt64) (x : AnyTA V) :
       | .complexExact re im => .complexExact (idx.map fun i => re[i]!) (idx.map fun i => im[i]!)
       | .complexFloat re im => .complexFloat (pick re) (pick im)
       | .raw v => .raw v
-    { e with dense, bits := e.bits.map down }
+    let e := { e with dense, bits := e.bits.map down }
+    match subChainStr mask false x, subChainStr mask true x with
+    | some s, some c => { e with str := .val s, compactStr := .val c }
+    | _, _ => e
 
 /-- The encoding of a term of a large space (`n > 10`): the oracle records no dense vector
 there (schema §7: sparse `terms`), so kind, `T`, `grade`, `bits` and the strings are

@@ -69,14 +69,33 @@ def docsKnownIssues : Array KnownIssue := #[
 ]
 
 /-- The docs registration: each shard is replayed once (`prepare`), each case reads its
-statement's result. -/
+statement's result; values are compared bit for bit, except for statements that ran a series
+or a dense closed form (`approx`), which `docsApproxRegistration` compares with the
+composite tolerance. -/
 def docsRegistration : Registration :=
   { name := "grassmann/docs", suite := "docs", op := "docs"
     prepare := fun p =>
       let results := runStatements (sandboxOf p.shard) (shardInputs p.shard)
-      ⟨fun ctx _ => (results[ctx.case.idx]?).join⟩
+      ⟨fun ctx _ => match (results[ctx.case.idx]?).join with
+        | some (e, false) => some e
+        | _ => none⟩
     knownIssues := docsKnownIssues }
 
-initialize register docsRegistration
+/-- The statements that ran a series (`exp`, `log`, `sqrt`, … of a container): Julia's generated
+loops sum in another order, so values are compared with `rtol = 1e-12`, `atol = 1e-14` (the
+kinds and strings exactly). -/
+def docsApproxRegistration : Registration :=
+  { name := "grassmann/docs-series", suite := "docs", op := "docs"
+    prepare := fun p =>
+      let results := runStatements (sandboxOf p.shard) (shardInputs p.shard)
+      ⟨fun ctx _ => match (results[ctx.case.idx]?).join with
+        | some (e, true) => some e
+        | _ => none⟩
+    floatTol := some (1e-12, 1e-14)
+    knownIssues := docsKnownIssues }
+
+initialize
+  register docsRegistration
+  register docsApproxRegistration
 
 end Tests.ElementOracle.Docs
