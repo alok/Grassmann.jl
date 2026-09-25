@@ -61,10 +61,12 @@ namespace Bench.DeMorgan
 
 open _root_.DeMorgan Bench
 
-/-- `∑ toNat ((p → q) ↔ ((p ∧ q) ∨ ¬p))` over pairs of 64-row columns. -/
+/-- `∑ toNat ((p → q) ↔ ((p ∧ q) ∨ ¬p))` over pairs of 64-row columns. The column is
+converted through `UInt64` (`Nat.toFloat` of a value `≥ 2^63` takes ~8 µs, which would swamp
+the formula). -/
 def formulaSum (ps : Array (TruthValues 6 × TruthValues 6)) : Float :=
   ps.foldl (fun acc (p, q) =>
-    acc + (Nat.toFloat ((p.imp q).iff ((p.and q).or p.not)).toNat)) 0
+    acc + ((p.imp q).iff ((p.and q).or p.not)).toNat.toUInt64.toFloat) 0
 
 /-- The table of `((p ∧ q) → (r ∨ ¬s)) ↔ (¬(p ∧ q) ∨ r)`; returns the expression's name. -/
 def table4 (vs : Array (TruthTable 4)) : String :=
