@@ -80,6 +80,21 @@ def fastPathSuite : IO (Suite × Suite) := do
       s := s.check (Sys.identFull (w.sys Num) nums[i]!) fun _ => s!"ofSystem? {u.name} = {w.name}"
       if w != u then IO.println s!"    {u.name} has the Julia type of {w.name}"
     | none => s := s.check false fun _ => s!"ofSystem? {u.name} = none"
+  -- Julia's system aliases (`initdata.jl:158-167`): values, `Sys` values and names
+  let aliases : List (String × Sys × UnitSystem Num) :=
+    [("SI", .SI, SI Num), ("MKS", .MKS, MKS Num), ("ME", .ME, ME Num), ("GM", .GM, GM Num),
+     ("MetricEngineering", .MetricEngineering, MetricEngineering Num),
+     ("GravitationalMetric", .GravitationalMetric, GravitationalMetric Num),
+     ("CGS", .CGS, CGS Num), ("CGSm", .CGSm, CGSm Num), ("CGSe", .CGSe, CGSe Num), ("HLU", .HLU, HLU Num),
+     ("EnglishEngineering", .EnglishEngineering, EnglishEngineering Num), ("EE", .EE, EE Num),
+     ("BritishGravitational", .BritishGravitational, BritishGravitational Num), ("BG", .BG, BG Num),
+     ("EnglishUS", .EnglishUS, EnglishUS Num), ("AbsoluteEnglish", .AbsoluteEnglish, AbsoluteEnglish Num),
+     ("AE", .AE, AE Num)]
+  for (nm, u, U) in aliases do
+    s := s.check (Sys.ofName? nm == some u) fun _ => s!"alias {nm}: ofName? disagrees"
+    s := s.check (Sys.identFull (u.sys Num) U) fun _ => s!"alias {nm}: value is not the system"
+    s := s.check (Sys.ofSystem? U == some u) fun _ => s!"alias {nm}: ofSystem?"
+  s := s.check (match Sys.SI2019 with | .SI => true | _ => false) fun _ => "match_pattern Sys.SI"
   -- a system that is not named: Metric with another coupling
   let M := Metric Num
   let custom : UnitSystem Num := { M with C := { M.C with ΩΛ := .c (.float 0.7) } }

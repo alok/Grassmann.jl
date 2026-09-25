@@ -129,7 +129,15 @@ instance : ToString (Quantity U d α) := ⟨display⟩
 /-- The value in `α` (Julia `normal(q)`). -/
 @[inline] def normal (q : Quantity U d α) : α := q.val
 
+/-- Julia `dimensions(q)` (`dimension.jl:303`): the USQ dimension group of the
+quantity's type. -/
+def dimensions (_ : Quantity U d α) : USQGroup := d.toGroup
+
 end Quantity
+
+/-- Julia `Dimension(q) = q.d` (`dimension.jl:304`): the USQ dimension group of a
+quantity. -/
+def Dimension {U : Sys} {d : Dim} {α : Type} (q : Quantity U d α) : USQGroup := q.dimensions
 
 /-- A `ConvertUnit` applies to quantities of its own source system and dimension
 (`dimension.jl:362-365`). -/

@@ -145,6 +145,26 @@ def QCDGauss : UnitSystem α :=
 def QCDoriginal : UnitSystem α :=
   unitsystem (Universe α) one one one (c2 α * UnitAlg.tau * ms α .α) (UnitAlg.inv (μₚₑ α))
 
+/-! Julia's aliases (`initdata.jl:158-167`). -/
+
+/-- `SI = SI2019` -/ abbrev SI : UnitSystem α := SI2019 α
+/-- `MKS = Metric` -/ abbrev MKS : UnitSystem α := Metric α
+/-- `MetricEngineering = Engineering` -/ abbrev MetricEngineering : UnitSystem α := Engineering α
+/-- `ME = MetricEngineering` -/ abbrev ME : UnitSystem α := Engineering α
+/-- `GravitationalMetric = Gravitational` -/ abbrev GravitationalMetric : UnitSystem α := Gravitational α
+/-- `GM = GravitationalMetric` -/ abbrev GM : UnitSystem α := Gravitational α
+/-- `CGS = Gauss` -/ abbrev CGS : UnitSystem α := Gauss α
+/-- `CGSm = EMU` -/ abbrev CGSm : UnitSystem α := EMU α
+/-- `CGSe = ESU` -/ abbrev CGSe : UnitSystem α := ESU α
+/-- `HLU = LorentzHeaviside` -/ abbrev HLU : UnitSystem α := LorentzHeaviside α
+/-- `EnglishEngineering = English` -/ abbrev EnglishEngineering : UnitSystem α := English α
+/-- `EE = English` -/ abbrev EE : UnitSystem α := English α
+/-- `BritishGravitational = British` -/ abbrev BritishGravitational : UnitSystem α := British α
+/-- `BG = British` -/ abbrev BG : UnitSystem α := British α
+/-- `EnglishUS = Survey` -/ abbrev EnglishUS : UnitSystem α := Survey α
+/-- `AbsoluteEnglish = FPS` -/ abbrev AbsoluteEnglish : UnitSystem α := FPS α
+/-- `AE = FPS` -/ abbrev AE : UnitSystem α := FPS α
+
 end named
 
 /-- The 48 named unit systems, in Julia's `UnitSystems.Systems` order
@@ -226,6 +246,26 @@ def sys (α : Type) [UnitAlg α] : Sys → UnitSystem α
   | Natural => UnitSystems.Natural α | NaturalGauss => UnitSystems.NaturalGauss α
   | QCD => UnitSystems.QCD α | QCDGauss => UnitSystems.QCDGauss α
   | QCDoriginal => UnitSystems.QCDoriginal α
+
+/-! Julia's aliases as `Sys` values, usable in patterns (`initdata.jl:158-167`). -/
+
+/-- `SI = SI2019` -/ @[match_pattern] abbrev SI : Sys := SI2019
+/-- `MKS = Metric` -/ @[match_pattern] abbrev MKS : Sys := Metric
+/-- `MetricEngineering = Engineering` -/ @[match_pattern] abbrev MetricEngineering : Sys := Engineering
+/-- `ME = MetricEngineering` -/ @[match_pattern] abbrev ME : Sys := Engineering
+/-- `GravitationalMetric = Gravitational` -/ @[match_pattern] abbrev GravitationalMetric : Sys := Gravitational
+/-- `GM = GravitationalMetric` -/ @[match_pattern] abbrev GM : Sys := Gravitational
+/-- `CGS = Gauss` -/ @[match_pattern] abbrev CGS : Sys := Gauss
+/-- `CGSm = EMU` -/ @[match_pattern] abbrev CGSm : Sys := EMU
+/-- `CGSe = ESU` -/ @[match_pattern] abbrev CGSe : Sys := ESU
+/-- `HLU = LorentzHeaviside` -/ @[match_pattern] abbrev HLU : Sys := LorentzHeaviside
+/-- `EnglishEngineering = English` -/ @[match_pattern] abbrev EnglishEngineering : Sys := English
+/-- `EE = English` -/ @[match_pattern] abbrev EE : Sys := English
+/-- `BritishGravitational = British` -/ @[match_pattern] abbrev BritishGravitational : Sys := British
+/-- `BG = British` -/ @[match_pattern] abbrev BG : Sys := British
+/-- `EnglishUS = Survey` -/ @[match_pattern] abbrev EnglishUS : Sys := Survey
+/-- `AbsoluteEnglish = FPS` -/ @[match_pattern] abbrev AbsoluteEnglish : Sys := FPS
+/-- `AE = FPS` -/ @[match_pattern] abbrev AE : Sys := FPS
 
 end Sys
 

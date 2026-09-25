@@ -118,6 +118,10 @@ variable {U S : Sys} {d : Dim}
 /-- The exact factor. -/
 def ratio (_ : ConvertUnit U S d) : Scalar := Similitude.ratio d.toGroup.v U S
 
+/-- Julia `dimensions(c) = c.v` (`dimension.jl:230`): the dimension the factor
+converts. -/
+def dimensions (_ : ConvertUnit U S d) : USQGroup := d.toGroup
+
 /-- The inverse conversion (Julia's `inv(::ConvertUnit)` is broken,
 `dimension.jl:245`; this is the intended meaning). -/
 def inv (_ : ConvertUnit U S d) : ConvertUnit S U d := ⟨⟩
