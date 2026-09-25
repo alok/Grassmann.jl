@@ -145,6 +145,54 @@ def QCDGauss : UnitSystem α :=
 def QCDoriginal : UnitSystem α :=
   unitsystem (Universe α) one one one (c2 α * UnitAlg.tau * ms α .α) (UnitAlg.inv (μₚₑ α))
 
+/-! ### Aliases
+
+Julia's alternative spellings (`initdata.jl:158`, `:162-165`). They are `abbrev`s,
+so they are reducible and `SI α` and `SI2019 α` are interchangeable everywhere,
+including in instance search. `unitname` still reports the canonical name — Julia
+aliases the const, not the name, so `unitname(SI)` is `"SI2019"` there too.
+
+`IAU` needs no alias: Julia's `IAU = IAU☉` renames the display, and this port
+already spells the constructor `IAU` and displays it as `IAU☉`. -/
+
+/-- `MetricEngineering = Engineering` (`initdata.jl:158`) -/
+abbrev MetricEngineering : UnitSystem α := Engineering α
+/-- `GravitationalMetric = Gravitational` (`initdata.jl:158`) -/
+abbrev GravitationalMetric : UnitSystem α := Gravitational α
+/-- `SI = SI2019` (`initdata.jl:162`) -/
+abbrev SI : UnitSystem α := SI2019 α
+/-- `MKS = Metric` (`initdata.jl:162`) -/
+abbrev MKS : UnitSystem α := Metric α
+/-- `ME = MetricEngineering = Engineering` (`initdata.jl:162`) -/
+abbrev ME : UnitSystem α := Engineering α
+/-- `GM = GravitationalMetric = Gravitational` (`initdata.jl:162`). Not Julia's
+`GM☉` (`initdata.jl:25`), which is the solar gravitational parameter. -/
+abbrev GM : UnitSystem α := Gravitational α
+/-- `CGS = Gauss` (`initdata.jl:163`) -/
+abbrev CGS : UnitSystem α := Gauss α
+/-- `CGSm = EMU` (`initdata.jl:163`) -/
+abbrev CGSm : UnitSystem α := EMU α
+/-- `CGSe = ESU` (`initdata.jl:163`) -/
+abbrev CGSe : UnitSystem α := ESU α
+/-- `HLU = LorentzHeaviside` (`initdata.jl:163`) -/
+abbrev HLU : UnitSystem α := LorentzHeaviside α
+/-- `EnglishEngineering = English` (`initdata.jl:164`) -/
+abbrev EnglishEngineering : UnitSystem α := English α
+/-- `BritishGravitational = British` (`initdata.jl:164`) -/
+abbrev BritishGravitational : UnitSystem α := British α
+/-- `BG = British` (`initdata.jl:164`) -/
+abbrev BG : UnitSystem α := British α
+/-- `EnglishUS = Survey` (`initdata.jl:165`) -/
+abbrev EnglishUS : UnitSystem α := Survey α
+/-- `AbsoluteEnglish = FPS` (`initdata.jl:165`) -/
+abbrev AbsoluteEnglish : UnitSystem α := FPS α
+/-- `AE = FPS` (`initdata.jl:165`) -/
+abbrev AE : UnitSystem α := FPS α
+/-- `EE = English` (`initdata.jl:165`). Note the asymmetry in Julia: `EE` is
+`English` but `AE` is `FPS`, even though `EnglishEngineering = English` and
+`AbsoluteEnglish = FPS` pair the long names the same way. -/
+abbrev EE : UnitSystem α := English α
+
 end named
 
 /-- The 48 named unit systems, in Julia's `UnitSystems.Systems` order
@@ -201,6 +249,47 @@ def ofName? (s : String) : Option Sys :=
   | "BritishGravitational" | "BG" => some British | "EnglishUS" => some Survey
   | "AbsoluteEnglish" | "AE" => some FPS
   | s => all.find? (·.name == s)
+
+/-! ### `Sys` aliases
+
+The same aliases as `Sys` indices, so `Sys.SI` and `.CGS` work wherever a `Sys`
+is expected. `@[match_pattern]` lets them appear on the left of a `match`, as
+Julia's consts do in its `@pure` dispatch. -/
+
+/-- `SI = SI2019` (`initdata.jl:162`) -/
+@[match_pattern] abbrev SI : Sys := .SI2019
+/-- `MKS = Metric` (`initdata.jl:162`) -/
+@[match_pattern] abbrev MKS : Sys := .Metric
+/-- `MetricEngineering = Engineering` (`initdata.jl:158`) -/
+@[match_pattern] abbrev MetricEngineering : Sys := .Engineering
+/-- `ME = MetricEngineering = Engineering` (`initdata.jl:162`) -/
+@[match_pattern] abbrev ME : Sys := .Engineering
+/-- `GravitationalMetric = Gravitational` (`initdata.jl:158`) -/
+@[match_pattern] abbrev GravitationalMetric : Sys := .Gravitational
+/-- `GM = GravitationalMetric = Gravitational` (`initdata.jl:162`) -/
+@[match_pattern] abbrev GM : Sys := .Gravitational
+/-- `CGS = Gauss` (`initdata.jl:163`) -/
+@[match_pattern] abbrev CGS : Sys := .Gauss
+/-- `CGSm = EMU` (`initdata.jl:163`) -/
+@[match_pattern] abbrev CGSm : Sys := .EMU
+/-- `CGSe = ESU` (`initdata.jl:163`) -/
+@[match_pattern] abbrev CGSe : Sys := .ESU
+/-- `HLU = LorentzHeaviside` (`initdata.jl:163`) -/
+@[match_pattern] abbrev HLU : Sys := .LorentzHeaviside
+/-- `EnglishEngineering = English` (`initdata.jl:164`) -/
+@[match_pattern] abbrev EnglishEngineering : Sys := .English
+/-- `EE = English` (`initdata.jl:165`) -/
+@[match_pattern] abbrev EE : Sys := .English
+/-- `BritishGravitational = British` (`initdata.jl:164`) -/
+@[match_pattern] abbrev BritishGravitational : Sys := .British
+/-- `BG = British` (`initdata.jl:164`) -/
+@[match_pattern] abbrev BG : Sys := .British
+/-- `EnglishUS = Survey` (`initdata.jl:165`) -/
+@[match_pattern] abbrev EnglishUS : Sys := .Survey
+/-- `AbsoluteEnglish = FPS` (`initdata.jl:165`) -/
+@[match_pattern] abbrev AbsoluteEnglish : Sys := .FPS
+/-- `AE = FPS` (`initdata.jl:165`) -/
+@[match_pattern] abbrev AE : Sys := .FPS
 
 /-- The system's constants in scalar `α`. -/
 def sys (α : Type) [UnitAlg α] : Sys → UnitSystem α

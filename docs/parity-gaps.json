@@ -1808,12 +1808,13 @@
  {
   "pkg": "UnitSystems",
   "symbol": "system aliases SI, CGS, CGSm, CGSe (P1); MKS, ME, GM, HLU, EE, EnglishEngineering, BG, BritishGravitational, EnglishUS, AE, AbsoluteEnglish (P2); same in Similitude/MeasureSystems",
-  "status": "PARTIAL",
-  "fix": "Today these resolve only by string through Sys.ofName?. Add abbrev SI (\u03b1) [UnitAlg \u03b1] := SI2019 \u03b1 and the rest in Systems.lean, plus @[match_pattern] abbrev Sys.SI : Sys := .SI2019, so both spellings work as values.",
+  "status": "DONE",
+  "fix": "Both spellings: abbrev SI : UnitSystem \u03b1 := SI2019 \u03b1 and the other 16 in the named section, plus @[match_pattern] abbrev Sys.SI : Sys := .SI2019 and the rest, so aliases work as values, as Sys indices and on the left of a match. Reachable unchanged from Similitude and MeasureSystems. IAU needs no alias: Julia's IAU = IAU\u2609 renames the display and the port already spells the constructor IAU. The aliases table of systems.json had been generated since the systems oracle was written and no test read it; Tests/UnitSystems/Aliases.lean now does (73 checks + 37 rfl, 0 failed).",
   "effort": "S",
   "priority": "P1",
   "files": [
-   "UnitSystems/Systems.lean"
+   "UnitSystems/Systems.lean",
+   "Tests/UnitSystems/Aliases.lean"
   ],
   "key": "units-applied"
  },
