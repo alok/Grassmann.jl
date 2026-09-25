@@ -34,9 +34,8 @@ Performance references (Julia 1.13, this machine, measured for this audit, best 
 | AbstractAnalysis `isgroup(S5)` | 36 ms |
 | AbstractAnalysis `magma([2-cycle gens of S6])` | 2.5 s |
 
-The Lean side was **not** measured. The disk had only ~0.9 GiB free (`/System/Volumes/Data` 100% full), so no
-scratch build was possible. Fatou is the only package here with measured Lean-vs-Julia numbers (docs/PERF.md
-2026-09-24): Lean is at parity with a handwritten Julia kernel and 30–200× faster than Fatou.jl.
+The Lean side is measured by the benchmark harness (`lake exe bench dendriform demorgan wilkinson fatou`,
+docs/perf/latest.md) and, for AbstractAnalysis, by the temporary cases recorded in docs/PERF.md (2026-09-25).
 
 ---
 
@@ -200,7 +199,7 @@ scratch build was possible. Fatou is the only package here with measured Lean-vs
 | `orbit`, `orbiterror`, `orbithold`, `FixedCycle` | `orbit`, `orbitN`, `orbitError`, `orbitNTrace`, `orbitHold`, `FixedCycle.run/withLen` | DONE | the metric defaults to the state's `Metric.dist` (Julia's `supnorm`) | – |
 | `derivative`, `derivative2` | same (Float) | DONE | oracle | – |
 | performance: `Semimagma` membership | `magmaHashed`/`groupHashed` (hash side index), `isGroupHashed` (index Cayley table), `@[csimp]` allocation-free scans | DONE | S₆ closure 64 ms (Julia 2.59 s, linear port 3.17 s); `isgroup(S₅)` 4.4 ms (Julia 78 ms; generic 336 ms) | – |
-| performance: `Limit` loops (`sum(x)[1e-10]` 0.13 ms in Julia) | `Limit (Indexed Float) Float` | IN_PROGRESS | unmeasured; risk of a boxed `Indexed` per step; Bench/Harness in flight | – |
+| performance: `Limit` loops (`sum(x)[1e-10]` 0.13 ms in Julia) | `Limit (Indexed Float) Float`, `@[inline]` `orbit`/`sum`/`limitEps` | PARTIAL | measured (docs/PERF.md 2026-09-25): `orbit(cos, 1.0)` 0.96 µs (Julia 0.75 µs); `sum(x)[1e-10]` 4.8 ms, 37× Julia: the `Indexed Float` state is a heap object with a boxed `Float` per step. Needs a scalar fast path for sums | S |
 
 ## 6. Wilkinson.jl (exports `PolynomialAnalysis PolynomialComparison plot factor expand horner polyfactors polyexpand polyhorner`) + SyntaxTree parts
 
@@ -222,7 +221,7 @@ scratch build was possible. Fatou is the only package here with measured Lean-vs
 | ST `callcount`, `sub`, `abs`, `alg`, `expravg`, `exprdev`, `exprval` | same (`Wilkinson/SyntaxTree.lean`) | DONE | oracle `exprval.json` | – |
 | ST `genfun`/`genlatest`/`@genfun` | `SyntaxTree.eval` (interpreter over `JNum`) | DONE | eval-and-invokelatest becomes an interpreter | – |
 | ST `linefilter!` | – | SKIP | strips `LineNumberNode`s, which `JExpr` does not have | – |
-| performance (3000-point Stieltjes × forms, 256-bit BigFloat) | – | IN_PROGRESS | Julia cannot load Wilkinson here (PyPlot); unmeasured on both sides; Bench/Harness in flight | – |
+| performance (3000-point Stieltjes × forms, 256-bit BigFloat) | `Bench/Wilkinson.lean` (`wilkinson` suite), twin `oracle/bench/wilkinson.jl` | DONE | 0.36–0.88× Julia against Wilkinson's per-call code generation; Julia with the function precompiled (`*_nocodegen`) is 3–17× faster than Lean's AST interpreter (follow-up: compile the AST) | – |
 
 ## 7. Fatou.jl (exports `fatou juliafill mandelbrot newton basin orbit plot`)
 
@@ -307,8 +306,8 @@ Computed from the status column of the tables above (one row per symbol or symbo
 
 | status | rows |
 |---|---|
-| DONE | 170 |
-| PARTIAL | 5 |
+| DONE | 171 |
+| PARTIAL | 6 |
 | MISSING | 3 |
-| IN_PROGRESS | 2 |
+| IN_PROGRESS | 0 |
 | SKIP | 14 |
