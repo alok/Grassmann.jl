@@ -407,8 +407,10 @@ for r in (1.0, 2.0)
     P = Cartan.PointCloud(F.sphere(r))
     fac = P(SimplexTopology([Values(f...) for f in ico_faces], 12))
     s1 = F.sphere(fac, r)
+    # `sphere` appends to the shared point vector in place: snapshot level 1 before level 2
+    l1 = flatv(collect(Cartan.fullpoints(s1)))
     s2 = F.sphere(s1, r)
-    sph["r=$(r)"] = Dict("level1_points" => flatv(collect(Cartan.fullpoints(s1))),
+    sph["r=$(r)"] = Dict("level1_points" => l1,
         "level1_faces" => [ints(t) for t in Cartan.topology(s1)],
         "level2_points" => flatv(collect(Cartan.fullpoints(s2))), "level2_faces" => [ints(t) for t in Cartan.topology(s2)])
 end
