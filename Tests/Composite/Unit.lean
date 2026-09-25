@@ -547,6 +547,10 @@ def kindsTests (t : Tally) : Tally := Id.run do
   t := expectM t "tanh(atanh(q))" (Multivector.tanh (Half.atanh q |> Half.toMultivector)) (Half.toMultivector q) 1e-7
   let p : Phasor E3 Float := z.polarize
   t := expectM t "sin(phasor) = sin(complexify)" p.sin z.sin 1e-12
+  -- Julia `exph(1.0 + 0.5v₁)` (`exph` of a spinor or multivector is an `UndefVarError` there)
+  t := expect t "exph(1+0.5v1)" (Couple.exph (⟨1, 1.0, 0.5⟩ : Couple E3 Float)).toMultivector
+    [3.065205170334457, 1.4164838996343287, 0, 0, 0, 0, 0, 0] seriesTol
+  t := expectM t "exph(q) = exp(q) for q spinor" (Half.toMultivector (Half.exph q)) (Half.toMultivector (Half.exp q)) 1e-9
   let w : PseudoCouple E3 Float := ⟨0, 1.0, 0.5⟩
   t := expectM t "sqrt(pseudo)²" (w.sqrt * w.sqrt) (toMultivector w) 1e-7
   return t

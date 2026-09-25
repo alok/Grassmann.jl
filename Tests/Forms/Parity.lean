@@ -173,6 +173,22 @@ def suite : IO Tally := do
   let jv ← load "vandermonde"
   let t := (arr (fld jv "ops")).toList.zipIdx.foldl (fun t (c, k) => vandOp t c k) t
   let t := (arr (fld jv "fits")).toList.zipIdx.foldl (fun t (c, k) => fitCase t c k) t
+  -- Julia `vandermondereal(Endomorphism([2 1 0; 1 3 1; 0 1 4]))` and
+  -- `vandermondecomplex(Endomorphism([0 -1; 1 0]))` (Grassmann 0.8.46)
+  let A : Endomorphism (En 3) (.chain 1) Float := endo (En 3) [[2, 1, 0], [1, 3, 1], [0, 1, 4]]
+  let t := match A.vandermondereal with
+    | .ok M =>
+      let want : List (List Float) := [[1.0, 1.267949192431123, 1.607695154586737], [1.0, 3.0, 9.0],
+        [1.0, 4.732050807568878, 22.392304845413268]]
+      t.ok ((M.toRows.zip want).all fun (r, w) => (r.zip w).all fun (x, y) => close 1e-13 x y) fun _ =>
+        s!"vandermondereal = {M.toRows}"
+    | .error e => t.ok false fun _ => s!"vandermondereal: {e}"
+  let R : Endomorphism (En 2) (.chain 1) Float := endo (En 2) [[0, -1], [1, 0]]
+  let C := R.vandermondecomplex
+  let rows := C.toRows.map (·.map fun z => (z.re, z.im))
+  let t := t.ok (rows.length == 2 && (rows.zip [[(1.0, 0.0), (0.0, -1.0)], [(1.0, 0.0), (0.0, 1.0)]]).all fun (r, w) =>
+      (r.zip w).all fun ((a, b), (c, d)) => close 1e-14 a c && close 1e-14 b d) fun _ =>
+    s!"vandermondecomplex = {rows}"
   return t
 
 end Tests.FormsTests.Parity
