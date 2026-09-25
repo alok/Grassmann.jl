@@ -9,11 +9,15 @@ Code-generation suites (DESIGN.md §5.2, `Grassmann.Kernel.Codegen`):
   specification reduces to its kernel) reported against the policy's counts; the
   `decide` spot checks run at build time (`Tests/Codegen/Dispatch.lean`);
 * `codegen/typed`: the typed operations at `Float` (specialized kernels, as in user
-  code) against the reference, and `basis!`'s emission (`Tests/Codegen/Typed.lean`).
+  code) against the reference, and `basis!`'s emission (`Tests/Codegen/Typed.lean`);
+* `codegen/fuse`: expression fusion (`fused%`) and batch kernels (`batch%`) against the typed
+  operations, compiled (`Tests/Fuse/Run.lean`); every other space and coefficient type is
+  checked while `Tests/Fuse/Guards.lean` builds.
 -/
 import Tests.Codegen.Kernels
 import Tests.Codegen.Dispatch
 import Tests.Codegen.Typed
+import Tests.Fuse.Run
 
 open Grassmann DirectSum Grassmann.Kernel.Codegen CodegenTests
 
@@ -33,7 +37,8 @@ def CodegenTests.Dispatch.run : IO Tally := do
 /-- Run every code-generation suite; returns `(passed, failed)`. -/
 def Tests.Codegen.run : IO (Nat × Nat) := do
   let suites : List (String × IO Tally) :=
-    [("codegen/kernels", Kernels.run), ("codegen/dispatch", Dispatch.run), ("codegen/typed", Typed.run)]
+    [("codegen/kernels", Kernels.run), ("codegen/dispatch", Dispatch.run), ("codegen/typed", Typed.run),
+     ("codegen/fuse", FuseTests.run)]
   let mut pass := 0
   let mut fail := 0
   for (name, suite) in suites do

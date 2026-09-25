@@ -1,159 +1,179 @@
-import Grassmann
-import Grassmann.Kernel.Generated
-import Tests.Util.Random
+import Bench.Grassmann.Common
+import Grassmann.Fuse
 
 /-!
-# Product benchmarks of the generated kernels (DESIGN.md §5.2, docs/PERF.md)
+# Typed operations of the generated kernels (DESIGN.md §5.2, docs/PERF.md)
 
-For `ℝ3`, `STA`, `PGA3` and `CGA3` at `Float`: `Multivector*Multivector`,
-`Spinor*Spinor`, the rotor sandwich of a vector (`R*v*~R`, `v ⊘ R`, `R >>> v`),
-`Chain1∧Chain1`, `Chain2*Chain1`, the reverse and the Hodge complement of a
-multivector and the Hodge complement of a vector. Each is timed as ns per call
-over `N` calls on a ring of `K = 1024` random operands (inputs vary per call,
-so nothing is loop-invariant), each result's coefficients summed into the
-accumulator (so every output is computed), best of 7 runs after a warm-up: the
-loop of `oracle/bench/grassmann_bench.jl`, which times the same operations in
-Julia. The reference kernels (the interpreted plans every space had before code
-generation) are timed on two products for comparison.
+Cases `grassmann/<space>/<op>` at `Float`, each over the `K = 1024` operands of a ring
+(`Bench.Grassmann.Common`), against the same loops in `oracle/bench/grassmann.jl`. The call
+sites are ordinary typed expressions (`a * b`, `v ⊘ R`, `~m`, ...) written at the concrete space
+by the `space_cases%` macro, so every size is a closed term and every operation compiles to its
+generated kernel specialized at `Float`, exactly as in user code.
 
-The call sites are ordinary typed expressions (`a * b`, `v ⊘ R`, ...) at concrete
-types: their `Kernels` dispatch folds at compile time to the generated kernels,
-specialized at `Float`.
+Groups (`CaseSet`): products and sandwiches; inner products (`⋅`, `⨼`, `∨`, `×`, `⊛`);
+norms and inverses (`abs2`, `norm`, `inv`, `/`, `\`); linear combinations (`+`, `-`, scalar
+multiples, mixed-kind promotion); unary maps (reverse, involutions, complements, grade
+projections); display (Julia `repr`); the same expressions through `fused%` (keys `… [fused]`);
+and two harness floors (the sum of an operand, and the sum of a fresh copy of one: the
+allocation every vector-valued Lean result pays, and a Julia isbits result does not).
 -/
 
 namespace Bench.Grassmann
 
-open _root_.Grassmann DirectSum StaticVectors Grassmann.Kernel
+open _root_.Grassmann DirectSum StaticVectors Bench
 
-/-- Ring size of the operand arrays (a power of two). -/
-def ringSize : Nat := 1024
+/-- `2.5` (a top-level constant, not a literal inside the loop: docs/PERF.md). -/
+def c25 : Float := 2.5
+/-- `1.5`. -/
+def c15 : Float := 1.5
 
-/-- Sum of the coefficients (keeps every output of a product live): a `USize` loop over the
-packed storage (`FloatArray.foldl`). -/
-@[inline] def total {n : Nat} (v : Values Float n) : Float := v.data.foldl (· + ·) 0
+/-- Which case groups a space runs. -/
+structure CaseSet where
+  /-- Inner products (gap `grassmann/inner-products`). -/
+  inner : Bool := true
+  /-- `abs2` and `norm`. -/
+  norms : Bool := true
+  /-- Inverses and divisions (only where Julia's `inv` is defined for random operands). -/
+  inverses : Bool := false
+  /-- Spinor inverses and divisions (Julia's `inv(::Spinor)` is defined for random operands
+  only when `(~s)s` is a scalar: `n ≤ 3`). -/
+  spinorInverses : Bool := false
+  /-- Linear combinations. -/
+  linear : Bool := true
+  /-- Unary maps beyond reverse and Hodge. -/
+  unary : Bool := true
+  /-- The harness floors. -/
+  floors : Bool := true
+  /-- Display (Julia `repr`; the check is the length of the string). -/
+  display : Bool := true
+  /-- Fused expressions (`fused%`, `Grassmann.Fuse`), each keyed `<op> [fused]` next to its
+  unfused case; the Julia twin times the same expression. -/
+  fused : Bool := true
 
-/-- `Σ f(xs[i & m], ys[(7i + 3) & m])` over `k` calls from `i`, `m = K - 1` (tail-recursive,
-unboxed accumulator, `USize` indices, no default values). -/
-@[specialize] def loop2 {X Y : Type} (f : X → Y → Float) (xs : Array X) (ys : Array Y) :
-    Nat → USize → Float → Float
-  | 0, _, acc => acc
-  | k + 1, i, acc =>
-    let m : USize := 1023
-    let a := (i &&& m).toNat
-    let b := ((7 * i + 3) &&& m).toNat
-    if h : a < xs.size ∧ b < ys.size then
-      loop2 f xs ys k (i + 1) (acc + f xs[a] ys[b])
-    else acc
+/-- `space_cases% "label" V seed cs`: the cases of one space as a `BenchM Unit` program, written at
+the concrete space `V` (a macro, so every operation is elaborated at concrete types as in user
+code: sizes such as `halfDim V.n false` are closed terms, and each typed operation compiles to
+its generated kernel specialized at `Float`). Rings are seeded from `seed`. -/
+syntax (name := spaceCasesStx) "space_cases% " str term:max num term:max : term
 
-/-- `Σ f(xs[i & m])` over `k` calls from `i`. -/
-@[specialize] def loop1 {X : Type} (f : X → Float) (xs : Array X) : Nat → USize → Float → Float
-  | 0, _, acc => acc
-  | k + 1, i, acc =>
-    let m : USize := 1023
-    let a := (i &&& m).toNat
-    if h : a < xs.size then loop1 f xs k (i + 1) (acc + f xs[a]) else acc
-
-/-- `f` applied `k` times to `x`: the result of each call is the (exclusive) operand of the
-next, so kernels that write into their operand work in place. -/
-@[specialize] def iterate {X : Type} (f : X → X) (x : X) : Nat → X
-  | 0 => x
-  | k + 1 => iterate f (f x) k
-
-/-- Time one run of `run k salt` (ns per call) and return its checksum. -/
-@[noinline] def measure (run : Nat → USize → Float) (k : Nat) (salt : USize) : IO (Float × Float) := do
-  let t0 ← IO.monoNanosNow
-  let s ← IO.lazyPure fun _ => run k salt
-  let t1 ← IO.monoNanosNow
-  return ((t1 - t0).toFloat / k.toUInt64.toFloat, s)
-
-/-- Warm up, then print the best of `reps` runs of `k` calls. -/
-def timed (name : String) (k reps : Nat) (run : Nat → USize → Float) : IO Float := do
-  let _ ← measure run (k / 10 + 1) 0
-  let mut best := 1.0e30
-  let mut sum := 0.0
-  for r in [0:reps] do
-    let (t, s) ← measure run k r.toUSize
-    best := min best t
-    sum := s
-  let name := name.pushn ' ' (26 - name.length)
-  IO.println s!"  {name} {JuliaBase.F64.showCompact best} ns/op   (checksum {JuliaBase.F64.showCompact sum})"
-  return best
-
-/-- `n` random values in `[-1, 1)`. -/
-def randVals (n : Nat) : Tests.Gen (Values Float n) := do
-  let xs ← Tests.Gen.array n (Tests.Gen.floatIn (-1) 1)
-  return Values.ofFn fun i => xs[i.1]!
-
-/-- `ringSize` random values of a container. -/
-def ring {X : Type} (n : Nat) (mk : Values Float n → X) : Tests.Gen (Array X) := do
-  let mut out := #[]
-  for _ in [0:ringSize] do out := out.push (mk (← randVals n))
-  return out
-
-/-- The benchmarks of one space. Specialized at every call on the `Kernels V` instance, so
-each space's typed operations compile to its generated kernels. -/
-@[inline] def space (label : String) (V : TensorBundle) [Kernels V] [SandwichKernels V] (N reps : Nat) (seed : Nat) :
-    IO (List (String × Float)) := do
-  let n := V.n
-  let ((M, S, U, C), _) := (do
-      return (← ring (2 ^ n) (Multivector.mk (V := V)), ← ring (Layout.even.size n) (Half.mk (V := V) (odd := false)),
-        ← ring (Layout.size n (.chain 1)) (Chain.mk (V := V) (G := 1)),
-        ← ring (Layout.size n (.chain 2)) (Chain.mk (V := V) (G := 2))) : Tests.Gen _)
-    |> (StateT.run · (Tests.Rng.ofSeed seed))
-  IO.println s!"== {label}  {V}"
-  let mvN := if n ≥ 5 then N / 10 else N
-  let mut out := []
-  -- the harness alone: the coefficient sum of an operand, and of a fresh copy of it (one
-  -- allocation, copy and free of a result: the floor of every Lean operation here)
-  out := ("sum of an operand", ← timed "sum of an operand" N reps fun k i =>
-    loop1 (fun (a : Multivector V Float) => total a.v) M k i 0) :: out
-  out := ("copy of an operand", ← timed "copy of an operand" N reps fun k i =>
-    loop1 (fun (a : Multivector V Float) =>
-      (a.v.data.set! 0 (a.v.data.get! 1)).foldl (· + ·) 0) M k i 0) :: out
-  out := ("Multivector*Multivector", ← timed "Multivector*Multivector" mvN reps fun k i =>
-    loop2 (fun (a b : Multivector V Float) => total (a * b).v) M M k i 0) :: out
-  out := ("Spinor*Spinor", ← timed "Spinor*Spinor" N reps fun k i =>
-    loop2 (fun (s t : Spinor V Float) => total (s * t : Spinor V Float).v) S S k i 0) :: out
-  out := ("R*v*~R", ← timed "R*v*~R" N reps fun k i =>
-    loop2 (fun (R : Spinor V Float) (v : Chain V 1 Float) => total (R * v * ~R : CoSpinor V Float).v) S U k i 0) :: out
-  out := ("v ⊘ R", ← timed "v ⊘ R" N reps fun k i =>
-    loop2 (fun (R : Spinor V Float) (v : Chain V 1 Float) => total (v ⊘ R : Chain V 1 Float).v) S U k i 0) :: out
-  out := ("R >>> v", ← timed "R >>> v" N reps fun k i =>
-    loop2 (fun (R : Spinor V Float) (v : Chain V 1 Float) => total (R >>> v : Chain V 1 Float).v) S U k i 0) :: out
-  out := ("Chain1∧Chain1", ← timed "Chain1∧Chain1" N reps fun k i =>
-    loop2 (fun (a b : Chain V 1 Float) => total (a ∧ b : Chain V 2 Float).v) U U k i 0) :: out
-  out := ("Chain2*Chain1", ← timed "Chain2*Chain1" N reps fun k i =>
-    loop2 (fun (c : Chain V 2 Float) (u : Chain V 1 Float) => total (c * u : CoSpinor V Float).v) C U k i 0) :: out
-  out := ("reverse Multivector", ← timed "reverse Multivector" N reps fun k i =>
-    loop1 (fun (a : Multivector V Float) => total (~a).v) M k i 0) :: out
-  out := ("reverse in place (m := ~m)", ← timed "reverse in place (m := ~m)" N reps fun k i =>
-    let m := M[i.toNat % ringSize]!
-    total (iterate (fun (a : Multivector V Float) => ~a) m k).v) :: out
-  out := ("hodge Multivector", ← timed "hodge Multivector" N reps fun k i =>
-    loop1 (fun (a : Multivector V Float) => total (⋆a : Multivector V Float).v) M k i 0) :: out
-  out := ("hodge Chain1", ← timed "hodge Chain1" N reps fun k i =>
-    loop1 (fun (u : Chain V 1 Float) => total (⋆u : Chain V (V.n - 1) Float).v) U k i 0) :: out
-  -- the reference kernels (interpreted plans) on the same operands
-  out := ("ref Multivector*Multivector", ← timed "ref Multivector*Multivector" (mvN / 10 + 1) reps fun k i =>
-    loop2 (fun (a b : Multivector V Float) => total (refBin V .mul .full .full .full a.v b.v)) M M k i 0) :: out
-  out := ("ref Spinor*Spinor", ← timed "ref Spinor*Spinor" (N / 10 + 1) reps fun k i =>
-    loop2 (fun (s t : Spinor V Float) => total (refBin V .mul .even .even .even s.v t.v)) S S k i 0) :: out
-  return out.reverse
-
-/-- Run the suite; `smoke` uses few iterations. The environment variable
-`GRASSMANN_BENCH_SPACES` (e.g. `ℝ3,CGA3`) restricts the spaces, `GRASSMANN_BENCH_N` sets the
-number of calls per operation. -/
-def run (smoke : Bool) : IO Unit := do
-  let only := (← IO.getEnv "GRASSMANN_BENCH_SPACES").map (·.splitOn ",")
-  let N := match (← IO.getEnv "GRASSMANN_BENCH_N").bind String.toNat? with
-    | some k => k
-    | none => if smoke then 10000 else 10000000
-  let reps := if smoke then 1 else 7
-  let want := fun (l : String) => only.all (·.contains l)
-  IO.println s!"Grassmann products at Float ({N} calls per operation, ns/op, best of {reps})"
-  if want "ℝ3" then discard <| space "ℝ3" ℝ3 N reps 1
-  if want "STA" then discard <| space "STA" STA N reps 2
-  if want "PGA3" then discard <| space "PGA3" PGA3 N reps 3
-  if want "CGA3" then discard <| space "CGA3" CGA3 N reps 4
+macro_rules
+  | `(space_cases% $label $V $seed $cs) => `(show Bench.BenchM Unit from do
+      let n := ($V).n
+      let p := s!"K={ringSize}"
+      let k (s : String) := $label ++ "/" ++ s
+      let M := ringOf (2 ^ n) ($seed * 16 + 1) (Multivector.mk (V := $V) (α := Float))
+      let N := ringOf (2 ^ n) ($seed * 16 + 2) (Multivector.mk (V := $V) (α := Float))
+      let S := ringOf (halfDim n false) ($seed * 16 + 3) (Half.mk (V := $V) (odd := false) (α := Float))
+      let T := ringOf (halfDim n false) ($seed * 16 + 4) (Half.mk (V := $V) (odd := false) (α := Float))
+      let U := ringOf (Leibniz.binomial n 1) ($seed * 16 + 5) (Chain.mk (V := $V) (G := 1) (α := Float))
+      let W := ringOf (Leibniz.binomial n 1) ($seed * 16 + 6) (Chain.mk (V := $V) (G := 1) (α := Float))
+      let C := ringOf (Leibniz.binomial n 2) ($seed * 16 + 7) (Chain.mk (V := $V) (G := 2) (α := Float))
+      let H := ringOf (Leibniz.binomial n (n - 1)) ($seed * 16 + 8) (Chain.mk (V := $V) (G := n - 1) (α := Float))
+      let J := ringOf (Leibniz.binomial n (n - 1)) ($seed * 16 + 9) (Chain.mk (V := $V) (G := n - 1) (α := Float))
+      if ($cs : CaseSet).floors then
+        case1 (k "sum of an operand") (fun (a : Multivector $V Float) => total a.v) M p
+        case1 (k "copy of an operand") (fun (a : Multivector $V Float) =>
+          (a.v.data.set! 0 (a.v.data.get! 1)).foldl (· + ·) 0) M p
+      -- products and sandwiches
+      case2 (k "Multivector*Multivector") (fun (a b : Multivector $V Float) => total (a * b).v) M N p
+      case2 (k "Spinor*Spinor") (fun (s t : Spinor $V Float) => total (s * t : Spinor $V Float).v) S T p
+      case2 (k "Chain1*Chain1") (fun (a b : Chain $V 1 Float) => total (a * b : Spinor $V Float).v) U W p
+      case2 (k "Chain1∧Chain1") (fun (a b : Chain $V 1 Float) => total (a ∧ b : Chain $V 2 Float).v) U W p
+      case2 (k "Chain2*Chain1") (fun (c : Chain $V 2 Float) (u : Chain $V 1 Float) => total (c * u : CoSpinor $V Float).v) C U p
+      case2 (k "Multivector∧Multivector") (fun (a b : Multivector $V Float) =>
+        total (a ∧ b : Multivector $V Float).v) M N p
+      case2 (k "R*v*~R") (fun (R : Spinor $V Float) (v : Chain $V 1 Float) =>
+        total (R * v * ~R : CoSpinor $V Float).v) S U p
+      case2 (k "v ⊘ R") (fun (R : Spinor $V Float) (v : Chain $V 1 Float) => total (v ⊘ R : Chain $V 1 Float).v) S U p
+      case2 (k "R >>> v") (fun (R : Spinor $V Float) (v : Chain $V 1 Float) =>
+        total (R >>> v : Chain $V 1 Float).v) S U p
+      -- inner products
+      if ($cs : CaseSet).inner then
+        case2 (k "Chain1⋅Chain1") (fun (a b : Chain $V 1 Float) => total (a ⋅ b).v) U W p
+        case2 (k "Chain2⋅Chain1") (fun (c : Chain $V 2 Float) (u : Chain $V 1 Float) => total (c ⋅ u).v) C U p
+        case2 (k "Chain1⨼Chain2") (fun (u : Chain $V 1 Float) (c : Chain $V 2 Float) => total (u ⨼ c).v) U C p
+        case2 (k "Multivector⋅Multivector") (fun (a b : Multivector $V Float) =>
+          total (a ⋅ b : Multivector $V Float).v) M N p
+        case2 (k "Chain(n-1)∨Chain(n-1)") (fun (a b : Chain $V (n - 1) Float) => total (a ∨ b).v) H J p
+        case2 (k "Multivector∨Multivector") (fun (a b : Multivector $V Float) =>
+          total (a ∨ b : Multivector $V Float).v) M N p
+        case2 (k "Chain1×Chain1") (fun (a b : Chain $V 1 Float) => total (a × b : Chain $V (n - (1 + 1)) Float).v) U W p
+        case2 (k "Multivector⊛Multivector") (fun (a b : Multivector $V Float) =>
+          total (a ⊛ b : Chain $V 0 Float).v) M N p
+      -- norms and inverses
+      if ($cs : CaseSet).norms then
+        case1 (k "abs2 Multivector") (fun (a : Multivector $V Float) => total a.abs2.v) M p
+        case1 (k "abs2 Spinor") (fun (s : Spinor $V Float) => total s.abs2.v) S p
+        case1 (k "abs2 Chain1") (fun (u : Chain $V 1 Float) => total u.abs2.v) U p
+        case1 (k "norm Multivector") (fun (a : Multivector $V Float) => Grassmann.norm a) M p
+      if ($cs : CaseSet).inverses then
+        case1 (k "inv Chain1") (fun (u : Chain $V 1 Float) => total u⁻¹.v) U p
+        case2 (k "Chain1/Chain1") (fun (a b : Chain $V 1 Float) => total (a / b : Spinor $V Float).v) U W p
+        case2 (k "Chain1\\Chain1") (fun (a b : Chain $V 1 Float) => total (a⁻¹ * b : Spinor $V Float).v) U W p
+      if ($cs : CaseSet).spinorInverses then
+        case1 (k "inv Spinor") (fun (s : Spinor $V Float) => total s⁻¹.v) S p
+        case2 (k "Spinor/Spinor") (fun (s t : Spinor $V Float) => total (s / t : Spinor $V Float).v) S T p
+      -- linear combinations
+      if ($cs : CaseSet).linear then
+        case2 (k "Multivector+Multivector") (fun (a b : Multivector $V Float) => total (a + b).v) M N p
+        case2 (k "Chain1+Chain1") (fun (a b : Chain $V 1 Float) => total (a + b).v) U W p
+        case2 (k "Spinor-Spinor") (fun (s t : Spinor $V Float) => total (s - t).v) S T p
+        case1 (k "2.5*Multivector") (fun (a : Multivector $V Float) => total (c25 * a).v) M p
+        case2 (k "2.5*Chain1+1.5*Chain1") (fun (a b : Chain $V 1 Float) => total (c25 * a + c15 * b).v) U W p
+        case2 (k "Chain1+Multivector") (fun (u : Chain $V 1 Float) (b : Multivector $V Float) =>
+          total (u + b : Multivector $V Float).v) U N p
+        case2 (k "Chain1+Chain2") (fun (u : Chain $V 1 Float) (c : Chain $V 2 Float) =>
+          total (u + c : Multivector $V Float).v) U C p
+      -- unary maps
+      case1 (k "reverse Multivector") (fun (a : Multivector $V Float) => total (~a).v) M p
+      bench (k "reverse in place (m := ~m)") (ops := ringSize) (param := p) fun s =>
+        let m := M[s % ringSize]!
+        total (iterate (fun (a : Multivector $V Float) => ~a) m ringSize).v
+      case1 (k "hodge Multivector") (fun (a : Multivector $V Float) => total (⋆a : Multivector $V Float).v) M p
+      case1 (k "hodge Chain1") (fun (u : Chain $V 1 Float) => total (⋆u : Chain $V (n - 1) Float).v) U p
+      if ($cs : CaseSet).unary then
+        case1 (k "involute Multivector") (fun (a : Multivector $V Float) => total (involute a).v) M p
+        case1 (k "clifford Multivector") (fun (a : Multivector $V Float) => total (clifford a).v) M p
+        case1 (k "complementright Multivector") (fun (a : Multivector $V Float) =>
+          total (complementRight a : Multivector $V Float).v) M p
+        case1 (k "grade 2 of Multivector") (fun (a : Multivector $V Float) => total (gradePart a 2).v) M p
+        case1 (k "even Multivector") (fun (a : Multivector $V Float) => total (even a : Spinor $V Float).v) M p
+      -- display (Julia `repr`)
+      if ($cs : CaseSet).display then
+        case1 (k "show Multivector") (fun (a : Multivector $V Float) => (toString a).length.toUInt64.toFloat) M p
+        case1 (k "show Spinor") (fun (x : Spinor $V Float) => (toString x).length.toUInt64.toFloat) S p
+        case1 (k "show Chain1") (fun (u : Chain $V 1 Float) => (toString u).length.toUInt64.toFloat) U p
+      -- the same expressions through `fused%` (one kernel, one result allocation)
+      if ($cs : CaseSet).fused then
+        case2 (k "R*v*~R [fused]") (fun (R : Spinor $V Float) (v : Chain $V 1 Float) =>
+          total (fused% (R * v * ~R : CoSpinor $V Float)).v) S U p
+        case2 (k "Chain1×Chain1 [fused]") (fun (a b : Chain $V 1 Float) =>
+          total (fused% (a × b : Chain $V (n - (1 + 1)) Float)).v) U W p
+        case2 (k "Multivector⊛Multivector [fused]") (fun (a b : Multivector $V Float) =>
+          total (fused% (a ⊛ b : Chain $V 0 Float)).v) M N p
+        case2 (k "scalar(Multivector*Multivector)") (fun (a b : Multivector $V Float) =>
+          scalarValue (a * b)) M N p
+        case2 (k "scalar(Multivector*Multivector) [fused]") (fun (a b : Multivector $V Float) =>
+          fused% (scalarValue (a * b))) M N p
+        case1 (k "abs2 Multivector [fused]") (fun (a : Multivector $V Float) => total (fused% a.abs2).v) M p
+        case2 (k "Spinor-Spinor [fused]") (fun (s t : Spinor $V Float) => total (fused% (s - t)).v) S T p
+        case1 (k "2.5*Multivector [fused]") (fun (a : Multivector $V Float) => total (fused% (c25 * a)).v) M p
+        case2 (k "2.5*Chain1+1.5*Chain1 [fused]") (fun (a b : Chain $V 1 Float) =>
+          total (fused% (c25 * a + c15 * b)).v) U W p
+        case2 (k "Chain1+Multivector [fused]") (fun (u : Chain $V 1 Float) (b : Multivector $V Float) =>
+          total (fused% (u + b : Multivector $V Float)).v) U N p
+        case2 (k "Chain1+Chain2 [fused]") (fun (u : Chain $V 1 Float) (c : Chain $V 2 Float) =>
+          total (fused% (u + c : Multivector $V Float)).v) U C p
+        case1 (k "grade 2 of Multivector [fused]") (fun (a : Multivector $V Float) =>
+          total (fused% (gradePart a 2)).v) M p
+        case1 (k "even Multivector [fused]") (fun (a : Multivector $V Float) =>
+          total (fused% (even a : Spinor $V Float)).v) M p
+        bench (k "reverse in place (m := ~m) [fused]") (ops := ringSize) (param := p) fun s =>
+          let m := M[s % ringSize]!
+          total (iterate (fun (a : Multivector $V Float) => fused% (~a)) m ringSize).v
+        if ($cs : CaseSet).inverses then
+          case1 (k "inv Chain1 [fused]") (fun (u : Chain $V 1 Float) => total (fused% u⁻¹).v) U p
+          case2 (k "Chain1/Chain1 [fused]") (fun (a b : Chain $V 1 Float) =>
+            total (fused% (a / b : Spinor $V Float)).v) U W p)
 
 end Bench.Grassmann

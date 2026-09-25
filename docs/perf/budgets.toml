@@ -286,3 +286,246 @@ note = "Values Float n is a FloatArray: vector results allocate once (~9 ns; in 
 pattern = "dynamic/*"
 ratio = 1.5
 note = "TA fast paths through the generated kernels (DynKernels); measured 0.39-0.97x of Julia's Vector{Any} dispatch."
+
+# grassmann (docs/PERF.md, 2026-09-25): typed operations pay one allocation per result; fused%/batch%
+# are the fast paths. Measured ratio (max over spaces) plus 30% headroom.
+
+# Component-major layout experiment (docs/PERF.md): strided streams, kept only as the measurement behind the element-major choice.
+[[budget]]
+pattern = "grassmann/*/batch Spinor[*]Spinor [[]soa]"
+ratio = 2.7
+note = "Component-major layout experiment (docs/PERF.md): strided streams, kept only as the measurement behind the element-major choice."
+
+# Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md.
+[[budget]]
+pattern = "grassmann/*/Chain1[*]Chain1"
+ratio = 23.6
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/Chain1×Chain1"
+ratio = 22.3
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/Chain1∧Chain1"
+ratio = 23.3
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/Chain1⋅Chain1"
+ratio = 20.7
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/Chain1⨼Chain2"
+ratio = 18.9
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/Chain2[*]Chain1"
+ratio = 21.7
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/Chain2⋅Chain1"
+ratio = 19.6
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/Multivector[*]Multivector"
+ratio = 7.6
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/Multivector∧Multivector"
+ratio = 6.9
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/Multivector∨Multivector"
+ratio = 4.4
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/Multivector⋅Multivector"
+ratio = 4.6
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/R >>> v"
+ratio = 10.2
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/R[*]v[*]~R"
+ratio = 30.4
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/Spinor[*]Spinor"
+ratio = 22.6
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/abs2 Chain1"
+ratio = 22.0
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/abs2 Spinor"
+ratio = 5.3
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/clifford Multivector"
+ratio = 24.8
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/complementright Multivector"
+ratio = 24.8
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/copy of an operand"
+ratio = 20.6
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/hodge Chain1"
+ratio = 29.3
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/hodge Multivector"
+ratio = 26.2
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/norm Multivector"
+ratio = 8.3
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/reverse Multivector"
+ratio = 25.7
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/reverse in place (m := ~m)"
+ratio = 9.6
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+[[budget]]
+pattern = "grassmann/*/v ⊘ R"
+ratio = 10.1
+note = "Every typed result is a fresh FloatArray (about 10 ns to allocate, fill and free; Julia's isbits results stay in registers). fused% (one allocation per expression) and batch%/batchInto% (none per element) are the fast paths: docs/PERF.md."
+
+# Half.inv?/Chain.inv: abs2, a norm and isapprox tests, a List search over grades and three allocations; Julia's inv is closed-form on isbits values. fused% of Chain.inv is one allocation.
+[[budget]]
+pattern = "grassmann/*/Chain1/Chain1"
+ratio = 22.8
+note = "Half.inv?/Chain.inv: abs2, a norm and isapprox tests, a List search over grades and three allocations; Julia's inv is closed-form on isbits values. fused% of Chain.inv is one allocation."
+[[budget]]
+pattern = "grassmann/*/Chain1\\Chain1"
+ratio = 22.5
+note = "Half.inv?/Chain.inv: abs2, a norm and isapprox tests, a List search over grades and three allocations; Julia's inv is closed-form on isbits values. fused% of Chain.inv is one allocation."
+[[budget]]
+pattern = "grassmann/*/Spinor/Spinor"
+ratio = 26.5
+note = "Half.inv?/Chain.inv: abs2, a norm and isapprox tests, a List search over grades and three allocations; Julia's inv is closed-form on isbits values. fused% of Chain.inv is one allocation."
+[[budget]]
+pattern = "grassmann/*/inv Chain1"
+ratio = 68.8
+note = "Half.inv?/Chain.inv: abs2, a norm and isapprox tests, a List search over grades and three allocations; Julia's inv is closed-form on isbits values. fused% of Chain.inv is one allocation."
+[[budget]]
+pattern = "grassmann/*/inv Spinor"
+ratio = 37.8
+note = "Half.inv?/Chain.inv: abs2, a norm and isapprox tests, a List search over grades and three allocations; Julia's inv is closed-form on isbits values. fused% of Chain.inv is one allocation."
+[[budget]]
+pattern = "grassmann/*/involute Multivector"
+ratio = 22.8
+note = "Half.inv?/Chain.inv: abs2, a norm and isapprox tests, a List search over grades and three allocations; Julia's inv is closed-form on isbits values. fused% of Chain.inv is one allocation."
+
+# One allocation per fused expression (the ~10 ns result floor; the arithmetic is fused): where Julia's whole expression costs about 1 ns the ratio stays large. batch% has no per-element allocation.
+[[budget]]
+pattern = "grassmann/*/2.5[*]Chain1+1.5[*]Chain1 [[]fused]"
+ratio = 22.5
+note = "One allocation per fused expression (the ~10 ns result floor; the arithmetic is fused): where Julia's whole expression costs about 1 ns the ratio stays large. batch% has no per-element allocation."
+[[budget]]
+pattern = "grassmann/*/2.5[*]Multivector [[]fused]"
+ratio = 16.5
+note = "One allocation per fused expression (the ~10 ns result floor; the arithmetic is fused): where Julia's whole expression costs about 1 ns the ratio stays large. batch% has no per-element allocation."
+[[budget]]
+pattern = "grassmann/*/Chain1+Chain2 [[]fused]"
+ratio = 17.0
+note = "One allocation per fused expression (the ~10 ns result floor; the arithmetic is fused): where Julia's whole expression costs about 1 ns the ratio stays large. batch% has no per-element allocation."
+[[budget]]
+pattern = "grassmann/*/Chain1+Multivector [[]fused]"
+ratio = 14.3
+note = "One allocation per fused expression (the ~10 ns result floor; the arithmetic is fused): where Julia's whole expression costs about 1 ns the ratio stays large. batch% has no per-element allocation."
+[[budget]]
+pattern = "grassmann/*/Chain1/Chain1 [[]fused]"
+ratio = 6.0
+note = "One allocation per fused expression (the ~10 ns result floor; the arithmetic is fused): where Julia's whole expression costs about 1 ns the ratio stays large. batch% has no per-element allocation."
+[[budget]]
+pattern = "grassmann/*/Chain1×Chain1 [[]fused]"
+ratio = 21.3
+note = "One allocation per fused expression (the ~10 ns result floor; the arithmetic is fused): where Julia's whole expression costs about 1 ns the ratio stays large. batch% has no per-element allocation."
+[[budget]]
+pattern = "grassmann/*/Multivector⊛Multivector [[]fused]"
+ratio = 3.8
+note = "One allocation per fused expression (the ~10 ns result floor; the arithmetic is fused): where Julia's whole expression costs about 1 ns the ratio stays large. batch% has no per-element allocation."
+[[budget]]
+pattern = "grassmann/*/R[*]v[*]~R [[]fused]"
+ratio = 3.9
+note = "One allocation per fused expression (the ~10 ns result floor; the arithmetic is fused): where Julia's whole expression costs about 1 ns the ratio stays large. batch% has no per-element allocation."
+[[budget]]
+pattern = "grassmann/*/Spinor-Spinor [[]fused]"
+ratio = 23.0
+note = "One allocation per fused expression (the ~10 ns result floor; the arithmetic is fused): where Julia's whole expression costs about 1 ns the ratio stays large. batch% has no per-element allocation."
+[[budget]]
+pattern = "grassmann/*/even Multivector [[]fused]"
+ratio = 25.9
+note = "One allocation per fused expression (the ~10 ns result floor; the arithmetic is fused): where Julia's whole expression costs about 1 ns the ratio stays large. batch% has no per-element allocation."
+[[budget]]
+pattern = "grassmann/*/grade 2 of Multivector [[]fused]"
+ratio = 27.5
+note = "One allocation per fused expression (the ~10 ns result floor; the arithmetic is fused): where Julia's whole expression costs about 1 ns the ratio stays large. batch% has no per-element allocation."
+[[budget]]
+pattern = "grassmann/*/inv Chain1 [[]fused]"
+ratio = 22.7
+note = "One allocation per fused expression (the ~10 ns result floor; the arithmetic is fused): where Julia's whole expression costs about 1 ns the ratio stays large. batch% has no per-element allocation."
+
+# Values.zipWith/map push each coefficient (an out-of-line call) and recompute halfDim at run time. fused% is one allocation. Fix: set-based loops, or the linear maps as generated Kernels fields.
+[[budget]]
+pattern = "grassmann/*/2.5[*]Chain1+1.5[*]Chain1"
+ratio = 92.7
+note = "Values.zipWith/map push each coefficient (an out-of-line call) and recompute halfDim at run time. fused% is one allocation. Fix: set-based loops, or the linear maps as generated Kernels fields."
+[[budget]]
+pattern = "grassmann/*/2.5[*]Multivector"
+ratio = 34.7
+note = "Values.zipWith/map push each coefficient (an out-of-line call) and recompute halfDim at run time. fused% is one allocation. Fix: set-based loops, or the linear maps as generated Kernels fields."
+[[budget]]
+pattern = "grassmann/*/Chain(n-1)∨Chain(n-1)"
+ratio = 22.4
+note = "Values.zipWith/map push each coefficient (an out-of-line call) and recompute halfDim at run time. fused% is one allocation. Fix: set-based loops, or the linear maps as generated Kernels fields."
+[[budget]]
+pattern = "grassmann/*/Chain1+Chain1"
+ratio = 36.5
+note = "Values.zipWith/map push each coefficient (an out-of-line call) and recompute halfDim at run time. fused% is one allocation. Fix: set-based loops, or the linear maps as generated Kernels fields."
+[[budget]]
+pattern = "grassmann/*/Multivector+Multivector"
+ratio = 27.6
+note = "Values.zipWith/map push each coefficient (an out-of-line call) and recompute halfDim at run time. fused% is one allocation. Fix: set-based loops, or the linear maps as generated Kernels fields."
+[[budget]]
+pattern = "grassmann/*/Spinor-Spinor"
+ratio = 156.8
+note = "Values.zipWith/map push each coefficient (an out-of-line call) and recompute halfDim at run time. fused% is one allocation. Fix: set-based loops, or the linear maps as generated Kernels fields."
+
+# convertLayout recomputes blade ranks per coefficient at run time (0.5-6 us per call; Grassmann/Types/Dims.lean). fused% evaluates the conversion at elaboration time (10-25 ns). Fix: a memoized index map or a generated conversion.
+[[budget]]
+pattern = "grassmann/*/Chain1+Chain2"
+ratio = 1252.2
+note = "convertLayout recomputes blade ranks per coefficient at run time (0.5-6 us per call; Grassmann/Types/Dims.lean). fused% evaluates the conversion at elaboration time (10-25 ns). Fix: a memoized index map or a generated conversion."
+[[budget]]
+pattern = "grassmann/*/Chain1+Multivector"
+ratio = 2172.4
+note = "convertLayout recomputes blade ranks per coefficient at run time (0.5-6 us per call; Grassmann/Types/Dims.lean). fused% evaluates the conversion at elaboration time (10-25 ns). Fix: a memoized index map or a generated conversion."
+[[budget]]
+pattern = "grassmann/*/Multivector⊛Multivector"
+ratio = 70.5
+note = "convertLayout recomputes blade ranks per coefficient at run time (0.5-6 us per call; Grassmann/Types/Dims.lean). fused% evaluates the conversion at elaboration time (10-25 ns). Fix: a memoized index map or a generated conversion."
+[[budget]]
+pattern = "grassmann/*/even Multivector"
+ratio = 2829.2
+note = "convertLayout recomputes blade ranks per coefficient at run time (0.5-6 us per call; Grassmann/Types/Dims.lean). fused% evaluates the conversion at elaboration time (10-25 ns). Fix: a memoized index map or a generated conversion."
+[[budget]]
+pattern = "grassmann/*/grade 2 of Multivector"
+ratio = 1980.6
+note = "convertLayout recomputes blade ranks per coefficient at run time (0.5-6 us per call; Grassmann/Types/Dims.lean). fused% evaluates the conversion at elaboration time (10-25 ns). Fix: a memoized index map or a generated conversion."
+[[budget]]
+pattern = "grassmann/*/scalar(Multivector[*]Multivector)"
+ratio = 32.7
+note = "convertLayout recomputes blade ranks per coefficient at run time (0.5-6 us per call; Grassmann/Types/Dims.lean). fused% evaluates the conversion at elaboration time (10-25 ns). Fix: a memoized index map or a generated conversion."
+[[budget]]
+pattern = "grassmann/*/reverse in place (m := ~m) [[]fused]"
+ratio = 10.1
+note = "In place, the loop-carried store-to-load chain through the FloatArray dominates (Julia keeps m in registers); the fused form writes only the coefficients that change."
