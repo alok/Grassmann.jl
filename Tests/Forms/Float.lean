@@ -16,18 +16,6 @@ namespace Tests.FormsTests.FloatSuite
 
 open Lean Tests.Units Grassmann DirectSum StaticVectors Tests.FormsTests
 
-/-- Compare a `Spectrum` with Julia's (type-unstable) eigenvalue vector. -/
-def spectrum (t : Tally) (m : Mode) {n : Nat} (s : Forms.Spectrum n) (want : Json) (what : Unit → String)
-    (unordered : Bool := false) : Tally :=
-  if (jerr? want).isSome then t.skip else
-  let juliaComplex := match (arr want)[0]? with | some (.arr _) => true | _ => false
-  let t := t.ok (juliaComplex == !s.isReal) fun _ =>
-    s!"{what ()}: kind {if s.isReal then "real" else "complex"} vs Julia {if juliaComplex then "complex" else "real"}"
-  let cmp := if unordered then Tally.numsSet else Tally.nums
-  match s with
-  | .real v => cmp t m (vals v) want what
-  | .complex v => cmp t m (vals v) want what
-
 /-- One golden case. -/
 def check (t : Tally) (c : Json) (k : Nat) : Tally := Id.run do
   let rowsA := floatRows (fld c "A")
@@ -50,7 +38,7 @@ def check (t : Tally) (c : Json) (k : Nat) : Tally := Id.run do
   if n ≥ 2 then t := t.num (.approx 1e-9) (.flt A.discriminant) (fld c "discriminant") (w "discriminant")
   -- against LAPACK (`n ≥ 5`) the `(re, im)` order can depend on rounding noise
   let uo := n ≥ 5
-  t := spectrum t er A.eigvals (fld c "eigvals") (w "eigvals") uo
+  t := Tally.spectrum t er A.eigvals (fld c "eigvals") (w "eigvals") uo
   match A.eigvalsreal with
   | .ok v => t := (if n ≥ 5 then Tally.numsSet else Tally.nums) t er (vals v) (fld c "eigvalsreal") (w "eigvalsreal")
   | .error e =>
@@ -62,7 +50,7 @@ def check (t : Tally) (c : Json) (k : Nat) : Tally := Id.run do
       (w "eigvalscomplex")
   else t := t.skip
   if n ≥ 2 then
-    t := spectrum t (.approx 1e-9) A.sylvester (fld c "sylvester") (w "sylvester") uo
+    t := Tally.spectrum t (.approx 1e-9) A.sylvester (fld c "sylvester") (w "sylvester") uo
     t := t.nums .bits (vals A.eigmults) (fld c "eigmults") (w "eigmults")
   else
     t := t.skip.skip  -- Julia's `sylvester`/`eigmults` of a 1×1 operator throw (`UndefVarError: T`)

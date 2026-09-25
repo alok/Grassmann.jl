@@ -395,3 +395,29 @@ for s in Any["+++", "-++", "2,3,5", 4, "-+++"]
     end
 end
 save("eval", Dict("meta" => meta, "cases" => evals))
+
+# ------------------------------------------------------------------------------------------
+# eigenvalues of elements (their sandwich operators; closed forms for 2-D/3-D spinors)
+# ------------------------------------------------------------------------------------------
+elemeig = Any[]
+V3, V2 = S"+++", Submanifold(2)
+function elemcase(kind, V, g, c)
+    X = kind == "chain" ? Chain{V,g}(c...) : kind == "spinor" ? Spinor{V}(c...) :
+        Couple{V,Λ(V).v12}(c...)
+    Dict("kind" => kind, "space" => (V isa Signature ? Dict("sig" => "+++") : Dict("n" => mdims(V))),
+        "g" => g, "c" => enc(c), "eigvals" => @safe(eigvals(X)))
+end
+push!(elemeig, elemcase("couple", V3, 0, [2.0, 3.0]))
+push!(elemeig, elemcase("spinor", V3, 0, [1.0, 2.0, 3.0, 4.0]))
+push!(elemeig, elemcase("spinor", V3, 0, [1.5, 2.0, 3.0, 4.0]))
+push!(elemeig, elemcase("chain", V3, 2, [1.0, 2.0, 3.0]))
+push!(elemeig, elemcase("chain", V3, 0, [2.0]))
+push!(elemeig, elemcase("chain", V3, 1, [1.0, 2.0, 3.0]))
+push!(elemeig, elemcase("chain", V3, 2, [1.0, 0.0, 0.0]))
+push!(elemeig, elemcase("chain", V2, 1, [1.0, 2.0]))
+for trial in 1:6
+    push!(elemeig, elemcase("spinor", V3, 0, round.(randn(4), digits = 3)))
+    push!(elemeig, elemcase("chain", V3, 1, round.(randn(3), digits = 3)))
+    push!(elemeig, elemcase("chain", V3, 2, round.(randn(3), digits = 3)))
+end
+save("elemeig", Dict("meta" => meta, "cases" => elemeig))

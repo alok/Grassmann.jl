@@ -15,6 +15,9 @@ import Tests.Forms.Common
 * `dyadic.json`: projectors, dyadics and their products, contractions, materialisations,
   traces and display (`rtol = 1e-12`: the normalisation `v/|v|`).
 * `eval.json`: `t(y₁, …, y_k)`, `t(y)`, `M(y…)` and `vecdot`, exact.
+* `elemeig.json`: `eigvals` of elements (the sandwich operator `x ↦ x ⊘ X`): the closed
+  forms of 3-D spinors, couples and even chains, scalars, and `operator(X)` otherwise
+  (`rtol = 1e-12`).
 -/
 
 namespace Tests.FormsTests.GeometrySuite
@@ -172,6 +175,19 @@ def evalCase (t : Tally) (c : Json) (k : Nat) : Tally := Id.run do
   t := t.num .bits (.int (vecdot M M)) (fld c "vecdotMM") (w "vecdot(M,M)")
   return t
 
+/-- One element-eigenvalue case (the sandwich operator's spectrum). -/
+def elemCase (t : Tally) (c : Json) (k : Nat) : Tally :=
+  let V := spaceOf (fld c "space")
+  let g := (fld c "g").getNat?.toOption.getD 0
+  let cs := flts (fld c "c")
+  let w := fun (_ : Unit) => s!"element eigvals case {k} {(fld c "kind").compress} {cs}"
+  let s : Forms.Spectrum ((Layout.chain 1).size V.n) :=
+    match (fld c "kind").getStr?.toOption.getD "" with
+    | "spinor" => Half.eigvals ((Half.ofList? cs).getD Half.zero : Spinor V Float)
+    | "couple" => Couple.eigvals (⟨3, cs[0]!, cs[1]!⟩ : Couple V Float)
+    | _ => Chain.eigvals (chainOf V g cs)
+  t.spectrum (.approx 1e-12) s (fld c "eigvals") w
+
 /-- Run the suite. -/
 def suite : IO Tally := do
   let js ← load "simplex"
@@ -181,6 +197,8 @@ def suite : IO Tally := do
   let jd ← load "dyadic"
   let t := (cases jd).toList.zipIdx.foldl (fun t (c, k) => dyadicCase t c k) t
   let je ← load "eval"
-  return (cases je).toList.zipIdx.foldl (fun t (c, k) => evalCase t c k) t
+  let t := (cases je).toList.zipIdx.foldl (fun t (c, k) => evalCase t c k) t
+  let jx ← load "elemeig"
+  return (cases jx).toList.zipIdx.foldl (fun t (c, k) => elemCase t c k) t
 
 end Tests.FormsTests.GeometrySuite

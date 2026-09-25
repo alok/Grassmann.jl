@@ -91,4 +91,57 @@ def cayley (V : TensorBundle) (op : BinOp) (l : Layout := .full) : CayleyTable V
   let bs := l.blades V.n
   ⟨l, bs.map fun a => bs.map fun b => V.apply₂ op a b⟩
 
+/-! ## Eigenvalues of elements (their sandwich operators) -/
+
+namespace Forms
+
+variable {V : TensorBundle}
+
+/-- Julia's test for the closed-form spinor eigenvalues (`forms.jl:1352-1373`): the
+Euclidean plane or space (`S == 2 || S === S"2" || S === 3 || S === S"3"`). -/
+def euclid23 (V : TensorBundle) : Bool :=
+  (V.n == 2 || V.n == 3) && !V.hasinf && !V.hasorigin && V.diffvars == 0 && V.dyadmode == 0 &&
+    match V.metric with
+    | .euclid => true
+    | .signature neg => neg == 0
+    | _ => false
+
+/-- The closed-form eigenvalues of `x ↦ x ⊘ X` for an even element `X` of the Euclidean
+plane or space (`forms.jl:1360-1373`): with `X² = re + B`, `re ∓ i|B|` (and `|X|²` in
+3-D). Julia's 2-D `Spinor` case throws (`imaginary(::Spinor)` has no method, port-notes
+§8.4 item 17); here it is the same formula. -/
+def spinorEigvals [Kernels V] (X : Spinor V Float) : Spectrum ((Layout.chain 1).size V.n) :=
+  let X2 : Spinor V Float := ((X * X : Half V (false ^^ false) Float)).cast (by simp)
+  let re := getD X2.v 0
+  let b : Chain V 2 Float := X2.grade 2
+  let sq := Float.sqrt (getD b.abs2.v 0)
+  let third := getD (X.abs2).v 0
+  .complex (Values.ofFn fun i => match i.1 with
+    | 0 => ⟨re, -sq⟩ | 1 => ⟨re, sq⟩ | _ => ⟨third, 0⟩)
+
+end Forms
+
+open Forms in
+/-- Julia `eigvals(X)` of a chain (`forms.jl:1350-1359`): a scalar `s` has the triple
+eigenvalue `s²` (`abs2`); an even chain of the Euclidean plane/space the closed form of
+its spinor; otherwise the eigenvalues of `operator(X)`. -/
+def Chain.eigvals {G : Nat} [Kernels V] (X : Chain V G Float) : Spectrum ((Layout.chain 1).size V.n) :=
+  if G = 0 then
+    let s := getD X.v 0
+    .real (Values.replicate (s * s))
+  else if G % 2 == 0 && euclid23 V then spinorEigvals (Grassmann.toHalf X false)
+  else (operator X 1).eigvals
+
+open Forms in
+/-- Julia `eigvals(X::Spinor)` (`forms.jl:1360-1373`). -/
+def Half.eigvals [Kernels V] (X : Spinor V Float) : Spectrum ((Layout.chain 1).size V.n) :=
+  if euclid23 V then spinorEigvals X else (operator X 1).eigvals
+
+open Forms in
+/-- Julia `eigvals(X::Couple)` (`forms.jl:1360-1373`): the spinor closed form for an
+even blade of the Euclidean plane/space, else the eigenvalues of `operator(X)`. -/
+def Couple.eigvals [Kernels V] (X : Couple V Float) : Spectrum ((Layout.chain 1).size V.n) :=
+  if euclid23 V && DirectSum.Bits.popcount X.bits % 2 == 0 then spinorEigvals (Grassmann.toHalf X false)
+  else (operator X 1).eigvals
+
 end Grassmann

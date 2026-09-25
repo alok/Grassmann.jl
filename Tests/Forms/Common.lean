@@ -144,6 +144,19 @@ def numsSet (t : Tally) (m : Mode) (got : List Num) (want : Json) (what : Unit �
       | none => none) (some got)
     t.ok rest.isSome fun _ => s!"{what ()}: {got.map Num.show} vs {ws.map Num.show} (as multisets)"
 
+/-- Compare a `Spectrum` with Julia's (type-unstable) eigenvalue vector: the
+real/complex type and the values (as multisets when `unordered`). -/
+def spectrum (t : Tally) (m : Mode) {n : Nat} (s : Grassmann.Forms.Spectrum n) (want : Json)
+    (what : Unit → String) (unordered : Bool := false) : Tally :=
+  if (jerr? want).isSome then t.skip else
+  let juliaComplex := match (arr want)[0]? with | some (.arr _) => true | _ => false
+  let t := t.ok (juliaComplex == !s.isReal) fun _ =>
+    s!"{what ()}: kind {if s.isReal then "real" else "complex"} vs Julia {if juliaComplex then "complex" else "real"}"
+  let got : List Num := match s with
+    | .real v => v.toList.map .flt
+    | .complex v => v.toList.map fun z => .cpx z.re z.im
+  if unordered then t.numsSet m got want what else t.nums m got want what
+
 /-- Compare a matrix (rows) with a golden row list. -/
 def mat (t : Tally) (m : Mode) (got : List (List Num)) (want : Json) (what : Unit → String) : Tally :=
   if (jerr? want).isSome then t.skip else
