@@ -4,6 +4,7 @@ import Grassmann.Spec.Clifford
 import Grassmann.Spec.Exterior
 import Grassmann.Spec.Involution
 import Grassmann.Spec.Hodge
+import Grassmann.Spec.Vector
 
 /-!
 # Grassmann.Spec: a proved specification of the geometric algebra
@@ -27,7 +28,10 @@ data structures, with its laws proved in every dimension (docs/PROOFS.md):
   grade involution and Clifford conjugation;
 * `Grassmann.Spec.Hodge`: the right complement and the Hodge star
   (`⋆x = ~x I`), `e_a ∧ !e_a = I`, and the double complements
-  `!!x = (-1)^{k(n-k)} x`, `⋆⋆x = (-1)^{k(n-k)} det(g) x`.
+  `!!x = (-1)^{k(n-k)} x`, `⋆⋆x = (-1)^{k(n-k)} det(g) x`;
+* `Grassmann.Spec.Vector`: the Clifford relation `v² = q(v)` for vectors,
+  `uv = B(u,v) + u ∧ v` and `uv + vu = 2B(u,v)`, over every commutative ring
+  (characteristic 2 included).
 
 `Grassmann.Proofs` links this model to the kernels of the implementation.
 -/
