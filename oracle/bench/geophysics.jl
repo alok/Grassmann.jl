@@ -37,10 +37,7 @@ function suite_geophysics(ctx)
         end
     end
     xs = [0.5 + i * 1.0e-6 for i in 0:n-1]
-    bench!(i -> geo_loopf(geo_pow, blackbox(i, xs)), ctx, "jmath_pow"; ops = n, param = p)
-    bench!(i -> geo_loopf(exp, blackbox(i, xs)), ctx, "jmath_exp"; ops = n, param = p)
-    bench!(i -> geo_loopf(sin, blackbox(i, xs)), ctx, "jmath_sin"; ops = n, param = p)
-    bench!(i -> geo_loopf(atan, blackbox(i, xs)), ctx, "jmath_atan"; ops = n, param = p)
+    bench!(i -> geo_loopf(geo_pow, blackbox(i, xs)), ctx, "pow_neg5.25"; ops = n, param = p)
     ϕs = [i * 1.5e-5 for i in 0:n-1]
     bench!(i -> geo_loopf(geo_gravity, blackbox(i, ϕs)), ctx, "gravity"; ops = n, param = p)
 end

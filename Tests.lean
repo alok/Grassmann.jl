@@ -17,3 +17,10 @@ import Tests.Fatou
 import Tests.Grassmann
 import Tests.Golden
 import Tests.Geophysics
+import Tests.Proofs
+import Tests.Codegen
+import Tests.Dynamic
+import Tests.Golden.GrassmannEval
+import Tests.Composite
+import Tests.Forms
+import Tests.Cartan

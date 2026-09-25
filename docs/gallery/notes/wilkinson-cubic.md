@@ -1,0 +1,1 @@
+Wilkinson.jl does not load (PyPlot/Conda), so the Julia side runs its copied kernels (as `oracle/wilkinson/gen.jl`) and draws with CairoMakie; LaTeX labels are plain text. Upstream's positional `legend(leg)` mislabels the lines when the input form is drawn and spells "orignal"; both sides label each line directly.

@@ -1,0 +1,1 @@
+The README image is PyPlot `imshow(extent = bounds)` with a LaTeX title; here both sides draw the raster with cell edges at the bounds, the plain-text `String(K)` title, and the Makie colormap of the same name (Lean: `Fatou.Raster.toRGBA8` through a 256-entry table sampled from it). `bare=true`: no title, no colorbar.

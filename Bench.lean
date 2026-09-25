@@ -9,6 +9,7 @@ import Bench.Dendriform
 import Bench.Wilkinson
 import Bench.MeshTopology
 import Bench.Fatou
+import Bench.Grassmann
 import Bench.Geophysics
 
 /-!

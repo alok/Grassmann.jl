@@ -84,7 +84,10 @@ does.
    format `area: imperative summary`.
 9. **One home for Julia `Base`.** Scalar Julia semantics (`F64.max`/`min`,
    `isapprox`, `hypot`, `cbrt`, `Float64(::Rational)`, the exact IEEE toolkit
-   `IEEEFloat`, Julia's own `exp`/`log`/`expm1`/`log1p`/`^` kernels, `parse`,
+   `IEEEFloat`, Julia's own `exp`/`log`/`expm1`/`log1p`/`^` kernels and its
+   trigonometric and hyperbolic functions (`JuliaBase.Trig`, `JuliaBase.Hyperbolic`;
+   no library calls the platform `libm` where Julia has its own kernel), the one
+   literal macro `f64!`/`f32!`, `parse`,
    `round(digits/sigdigits)`, `sum(::Vector{Float64})`, `Float16`, the
    `Complex` type and its `ComplexF64` algorithms, `show`, ranges) live in
    `JuliaBase` and nowhere else. Other libraries import it; they add only their

@@ -1,0 +1,2 @@
+# the gallery images are committed (a global *.png ignore would hide them)
+!*.png

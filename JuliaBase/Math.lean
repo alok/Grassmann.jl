@@ -81,16 +81,16 @@ namespace Radix
   | two => f64! 256.0 | e => f64! 369.3299304675746 | ten => f64! 850.4135922911647
 /-- `LogBo256U(base, Float64)`: high part of `-log_b(2)/256`. -/
 @[inline] def lnU : Radix → Float
-  | two => -f64! 0.00390625 | e => -f64! 0.002707606173999011 | ten => -f64! 0.0011758984204561784
+  | two => f64! -0.00390625 | e => f64! -0.002707606173999011 | ten => f64! -0.0011758984204561784
 /-- `LogBo256L(base, Float64)`: low part of `-log_b(2)/256`. -/
 @[inline] def lnL : Radix → Float
-  | two => f64! 0.0 | e => -f64! 6.327543041662719e-14 | ten => -f64! 1.0624811566412999e-13
+  | two => f64! 0.0 | e => f64! -6.327543041662719e-14 | ten => f64! -1.0624811566412999e-13
 /-- `MAX_EXP(base, Float64)`. -/
 @[inline] def maxExp : Radix → Float
   | two => f64! 1024.0 | e => f64! 709.7827128933841 | ten => f64! 308.25471555991675
 /-- `MIN_EXP(base, Float64)`. -/
 @[inline] def minExp : Radix → Float
-  | two => -f64! 1075.0 | e => -f64! 745.1332191019412 | ten => -f64! 323.60724533877976
+  | two => f64! -1075.0 | e => f64! -745.1332191019412 | ten => f64! -323.60724533877976
 /-- `SUBNORM_EXP(base, Float64)` = `|log_b(floatmin)|`. -/
 @[inline] def subnormExp : Radix → Float
   | two => f64! 1022.0 | e => f64! 708.3964185322641 | ten => f64! 307.6526555685887
@@ -112,16 +112,16 @@ namespace Radix
   | two => f32! 1.0 | e => f32! 1.442695 | ten => f32! 3.321928
 /-- `LogBU(base, Float32)`: high part of `-log_b(2)`. -/
 @[inline] def lnU32 : Radix → Float32
-  | two => -f32! 1.0 | e => -f32! 0.69314575 | ten => -f32! 0.3010254
+  | two => f32! -1.0 | e => f32! -0.69314575 | ten => f32! -0.3010254
 /-- `LogBL(base, Float32)`: low part of `-log_b(2)`. -/
 @[inline] def lnL32 : Radix → Float32
-  | two => f32! 0.0 | e => -f32! 1.4286068e-6 | ten => -f32! 4.605039e-6
+  | two => f32! 0.0 | e => f32! -1.4286068e-6 | ten => f32! -4.605039e-6
 /-- `MAX_EXP(base, Float32)`. -/
 @[inline] def maxExp32 : Radix → Float32
   | two => f32! 128.0 | e => f32! 88.72284 | ten => f32! 38.53184
 /-- `MIN_EXP(base, Float32)`. -/
 @[inline] def minExp32 : Radix → Float32
-  | two => -f32! 150.0 | e => -f32! 103.97208 | ten => -f32! 45.1545
+  | two => f32! -150.0 | e => f32! -103.97208 | ten => f32! -45.1545
 /-- `SUBNORM_EXP(base, Float32)`. -/
 @[inline] def subnormExp32 : Radix → Float32
   | two => f32! 126.00001 | e => f32! 87.33655 | ten => f32! 37.92978
@@ -191,7 +191,7 @@ def magic : Float := f64! 6.755399441055744e15
 high bits of the value and 8 extra bits of the correction. -/
 @[inline] def tableUnpack (n : Int64) : Float × Float :=
   let j := (n.toUInt64 &&& 255).toNat
-  (jTableU[j]!, jTableL[j]!)
+  (jTableU.get! j, jTableL.get! j)
 
 /-- The argument reduction shared by the `exp_impl` methods: `N` (the low 32 bits of the
 rounded `x·256/log_b(2)`, signed) and `r = x - N·log_b(2)/256` in two steps. -/
@@ -213,7 +213,7 @@ rounded `x·256/log_b(2)`, signed) and `r = x - N·log_b(2)/256` in two steps. -
   let (jU, jL) := tableUnpack n
   let small := Float.fma jU (b.kernel r) jL + jU
   if !(x.abs ≤ b.subnormExp) then
-    if x.isNaN then x
+    if F64.isnan x then x
     else if x ≥ b.maxExp then F64.inf
     else if x ≤ b.minExp then f64! 0.0
     else if k ≤ -53 then
@@ -234,7 +234,7 @@ last step of `^(::Float64, ::Float64)`. -/
   let lo := (f64! 1.0 - hi) + kern
   let small := Float.fma jU hi (Float.fma jU (lo + xlo) verySmall)
   if !(x.abs ≤ b.subnormExp) then
-    if x.isNaN then x
+    if F64.isnan x then x
     else if x ≥ b.maxExp then F64.inf
     else if x ≤ b.minExp then f64! 0.0
     else if k ≤ -53 then
@@ -300,10 +300,10 @@ def expm1Small32 (x : Float32) : Float32 :=
 
 /-- Julia `expm1(x::Float64)` (exp.jl:432-455). -/
 def expm1 (x : Float) : Float :=
-  if -f64! 0.2876820724517809 ≤ x && x ≤ f64! 0.22314355131420976 then expm1Small x
-  else if x.isNaN then x
+  if f64! -0.2876820724517809 ≤ x && x ≤ f64! 0.22314355131420976 then expm1Small x
+  else if F64.isnan x then x
   else if x > f64! 709.7827128933845 then F64.inf
-  else if x < -f64! 37.42994775023705 then -f64! 1.0
+  else if x < f64! -37.42994775023705 then f64! -1.0
   else
     let (n, r) := expReduce x .e
     let k := n >>> 8
@@ -313,20 +313,20 @@ def expm1 (x : Float) : Float :=
     let twopnk := twoPow (-k)
     if k ≥ 106 then twoPow (k - 1) * (jU + Float.fma jU p jL) * f64! 2.0
     else if k ≥ 53 then twopk * (jU + Float.fma jU p (jL - twopnk))
-    else if k ≤ -2 then twopk * (jU + Float.fma jU p jL) - 1
+    else if k ≤ -2 then twopk * (jU + Float.fma jU p jL) - f64! 1.0
     else twopk * ((jU - twopnk) + Float.fma jU p jL)
 
 /-- Julia `expm1(x::Float32)` (exp.jl:457-472): the reduction in `Float64`. -/
 def expm1F32 (x : Float32) : Float32 :=
   if x > f32! 88.72284 then Float32.ofBits 0x7F800000
-  else if x < -f32! 17.32868 then -f32! 1.0
-  else if -f32! 0.2876821 ≤ x && x ≤ f32! 0.22314355 then expm1Small32 x
-  else if x.isNaN then x
+  else if x < f32! -17.32868 then f32! -1.0
+  else if f32! -0.2876821 ≤ x && x ≤ f32! 0.22314355 then expm1Small32 x
+  else if F32.isnan x then x
   else
     let x := x.toFloat
     let nf := F64.round (x * f64! 1.4426950408889634)
     let n := nf.toInt64
-    let r := Float.fma nf (-f64! 0.6931471805599453) x
+    let r := Float.fma nf (f64! -0.6931471805599453) x
     let hi := Float.fma r (Float.fma r (Float.fma r (Float.fma r (Float.fma r (Float.fma r
       f64! 0.0002004037059220124 f64! 0.0013966479175977883) f64! 0.008332997481506921) f64! 0.041666183019487026)
       f64! 0.16666667546642386) f64! 0.5) f64! 1.0
@@ -341,8 +341,8 @@ case, `jp = 128F - 127` indexing `t_log_Float64`. -/
 @[inline] def logProc1 (y mf bigF f : Float) (b : Radix) : Float :=
   -- `jp = trunc(128F) - 127`, 1-based into `t_log_Float64`
   let jp := ((f64! 128.0 * bigF).toUInt64 - 128).toNat
-  let lHi := mf * f64! 0.6931471805601177 + logTable64Hi[jp]!
-  let lLo := mf * (-f64! 1.7239444525614835e-13) + logTable64Lo[jp]!
+  let lHi := mf * f64! 0.6931471805601177 + logTable64Hi.get! jp
+  let lLo := mf * (f64! -1.7239444525614835e-13) + logTable64Lo.get! jp
   let u := (f64! 2.0 * f) / (y + bigF)
   let v := u * u
   let q := u * v * Float.fma v f64! 0.012500053168098584 f64! 0.08333333333303913
@@ -379,7 +379,7 @@ case, `jp = 128F - 127` indexing `t_log_Float64`. -/
 
 /-- Julia `log_proc1` for `Float32` (log.jl:216-236): the table sum in `Float64`, rounded once. -/
 @[inline] def logProc1F32 (y mf bigF f : Float32) (b : Radix) : Float32 :=
-  let l := mf.toFloat * f64! 0.6931471805599453 + logTable32F[((f32! 128.0 * bigF).toUInt32 - 128).toNat]!
+  let l := mf.toFloat * f64! 0.6931471805599453 + logTable32F.get! ((f32! 128.0 * bigF).toUInt32 - 128).toNat
   let u := (f32! 2.0 * f) / (y + bigF)
   let v := u * u
   let q := u * v * f32! 0.08333351
@@ -396,7 +396,7 @@ case, `jp = 128F - 127` indexing `t_log_Float64`. -/
 /-- Julia `_log(x::Float32, base, func)` (log.jl:299-332). -/
 @[inline] def logImpl32 (x : Float32) (b : Radix) : Float32 :=
   if x > f32! 0.0 then
-    if x.isInf then x
+    if F32.isinf x then x
     else if f32! 0.939413 < x && x < f32! 1.0644945 then logProc2F32 (x - f32! 1.0) b
     else
       let xu := x.toBits
@@ -415,10 +415,10 @@ case, `jp = 128F - 127` indexing `t_log_Float64`. -/
 
 /-- Julia `log1p(x::Float64)` (log.jl:335-366). -/
 def log1p (x : Float) : Float :=
-  if x > -f64! 1.0 then
+  if x > f64! -1.0 then
     if x == F64.inf then x
-    else if -f64! 1.1102230246251565e-16 < x && x < f64! 1.1102230246251565e-16 then x
-    else if -f64! 0.06058693718652422 < x && x < f64! 0.06449445891785943 then logProc2 x .e
+    else if f64! -1.1102230246251565e-16 < x && x < f64! 1.1102230246251565e-16 then x
+    else if f64! -0.06058693718652422 < x && x < f64! 0.06449445891785943 then logProc2 x .e
     else
       let z := f64! 1.0 + x
       let zu := z.toBits
@@ -428,15 +428,15 @@ def log1p (x : Float) : Float :=
       let y := Float.ofBits ((zu &&& 0x000FFFFFFFFFFFFF) ||| 0x3FF0000000000000)
       let bigF := (y + f64! 3.5184372088832e13) - f64! 3.5184372088832e13
       logProc1 y m.toFloat bigF ((y - bigF) + c * s) .e
-  else if x == -f64! 1.0 then -F64.inf
+  else if x == f64! -1.0 then -F64.inf
   else F64.nan
 
 /-- Julia `log1p(x::Float32)` (log.jl:368-398). -/
 def log1pF32 (x : Float32) : Float32 :=
-  if x > -f32! 1.0 then
-    if x.isInf then x
-    else if -f32! 5.9604645e-8 < x && x < f32! 5.9604645e-8 then x
-    else if -f32! 0.06058694 < x && x < f32! 0.06449446 then logProc2F32 x .e
+  if x > f32! -1.0 then
+    if F32.isinf x then x
+    else if f32! -5.9604645e-8 < x && x < f32! 5.9604645e-8 then x
+    else if f32! -0.06058694 < x && x < f32! 0.06449446 then logProc2F32 x .e
     else
       let z := f32! 1.0 + x
       let zu := z.toBits
@@ -446,7 +446,7 @@ def log1pF32 (x : Float32) : Float32 :=
       let y := Float32.ofBits ((zu &&& 0x007FFFFF) ||| 0x3F800000)
       let bigF := (y + f32! 65536.0) - f32! 65536.0
       logProc1F32 y m.toFloat32 bigF ((y - bigF) + s * c) .e
-  else if x == -f32! 1.0 then Float32.ofBits 0xFF800000
+  else if x == f32! -1.0 then Float32.ofBits 0xFF800000
   else Float32.ofBits 0x7FC00000
 
 /-- Julia `_log_ext(xu)` (log.jl:559-587, after ARM's `pow.c`): `log(x)` as an unevaluated
@@ -458,21 +458,21 @@ sum `hi + lo` with about 68 bits, for `^(::Float64, ::Float64)`. -/
   let k := (tmp >>> 52).toFloat
   let idx := ((tmp >>> 45).toUInt64 &&& 127).toNat
   let t := logTableT[idx]!
-  let logctail := logTableTailF[idx]!
+  let logctail := logTableTailF.get! idx
   let invc := Float.ofBits (((t &&& 0xff) ||| 0x1ff00) <<< 45)
   let logc := Float.ofBits (t &&& (~~~ (0xff : UInt64)))
-  let r := Float.fma z invc (-f64! 1.0)
+  let r := Float.fma z invc (f64! -1.0)
   let t1 := Float.fma k f64! 0.6931471805598903 logc
   let t2 := t1 + r
   let lo1 := Float.fma k f64! 5.497923018708371e-14 logctail
   let lo2 := t1 - t2 + r
-  let ar := -f64! 0.5 * r
+  let ar := f64! -0.5 * r
   let (ar2, lo3) := twoMul r ar
   let hi := t2 + ar2
   let lo4 := t2 - hi + ar2
   let p := Float.fma r (Float.fma r (Float.fma r (Float.fma r (Float.fma r f64! 0.25001038159188854
-      (-f64! 0.28572740711487526)) f64! 0.33333333317438696) (-f64! 0.3999999997661988)) f64! 0.5000000000000007)
-      (-f64! 0.6666666666666679)
+      (f64! -0.28572740711487526)) f64! 0.33333333317438696) (f64! -0.3999999997661988)) f64! 0.5000000000000007)
+      (f64! -0.6666666666666679)
   let lo := lo1 + lo2 + lo3 + Float.fma (r * ar2) p lo4
   (hi, lo)
 
@@ -498,7 +498,7 @@ def powLoop (x xnlo y ynlo : Float) (n : Nat) : Nat → Float
       powLoop x' (xnlo' + err) y ynlo (n / 2) fuel
     else
       let err := Float.fma y xnlo (x * ynlo)
-      if x.isFinite && err.isFinite then x * y + err else x * y
+      if F64.isfinite x && F64.isfinite err then x * y + err else x * y
 
 /-- Julia `pow_body(x::Float64, n::Integer)` (pow.jl:120-146): compensated power by squaring,
 the `x^n` of Julia for `-2^12 ≤ n ≤ 3·2^13` (more accurate than repeated multiplication). -/
@@ -508,9 +508,9 @@ def powBody (x : Float) (n : Int) : Float :=
     let rx := f64! 1.0 / x
     if n == -2 then rx * rx
     else
-      let xnlo := if x.isFinite then -(Float.fma x rx (-f64! 1.0)) * rx else -f64! 0.0
+      let xnlo := if F64.isfinite x then -(Float.fma x rx (f64! -1.0)) * rx else f64! -0.0
       powLoop rx xnlo f64! 1.0 f64! 0.0 n.natAbs (n.natAbs + 1)
-  else powLoop x (-f64! 0.0) f64! 1.0 f64! 0.0 n.toNat (n.toNat + 1)
+  else powLoop x (f64! -0.0) f64! 1.0 f64! 0.0 n.toNat (n.toNat + 1)
 
 /-- Julia `pow_body(x::Float64, y::Float64)` for positive `x` (pow.jl:91-104):
 `exp(y·log(x))` through the 68-bit `_log_ext` and the two-part `exp_impl`. -/
@@ -584,11 +584,11 @@ def powInt (x : Float) (n : Int) : Float :=
     let ax := x.abs
     let y := Float.ofInt n
     if Float.ofInt (F64.toIntTrunc y) == y && F64.toIntTrunc y == n then
-      copysign (powBodyFloat ax y) (if neg then -f64! 1.0 else f64! 1.0)
+      copysign (powBodyFloat ax y) (if neg then f64! -1.0 else f64! 1.0)
     else
       -- `n` is not a `Float64`: split off `n % 1024` (Julia's `rem`, sign of `n`)
       let n2 := n.tmod 1024
-      powBodyFloat ax (Float.ofInt (n - n2)) * copysign (Math.powBody ax n2) (if neg then -f64! 1.0 else f64! 1.0)
+      powBodyFloat ax (Float.ofInt (n - n2)) * copysign (Math.powBody ax n2) (if neg then f64! -1.0 else f64! 1.0)
 
 /-- Julia `^(x::Float64, y::Float64)` (pow.jl:7-30). A negative base with a non-integer
 exponent (Julia `DomainError`) gives `NaN`. -/
@@ -596,9 +596,9 @@ def pow (x y : Float) : Float :=
   if x.toBits == (f64! 1.0 : Float).toBits then f64! 1.0
   else
     let y := if !(y.abs < f64! 6.917529027641082e18) then
-        (if y.isNaN then y else if y > 0 then f64! 6.917529027641082e18 else -f64! 6.917529027641082e18)
+        (if F64.isnan y then y else if y > 0 then f64! 6.917529027641082e18 else f64! -6.917529027641082e18)
       else y
-    if y.isNaN then y
+    if F64.isnan y then y
     else
       let yint64 := y.toInt64
       let yisint := y == yint64.toFloat
@@ -608,11 +608,11 @@ def pow (x y : Float) : Float :=
       else if x == f64! 0.0 then (if y > 0 then f64! 0.0 else inf)
       else if x < 0 && !yisint then nan
       else
-        let s : Float := if x < 0 && yint % 2 != 0 then -f64! 1.0 else f64! 1.0
-        if !x.isFinite then
+        let s : Float := if x < 0 && yint % 2 != 0 then f64! -1.0 else f64! 1.0
+        if !F64.isfinite x then
           -- `copysign(x, s) * (y > 0 || isnan(x))`, with Julia's `Float * false = ±0.0`
           let c := copysign x s
-          if y > 0 || x.isNaN then c else copysign f64! 0.0 c
+          if y > 0 || F64.isnan x then c else copysign f64! 0.0 c
         else copysign (powBodyFloat x.abs y) s
 
 /-- Julia `Base.power_by_squaring(x::Float64, p)` for `p ≥ 0` (intfuncs.jl:394). -/
@@ -685,8 +685,8 @@ def pow (x y : Float32) : Float32 :=
   if x == f32! 1.0 then f32! 1.0
   else
     let maxExp : Float32 := f32! 1744830464.0  -- `0x1.Ap30`
-    let y := if !(y.abs < maxExp) then (if y.isNaN then y else if y > 0 then maxExp else -maxExp) else y
-    if y.isNaN then y
+    let y := if !(y.abs < maxExp) then (if F32.isnan y then y else if y > 0 then maxExp else -maxExp) else y
+    if F32.isnan y then y
     else
       let yint64 := y.toFloat.toInt64
       let yisint := y.toFloat == yint64.toFloat
@@ -697,7 +697,7 @@ def pow (x y : Float32) : Float32 :=
       else
         let neg := x < 0 && yint % 2 != 0
         let c := if neg then -x.abs else x.abs  -- `copysign(x, s)`
-        if !x.isFinite then (if y > 0 || x.isNaN then c else copysign f32! 0.0 c)
+        if !F32.isfinite x then (if y > 0 || F32.isnan x then c else copysign f32! 0.0 c)
         else
           let r := powBodyFloat x.abs y.toFloat
           if neg then -r else r

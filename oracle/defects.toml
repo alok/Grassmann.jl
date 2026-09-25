@@ -231,7 +231,7 @@ policy = "ref"
 id = "conformal-antimetric"
 title = "antimetric (cometric) on conformal / non-diagonal spaces calls the undefined `antimetric_term` or has no container method"
 source = "DirectSum.jl src/operations.jl:372; Grassmann.jl src/products.jl:1630-1815"
-notes = "grassmann-products.md App. A #20; grassmann-algebra.md §4.16 #24; directsum.md Q17; grassmann-parity.md §8.6 #5"
+notes = "grassmann-products.md App. A #20; grassmann-algebra.md §4.16 #24; directsum.md Q17; grassmann-parity.md §8.6 #5; Tests/DirectSum class D5 (antimetric_term undefined)"
 correct = "Gram-complement outermorphism"
 policy = "skip"
   [[defect.match]]
@@ -275,7 +275,7 @@ policy = "skip"
 id = "tangent-container-complement"
 title = "Chain/Multivector complements in tangent spaces throw UndefVarError `args`"
 source = "Grassmann.jl src/products.jl:1340"
-notes = "grassmann-parity.md §8.6 #6"
+notes = "grassmann-parity.md §8.6 #6; Tests/DirectSum class D6 (tangent Chain complement/reverse in the blade dumps: crc, clc, hrc, hlc, revc, arevc throw or return the wrong grade)"
 correct = "complement of the Multivector form"
 policy = "skip"
   [[defect.match]]
@@ -306,6 +306,19 @@ correct = "imaginary(z) if grade(B) == 3, else Zero"
 policy = "ref"
   [[defect.match]]
   msg = "*imaginarya*"
+
+[[defect]]
+id = "grade-couple-coefficient"
+title = "grade(z::Couple, grade(B)) returns the bare coefficient imagvalue(z) (a Number) instead of im·B; grade(z::PseudoCouple, grade(B)) and grade(z, mdims(V)) likewise return realvalue(z) / imagvalue(z) instead of re·B / im·I"
+source = "Grassmann.jl src/multivectors.jl:670, :697"
+notes = "found by the element-oracle consumer evaluating the unary goldens against DirectSum's reference (Tests/Golden/Pending.lean); the generator compares only dense outputs with its reference, and a Number has none"
+correct = "imaginary(z) for a Couple; Single(realvalue(z), B) and imagvalue(z)·I for a PseudoCouple (the grade projection of the Multivector path)"
+policy = "skip"
+  [[defect.match]]
+  suite = "unary"
+  op = "grade:1|grade:2|grade:3|grade:4|grade:5|grade:6|grade:7|grade:8"
+  kinds = ["Couple|PseudoCouple"]
+  out = "Number"
 
 [[defect]]
 id = "multivector-of-zero"
@@ -510,7 +523,7 @@ policy = "skip"
 id = "c4neg-conformal-signature"
 title = "conformal spaces ignore signature bits beyond ∞/∅ in products (S\"∞∅+-\": v₂*v₂ = 1v)"
 source = "Grassmann.jl src/parity.jl:166-314 (metricdyad hard-codes +1)"
-notes = "grassmann-parity.md §0, §8.6 #1"
+notes = "grassmann-parity.md §0, §8.6 #1; Tests/DirectSum class D1 (blades and derived suites, counted only when the bug-compatible DirectSum.Compat port reproduces Julia's value)"
 correct = "the true Clifford product of the Gram form"
 policy = "skip"
   [[defect.match]]
@@ -521,7 +534,7 @@ policy = "skip"
 id = "metrictensor-dropped-terms"
 title = "general MetricTensor geometric product drops middle-grade terms"
 source = "Grassmann.jl src/parity.jl:165-313"
-notes = "grassmann-parity.md §0, §8.6 #2"
+notes = "grassmann-parity.md §0, §8.6 #2; Tests/DirectSum class D2 (MetricTensor middle grades, confirmed through DirectSum.Compat)"
 correct = "Chevalley recursion on the Gram matrix"
 policy = "skip"
   [[defect.match]]
@@ -532,7 +545,7 @@ policy = "skip"
 id = "cache-key-collision"
 title = "regressive/interior caches are keyed by (n, S, options) only, so tangent spaces reuse entries of plain spaces evaluated earlier in the same process"
 source = "Grassmann.jl src/parity.jl:323-439"
-notes = "grassmann-parity.md §4.13, §8.6 #4; this is why generate_all.jl runs every shard in a fresh process"
+notes = "grassmann-parity.md §4.13, §8.6 #4; Tests/DirectSum class D4 (dump_all tangent records checked against the fresh-process dump_small); this is why generate_all.jl runs every shard in a fresh process"
 correct = "no global caches; use the fresh-process values (golden/blades/dump_small.jsonl)"
 policy = "skip"
   [[defect.match]]
@@ -622,7 +635,7 @@ policy = "skip"
 id = "name-parser-square-sign"
 title = "basis-name parser flips the sign for repeated indices with positive square (Λ(S\"+++\").v11 = -1v) and mishandles ∞∞/∅∅"
 source = "Leibniz.jl src/indices.jl:230-247; DirectSum.jl src/basis.jl:134-139"
-notes = "grassmann-types.md §4.11, §4.12 #20; directsum.md Q16"
+notes = "grassmann-types.md §4.11, §4.12 #20; directsum.md Q16 (the sign part; the parse errors are `dyadic-name-lookup-errors`); Tests/DirectSum class Q16 (repeated-index sign through Λ(V))"
 correct = "metric sign from the geometric product"
 policy = "skip"
 
@@ -672,6 +685,80 @@ title = "DirectSum space-layer quirks Q1-Q26 (string grammar, cache index Diagon
 source = "DirectSum.jl src/*"
 notes = "directsum.md §8.3"
 correct = "see the quirk catalog"
+policy = "skip"
+
+# ---------------------------------------------------------------------------------------------
+# DirectSum / Leibniz space layer (Tests/DirectSum/golden/spaces.json; Tests/DirectSum classifies
+# these in code under the labels below; no element-oracle golden exercises them)
+# ---------------------------------------------------------------------------------------------
+
+[[defect]]
+id = "leibniz-cumsum-cache-seeding"
+title = "binomcumsum/spincumsum/anticumsum caches are seeded with placeholders for n = 0, 1 (antiindex(1, 0b1) = 2, antisum(1,1) = 1, binomsum(1,2) out of bounds)"
+source = "Leibniz.jl src/utilities.jl:145"
+notes = "leibniz.md §4.2 and quirk Q2; Tests/DirectSum class `Leibniz Q2 cumsum/antiindex cache seeding (n < 2)`"
+correct = "the cumulative sums computed by their formulas for every n"
+policy = "skip"
+
+[[defect]]
+id = "getalgebra-cache-name"
+title = "getalgebra caches Λ(V) without the naming scheme (Name), so a space with name scheme 2 can return the cached scheme-1 basis of the same space"
+source = "DirectSum.jl src/basis.jl:226-268"
+notes = "directsum.md §8.3 Q5 (options ≥ 12 also segfault there); Tests/DirectSum class `DirectSum Q5 getalgebra cache ignores the naming scheme`"
+correct = "no caches: the basis of V is a function of all of V's fields"
+policy = "skip"
+
+[[defect]]
+id = "dyadic-name-lookup-errors"
+title = "basis-name lookup throws on valid dyadic names: only canonical v…w… order parses (w2v1 BoundsError), w/W unusable in v-names, w-names on non-dual spaces MethodError"
+source = "DirectSum.jl src/basis.jl:134-139; Leibniz.jl src/indices.jl:230-247"
+notes = "directsum.md §5 and §8.3 Q16 (the error part; the repeated-index sign is `name-parser-square-sign`); Tests/DirectSum class `DirectSum Q16 name lookup (Julia throws on out-of-order dyadic names)`"
+correct = "parse into (prefix, index) blocks and multiply the generators left to right"
+policy = "skip"
+
+[[defect]]
+id = "dyadic-tangent-subspace-display"
+title = "display of a dyadic-tangent subspace containing an ϵ slot (T(ℝ²)⊕T(ℝ²)') raises KeyError/BoundsError or prints `∞²`"
+source = "DirectSum.jl src/DirectSum.jl:325-350 (show(::Submanifold) of a dyadic tangent bundle)"
+notes = "directsum.md §5.4 and §8.3 Q19 (the exception to replicating Q19's display quirks); Tests/DirectSum class `DirectSum Q19 dyadic-tangent subspace display (Julia BoundsError)`"
+correct = "the handle notation of the other tangent subspaces"
+policy = "skip"
+
+# ---------------------------------------------------------------------------------------------
+# Geophysics (oracle/golden/geophysics records these as Julia errors; Tests/Geophysics skips them
+# and Geophysics/Gas.lean implements the evident intent)
+# ---------------------------------------------------------------------------------------------
+
+[[defect]]
+id = "sutherlandgas-heatvolume-recursion"
+title = "heatvolume(T, ::SutherlandGas, U) calls heatvolume(G), which recurses back into it: StackOverflowError for every heat function of a SutherlandGas (air)"
+source = "Geophysics.jl src/chemistry.jl:235-236 (v0.3.8, 381a792)"
+notes = "applied-misc.md §5; oracle/geophysics/gen.jl records the StackOverflowError once (OVERFLOW)"
+correct = "the constant cᵥ converted to U: specificentropy(cᵥ, U, Metric)"
+policy = "skip"
+
+[[defect]]
+id = "pentatomicgas-no-heatvolume"
+title = "PentatomicGas (Methane) has no heatvolume method: heatvolume and everything derived from it throw MethodError"
+source = "Geophysics.jl src/chemistry.jl:170, :229-245 (v0.3.8, 381a792)"
+notes = "applied-misc.md §5; Geophysics/Gas.lean"
+correct = "NaN heat capacities (the family carries no vibrational data)"
+policy = "skip"
+
+[[defect]]
+id = "gastext-unitsystems-G"
+title = "the fallback gastext(::MoleGas) reads the global G, which is UnitSystems' gravitational constant, so show(::PentatomicGas) throws MethodError: no method matching molarmass(::FieldConstants.Constant{6.674302101972536e-11})"
+source = "Geophysics.jl src/chemistry.jl:92 (v0.3.8, 381a792)"
+notes = "applied-misc.md §5 (which says UndefVarError: `G` resolves to UnitSystems.G through `using UnitSystems`); Geophysics/Show.lean"
+correct = "MoleGas{M=<molarmass>, … of the gas itself"
+policy = "skip"
+
+[[defect]]
+id = "fluidstate-intensity-impedance"
+title = "intensity(::FluidState) divides by impedance(F, U), which has no FluidState method (MethodError); specificimpedance was meant"
+source = "Geophysics.jl src/chemistry.jl:440-444 (v0.3.8, 381a792)"
+notes = "applied-misc.md §5; Geophysics/Gas.lean"
+correct = "pressure(F, U)^2/specificimpedance(F, U), the documented P²/(ρ·a)"
 policy = "skip"
 
 # ---------------------------------------------------------------------------------------------
