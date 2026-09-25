@@ -20,7 +20,9 @@ Every function transcribes one README expression, in Julia's evaluation order:
 
 `vectorfield(t, V, W) = p -> V(vector(↓(↑((V∪Manifold(t))(Chain{W,1}(p))) ⊘ t)))`
 (`ext/GeometryBasicsExt.jl:30`): the point, read in the generators `W`, is lifted, sandwiched
-(`x ⊘ t = (~t)⟑x⟑involute(t)`), projected down and read in the generators `V`.
+(`x ⊘ t = (~t)⟑x⟑involute(t)`), projected down and read in the generators `V`. All of it is
+the library's: `Chain.expEven`/`Half.exp`, `Chain.up`/`Chain.down` (`↑`/`↓`, the null points
+chosen from the space) and `Grassmann.Fields.chainfieldFull`/`vectorfield`.
 -/
 
 namespace Gallery.Fields
@@ -41,20 +43,19 @@ def c007 : Float := 0.07
 /-- `exp(θ v12)` as a multivector (Julia's `exp` of a bivector term: `cos θ + sin θ v12`
 or `cosh θ + sinh θ v12`, `src/composite.jl:136-160`). -/
 def expPlane (V : TensorBundle) [Kernels V] (b12 : Submanifold V 2) (θ : Float) : Multivector V Float :=
-  toMultivector (expEven (ofBivector (Chain.ofBlade b12 θ)))
+  toMultivector (Chain.expEven (Chain.ofBlade b12 θ))
 
 /-- `v1 * R` for a plane versor `R`. -/
 def timesV1 (V : TensorBundle) [Kernels V] (b1 : Submanifold V 1) (R : Multivector V Float) :
     Multivector V Float :=
   toMultivector (Chain.ofBlade b1 (1 : Float)) * R
 
-/-- `vector(p ⊘ t)` for a planar point `p = x v1 + y v2` (in a plane `↑`, `↓` are the
-identity): `x ⊘ t = (~t)⟑x⟑involute(t)`. -/
+/-- `vectorfield(t)` at a planar point `p = x v1 + y v2` (Julia `chainfield(t)`; in a plane
+`↑`, `↓` are the identity): `vector(p ⊘ t)`, `x ⊘ t = (~t)⟑x⟑involute(t)`. -/
 @[inline] def planeField {V : TensorBundle} [Kernels V] (t : Multivector V Float) (x y : Float) :
     Float × Float :=
   let p : Chain V 1 Float := ⟨Values.ofFn fun i => if i.1 = 0 then x else y⟩
-  let w : Multivector V Float := (~t) * toMultivector p * involute t
-  let v := (gradePart w 1).v
+  let v := (Grassmann.Fields.chainfieldFull t p).v
   (getD v 0, getD v 1)
 
 /-- The field of the README figure `plane-k` (`k = 1 … 6`): `vectorfield(t)` for
@@ -89,8 +90,8 @@ def inf3Torus : Chain Inf3.V 2 Float := Chain.ofBlade v12 threeSevenths + Chain.
 
 /-- The README torus curve `↓(exp(π*t*((3/7)*v12+v∞3))>>>↑(v1+v2+v3))` (`S"∞+++"`). -/
 def torus (t : Float) : Chain Inf3.V 1 Float :=
-  let R := expEven (ofBivector ((pi * t) * inf3Torus))
-  downRiemann inf3Inf (R >>> upRiemann inf3Inf inf3P)
+  let R := Chain.expEven ((pi * t) * inf3Torus)
+  Chain.down (R >>> Chain.up inf3P)
 
 open Gallery.Inf3 in
 /-- `sin(3t)*3v1+cos(2t)*7v2-sin(5t)*4v3`. -/
@@ -104,14 +105,14 @@ def infTimes (c : Float) (w : Chain Inf3.V 1 Float) : Spinor Inf3.V Float :=
 
 /-- The README `orbit-2` curve `↓(exp(t*v∞*(…)/2)>>>↑(v1+v2-v3))`. -/
 def orbit2 (t : Float) : Chain Inf3.V 1 Float :=
-  let R := expEven (infTimes t (wobble t) / (2 : Float))
-  downRiemann inf3Inf (R >>> upRiemann inf3Inf inf3Q)
+  let R := Half.exp (infTimes t (wobble t) / (2 : Float))
+  Chain.down (R >>> Chain.up inf3Q)
 
 /-- The README `orbit-4` curve `↓(exp(t*(v12+0.07v∞*(…)/2))>>>↑(v1+v2-v3))`. -/
 def orbit4 (t : Float) : Chain Inf3.V 1 Float :=
   let B : Spinor Inf3.V Float := ofBivector (Chain.ofBlade Inf3.v12 1) + infTimes c007 (wobble t) / (2 : Float)
-  let R := expEven (t * B)
-  downRiemann inf3Inf (R >>> upRiemann inf3Inf inf3Q)
+  let R := Half.exp (t * B)
+  Chain.down (R >>> Chain.up inf3Q)
 
 open Gallery.CGA3 in
 /-- `v1+v2+v3` in `S"∞∅+++"`. -/
@@ -129,19 +130,19 @@ def cga3Orig : Chain CGA3.V 1 Float := Chain.ofBlade CGA3.vo 1
 
 /-- The README helix: the torus expression evaluated in conformal space `S"∞∅+++"`. -/
 def helix (t : Float) : Chain CGA3.V 1 Float :=
-  let R := expEven (ofBivector ((pi * t) * cga3Torus))
-  downConformal cga3Inf cga3Orig (R >>> upConformal cga3Inf cga3Orig cga3P)
+  let R := Chain.expEven ((pi * t) * cga3Torus)
+  Chain.down (R >>> Chain.up cga3P)
 
 end Curves
 
 /-- Julia's `-2π:0.0001:2π`, the default sample range of `points` (125 664 values). -/
-def pointsRange : FloatArray := (JuliaBase.colon (-2 * pi) 0.0001 (2 * pi)).toFloatArray
+def pointsRange : FloatArray := Grassmann.Fields.pointsRange
 
 /-! ## The 3D versor fields `orb`, `wave` -/
 
 /-- `exp((π/4)*(v12+v∞3))` in `S"∞+++"`. -/
 def orbVersor : Spinor Inf3.V Float :=
-  expEven (ofBivector ((pi / 4) * (Chain.ofBlade Inf3.v12 (1 : Float) + Chain.ofBlade Inf3.vinf3 1)))
+  Chain.expEven ((pi / 4) * (Chain.ofBlade Inf3.v12 (1 : Float) + Chain.ofBlade Inf3.vinf3 1))
 
 /-- `vectorfield(t, V(2,3,4), W)` at `p`: the point read in generators `W` (0-based chain
 indices `w₁ w₂ w₃`) of `S"∞+++"`, lifted, sandwiched by `t`, projected down, read in
@@ -150,7 +151,7 @@ indices `w₁ w₂ w₃`) of `S"∞+++"`, lifted, sandwiched by `t`, projected d
     Float × Float × Float :=
   let p : Chain Inf3.V 1 Float := ⟨Values.ofFn fun i =>
     if i.1 = w₁ then x else if i.1 = w₂ then y else if i.1 = w₃ then z else 0⟩
-  let q := downRiemann inf3Inf (upRiemann inf3Inf p ⊘ t)
+  let q := Grassmann.Fields.chainfieldFull t p
   (getD q.v 1, getD q.v 2, getD q.v 3)
 
 end Gallery.Fields
