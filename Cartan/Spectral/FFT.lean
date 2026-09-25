@@ -159,39 +159,72 @@ def bitrev (i bits : Nat) : Nat := Id.run do
     x := x / 2
   return r
 
-/-- Iterative radix-2 FFT of a power-of-two length, `sign = -1` forward, `+1` backward. -/
-def fftPow2 (z0 : CVec) (sign : Float) : CVec := Id.run do
+/-- The bit-reversed successor of `j` (reversed binary increment from the top bit `m`), fuelled
+by the number of bits. -/
+def revInc (j m : USize) : Nat → USize
+  | 0 => j ||| m
+  | k + 1 => if j &&& m != 0 then revInc (j ^^^ m) (m >>> 1) k else j ||| m
+
+/-- Swap complex entries `i` and `j` (in place when unshared). -/
+@[inline] def swapC (z : CVec) (i j : USize) : CVec :=
+  let ar := Flat.getU z (2 * i); let ai := Flat.getU z (2 * i + 1)
+  let br := Flat.getU z (2 * j); let bi := Flat.getU z (2 * j + 1)
+  Flat.putU (Flat.putU (Flat.putU (Flat.putU z (2 * i) br) (2 * i + 1) bi) (2 * j) ar) (2 * j + 1) ai
+
+/-- The bit-reversal permutation of entries `i, …` (`j` the reversal of `i`, `half = n/2`). -/
+def bitrevLoop (half : USize) (bits : Nat) : (k : Nat) → (i j : USize) → CVec → CVec
+  | 0, _, _, z => z
+  | k + 1, i, j, z =>
+    let z := if i < j then swapC z i j else z
+    bitrevLoop half bits k (i + 1) (revInc j half bits) z
+
+/-- The butterflies `a = s + k`, `b = a + half` of one stage for the blocks `s, s + len, …`, with
+the twiddle `w = (wr, wi)` of offset `k`. -/
+def blockLoop (half len : USize) (a0 : USize) (wr wi : Float) : (cnt : Nat) → USize → CVec → CVec
+  | 0, _, z => z
+  | cnt + 1, s, z =>
+    let a := s + a0
+    let b := a + half
+    let br := Flat.getU z (2 * b); let bi := Flat.getU z (2 * b + 1)
+    let tr := br * wr - bi * wi
+    let ti := br * wi + bi * wr
+    let ar := Flat.getU z (2 * a); let ai := Flat.getU z (2 * a + 1)
+    let z := Flat.putU (Flat.putU (Flat.putU (Flat.putU z (2 * a) (ar + tr)) (2 * a + 1) (ai + ti))
+      (2 * b) (ar - tr)) (2 * b + 1) (ai - ti)
+    blockLoop half len a0 wr wi cnt (s + len) z
+
+/-- One stage: for every twiddle offset `k < half`, its butterflies in all blocks
+(`wi = sgn · (−sin)` read from the table of `(cos, −sin)`). -/
+def stageLoop (tw : CVec) (sgn : Float) (half len step : USize) (blocks : Nat) :
+    (k : Nat) → USize → CVec → CVec
+  | 0, _, z => z
+  | k + 1, a0, z =>
+    let t := a0 * step
+    let wr := Flat.getU tw (2 * t)
+    let wi := sgn * Flat.getU tw (2 * t + 1)
+    stageLoop tw sgn half len step blocks k (a0 + 1) (blockLoop half len a0 wr wi blocks 0 z)
+
+/-- The stages `half = h, 2h, …` up to `n`. -/
+def stagesLoop (tw : CVec) (sgn : Float) (n : Nat) : (fuel : Nat) → (half : Nat) → CVec → CVec
+  | 0, _, z => z
+  | fuel + 1, half, z =>
+    if half < n then
+      let len := 2 * half
+      let z := stageLoop tw sgn half.toUSize len.toUSize (n / len).toUSize (n / len) half 0 z
+      stagesLoop tw sgn n fuel len z
+    else z
+
+/-- Iterative radix-2 FFT of a power-of-two length, `sign = -1` forward, `+1` backward: the
+bit-reversal permutation, then `log₂ n` stages of butterflies `(a, b) ↦ (a + wb, a − wb)` with
+`w = cos − i·sign·sin` from the cached table (tail-recursive `USize` loops). -/
+def fftPow2 (z0 : CVec) (sign : Float) : CVec :=
   let n := z0.len
-  if n ≤ 1 then return z0
+  if n ≤ 1 then z0 else
   let bits := Nat.log2 n
   let tw := twiddles n
-  let mut z := z0
-  for i in [0:n] do
-    let j := bitrev i bits
-    if i < j then
-      let ar := z.get! (2 * i); let ai := z.get! (2 * i + 1)
-      let br := z.get! (2 * j); let bi := z.get! (2 * j + 1)
-      z := (((z.set! (2 * i) br).set! (2 * i + 1) bi).set! (2 * j) ar).set! (2 * j + 1) ai
-  let mut half := 1
-  while half < n do
-    let len := 2 * half
-    let step := n / len
-    let mut s := 0
-    while s < n do
-      for k in [0:half] do
-        let wr := tw.get! (2 * (k * step))
-        let wi := sign * -(tw.get! (2 * (k * step) + 1))
-        -- tw holds (cos, −sin); w = cos + i·sign·sin
-        let a := s + k
-        let b := a + half
-        let br := z.get! (2 * b); let bi := z.get! (2 * b + 1)
-        let tr := br * wr - bi * wi
-        let ti := br * wi + bi * wr
-        let ar := z.get! (2 * a); let ai := z.get! (2 * a + 1)
-        z := (((z.set! (2 * a) (ar + tr)).set! (2 * a + 1) (ai + ti)).set! (2 * b) (ar - tr)).set! (2 * b + 1) (ai - ti)
-      s := s + len
-    half := len
-  return z
+  let z := bitrevLoop (n / 2).toUSize bits n 0 0 z0
+  -- `w = cos + i·sign·sin`, the table holds `(cos, −sin)`: `wi = sign · −(−sin)`
+  stagesLoop tw (sign * -1) n (bits + 1) 1 z
 
 mutual
 
