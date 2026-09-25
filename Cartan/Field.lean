@@ -388,6 +388,27 @@ def ofSpace {N : Nat} (ps : ProductSpace N) : TensorField (GridBundle.ofSpace ps
   let n01 := n0 * c1.size
   ofFn b fun k => f (c0.get! (k % n0)) (c1.get! (k / n0 % c1.size)) (c2.get! (k / n01))
 
+/-- Julia `TensorField(fiber(t))` for an `N`-D field `t` (C2, `Cartan.jl:109-111, 159`): the grid
+whose points are the fibers of `t` (a curvilinear grid, e.g. the points of a surface), with the
+shape of `t`'s base and the open topology. -/
+def PointGrid.ofField {N : Nat} {P G : Type} {b : GridBundle N P G} {Q : Type} [FlatFiber Q]
+    (t : TensorField b Q) : PointGrid N Q :=
+  .ofFlat b.size t.data
+
+/-- Julia `TensorField(fiber(t))`: the identity field of `PointGrid.ofField t` (its fibers are its
+points). -/
+def ofFibers {N : Nat} {P G : Type} {b : GridBundle N P G} {Q : Type} [FlatFiber Q]
+    (t : TensorField b Q) : TensorField (PointGrid.ofField t) Q :=
+  if h : t.data.size = FlatFiber.width Q * card (PointGrid.ofField t) then ⟨t.data, h, none⟩
+  else ofFn _ fun i => (PointGrid.ofField t).get i
+
+/-- Julia `TensorField(a, b)` for an `N`-D field `a` (C6, `Cartan.jl:115`): the fibers of `b` over
+the grid whose points are the fibers of `a`. -/
+def reparametrizeN {N : Nat} {P G : Type} {b : GridBundle N P G} {Q : Type} [FlatFiber Q]
+    (a : TensorField b Q) (c : TensorField b F) : TensorField (PointGrid.ofField a) F :=
+  if h : c.data.size = FlatFiber.width F * card (PointGrid.ofField a) then ⟨c.data, h, none⟩
+  else ofFn _ fun i => c.get i
+
 /-- Julia `TensorField(f, r)` (C14, `Cartan.jl:160`): the curve `f` sampled on `r` (Julia's
 default `r = -2π:0.0001:2π`). Julia applies `vector` to each value; here `f` returns the fiber. -/
 @[inline] def curve (f : Float → F) (r : Axis := Axis.colon (-twoPiF) (f64! 0.0001) twoPiF) :

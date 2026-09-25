@@ -24,6 +24,7 @@ instance {N : Nat} {P G : Type} : BaseShape (GridBundle N P G) := ⟨fun b => b.
 instance {n : Nat} {P G : Type} : BaseShape (SimplexBundle n P G) := ⟨fun b => [b.top.nodes]⟩
 instance {n : Nat} {P G : Type} : BaseShape (FaceBundle n P G) := ⟨fun b => [b.top.elements]⟩
 instance {n : Nat} {P G : Type} : BaseShape (DiscontinuousBundle n P G) := ⟨fun b => [b.top.nodes]⟩
+instance {N : Nat} {P G : Type} : BaseShape (PointGrid N P G) := ⟨fun b => b.size.toList⟩
 instance {P G : Type} [FlatFiber P] : BaseShape (PointCloud P G) := ⟨fun b => [b.size]⟩
 instance {M : Type} [FrameBundle M] : BaseShape (FiberProductBundle M) :=
   ⟨fun b => [card b.space, b.axis.length]⟩

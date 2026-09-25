@@ -340,6 +340,51 @@ instance [BEq G] : BEq (GridBundle N P G) :=
 
 end GridBundle
 
+/-! ## Grids of explicit points -/
+
+/-- Julia `GridBundle(PointArray(0, P))` of an explicit `N`-dimensional array of points `P`
+(`Cartan.jl:109-111`, C2): a curvilinear grid, such as the points of a surface, not a product of
+coordinate axes. The points are stored flat and column-major (`width P` floats each), with the
+quotient topology of their shape. -/
+structure PointGrid (N : Nat) (P : Type) (G : Type := Induced) where
+  /-- Julia `size(P)`. -/
+  size : Vector Nat N
+  /-- The points, flat (Julia `points(m)`). -/
+  points : FloatArray
+  /-- Julia `immersion(m)`. -/
+  top : QuotientTopology N
+  /-- Julia `metricextensor(m)`. -/
+  metric : MetricStore G
+  /-- The topology has the grid's shape. -/
+  size_top : top.size = size
+
+namespace PointGrid
+
+variable {N : Nat} {P G : Type}
+
+instance : FrameBundle (PointGrid N P G) := ⟨fun m => MeshTopology.gridLength m.size⟩
+
+/-- Point `i` (0-based, column-major). -/
+@[inline] def get [FlatFiber P] (m : PointGrid N P G) (i : Nat) : P :=
+  FlatFiber.read m.points (i * FlatFiber.width P)
+
+instance [FlatFiber P] [Inhabited G] : Coordinates (PointGrid N P G) P G where
+  point := get
+  metricAt m i := m.metric.get i
+
+/-- The open grid of the flat points `pts` of shape `s` (Julia `GridBundle(PointArray(0, P))`). -/
+def ofFlat (s : Vector Nat N) (pts : FloatArray) : PointGrid N P :=
+  ⟨s, pts, QuotientTopology.openTop s, .induced, rfl⟩
+
+/-- The same points glued by `t` (Julia `XTopology(m)`), when `t` has the grid's shape. -/
+def withTop (m : PointGrid N P G) (t : QuotientTopology N) (h : t.size = m.size) : PointGrid N P G :=
+  { m with top := t, size_top := h }
+
+/-- Julia `TorusTopology(m)`: every axis periodic. -/
+def torus (m : PointGrid N P G) : PointGrid N P G := m.withTop (.torus m.size) rfl
+
+end PointGrid
+
 /-! ## Point clouds and simplex bundles -/
 
 /-- Julia `PointCloud` = `PointVector` (`fiber.jl:216-273`): explicit points (flat, `width P`
