@@ -24,3 +24,5 @@ import Tests.Golden.GrassmannEval
 import Tests.Composite
 import Tests.Forms
 import Tests.Cartan
+import Tests.Clifford
+import Tests.FlowGeometry

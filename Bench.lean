@@ -11,6 +11,10 @@ import Bench.MeshTopology
 import Bench.Fatou
 import Bench.Grassmann
 import Bench.Geophysics
+import Bench.Dynamic
+import Bench.Composite
+import Bench.Forms
+import Bench.Cartan
 
 /-!
 Benchmarks (`lake exe bench`, driver `Bench/Main.lean`). Every suite runs on the harness of
