@@ -5,3 +5,10 @@ import Tests.AbstractLattices
 import Tests.PrimitiveBits
 import Tests.DeMorgan
 import Tests.Dendriform
+import Tests.DirectSum
+import Tests.AbstractAnalysis
+import Tests.Wilkinson
+import Tests.FieldAlgebra
+import Tests.UnitSystems
+import Tests.Similitude
+import Tests.MeasureSystems

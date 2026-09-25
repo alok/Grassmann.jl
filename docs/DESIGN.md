@@ -269,6 +269,9 @@ unrolled kernels for `V` (§5.2) when `n ≤ 6`.
 
 ### 5.1 Reference semantics
 
+The blade-level source of truth is `DirectSum.Ops`: `BinOp`/`UnOp`, `terms₂`/`terms₁` (exact `Rat` term lists)
+and `plan₂`/`plan₁` (multiply-accumulate plans in Julia storage order for any `Layout`), all oracle-verified.
+
 `Grassmann/Kernel/Reference.lean` defines every product, blade by blade:
 geometric, wedge, regressive, contraction, and the complements, from the
 parity functions. It uses plain loops and is correct for every space. It is
@@ -334,6 +337,10 @@ leibniz.md §5):
 against 10⁵ oracle doubles. `ToString`/`Repr` instances on both layers use it.
 
 ## 7. Oracle and tests
+
+> Normative schema: [`docs/port-notes/oracle-schema.md`](port-notes/oracle-schema.md). Element-level goldens are
+> sharded (`oracle/golden/<suite>/manifest.json` + shards + an inputs pool) with machine-readable defects in
+> `oracle/golden/defects.json`; the summary below is the original plan.
 
 * `oracle/Project.toml` pins the registered Julia packages
   (Grassmann 0.8.46, Cartan 0.4.16, …).

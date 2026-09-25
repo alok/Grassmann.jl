@@ -12,7 +12,14 @@ def suites : List Suite := [
   ⟨"AbstractLattices", Tests.AbstractLattices.run⟩,
   ⟨"PrimitiveBits", Tests.PrimitiveBits.run⟩,
   ⟨"DeMorgan", Tests.DeMorgan.run⟩,
-  ⟨"Dendriform", Tests.Dendriform.run⟩
+  ⟨"Dendriform", Tests.Dendriform.run⟩,
+  ⟨"DirectSum", Tests.DirectSum.run⟩,
+  ⟨"AbstractAnalysis", Tests.AbstractAnalysis.run⟩,
+  ⟨"Wilkinson", Tests.Wilkinson.run⟩,
+  ⟨"FieldAlgebra", Tests.FieldAlgebra.run⟩,
+  ⟨"UnitSystems", Tests.UnitSystems.run⟩,
+  ⟨"Similitude", Tests.Similitude.run⟩,
+  ⟨"MeasureSystems", Tests.MeasureSystems.run⟩
 ]
 
 /-- Test driver: `lake test` runs everything; `lake exe tests A B` runs the named suites. -/
