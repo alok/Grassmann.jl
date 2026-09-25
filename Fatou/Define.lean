@@ -34,8 +34,12 @@ mixed real/complex methods do. For a fast raster:
   writing the literal inside the map: an inlined decimal literal can be re-parsed on every
   iteration (docs/PERF.md). Integer-valued literals such as `(2 : Float)` are cheap.
 
-Not ported: Julia's symbolic front-end (maps are Lean functions; titles take the `label`),
-`juliafill(E; newt = true)` (use `newton`), and the `@time` printing of `Compute`.
+Julia's symbolic front-end (`juliafill(:(z^2 + c))`, `newton(:(z^3 - 1))`, derivatives,
+REDUCE's Newton maps and LaTeX titles, `basin(K, j)` bodies) is `Fatou.Symbolic` over the
+computer algebra of `Fatou.CAS`: `juliafill! "z^2 + c" …`, `mandelbrot! …`, `newton! "z^3 - 1" …`
+compile the map at elaboration time and fill `expr`/`latex`. A hand-written `Define` (a Lean
+closure with a `label`) remains the fast path with no parsing. Not ported: the `@time`
+printing of `Compute`.
 -/
 
 namespace Fatou

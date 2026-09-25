@@ -17,9 +17,12 @@ the oracle bit for bit:
 * integer powers with the lowering Julia applies to literal exponents (`literal_pow`,
   intfuncs.jl:465-487) and `power_by_squaring` (intfuncs.jl:394-438);
 * `abs` (correctly rounded `hypot`), `abs2`, `angle`, `exp`, `sin`, `cos`, `sinh`, `cosh`,
-  `log`, `sqrt` (complex.jl:523-714, 887-981). The real kernels they call (`sin`, `cosh`,
-  `atan2`, …) are the platform libm's, which may differ from Julia's own implementations in
-  the last bit; tests put these in a tolerance tier.
+  `log`, `sqrt` (complex.jl:523-714, 887-981). `hypot` and `atan2` (so `abs` and `angle`, the
+  default colouring) are JuliaBase's ports of Julia's own; the other real kernels (`sin`,
+  `cos`, `exp`, `cosh`, …) are the platform libm's, which may differ from Julia's in the last
+  bit, and tests put maps that call them in a tolerance tier;
+* `z ^ w` and `z ^ p` for complex and real non-integer exponents (Julia's `_cpow`, through
+  `JuliaBase.ComplexF64.pow`), as the wiki's `z^(4.0+3.0im)` maps need.
 
 Everything is `@[inline]` so that a map written as a lambda over `C64` specializes into the
 escape-time kernel with its `Complex` constructors cancelled (no allocation per iteration).
