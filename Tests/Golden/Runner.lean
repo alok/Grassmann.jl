@@ -306,9 +306,9 @@ def evalCase (r : Report) (s : Shard) (defects pending : DefectTable)
   -- policy `ref` with a reference: values only
   if policy == some .ref then
     if let some rj := c.ref then
+      let some (reg, got) := result | return unimpl r c.op
       r := { r with refCompared := r.refCompared + 1 }
       for id in c.defects do r := { r with defects := Report.bump r.defects id false }
-      let some (reg, got) := result | return unimpl r c.op
       let ref := (Coeffs.decode (sniffRefType rj) rj).toOption.getD (.raw rj)
       let why := compareWithRef (valueMode s reg c.op) got ref
       return record r reg s.name c subj why
