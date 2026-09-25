@@ -33,3 +33,7 @@ root = "Gallery.Main"
 [[lean_exe]]
 name = "gallerytest"
 root = "Gallery.Test"
+
+[[lean_exe]]
+name = "plotbench"
+root = "PlotBench"

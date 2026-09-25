@@ -1,4 +1,5 @@
 import GrassmannPlot.Arrows
+import GrassmannPlot.Eval
 
 /-!
 # `streamplot` of vector fields
@@ -94,13 +95,14 @@ variable {P G F : Type} [FlatFiber F] [LinearFiber F]
   ⟨buf.get! 0, buf.get! 1, buf.get! 2⟩
 
 /-- Julia `p ↦ Point(m(Chain(p...)))` for a field over a 2-D grid (multilinear interpolation). -/
-@[inline] def field2 {b : GridBundle 2 P G} (t : TensorField b F) (p : Vec2) : Vec2 :=
-  let v := fiberVec (t.eval2 p.x p.y)
-  ⟨v.x, v.y⟩
+@[inline] def field2 {b : GridBundle 2 P G} (t : TensorField b F) : Vec2 → Vec2 :=
+  let g := grid2Eval t
+  fun p => let v := g.eval p.x p.y; ⟨v.x, v.y⟩
 
 /-- Julia `p ↦ Point(m(Chain(p...)))` for a field over a 3-D grid. -/
-@[inline] def field3 {b : GridBundle 3 P G} (t : TensorField b F) (p : Vec3) : Vec3 :=
-  fiberVec (t.eval3 p.x p.y p.z)
+@[inline] def field3 {b : GridBundle 3 P G} (t : TensorField b F) : Vec3 → Vec3 :=
+  let g := grid3Eval t
+  fun p => g.eval p.x p.y p.z
 
 /-- The box `[first, last]` of an axis (Makie's `Rect` from the extrema of the range, or
 `to_interval`). -/
@@ -116,7 +118,9 @@ def streamOptions (a : Attrs) (gs : Array Nat) : Stream.Options :=
 def stream2 {b : GridBundle 2 P G} (t : TensorField b F) (a : Attrs) : Stream.Result :=
   let (x0, w) := axisBox (b.space.axis 0)
   let (y0, h) := axisBox (b.space.axis 1)
-  Stream.streamplot2 (field2 t) x0 y0 w h (streamOptions a #[32, 32])
+  let g := grid2Eval t
+  -- `Stream.run 2` directly (what `streamplot2` does), without its `Vec2` wrapper per step
+  Stream.run 2 (fun p => g.eval p.x p.y) ⟨x0, y0, 0⟩ ⟨w, h, 0⟩ (streamOptions a #[32, 32])
 
 /-- Julia `streamplot(m::VectorField{…,3,RealSpace{3}})` with Cartan's default
 `gridsize = (11, 11, 11)` (`streamargs`, `Cartan.jl:936-945`). -/
@@ -164,7 +168,8 @@ def tangentStream3 {bm : GridBundle 2 P G} (m : TensorField bm F) (a : Attrs) : 
   let (y0, wy) := axisBox (bm.space.axis 1)
   let gs : Array Nat := match a.gridsize with | some g => g.push 1 | none => #[32, 32, 1]
   let o := streamOptions { a with gridsize := some gs } gs
-  let f (p : Vec3) : Vec3 := let v := field2 m ⟨p.x, p.y⟩; ⟨v.x, v.y, 0⟩
+  let fm := field2 m
+  let f (p : Vec3) : Vec3 := let v := fm ⟨p.x, p.y⟩; ⟨v.x, v.y, 0⟩
   (Stream.streamplot3 f ⟨x0, y0, f64! -1e-15⟩ ⟨wx, wy, f64! 2e-15⟩ o, gs)
 
 /-- Julia `streamplot(M::VectorField, m::VectorField{…,2,RealSpace{2}})` (`MakieExt.jl:536-557`). -/
@@ -172,7 +177,8 @@ instance instStreamTangent {bM bm : GridBundle 2 P G} : MakiePlot .streamplot (T
   plot c Mm a :=
     let M := Mm.1
     let m := Mm.2
-    let embed (p : Vec3) : Vec3 := fiberVec (M.eval2 p.x p.y)
+    let gM := grid2Eval M
+    let embed (p : Vec3) : Vec3 := gM.eval p.x p.y
     if FlatFiber.width E != 2 then
       let (_, wx) := axisBox (bm.space.axis 0)
       let (_, wy) := axisBox (bm.space.axis 1)

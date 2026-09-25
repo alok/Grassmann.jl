@@ -82,18 +82,23 @@ def w6 : Float := 6
 def w3 : Float := 3
 /-- Stencil weight `8`. -/
 def w8 : Float := 8
+/-- `1.0`. -/
+def fOneC : Float := 1
+
+/-- Component `c` of the flat vector `k` (width `w`). -/
+@[inline] def ga (a : FloatArray) (w c k : Nat) : Float := a.get! (k * w + c)
 
 /-- Cartan `centraldiff_slow_calc(f::GridBundle{…,<:OpenTopology}, l, Val(1), i)`
 (`src/grid.jl:788-799`) for component `c` of the flat vectors `a` (width `w`, `l ≥ 4` points)
 at the 0-based index `i`: the one-sided five-point stencils at the ends and
 `f[i-2] + 8(f[i+1] - f[i-1]) - f[i+2]` inside, evaluated in Julia's order. -/
 @[inline] def stencil (a : FloatArray) (w c i l : Nat) : Float :=
-  let g (k : Nat) : Float := a.get! (k * w + c)
-  if i == 0 then w18 * g 1 - w9 * g 2 + w2 * g 3 - w11 * g 0
-  else if i + 1 == l then w11 * g i - w18 * g (i - 1) + w9 * g (i - 2) - w2 * g (i - 3)
-  else if i == 1 then w6 * g 2 - g 3 - w3 * g 1 - w2 * g 0
-  else if i + 2 == l then w3 * g i - w6 * g (i - 1) + g (i - 2) + w2 * g (i + 1)
-  else g (i - 2) + w8 * (g (i + 1) - g (i - 1)) - g (i + 2)
+  if 2 ≤ i && i + 2 < l then
+    ga a w c (i - 2) + w8 * (ga a w c (i + 1) - ga a w c (i - 1)) - ga a w c (i + 2)
+  else if i == 0 then w18 * ga a w c 1 - w9 * ga a w c 2 + w2 * ga a w c 3 - w11 * ga a w c 0
+  else if i + 1 == l then w11 * ga a w c i - w18 * ga a w c (i - 1) + w9 * ga a w c (i - 2) - w2 * ga a w c (i - 3)
+  else if i == 1 then w6 * ga a w c 2 - ga a w c 3 - w3 * ga a w c 1 - w2 * ga a w c 0
+  else w3 * ga a w c i - w6 * ga a w c (i - 1) + ga a w c (i - 2) + w2 * ga a w c (i + 1)
 
 /-- The derivative components `stencil(f)/stencil(x)` at point `i` (Julia
 `centraldifffiber(f, centraldiffpoints(f))`, `src/grid.jl:707-713`): a Grassmann fiber divides by
@@ -101,11 +106,40 @@ the real `d` as `x * (1/d)` (`LinearFiber.recipDiv`), numbers as `x / d`. -/
 @[inline] def derivAt (x a : FloatArray) (w i l : Nat) (recip : Bool) (c : Nat) : Float :=
   let d := stencil x 1 0 i l
   let s := stencil a w c i l
-  if recip then s * ((1 : Float) / d) else s / d
+  if recip then s * (fOneC / d) else s / d
+
+/-- `√(Σ_c (stencil(f)_c / stencil(x))²)` at point `i`: the norm of the central-difference tangent
+of a fiber whose norm is the Euclidean norm of its flat encoding (`FiberNorm.flat`: Grassmann
+elements), summed left to right without building the fiber. -/
+def flatSpeedAt (x a : FloatArray) (w i l : Nat) (recip : Bool) : Float :=
+  if 2 ≤ i && i + 2 < l then
+    -- interior: `f[i-2] + 8(f[i+1] - f[i-1]) - f[i+2]` at fixed offsets
+    let d := x.get! (i - 2) + w8 * (x.get! (i + 1) - x.get! (i - 1)) - x.get! (i + 2)
+    let rd := fOneC / d
+    let rec inner (o k : Nat) (acc : Float) : Float :=
+      match k with
+      | 0 => acc
+      | k + 1 =>
+        let s := a.get! (o - 2 * w) + w8 * (a.get! (o + w) - a.get! (o - w)) - a.get! (o + 2 * w)
+        let v := if recip then s * rd else s / d
+        inner (o + 1) k (acc + v * v)
+    Float.sqrt (inner (i * w) w 0)
+  else
+    let d := stencil x 1 0 i l
+    let rd := fOneC / d
+    let rec go (c : Nat) (acc : Float) : Float :=
+      if c < w then
+        let s := stencil a w c i l
+        let v := if recip then s * rd else s / d
+        go (c + 1) (acc + v * v)
+      else acc
+    termination_by w - c
+    Float.sqrt (go 0 0)
 
 /-- Julia `speed(f::IntervalMap)` (`src/diffgeo.jl:544-546`) of a curve over an open 1-D grid:
 `abs` (the fiber norm, `FiberNorm`) of the central-difference tangent. `none` below 4 points,
-where Julia's stencil reads out of bounds (a `BoundsError`). -/
+where Julia's stencil reads out of bounds (a `BoundsError`). Grassmann fibers take the
+allocation-free `flatSpeedAt`. -/
 def speed {G F : Type} [FlatFiber F] [LinearFiber F] [FiberNorm F] {b : GridBundle 1 Float G}
     (t : TensorField b F) : Option (TensorField b Float) :=
   let l := card b
@@ -113,9 +147,12 @@ def speed {G F : Type} [FlatFiber F] [LinearFiber F] [FiberNorm F] {b : GridBund
   let x := b.space.coords[0]
   let w := FlatFiber.width F
   let recip := LinearFiber.recipDiv F
-  some <| TensorField.ofFn b fun i =>
-    let buf := buildFlat (F := Float) w (derivAt x t.data w i l recip)
-    fnorm (FlatFiber.read buf 0 : F)
+  if FiberNorm.flat F then
+    some <| TensorField.ofFn b fun i => flatSpeedAt x t.data w i l recip
+  else
+    some <| TensorField.ofFn b fun i =>
+      let buf := buildFlat (F := Float) w (derivAt x t.data w i l recip)
+      fnorm (FlatFiber.read buf 0 : F)
 
 /-! ## Grid surfaces -/
 
