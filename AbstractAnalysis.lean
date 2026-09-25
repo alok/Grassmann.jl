@@ -4,6 +4,7 @@ import AbstractAnalysis.Countable
 import AbstractAnalysis.Sequence
 import AbstractAnalysis.Metric
 import AbstractAnalysis.Limit
+import AbstractAnalysis.Sets
 
 /-!
 # AbstractAnalysis
