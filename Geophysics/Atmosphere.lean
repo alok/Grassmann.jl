@@ -1,6 +1,7 @@
 import StaticVectors.Values
 import Geophysics.Planet
 import Geophysics.Gas
+import Geophysics.Layer
 
 /-!
 # Layered standard atmospheres
@@ -88,16 +89,28 @@ end Atmosphere
 /-- Julia `layer(h, W)` on a table of layer bases (`Geophysics.jl:571`):
 `h ≤ h[0]` gives layer 0; otherwise the layer below the first base `≥ h`, or the
 last layer. An exact base `h = h[k]` (`k > 0`) belongs to layer `k - 1`; `NaN`
-falls through to the last layer. -/
-def layerOf {n : Nat} (hs : Values Float n) (pos : 0 < n) (x : Float) : Fin n :=
-  if x ≤ hs.get ⟨0, pos⟩ then ⟨0, pos⟩ else go 0
-where
-  /-- the `findfirst` scan -/
-  go (j : Nat) : Fin n :=
-    if h : j < n then
-      if hs.get ⟨j, h⟩ ≥ x then ⟨j - 1, by omega⟩ else go (j + 1)
-    else ⟨n - 1, by omega⟩
-  termination_by n - j
+falls through to the last layer. This is `layerIdx` at `Float`, so its
+specification (`Geophysics.Layer`) holds for IEEE comparisons: see
+`layerOf_of_le`, `not_le_layerOf`, `le_layerOf_succ`. -/
+@[inline] def layerOf {n : Nat} (hs : Values Float n) (pos : 0 < n) (x : Float) : Fin n :=
+  layerIdx hs.get pos x
+
+/-- At or below the first base the layer is `0`. -/
+theorem layerOf_of_le {n : Nat} (hs : Values Float n) (pos : 0 < n) (x : Float)
+    (h : x ≤ hs.get ⟨0, pos⟩) : layerOf hs pos x = ⟨0, pos⟩ :=
+  layerIdx_of_le hs.get pos x h
+
+/-- Above the first base, `x` is not `≤` the base of its layer. -/
+theorem not_le_layerOf {n : Nat} (hs : Values Float n) (pos : 0 < n) (x : Float)
+    (h : ¬ x ≤ hs.get ⟨0, pos⟩) : ¬ x ≤ hs.get (layerOf hs pos x) :=
+  not_le_layerIdx hs.get pos x h
+
+/-- Above the first base, `x` is `≤` the next base when there is one (an exact
+base belongs to the layer below). -/
+theorem le_layerOf_succ {n : Nat} (hs : Values Float n) (pos : 0 < n) (x : Float)
+    (h : ¬ x ≤ hs.get ⟨0, pos⟩) (hn : (layerOf hs pos x).1 + 1 < n) :
+    x ≤ hs.get ⟨(layerOf hs pos x).1 + 1, hn⟩ :=
+  le_layerIdx_succ hs.get pos x h hn
 
 /-- The layer-independent data of a weather column (the fields of Julia's
 `Weather{ϕ,f,n,P,U}`, `Geophysics.jl:477-485`). -/
