@@ -63,7 +63,7 @@ def agreement (cs : Array Check) : String :=
     s!"{if c.ok then "" else "**FAIL** "}{cell c.label}: {cell c.detail}")
 
 /-- Render the page. `extra` is the per-figure note of `docs/gallery/notes/<name>.md` if any. -/
-def render (root : System.FilePath) (rows : Array (Entry × Array Check)) : IO String := do
+def render (root : System.FilePath) (rows : Array (Entry × Array Check × String)) : IO String := do
   let mut s := "# Gallery: the chakravala figures in Lean\n\n"
   s := s ++ "Every figure of the Julia ecosystem that the Lean port can compute today, rendered with " ++
     "[LeanPlot](https://github.com/alok/LeanPlot) (left) next to the Julia/CairoMakie original " ++
@@ -74,16 +74,16 @@ def render (root : System.FilePath) (rows : Array (Entry × Array Check)) : IO S
     "(`oracle/gallery/data/<name>.json`): iteration counts of the fractals, curve samples, " ++
     "streamlines, graph edges and error curves. Images are compared by eye (DESIGN.md §0: " ++
     "plot data numerically, images visually).\n\n"
-  let groups := rows.foldl (fun (acc : Array String) (e, _) => if acc.contains e.group then acc else acc.push e.group) #[]
+  let groups := rows.foldl (fun (acc : Array String) (e, _, _) => if acc.contains e.group then acc else acc.push e.group) #[]
   for g in groups do
     s := s ++ s!"## {g}\n\n| figure | Lean (LeanPlot) | Julia (CairoMakie) | data agreement |\n|---|---|---|---|\n"
-    for (e, cs) in rows do
+    for (e, cs, img) in rows do
       if e.group != g then continue
       let notePath := root / "docs" / "gallery" / "notes" / s!"{e.name}.md"
       let note ← if ← notePath.pathExists then pure ((← IO.FS.readFile notePath).trimAscii.toString) else pure ""
       let fig := s!"**{e.name}**<br>{cell e.title}<br><sub>{cell e.source}</sub>" ++
         (if note.isEmpty then "" else s!"<br><sub>{cell (note.replace "\n" " ")}</sub>")
-      s := s ++ s!"| {fig} | ![{e.name} (Lean)](lean/{e.name}.png) | ![{e.name} (Julia)](julia/{e.name}.png) | {agreement cs} |\n"
+      s := s ++ s!"| {fig} | ![{e.name} (Lean)](lean/{e.name}.png) | ![{e.name} (Julia)](julia/{e.name}.png) | {agreement cs}<br><sub>pixels: {cell img}</sub> |\n"
     s := s ++ "\n"
   s := s ++ "## Pending (need Cartan, Adapode or other unported packages)\n\n" ++
     "From the ranked inventory in `docs/port-notes/plot-inventory.md` §6-§7.\n\n" ++

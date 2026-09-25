@@ -40,7 +40,7 @@ def selected (o : Opts) (e : Entry) : Bool :=
 def main (args : List String) : IO UInt32 := do
   let o := parseArgs args {}
   IO.FS.createDirAll "out"
-  let mut results : Array (Entry × Array Check × Nat) := #[]
+  let mut results : Array (Entry × Array Check × String) := #[]
   let mut failed := 0
   for e in Gallery.registry do
     if !selected o e then continue
@@ -61,13 +61,20 @@ def main (args : List String) : IO UInt32 := do
     for c in out.checks do
       IO.println s!"  [{if c.ok then "ok" else "FAIL"}] {c.label}: {c.detail}"
       if !c.ok then failed := failed + 1
+    let juliaPng := o.root / "docs" / "gallery" / "julia" / s!"{e.name}.png"
+    let img ← if ← juliaPng.pathExists then
+        match Gallery.ImageDiff.comparePNG (← IO.FS.readBinFile png) (← IO.FS.readBinFile juliaPng) with
+        | .ok st => pure st.summary
+        | .error err => pure s!"not compared ({err})"
+      else pure "no Julia render"
+    IO.println s!"  image: {img}"
     if o.docs then
       let dst := o.root / "docs" / "gallery" / "lean" / s!"{e.name}.png"
       IO.FS.createDirAll (o.root / "docs" / "gallery" / "lean")
       IO.FS.writeBinFile dst (← IO.FS.readBinFile png)
-    results := results.push (e, out.checks, t1 - t0)
+    results := results.push (e, out.checks, img)
   if o.docs && o.only.isEmpty then
-    let md ← Gallery.Index.render o.root (results.map fun (e, cs, _) => (e, cs))
+    let md ← Gallery.Index.render o.root results
     IO.FS.writeFile (o.root / "docs" / "gallery" / "index.md") md
     IO.println "wrote docs/gallery/index.md"
   IO.println s!"{results.size} figures, {failed} failed checks"
