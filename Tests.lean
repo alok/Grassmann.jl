@@ -26,3 +26,4 @@ import Tests.Forms
 import Tests.Cartan
 import Tests.Clifford
 import Tests.FlowGeometry
+import Tests.Adapode

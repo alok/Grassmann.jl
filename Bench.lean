@@ -15,6 +15,7 @@ import Bench.Dynamic
 import Bench.Composite
 import Bench.Forms
 import Bench.Cartan
+import Bench.Adapode
 
 /-!
 Benchmarks (`lake exe bench`, driver `Bench/Main.lean`). Every suite runs on the harness of

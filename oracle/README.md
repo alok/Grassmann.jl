@@ -37,6 +37,11 @@ comparison rules). This README covers generating and maintaining the files.
 | `floats` | 1 | ~20 400 | Julia `show`/compact `show` of Float64 (exact bits), Int64, Rational, Complex, Bool |
 | `docs` | 58 | ~500 | the README/docs examples (grassmann-docs.md §6), REPL display and value |
 
+Package oracles outside the element suites live in their own directories with their own
+generators, for example `oracle/adapode/gen.jl` (Adapode ODE goldens; loads Adapode.jl master
+through `oracle/adapode/load.jl`, see docs/port-notes/adapode.md §9.0), `oracle/cartan/`,
+`oracle/flowgeometry/` and `oracle/unitsystems/`.
+
 Every Julia error and every mismatch against the generator's independent reference is attributed
 to an entry of `defects.toml`; the manifests' `totals.unexplained` is 0.
 

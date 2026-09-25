@@ -1024,6 +1024,21 @@ Reference PNGs are in `.../adapode_oracle/plots/`: `lorenz_rk4`, `lorenz_abm4`, 
 
 ## 9. Oracle test plan
 
+### 9.0 Committed oracle (2026-09-25)
+
+The ODE goldens are committed under `oracle/golden/adapode/` (generator `oracle/adapode/gen.jl`
+with `oracle/adapode/sections/*.jl`; loader and patches `oracle/adapode/load.jl`; defects
+`oracle/adapode/defects.toml`). The loader `include`s Adapode.jl master from `ADAPODE_SRC`
+(default `~/chakravala/Adapode.jl/src/Adapode.jl`), because the registered 0.3.13 lacks the Flow
+API. The benchmark twin is `oracle/bench/adapode.jl` (suite `adapode`, run in its own process).
+Defect findings from the port:
+
+- B8 is confirmed by a golden: Julia's leapfrog time axis is one point short of its data.
+- `odesolve` with a TensorField state and skip ≥ 1 fails in Cartan 0.4.16.
+- `Values(Values(...))` copy quirk in `CBA[1]` and `Gauss[1]`.
+
+The notes below (9.1 onward) describe the exploratory scratch oracle that preceded it.
+
 ### 9.1 How to run the oracle
 
 - Directory: `/private/tmp/claude-502/-Users-alokbeniwal-Grassmann/c6cc2308-bfca-4b9a-ad33-d89b110132a8/scratchpad/notes/adapode_oracle/`

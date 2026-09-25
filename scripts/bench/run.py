@@ -29,7 +29,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 # suite -> (environment group, Julia threads). Fatou's parallel cases compare Lean tasks with
-# Julia threads, so its process gets every core; all other suites are single-threaded.
+# Julia threads, so its process gets every core; all other suites are single-threaded. Adapode
+# loads Adapode.jl master with patches to Cartan methods, so it runs in a process of its own.
 JULIA_SUITES: dict[str, tuple[str, str]] = {
     "math": ("main", "1"),
     "juliabase": ("main", "1"),
@@ -44,6 +45,7 @@ JULIA_SUITES: dict[str, tuple[str, str]] = {
     "composite": ("main", "1"),
     "forms": ("main", "1"),
     "cartan": ("main", "1"),
+    "adapode": ("adapode", "1"),
     "fatou": ("threads", "auto"),
     "dendriform": ("env2", "1"),
     "demorgan": ("env2", "1"),

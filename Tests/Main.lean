@@ -32,7 +32,8 @@ def suites : List Suite := [
   ⟨"Forms", Tests.Forms.run⟩,
   ⟨"Cartan", Tests.Cartan.run⟩,
   ⟨"Clifford", Tests.Clifford.run⟩,
-  ⟨"FlowGeometry", Tests.FlowGeometry.run⟩
+  ⟨"FlowGeometry", Tests.FlowGeometry.run⟩,
+  ⟨"Adapode", Tests.Adapode.run⟩
 ]
 
 /-- Test driver: `lake test` runs everything; `lake exe tests A B` runs the named suites. -/

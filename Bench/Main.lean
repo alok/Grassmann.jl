@@ -23,7 +23,7 @@ def suites : List Suite :=
   [ Bench.Math.suite, Bench.JuliaBase.suite, Bench.StaticVectors.suite, Bench.DirectSum.suite,
     Bench.UnitSystems.suite, Bench.Geophysics.suite, Bench.Dendriform.suite, Bench.DeMorgan.suite,
     Bench.Wilkinson.suite, Bench.MeshTopology.suite, Bench.Fatou.suite, Bench.Dynamic.suite, Bench.Composite.suite,
-    Bench.Forms.suite, Bench.Cartan.suite ] ++
+    Bench.Forms.suite, Bench.Cartan.suite, Bench.Adapode.suite ] ++
   (optional_suite% "Grassmann" Bench.Grassmann.run).toList
 
 /-- Usage text. -/
