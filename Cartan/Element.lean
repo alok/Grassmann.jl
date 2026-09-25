@@ -122,9 +122,44 @@ def volumeAt (m : SimplexBundle n (HPoint V) G) (e : Nat) : Float :=
     if d.size == 1 then d[0]!.abs
     else Float.sqrt (d.foldl (fun s x => s + x * x) 0)
 
-/-- Julia `volumes(t)`: the unsigned measures, a field over the elements. -/
+/-- Whether element `e` is stored at `conn[n·e …]` (the facets are the full elements in order, so
+`vertexOf e k = conn[n e + k]`). -/
+@[inline] def directConn (m : SimplexBundle n (HPoint V) G) : Bool :=
+  (m.top.sub.isOneTo || m.top.isFull) && n * m.elements ≤ m.top.conn.size
+
+/-- `|det/2|` of the planar triangles `k, …` whose vertex ids start at `conn[q]` (stride 3), read
+from the flat homogeneous points `pts` (stride 3) and written to `out` from `o`: `det3At`'s
+operations (`wedge3`, `wedge21`, times `½`), without `vertexOf`'s facet lookups or `Nat` indices. -/
+def planarVolLoop {no : Nat} (conn : Array Nat) (pts : FloatArray) (half : Float) :
+    (k : Nat) → (q o : USize) → Flat.Buf no → q.toNat + 3 * k ≤ conn.size → o.toNat + k ≤ no →
+      Flat.Buf no
+  | 0, _, _, out, _, _ => out
+  | k + 1, q, o, out, hq, ho =>
+    have e1 : (q + 1).toNat ≤ q.toNat + 1 := Flat.toNat_add_le q 1
+    have e2 : (q + 2).toNat ≤ q.toNat + 2 := Flat.toNat_add_le q 2
+    have e3 : (q + 3).toNat ≤ q.toNat + 3 := Flat.toNat_add_le q 3
+    have eo : (o + 1).toNat ≤ o.toNat + 1 := Flat.toNat_add_le o 1
+    let a := 3 * (conn.uget q (by omega) - 1).toUSize
+    let b := 3 * (conn.uget (q + 1) (by omega) - 1).toUSize
+    let c := 3 * (conn.uget (q + 2) (by omega) - 1).toUSize
+    let (b12, b13, b23) := Forms.wedge3 (Flat.getU pts a) (Flat.getU pts (a + 1)) (Flat.getU pts (a + 2))
+      (Flat.getU pts b) (Flat.getU pts (b + 1)) (Flat.getU pts (b + 2))
+    let d := Forms.wedge21 b12 b13 b23 (Flat.getU pts c) (Flat.getU pts (c + 1)) (Flat.getU pts (c + 2))
+    planarVolLoop conn pts half k (q + 3) (o + 1) (out.set o (d * half).abs (by omega))
+      (by omega) (by omega)
+
+/-- Julia `volumes(t)`: the unsigned measures, a field over the elements (planar triangles of a
+full topology by `planarVolLoop`, the same operations as `volumeAt`). -/
 def volumes (m : SimplexBundle n (HPoint V) G) : TensorField m.faces' Float :=
-  TensorField.ofFn _ m.volumeAt
+  let E := m.elements
+  if hE : n == 3 && V.n == 3 && m.directConn && E = card m.faces' then
+    if hc : 3 * E ≤ m.top.conn.size then
+      let out := (planarVolLoop (no := E) m.top.conn m.cloud.points (1 / factF 2) E 0 0 (Flat.zerosBuf E)
+        (by simpa using hc) (by simp)).1
+      if h : out.size = FlatFiber.width Float * card m.faces' then ⟨out, h, none⟩
+      else TensorField.ofFn _ m.volumeAt
+    else TensorField.ofFn _ m.volumeAt
+  else TensorField.ofFn _ m.volumeAt
 
 /-- The signed measure of a non-embedded element (`detsimplex`; `volumes` of an embedded one). -/
 def signedVolumeAt (m : SimplexBundle n (HPoint V) G) (e : Nat) : Float :=
@@ -292,11 +327,66 @@ def interior (e : SimplexBundle n (HPoint V) G) : Array Nat := e.top.interiorNod
 
 /-! ## Assembly and transfer (§4.2) -/
 
+/-- `b[v] += f[v]·w[e]` for the vertices `v` (0-based ids `conn[q + j] - 1`, `j < r`) of one element. -/
+def incidenceVerts (conn : Array Nat) (f : FloatArray) (wk : Float) (q : Nat) :
+    (r j : Nat) → FloatArray → FloatArray
+  | 0, _, b => b
+  | r + 1, j, b =>
+    let v := (conn[q + j]! - 1).toUSize
+    incidenceVerts conn f wk q r (j + 1) (Flat.putU b v (Flat.getU b v + Flat.getU f v * wk))
+
+/-- The elements `e, …` (`k` of them, vertex ids from `conn[q]`, stride `n`) of
+`assembleincidence` (element by element, vertices in order, as `elems`/`verts`). -/
+def incidenceLoop (conn : Array Nat) (f w : FloatArray) (n : Nat) :
+    (k e q : Nat) → FloatArray → FloatArray
+  | 0, _, _, b => b
+  | k + 1, e, q, b =>
+    incidenceLoop conn f w n k (e + 1) (q + n) (incidenceVerts conn f (Flat.getU w e.toUSize) q n 0 b)
+
+/-- `b[v] += f[v]·w` for one vertex `v` (0-based). -/
+@[inline] def addAt (f : FloatArray) (wk : Float) (b : FloatArray) (v : USize) : FloatArray :=
+  Flat.putU b v (Flat.getU b v + Flat.getU f v * wk)
+
+/-- `incidenceLoop` for triangles, unrolled: the elements `k, …` whose vertex ids start at
+`conn[q]` (stride 3), their weights from `w[e]`. -/
+def incidence3Loop (conn : Array Nat) (f w : FloatArray) :
+    (k : Nat) → (q e : USize) → q.toNat + 3 * k ≤ conn.size → FloatArray → FloatArray
+  | 0, _, _, _, b => b
+  | k + 1, q, e, hq, b =>
+    have e1 : (q + 1).toNat ≤ q.toNat + 1 := Flat.toNat_add_le q 1
+    have e2 : (q + 2).toNat ≤ q.toNat + 2 := Flat.toNat_add_le q 2
+    have e3 : (q + 3).toNat ≤ q.toNat + 3 := Flat.toNat_add_le q 3
+    let wk := Flat.getU w e
+    let v0 := (conn.uget q (by omega) - 1).toUSize
+    let v1 := (conn.uget (q + 1) (by omega) - 1).toUSize
+    let v2 := (conn.uget (q + 2) (by omega) - 1).toUSize
+    incidence3Loop conn f w k (q + 3) (e + 1) (by omega) (addAt f wk (addAt f wk (addAt f wk b v0) v1) v2)
+
+/-- A homogeneous point read from `pts[off …]` into the storage of `x` (in place when unshared;
+`AffinePoint.readLoop`). -/
+@[inline] def readHPointInto (pts : FloatArray) (off : Nat) (x : HPoint V) : HPoint V :=
+  ⟨⟨AffinePoint.readLoop pts off (Leibniz.binomial V.n 1) 0 x.v.data, by
+    show (AffinePoint.readLoop pts off (Leibniz.binomial V.n 1) 0 x.v.data).size = _
+    rw [AffinePoint.size_readLoop]; exact x.v.size_eq⟩⟩
+
+/-- `out[v] := f(point v)` for the nodes `v, …` (`k` of them), each point read into the storage
+of the previous one. -/
+@[specialize] def nodalLoop (pts : FloatArray) (w : Nat) (f : HPoint V → Float) :
+    (k v : Nat) → HPoint V → FloatArray → FloatArray
+  | 0, _, _, out => out
+  | k + 1, v, x, out =>
+    let x := readHPointInto pts (v * w) x
+    nodalLoop pts w f k (v + 1) x (out.set! v (f x))
+
 /-- Julia `assembleincidence(t, f, m, Val(true))` (MeshTopology `element.jl:311-319`, B1 fixed):
 `b[tₖ] .+= f[tₖ] .* m[k]` element by element (`f` nodal, `m` per element). -/
 def assembleincidence (m : SimplexBundle n (HPoint V) G) (f : FloatArray) (w : FloatArray) :
     FloatArray :=
-  elems m.elements 0 (Flat.zeros m.totalNodes)
+  if m.directConn then
+    if hc : n = 3 ∧ 3 * m.elements ≤ m.top.conn.size then
+      incidence3Loop m.top.conn f w m.elements 0 0 (by simpa using hc.2) (Flat.zeros m.totalNodes)
+    else incidenceLoop m.top.conn f w n m.elements 0 0 (Flat.zeros m.totalNodes)
+  else elems m.elements 0 (Flat.zeros m.totalNodes)
 where
   /-- The vertices `j, …` of element `k`. -/
   verts (k : Nat) (wk : Float) : Nat → Nat → FloatArray → FloatArray
@@ -310,9 +400,12 @@ where
     | r + 1, k, b => elems r (k + 1) (verts k (w.get! k) n 0 b)
 
 /-- The nodal values `f(x)` of a function of the homogeneous point at every full node (Julia
-`iterpts(t, f)`). -/
+`iterpts(t, f)`), each point read into the storage of the previous one (`readHPointInto`), which
+`f` has released unless it kept it. -/
 def nodal (m : SimplexBundle n (HPoint V) G) (f : HPoint V → Float) : FloatArray :=
-  buildFlat (F := Float) m.totalNodes fun v => f (Chain.ofFn fun c => m.coord (v + 1) c.1)
+  if m.totalNodes = 0 then Flat.zeros 0
+  else nodalLoop m.cloud.points V.n f m.totalNodes 0 (Chain.ofFn fun c => m.coord 1 c.1)
+    (Flat.zeros m.totalNodes)
 
 /-- Julia `assembleload(t, f, m = volumes(t))` (`element.jl:546`): the lumped P1 load
 `bᵢ = Σ_{k ∋ i} (fᵢ / n) |Tₖ|`, with `f` given at the nodes. -/
@@ -320,6 +413,12 @@ def assembleloadNodal (m : SimplexBundle n (HPoint V) G) (f : FloatArray)
     (vol : FloatArray := m.volumes.data) : FloatArray :=
   let nf := Float.ofNat n
   m.assembleincidence (Flat.map (· / nf) f) vol
+
+/-- Julia `assembleload(t, c, m = volumes(t))` for a number `c` (Julia's default `1`;
+`iterpts(t, c)` is the constant, `element.jl:25`): no point is read. -/
+def assembleloadConst (m : SimplexBundle n (HPoint V) G) (c : Float := 1)
+    (vol : FloatArray := m.volumes.data) : FloatArray :=
+  m.assembleloadNodal (Flat.map (fun _ => c) (Flat.zeros m.totalNodes)) vol
 
 /-- Julia `assembleload(t, f)` for a function of the (homogeneous) point. -/
 def assembleload (m : SimplexBundle n (HPoint V) G) (f : HPoint V → Float := fun _ => 1) : FloatArray :=

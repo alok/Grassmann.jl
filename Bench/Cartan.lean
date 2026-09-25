@@ -135,7 +135,10 @@ def suite : Suite := ⟨"cartan", do
   bench "mesh_volumes" (ops := ne) (param := mp) fun s => chk (blackBox s mesh).volumes
   bench "mesh_gradienthat" (ops := ne) (param := mp) fun s => chk (blackBox s mesh).gradienthat
   bench "mesh_gradient" (ops := ne) (param := mp) fun s => chk ((blackBox s mesh).gradient2 u)
-  bench "mesh_load" (ops := np) (param := mp) fun s => chkA (blackBox s mesh).assembleload
+  -- Julia `assembleload(t)` takes the number `1` (`iterpts(t, 1)` is the constant): `assembleloadConst`
+  bench "mesh_load" (ops := np) (param := mp) fun s => chkA (blackBox s mesh).assembleloadConst
+  bench "mesh_load_fn" (ops := np) (param := mp) fun s =>
+    chkA ((blackBox s mesh).assembleload fun x => getD x.v 1)
   -- FFT of 2^16 complex points (Julia FFTW `fft`)
   let nf ← size 65536 64
   let z : Spectral.CVec := ⟨(Array.range (2 * nf)).map fun k => Float.sin (Float.ofNat k * 0.001)⟩
