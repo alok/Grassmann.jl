@@ -573,7 +573,6 @@ def prod (op : POp) (a b : TA V α) : TA V α :=
 @[inline] def antidot (a b : TA V α) : TA V α :=
   complementleft (contraction (complementright a) (complementright b))
 
-instance : Mul (TA V α) := ⟨mul⟩
 
 /-! ## Sandwich products (`src/algebra.jl:313-385, 1560-1790`) -/
 

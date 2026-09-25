@@ -415,3 +415,42 @@ Findings:
   suites with `where go` loops over a function argument pay the same.
 * Payne–Hanek (`sin(1e10)`) 59 → 20.5 ns (Julia 9.1): the table read was a local closure called
   seven times and `fromFraction` returned a boxed pair.
+## 2026-09-25: the dynamic layer `TA` dispatches to the generated kernels
+
+`lake exe bench dynamic` (`Bench/Dynamic.lean`) against `oracle/bench/dynamic.jl`: `ℝ3`
+(`Submanifold(3)`) elements with `Float64` coefficients, rings of 1024 random operands, every
+result's stored coefficients summed (checksums equal to Julia's bit for bit). Julia keeps its
+elements in a `Vector{Any}`, so every call dispatches on the runtime type, as `TA` dispatches
+on its kind. Minimum ns per operation, Apple M4 Max.
+
+| case | Julia (`Vector{Any}`) | Lean `TA` operators | Lean `TA` Julia loops (before) | ratio |
+|---|---|---|---|---|
+| `Multivector * Multivector` | 42.3 | 34.5 | 311 | 0.82 |
+| `Chain{1} * Chain{1}` | 41.9 | 37.3 | 280 | 0.89 |
+| `Chain{1} ∧ Chain{1}` | 51.1 | 37.9 | 207 | 0.74 |
+| `Single * Single` | 255 | 99.4 | 498 | 0.39 |
+| `Multivector + Multivector` | 35.0 | 33.8 | 98.9 | 0.97 |
+| `~Multivector` | 39.2 | 21.3 | 2039 | 0.54 |
+
+What changed (`Grassmann/Dynamic/Fast.lean`):
+* The dynamic products evaluate Julia's generated loops through interpreted plans (so that
+  `Float` results agree with Julia bit for bit, sign of zero included, in every space), found
+  per call in a process-wide `HashMap` keyed by the space, and run generic in the coefficient
+  type (boxed `Float`s). The unary maps computed every entry from DirectSum's blade rules (a
+  `Rat` coefficient and a basis rank per entry: 2 µs for `~m`).
+* `class DynKernels V` marks spaces whose `Kernels` instance is generated and whose metric is
+  diagonal and non-degenerate (`ℝ2`, `ℝ3`, `ℝ4`, `STA`, `n ≤ 5`, not conformal, tangent or
+  dyadic). There the generated kernel of a chain × chain or container × container product,
+  and of a sign map or complement of a container, *is* Julia's loop (same contributions in the
+  same order, first-term sums, `-x` negation), so the operator instances call it directly;
+  `Single * Single` uses the blade sign (`parityjoin`) with `termProd`'s exact scaling; same-kind
+  container sums are inline. `Tests/Dynamic/Fast.lean` checks 17602 fast results against the
+  loops bit for bit. Every other case (and every space without `DynKernels`: PGA, CGA,
+  runtime-built spaces) keeps the loops.
+* At a call site with a literal space the `DynKernels.fast` test and the kernel dispatch fold,
+  and the kernel is specialized at `Float`; the remaining cost is the result allocation and
+  the kind match.
+
+Open: the plan lookup of the loop path (hashing the `TensorBundle` per call) and the generic
+coefficient code are what `PGA3`/`CGA3` and runtime spaces still pay (≈200-300 ns for small
+products); a per-space `DynKernels` carrying precomputed loop plans would remove the lookup.

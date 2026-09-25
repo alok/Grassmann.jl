@@ -31,6 +31,13 @@ abbrev CoSpinor (V : TensorBundle) (α : Type) [Coeff α] := Half V true α
 /-- Julia `AntiSpinor`, the same type as `CoSpinor`. -/
 abbrev AntiSpinor (V : TensorBundle) (α : Type) [Coeff α] := Half V true α
 
+/-- Julia `Quaternion{V,T} = Spinor{V,T,4}` (the even algebra of a 3-generator space; Julia
+prints `typeof(1 + v12 - v13)` as `Quaternion{⟨111⟩, Int64}`). -/
+abbrev Quaternion (V : TensorBundle) (α : Type) [Coeff α] := Half V false α
+
+/-- Julia `AntiQuaternion{V,T} = CoSpinor{V,T,4}`. -/
+abbrev AntiQuaternion (V : TensorBundle) (α : Type) [Coeff α] := Half V true α
+
 namespace Half
 
 variable {V : TensorBundle} {p q : Bool} {α : Type} [Coeff α]
@@ -46,6 +53,11 @@ def ofList? (l : List α) : Option (Half V p α) := (Values.ofList? l).map (⟨�
 
 /-- Build from an array of the right length. -/
 def ofArray? (a : Array α) : Option (Half V p α) := (Values.ofArray? a).map (⟨·⟩)
+
+/-- Build from a list whose length `2ⁿ⁻¹` is checked at elaboration time (Julia
+`Spinor{V}(1,2,3,4)`; the literals `spinor![…]`, `cospinor![…]`). -/
+def ofList (l : List α) (h : l.length = halfDim V.n p := by decide) : Half V p α :=
+  ⟨Values.ofFn fun i => l[i.1]'(by have := i.2; omega)⟩
 
 /-- The zero half. -/
 @[inline] def zero : Half V p α := ⟨zeroValues _⟩

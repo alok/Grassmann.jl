@@ -178,6 +178,32 @@ def run : IO Tally := do
     && Grassmann.isapprox (toMultivector ce) c0 (atol := 1.0e-15)) "norm-based isapprox"
   -- equality
   t := t.check (decide (a = a) && !decide (a = b) && a == a) "DecidableEq/BEq"
+  -- Julia's predicates on typed elements (Grassmann/Algebra/Predicates.lean)
+  let v1 := chain E3 1 [1, 0, 0]
+  let s12 : Single E3 2 Int := ⟨0b011, 2⟩
+  let mv1 : Multivector E3 Int := toMultivector v1
+  t := t.check (isterm s12 && isgraded s12 && rank? s12 == some 2 && istensor s12) "Single is a term"
+  t := t.check (!isterm v1 && isgraded v1 && rank? v1 == some 1) "Chain is graded"
+  t := t.check (!isterm m && !isgraded m && rank? m == none && !isgraded s && istensor m)
+    "containers are mixed"
+  t := t.check (isvector v1 && !isbivector v1 && isbivector (Chain.zero : Chain E3 1 Int))
+    "graded isvector: rank(t) == 1 || iszero(t)"
+  t := t.check (isvector mv1 && !isvector m && !isscalar m) "mixed isvector: norm(t) ≈ norm(vector(t))"
+  t := t.check (isscalar (⟨0b011, 3, 0⟩ : Couple E3 Int) && !isscalar (⟨0b011, 3, 1⟩ : Couple E3 Int))
+    "Couple isscalar"
+  t := t.check (isvolume (chain E3 3 [5]) && isvolume (half E3 true [0, 0, 0, 4]) && !isvolume c1)
+    "isvolume"
+  t := t.check (isone (Multivector.one : Multivector E3 Int) && !isone mv1 &&
+    iszero (Chain.zero : Chain E3 2 Int)) "isone/iszero"
+  let cinf : Chain E3 1 Float := Chain.ofFn fun i => if i.1 = 1 then 1 / 0 else 0
+  t := t.check (!isfinite cinf && isfinite c0) "isfinite"
+  t := t.check ((v1 ∥ chain E3 1 [2, 0, 0]) && !(v1 ∥ chain E3 1 [0, 1, 0])) "a ∥ b = iszero(a ∧ b)"
+  let ra : Chain E3 1 Rat := Chain.ofFn fun i => if i.1 = 0 then 2 else 0
+  let rb : Chain E3 1 Rat := Chain.ofFn fun i => if i.1 = 1 then 3 else 0
+  t := t.check (toMultivector (ra \ ra) == Multivector.one) "a \\ a = 1"
+  let q := ra \ rb
+  t := t.check (q.coeff 0b011 == 3 / 2 && q.coeff 0 == 0 && q.coeff 0b101 == 0)
+    "2v₁ \\ 3v₂ = inv(2v₁)⟑3v₂ = (3/2)v₁₂"
   return t
 
 end GrassmannTests.Types

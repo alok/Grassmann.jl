@@ -21,6 +21,15 @@ structure Chain (V : TensorBundle) (G : Nat) (α : Type) [Coeff α] where
   /-- The coefficients in Julia's `bladeindex` order. -/
   v : Values α (Leibniz.binomial V.n G)
 
+/-- Julia `GradedVector{V,T} = Chain{V,1,T}` (`src/multivectors.jl:1210`). -/
+abbrev GradedVector (V : TensorBundle) (α : Type) [Coeff α] := Chain V 1 α
+
+/-- Julia `Bivector{V,T} = Chain{V,2,T}`. -/
+abbrev Bivector (V : TensorBundle) (α : Type) [Coeff α] := Chain V 2 α
+
+/-- Julia `Trivector{V,T} = Chain{V,3,T}`. -/
+abbrev Trivector (V : TensorBundle) (α : Type) [Coeff α] := Chain V 3 α
+
 namespace Chain
 
 variable {V : TensorBundle} {G H : Nat} {α : Type} [Coeff α]
@@ -37,6 +46,13 @@ def ofList? (l : List α) : Option (Chain V G α) := (Values.ofList? l).map (⟨
 
 /-- Build from an array of the right length. -/
 def ofArray? (a : Array α) : Option (Chain V G α) := (Values.ofArray? a).map (⟨·⟩)
+
+/-- Build from a list whose length is checked at elaboration time (Julia
+`Chain{V,G}(4,5,6)`, which throws `DimensionMismatch` at run time): the proof
+`l.length = binomial n G` is found by `decide` for literal spaces, e.g.
+`(Chain.ofList [4, 5, 6] : Chain ℝ3 1 Int)`, or the literal `chain![4, 5, 6]`. -/
+def ofList (l : List α) (h : l.length = Leibniz.binomial V.n G := by decide) : Chain V G α :=
+  ⟨Values.ofFn fun i => l[i.1]'(by have := i.2; omega)⟩
 
 /-- The zero chain (Julia `zero(Chain{V,G,T})`). -/
 @[inline] def zero : Chain V G α := ⟨zeroValues _⟩

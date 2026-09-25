@@ -232,6 +232,11 @@ pattern = "geophysics/gravity"
 ratio = 3
 note = "Somigliana formula on JuliaBase sin/cos/sqrt: the same out-of-line float_to_bits calls as math/*."
 
+# Dynamic layer (Grassmann.TA) in ℝ3 against Julia elements in a Vector{Any}: the operator
+# instances take the generated kernels (DynKernels, Grassmann/Dynamic/Fast.lean), 0.4-1.0x of
+# Julia on 2026-09-25; the *_loops cases (Julia's loops, every space without DynKernels) are
+# Lean-only reference rows.
+
 [[budget]]
 pattern = "staticvectors/sum3"
 ratio = 2.5
@@ -276,3 +281,8 @@ note = "Values Float n is a FloatArray: vector results allocate once (~9 ns; in 
 pattern = "staticvectors/reverse16"
 ratio = 100
 note = "Values Float n is a FloatArray: vector results allocate once (~9 ns; in place when the first operand is unshared), n <= 4 is unrolled straight-line code, larger n runs Nat-indexed loops; Julia keeps isbits tuples in registers and fuses/SIMDs whole expressions (2026-09-25 foundations pass)."
+
+[[budget]]
+pattern = "dynamic/*"
+ratio = 1.5
+note = "TA fast paths through the generated kernels (DynKernels); measured 0.39-0.97x of Julia's Vector{Any} dispatch."

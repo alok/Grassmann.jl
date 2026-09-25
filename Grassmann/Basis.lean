@@ -44,8 +44,11 @@ register_option grassmann.basis.kernels : Bool := {
 
 /-- `basis! V`: declare the space `V`, its unit scalar `v` and every basis blade
 (Julia `@basis V`), and for `n ≤ 6` its generated kernels (`(kernels := false)`
-opts out). -/
-syntax (name := basisCmd) "basis! " (atomic("(" &"kernels" " := ") ident ")")? term : command
+opts out). `(names := E e)` names the space `E` and the blades `e₁ e₁₂ …` (aliases `e1 e12`),
+Julia's `@basis V E e`; a third and fourth name replace the covector and tangent
+prefixes `w`, `∂` (Julia's `cov`, `duo`). -/
+syntax (name := basisCmd) "basis! " (atomic("(" &"kernels" " := ") ident ")")?
+  (atomic("(" &"names" " := ") ident+ ")")? term : command
 
 /-- Evaluate a `TensorBundle` term at elaboration time. -/
 private unsafe def evalBundleUnsafe (t : Term) : TermElabM TensorBundle := do
@@ -63,8 +66,20 @@ def asciiAlias (label : String) : String :=
 
 /-- Elaborate `basis! V`: evaluate `V`, then declare the space, the blades and the aliases. -/
 @[command_elab basisCmd] def elabBasis : CommandElab
-  | `(basis! $[(kernels := $k)]? $t) => do
+  | `(basis! $[(kernels := $k)]? $[(names := $ns*)]? $t) => do
     let V ← liftTermElabM (evalBundle t)
+    let ns : Array Ident := ns.getD #[]
+    let spaceName : Name := (ns[0]?.map (·.getId)).getD `V
+    let pre := Leibniz.pre
+    let names : Leibniz.Names :=
+      ((ns[1]?.map (·.getId.toString)).getD pre.1,
+       (ns[2]?.map (·.getId.toString)).getD pre.2.1,
+       (ns[3]?.map (·.getId.toString)).getD pre.2.2.1, pre.2.2.2)
+    -- Julia's labels with the prefixes renamed (the element *values* still print with the
+    -- space's own prefixes, as in Julia: `e3` is `v₃`)
+    let label := fun (b : UInt64) (ascii : Bool) =>
+      ((((V.bladeLabel b (label := ascii)).replace "v" names.1).replace "w" names.2.1).replace
+        "∂" names.2.2.1)
     let kernels ← match k with
       | none => pure (grassmann.basis.kernels.get (← getOptions))
       | some b => match b.getId with
@@ -73,19 +88,19 @@ def asciiAlias (label : String) : String :=
         | _ => throwErrorAt b "expected `true` or `false`"
     if V.n > 10 then
       throwError m!"basis!: {V.n} generators would declare {toString (2 ^ V.n)} blades (at most 10 generators)"
-    let vId := mkIdent `V
+    let vId := mkIdent spaceName
     elabCommand (← `(/-- The space declared by `basis!`. -/ abbrev $vId : DirectSum.TensorBundle := $t))
-    let mut declared : Std.HashSet String := {"V"}
+    let mut declared : Std.HashSet String := {spaceName.toString}
     for b in Leibniz.indexBasisAll V.n do
       let g := Bits.popcount b
-      let pretty := V.bladeLabel b
+      let pretty := label b false
       let id := mkIdent (Name.mkSimple pretty)
       let gLit := Syntax.mkNumLit (toString g)
       let bLit := Syntax.mkNumLit (toString b.toNat)
       elabCommand (← `(/-- A basis blade declared by `basis!`. -/
         def $id : DirectSum.Submanifold $vId $gLit := ⟨$bLit⟩))
       declared := declared.insert pretty
-      let ascii := asciiAlias (V.bladeLabel b (label := true))
+      let ascii := asciiAlias (label b true)
       if !declared.contains ascii then
         let aId := mkIdent (Name.mkSimple ascii)
         elabCommand (← `(/-- ASCII alias of a basis blade declared by `basis!`. -/
@@ -101,5 +116,43 @@ def asciiAlias (label : String) : String :=
       Kernel.Codegen.generateKernels vId V ((← getCurrNamespace) ++ `kernels)
         (Kernel.Codegen.Policy.default V.n)
   | _ => throwUnsupportedSyntax
+
+/-- `dualbasis! V`: Julia `@dualbasis V`, the basis of the dual space `V′` (covector
+blades `w¹ w¹² …`, aliases `w1 w12`). -/
+syntax (name := dualbasisCmd) "dualbasis! " term : command
+
+macro_rules
+  | `(dualbasis! $t) => `(basis! (DirectSum.TensorBundle.dual $t))
+
+/-- `mixedbasis! V`: Julia `@mixedbasis V`, the basis of `V ⊕ V′` (vectors, covectors and
+their mixed blades `v₁w¹ …`). -/
+syntax (name := mixedbasisCmd) "mixedbasis! " term : command
+
+macro_rules
+  | `(mixedbasis! $t) => `(basis! (DirectSum.TensorBundle.oplus! $t (DirectSum.TensorBundle.dual $t)))
+
+/-! ## Hyperplanes (Julia `hyperplanes`, `𝕚 𝕛 𝕜`) -/
+
+/-- Julia `hyperplanes(V)` (`src/Grassmann.jl:62`): the terms `I ⟑ vₖ` for every generator
+(`k < n - diffvars`), the hyperplanes orthogonal to the basis vectors; in `ℝ3`
+`[1v₂₃, -1v₁₃, 1v₁₂]`, in `ℝ4` `[-1v₂₃₄, 1v₁₃₄, -1v₁₂₄, 1v₁₂₃]`. Each is a grade-`n-1` term
+(its coefficient is `0` for a degenerate `I ⟑ vₖ`). -/
+def hyperplanes (V : TensorBundle) : Array (Single V (V.n - 1) Int) :=
+  (List.range (V.n - V.diffvars)).toArray.map fun k =>
+    let e : UInt64 := (1 : UInt64) <<< k.toUInt64
+    match V.apply₂ .mul (DirectSum.Bits.lowMask V.n) e with
+    | .ok (.blade b) => ⟨b, 1⟩
+    | .ok (.single c b) => ⟨b, c.num⟩
+    | _ => ⟨DirectSum.Bits.lowMask V.n ^^^ e, 0⟩
+
+/-- Julia `𝕚 = hyperplanes(ℝ3)[1] = v₂₃` (`src/Grassmann.jl:71`): the quaternion unit
+`i` as a bivector of `ℝ3` (`𝕚 * 𝕛 = -v₁₂`… with the dynamic layer's kinds). -/
+def «𝕚» : Single ℝ3 2 Int := ⟨6, 1⟩
+
+/-- Julia `𝕛 = hyperplanes(ℝ3)[2] = -v₁₃`. -/
+def «𝕛» : Single ℝ3 2 Int := ⟨5, -1⟩
+
+/-- Julia `𝕜 = hyperplanes(ℝ3)[3] = v₁₂`. -/
+def «𝕜» : Single ℝ3 2 Int := ⟨3, 1⟩
 
 end Grassmann

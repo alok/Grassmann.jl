@@ -29,6 +29,8 @@ here as `scoped` notation of `Grassmann`, so that `open Grassmann` activates it:
 | complements | prefix `⋆`, `!` (overloads `not`) | max |
 | reverse, parts, conjugate, involute | prefix `~`, postfix `₊ ₋ ǂ ˣ` | max |
 | versor action | `R >>> x` | 75 |
+| left division, parallel test | `a \ b` (overloads `SDiff`), `a ∥ b` | 70, 50 |
+| shifted contractions (Julia `<<`, `>>`) | `a ≪ b`, `a ≫ b` | 70 |
 
 **Open `Grassmann` or `AbstractTensors`, not both**: the two namespaces declare
 the same notation, and with both open every operator is ambiguous.
@@ -49,6 +51,21 @@ import JuliaBase
 namespace Grassmann
 
 open AbstractTensors
+
+universe u v w
+
+/-- Left division `a \ b = inv(a) ⟑ b` (Julia `Base.:\`, AbstractTensors
+`src/AbstractTensors.jl:323`). A class of its own (core `SDiff` is homogeneous), so the
+result type can depend on both operands. -/
+class LeftDiv (α : Type u) (β : Type v) (γ : outParam (Type w)) where
+  /-- `a \ b`. -/
+  ldiv : α → β → γ
+
+/-- Julia `a ∥ b = iszero(a ∧ b)` (Grassmann `src/algebra.jl:401`): whether two elements
+are parallel. -/
+class Parallel (α : Type u) (β : Type v) where
+  /-- `a ∥ b`. -/
+  parallel : α → β → Bool
 
 export DirectSum (TensorBundle Metric Submanifold SubSpace Layout BinOp UnOp
   ℝ0 ℝ1 ℝ2 ℝ3 ℝ4 ℝ5 ℝ6 ℝ7 ℝ8 ℝ9 R2 R3 R4 R5 STA PGA2 PGA3 CGA2 CGA3)
@@ -105,5 +122,14 @@ scoped postfix:max "₋" => Odd.odd
 scoped postfix:max "ǂ" => StaticVectors.Conj.conj
 /-- Grade involution (Julia postfix `ˣ`). -/
 scoped postfix:max "ˣ" => Involute.involute
+/-- Left division (Julia `a \ b = inv(a) ⟑ b`); overloads core's `\` (`SDiff`) through a
+choice node, as `∧` overloads `And`. -/
+scoped infixl:70 " \\ " => LeftDiv.ldiv
+/-- Parallel test (Julia `a ∥ b = iszero(a ∧ b)`). -/
+scoped infix:50 " ∥ " => Parallel.parallel
+/-- Julia `a << b = contraction(b, ~a)`. -/
+scoped infixl:70 " ≪ " => shiftLeftContraction
+/-- Julia `a >> b = contraction(~a, b)`. -/
+scoped infixl:70 " ≫ " => shiftRightContraction
 
 end Grassmann

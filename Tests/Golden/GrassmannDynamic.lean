@@ -335,6 +335,40 @@ def AnyTA.blade? (x : AnyTA V) : Option UInt64 :=
   | .int t => f t | .rat t => f t | .float t => f t | .bool t => f t
   | .cint t => f t | .crat t => f t | .cfloat t => f t
 
+/-- A term (`Zero`, `One`, a blade or a `Single`). -/
+def AnyTA.isTerm (x : AnyTA V) : Bool :=
+  match x.encode.kind with
+  | .zero | .one | .submanifold | .single => true
+  | _ => false
+
+/-- A dense container result (`Chain`, `Spinor`, `CoSpinor`, `Multivector`). -/
+def AnyTA.isContainer (x : AnyTA V) : Bool :=
+  match x.encode.kind with
+  | .chain | .spinor | .cospinor | .multivector => true
+  | _ => false
+
+/-- Julia `abs2(x)` (`TA.abs2`) for the coefficient types with a Julia `abs2`/`norm`. -/
+def AnyTA.abs2 : AnyTA V → Option (AnyTA V)
+  | .int t => some (.int (TA.abs2 t))
+  | .rat t => some (.rat (TA.abs2 t))
+  | .float t => some (.float (TA.abs2 t))
+  | .cfloat t => some (.cfloat (TA.abs2 t))
+  | _ => none
+
+/-- Julia `norm(x)` (`TA.norm`), a `Float64`; integer and rational complex coefficients
+are converted to `Complex{Float64}` first (exact for the oracle's small entries). -/
+def AnyTA.norm (x : AnyTA V) : Option Float :=
+  let direct : AnyTA V → Option Float := fun
+    | .int t => some t.norm
+    | .rat t => some t.norm
+    | .float t => some t.norm
+    | .cfloat t => some t.norm
+    | _ => none
+  match x with
+  | .bool _ => (x.promoteTo .int64).bind direct
+  | .cint _ | .crat _ => (x.promoteTo (.complex .float64)).bind direct
+  | _ => direct x
+
 /-- The `Float64` version of the coefficient type (`Complex{Float64}` for complex types). -/
 def AnyTA.toFloat (x : AnyTA V) : Option (AnyTA V) :=
   match x with

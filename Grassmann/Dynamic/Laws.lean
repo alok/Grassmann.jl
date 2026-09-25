@@ -1334,8 +1334,10 @@ theorem Multivector_ext {m w : Multivector V α} (h : ∀ i, m.v.get i = w.v.get
 /-- **`toDense` is additive** on well-formed elements: every branch of Julia's `+`
 lattice (DESIGN.md §4.3) computes the sum. -/
 theorem toDense_add (hL : LayoutInv V.n) {a b : TA V α} (ha : a.WF) (hb : b.WF) :
-    (a + b).toDense = a.toDense + b.toDense :=
-  Multivector_ext fun i => (dget_add hL a b ha hb i).trans (Values.get_add _ _ i).symm
+    (a + b).toDense = a.toDense + b.toDense := by
+  show (addF a b).toDense = _
+  rw [addF_eq]
+  exact Multivector_ext fun i => (dget_add hL a b ha hb i).trans (Values.get_add _ _ i).symm
 
 /-- **`toDense` commutes with negation.** -/
 theorem toDense_neg {a : TA V α} (ha : a.WF) : (-a).toDense = -a.toDense :=
