@@ -182,6 +182,19 @@ def logTable32F : FloatArray := floatsOfBits id logTable32
 /-- `logctail` of `t_log_table_compact`. -/
 def logTableTailF : FloatArray := floatsOfBits id logTableTail
 
+/-- `2^k` for `k = -1022 … 1023` at index `k + 1022`, decoded once: scaling by a table read
+instead of two out-of-line bit casts (`reinterpret(Float64, (k << 52) + bits)`). -/
+def pow2Table : FloatArray :=
+  floatsOfBits (fun i => (i + 1) <<< 52) ((List.range 2046).toArray.map (·.toUInt64))
+
+/-- `2^k` for a normal exponent `-1022 ≤ k ≤ 1023` (a table read). -/
+@[inline] def pow2 (k : Int64) : Float := pow2Table.get! (k + i64! 1022).toUInt64.toNat
+
+/-- `twoPow k` (`reinterpret(Float64, (1023 + k) << 52)`, wrapping outside the normal range as
+Julia does), from the table when `k` is a normal exponent. -/
+@[inline] def twoPowT (k : Int64) : Float :=
+  if i64! -1022 ≤ k && k ≤ i64! 1023 then pow2 k else twoPow k
+
 /-! ## `exp` (exp.jl) -/
 
 /-- `MAGIC_ROUND_CONST(Float64) = 1.5·2^52`. -/
@@ -197,7 +210,10 @@ high bits of the value and 8 extra bits of the correction. -/
 rounded `x·256/log_b(2)`, signed) and `r = x - N·log_b(2)/256` in two steps. -/
 @[inline] def expReduce (x : Float) (b : Radix) : Int64 × Float :=
   let nf := Float.fma x b.inv256 magic
-  let n : Int64 := nf.toBits.toUInt32.toInt32.toInt64
+  -- Julia takes the low 32 bits of the bit pattern of `nf = 1.5·2^52 + N`; while `nf` lies in
+  -- `[2^52, 2^53)` (every `x` whose result uses `N`) those are the low 32 bits of the integer
+  -- `nf` itself, and `Float.toUInt64` is an inline conversion (`toBits` is an out-of-line call)
+  let n : Int64 := nf.toUInt64.toUInt32.toInt32.toInt64
   let nf := nf - magic
   let r := Float.fma nf b.lnU x
   let r := Float.fma nf b.lnL r
@@ -206,26 +222,31 @@ rounded `x·256/log_b(2)`, signed) and `r = x - N·log_b(2)/256` in two steps. -
 /-- Scale by `2^k` through the exponent bits (`reinterpret(T, (Int64(k) << 52) + bits)`). -/
 @[inline] def scale2k (k : Int64) (small : Float) : Float := addExponentBits k small
 
+/-- `scale2k k small` when `small·2^k` is normal (`0.99 < small < 2` and the result is a normal
+number, as on the fast path of `exp_impl`, `|x| ≤ SUBNORM_EXP`): the product by the exact power
+of two is exact, hence bit-identical to adding `k` to the exponent bits. -/
+@[inline] def scale2kNormal (k : Int64) (small : Float) : Float := small * pow2 k
+
 /-- Julia `exp_impl(x::Float64, base)` (exp.jl:207-231). -/
 @[inline] def expImpl (x : Float) (b : Radix) : Float :=
   let (n, r) := expReduce x b
-  let k := n >>> 8
+  let k := n >>> i64! 8
   let (jU, jL) := tableUnpack n
   let small := Float.fma jU (b.kernel r) jL + jU
   if !(x.abs ≤ b.subnormExp) then
     if F64.isnan x then x
     else if x ≥ b.maxExp then F64.inf
     else if x ≤ b.minExp then f64! 0.0
-    else if k ≤ -53 then
-      addExponentBits (k + 53) small * f64! 1.1102230246251565e-16
+    else if k ≤ i64! -53 then
+      addExponentBits (k + i64! 53) small * f64! 1.1102230246251565e-16
     else scale2k k small
-  else scale2k k small
+  else scale2kNormal k small
 
 /-- Julia `exp_impl(x::Float64, xlo::Float64, base)` (exp.jl:233-259): `b^(x + xlo)`, the
 last step of `^(::Float64, ::Float64)`. -/
 @[inline] def expImpl2 (x xlo : Float) (b : Radix) : Float :=
   let (n, r) := expReduce x b
-  let k := n >>> 8
+  let k := n >>> i64! 8
   let (jU, jL) := tableUnpack n
   let kern := b.kernel r
   let verySmall := Float.fma kern (jU * xlo) jL
@@ -237,11 +258,11 @@ last step of `^(::Float64, ::Float64)`. -/
     if F64.isnan x then x
     else if x ≥ b.maxExp then F64.inf
     else if x ≤ b.minExp then f64! 0.0
-    else if k ≤ -53 then
-      addExponentBits (k + 53) small * f64! 1.1102230246251565e-16
-    else if k == 1024 then (small * f64! 2.0) * f64! 8.98846567431158e307
+    else if k ≤ i64! -53 then
+      addExponentBits (k + i64! 53) small * f64! 1.1102230246251565e-16
+    else if k == i64! 1024 then (small * f64! 2.0) * f64! 8.98846567431158e307
     else scale2k k small
-  else scale2k k small
+  else scale2kNormal k small
 
 /-- Julia `round(x::Float32)` (to nearest, ties to even; exact through `Float64`). -/
 @[inline] def round32 (x : Float32) : Float32 := (F64.round x.toFloat).toFloat32
@@ -306,14 +327,14 @@ def expm1 (x : Float) : Float :=
   else if x < f64! -37.42994775023705 then f64! -1.0
   else
     let (n, r) := expReduce x .e
-    let k := n >>> 8
+    let k := n >>> i64! 8
     let (jU, jL) := tableUnpack n
     let p := Radix.e.kernel r
-    let twopk := twoPow k
-    let twopnk := twoPow (-k)
-    if k ≥ 106 then twoPow (k - 1) * (jU + Float.fma jU p jL) * f64! 2.0
-    else if k ≥ 53 then twopk * (jU + Float.fma jU p (jL - twopnk))
-    else if k ≤ -2 then twopk * (jU + Float.fma jU p jL) - f64! 1.0
+    let twopk := twoPowT k
+    let twopnk := twoPowT (-k)
+    if k ≥ i64! 106 then twoPowT (k - i64! 1) * (jU + Float.fma jU p jL) * f64! 2.0
+    else if k ≥ i64! 53 then twopk * (jU + Float.fma jU p (jL - twopnk))
+    else if k ≤ i64! -2 then twopk * (jU + Float.fma jU p jL) - f64! 1.0
     else twopk * ((jU - twopnk) + Float.fma jU p jL)
 
 /-- Julia `expm1(x::Float32)` (exp.jl:457-472): the reduction in `Float64`. -/
