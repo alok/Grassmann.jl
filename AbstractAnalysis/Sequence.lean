@@ -131,11 +131,34 @@ end SequenceArray
 /-- A 1-D sequence stored in a plain `Array`. -/
 abbrev SequenceVector (α : Type) [Inhabited α] := SequenceArray (Array α) α
 
+/-- Julia `accumulate_pairwise!(op, c, v)` (base/accumulate.jl), which `cumsum`
+uses for rounding arithmetic: blocks below 128 elements accumulate their own
+partial sum `s_` and add it to the running offset `s`, so `c[i] = v[1] + (v[2] + … + v[i])`
+rather than a left fold. On exact types the two agree. -/
+def accumulatePairwise {α : Type} [Inhabited α] (op : α → α → α) (v : Array α) : Array α :=
+  if v.size ≤ 1 then v else (go (v.set! 0 v[0]!) v[0]! 1 (v.size - 1) v.size).1
+where
+  /-- Julia `_accumulate_pairwise!`: returns the updated output and the block sum. -/
+  go (c : Array α) (s : α) (i1 n : Nat) : Nat → Array α × α
+    | 0 => (c, s)
+    | fuel + 1 =>
+      if n < 128 then
+        let s_ := v[i1]!
+        let c := c.set! i1 (op s s_)
+        (List.range (n - 1)).foldl (fun (c, s_) j =>
+          let s_ := op s_ v[i1 + 1 + j]!
+          (c.set! (i1 + 1 + j) (op s s_), s_)) (c, s_)
+      else
+        let n2 := n / 2
+        let (c, s_) := go c s i1 n2 fuel
+        let (c, t) := go c (op s s_) (i1 + n2) (n - n2) fuel
+        (c, op s_ t)
+
 /-- Julia `cumsum(x::CountableVector)`: eager prefix sums of the first `len`
-terms, extended lazily by `u[k-1] + x(k)` (src/AbstractAnalysis.jl:283-298). -/
+terms via `accumulate_pairwise!` (`cumsum(view(x, :))`), extended lazily by
+`u[k-1] + x(k)` (src/AbstractAnalysis.jl:283-298). -/
 def CountableVector.cumsum {α : Type} [Add α] [Inhabited α] (x : CountableVector α) : SequenceVector α :=
-  let seq : SequenceVector α := ⟨#[x.f 1], fun u k => u[k - 2]! + x.f k⟩
-  if x.len = 0 then ⟨#[], seq.f⟩ else seq.resize x.len
+  ⟨accumulatePairwise (· + ·) (x.slice 1 x.len), fun u k => u[k - 2]! + x.f k⟩
 
 /-- Julia `cumprod(x::CountableVector)`. -/
 def CountableVector.cumprod {α : Type} [Mul α] [Inhabited α] (x : CountableVector α) : SequenceVector α :=

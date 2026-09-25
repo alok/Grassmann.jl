@@ -204,7 +204,7 @@ def liminf {α : Type} [Min α] [Inhabited α] (x : Array α) (m : Nat := 5) : �
 
 /-- Julia's default step `eps()^(1/5)` for `derivative` (the value Julia's
 `^(::Float64, ::Float64)` returns). -/
-def derivativeStep : Float := 7.400959797414051e-4
+def derivativeStep : Float := 7.40095979741405e-4
 
 /-- Julia `derivative(f, x, h)`: the five-point stencil
 `(-f(x+2h) + 8f(x+h) - 8f(x-h) + f(x-2h)) / 12h`. -/

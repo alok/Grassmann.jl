@@ -306,7 +306,10 @@ def prodNaturals (n : Nat) : Limit (Indexed Int) Int where
   v0 := ⟨1, 1⟩
   v := ⟨n, (factorial n : Int)⟩
   n := n
-  r := let v := Float.ofNat (factorial n); (v / Float.ofNat n - v).abs
+  r :=
+    if n ≤ 20 then let v := Float.ofNat (factorial n); (v / Float.ofNat n - v).abs
+    else -- Julia switches to `BigInt`/`BigFloat`: the residual is the rounded exact value
+      IEEEFloat.ofRat Float ((factorial n : Rat) - (factorial n : Rat) / (n : Rat))
   step u := ⟨u.k + 1, u.val * ((u.k + 1 : Nat) : Int)⟩
   value := Indexed.val
   dist a b := (Float.ofInt a - Float.ofInt b).abs
