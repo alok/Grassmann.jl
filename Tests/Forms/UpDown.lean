@@ -203,6 +203,15 @@ def suite : IO Tally := do
   let rf := Fields.rectanglefield pts elems g 3 2
   let t := t.ok (rf.size == 2 && (((rf[1]!)[0]!).v.toList.zip [0, 2]).all fun (a, b) => (a - b).abs < 1e-13) fun _ =>
     "rectanglefield"
+  -- Julia `column(p, i)`, `columns(p, 2, 3)`, and the per-element `barycenters`/`means`/`centroids`
+  let t := t.ok (Forms.pointColumn pts 2 == #[0, 2, 0, 2] && Forms.pointColumns pts 2 3 == #[#[0, 2, 0, 2], #[0, 0, 2, 2]])
+    fun _ => "column, columns"
+  let t := t.ok ((Forms.barycenters elems pts).map (·.v.toList) == #[[3, 2, 2], [3, 4, 4]]) fun _ => "barycenters"
+  let near := fun (a b : List Float) => (a.zip b).all fun (x, y) => (x - y).abs < 1e-13
+  let t := t.ok (near ((Forms.means elems pts)[0]!).v.toList [1, 2 / 3, 2 / 3] &&
+      near ((Forms.centroids elems pts)[1]!).v.toList [1, 4 / 3, 4 / 3]) fun _ => "means, centroids"
+  let S : Simplex (En 3) (En 3) Float := TensorOperator.ofFn fun i j => getD (pts[j.1]!).v i.1
+  let t := t.ok (S.pointColumn 2 |>.toList |> (· == [0, 2, 0])) fun _ => "column of a simplex"
   return t
 
 end Tests.FormsTests.UpDown

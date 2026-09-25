@@ -193,6 +193,56 @@ def TensorOperator.interpolate {V W : TensorBundle} {α : Type} [Coeff α] [Div 
   let lam := T.solve p
   Mat.dotPlain lam.v f
 
+/-! ## Coordinates of point lists and the per-element helpers -/
+
+namespace Forms
+
+variable {W : TensorBundle} {α : Type} [Coeff α]
+
+/-- Julia `column(t, i = 1) = getindex.(value(t), i)` (`src/Grassmann.jl:293`) of a point
+list: the `i`-th coordinate (1-based) of every point (`TensorOperator.column` is the other
+reading, an operator's `j`-th column). -/
+def pointColumn (pts : Array (Chain W 1 α)) (i : Nat := 1) : Array α := pts.map fun p => getD p.v (i - 1)
+
+/-- Julia `columns(t, i = 1, j = mdims(Manifold(t)))` (`src/Grassmann.jl:294`): the coordinates
+`i … j` (1-based) of a point list, one array each. -/
+def pointColumns (pts : Array (Chain W 1 α)) (i : Nat := 1) (j : Nat := W.n) : Array (Array α) :=
+  (List.range' i (j + 1 - i)).toArray.map fun k => pointColumn pts k
+
+/-- The sum of the points `p[k]`, `k ∈ idx` (1-based), a left fold from the first. -/
+def sumAt (p : Array (Chain W 1 α)) (idx : Array Nat) : Chain W 1 α :=
+  match idx.toList with
+  | [] => Chain.zero
+  | k :: ks => ks.foldl (fun acc k' => acc + (p[k' - 1]?.getD Chain.zero)) (p[k - 1]?.getD Chain.zero)
+
+/-- Julia `barycenters(m, p) = barycenter.(getindex.(Ref(p), m))` (`src/composite.jl:962-969`):
+the sum of each element's points. -/
+def barycenters (m : Array (Array Nat)) (p : Array (Chain W 1 α)) : Array (Chain W 1 α) :=
+  m.map (sumAt p)
+
+/-- Julia `means(m, p) = mean.(getindex.(Ref(p), m))` (`src/composite.jl:962-969`): each
+element's point sum over its vertex count (times the reciprocal, as `mean` of a simplex). -/
+def means [Div α] (m : Array (Array Nat)) (p : Array (Chain W 1 α)) : Array (Chain W 1 α) :=
+  m.map fun idx => sumAt p idx * ((Coeff.one : α) / Coeff.ofInt (idx.size : Int))
+
+/-- Julia `centroids(m, p) = centroid.(getindex.(Ref(p), m))` (`src/composite.jl:962-969`):
+each element's point sum over its homogeneous coordinate (`s/s[1]`). -/
+def centroids [Div α] (m : Array (Array Nat)) (p : Array (Chain W 1 α)) : Array (Chain W 1 α) :=
+  m.map fun idx => let s := sumAt p idx; s * (Coeff.one / getD s.v 0)
+
+end Forms
+
+namespace TensorOperator
+
+variable {V W : TensorBundle} {α : Type} [Coeff α]
+
+/-- Julia `column(t, i)` of a simplex (`getindex.(value(t), i)`, `src/Grassmann.jl:293`): the
+`i`-th coordinate (1-based) of every vertex, the operator's row `i`. -/
+def pointColumn (T : Simplex V W α) (i : Nat := 1) : Values α ((Layout.chain 1).size V.n) :=
+  Values.ofFn fun j => T.entry (i - 1) j.1
+
+end TensorOperator
+
 /-- Julia `findfirst(P, t)` (`composite.jl:917-922`): the first simplex (1-based)
 containing `P`, `0` if none. -/
 def findfirstSimplex {V W : TensorBundle} {α : Type} [Coeff α] [SignBit α]
