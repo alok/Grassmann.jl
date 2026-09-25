@@ -124,8 +124,9 @@ def limitEpsTrace (L : Limit S V) (ϵ : Float) : Limit S V × FloatArray :=
   let (_, xn, n, change, out) := untilConverged L.step L.value L.dist ϵ true x x 1 (5 * ϵ) {} maxIter
   (⟨x, xn, n + L.n, change, L.step, L.value, L.dist⟩, out)
 
-/-- Julia `limit(L, ϵ)` / `L[ϵ]`. -/
-def limitEps (L : Limit S V) (ϵ : Float) : Limit S V :=
+/-- Julia `limit(L, ϵ)` / `L[ϵ]`. Inlined, so that a limit built in place (`x.sum.limitEps ϵ`)
+specializes `untilConverged` on its step and metric. -/
+@[inline] def limitEps (L : Limit S V) (ϵ : Float) : Limit S V :=
   let x := L.v
   let (_, xn, n, change, _) := untilConverged L.step L.value L.dist ϵ false x x 1 (5 * ϵ) {} maxIter
   ⟨x, xn, n + L.n, change, L.step, L.value, L.dist⟩
@@ -265,7 +266,7 @@ variable {α : Type}
 
 /-- Julia `sum(x::CountableVector)` (src/metric.jl:204-206): a `Limit` of
 partial sums at `len` whose **residual is the last term** `x[end]`. -/
-def sum [JNumber α] [Metric α] (x : CountableVector α) : Limit (Indexed α) α where
+@[inline] def sum [JNumber α] [Metric α] (x : CountableVector α) : Limit (Indexed α) α where
   v0 := ⟨1, x.f 1⟩
   v := ⟨x.len, x.jsum⟩
   n := x.len
@@ -276,7 +277,7 @@ def sum [JNumber α] [Metric α] (x : CountableVector α) : Limit (Indexed α) �
 
 /-- Julia `prod(x::CountableVector)` (src/metric.jl:207-210): residual
 `supnorm(val, val/x[end])`. -/
-def prod [JNumber α] [Metric α] (x : CountableVector α) : Limit (Indexed α) α where
+@[inline] def prod [JNumber α] [Metric α] (x : CountableVector α) : Limit (Indexed α) α where
   v0 := ⟨1, x.f 1⟩
   v := ⟨x.len, x.jprod⟩
   n := x.len
@@ -346,19 +347,19 @@ without a `Metric` instance (Cartan's tensor fields) pass their own `d`. -/
 
 /-- Julia `orbit(f, x, ϵ = 5eps(), Val(false), d = supnorm)`: iterate until
 `d(x_{k+1}, x_k) ≤ ϵ`. -/
-def orbit {S : Type} (f : S → S) (x : S) (ϵ : Float := 5 * 2.220446049250313e-16)
+@[inline] def orbit {S : Type} (f : S → S) (x : S) (ϵ : Float := 5 * 2.220446049250313e-16)
     (d : S → S → Float := by exact AbstractAnalysis.Metric.dist) : Limit S S :=
   let (_, xn, n, change, _) := Limit.untilConverged f id d ϵ false x x 1 (5 * ϵ) {} Limit.maxIter
   ⟨x, xn, n, change, f, id, d⟩
 
 /-- Julia `orbiterror(f, x, ϵ, d = supnorm)`: the orbit plus its residual trace. -/
-def orbitError {S : Type} (f : S → S) (x : S) (ϵ : Float := 5 * 2.220446049250313e-16)
+@[inline] def orbitError {S : Type} (f : S → S) (x : S) (ϵ : Float := 5 * 2.220446049250313e-16)
     (d : S → S → Float := by exact AbstractAnalysis.Metric.dist) : Limit S S × FloatArray :=
   let (_, xn, n, change, out) := Limit.untilConverged f id d ϵ true x x 1 (5 * ϵ) {} Limit.maxIter
   (⟨x, xn, n, change, f, id, d⟩, out)
 
 /-- Julia `orbit(f, x, k::Int, d = supnorm)`: exactly `k` steps, length `k + 1`. -/
-def orbitN {S : Type} (f : S → S) (x : S) (k : Nat)
+@[inline] def orbitN {S : Type} (f : S → S) (x : S) (k : Nat)
     (d : S → S → Float := by exact AbstractAnalysis.Metric.dist) : Limit S S :=
   let (x0, xn) := Limit.iterPair f x x k
   ⟨x, xn, k + 1, d xn x0, f, id, d⟩
