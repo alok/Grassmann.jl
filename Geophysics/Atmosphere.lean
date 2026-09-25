@@ -716,6 +716,50 @@ def specificenergy (h : Float) (U : Sys := W.units) := W.eval .specificenergy h 
 /-- `specificenthalpy(h, W, U)` -/
 def specificenthalpy (h : Float) (U : Sys := W.units) := W.eval .specificenthalpy h U
 
+/-! The named ratios `<op>ratio(h, W, U) = op(h, W, U)/op(W, U)` (`Geophysics.jl:873-881`;
+Julia defines them for every operation except `heatcapacity`). -/
+
+/-- `temperatureratio(h, W, U)` -/
+def temperatureratio (h : Float) (U : Sys := W.units) := W.ratio .temperature h U
+/-- `pressureratio(h, W, U)` -/
+def pressureratio (h : Float) (U : Sys := W.units) := W.ratio .pressure h U
+/-- `densityratio(h, W, U)` -/
+def densityratio (h : Float) (U : Sys := W.units) := W.ratio .density h U
+/-- `specificweightratio(h, W, U)` -/
+def specificweightratio (h : Float) (U : Sys := W.units) := W.ratio .specificweight h U
+/-- `specificvolumeratio(h, W, U)` -/
+def specificvolumeratio (h : Float) (U : Sys := W.units) := W.ratio .specificvolume h U
+/-- `specificimpedanceratio(h, W, U)` -/
+def specificimpedanceratio (h : Float) (U : Sys := W.units) := W.ratio .specificimpedance h U
+/-- `thermaldiffusivityratio(h, W, U)` -/
+def thermaldiffusivityratio (h : Float) (U : Sys := W.units) := W.ratio .thermaldiffusivity h U
+/-- `intensityratio(h, W, U)` -/
+def intensityratio (h : Float) (U : Sys := W.units) := W.ratio .intensity h U
+/-- `kinematicratio(h, W, U)` -/
+def kinematicratio (h : Float) (U : Sys := W.units) := W.ratio .kinematic h U
+/-- `elasticityratio(h, W, U)` -/
+def elasticityratio (h : Float) (U : Sys := W.units) := W.ratio .elasticity h U
+/-- `viscosityratio(h, W, U)` -/
+def viscosityratio (h : Float) (U : Sys := W.units) := W.ratio .viscosity h U
+/-- `thermalconductivityratio(h, W, U)` -/
+def thermalconductivityratio (h : Float) (U : Sys := W.units) := W.ratio .thermalconductivity h U
+/-- `heatvolumeratio(h, W, U)` -/
+def heatvolumeratio (h : Float) (U : Sys := W.units) := W.ratio .heatvolume h U
+/-- `heatpressureratio(h, W, U)` -/
+def heatpressureratio (h : Float) (U : Sys := W.units) := W.ratio .heatpressure h U
+/-- `heatratioratio(h, W, U)` -/
+def heatratioratio (h : Float) (U : Sys := W.units) := W.ratio .heatratio h U
+/-- `prandtlratio(h, W, U)` -/
+def prandtlratio (h : Float) (U : Sys := W.units) := W.ratio .prandtl h U
+/-- `sonicspeedratio(h, W, U)` -/
+def sonicspeedratio (h : Float) (U : Sys := W.units) := W.ratio .sonicspeed h U
+/-- `freedomratio(h, W, U)` -/
+def freedomratio (h : Float) (U : Sys := W.units) := W.ratio .freedom h U
+/-- `specificenergyratio(h, W, U)` -/
+def specificenergyratio (h : Float) (U : Sys := W.units) := W.ratio .specificenergy h U
+/-- `specificenthalpyratio(h, W, U)` -/
+def specificenthalpyratio (h : Float) (U : Sys := W.units) := W.ratio .specificenthalpy h U
+
 end Weather
 
 /-- Julia `Weather{ϕ}(A, F)` as an atmosphere method: integrate `A` from the fluid

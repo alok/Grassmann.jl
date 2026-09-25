@@ -94,6 +94,11 @@ def Xenon : MoleGas := AtomicGas 131.293 2.229e-5 nanT 5.27e-3 nanT
 /-- `He ≡ Helium` -/ abbrev He := Helium
 /-- `Kr ≡ Krypton` -/ abbrev Kr := Krypton
 /-- `Xe ≡ Xenon` -/ abbrev Xe := Xenon
+/-- Julia `N₂` -/ abbrev N₂ := Nitrogen
+/-- Julia `O₂` -/ abbrev O₂ := Oxygen
+/-- Julia `CO₂` -/ abbrev CO₂ := CarbonDioxide
+/-- Julia `CH₄` -/ abbrev CH₄ := Methane
+/-- Julia `H₂` -/ abbrev H₂ := Hydrogen
 
 /-- The constant-`cᵥ` Sutherland air model (`planets.jl:62`; its heat capacities
 recurse forever in Julia, see `Gas`). -/
