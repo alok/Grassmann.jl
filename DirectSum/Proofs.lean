@@ -1,6 +1,7 @@
 import DirectSum.Proofs.Sign
 import DirectSum.Proofs.Metric
 import DirectSum.Proofs.UInt64
+import DirectSum.Proofs.Popcount
 
 /-!
 # DirectSum.Proofs: the blade sign rules, proved for every dimension
@@ -21,6 +22,8 @@ Theorems about the bit-level sign rules of `DirectSum.Bits`/`DirectSum.Parity`
   `Bits.prefixParity`, `Bits.reorderParity` and Julia's `parityjoin` equal the
   specification on **all** `UInt64` masks (`reorderParity_eq_spec`,
   `signOf_parityjoin`).
+* `DirectSum.Proofs.Popcount`: the SWAR `Bits.popcount` is the bit count on all
+  `UInt64` masks (`popcount_eq_bitCount`), via field sums that never overflow.
 
 No `sorry`, no axioms beyond Lean's standard three, no `native_decide`.
 -/
