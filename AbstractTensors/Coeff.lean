@@ -140,10 +140,11 @@ instance {α : Type} [Coeff α] : Coeff (Complex α) where
 /-! ## `Analytic` instances -/
 
 /-- `Float` via the C `libm` (Julia uses its own `libm`; results agree to an
-ulp or two), with `expm1`/`log1p` from `JuliaBase`. -/
+ulp or two), with `expm1`/`log1p` from `JuliaBase` and Julia's own bit-exact `cbrt`
+(`JuliaBase.F64.cbrt`). -/
 instance : Analytic Float where
   sqrt := Float.sqrt
-  cbrt := Float.cbrt
+  cbrt := F64.cbrt
   exp := Float.exp
   expm1 := F64.expm1
   log := Float.log

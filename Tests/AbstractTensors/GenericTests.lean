@@ -29,7 +29,7 @@ instance : SeriesRing Float where
 
 /-- Julia's scalar carrier `Sc{PS{1.0}(),Float64}`. -/
 instance realRing : TensorRing Float :=
-  TensorRing.ofSeries 0 1 1 id (fun _ => false) id (· * 1) (· * 1) Float.sqrt Float.cbrt
+  TensorRing.ofSeries 0 1 1 id (fun _ => false) id (· * 1) (· * 1) Float.sqrt F64.cbrt
 
 /-! ### The complex carrier: `Complex Float`, `I = i` -/
 
