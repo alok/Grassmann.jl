@@ -93,3 +93,9 @@ import Grassmann.Tactic
 
 /-- info: 'Grassmann.Spec.Cl.instRing' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Grassmann.Spec.Cl.instRing
+
+/-- info: 'Grassmann.Spec.Cl.isGrade_sandwich_of_even' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Spec.Cl.isGrade_sandwich_of_even
+
+/-- info: 'Grassmann.Spec.Cl.sandwich_sq_of_vector' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Spec.Cl.sandwich_sq_of_vector
