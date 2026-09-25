@@ -158,6 +158,10 @@ def run : IO Tally := do
   for (bits, nm) in [((0b011 : UInt64), "v₁₂"), (0b001, "v₁"), (0b111, "v₁₂₃")] do
     let z : Couple E3 Rat := ⟨bits, 1, 2⟩
     t := t.check (toMultivector z * toMultivector z⁻¹ == Multivector.one) s!"Couple inverse on {nm}"
+  -- abs2 of couples (grassmann-types.md §4.8 goldens)
+  t := t.check ((⟨0b011, 1, 2⟩ : Couple E3 Int).abs2 == 5) "abs2(Couple{v12}(1,2)) = 5"
+  t := t.check (toString (⟨0b011, 1, 2⟩ : PseudoCouple E3 Int).abs2 == "5 + 4v₃") "abs2(PC{v12}(1,2))"
+  t := t.check (toString (⟨0b001, 3, 4⟩ : PseudoCouple E3 Int).abs2 == "25v⃖") "abs2(PC{v1}(3,4))"
   -- isapprox: componentwise for chains (Julia `0 ≈ 1e-20` is false)
   let c0 : Chain E3 1 Float := Chain.ofFn fun _ => 0
   let ce : Chain E3 1 Float := Chain.ofFn fun i => if i.1 = 0 then 1.0e-20 else 0

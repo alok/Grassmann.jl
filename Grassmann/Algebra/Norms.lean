@@ -153,7 +153,24 @@ def inv [Div α] (z : Couple V α) : Couple V α :=
 
 instance [Div α] : Inv (Couple V α) := ⟨Couple.inv⟩
 
+/-- Julia `abs2(z) = re² + im²·abs2(e_B)` for a couple (`src/multivectors.jl:669`):
+the scalar part of `(~z) ⟑ z` (`abs2(e_B) = ⟨~e_B e_B⟩₀ = contraction(e_B, e_B)`). -/
+def abs2 (z : Couple V α) : α :=
+  if z.bits == 0 then (z.re + z.im) * (z.re + z.im)
+  else
+    let f := (V.terms₂ .contraction z.bits z.bits).toOption.bind
+      (fun ts => (ts.find? fun (t : BladeTerm) => t.bits == 0 && t.z == 0).map (·.coef)) |>.getD 0
+    z.re * z.re + scaleBy f (z.im * z.im)
+
 end Couple
+
+namespace PseudoCouple
+
+/-- Julia `abs2(z)` for a pseudo-couple (`src/multivectors.jl:689-696`): the full
+`(~z) ⟑ z`, which need not be a scalar (`abs2(v₁₂ + 2v₁₂₃) = 5 + 4v₃` in `ℝ3`). -/
+@[inline] def abs2 (z : PseudoCouple V α) : Multivector V α := (~(toMultivector z)) * toMultivector z
+
+end PseudoCouple
 
 /-- Julia `a / b = a ⟑ inv(b)` (**right** division, `AbstractTensors.jl:320`)
 between elements. -/
