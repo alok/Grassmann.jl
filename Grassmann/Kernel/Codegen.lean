@@ -34,7 +34,7 @@ families, `maxEntries` caps the size of a single kernel.
 Tracing: `set_option trace.grassmann.codegen true` reports the kernel count, the
 entry count and the time of each stage.
 -/
-import Grassmann.Kernel.Codegen.Emit
+import Grassmann.Kernel.Codegen.Sandwich
 import Lean.Meta.Eval
 
 namespace Grassmann.Kernel.Codegen
@@ -80,10 +80,11 @@ def generateKernels (t : Term) (V : TensorBundle) (pre : Name) (pol : Policy) : 
     so the fallback kernels read one shared value). -/ @[noinline] def $valueId : DirectSum.TensorBundle :=
       $(mkCIdent (pre ++ `space))))
   let em ← emitSpace V (mkCIdent (pre ++ `space)) (mkCIdent (pre ++ `spaceValue)) pre planned
+  let sw ← emitSandwiches V (mkCIdent (pre ++ `space)) pre
   let t2 ← IO.monoMsNow
   modifyEnv (kernelRegistry.addEntry · (V, pre))
-  trace[grassmann.codegen] "{V}: {em.kernels} kernels, {em.entries} entries; plans {t1 - t0} ms, \
-    emission and compilation {t2 - t1} ms"
+  trace[grassmann.codegen] "{V}: {em.kernels} kernels, {em.entries} entries, {sw} fused sandwiches; \
+    plans {t1 - t0} ms, emission and compilation {t2 - t1} ms"
 
 /-- `grassmann_kernels V`: generate straight-line kernels and a `Kernels V` instance for
 the space `V` (DESIGN.md §5.2). Optional `(dense := false)` and `(maxEntries := n)`
