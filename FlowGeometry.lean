@@ -82,21 +82,35 @@ tetrahedral mesher in Lean yet), the unused `Chord{p,c,x0}` type, and the undefi
 
 ## Performance (`Tests/FlowGeometry/Bench.lean` vs `oracle/flowgeometry/bench.jl`, Apple M4 Max)
 
-| per call | Julia 1.13 | Lean |
-|---|---|---|
-| `NACA"2412"` parse | 4.2 µs | 0.46 µs |
-| `profile(ClarkY{12,150})` | 0.85 µs | 1.3 µs |
-| `profile(NACA4{24,150})` | 0.27 µs | 1.8 µs |
-| `upper(NACA"2412")` | 3.8 µs | 4.9 µs |
-| `complex(NACA"2412")` | 5.0 µs | 7.1 µs |
-| `complex(Joukowski{…,75})` | 1.6 µs | 3.6 µs |
-| `initrakich()` (101 × 51) | 20.4 ms | 1.35 ms |
-| `wing(NACA"6511")` (150 × 299) | 114 µs | 374 µs |
-| `ClarkY{12}(x)` per point | 4.0 ns | 5.3 ns |
+Time per call, best of 7, one thread; Julia 1.13 with FlowGeometry 0.1.5.
 
-Julia folds the coefficient fits into the code (its `profile(NACA4{24,150}())` is the 150
-evaluations and nothing else), and a Julia field over a range is a thin wrapper; the Lean profile
-fields spend about 0.7 µs materializing their `Cartan.GridBundle` (`Axis.toFloatArray`) and up to
-2 µs in the coefficient solves (`Thickness`, `Modified`). The sampling itself
-(`Eval.valuesOn`, 2.5 ns per point for `ClarkY`) is faster than Julia's.
+| per call | Julia | Lean |
+|---|---|---|
+| `NACA"2412"` parse (Julia: the macro body) | 4.2 µs | 0.48 µs |
+| `profile(ClarkY{12,150})` | 0.79 µs | 0.86 µs |
+| `profile(Thickness{12,4,150})` | 0.79 µs | 0.98 µs |
+| `profile(Modified{12,64,150})` | 0.47 µs | 0.91 µs |
+| `profile(NACA4{24,150})` | 0.27 µs | 0.74 µs |
+| `profile(NACA6{2,150})` | 1.97 µs | 2.49 µs |
+| `upper(NACA"2412")` | 3.70 µs | 3.59 µs |
+| `complex(NACA"2412")` | 4.96 µs | 5.30 µs |
+| `points(NACA"2412")` | 5.67 µs | 5.83 µs |
+| `complex(Joukowski{1.1,0.1,0.1,1.0,75})` | 1.68 µs | 3.40 µs |
+| `initrakich()` (101 × 51) | 20.4 ms | 1.31 ms |
+| `wing(NACA"6511")` (150 × 299) | 122 µs | 245 µs |
+| `convhull` (25 points) | 2.9 µs | 11.4 µs |
+| sphere subdivision × 2 (20 → 320 faces) | 8.2 µs | 22.2 µs |
+| `ClarkY{12}(x)` per point | 4.1 ns | 5.1 ns |
+
+Julia folds the coefficient fits into the code; the port fits the `NACA4` cambers once per
+process (a table of the 100 digit pairs) and caches the `Thickness`/`Modified` solves
+(`cachedFit`). The remaining gap on the cheap profiles is the field's base: a
+`Cartan.GridBundle` materializes its coordinates (about 0.5 µs for 150 points, `grid1`), where a
+Julia field over a range is a thin wrapper. The Joukowski map and the airfoil surfaces are bound by
+`JuliaBase`'s `sincos`/`atan`, which are slower than Julia's (docs/PERF.md). Measured lessons:
+a `where` helper taking a closure is not specialized (every `Float` boxed through it: 16 → 2.5 ns
+per sample once the loop is a top-level `@[specialize]` function); a `FloatArray.push` is an
+out-of-line call (2.2 ns), so outputs of known size are zero arrays filled with `set!`; the general
+`JuliaBase.range` spends about 1-2 µs in `rat`, so `range(0, 1, n)`, its `doubleinterval` and
+`range(0, 2π, n)` are built directly (checked against it).
 -/
