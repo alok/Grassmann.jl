@@ -49,6 +49,9 @@ structure CaseSet where
   /-- Fused expressions (`fused%`, `Grassmann.Fuse`), each keyed `<op> [fused]` next to its
   unfused case; the Julia twin times the same expression. -/
   fused : Bool := true
+  /-- Products into an exclusive operand (`s := u * s`, the unit `u` shared): the generated
+  kernel writes into whichever operand is exclusive (`Grassmann.Kernel.pickBase`). -/
+  inplace : Bool := true
 
 /-- `space_cases% "label" V seed cs`: the cases of one space as a `BenchM Unit` program, written at
 the concrete space `V` (a macro, so every operation is elaborated at concrete types as in user
@@ -129,6 +132,15 @@ macro_rules
       bench (k "reverse in place (m := ~m)") (ops := ringSize) (param := p) fun s =>
         let m := M[s % ringSize]!
         total (iterate (fun (a : Multivector $V Float) => ~a) m ringSize).v
+      if ($cs : CaseSet).inplace then
+        let u : Spinor $V Float := ⟨Values.ofFn fun i => if i.1 == 0 then 1 else 0⟩
+        let e : Multivector $V Float := ⟨Values.ofFn fun i => if i.1 == 0 then 1 else 0⟩
+        bench (k "Spinor*Spinor in place (s := u * s)") (ops := ringSize) (param := p) fun s =>
+          let x := S[s % ringSize]!
+          total (iterate (fun (y : Spinor $V Float) => (u * y : Spinor $V Float)) x ringSize).v
+        bench (k "Multivector*Multivector in place (m := u * m)") (ops := ringSize) (param := p) fun s =>
+          let x := M[s % ringSize]!
+          total (iterate (fun (y : Multivector $V Float) => e * y) x ringSize).v
       case1 (k "hodge Multivector") (fun (a : Multivector $V Float) => total (⋆a : Multivector $V Float).v) M p
       case1 (k "hodge Chain1") (fun (u : Chain $V 1 Float) => total (⋆u : Chain $V (n - 1) Float).v) U p
       if ($cs : CaseSet).unary then

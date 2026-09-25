@@ -64,6 +64,7 @@ Base.@kwdef struct GCaseSet
     floors::Bool = true
     fused::Bool = true
     display::Bool = true
+    inplace::Bool = true
 end
 
 function gspace(ctx, label, V, seed, cs::GCaseSet = GCaseSet())
@@ -129,6 +130,15 @@ function gspace(ctx, label, V, seed, cs::GCaseSet = GCaseSet())
     end
     gcase1(ctx, k("reverse Multivector"), ~, M)
     bench!(i -> giterate(~, M[(i % GK) + 1], GK), ctx, k("reverse in place (m := ~m)"); ops = GK, param = "K=$GK")
+    if cs.inplace
+        # the Lean cases write the product into the exclusive operand; Julia's results are isbits
+        u = Spinor{V}(Values{2^(n-1),Float64}(ntuple(j -> j == 1 ? 1.0 : 0.0, 2^(n-1))))
+        e = Multivector{V}(Values{2^n,Float64}(ntuple(j -> j == 1 ? 1.0 : 0.0, 2^n)))
+        bench!(i -> giterate(y -> u * y, S[(i % GK) + 1], GK), ctx, k("Spinor*Spinor in place (s := u * s)");
+               ops = GK, param = "K=$GK")
+        bench!(i -> giterate(y -> e * y, M[(i % GK) + 1], GK), ctx,
+               k("Multivector*Multivector in place (m := u * m)"); ops = GK, param = "K=$GK")
+    end
     gcase1(ctx, k("hodge Multivector"), ⋆, M)
     gcase1(ctx, k("hodge Chain1"), ⋆, U)
     if cs.unary
@@ -169,7 +179,7 @@ end
 
 "The case groups of the spaces other than ℝ3, STA, PGA3, CGA3 (Lean `coreCases`)."
 const GCORE = GCaseSet(inner = false, norms = false, linear = false, unary = false, fused = false, floors = false,
-                       display = false)
+                       display = false, inplace = false)
 
 "Checksum of a result vector: the coefficient sums of its first and last elements (Lean `Batch.check`)."
 gbc(o) = gtotal(o[1]) + gtotal(o[end])

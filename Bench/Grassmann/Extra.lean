@@ -15,7 +15,7 @@ open _root_.Grassmann DirectSum Bench
 /-- The case groups of the other spaces. -/
 def coreCases : CaseSet :=
   { inner := false, norms := false, linear := false, unary := false, fused := false, floors := false,
-    display := false }
+    display := false, inplace := false }
 
 set_option maxHeartbeats 1000000 in
 /-- `ℝ2`. -/ def casesR2 : BenchM Unit := space_cases% "ℝ2" ℝ2 1 coreCases
