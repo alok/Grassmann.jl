@@ -315,7 +315,8 @@ def resolveAt (m : QuotientTopology N) (a : Fin N) (idx : Vector Int N) (q11 : B
 /-- Julia `m[Val(K), i₁,…,i_N]` (QT:420-561): the representative of the (possibly ghost) grid
 index `idx` when stepping along axis `K` (`K = 0`: plain indexing). Exactly one axis may be out
 of bounds (see `inBounds`); it is then mapped through its face's gluing. Corners, multi-axis
-ghosts, open faces and interior points return `idx` unchanged. -/
+ghosts, open faces and interior points return `idx` unchanged. Julia implements `N ≤ 5` only (and
+returns `idx` unchanged beyond); this is the same rule for every `N`. -/
 def ghost (m : QuotientTopology N) (K : Nat) (idx : Vector Int N) (q11 : Bool := false) :
     Vector Int N :=
   match m.soleOut K idx with

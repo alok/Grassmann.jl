@@ -133,6 +133,11 @@ def simplexProps : TestM Unit := do
     g := g'
     let t : SimplexTopology 3 := .ofElements els
     let lbl := s!"random mesh {trial}"
+    -- validated gathers: `vertexFin` agrees with the element list
+    if h : t.valid = true then
+      check s!"{lbl} vertexFin" ((List.finRange t.totalElements).all fun e =>
+        (List.finRange 3).all fun k => (t.vertexFin h e k).1 + 1 == (t.fullElem e)[k])
+    else check s!"{lbl} valid" false
     let es := t.edgeList
     check s!"{lbl} edges strictly colex"
       ((List.range (es.size - 1)).all fun k =>

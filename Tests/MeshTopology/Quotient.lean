@@ -34,10 +34,13 @@ def checkGhosts {N : Nat} (lbl : String) (m : QuotientTopology N) (c : Json) : T
       if let .ok u := out.getObjVal? "julia" then
         checkJ s!"{lbl} ghost (Q11 upstream) K={K} {idx}" (jvec (m.ghost K v (q11 := true))) u
 
-/-- Tables, summary and flags. -/
+/-- Tables, summary and flags; the face-indexed representation round-trips through Julia's
+`(p, q, r)` tables. -/
 def checkTable {N : Nat} (lbl : String) (m : QuotientTopology N) (c : Json) : TestM Unit := do
   checkJ s!"{lbl} table" (jquotient m) (← jField c "table")
   checkJ s!"{lbl} summary" (jstr m.summary) (← jField c "summary")
+  let (p, q, r) := m.toTable
+  check s!"{lbl} ofTable? ∘ toTable" (QuotientTopology.ofTable? p q r m.size m.collapse == some m)
 
 /-- A column-major grid of naturals. -/
 def jgridN {N : Nat} (s : Vector Nat N) (a : Array Nat) : Json := jgrid s.toList (a.map jnat)
