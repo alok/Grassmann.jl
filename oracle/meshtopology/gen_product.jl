@@ -9,6 +9,7 @@ function prodcase(name, f)
     d["linear"] = both(M -> (m = f(M); [m[k] for k in 1:length(m)]))
     d["summary"] = both(M -> summary(f(M)))
     d["show"] = both(M -> showj(f(M)))
+    d["display"] = both(M -> sprint(show, MIME"text/plain"(), f(M)))
     N = length(size(f(F)))
     if N ≥ 1
         d["resize"] = both(M -> ptj(M.resize(f(M), 7)))

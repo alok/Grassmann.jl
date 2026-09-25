@@ -81,6 +81,8 @@ def checkCase (c : Json) : TestM Unit := do
   let some (fam, sizes) := parseName name | throw <| IO.userError s!"bad name {name}"
   let ⟨N, m⟩ ← namedTopology fam sizes
   checkTable name m c
+  checkJ s!"{name} display" (jstr m.displayString) (← jField c "display")
+  checkJ s!"{name} print" (jstr m.printString) (← jField c "print")
   checkJ s!"{name} isopen" (jbool m.isOpen) (← jField c "isopen")
   checkJ s!"{name} iscompact" (jbool m.isCompact) (← jField c "iscompact")
   checkGhosts name m c

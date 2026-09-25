@@ -276,6 +276,38 @@ partial def showArrayBody (dims : List Nat) (elems : Array String) : String :=
     sep.intercalate ((List.range last).map fun k =>
       showArrayBody inner (elems.extract (k * stride) ((k + 1) * stride)))
 
+/-- One matrix of Julia's `text/plain` array display: rows `" " ++ entries` separated by two
+spaces, each column padded to its widest entry (right-aligned for numbers, left-aligned
+otherwise, the last column unpadded). `elems` are column-major. -/
+def displayMatrix (r c : Nat) (elems : Array String) (rightAlign : Bool) : String :=
+  let width (j : Nat) : Nat := (List.range r).foldl (fun w i => max w (elems[i + j * r]!).length) 0
+  let widths := (Array.range c).map width
+  "\n".intercalate ((List.range r).map fun i =>
+    " " ++ "  ".intercalate ((List.range c).map fun j =>
+      let e := elems[i + j * r]!
+      let pad := String.ofList (List.replicate (widths[j]! - e.length) ' ')
+      if rightAlign then pad ++ e else if j + 1 == c then e else e ++ pad))
+
+/-- Julia's `show(io, MIME"text/plain"(), A)` of an array with summary `header`, dimensions
+`dims` and entry strings `elems` (column-major): a vector one entry per line, a matrix as
+aligned columns, higher dimensions as `[:, :, k…] =` slices separated by blank lines. -/
+def displayArray (header : String) (dims : List Nat) (elems : Array String) (rightAlign : Bool := false) :
+    String :=
+  match dims with
+  | [] => header
+  | [n] => header ++ ":\n" ++ displayMatrix n 1 elems rightAlign
+  | [r, c] => header ++ ":\n" ++ displayMatrix r c elems rightAlign
+  | r :: c :: rest =>
+    let slice := r * c
+    let nslices := rest.foldl (· * ·) 1
+    let restV := rest.toArray
+    let label (k : Nat) : String :=
+      let (_, idx) := restV.foldl (fun (acc : Nat × Array Nat) n => (acc.1 / n, acc.2.push (acc.1 % n + 1)))
+        (k, #[])
+      "[:, :, " ++ ", ".intercalate (idx.toList.map toString) ++ "] ="
+    header ++ ":\n" ++ "\n\n".intercalate ((List.range nslices).map fun k =>
+      label k ++ "\n" ++ displayMatrix r c (elems.extract (k * slice) ((k + 1) * slice)) rightAlign)
+
 namespace ProductTopology
 
 variable {N : Nat}
@@ -294,6 +326,18 @@ def showString (m : ProductTopology N) : String :=
       showArrayBody m.size.toList (m.toArray.map (showInts ·.toList)) ++ "]"
 
 instance : ToString (ProductTopology N) := ⟨showString⟩
+
+/-- Julia `show(io, MIME"text/plain"(), m)`: the summary and the grid of `Values`. -/
+def displayString (m : ProductTopology N) : String :=
+  displayArray m.summary m.size.toList (m.toArray.map (showInts ·.toList))
+
+end ProductTopology
+
+/-- Julia `show(io, MIME"text/plain"(), CrossRange(n))` (a vector of right-aligned integers). -/
+def crossRangeDisplay (n : Nat) : String :=
+  displayArray s!"{n}-element CrossRange" [n] ((AxisMap.cross n).toArray.map toString) (rightAlign := true)
+
+namespace ProductTopology
 
 end ProductTopology
 

@@ -591,6 +591,14 @@ def summary (m : QuotientTopology N) : String :=
     else s!"QuotientTopology\{{N}, {N - 1}, {2 * N}, {O}, "
   s!"{dimsString m.size.toList} {head}{m.mapsTypeString}}"
 
+/-- Julia `show(io, MIME"text/plain"(), m)`: the summary and the grid of representatives. -/
+def displayString (m : QuotientTopology N) : String :=
+  displayArray m.summary m.size.toList (m.toArray.map (showInts ·.toList))
+
+/-- Julia `print(m)`: `Values{2, Int64}[[1, 1] [4, 2] …; …]`. -/
+def printString (m : QuotientTopology N) : String :=
+  s!"Values\{{N}, Int64}[" ++ showArrayBody m.size.toList (m.toArray.map (showInts ·.toList)) ++ "]"
+
 end QuotientTopology
 
 end MeshTopology

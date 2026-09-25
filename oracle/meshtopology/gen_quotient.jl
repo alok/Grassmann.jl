@@ -54,6 +54,8 @@ function qcase(name, f; ghosts = true, samples = 150, slicecfg = nothing)
     d = Dict{String,Any}("name" => name, "N" => N)
     d["table"] = both(M -> qtj(f(M)))
     d["summary"] = both(M -> summary(f(M)))
+    d["display"] = both(M -> sprint(show, MIME"text/plain"(), f(M)))
+    d["print"] = both(M -> sprint(print, f(M)))
     d["isopen"] = both(M -> M.isopen(f(M)))
     d["iscompact"] = both(M -> M.iscompact(f(M)))
     if ghosts && N ≤ 3

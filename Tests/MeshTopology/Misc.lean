@@ -37,6 +37,7 @@ def misc : TestM Unit := do
     let n ← gNat c "n"
     checkJ s!"crossrange({n})" (jnat (crossShift n)) (← jField c "m")
     checkJ s!"CrossRange({n})" (jints (AxisMap.cross n).toArray) (← jField c "vals")
+    checkJ s!"CrossRange({n}) display" (jstr (crossRangeDisplay n)) (← jField c "display")
   for c in ← gArr j "simplexnumber" do
     let N ← gNat c "N"
     let n ← gNat c "n"
@@ -116,6 +117,7 @@ def product : TestM Unit := do
       (← jField c "linear")
     checkJ s!"{name} summary" (jstr p.summary) (← jField c "summary")
     checkJ s!"{name} show" (jstr p.showString) (← jField c "show")
+    checkJ s!"{name} display" (jstr p.displayString) (← jField c "display")
     if 1 ≤ N then
       checkOptJ s!"{name} resize" ((p.resize? 7).map jproduct) (← jField c "resize")
       checkOptJ s!"{name} resample" ((p.resample? (p.size.map (· + 2))).map jproduct)

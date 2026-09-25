@@ -3,7 +3,8 @@
 
 misc = Dict{String,Any}()
 
-misc["crossrange"] = [Dict("n" => n, "m" => F.crossrange(n), "vals" => J(collect(F.CrossRange(n))))
+misc["crossrange"] = [Dict("n" => n, "m" => F.crossrange(n), "vals" => J(collect(F.CrossRange(n))),
+                           "display" => J(sprint(show, MIME"text/plain"(), F.CrossRange(n))))
                       for n in 1:13]
 
 misc["simplexnumber"] = [Dict("N" => N, "n" => n, "out" => both(M -> M.simplexnumber(N, n)))
