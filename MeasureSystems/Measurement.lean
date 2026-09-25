@@ -71,23 +71,19 @@ def result1 (val der : Float) (a : Measurement) : Measurement :=
 /-- Julia's many-argument `result(val, ders, args)` (`math.jl:80-118`): the
 derivative of the result with respect to each independent variable, and the
 uncertainty `sqrt(Σ (σₓ·∂G/∂x)²)` summed in Julia's order. -/
-def resultN (val : Float) (ders : List Float) (args : List Measurement) : Measurement := Id.run do
-  let mut err := 0.0
-  let mut newder : List (MTag × Float) := []
-  for y in args do
-    for (t, _) in y.der do
-      if newder.any (·.1.same t) then continue
-      let σx := t.2.1
-      if σx == 0.0 then continue
-      let mut dG := 0.0
-      for (d, x) in ders.zip args do
-        let dax := x.derivative t
-        if dax != 0.0 then dG := dG + d * dax
-      if dG != 0.0 then
-        newder := (t, dG) :: newder
-        let e := σx * dG
-        err := err + e * e
-  return ⟨val, err.sqrt, 0, newder⟩
+def resultN (val : Float) (ders : List Float) (args : List Measurement) : Measurement :=
+  -- `∂G/∂x = Σᵢ ∂G/∂aᵢ · ∂aᵢ/∂x`, skipping zero partials, in argument order
+  let dGdx (t : MTag) : Float :=
+    (ders.zip args).foldl (fun acc (d, x) => let dax := x.derivative t; if dax != 0.0 then acc + d * dax else acc) 0.0
+  let step (acc : Float × List (MTag × Float)) (t : MTag) : Float × List (MTag × Float) :=
+    let (err, newder) := acc
+    if newder.any (·.1.same t) || t.2.1 == 0.0 then acc
+    else
+      let dG := dGdx t
+      if dG == 0.0 then acc
+      else let e := t.2.1 * dG; (err + e * e, (t, dG) :: newder)
+  let (err, newder) := args.foldl (fun acc y => y.der.foldl (fun acc (t, _) => step acc t) acc) (0.0, [])
+  ⟨val, err.sqrt, 0, newder⟩
 
 /-- `a + b` -/
 def add (a b : Measurement) : Measurement := resultN (a.val + b.val) [1.0, 1.0] [a, b]

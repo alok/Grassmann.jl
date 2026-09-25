@@ -21,7 +21,7 @@ def run : IO (Nat × Nat) := do
   IO.println "Similitude"
   let mut pass := 0
   let mut fail := 0
-  for suite in [constantsSuite, homsSuite, unifiedSuite, ratiosSuite, systemConstantsSuite, quantitySuite, derivedSuite, quotientSuite, extrasSuite] do
+  for suite in [constantsSuite, homsSuite, unifiedSuite, ratiosSuite, systemConstantsSuite, quantitySuite, derivedSuite, quotientSuite, extrasSuite, ratioPropertySuite] do
     let t0 ← IO.monoMsNow
     let st ← suite
     let t1 ← IO.monoMsNow

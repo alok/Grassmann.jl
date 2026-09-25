@@ -1,4 +1,5 @@
 import Tests.Similitude.Common
+import Tests.Util.Random
 
 /-!
 # Similitude: conversion ratios and per-system constants
@@ -59,6 +60,37 @@ def systemConstantsSuite : IO Suite := do
           match dims.get i with | .int k => (k : Rat) | .rat q => q | .float _ => 0)
         fun _ => s!"{nm}({U.name}) dims"
     | _, _ => s := s.check false fun _ => s!"no function {nm}"
+  return s
+
+/-- Exponent vectors of two exact values agree and their coefficients are close. -/
+def groupClose (a b : Scalar) : Bool :=
+  match a, b with
+  | .grp g, .grp h => g.v.beq h.v && JuliaBase.F64.isapprox g.c.toFloat h.c.toFloat (rtol := 1e-13)
+  | a, b => JuliaBase.F64.isapprox a.toFloat b.toFloat (rtol := 1e-13)
+
+/-- Property tests of the exact ratios (no oracle): `ratio(d,U,U) = 𝟏`, the
+cocycle law `ratio(d,U,S)·ratio(d,S,V) = ratio(d,U,V)` on exponents (coefficients
+within rounding), and `ratio(d,U,S)·ratio(d,S,U) = 𝟏`, for random systems and
+quantities (FFF, whose permeability is zero, excluded). -/
+def ratioPropertySuite : IO Suite := do
+  let mut s : Suite := { name := "ratio properties" }
+  let sys := (Sys.all.filter (· != .FFF)).toArray
+  let convs := Conv.all.toArray
+  let mut g := Tests.Rng.ofSeed 20260924
+  for _ in [0:600] do
+    let (i, g1) := g.nat sys.size
+    let (j, g2) := g1.nat sys.size
+    let (k, g3) := g2.nat sys.size
+    let (c, g4) := g3.nat convs.size
+    g := g4
+    let (U, S, V, q) := (sys[i]!, sys[j]!, sys[k]!, convs[c]!)
+    let d := q.dim.toGroup.v
+    let one := Scalar.grp Consts.one
+    s := s.check (groupClose (ratio d U U) one) fun _ => s!"{q.name}({U.name},{U.name}) = {ratio d U U}"
+    s := s.check (groupClose (ratio d U S * ratio d S V) (ratio d U V)) fun _ =>
+      s!"{q.name}: {U.name}→{S.name}→{V.name} = {ratio d U S * ratio d S V}, direct {ratio d U V}"
+    s := s.check (groupClose (ratio d U S * ratio d S U) one) fun _ =>
+      s!"{q.name}: {U.name}↔{S.name} = {ratio d U S * ratio d S U}"
   return s
 
 end Tests.SimilitudeTests
