@@ -50,6 +50,11 @@ macro_rules
         (scalarValue (u * w * u * w : Spinor $V $α))) (s 35) t
       t := (fcheck (nm "(u⋅w).get 0 + x") (u : Chain $V 1 $α) (w : Chain $V 1 $α) (x : $α) =>
         (getD (u ⋅ w).v 0 + x)) (s 36) t
+      -- literal blades (`x·e₁` as a `Single`, folded to a one-hot chain at elaboration time)
+      t := (fcheck (nm "x e₁ + u") (x : $α) (u : Chain $V 1 $α) =>
+        ((x * (⟨1⟩ : Submanifold $V 1) : Single $V 1 $α) + u : Chain $V 1 $α)) (s 37) t
+      t := (fcheck (nm "R (x e₂) ~R") (R : Spinor $V $α) (x : $α) =>
+        (R * (x * (⟨2⟩ : Submanifold $V 1) : Single $V 1 $α) * ~R : CoSpinor $V $α)) (s 38) t
       return t)
 
 /-- `fuse_checks_dense% "label" V α`: the checks with `Multivector` operands (their straight-line code grows as `4ⁿ`: the suite runs them in the smaller spaces). -/

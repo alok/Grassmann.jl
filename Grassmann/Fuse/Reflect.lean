@@ -351,6 +351,20 @@ partial def step? (e : Expr) : M (Option Expr) := do
       if c.isConstOf ``Bool.true then return some (mkAppN args[2]! (args.extract 4))
       if c.isConstOf ``Bool.false then return some (mkAppN args[3]! (args.extract 4))
       return none
+    -- one-hot elements of a literal blade (`2.0 * v₁` as a chain): unfold, so that the blade's
+    -- storage position folds at elaboration time; a run-time blade stays a leaf
+    if n == ``Grassmann.Chain.ofBlade || n == ``Grassmann.Half.ofBlade ||
+        n == ``Grassmann.Multivector.ofBlade then
+      let args := e.getAppArgs
+      -- the space, the grade and the blade argument of each constructor
+      let pos := if n == ``Grassmann.Chain.ofBlade then (0, 1, 4)
+        else if n == ``Grassmann.Half.ofBlade then (0, 4, 5) else (0, 3, 4)
+      let (some V, some G, some b) := (args[pos.1]?, args[pos.2.1]?, args[pos.2.2]?) | return none
+      let bits ← reduceFull (mkApp3 (mkConst ``DirectSum.Submanifold.bits) V G b)
+      if bits.hasFVar || bits.hasMVar then return none
+      -- the blade as a literal, then the definition
+      let e' := mkAppN e.getAppFn (args.set! pos.2.2 (mkApp3 (mkConst ``DirectSum.Submanifold.mk) V G bits))
+      return ← unfoldDefinition? e' (ignoreTransparency := true)
     if ← unfoldable n then
       return ← unfoldDefinition? e (ignoreTransparency := true)
     return none
