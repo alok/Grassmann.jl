@@ -1,0 +1,1 @@
+/-! Benchmarks (`lake exe bench`). -/

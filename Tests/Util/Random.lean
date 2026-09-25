@@ -58,10 +58,10 @@ def nat (n : Nat) : Gen Nat := modifyGet (·.nat n)
 def int (lo hi : Int) : Gen Int := modifyGet (·.int lo hi)
 
 /-- Run a generator from a seed. -/
-def run (seed : Nat) (g : Gen α) : α := (g.run (Rng.ofSeed seed)).1
+def run {α : Type} (seed : Nat) (g : Gen α) : α := (StateT.run g (Rng.ofSeed seed)).1
 
 /-- `n` independent draws. -/
-def array (n : Nat) (g : Gen α) : Gen (Array α) := do
+def array {α : Type} (n : Nat) (g : Gen α) : Gen (Array α) := do
   let mut out := Array.mkEmpty n
   for _ in [0:n] do out := out.push (← g)
   return out
