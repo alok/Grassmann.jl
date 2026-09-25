@@ -295,6 +295,113 @@ exterior product. -/
 theorem PGA4_wedge {g : Fin 5 → Rat} (x y : Cl g) : implWedge D!"0,1,1,1,1" x y = Cl.wedge x y :=
   implWedge_eq_wedge_of_flat ⟨rfl, rfl⟩ (by decide) x y
 
+/-! ## Reversion and grade involution in every flat space -/
+
+private theorem toNat_lowMask {n : Nat} (hn : n ≤ 64) : (Bits.lowMask n).toNat = 2 ^ n - 1 := by
+  unfold Bits.lowMask Bits.fullMask
+  by_cases h : n ≥ 64
+  · have : n = 64 := by omega
+    subst this; rw [ite_eq_left h]; decide
+  · rw [ite_eq_right h]
+    have hn' : n < 64 := by omega
+    have hshl : ((1 : UInt64) <<< n.toUInt64).toNat = 2 ^ n := by
+      rw [UInt64.toNat_shiftLeft, UInt64.toNat_one, Nat.toUInt64_eq, UInt64.toNat_ofNat',
+        Nat.mod_eq_of_lt (Nat.lt_trans hn' (by decide)), Nat.mod_eq_of_lt hn', Nat.one_shiftLeft,
+        Nat.mod_eq_of_lt (Nat.pow_lt_pow_right (by decide) hn')]
+    rw [UInt64.toNat_sub_of_le _ _ (by rw [UInt64.le_iff_toNat_le, hshl]; exact Nat.one_le_two_pow), hshl,
+      UInt64.toNat_one]
+
+namespace IsFlatSpace
+
+variable {V : TensorBundle} (hV : IsFlatSpace V)
+include hV
+
+/-- In a flat space of dimension `n ≤ 64`, the implementation's grade of a blade
+(`TensorBundle.gradeOf`, a SWAR `popcount`) is its grade. -/
+theorem gradeOf_mask {n : Nat} (hVn : V.n = n) (hn : n ≤ 64) (a : BitVec n) : V.gradeOf (mask a) = grade a := by
+  unfold TensorBundle.gradeOf
+  have hg : V.grade = n := by
+    unfold TensorBundle.grade TensorBundle.tangentSlots; rw [hV.tangent, hVn]; simp
+  rw [hg, popcount_eq_bitCount, UInt64.toNat_and, toNat_mask hn, toNat_lowMask hn,
+    Nat.and_two_pow_sub_one_eq_mod, Nat.mod_eq_of_lt a.isLt, bitCount_of_lt hn a.isLt]
+  rfl
+
+/-- The implementation's reversion of a blade in a flat space: `~e_a = revSign(a) e_a`. -/
+theorem terms_reverse {n : Nat} (hVn : V.n = n) (hn : n ≤ 64) (a : BitVec n) :
+    V.terms₁ .reverse (mask a) = .ok #[{ bits := mask a, coef := revSign a }] := by
+  show Except.ok (V.reverse (mask a)).bladeTerms = _
+  congr 1
+  unfold TensorBundle.reverse
+  rw [hV.gradeOf_mask hVn hn, revSign]
+  have hn1 : (-1 : Rat) ≠ 0 := by decide +kernel
+  cases Leibniz.parityreverse (grade a)
+  · show (BladeResult.blade (mask a)).bladeTerms = _
+    rw [blade_terms]; rfl
+  · show (BladeResult.single (-1) (mask a)).bladeTerms = _
+    rw [single_terms _ _ hn1]; rfl
+
+/-- The implementation's grade involution of a blade in a flat space. -/
+theorem terms_involute {n : Nat} (hVn : V.n = n) (hn : n ≤ 64) (a : BitVec n) :
+    V.terms₁ .involute (mask a) = .ok #[{ bits := mask a, coef := invSign a }] := by
+  show Except.ok (V.involute (mask a)).bladeTerms = _
+  congr 1
+  unfold TensorBundle.involute
+  rw [hV.gradeOf_mask hVn hn, invSign]
+  have hn1 : (-1 : Rat) ≠ 0 := by decide +kernel
+  cases Leibniz.parityinvolute (grade a)
+  · show (BladeResult.blade (mask a)).bladeTerms = _
+    rw [blade_terms]; rfl
+  · show (BladeResult.single (-1) (mask a)).bladeTerms = _
+    rw [single_terms _ _ hn1]; rfl
+
+end IsFlatSpace
+
+/-- The linear extension of a blade-level unary rule. -/
+def lin {n : Nat} {g : Fin n → Rat} (T : BitVec n → Cl g) (x : Cl g) : Cl g :=
+  ⟨fun c => bsum n fun a => x.coeff a * (T a).coeff c⟩
+
+/-- The linear extension of a diagonal blade rule `e_a ↦ k(a) e_a` scales each
+coefficient by `k`. -/
+theorem lin_diag {n : Nat} {g : Fin n → Rat} {T : BitVec n → Cl g} {k : BitVec n → Rat}
+    (hT : ∀ a, T a = k a • Cl.blade a) (x : Cl g) : lin T x = ⟨fun c => k c * x.coeff c⟩ := by
+  ext c
+  show (bsum n fun a => x.coeff a * (T a).coeff c) = k c * x.coeff c
+  have : ∀ a, x.coeff a * (T a).coeff c = if a = c then k c * x.coeff c else 0 := by
+    intro a
+    rw [hT]
+    show x.coeff a * (k a * (if c = a then 1 else 0)) = _
+    by_cases h : a = c
+    · subst h; rw [ite_eq_left rfl, ite_eq_left rfl]; grind
+    · rw [ite_eq_right (Ne.symm h), ite_eq_right h]; grind
+  rw [bsum_congr this, bsum_ite_eq]
+
+/-- The implementation's unary operation `op` (linear extension of `terms₁ op`) on
+spec multivectors. -/
+def implUnary (V : TensorBundle) (op : UnOp) {n : Nat} {g : Fin n → Rat} (x : Cl g) : Cl g :=
+  lin (fun a => ofTerms g (V.terms₁ op (mask a))) x
+
+/-- **The implementation's reversion is the spec reversion in every flat space**
+(any metric, no conformal pair, no tangent variables) of dimension `≤ 64`. -/
+theorem implReverse_eq_reverse {V : TensorBundle} (hV : IsFlatSpace V) {n : Nat} (hVn : V.n = n)
+    (hn : n ≤ 64) {g : Fin n → Rat} (x : Cl g) : implUnary V .reverse x = Cl.reverse x := by
+  have hne : ∀ a : BitVec n, (revSign a : Rat) ≠ 0 := fun a => by
+    unfold revSign; cases Leibniz.parityreverse (grade a) <;> decide
+  unfold implUnary
+  rw [lin_diag (k := revSign) fun a => ofTerms_of_matches hn (by
+    rw [hV.terms_reverse hVn hn a]; simp [Matches, single, hne a])]
+  rfl
+
+/-- **The implementation's grade involution is the spec involution in every flat
+space** of dimension `≤ 64`. -/
+theorem implInvolute_eq_involute {V : TensorBundle} (hV : IsFlatSpace V) {n : Nat} (hVn : V.n = n)
+    (hn : n ≤ 64) {g : Fin n → Rat} (x : Cl g) : implUnary V .involute x = Cl.involute x := by
+  have hne : ∀ a : BitVec n, (invSign a : Rat) ≠ 0 := fun a => by
+    unfold invSign; cases Leibniz.parityinvolute (grade a) <;> decide
+  unfold implUnary
+  rw [lin_diag (k := invSign) fun a => ofTerms_of_matches hn (by
+    rw [hV.terms_involute hVn hn a]; simp [Matches, single, hne a])]
+  rfl
+
 /-- `ℝⁿ` (Julia `V"n"`, the `Int` space) is a plain signature space. -/
 theorem isSignatureSpace_euclidean (n : Nat) : IsSignatureSpace (TensorBundle.euclidean n) :=
   ⟨Or.inr rfl, rfl, rfl⟩

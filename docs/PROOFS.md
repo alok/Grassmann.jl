@@ -65,8 +65,15 @@ The `UInt64` kernels of `DirectSum.Bits`, for **all** 64-bit masks:
 | `reorderParity_eq_sigma`, `reorderParity_eq_spec` | `Bits.reorderParity a b = reorderParitySpec 64 a b`; this generalizes the 4-bit `decide` check `Bits.reorderParity_eq_spec_4` | proved |
 | `reorderParity_cocycle`, `reorderParity_swap` | the implementation itself satisfies the cocycle and swap identities | proved |
 | `parityjoin_eq`, `signOf_parityjoin` | Julia's `parityjoin` (the signature-space product sign) is the spec blade coefficient | proved |
+| `popcount_eq_bitCount` | the SWAR `Bits.popcount` is the bit count | proved |
 
-Method: every function involved is 𝔽₂-linear, and a linear functional on 𝔽₂⁶⁴
+Method for `popcount` (`DirectSum.Proofs.Popcount`): numbers are written as
+little-endian field sums `Σ f(j) 2^{wj}`; every SWAR step is an identity between
+field sums because no field overflows (the bounds are tracked), and the final
+multiplication by `0x0101010101010101` is one polynomial identity plus a bound
+on the prefix sums.
+
+Method for the xor kernels: every function involved is 𝔽₂-linear, and a linear functional on 𝔽₂⁶⁴
 is determined by its values on the 64 unit vectors (`linear_eq_xorSum`, proved
 once by induction on the number of low bits). The 64 values (64 × 64 for the
 prefix scan) are closed terms that the kernel evaluates in well under a second.
@@ -144,6 +151,7 @@ multiply-accumulate plans (`Grassmann.Kernel.build`, DESIGN.md §5.1).
 | `mulSign_eq_coef` | for every space and every `n ≤ 64`, `(-1)^{TensorBundle.mulSign a b}` is the spec coefficient of the signature metric `V.sigBits`, on every pair of blades |
 | `IsSignatureSpace.terms_mul` | in every plain signature space (`Signature` or `Int` metric, no conformal pair, no tangent variables), `terms₂ .mul a b` is the single term `(-1)^{parityjoin} e_{a⊕b}` for all 64-bit masks; `metricProduct` is a product of `±1`s, so its absolute value is `1` whatever its loop visits |
 | `implMul_eq_mul_of_signature` | hence **the implementation's geometric product is the spec product on all multivectors of every plain signature space of dimension `≤ 64`** (`R7_mul`, `S33_mul` instantiate it) |
+| `IsFlatSpace.gradeOf_mask`, `implReverse_eq_reverse`, `implInvolute_eq_involute` | in every flat space of dimension `≤ 64` the implementation's grade (a SWAR popcount) is the grade, and its reversion and grade involution are the spec's on all multivectors |
 | `IsFlatSpace.terms_wedge`, `implWedge_eq_wedge_of_flat` | in every space without a conformal pair or tangent variables (any metric: signatures, `DiagonalForm`s including degenerate ones, `MetricTensor`s) and every width `≤ 64`, the implementation's exterior product is the spec exterior product on all multivectors (`PGA4_wedge` instantiates it) |
 
 **Checked** by the kernel (`Grassmann.Proofs.Tables`), on every basis blade
@@ -207,18 +215,16 @@ generated kernels) are exercised; they are not proved.
 
 ## Not covered (yet)
 
-* `Bits.popcount` (SWAR), `Bits.ctz`, `Bits.sumIndices` and the
-  `metricProduct` loop are not proved for all masks. They are exercised by every
-  check and test above, and the general statements for `parityjoin`/`mulSign` do
-  not depend on them. `popcount` is not 𝔽₂-linear, so the linearity method of
-  §1 does not apply.
+* `Bits.ctz`, `Bits.sumIndices` and the `metricProduct` loop are not proved for
+  all masks (`Bits.popcount` is). They are exercised by every check and test
+  above.
 * `DiagonalForm` products in general dimension go through `metricProduct`, whose
   loop visits the set bits with `ctz`, so they are checked (`PGA*`,
   `D!"1,2,-3"`) and tested (`PGA4`, `D5`), not proved; plain signature spaces
   are proved in every dimension (`implMul_eq_mul_of_signature`).
-* The involutions and complements are linked per space (checked, `n ≤ 4`) and
-  tested (`n ≤ 7`), not in general: their blade rules read the grade through
-  `Bits.popcount` (or `Bits.sumIndices`).
+* The complements are linked per space (checked, `n ≤ 4`) and tested (`n ≤ 7`),
+  not in general: their blade rules use `Bits.sumIndices` and the Leibniz
+  `complement` mask.
 * The other contractions (`⨼`, `<<`, `>>`), `cross`, `veedot`, `antidot` and the
   sandwiches have no spec yet; `Tests/Grassmann/Props.lean` tests their
   algebraic laws. The regressive product is linked blade by blade, not yet

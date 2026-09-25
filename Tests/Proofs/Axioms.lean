@@ -59,3 +59,9 @@ import Grassmann.Proofs
 
 /-- info: 'Grassmann.Proofs.implWedge_eq_wedge_of_flat' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Grassmann.Proofs.implWedge_eq_wedge_of_flat
+
+/-- info: 'DirectSum.Proofs.popcount_eq_bitCount' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms DirectSum.Proofs.popcount_eq_bitCount
+
+/-- info: 'Grassmann.Proofs.implReverse_eq_reverse' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.implReverse_eq_reverse
