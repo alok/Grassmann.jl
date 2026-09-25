@@ -36,7 +36,7 @@ def suite : TestM Unit := do
   for g in jArr (jGet j "colon32") do
     let a := jArr (jGet g "args")
     let (x, st, y) := (hexF32 a[0]!, hexF32 a[1]!, hexF32 a[2]!)
-    checkSet s!"{x}f0:{st}f0:{y}f0" (.f32 (colon32 x st y)) g true
+    checkSet s!"{x}f0:{st}f0:{y}f0" (.f32 (JuliaBase.colon32 x st y)) g true
   for g in jArr (jGet j "colon64") do
     let a := jArr (jGet g "args")
     let (x, st, y) := (hexF64 a[0]!, hexF64 a[1]!, hexF64 a[2]!)

@@ -13,6 +13,7 @@ Julia's own numerics against the oracle (`Tests/JuliaBase/math.json`, written by
 * `rdig`/`rsig`/`hidigit`: `round(x; digits)`, `round(x; sigdigits)`, `Base.hidigit`;
 * `parse`: `tryparse(Float64, s)` (`F64.parse?`);
 * `sum`/`sumgen`: `sum(::Vector{Float64})` (`F64.sum`) of explicit and generated vectors;
+* `colon32`: `collect(a:st:b)` for `Float32` endpoints (`colon32`);
 * `eps64`/`eps32`, `exponent64`/`exponent32`, `rat64`/`rat32`: `F64.epsOf`, `F32.epsOf`,
   `IEEEFloat.exponent`, and the correctly rounded `IEEEFloat.ofFraction`/`ofRat` of big
   rationals.
@@ -144,6 +145,12 @@ def checkRow (t : Tally) : List String → Tally
     let got := F64.sum (sumVec (int n).toNat (int seed).toNat)
     t.check (sameFloat got (f64 hr)) fun _ =>
       s!"sum(sumvec({n}, {seed})): got {F64.showString got}, want {F64.showString (f64 hr)}"
+  | ["colon32", ha, hs, hb, xs] =>
+    let r := colon32 (f32 ha) (f32 hs) (f32 hb)
+    let want := if xs.isEmpty then [] else (xs.splitOn ",").map f32
+    let got := (List.range r.len).map fun (i : Nat) => r.get ((i : Int) + 1)
+    t.check (got.length == want.length && (got.zip want).all fun (x, y) => sameF32 x y) fun _ =>
+      s!"{F32.showString (f32 ha)}:{F32.showString (f32 hs)}:{F32.showString (f32 hb)}: got {got.length} elements {got.take 4 |>.map F32.showString}, want {want.length} {want.take 4 |>.map F32.showString}"
   | ["parse", str, want] =>
     match F64.parse? str, want with
     | none, "ERR" => t.check true fun _ => ""
