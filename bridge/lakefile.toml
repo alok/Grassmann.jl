@@ -1,0 +1,22 @@
+name = "GrassmannBridge"
+version = "0.1.0"
+description = "Bridge from the Grassmann specification model (Grassmann.Spec) to mathlib's CliffordAlgebra and ExteriorAlgebra"
+license = "AGPL-3.0-or-later"
+defaultTargets = ["GrassmannBridge"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+pp.unicode.fun = true
+
+[[require]]
+name = "Grassmann"
+path = ".."
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "master"
+
+[[lean_lib]]
+name = "GrassmannBridge"
