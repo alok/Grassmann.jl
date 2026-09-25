@@ -78,6 +78,19 @@ def choose (n k : Nat) : Nat := binomial n k
 /-- Julia `gdimsall(n)`: `[C(n,0), …, C(n,n)]`. -/
 def gdimsall (n : Nat) : Array Nat := (List.range (n + 1)).toArray.map (choose n)
 
+/-- Julia `gdimseven(n) = [C(n,0), C(n,2), …]`: the sizes of the even grades
+(`Leibniz.jl src/utilities.jl`). -/
+def gdimseven (n : Nat) : Array Nat :=
+  ((List.range (n + 1)).filter (· % 2 == 0)).toArray.map (choose n)
+
+/-- Julia `gdimsodd(n) = [C(n,1), C(n,3), …]`: the sizes of the odd grades (empty for `n = 0`,
+where Julia throws a `MethodError`). -/
+def gdimsodd (n : Nat) : Array Nat :=
+  ((List.range (n + 1)).filter (· % 2 == 1)).toArray.map (choose n)
+
+example : gdimseven 5 = #[1, 10, 5] ∧ gdimsodd 5 = #[5, 10, 1] := by decide +kernel
+example : gdimseven 0 = #[1] ∧ gdimsodd 0 = #[] := by decide +kernel
+
 /-! ## Grade offsets -/
 
 /-- Julia `binomsum(n,i) = Σ_{q<i} C(n,q)`: 0-based start of grade `i` in the
