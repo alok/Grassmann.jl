@@ -1,0 +1,27 @@
+name = "GrassmannGallery"
+version = "0.1.0"
+description = "The chakravala plot gallery reproduced with the Lean port and LeanPlot, side by side with Julia/CairoMakie"
+license = "AGPL-3.0-or-later"
+defaultTargets = ["Gallery", "gallery"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+pp.unicode.fun = true
+maxRecDepth = 4096
+
+[[require]]
+name = "Grassmann"
+path = ".."
+
+[[require]]
+name = "LeanPlot"
+git = "https://github.com/alok/LeanPlot"
+rev = "f141f5959d542dc2b06eb2af365173218592bb5f"
+
+[[lean_lib]]
+name = "Gallery"
+
+[[lean_exe]]
+name = "gallery"
+root = "Gallery.Main"
