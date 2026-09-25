@@ -21,6 +21,8 @@ porting Julia expressions.
 -/
 import AbstractTensors.Dims
 import AbstractTensors.Coeff
+import AbstractTensors.Alias
+import AbstractLattices.Basic
 
 universe u v w
 
@@ -106,15 +108,18 @@ instance {α : Type} : Value (Complex α) (Complex α) := ⟨id⟩
 
 /-! ## Binary products (AT:257-349; port-notes §2.1.6) -/
 
-/-- Exterior product `∧` (Julia `wedge`, AbstractLattices). -/
-class Wedge (α : Type u) (β : Type v) (γ : outParam (Type w)) where
-  /-- `a ∧ b`. -/
-  wedge : α → β → γ
+/-! `Wedge`/`Vee` **are** the AbstractLattices classes `HWedge`/`HVee` (Julia: `∧ === wedge`
+and `∨ === vee` are single generic functions owned by AbstractLattices, extended by
+AbstractTensors, Grassmann, DeMorgan and Dendriform, `AbstractLattices.jl
+src/AbstractLattices.jl:5-9`). The names `Wedge`, `Wedge.wedge`, `wedge`, `Vee`, `Vee.vee`,
+`vee` are aliases of `AbstractLattices.HWedge`, `HWedge.wedge`, … (`export_alias`), so an
+instance declared as `Wedge A B C` is an `HWedge A B C` instance, and the `∧`/`∨` notation of
+AbstractTensors and Grassmann reaches the Bool, truth-table and tree instances too. -/
 
-/-- Regressive product `∨` (Julia `vee`, AbstractLattices). -/
-class Vee (α : Type u) (β : Type v) (γ : outParam (Type w)) where
-  /-- `a ∨ b`. -/
-  vee : α → β → γ
+export_alias Wedge => AbstractLattices.HWedge
+export_alias Wedge.wedge => AbstractLattices.HWedge.wedge
+export_alias Vee => AbstractLattices.HVee
+export_alias Vee.vee => AbstractLattices.HVee.vee
 
 /-- Geometric product `⟑` (Julia `wedgedot`, `times`, `*`). Grassmann gives
 tensors both this and `HMul`. -/
@@ -162,8 +167,8 @@ class AntiSymProd (α : Type u) (β : Type v) (γ : outParam (Type w)) where
   /-- `a ⊠ b`. -/
   antiSymProd : α → β → γ
 
-export Wedge (wedge)
-export Vee (vee)
+export_alias wedge => AbstractLattices.HWedge.wedge
+export_alias vee => AbstractLattices.HVee.vee
 export WedgeDot (wedgedot)
 export VeeDot (veedot)
 export Contraction (contraction)
@@ -291,6 +296,30 @@ abbrev pseudo {α : Type u} {β γ : Type v} {δ : Type w} [ComplementRight α �
     [ComplementRight α' β'] [Sandwich β β' γ] [ComplementLeft γ δ] (x : α) (R : α') : δ :=
   co₂ sandwich x R
 
+/-- Julia `pseudosandwich = cosandwich` (AT:561). -/
+abbrev pseudosandwich {α α' : Type u} {β β' γ : Type v} {δ : Type w} [ComplementRight α β]
+    [ComplementRight α' β'] [Sandwich β β' γ] [ComplementLeft γ δ] (x : α) (R : α') : δ :=
+  cosandwich x R
+
+/-- Julia `antisandwich(R, x) = complementleft(complementright(R) >>> complementright(x))`
+(AT:568). -/
+@[inline] def antisandwich {α α' : Type u} {β β' γ : Type v} {δ : Type w} [ComplementRight α β]
+    [ComplementRight α' β'] [HShiftRight β β' γ] [ComplementLeft γ δ] (R : α) (x : α') : δ :=
+  complementLeft (complementRight R >>> complementRight x)
+
+/-- Julia `pseudograde(t, G) = t(grade(V) - G)` (DirectSum): the part of grade `mdims(V) - G`. -/
+abbrev pseudogradeProj {X : Type u} {M : Type v} {V : M} {T : Type w} {β : Type v} (G : Nat)
+    [TensorAlgebra X M V T] [HasMDims M] [GradeProj X (HasMDims.mdims V - G) β] : X → β :=
+  GradeProj.proj (G := HasMDims.mdims V - G)
+
+/-- Julia `a ⊗ λ = a*λ` for a tensor and a scalar (AT:333-334). -/
+instance (priority := low) instTensorProdScalarRight {X : Type u} {M : Type v} {V : M} {T : Type w}
+    {α : Type} [TensorAlgebra X M V T] [Coeff α] [HMul X α X] : TensorProd X α X := ⟨(· * ·)⟩
+
+/-- Julia `λ ⊗ a = λ*a` for a scalar and a tensor (AT:335-336). -/
+instance (priority := low) instTensorProdScalarLeft {X : Type u} {M : Type v} {V : M} {T : Type w}
+    {α : Type} [TensorAlgebra X M V T] [Coeff α] [HMul α X X] : TensorProd α X X := ⟨(· * ·)⟩
+
 /-! ## Uniform scaling (Julia `LinearAlgebra.UniformScaling`, AT:287-316)
 
 `λI` is a dimension-free pseudoscalar: `V(λI)` is `λ` times the unit
@@ -368,6 +397,10 @@ scoped infixl:70 " ∗ " => reverseProduct
 scoped infixl:70 " ⊛ " => scalarProduct
 /-- Sandwich (Julia `⊘`). -/
 scoped infixl:70 " ⊘ " => Sandwich.sandwich
+/-- Julia `a << b = contraction(b, ~a)` (AT:260; Julia precedence 14, above `+`). -/
+scoped infixl:75 " << " => shiftLeftContraction
+/-- Julia `a >> b = contraction(~a, b)` (AT:261). -/
+scoped infixl:75 " >> " => shiftRightContraction
 /-- Tensor product (Julia `⊗`). -/
 scoped infixl:70 " ⊗ " => TensorProd.tensorProd
 /-- Symmetrized product (Julia `⊙`). -/

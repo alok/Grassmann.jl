@@ -29,28 +29,29 @@ def alphanumw : String := "1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq
 private def subDigits : Array Char := #['₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉', '₀']
 private def supDigits : Array Char := #['¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹', '⁰']
 
-/-- Nth character (1-based) of a string, or `'?'`. -/
-private def charAt (s : String) (j : Nat) : Char := (s.toList[j - 1]?).getD '?'
+/-- Subscript glyphs for indices `-1 … 36` (Julia `subs`): `∞ ∅ ₁ … ₉ ₀ a … z`. -/
+private def subTable : Array Char :=
+  #['∞', '∅', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉', '₀'] ++ ("abcdefghijklmnopqrstuvwxyz".toList.toArray)
+
+/-- Superscript glyphs for indices `-1 … 36` (Julia `sups`): `∞ ∅ ¹ … ⁹ ⁰ A … Z`. -/
+private def supTable : Array Char :=
+  #['∞', '∅', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹', '⁰'] ++ ("ABCDEFGHIJKLMNOPQRSTUVWXYZ".toList.toArray)
 
 /-- Subscript glyph for index `i` (Julia `subs[i]`), for `-1 ≤ i ≤ 36`;
 `'?'` outside that range (where Julia raises a `KeyError`). -/
 def subs (i : Int) : Char :=
-  if i == -1 then vio.1
-  else if i == 0 then vio.2
-  else if i < -1 || i > 36 then '?'
-  else
-    let j := i.toNat
-    if j ≤ 10 then subDigits[j - 1]! else charAt alphanumv j
+  if i < -1 || i > 36 then '?' else subTable[(i + 1).toNat]?.getD '?'
 
 /-- Superscript glyph for index `i` (Julia `sups[i]`), for `-1 ≤ i ≤ 36`;
 `'?'` outside that range. -/
 def sups (i : Int) : Char :=
-  if i == -1 then vio.1
-  else if i == 0 then vio.2
-  else if i < -1 || i > 36 then '?'
-  else
-    let j := i.toNat
-    if j ≤ 10 then supDigits[j - 1]! else charAt alphanumw j
+  if i < -1 || i > 36 then '?' else supTable[(i + 1).toNat]?.getD '?'
+
+-- the glyph tables agree with the alphabets `subDigits`/`alphanumv` and `supDigits`/`alphanumw`
+example : (List.range 36).all (fun j => subs (j + 1 : Nat) ==
+    (if j < 10 then subDigits[j]! else alphanumv.toList[j]!)) := by decide
+example : (List.range 36).all (fun j => sups (j + 1 : Nat) ==
+    (if j < 10 then supDigits[j]! else alphanumw.toList[j]!)) := by decide
 
 /-- A naming scheme: prefixes for vectors, covectors, tangent derivations and
 tangent functions (Julia `NTuple{4,String}`). -/
@@ -74,19 +75,23 @@ def nameScheme (k : Nat) : Names := if k == 2 then PRE else pre
   Indices beyond 36 wrap by 26 and flip sub/superscript, as in Leibniz.jl. -/
 def printIndex (i : Int) (label : Bool := false) (pfx : String := pre.1)
     (names : Names := pre) : String :=
-  let t := i > 36
-  let j := if t then i - 26 else i
-  if label && 0 < j && j ≤ 10 then toString j
-  else
-    let vecLike := pfx == names.1 || pfx == names.2.2.1
+  pushIndex "" i label (pfx == names.1 || pfx == names.2.2.1)
+where
+  /-- Append the glyph of index `i` to `s`; `vecLike` says the prefix prints subscripts. -/
+  pushIndex (s : String) (i : Int) (label vecLike : Bool) : String :=
+    let t := i > 36
+    let j := if t then i - 26 else i
+    if label && 0 < j && j ≤ 10 then
+      if j == 10 then (s.push '1').push '0' else s.push (Char.ofNat (48 + j.toNat))
     -- `(e ∉ pre[[1,3]]) ⊻ t ? sups : subs`
-    if (!vecLike) != t then (sups j).toString else (subs j).toString
+    else if (!vecLike) != t then s.push (sups j) else s.push (subs j)
 
 /-- Prefix followed by all index glyphs, e.g. `printIndices [1,2] = "v₁₂"`
 (Julia 1-list `printindices`, `indices.jl:145`). -/
 def printIndices (is : List Int) (label : Bool := false) (pfx : String := pre.1)
     (names : Names := pre) : String :=
-  is.foldl (fun acc i => acc ++ printIndex i label pfx names) pfx
+  let vecLike := pfx == names.1 || pfx == names.2.2.1
+  is.foldl (fun acc i => printIndex.pushIndex acc i label vecLike) pfx
 
 /-- Julia 4-list `printindices(io,a,b,c,d,l,e,f,g,h)` (`indices.jl:147-154`):
 blocks print in the order `c` (∂), `d` (ϵ), `a` (v), `b` (w); the vector block
@@ -140,6 +145,7 @@ def diffmaskPair (c : LabelCtx) : UInt64 × UInt64 :=
 (`indices.jl:122-132`): with `∞` present position 1 becomes `-1`; with `∅`
 present the next position `P` becomes `0`; the rest shift down by `P`. -/
 def shiftList (c : LabelCtx) (set : List Int) : List Int :=
+  if c.nulls == 0 then set else
   match set with
   | [] => []
   | x :: xs =>
@@ -157,11 +163,28 @@ def shiftIndices (c : LabelCtx) (b : UInt64) : List Int :=
 
 end LabelCtx
 
+/-- The label of mask `x` in a plain space: the prefix `pfx`, then the glyph of every set bit,
+ascending (`printIndices (indicesList x) label pfx`, without the intermediate lists). -/
+def plainLabel (x : UInt64) (pfx : String) (label vecLike : Bool) : String :=
+  go x pfx 64
+where
+  /-- Consume the set bits of `x` from the lowest. -/
+  go (x : UInt64) (acc : String) : Nat → String
+    | 0 => acc
+    | fuel + 1 => if x == 0 then acc else
+        go (x &&& (x - 1)) (printIndex.pushIndex acc (Int.ofNat (ctz x + 1)) label vecLike) fuel
+
 /-- Julia `printlabel(io,V,e,label,vec,cov,duo,dif)` (`indices.jl:156-181`):
 the name of basis blade `e` (a mask local to the handle). `label = true` gives
 the ASCII label form (`v12`, `∂1v1`). -/
 def printLabel (c : LabelCtx) (e : UInt64) (label : Bool := false) (names : Names := pre) :
     String :=
+  -- fast path: a whole plain space (no null, tangent or dual generators) prints `vec` and one
+  -- glyph per set bit, in ascending order
+  if c.dyadmode == 0 && c.diffvars == 0 && !c.hasinf && !c.hasorigin && c.sub == lowMask c.n then
+    -- as `printIndices … vec` below, the sub/superscript choice compares with the default `pre`
+    plainLabel e names.1 label (names.1 == pre.1 || names.1 == pre.2.2.1)
+  else
   let (vec, cov, duo, dif) := names
   let nn : Int := c.n
   let d : Int := c.diffvars
@@ -183,6 +206,7 @@ def printLabel (c : LabelCtx) (e : UInt64) (label : Bool := false) (names : Name
       else printIndices4 (shift es) [] eps [] label (vec, cov, duo, dif)
     else
       printIndices (shift es) label (if c.dyadmode > 0 then cov else vec)
+
 
 /-- Julia `indexstring(V,D)` (`indices.jl:205-209`): the label with `PRE` names
 in label mode, e.g. `X13`. -/

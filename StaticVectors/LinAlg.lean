@@ -37,6 +37,13 @@ when `n = 0`. -/
     (a : Values α n) (b : Values β n) : γ :=
   match n, a, b with
   | 0, _, _ => empty
+  -- unrolled small sizes (the same left fold)
+  | 1, a, b => f (a.get ⟨0, by decide⟩) (b.get ⟨0, by decide⟩)
+  | 2, a, b => op (f (a.get ⟨0, by decide⟩) (b.get ⟨0, by decide⟩)) (f (a.get ⟨1, by decide⟩) (b.get ⟨1, by decide⟩))
+  | 3, a, b => op (op (f (a.get ⟨0, by decide⟩) (b.get ⟨0, by decide⟩)) (f (a.get ⟨1, by decide⟩) (b.get ⟨1, by decide⟩))) (f (a.get ⟨2, by decide⟩) (b.get ⟨2, by decide⟩))
+  | 4, a, b =>
+    op (op (op (f (a.get ⟨0, by decide⟩) (b.get ⟨0, by decide⟩)) (f (a.get ⟨1, by decide⟩) (b.get ⟨1, by decide⟩))) (f (a.get ⟨2, by decide⟩) (b.get ⟨2, by decide⟩)))
+      (f (a.get ⟨3, by decide⟩) (b.get ⟨3, by decide⟩))
   | k + 1, a, b => foldl₂Loop (fun acc x y => op acc (f x y)) a b k (Nat.le_succ k) (f a.head b.head)
 
 /-- Julia `dot(a, b)` (`SV/linalg.jl:59`): `∑ dot(aᵢ, bᵢ)`, a left fold from
@@ -75,19 +82,20 @@ def normP [JNorm α] (a : Values α n) (p : Float) : Float :=
 each entry by the reciprocal (so `normalize(Values(3.0,4.0)) = [0.6000000000000001, 0.8]`). -/
 @[inline] def normalize [JNorm α] [HMul Float α α] (a : Values α n) : Values α n :=
   let s := 1 / a.norm
-  a.map (s * ·)
+  Values.mapWith (fun s x => s * x) s a
 
 /-- Julia `normalize(a, p)`: `inv(norm(a, p)) * a`. -/
 @[inline] def normalizeP [JNorm α] [HMul Float α α] (a : Values α n) (p : Float) : Values α n :=
   let s := 1 / a.normP p
-  a.map (s * ·)
+  Values.mapWith (fun s x => s * x) s a
 
 /-- Julia `LinearAlgebra.cross(a, b)` on 3-vectors:
-`[a₂b₃ - a₃b₂, a₃b₁ - a₁b₃, a₁b₂ - a₂b₁]`. -/
-def cross [Mul α] [Sub α] (a b : Values α 3) : Values α 3 :=
+`[a₂b₃ - a₃b₂, a₃b₁ - a₁b₃, a₁b₂ - a₂b₁]`, straight-line and written into `a`'s storage
+(no allocation when `a` is unshared). -/
+@[inline] def cross [Mul α] [Sub α] (a b : Values α 3) : Values α 3 :=
   let a1 := a.get 0; let a2 := a.get 1; let a3 := a.get 2
   let b1 := b.get 0; let b2 := b.get 1; let b3 := b.get 2
-  ofFn fun i => match i with
+  a.updateAll fun i _ => match i with
     | 0 => a2 * b3 - a3 * b2
     | 1 => a3 * b1 - a1 * b3
     | 2 => a1 * b2 - a2 * b1

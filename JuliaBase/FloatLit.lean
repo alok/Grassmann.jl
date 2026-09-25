@@ -37,6 +37,15 @@ syntax:max (name := f64Lit) "f64! " "-"? (scientific <|> num) : term
 constant `Float32.ofBits n`. -/
 syntax:max (name := f32Lit) "f32! " "-"? (scientific <|> num) : term
 
+/-- `i64! 8` (or `i64! -53`): an `Int64` literal as a module-level constant (a plain global
+load in compiled code). An `Int64`/`Int32` literal inside a function body is otherwise a closed
+term, `Int64.ofNat 8` computed once and read through a once-cell (an atomic load and a branch on
+every use); `UInt64` literals are C immediates and need nothing. -/
+syntax:max (name := i64Lit) "i64! " "-"? num : term
+
+/-- `i32! 20` (or `i32! -60`): an `Int32` literal as a module-level constant (see `i64!`). -/
+syntax:max (name := i32Lit) "i32! " "-"? num : term
+
 namespace FloatLit
 
 /-- The value of a literal node as `(mantissa, negative exponent?, exponent)`. -/
@@ -78,6 +87,24 @@ def litConst (tag : String) (ty ofBits : Name) (bits : Expr) (bitsNat : Nat) : T
     let bits := if stx[1].isNone then bits else bits ^^^ 0x80000000
     litConst "f32" ``Float32 ``Float32.ofBits (toExpr bits) bits.toNat
   | none => throwErrorAt stx[2] "f32!: expected a numeric literal"
+
+/-- Elaborate `i64! n` / `i64! -n` (two's complement, wrapping as Julia's `Int64`). -/
+@[term_elab i64Lit] def elabI64 : TermElab := fun stx _ => do
+  match stx[2].isNatLit? with
+  | some n =>
+    let v : Int := if stx[1].isNone then n else -n
+    let bits := (Int64.ofInt v).toUInt64
+    litConst "i64" ``Int64 ``UInt64.toInt64 (toExpr bits) bits.toNat
+  | none => throwErrorAt stx[2] "i64!: expected a natural-number literal"
+
+/-- Elaborate `i32! n` / `i32! -n`. -/
+@[term_elab i32Lit] def elabI32 : TermElab := fun stx _ => do
+  match stx[2].isNatLit? with
+  | some n =>
+    let v : Int := if stx[1].isNone then n else -n
+    let bits := (Int32.ofInt v).toUInt32
+    litConst "i32" ``Int32 ``UInt32.toInt32 (toExpr bits) bits.toNat
+  | none => throwErrorAt stx[2] "i32!: expected a natural-number literal"
 
 end FloatLit
 

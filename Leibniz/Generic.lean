@@ -30,6 +30,19 @@ open DirectSum.Bits
 theorem parityreverse_spec : ∀ g < 128, parityreverse g = ((g * (g - 1) / 2) % 2 == 1) := by
   decide +kernel
 
+/-! ## Splitting masks -/
+
+/-- Julia `indexsplit(B, N) = [1 << (k-1) for k ∈ indices(B, N)]`: the single-generator masks
+of `b`, ascending. -/
+def indexsplit (b : UInt64) : Array UInt64 := go b #[] 64
+where
+  /-- Peel the lowest set bit. -/
+  go (x : UInt64) (acc : Array UInt64) : Nat → Array UInt64
+    | 0 => acc
+    | fuel + 1 => if x == 0 then acc else go (x &&& (x - 1)) (acc.push (lowestBit x)) fuel
+
+example : indexsplit 0b101101 = #[1, 4, 8, 32] := by decide
+
 /-! ## Complement mask (`Leibniz.jl src/generic.jl:233-237`) -/
 
 /-- Julia `complement(N,B,D=0,P=0)`: flip every ordinary (non-tangent, non-null)

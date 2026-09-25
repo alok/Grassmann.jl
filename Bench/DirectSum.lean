@@ -17,7 +17,8 @@ Lean fallback kernels and code generator evaluate at elaboration/plan time.
   loop over basis pairs recording `(i, j, basisindex(r), sign)`); `plan_mul_CGA3` is Lean-only.
 * `index_tables_n10`: building Leibniz's `indexbasis`/`bladeindex` tables for `n = 10`
   (Julia: the `_calc` functions its caches call); `basis_index_n10`: cached lookups.
-* `blade_show_R10`: printing all 1024 blade labels of `ℝ10`.
+* `blade_show_R10`: the ASCII labels (`v10`, `v12345678910`) of all 1024 blades of `ℝ10`
+  (Julia: `string` of the names `Λ(V).b`).
 -/
 
 namespace Bench.DirectSum
@@ -49,13 +50,19 @@ where
       let b := (k % n).toUInt64
       go (k + 1) (if parityjoin s a b then acc + 1 else acc) f
 
-/-- `∑ basisIndex n b` over all `b < 2^n`. -/
+/-- `∑ basisIndex n b` over all `b < 2^n` (a counted loop, as the Julia twin's `for b in
+0:(1<<n)-1`). -/
 def sumBasisIndex (n : Nat) : Nat :=
-  (List.range (2 ^ n)).foldl (fun acc b => acc + basisIndex n b.toUInt64) 0
+  go 0 0 (1 <<< n)
+where
+  /-- Tail-recursive loop over the masks. -/
+  go (b : UInt64) (acc : Nat) : Nat → Nat
+    | 0 => acc
+    | k + 1 => go (b + 1) (acc + basisIndex n b) k
 
-/-- Total bytes of the labels of every blade. -/
+/-- Total bytes of the ASCII labels (`v12`, Julia's names `Λ(V).b`) of every blade. -/
 def labelBytes (V : TensorBundle) (bs : Array UInt64) : Nat :=
-  bs.foldl (fun acc b => acc + (V.bladeLabel b).utf8ByteSize) 0
+  bs.foldl (fun acc b => acc + (V.bladeLabel b (label := true)).utf8ByteSize) 0
 
 /-- The suite. -/
 def suite : Suite := ⟨"directsum", do

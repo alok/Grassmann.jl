@@ -26,6 +26,59 @@ example : ((ℝ^3).tangent 1 2 ⊕ ((ℝ^3).tangent 1 2)′).diffmaskPair = (0xc
 #guard ((ℝ^1)′ ⊕ ℝ^3).toString == "⟨-+++⟩"
 #guard (let V := (ℝ^1)′ ⊕ ℝ^3; V ⊕ V′).toString == "⟨-++++---⟩*"
 
+/-! ## `ℝ`, `+`, `^` and set theory (DirectSum README:43-76, 124, 167-183; test lines 5-12) -/
+
+#guard ℝ.toString == "⟨+⟩"
+#guard (ℝ′ ⊕ ℝ^3).toString == "⟨-+++⟩"
+#guard (ℝ ⊕ ℝ′).toString == "⟨+-⟩*"
+#guard (ℝ ^ 3) == ℝ^3
+#guard ((ℝ^2)^2).toString == "⟨++++⟩"
+#guard (ℝ^3)^0 == V0
+#guard ((ℝ^3) + (ℝ^3)′).toString == "⟨+++---⟩*"
+#guard ((ℝ^3).tangent + (ℝ^3).tangent′).toString == "T¹⟨+++---₁¹⟩*"
+-- `ℝ⊕ℝ' ⊇ TensorBundle(1)`, `ℝ ∩ ℝ' == TensorBundle(0)`, `ℝ ∪ ℝ' == ℝ⊕ℝ'`
+example : (ℝ ⊕ ℝ′) ⊇ V!"+" := by decide
+#guard ℝ ∩ ℝ′ == V0
+#guard equal (ℝ ∪ ℝ′) (ℝ ⊕ ℝ′)
+#guard equal ℝ3 (ℝ^3) && equal (ℝ^3) S!"+++" && !equal (ℝ^3) (ℝ^4)
+#guard ((ℝ^2)′ ∪ ℝ^2).toString == "⟨++--⟩*"
+#guard ((ℝ^3) ∪ (ℝ^3).tangent).toString == "T¹⟨+++₁⟩"
+#guard toString ((ℝ^3).sub [1, 2] ∪ (ℝ^3).sub [2, 3]) == "⟨+++⟩"
+#guard toString ((ℝ^3).sub [1, 2] ∩ (ℝ^3).sub [2, 3]) == "⟨_+_⟩"
+example : (ℝ^3).sub [1, 2] ⊆ ℝ^3 := by decide
+example : ¬ ((ℝ^4) ⊆ (ℝ^3)) := by decide
+-- blades: `v1 ⊆ v12`, `v12 ⊆ V`, `v1 ∪ v2 = v12`
+example : (⟨0b1⟩ : Submanifold (ℝ^3) 1) ⊆ (⟨0b11⟩ : Submanifold (ℝ^3) 2) := by decide
+example : (⟨0b11⟩ : Submanifold (ℝ^3) 2) ⊆ ℝ^3 := by decide
+#guard toString (Submanifold.union (⟨0b1⟩ : Submanifold (ℝ^3) 1) (⟨0b10⟩ : Submanifold (ℝ^3) 1)) == "v₁₂"
+#guard (match SubSpace.oplus ((ℝ^3).sub [2, 3]) ((ℝ^3).sub [1]) with
+  | .ok x => toString x | .error e => e) == "⟨_+++__⟩"
+#guard ((ℝ^4).sub [1, 4]).showBasis == "DirectSum.Basis{⟨+__+⟩,4}(v, v₁, v₄, v₁₄)"
+#guard toString (ℝ^3).tangent.subtangent == "T¹⟨___₁⟩"
+
+-- metric kinds (Julia `Signature(D"1,-2,3") = ⟨+-+⟩`, `DiagonalForm(S"-+-") = ⟨-1,1,-1⟩`, duals,
+-- `Signature(D"0,1,1") = ⟨+++⟩`, `Signature((ℝ^3)(1,3)) = ⟨++⟩`, `Signature(D"1,-2,3"(2,3)) = ⟨-+⟩`)
+#guard (match (D!"1,-2,3").toSignature with | .ok W => W.toString | .error e => e) == "⟨+-+⟩"
+#guard (match (S!"-+-").toDiagonal with | .ok W => W.toString | .error e => e) == "⟨-1,1,-1⟩"
+#guard (match (D!"1,-2,3")′.toSignature with | .ok W => W.toString | .error e => e) == "⟨-+-⟩'"
+#guard (match (S!"-+-")′.toDiagonal with | .ok W => W.toString | .error e => e) == "⟨-1,1,-1⟩'"
+#guard (match (D!"0,1,1").toSignature with | .ok W => W.toString | .error e => e) == "⟨+++⟩"
+#guard ((ℝ^3).sub [1, 3]).toSignature.toString == "⟨++⟩"
+#guard ((D!"1,-2,3").sub [2, 3]).toSignature.toString == "⟨-+⟩"
+
+-- blade restriction/embedding and covector evaluation (Julia `W(b)`, `w¹(v₁)`)
+#guard ((ℝ^4).sub [2, 4]).restrictBlade 0b1010 == some 0b11
+#guard ((ℝ^4).sub [2, 4]).restrictBlade 0b0010 == some 0b01
+#guard ((ℝ^4).sub [2, 4]).restrictBlade 0b0011 == none
+#guard ((ℝ^4).sub [2, 4]).embedBlade 0b11 == 0b1010
+#guard (TensorBundle.embedBlade (ℝ^4) (ℝ^2) 0b11).toOption == some 0b11
+#guard (TensorBundle.embedBlade ((ℝ^2) ⊕ (ℝ^2)′) (ℝ^2)′ 0b1).toOption == some 0b100
+#guard ((ℝ^2) ⊕ (ℝ^2)′).evaluate1 0b100 0b1 == some 1
+#guard ((ℝ^2) ⊕ (ℝ^2)′).evaluate1 0b100 0b10 == none
+#guard ((ℝ^2) ⊕ (ℝ^2)′).evaluate1 0b1 0b100 == none
+#guard ((S!"-+") ⊕ (S!"-+")′).evaluate1 0b100 0b1 == some (-1)
+#guard ((S!"-+") ⊕ (S!"-+")′).evaluate1 0b1000 0b10 == some 1
+
 /-! ## Runtime goldens -/
 
 /-- `(description, holds)` pairs. -/

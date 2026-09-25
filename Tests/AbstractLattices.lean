@@ -1,9 +1,12 @@
 import AbstractLattices
 import Tests.AbstractLattices.Harness
+import Tests.AbstractLattices.Unified
 
 /-!
 AbstractLattices tests: the Julia test suite (`AbstractLattices.jl test/runtests.jl`)
-and the Bool methods of 0.2.2/0.3.x (port-notes/small-algebra.md §6.1).
+and the Bool methods of 0.2.2/0.3.x (port-notes/small-algebra.md §6.1); `Unified` checks at
+compile time that one `∧`/`∨` class family serves AbstractTensors, Grassmann, DeMorgan and
+Dendriform.
 -/
 
 open AbstractLattices Tests.Small

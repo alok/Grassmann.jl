@@ -354,7 +354,6 @@ Open gaps (budgets record them with 30% headroom; each is a follow-up):
 | `directsum/basis_index_n10` | 99 ns / 2.6 ns | `bladeRankImpl` computes `2 ^ n` (GMP `mpz_pow_ui`) per call; `binomsum` re-sums binomials | `b >>> n == 0`; read the tables' offsets |
 | `staticvectors/*`, small Grassmann ops | 10–40 ns / 0.5–3 ns | every vector-valued result is a fresh `FloatArray`; reductions are Nat-indexed, bounds-checked loops | unrolled generated kernels for small `n`, or unboxed-field structs for `n ≤ 4` |
 | `unitsystems/dim_products` | 1.5 µs / 139 ns | group products add `Rat` exponent vectors (a `gcd` per entry) | integer exponents in twelfths, as `UnitSystems.Dim` |
-| `directsum/blade_mul_CGA3` | 1.7 µs / 230 ns | Gram product recomputed per call over `Rat` terms | read plan tables (DESIGN §5.3) |
 | `directsum/blade_show_R10` | 310 ns / 10 ns, check ≠ | label strings built by `List`/`String` concatenation; **Lean prints `v₀` for generator 10, Julia `v10`** (label rule for `n ≥ 10`) | fix `Leibniz.printLabel`; build into one buffer |
 | `juliabase/sum_f64` | 0.55 / 0.087 ns per element | bit-exact replay of the SIMD accumulator layout with bounds-checked reads; no vectorization | `USize`/`uget` loop that clang can vectorize |
 | `math/*` (exp, log, expm1, sinh, tan) | 2–3× | Julia's kernels bit for bit; out-of-line `lean_float_to_bits`/`of_bits` calls and `Int` bookkeeping | runtime inline bit casts; `Int64` exponent arithmetic |
@@ -367,3 +366,52 @@ interpreter, a follow-up: compile the AST to a closure tree or plan), MeshTopolo
 Geophysics viscosity and sonic-speed profiles (2–4×), `atan`/`x^2.5` and the cached `parity`
 table lookups (3×).
 
+
+## 2026-09-25: foundations pass (JuliaBase, StaticVectors, Leibniz, DirectSum)
+
+Measured with the harness (`Bench/Harness`, min ns per operation, Apple M4 Max shared with other
+builds, so ±10%) against the Julia twins; every checksum agrees with Julia's. Budgets in
+`docs/perf/budgets.toml` are tightened to the new ratios with 30% headroom.
+
+| case | before | after | Julia | what changed |
+|---|---|---|---|---|
+| `juliabase/range_collect` | 40.6 | 3.6 | 0.57 | `F64.ofInt`: inline `Int64` cast for every Julia `Int` (`Float.ofInt` goes through `Float.ofScientific`); `collect` runs a `Float` counter |
+| `juliabase/range_getindex` | 39.2 | 2.3 | 0.65 | same |
+| `juliabase/parse_float` | 2120 | 238 | 29 | one tail-recursive byte state machine (no tuples), Clinger's fast path, Eisel–Lemire with an exact 128-bit table (600k strings checked against the exact parser) |
+| `juliabase/sum_f64` (per element) | 0.56 | 0.35 | 0.087 | `USize`/`uget` reads in the bit-exact SIMD replay |
+| `juliabase/round_digits` | 21.8 | 18.9 | 3.7 | exact powers of ten from a table |
+| `math/exp` | 6.49 | 4.49 | 2.54 | `N` from `Float.toUInt64` of the magic-rounded float (inline; `toBits` is an out-of-line call), `2^k` from a table on the normal fast path (exact product = bit add), `i64!` literals |
+| `directsum/basis_index_n10` | 103 | 5.4 | 2.6 | mask → position table behind `@[implemented_by]` (no `2 ^ n` on `Nat`); the bench loop no longer builds a `List.range` |
+| `directsum/blade_show_R10` | 305 | 55 | 10.4 | glyph tables, labels pushed char by char, plain spaces straight from the mask bits; the twin prints labels (`v10`), which is what Julia's `Λ(V).b` holds, and the checks now agree |
+| `directsum/plan_mul_R5` | 493 | 396 | 404 | (table-driven `basisRank`) |
+| `directsum/blade_mul_CGA3` | 1690 | 55 | 230 | non-diagonal spaces with `n ≤ 6` read a per-space product table (`TensorBundle.mulCached`, a global cache behind `@[implemented_by]`, DESIGN §5.3) instead of the Chevalley product over `Rat` per call |
+| `directsum/plan_mul_CGA3` (Lean only) | 1890 | 125 | – | same table |
+| `staticvectors/add3` | 10.9 | 1.04 | 0.56 | results written into the first operand (`Packed.set`, in place when unshared), `n ≤ 4` unrolled |
+| `staticvectors/dot3`, `norm3`, `sum3` | 9.8, 9.5, – | 1.05, 1.02, 1.02 | 0.62, 0.59, 0.54 | unrolled reductions with literal `Fin` indices (a `(0 : Fin 3)` numeral is a `0 % 3` closed term) |
+| `staticvectors/cross3` | 23.4 | 10.1 | 9.8 | straight-line, written into `a` |
+| `staticvectors/scale3`, `normalize3` | 21.7, 23.2 | 9.0, 9.2 | 0.47, 0.62 | one copy of the operand (the allocation floor); scalar maps `mapWith` keep `f` closed so the compiler inlines it |
+| `staticvectors/add16`, `dot16`, `scale16` | 32.7, 19.6, 43.9 | 15.0, 13.2, 22.4 | 0.75, 2.28, 0.50 | in place / fewer pushes; `n > 4` still runs `Nat`-indexed loops |
+| `staticvectors/construct3` | – | 12.5 | 0.54 | `vals![…]` builds the packed array with a push chain |
+
+Findings:
+* **`Int64`/`Int32` literals** become once-cell closed terms; declared as module constants
+  (`i64! 8`, `i32! 20`, `JuliaBase.FloatLit`) the compiler emits them as C immediates.
+* **`Float.toInt64`/`toInt32` call the out-of-line `lean_float_isnan`**; `Float.toUInt64` is
+  fully inline (a NaN compares false). Where the value is known to be a non-negative integer
+  (the `1.5·2^52 + N` of the magic rounding), `toUInt64` replaces a `toBits`.
+* **`Fin` numerals are closed terms** (`OfNat (Fin n) k` is `k % n`); unrolled kernels write
+  `⟨k, by decide⟩`.
+* A closure capturing a vector (`fun i x => f x (w.get i)`) is lambda-lifted and called once per
+  entry; the unrolled updates take the captured value as an argument of a closed function
+  (`zipUpd`, `withUpd`) so `f` inlines.
+* Julia's twins fuse whole expressions (`cumsum(a)[end]`, `reverse(a)[1]` cost ~0.5 ns); the Lean
+  cases pay for the full vector result (`cumsum16` 163 ns, `reverse16` 34 ns).
+* **A `where`-local loop of a `@[specialize]` function is not specialized.** `sumComplex f zs := go 0 0
+  where go …` compiled to `sumComplex_go(f, …)`, calling `f` as a closure on boxed values; the
+  harness loops of the `juliabase` suite are now `@[specialize]` recursive functions (the Julia
+  twins' loops are specialized on `f`): `round_digits` 18.9 → 6.7 ns (Julia 3.7), `complex_sqrt`
+  36 → 20 (13.2), `complex_exp` 42 → 22 (7.8), `complex_log` 49 → 23 (16.3), together with
+  `@[inline]` `ComplexF64.sqrt`/`log`/`exp` (their `Complex Float` results were boxed). Other
+  suites with `where go` loops over a function argument pay the same.
+* Payne–Hanek (`sin(1e10)`) 59 → 20.5 ns (Julia 9.1): the table read was a local closure called
+  seven times and `fromFraction` returned a boxed pair.

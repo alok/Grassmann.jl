@@ -280,7 +280,7 @@ def ssqsTiny : Float := Float.ofBits 1 / (f64! 2.0 * (F64.eps * F64.eps))
 
 /-- Julia `ssqs(x, y)` (complex.jl:509): `x² + y²` and a scaling exponent `k`, rescaled
 when the sum over/underflows. -/
-def ssqs (x y : Float) : Float × Int :=
+@[inline] def ssqs (x y : Float) : Float × Int :=
   let ρ := x * x + y * y
   if !F64.isfinite ρ && (F64.isinf x || F64.isinf y) then (F64.inf, 0)
   else if F64.isinf ρ || (ρ == f64! 0.0 && (x != f64! 0.0 || y != f64! 0.0)) || ρ < ssqsTiny then
@@ -293,7 +293,7 @@ def ssqs (x y : Float) : Float × Int :=
 
 /-- Julia `sqrt(z::Complex)` (complex.jl:523), Kahan's algorithm without intermediate
 over/underflow. -/
-def sqrt (z : Complex Float) : Complex Float :=
+@[inline] def sqrt (z : Complex Float) : Complex Float :=
   let x := z.re
   let y := z.im
   if x == f64! 0.0 && y == f64! 0.0 then ⟨f64! 0.0, y⟩
@@ -308,7 +308,7 @@ def sqrt (z : Complex Float) : Complex Float :=
     else ⟨ρ, y⟩
 
 /-- Julia `log(z::Complex)` (complex.jl:643). -/
-def log (z : Complex Float) : Complex Float :=
+@[inline] def log (z : Complex Float) : Complex Float :=
   let x := z.re
   let y := z.im
   let (ρ, k) := ssqs x y
@@ -318,11 +318,11 @@ def log (z : Complex Float) : Complex Float :=
   let ρρ :=
     if k == 0 && f64! 0.5 < β * β && (β ≤ f64! 1.25 || ρ < f64! 3.0) then
       F64.log1p ((β - f64! 1.0) * (β + f64! 1.0) + θ * θ) / f64! 2.0
-    else F64.log ρ / f64! 2.0 + Float.ofInt k * F64.ln2
+    else F64.log ρ / f64! 2.0 + F64.ofInt k * F64.ln2
   ⟨ρρ, angle z⟩
 
 /-- Julia `exp(z::Complex)` (complex.jl:694). -/
-def exp (z : Complex Float) : Complex Float :=
+@[inline] def exp (z : Complex Float) : Complex Float :=
   let zr := z.re
   let zi := z.im
   if F64.isnan zr then ⟨zr, if zi == f64! 0.0 then zi else zr⟩

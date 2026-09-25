@@ -63,6 +63,9 @@ example : a₋ = 2 := by decide
 example : aǂ = ⟨1, -2⟩ := by decide
 example : aˣ = ⟨1, -2⟩ := by decide
 example : a ∗ b = ⟨3, -2⟩ := by decide           -- `(~a) ⟑ b` (AT:257)
+example : a << b = 3 := by decide                -- `contraction(b, ~a)` (AT:260)
+example : a >> b = 3 := by decide                -- `contraction(~a, b)` (AT:261)
+example : (a << b) + 1 = 4 := by decide          -- `<<`/`>>` bind tighter than `+`, as in Julia
 example : a ⊛ b = 3 := by decide                 -- `scalar(a ⋅ b)` (AT:258)
 -- right associativity at the `And`/`Or` level; prefix `⋆` binds tighter
 example : (a ∧ b ∧ a) = (a ∧ (b ∧ a)) := rfl
