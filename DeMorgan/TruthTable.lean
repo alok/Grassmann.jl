@@ -113,7 +113,7 @@ def parstring (s : String) : String :=
 
 /-- The projection columns of `N` variables (Julia `select(N)`, DM:84). -/
 def projections (N : Nat) : Array (TruthValues N) :=
-  (Array.range N).map fun n => ⟨select (n + 1) N⟩
+  (Array.range N).map fun n => TruthValues.ofUInt64 N (select (n + 1) N)
 
 /-- Julia `combine(p, q, r, n)` (DM:103-146), transcribed literally: merge the classes of
 `q` (then the new class `(r, n)`) into `p`. Membership and alias tests use `p`'s
@@ -272,15 +272,15 @@ def ofFormulaClean (vars : Fin N → TruthTable N) : Formula N → TruthTable N
 
 /-- Julia `pretty_table(::TruthTable)` (DM:163-169) with PrettyTables v2 defaults: one
 column per class, `max` alias-count header rows (missing aliases blank), the `2^N` rows
-`digits(p[c], base=2, pad=2^N)`, cells right-aligned and padded by one space, unicode
-box drawing. The result ends with a newline, like `pretty_table`. -/
+(`rows N`) `digits(p[c], base=2, pad=2^N)`, cells right-aligned and padded by one space,
+unicode box drawing. The result ends with a newline, like `pretty_table`. -/
 def render (t : TruthTable N) : String := Id.run do
   let cols := t.classes
   let h := cols.foldl (fun acc c => max acc c.names.size) 0
   let header : Array (Array String) :=
     (Array.range h).map fun r => cols.map fun c => c.names[r]?.getD ""
   let body : Array (Array String) :=
-    (Array.range (2 ^ N)).map fun k => cols.map fun c => if c.col.eval k then "1" else "0"
+    (Array.range (rows N)).map fun k => cols.map fun c => if c.col.eval k then "1" else "0"
   let widths : Array Nat := (Array.range cols.size).map fun c =>
     (header ++ body).foldl (fun acc row => max acc (row[c]?.getD "").length) 0
   let rule (l m r : String) : String :=
