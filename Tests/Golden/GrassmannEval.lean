@@ -261,20 +261,33 @@ def productsEval : Evaluator := fun ctx args => do
     | op => (productOf? (V := V) op).bind fun f => a.bin T f b
   pure r.encode
 
-/-- Expected failures of the products evaluator on cases whose Julia value is wrong only in
-the sign of zero. -/
+/-- A products match table (`kinds`: one pattern per operand). -/
+def productsTable (op : String) (kinds : Array String := #[]) (space : String := "*") : MatchTable :=
+  { suite := some (Glob.compile "products"), space := some (Glob.compile space),
+    op := some (Glob.compile op),
+    kinds := if kinds.isEmpty then none else some (kinds.map KindPat.compile) }
+
+/-- Expected failures of the products evaluator: `Float` cases of Julia defects whose
+correct values differ from the expectation only in the sign of zero. -/
 def productsKnownIssues : Array KnownIssue := #[
-  { id := "tsandwich-submanifold-chain-sign-zero",
-    note := "defect tsandwich-submanifold-chain-sign (policy ref) with a null blade y (v₁ in " ++
-      "PGA3): Julia's y⟑x⟑y and the correct y⟑x⟑clifford(y) are both zero, so the oracle stores " ++
-      "no ref and the harness compares with Julia's out, whose zeros carry the defective sign. " ++
-      "Request: compare ref-policy cases without a stored ref modulo the sign of zero " ++
-      "(Tests/Golden/Runner.lean evalCase)",
-    tables := #[{ suite := some (Glob.compile "products"), space := some (Glob.compile "PGA*"),
-                  op := some (Glob.compile "tsandwich"),
-                  kinds := some #[KindPat.compile
-                    "Submanifold:1|Submanifold:2|Submanifold:5|Submanifold:6|Submanifold:9|Submanifold:10",
-                    KindPat.compile "Chain"] }] }
+  { id := "ref-zero-sign",
+    note := "policy-ref defects (conformal-blade-complement, subamnifold-typo, " ++
+      "conformal-generated-sandwich, tsandwich-submanifold-chain-sign, chain0-times-mixed) with " ++
+      "Float64 operands: the oracle's ref vectors are dense accumulations from zero and do not " ++
+      "define the sign of zero; the port's values follow Julia's generated loops and differ from " ++
+      "the ref only in zero signs; where the ref equals Julia's value numerically (y >>> x with a " ++
+      "null blade y: both are zero) the oracle stores no ref and the harness compares with " ++
+      "Julia's out, whose zeros carry the defect's sign. Request: compare ref vectors, and " ++
+      "ref-policy cases without a stored ref, modulo the sign of zero (Tests/Golden/Compare.lean " ++
+      "compareWithRef, Tests/Golden/Runner.lean evalCase; the reference evaluator already does)",
+    tables := #[productsTable "antidot|veedot" (space := "CGA*"),
+      productsTable "cross|wedge" #["PseudoCouple", "Multivector"],
+      productsTable "cross|wedge" #["Multivector", "PseudoCouple"],
+      productsTable "sandwich" #["Chain", "Single"],
+      productsTable "tsandwich" #["Single", "Chain"],
+      productsTable "tsandwich" #["Submanifold", "Chain"],
+      productsTable "mul|revmul" #["Chain:0", "Multivector"],
+      productsTable "mul|revmul" #["Multivector", "Chain:0"]] }
 ]
 
 /-! ## Registrations -/
