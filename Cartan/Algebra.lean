@@ -1,4 +1,5 @@
 import Cartan.Kernel
+import Cartan.Flat
 
 /-!
 # The lifted algebra of tensor fields
@@ -84,13 +85,15 @@ section Linear
 
 variable [LinearFiber F]
 
-/-- Componentwise combination of the flat arrays (`LinearFiber` operations). -/
+/-- Componentwise combination of the flat arrays (`LinearFiber` operations; `Cartan.Flat.zip`,
+in place over `a` when `a` is exclusive). -/
 @[inline] def zipFlat (f : Float → Float → Float) (a b : TensorField m F) : TensorField m F :=
-  ⟨zipFloats f a.data b.data, by rw [size_zipFloats, a.size_data], none⟩
+  ⟨Flat.zip f a.data b.data, by rw [Flat.size_zip, a.size_data], none⟩
 
-/-- Componentwise map of the flat array (`LinearFiber` operations). -/
+/-- Componentwise map of the flat array (`LinearFiber` operations; `Cartan.Flat.map`, in place
+when `a` is exclusive). -/
 @[inline] def mapFlat (f : Float → Float) (a : TensorField m F) : TensorField m F :=
-  ⟨mapFloats f a.data, by rw [size_mapFloats, a.size_data], none⟩
+  ⟨Flat.map f a.data, by rw [Flat.size_map, a.size_data], none⟩
 
 /-- Julia `a + b` (group A, `Cartan.jl:346-354`). -/
 instance : Add (TensorField m F) := ⟨zipFlat (· + ·)⟩
@@ -124,11 +127,11 @@ theorem size_zipScalarLoop (f : Float → Float → Float) (a s : FloatArray) (w
   | k + 1, i, out => by
     rw [zipScalarLoop, size_zipScalarLoop f a s w k (i + 1), FloatArray.size_set!']
 
-/-- Combine every component of `t` with the scalar field `s` at its point. -/
+/-- Combine every component of `t` with the scalar field `s` at its point (`Cartan.Flat.zipScalar`:
+per point, no index division). -/
 @[inline] def zipScalar (f : Float → Float → Float) (t : TensorField m F) (s : TensorField m Float) :
     TensorField m F :=
-  ⟨zipScalarLoop f t.data s.data (FlatFiber.width F) t.data.size 0 t.data,
-    by rw [size_zipScalarLoop, t.size_data], none⟩
+  ⟨Flat.zipScalar (FlatFiber.width F) f t.data s.data, by rw [Flat.size_zipScalar, t.size_data], none⟩
 
 /-- Julia `a / b` with a scalar field `b` (`./(fiber(a), fiber(b))`, `Cartan.jl:371`): each fiber
 divided by the scalar at its point, as `a * (1/b)` for Grassmann fibers. -/
@@ -353,9 +356,11 @@ where
   termination_by j => w - j
 
 /-- Julia `norm(t)` (`Cartan.jl:450`): the pointwise norm, a scalar field (on the flat arrays for
-Grassmann and point fibers). -/
+Grassmann and point fibers: `Cartan.Flat.norms`, one pass, no per-point allocation). -/
 @[inline] def norm [FiberNorm F] (t : TensorField m F) : TensorField m Float :=
-  if FiberNorm.flat F then ofFn m t.flatNormAt else t.map fnorm
+  if FiberNorm.flat F then
+    ⟨Flat.norms (FlatFiber.width F) (card m) t.data, by simp [FlatFiber.width], none⟩
+  else t.map fnorm
 
 /-- Julia `abs(t)` (group D): the pointwise absolute value / norm (Julia returns a `Single`
 scalar for a `Chain` fiber; the value is the same). -/
@@ -382,15 +387,23 @@ which Grassmann evaluates as `~a * (1/abs2)`. -/
 instance (priority := default + 1) {V : TensorBundle} {G : Nat} :
     Inv (TensorField m (Chain V G Float)) := ⟨map invChain⟩
 
-/-- Julia `supnorm(t) = maximum(norm, fiber(t))` (`Cartan.jl:513`). -/
-def supnorm [FiberNorm F] (t : TensorField m F) : Float :=
-  let nt := t.norm
-  foldRange (fun acc i => F64.max acc (nt.data.get! i)) (card m) 0 (-(1 : Float) / 0)
+/-- `-∞`. -/
+def negInf : Float := Float.ofBits 0xFFF0000000000000
+/-- `+∞`. -/
+def posInf : Float := Float.ofBits 0x7FF0000000000000
 
-/-- Julia `infnorm(t) = minimum(norm, fiber(t))` (`Cartan.jl:514`). -/
-def infnorm [FiberNorm F] (t : TensorField m F) : Float :=
+/-- Julia `supnorm(t) = maximum(norm, fiber(t))` (`Cartan.jl:513`), fused into one pass over the
+flat data for flat norms (no norm field is built). -/
+def supnorm [FiberNorm F] (t : TensorField m F) : Float :=
+  if FiberNorm.flat F then Flat.normExtremum true (FlatFiber.width F) (card m) t.data negInf else
   let nt := t.norm
-  foldRange (fun acc i => F64.min acc (nt.data.get! i)) (card m) 0 ((1 : Float) / 0)
+  foldRange (fun acc i => F64.max acc (nt.data.get! i)) (card m) 0 negInf
+
+/-- Julia `infnorm(t) = minimum(norm, fiber(t))` (`Cartan.jl:514`), fused like `supnorm`. -/
+def infnorm [FiberNorm F] (t : TensorField m F) : Float :=
+  if FiberNorm.flat F then Flat.normExtremum false (FlatFiber.width F) (card m) t.data posInf else
+  let nt := t.norm
+  foldRange (fun acc i => F64.min acc (nt.data.get! i)) (card m) 0 posInf
 
 /-! ## Scalar functions (`Analytic` fibers: `Float`, `Complex`) -/
 
