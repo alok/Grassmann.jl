@@ -99,8 +99,11 @@ exact for any integral (or even-twelfths) dimension, checked by `decide`. -/
 @[inline] def cbrt (a : Quantity U d α) (_h : d.HasRoot 3 := by decide) : Quantity U (d.root 3) α :=
   ⟨QScalar.cbrt a.val⟩
 
-/-- The exact factor converting dimension `d` from `U` to `S`. -/
-@[inline] def factor (U S : Sys) (d : Dim) : Scalar := ratio d.toGroup.v U S
+/-- The exact factor converting dimension `d` from `U` to `S`. Deliberately not
+inlined: with literal systems and dimension the call is a closed term, which the
+compiler hoists, so a typed `Float` conversion compiles to one multiplication by
+a precomputed constant. -/
+def factor (U S : Sys) (d : Dim) : Scalar := ratio d.toGroup.v U S
 
 /-- Julia `q(S)` / `S(q)`: the same quantity in system `S`, `q.v * ratio(d, U, S)`
 (`Similitude.jl:95-102`). With literal systems and dimension the factor is a
