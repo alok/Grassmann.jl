@@ -2,6 +2,9 @@ import MeshTopology.Basic
 import MeshTopology.Product
 import MeshTopology.Quotient
 import MeshTopology.Grid
+import MeshTopology.Sparse
+import MeshTopology.Simplex
+import MeshTopology.Element
 
 /-!
 # MeshTopology
@@ -13,4 +16,6 @@ Cartan.jl): integer-only topologies with no coordinates. See `docs/port-notes/me
 * `QuotientTopology N`: structured grids with face gluings (torus, Möbius, Klein, sphere, ball,
   cone, Hopf, …), their ghost-index resolver, slices and products.
 * `elementfuns`/`vertices`, multilinear cells and `BilinearTopology`: meshes of quotient grids.
+* `SimplexTopology N` / `DiscontinuousTopology N`: unstructured simplex meshes and sub-meshes,
+  with edges, faces, incidence/adjacency, neighbors, degrees and weights.
 -/

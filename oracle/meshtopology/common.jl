@@ -20,7 +20,7 @@ J(::Nothing) = nothing
 J(x::Pair) = Any[J(x.first), J(x.second)]
 J(x::Tuple) = Any[J(y) for y in x]
 J(x::SparseMatrixCSC) = J(Matrix(x))
-J(x::Dict) = x
+J(x::Dict) = Dict(k => J(v) for (k, v) in x)
 J(x::AbstractVector) = Any[J(y) for y in x]
 J(x::AbstractArray) = G(x)
 J(x::AbstractArray{T,0} where T) = Dict("dims" => Int[], "colmajor" => Any[])
