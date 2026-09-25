@@ -13,7 +13,7 @@ Against `oracle/golden/similitude/fieldalgebra.json`
 
 namespace Tests.FieldAlgebra.GroupTests
 
-open Lean Tests.Units FieldConstants FieldConstants.Julia _root_.FieldAlgebra
+open Lean Tests.Units FieldConstants _root_.FieldAlgebra
 
 /-- Julia `@group2 XYZ x y z w`. -/
 def xyz : Basis := { name := "XYZ", n := 4, text := #["x", "y", "z", "w"], charNames := true }

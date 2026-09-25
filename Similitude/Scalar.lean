@@ -22,7 +22,7 @@ physics) compute Similitude's exact values.
 
 namespace Similitude
 
-open FieldConstants FieldConstants.Julia FieldAlgebra UnitSystems
+open FieldConstants FieldAlgebra UnitSystems
 
 /-- A Julia number as Similitude computes with it. -/
 inductive Scalar where
@@ -44,9 +44,9 @@ def ipow (a : Consts) (b : Int) : Consts :=
   let c := match a.c with
     | .int x => if b ≥ 0 then Coef.int (x ^ b.toNat)
       else if x == 1 then .int 1 else if x == -1 then .int (if b % 2 == 0 then 1 else -1)
-      else .float (powInt (Float.ofInt x) b)
+      else .float (JuliaBase.F64.powInt (Float.ofInt x) b)
     | .rat q => if b ≥ 0 then .rat (q ^ b.toNat) else .rat (q⁻¹ ^ (-b).toNat)
-    | .float x => .float (powInt x b)
+    | .float x => .float (JuliaBase.F64.powInt x b)
   Group.mk' (a.v.smul b) c
 
 /-- The identity `𝟏` (`phys(0)`). -/
@@ -162,7 +162,7 @@ def ipow (x : Scalar) (n : Int) : Scalar :=
 def qpow (x : Scalar) (r : Rat) : Scalar :=
   match x with
   | grp g => grp (g ^ r)
-  | x => ofFloat (Julia.pow x.toFloat (Coef.toFloat (.rat r)))
+  | x => ofFloat (JuliaBase.F64.pow x.toFloat (Coef.toFloat (.rat r)))
 
 /-- Julia `sqrt` (`Float64` for plain numbers, halved exponents for groups). -/
 def sqrt : Scalar → Scalar

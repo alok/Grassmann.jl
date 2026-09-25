@@ -1,5 +1,5 @@
 import Dendriform.Grove
-import Dendriform.Float16
+import JuliaBase.Float16
 
 /-!
 # Display and `GroveBin`
@@ -47,7 +47,7 @@ def ofGrove {n : Nat} (g : Grove n) : GroveBin := ⟨n, g.size, g.index⟩
 
 /-- Julia `ppos = Float16(100 i // (2^Cn(d) - 1))` (DF/Dendriform.jl:144): the grove's
 position as a percentage of the total grove's index. -/
-def ppos (g : GroveBin) : Float16 := Float16.ofRat (100 * g.gbin) (2 ^ catalan g.degr - 1)
+def ppos (g : GroveBin) : JuliaBase.Float16 := JuliaBase.Float16.ofRat (100 * g.gbin) (2 ^ catalan g.degr - 1)
 
 /-- Julia `Grove(g::GroveBin)` (DF/Dendriform.jl:126, 171): decode the index. -/
 def toGrove (g : GroveBin) : Grove g.degr := Grove.ofIndex g.degr g.gbin

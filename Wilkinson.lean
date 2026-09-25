@@ -1,7 +1,5 @@
 import Wilkinson.BigFloat
 import Wilkinson.Expr
-import Wilkinson.FloatOps
-import Wilkinson.JuliaMath
 import Wilkinson.Range
 import Wilkinson.Num
 import Wilkinson.SyntaxTree
@@ -23,9 +21,7 @@ parts of `SyntaxTree.jl` (1.0.1) it relies on (`exprval`, `callcount`, `sub`,
 |---|---|---|
 | `Wilkinson.Expr` | Julia `Expr` | `JExpr`, `jl⟪ … ⟫` quotation, `string(::Expr)` |
 | `Wilkinson.BigFloat` | MPFR `BigFloat` | `BigFloat p`, correctly rounded `+ - * /`, `^n`, `log` |
-| `Wilkinson.FloatOps` | `base/special/pow.jl`, `base/reduce.jl` | `pow_body`, `literal_pow`, `sum` |
-| `Wilkinson.JuliaMath` | `base/special/exp.jl`, `log.jl` | Julia's own `exp`/`log` (`Float64`, `Float32`) |
-| `Wilkinson.Range` | `base/twiceprecision.jl` | `Float32` colon, `FloatSet` grids |
+| `Wilkinson.Range` | `base/twiceprecision.jl` | `FloatSet` grids (over `JuliaBase.colon`/`colon32`) |
 | `Wilkinson.Num` | Julia promotion | `JNum`: Int64/Rational/Float32/Float64/BigFloat |
 | `Wilkinson.SyntaxTree` | `SyntaxTree.jl` | `callcount`, `sub`, `abs`, `alg`, `exprval`, `eval` |
 | `Wilkinson.Analysis` | `src/Wilkinson.jl`, `src/polynomial.jl` | `stieltjes`, `simpson`, `Ω`, `exacterr`, `PolynomialComparison` |
@@ -34,7 +30,8 @@ parts of `SyntaxTree.jl` (1.0.1) it relies on (`exprval`, `callcount`, `sub`,
 | `Wilkinson.Reduce` | REDUCE via Reduce.jl | `expand`/`horner`/`factor` in REDUCE's output shapes, `polyfactors`/`polyhorner`/`polyexpand`, the `CAS`, `tests` |
 
 Everything numeric is bit-for-bit Julia (`oracle/golden/wilkinson/`, checked by
-`Tests.Wilkinson`): the grid, `exp`/`log`, powers, sums, 256-bit `BigFloat`, the
+`Tests.Wilkinson`): the grid, `exp`/`log` and powers (Julia's own kernels, from
+`JuliaBase.Math`), sums, 256-bit `BigFloat`, the
 Stieltjes bounds, Simpson scores and actual-error integrals, and every REDUCE
 form in the golden corpus.
 

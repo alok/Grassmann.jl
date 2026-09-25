@@ -18,7 +18,7 @@ Julia sources: `FieldAlgebra.jl/src/FieldAlgebra.jl:97-301, 391-429`.
 
 namespace FieldAlgebra
 
-open FieldConstants FieldConstants.Julia
+open FieldConstants
 
 /-- Superscript digits `⁰…⁹` (Julia `expos`, `FieldAlgebra.jl:97`). -/
 def expos : Array Char := #['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹']
@@ -53,7 +53,7 @@ namespace Expo
 /-- Numeric value as a `Float64`. -/
 def toFloat : Expo → Float
   | int n => Float.ofInt n
-  | rat q => ofRat (q.num < 0) q.num.natAbs q.den
+  | rat q => JuliaBase.IEEEFloat.ofRat Float q
   | float x => x
 
 /-- Julia `iszero`. -/
@@ -86,8 +86,8 @@ def makeint (x : Float) : JNum :=
     let ne := (2.220446049250313e-16 * ax).sqrt
     if ne < 1.0 then
       let t := (if x < 0 then -((-x).floor) else x.floor)   -- `x ÷ 1`
-      if log10 ax - log rem / log 1.7 > 20.0 then .int (Int64.ofInt t.toInt64.toInt)
-      else if log10 ax - log10 (1.0 - rem) > 17.0 then .int (Int64.ofInt t.toInt64.toInt + 1)
+      if JuliaBase.F64.log10 ax - JuliaBase.F64.log rem / JuliaBase.F64.log 1.7 > 20.0 then .int (Int64.ofInt t.toInt64.toInt)
+      else if JuliaBase.F64.log10 ax - JuliaBase.F64.log10 (1.0 - rem) > 17.0 then .int (Int64.ofInt t.toInt64.toInt + 1)
       else .float x
     else .float x
 
@@ -137,11 +137,13 @@ def printExpo : Expo → String
 fraction within `eps(x)` (continued fractions; identical to Julia's result for
 the half/third/quarter exponents that occur). -/
 def rationalize (x : Float) : Rat :=
-  let ⟨neg, m, e⟩ := decode x
-  let tol := eps x
-  let (p, q) := if e ≥ 0 then (m <<< e.toNat, 1) else (m, 1 <<< (-e).toNat)
-  let r := go p q 0 1 1 0 tol x.abs 64
-  if neg then -r else r
+  match JuliaBase.IEEEFloat.decode x with
+  | none => 0
+  | some (neg, m, e) =>
+    let tol := JuliaBase.F64.epsOf x
+    let (p, q) := if e ≥ 0 then (m <<< e.toNat, 1) else (m, 1 <<< (-e).toNat)
+    let r := go p q 0 1 1 0 tol x.abs 64
+    if neg then -r else r
 where
   go (p q h0 k0 h1 k1 : Nat) (tol ax : Float) : Nat → Rat
     | 0 => mkRat h1 k1
@@ -150,7 +152,7 @@ where
       let a := p / q
       let h2 := a * h1 + h0
       let k2 := a * k1 + k0
-      let approx := ofRat false h2 k2
+      let approx := JuliaBase.IEEEFloat.ofFraction Float h2 k2
       if (approx - ax).abs ≤ tol then mkRat h2 k2
       else go q (p % q) h1 k1 h2 k2 tol ax f
 
@@ -197,7 +199,7 @@ partial def printExpoBased (d : String) : Expo → String
         | .float _ => d ++ printExpoFloat x
 where
   /-- Julia `10^x` for a `Float64` exponent (`Int^Float64`). -/
-  powFloat10 (x : Float) : Float := pow 10.0 x
+  powFloat10 (x : Float) : Float := JuliaBase.F64.pow 10.0 x
 
 /-- The captures of Julia's regex `r"(\d+.\d+)[e](-?\d+)"` on a printed float in
 scientific notation: the mantissa *without its sign* (the regex starts matching
@@ -256,7 +258,7 @@ partial def latexpoBased (d : String) : Expo → String
         | .int m => latexpoBased d (.rat (Rat.divInt 1 m.toInt))
         | .float _ =>
           if isTen && (JuliaBase.F64.showString x.abs).length > 5 then
-            (if x < 0 then "/" else "") ++ (makeint (pow 10.0 x.abs)).toString ++
+            (if x < 0 then "/" else "") ++ (makeint (JuliaBase.F64.pow 10.0 x.abs)).toString ++
               (if x < 0 then "" else "\\cdot ")
           else d ++ latexpoFloat x
       else if isTen then

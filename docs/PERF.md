@@ -34,10 +34,14 @@ Conclusions baked into DESIGN.md:
   Mandelbrot escape loop (446 ms vs 54 ms with a tail-recursive loop). Hot Float loops must be tail-recursive.
 
 ## 2026-09-24: MeshTopology hot paths
+## 2026-09-24: Julia's own scalar kernels (`JuliaBase.Math`, `lake exe bench math`)
 
 Lean: `Tests/MeshTopology/Bench.lean` (compiled); Julia 1.13, MeshTopology 0.1.0 (one thread):
 `oracle/meshtopology/bench.jl`. Best of 7. Ghost lookups are all one-step stencil queries
 `m[Val(a), i ± e_a]` of the grid (precomputed query lists on both sides).
+## 2026-09-24: Fatou escape-time kernel (Apple M4 Max, 12P+4E cores)
+ns per call, 10⁷ calls over a sweep of arguments, results folded into an accumulator (Julia: the
+same loop, `@elapsed`, after warm-up).
 
 | operation | Julia | Lean |
 |---|---|---|
@@ -55,6 +59,17 @@ Lean: `Tests/MeshTopology/Bench.lean` (compiled); Julia 1.13, MeshTopology 0.1.0
 | `incidence` / `degrees` | 2.4 ms / 85 µs | 5.1 ms / 1.7 ms |
 | `facets(t, ones)` (Julia `findfirst` on a growing vector: O(F²)) | 8.4 s | 55 ms |
 | `LagrangeTriangles{3}` node lists (Julia incl. `edgesindices`) | 7.0 ms | 24 ms (`getVec`: 20 ms) |
+Wall times, best of 5–7. Julia 1.13 with Fatou 1.2.4; "handwritten" is a Julia kernel with
+Fatou's exact grid and loop (counts checked equal), threaded over rows like `Fatou.Compute`
+(`oracle/fatou/bench.jl`). Lean: `Tests/Fatou/Bench.lean` (`fatou K` / `fatou K (par := false)`).
+| function | libm (`Float.exp`, …) | `JuliaBase` (Julia's kernel in Lean) | Julia 1.13 |
+|---|---|---|---|
+| `exp` | 1.8 | 6.6 | 2.6 |
+| `log` | 2.0 | 8.2 | 3.1 |
+| `expm1` | — | 12.4 | 3.5 |
+| `log1p` | — | 9.3 | 3.3 |
+| `x^2.5` | 4.7 | 22.1 | 8.6 |
+| `x^7` (`pow_body`) | — | 9.0 | 2.9 |
 
 Conclusions:
 * Stencils should read a `NeighborTable`: one array read beats Julia's specialized branchy
@@ -63,16 +78,6 @@ Conclusions:
   counting sorts, bucketed edge lookup and hash maps are linear or `n log n`.
 * Per-element loops that Julia keeps in isbits tuples (`degrees`, Lagrange node lists) cost Lean
   3–20× (heap `Vector`s, boxed `Nat` arrays); acceptable for one-shot setup.
-
-||||||| 1058011
-
-
-## 2026-09-24: Fatou escape-time kernel (Apple M4 Max, 12P+4E cores)
-
-Wall times, best of 5–7. Julia 1.13 with Fatou 1.2.4; "handwritten" is a Julia kernel with
-Fatou's exact grid and loop (counts checked equal), threaded over rows like `Fatou.Compute`
-(`oracle/fatou/bench.jl`). Lean: `Tests/Fatou/Bench.lean` (`fatou K` / `fatou K (par := false)`).
-
 | raster | iterations | Lean seq | Lean par (Tasks) | Julia handwritten 1 / 16 thr | Fatou.jl 1 / 16 thr |
 |---|---|---|---|---|---|
 | Mandelbrot 1000², N=100 | 29.2 M | 67 ms | 10.7 ms | 62 / 8.8 ms | 2539 / 1760 ms |
@@ -112,3 +117,18 @@ Findings:
 A decimal literal such as `0.5` or `2.0` inside a function that gets inlined into a specialized hot
 loop can stay a runtime `Float.ofScientific` call. Measured 3.7× slower on Newton-basin rasters.
 Bind such constants to top-level `def`s (closed terms, evaluated once) and refer to those.
+
+* **Float literals can cost microseconds.** `0.9394130628134757` elaborates to
+  `Float.ofScientific 9394130628134757 true 16`; the code generator normally hoists that into a
+  closed term, but after inlining into a branch where the `Bool` argument is already a variable
+  it leaves the call in place, and `Float.ofScientific` takes a bignum path for 17-digit mantissas
+  or exponents past `10^22`. The first port of the kernels ran `F64.log` at 3 µs (exp 180 ns);
+  decoding the constants at elaboration time (`f64!`/`f32!`, `JuliaBase.FloatLit`) brought it to
+  8 ns. Grep the generated C for `l_Float_ofScientific` outside `_init_` functions to find
+  others (`JuliaBase/Complex.lean` has about 50).
+* `Int`/`Nat` arithmetic with `2 ^ 64`-style constants cost ~40 ns per conversion; the kernels use
+  `Int64`/`UInt64` (`>>>` on `Int64` is arithmetic, as Julia's `>>`).
+* Turning off closed-term extraction (`compiler.extract_closed false`) inlines the `f64!` bit
+  patterns as immediates but is not faster: the remaining cost is the out-of-line
+  `lean_float_to_bits`/`lean_float_of_bits` calls (`bl` in the disassembly), five or so per `exp`.
+  Unboxed `FloatArray` tables save two of them (7.3 → 6.6 ns).

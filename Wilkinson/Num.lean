@@ -1,6 +1,6 @@
 import Wilkinson.Expr
 import Wilkinson.Range
-import Wilkinson.JuliaMath
+import JuliaBase.Math
 
 /-!
 # Julia's numeric promotion, for evaluating expressions
@@ -24,7 +24,7 @@ as `@int128_str`/`@big_str` literals, which `SyntaxTree.sub` leaves unconverted.
 
 namespace Wilkinson
 
-open AbstractAnalysis
+open JuliaBase
 
 /-- A Julia number of one of the types Wilkinson evaluates in. -/
 inductive JNum where
@@ -170,37 +170,31 @@ def powLit (x : JNum) (k : Int) : JNum :=
     else if a == 1 then ofIntKind x.kind 1
     else if a == -1 then ofIntKind x.kind (if k % 2 == 0 then 1 else -1) else .f64 (0 / 0)
   | .rat q => .rat (if k ≥ 0 then q ^ k.toNat else 1 / q ^ k.natAbs)
-  | .f32 v => .f32 (literalPow32 v k)
-  | .f64 v => .f64 (literalPow v k)
+  | .f32 v => .f32 (F32.literalPow v k)
+  | .f64 v => .f64 (F64.literalPow v k)
   | .big v => .big (v.powInt k)
 
-/-- Julia `^(x::Float64, y::Float64)` (base/special/pow.jl:5-30): `1.0` for `x == 1`,
-the compensated integer power when `y` is an integer in `pow_body`'s range, and
-otherwise the C library `pow` (Julia's own `log`/`exp` kernel agrees to an ulp). -/
-def powF64 (x y : Float) : Float :=
-  if x == 1 then 1
-  else if y.isFinite && y.floor == y && y.abs ≤ 24576 then
-    let n : Int := if y ≥ 0 then y.toUInt64.toNat else -(((-y).toUInt64.toNat : Nat) : Int)
-    if n == 0 then 1 else if -4096 ≤ n ∧ n ≤ 24576 then powBody x n else Float.pow x y
-  else Float.pow x y
+/-- Julia `^(x::Float64, y::Float64)` (base/special/pow.jl:7-30), Julia's own kernel
+(`JuliaBase.F64.pow`). -/
+def powF64 (x y : Float) : Float := F64.pow x y
 
 /-- Julia `x ^ y` for a computed exponent: integer exponents as `^(x, n::Integer)`,
 float exponents as `^(::Float64, ::Float64)`. -/
 def pow (x y : JNum) : JNum :=
   match y with
   | .int _ | .i128 _ | .bigint _ => match x with
-    | .f64 v => .f64 (powInt v y.toInt)
-    | .f32 v => .f32 (powInt32 v y.toInt)
+    | .f64 v => .f64 (F64.powInt v y.toInt)
+    | .f32 v => .f32 (F32.powInt v y.toInt)
     | _ => powLit x y.toInt
   | _ => .f64 (powF64 x.toF64 y.toF64)
 
 /-- Julia `log` by type: Julia's own `Float64`/`Float32` kernels, `BigFloat` in
 `BigFloat`; integers and rationals convert to `Float64` first. -/
 def log : JNum → JNum
-  | .f32 v => .f32 (JuliaMath.log32 v)
+  | .f32 v => .f32 (F32.log v)
   | .big v => .big v.log
   | .bigint v => .big (BigFloat.log (BigFloat.ofInt 256 v))
-  | x => .f64 (JuliaMath.log x.toF64)
+  | x => .f64 (F64.log x.toF64)
 
 /-- Is the value `+Inf`? (Julia `p[k] == Inf`.) -/
 def isPosInf : JNum → Bool

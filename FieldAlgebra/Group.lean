@@ -20,7 +20,7 @@ form): rational exponent vectors that are all integral become `Int` vectors
 
 namespace FieldAlgebra
 
-open FieldConstants FieldConstants.Julia
+open FieldConstants
 
 /-- A named basis (Julia's group name `G`, `N` and the `@group` generator
 metadata). Values of this structure index `Group`. -/
@@ -61,7 +61,7 @@ def normalize : Coef → Coef
 /-- Value as a `Float64`. -/
 def toFloat : Coef → Float
   | int n => Float.ofInt n
-  | rat q => ofRat (q.num < 0) q.num.natAbs q.den
+  | rat q => JuliaBase.IEEEFloat.ofRat Float q
   | float x => x
 
 /-- Julia `==` across coefficient kinds. -/
@@ -108,16 +108,16 @@ def npow (c : Coef) (n : Nat) : Coef :=
   match c with
   | int a => int (a ^ n)
   | rat a => rat (a ^ n)
-  | float x => float (powInt x n)
+  | float x => float (JuliaBase.F64.powInt x n)
 
 /-- Julia `c^r` for a rational exponent: `x^(num/den)` in `Float64`. -/
 def rpow (c : Coef) (r : Rat) : Coef :=
   match c with
   | int 1 => float 1.0
-  | _ => float (pow c.toFloat (ofRat (r.num < 0) r.num.natAbs r.den))
+  | _ => float (JuliaBase.F64.pow c.toFloat (JuliaBase.IEEEFloat.ofRat Float r))
 
 /-- Julia `c^y` for a `Float64` exponent. -/
-def fpow (c : Coef) (y : Float) : Coef := float (pow c.toFloat y)
+def fpow (c : Coef) (y : Float) : Coef := float (JuliaBase.F64.pow c.toFloat y)
 
 /-- Julia `sqrt` (always `Float64`). -/
 def sqrt (c : Coef) : Coef := float c.toFloat.sqrt
@@ -224,7 +224,7 @@ def sub : Exps n → Exps n → Exps n := zipWith (· - ·) (· - ·)
 /-- `-a` (group inverse). -/
 def neg : Exps n → Exps n := map (- ·) (- ·)
 /-- `k·a` for a rational `k` (group power). -/
-def smul (k : Rat) : Exps n → Exps n := map (k * ·) (ofRat (k.num < 0) k.num.natAbs k.den * ·)
+def smul (k : Rat) : Exps n → Exps n := map (k * ·) (JuliaBase.IEEEFloat.ofRat Float k * ·)
 /-- `y·a` for a `Float64` `y`: always a `Float64` vector. -/
 def fmul (y : Float) (a : Exps n) : Exps n := float (FVec.ofFn fun i => y * a.getFloat i)
 

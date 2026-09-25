@@ -20,7 +20,6 @@ change the last bit of downstream results, so the port tracks the distinction.
 
 namespace FieldConstants
 
-open Julia
 
 /-- A Julia real that is either a `FieldConstants.Constant{N}` (`const = true`)
 or a plain number. -/
@@ -48,8 +47,8 @@ def plainLpow : JNum → Int → JNum
     else if n == 2 then .float (x * x) else if n == 3 then .float (x * x * x)
     else if n == -1 then .float (1.0 / x)
     else if n == -2 then (let i := 1.0 / x; .float (i * i))
-    else .float (powInt x n)
-  | .int a, n => if n < 0 then .float (powInt (Float.ofInt a.toInt) n) else JNum.npow (.int a) n
+    else .float (JuliaBase.F64.powInt x n)
+  | .int a, n => if n < 0 then .float (JuliaBase.F64.powInt (Float.ofInt a.toInt) n) else JNum.npow (.int a) n
 
 instance : BEq Num := ⟨fun a b => a.v == b.v⟩
 

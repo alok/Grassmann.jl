@@ -1,4 +1,4 @@
-import JuliaBase.Num
+import JuliaBase.Math
 
 /-!
 Julia's `Complex{T}` (Julia `base/complex.jl`): the port's one computable complex number
@@ -16,9 +16,11 @@ the noncomputable `ℝ`.
   Baudin–Smith division and inverse (complex.jl:390-510), `abs = hypot`, `isapprox`, and
   Julia's `sqrt`, `exp`, `expm1`, `log`, `log1p`, the trigonometric and hyperbolic
   functions and their inverses, and `^` (`_cpow`), ported line by line from Julia 1.13.
-  The arithmetic-only functions (`/`, `inv`, `abs`, `sqrt`) agree with the oracle bit for
-  bit; the ones that call `libm` agree to within its tolerance (Julia uses its own
-  `libm`).
+  The real `exp`, `log`, `expm1`, `log1p` and `^` they call are Julia's own kernels
+  (`JuliaBase.Math`), so the arithmetic-only functions (`/`, `inv`, `abs`, `sqrt`) and the
+  real parts built from those kernels agree with the oracle bit for bit; the ones that also
+  call `sin`/`cos`/`atan`/… (`libm` here, Julia's own port of openlibm there) agree to
+  within an ulp or two.
 * **`ComplexF32`**: Julia's `/` and `inv`, which widen to `Float64`.
 -/
 
@@ -300,7 +302,7 @@ def log (z : Complex Float) : Complex Float :=
   let ρρ :=
     if k == 0 && 0.5 < β * β && (β ≤ 1.25 || ρ < 3) then
       F64.log1p ((β - 1) * (β + 1) + θ * θ) / 2
-    else Float.log ρ / 2 + Float.ofInt k * F64.ln2
+    else F64.log ρ / 2 + Float.ofInt k * F64.ln2
   ⟨ρρ, angle z⟩
 
 /-- Julia `exp(z::Complex)` (complex.jl:694). -/
@@ -313,7 +315,7 @@ def exp (z : Complex Float) : Complex Float :=
     else if zr == -F64.inf then ⟨-0.0, F64.copysign 0 zi⟩
     else ⟨F64.nan, F64.nan⟩
   else
-    let er := Float.exp zr
+    let er := F64.exp zr
     if zi == 0 then ⟨er, zi⟩
     else ⟨er * Float.cos zi, er * Float.sin zi⟩
 
@@ -473,7 +475,7 @@ def atanh (z : Complex Float) : Complex Float :=
       if x == 1 then
         if y == 0 then (F64.inf, y)
         else
-          (Float.log (Float.sqrt (Float.sqrt (Float.fma y y 4)) / Float.sqrt ay),
+          (F64.log (Float.sqrt (Float.sqrt (Float.fma y y 4)) / Float.sqrt ay),
             F64.copysign (F64.pi / 2 + Float.atan (ay / 2)) y / 2)
       else
         let ysq := ay * ay
@@ -509,27 +511,27 @@ def pow (z p : Complex Float) : Complex Float :=
     else if z.im == 0 then
       let zr := z.re
       if zr == 0 then (if pr > 0 then z else ⟨F64.nan, F64.nan⟩)
-      else if zr > 0 then ⟨Float.pow zr pr, F64.flipsign z.im pr⟩
+      else if zr > 0 then ⟨F64.pow zr pr, F64.flipsign z.im pr⟩
       else
-        let rp := Float.pow (-zr) pr
+        let rp := F64.pow (-zr) pr
         if pr.isFinite then
           -- Julia uses `cospi`/`sinpi`; `cos(π p)`/`sin(π p)` here (≤ 1 ulp apart).
           rp * (⟨Float.cos (F64.pi * pr), F64.flipsign (Float.sin (F64.pi * pr)) z.im⟩ : Complex Float)
         else if rp == 0 then ⟨0, 0⟩ else ⟨F64.nan, F64.nan⟩
-    else finish (Float.pow (abs z) pr) (pr * angle z)
+    else finish (F64.pow (abs z) pr) (pr * angle z)
   else if z.im == 0 then
     if z.re == 0 then (if p.re > 0 then z else ⟨F64.nan, F64.nan⟩)
     else
       let zr := z.re
-      if zr > 0 then finish (Float.pow zr p.re) (p.im * Float.log zr)
+      if zr > 0 then finish (F64.pow zr p.re) (p.im * F64.log zr)
       else
         let r := -zr
         let θ := F64.copysign F64.pi z.im
-        finish (Float.pow r p.re * Float.exp (-p.im * θ)) (p.re * θ + p.im * Float.log r)
+        finish (F64.pow r p.re * F64.exp (-p.im * θ)) (p.re * θ + p.im * F64.log r)
   else
     let r := abs z
     let θ := angle z
-    finish (Float.pow r p.re * Float.exp (-p.im * θ)) (p.re * θ + p.im * Float.log r)
+    finish (F64.pow r p.re * F64.exp (-p.im * θ)) (p.re * θ + p.im * F64.log r)
 where
   /-- `rᵖ · cis(ϕ)` with Julia's non-finite-phase handling. -/
   finish (rp ϕ : Float) : Complex Float :=

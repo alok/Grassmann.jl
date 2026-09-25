@@ -7,6 +7,7 @@ structure BenchSuite where
 
 /-- Every benchmark `lake exe bench` runs. -/
 def benches : List BenchSuite := [
+  ⟨"math", fun smoke => Bench.Math.run smoke⟩,
   ⟨"MeshTopology", fun smoke => Tests.MeshTopology.Bench.run (smoke := smoke)⟩,
   ⟨"Fatou", fun smoke => Tests.Fatou.Bench.run (smoke := smoke)⟩
 ]

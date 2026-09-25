@@ -114,10 +114,10 @@ def randCase : Tests.Gen (Poly × Float) := do
 def boundHolds (p : Poly) (x : Float) : Bool :=
   let h := Reduce.horner (Reduce.expand (Reduce.toJExpr (Reduce.expandRF p)))
   if hasPow h then true else
-  match (SyntaxTree.eval (.f64 x) (SyntaxTree.sub .f64 h)).toF64, AbstractAnalysis.IEEEFloat.toRat? x,
+  match (SyntaxTree.eval (.f64 x) (SyntaxTree.sub .f64 h)).toF64, JuliaBase.IEEEFloat.toRat? x,
       Poly.ofJExpr (SyntaxTree.abs h) with
   | v, some qx, some habs =>
-    match AbstractAnalysis.IEEEFloat.toRat? v with
+    match JuliaBase.IEEEFloat.toRat? v with
     | some qv =>
       let k := opcount h
       let u : Rat := 1 / ((2 ^ 53 : Nat) : Rat)

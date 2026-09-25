@@ -1,14 +1,14 @@
 /-!
-# Julia `Float16` emulation for `GroveBin.ppos`
+# Julia `Float16`: exact conversion and printing
 
-Julia's `GroveBin` stores the grove's position as `ppos::Float16 = Float16(100i //
-(2^Cn(d) - 1))` (DF/Dendriform.jl:144) and prints it with Julia's shortest round-trip
-algorithm. Reproducing the printed strings exactly needs:
+A nonnegative IEEE binary16 value by its fields, with the two things the port needs from
+Julia's `Float16` (first for Dendriform's `GroveBin.ppos = Float16(100i // (2^Cn(d) - 1))`,
+DF/Dendriform.jl:144):
 
 1. **Correct rounding** of an exact rational to IEEE binary16 (11-bit significand,
-   subnormals of quantum `2^-24`, round half to even). Julia computes
-   `BigFloat(num)/BigFloat(den)` and rounds that to `Float16` with MPFR (`to_ieee754`), so
-   up to a 256-bit intermediate this is the correctly rounded value.
+   subnormals of quantum `2^-24`, round half to even): Julia's `Float16(::Rational{BigInt})`
+   computes `BigFloat(num)/BigFloat(den)` and rounds that to `Float16` with MPFR
+   (`to_ieee754`), so up to a 256-bit intermediate this is the correctly rounded value.
 2. **Ryu shortest digits** (`base/ryu/shortest.jl`, `reduce_shortest`): the shortest
    decimal in the rounding interval (endpoints included iff the significand is even),
    choosing the closest such decimal with ties to even. Implemented here in exact
@@ -17,11 +17,12 @@ algorithm. Reproducing the printed strings exactly needs:
    `-4 < pt ≤ 3` for `Float16` (`pt` = decimal exponent of the leading digit + 1), e.g.
    `22.58`, `100.0`, `0.006092`, otherwise `d.ddde±X`, e.g. `6.104e-5`, `1.0e3`.
 
-Values up to `65504` are handled (the documented Ryu `q = 0` quirk at `e2 = -1` only
-affects values `≥ 2048`, far above the `[0, 100]` range of `ppos`).
+Every nonnegative finite value up to `65504` prints exactly as Julia's `string(::Float16)`
+(checked exhaustively in `Tests/JuliaBase/Math.lean` and `Tests/Dendriform.lean`). Negative
+values are not represented (Julia prints them with a leading `-`).
 -/
 
-namespace Dendriform
+namespace JuliaBase
 
 /-- An IEEE binary16 value by its fields: biased exponent `e ∈ [0, 31]` and mantissa
 `m ∈ [0, 1023]` (sign omitted: `ppos ≥ 0`). -/
@@ -171,4 +172,4 @@ end Float16
 #guard toString (Float16.ofRat 100 (2 ^ 42 - 1)) == "0.0"
 #guard toString (Float16.ofRat 1000 1) == "1.0e3"
 
-end Dendriform
+end JuliaBase

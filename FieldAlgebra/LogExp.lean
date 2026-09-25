@@ -19,7 +19,7 @@ instead of infinite recursion (`:515-516`).
 
 namespace FieldAlgebra
 
-open FieldConstants FieldConstants.Julia
+open FieldConstants
 
 /-- The base of a formal logarithm or exponential. `num` holds a Julia number
 (the `Int` bases `2` and `10` print as `log2(`/`log10(`, the `Float64` value
@@ -50,10 +50,10 @@ def ident : LogBase → LogBase → Bool
 /-- `B^y`: the base of `log_B(g)/y`. -/
 def pow (b : LogBase) (y : JNum) : LogBase :=
   match b with
-  | e => num (.float (Julia.exp y.toFloat))
+  | e => num (.float (JuliaBase.F64.exp y.toFloat))
   | num x => match x, y with
-    | .int a, .int n => if n ≥ 0 then num (.int (JNum.ipow a n.toInt.toNat)) else num (.float (powInt (Float.ofInt a.toInt) n.toInt))
-    | _, _ => num (.float (Julia.pow x.toFloat y.toFloat))
+    | .int a, .int n => if n ≥ 0 then num (.int (JNum.ipow a n.toInt.toNat)) else num (.float (JuliaBase.F64.powInt (Float.ofInt a.toInt) n.toInt))
+    | _, _ => num (.float (JuliaBase.F64.pow x.toFloat y.toFloat))
 
 /-- Is this the decibel base `exp10(0.1)`? -/
 def isDB : LogBase → Bool
@@ -126,10 +126,10 @@ def showFun (x : LogGroup B) : String :=
 /-- Julia `product(::LogGroup)` given the argument's value (`FieldAlgebra.jl:500-504`). -/
 def productOf (x : LogGroup B) (p : Float) : Float :=
   match x.base with
-  | .e => Julia.log p
-  | .num (.int 2) => Julia.log2 p
-  | .num (.int 10) => Julia.log10 p
-  | b => if b.isDB then 10.0 * Julia.log10 p else Julia.log p / Julia.log b.toFloat
+  | .e => JuliaBase.F64.log p
+  | .num (.int 2) => JuliaBase.F64.log2 p
+  | .num (.int 10) => JuliaBase.F64.log10 p
+  | b => if b.isDB then 10.0 * JuliaBase.F64.log10 p else JuliaBase.F64.log p / JuliaBase.F64.log b.toFloat
 
 /-- Julia `iszero(::LogGroup) = isone(value(x))`. -/
 def isZero (x : LogGroup B) : Bool := x.v.isOne
@@ -168,10 +168,10 @@ def showFun (x : ExpGroup B) : String :=
 /-- Julia `product(::ExpGroup)` given the exponent's value (`FieldAlgebra.jl:546-549`). -/
 def productOf (x : ExpGroup B) (p : Float) : Float :=
   match x.base with
-  | .e => Julia.exp p
-  | .num (.int 2) => Julia.exp2 p
-  | .num (.int 10) => Julia.exp10 p
-  | .num n => Julia.pow n.toFloat p
+  | .e => JuliaBase.F64.exp p
+  | .num (.int 2) => JuliaBase.F64.exp2 p
+  | .num (.int 10) => JuliaBase.F64.exp10 p
+  | .num n => JuliaBase.F64.pow n.toFloat p
 
 /-- Julia `show`. -/
 def print (x : ExpGroup B) (product? : Option Float := none) : String :=

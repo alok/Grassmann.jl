@@ -1,3 +1,4 @@
+import JuliaBase.Sum
 import Wilkinson.Range
 import Wilkinson.SyntaxTree
 
@@ -27,7 +28,7 @@ Allocation counts, nondeterministic in Julia, are reported as `0`.
 
 namespace Wilkinson
 
-open AbstractAnalysis JuliaBase SyntaxTree
+open JuliaBase SyntaxTree
 
 /-- Element `i` of a grid as a Julia number of the grid's element type. -/
 def FloatSet.num (s : FloatSet) (i : Nat) : JNum :=
@@ -37,9 +38,9 @@ def FloatSet.num (s : FloatSet) (i : Nat) : JNum :=
 
 /-- Julia `exp` in the element type. -/
 def JNum.exp : JNum → JNum
-  | .f32 v => .f32 (JuliaMath.exp32 v)
-  | .big v => .f64 (JuliaMath.exp v.toFloat)
-  | x => .f64 (JuliaMath.exp x.toF64)
+  | .f32 v => .f32 (F32.exp v)
+  | .big v => .f64 (F64.exp v.toFloat)
+  | x => .f64 (F64.exp x.toF64)
 
 /-- Julia `floatset(Float64, N; scale) = scale(eps):(scale(floatmax) - scale(eps))/(N-1):scale(floatmax)`
 (src/Wilkinson.jl:17-21). -/
@@ -57,8 +58,8 @@ def floatset32 (N : Nat) (scale : Float32 → Float32 := id) : FloatSet :=
 /-- The standard grid: `floatset(T, 3000; scale = log)`. -/
 def logset (T : NumType) (N : Nat := 3000) : FloatSet :=
   match T with
-  | .f32 => floatset32 N JuliaMath.log32
-  | _ => floatset N JuliaMath.log
+  | .f32 => floatset32 N F32.log
+  | _ => floatset N F64.log
 
 /-- Julia `geonorm(x) = 1/(1-x)`. -/
 def geonorm (x : Float) : Float := 1 / (1 - x)
@@ -92,7 +93,7 @@ where
 /-- Julia `sum(v[a:s:b])`: materialise the strided slice (1-based indices), then
 Julia's vectorised `sum`. -/
 def stridedSum (p : FloatArray) (a s b : Nat) : Float :=
-  juliaSum (go a (FloatArray.emptyWithCapacity (b / s + 1)) (b + 1))
+  F64.sum (go a (FloatArray.emptyWithCapacity (b / s + 1)) (b + 1))
 where
   /-- Tail-recursive gather. -/
   go (i : Nat) (acc : FloatArray) : Nat → FloatArray

@@ -1,4 +1,3 @@
-import AbstractAnalysis.IEEE
 import AbstractAnalysis.Show
 import AbstractAnalysis.Countable
 import AbstractAnalysis.Sequence
@@ -17,8 +16,8 @@ convergence predicates, countable sets, finite magmas and permutation groups.
 See `docs/port-notes/small-algebra.md` §2.5, §4.5.
 
 Scalars print, compare and do complex arithmetic through `JuliaBase`
-(`JuliaShow`, `F64.isapprox`, `JuliaBase.Complex`); `AbstractAnalysis.IEEE` holds
-the exact IEEE toolkit `JuliaBase` does not have yet.
+(`JuliaShow`, `F64.isapprox`, `JuliaBase.Complex`), and convert exactly through
+`JuliaBase.IEEEFloat` (the exact IEEE toolkit, which started out in this package).
 
 ## What Cartan uses
 

@@ -1,4 +1,4 @@
-import AbstractAnalysis.IEEE
+import JuliaBase.IEEE
 
 /-!
 # `BigFloat p`: MPFR-style binary floating point
@@ -20,7 +20,7 @@ the result is tiny.
 
 namespace Wilkinson
 
-open AbstractAnalysis
+open JuliaBase
 
 /-- `±m · 2^e` with `2^(p-1) ≤ m < 2^p` (Julia `BigFloat` with `precision = p`). -/
 inductive BigFloat (p : Nat) where

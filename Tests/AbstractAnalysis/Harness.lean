@@ -1,5 +1,5 @@
 import Lean.Data.Json
-import AbstractAnalysis.IEEE
+import JuliaBase.Parse
 import JuliaBase.Float
 
 /-!
@@ -45,7 +45,7 @@ relative tolerance `rtol`. -/
 def checkFloat (name : String) (got expected : Float) (rtol : Float := 0) (ulps : Nat := 0) : TestM Unit :=
   let ok := sameFloat got expected ||
     (got.isFinite && expected.isFinite &&
-      (AbstractAnalysis.IEEEFloat.ulpDistance got expected ≤ ulps ||
+      (JuliaBase.IEEEFloat.ulpDistance got expected ≤ ulps ||
        (got - expected).abs ≤ rtol * max got.abs expected.abs))
   check name ok s!"got {JuliaBase.F64.showString got}, expected {JuliaBase.F64.showString expected}"
 
@@ -63,18 +63,15 @@ def loadJson (path : System.FilePath) : IO Json := do
   | .ok j => return j
   | .error e => throw <| IO.userError s!"{path}: {e}"
 
-/-- Parse Julia's `repr(::Float64)` (`Inf`, `-0.0`, `3.26592e6`, `1.0f0`, …). -/
+/-- Parse Julia's `repr(::Float64)` (`Inf`, `-0.0`, `3.26592e6`, `1.0f0`, …) with Julia's own
+`parse(Float64, s)` (`JuliaBase.F64.parse?`). -/
 def parseFloat (s : String) : Option Float :=
   match s with
   | "Inf" | "Inf32" => some (1.0 / 0.0)
   | "-Inf" | "-Inf32" => some (-1.0 / 0.0)
   | "NaN" | "NaN32" => some (0.0 / 0.0)
   | "-0.0" | "-0.0f0" => some (-0.0)
-  | _ =>
-    let s := s.replace "f" "e"
-    match Json.parse s with
-    | .ok (.num n) => some n.toFloat
-    | _ => none
+  | _ => JuliaBase.F64.parse? (s.replace "f" "e")
 
 /-- A float field stored as a `repr` string. -/
 def jFloat (j : Json) : Float :=

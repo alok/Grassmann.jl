@@ -24,7 +24,7 @@ Julia creates fresh tags on every evaluation, which makes them independent
 
 namespace MeasureSystems
 
-open FieldConstants FieldConstants.Julia
+open FieldConstants
 
 /-- The identity of an independent measurement: `(value, uncertainty, tag)`. -/
 abbrev MTag := Float × Float × Nat
@@ -116,14 +116,14 @@ def realDiv (x : Float) (a : Measurement) : Measurement :=
   result1 (x / a.val) (-x / (a.val * a.val)) a
 /-- `a^n` for an integer (`math.jl:287`). -/
 def powInt (a : Measurement) (n : Int) : Measurement :=
-  result1 (Julia.powInt a.val n) (Float.ofInt n * Julia.powInt a.val (n - 1)) a
+  result1 (JuliaBase.F64.powInt a.val n) (Float.ofInt n * JuliaBase.F64.powInt a.val (n - 1)) a
 /-- `a^r` for a `Rational` (`math.jl:292`). -/
 def powRat (a : Measurement) (r : Rat) : Measurement :=
   let b := FieldAlgebra.Coef.toFloat (.rat r)
-  result1 (Julia.pow a.val b) (b * Julia.pow a.val (b - 1.0)) a
+  result1 (JuliaBase.F64.pow a.val b) (b * JuliaBase.F64.pow a.val (b - 1.0)) a
 /-- `a^y` for a `Float64` (`math.jl:297`). -/
 def powFloat (a : Measurement) (y : Float) : Measurement :=
-  result1 (Julia.pow a.val y) (y * Julia.pow a.val (y - 1.0)) a
+  result1 (JuliaBase.F64.pow a.val y) (y * JuliaBase.F64.pow a.val (y - 1.0)) a
 /-- `sqrt(a)` -/
 def sqrt (a : Measurement) : Measurement := let v := a.val.sqrt; result1 v (1.0 / (2.0 * v)) a
 /-- `cbrt(a)` -/
@@ -160,16 +160,16 @@ def parse? (str : String) (id : Nat) : Option Measurement := do
       | _ => none
     let (valStr, valDec) ← numPart v
     let (errStr, errDec) ← numPart errTxt
-    let mut val ← parseFloat? valStr
-    let mut err ← parseFloat? errStr
+    let mut val ← JuliaBase.F64.parse? valStr
+    let mut err ← JuliaBase.F64.parse? errStr
     if valDec.isSome && errDec.isNone then
-      err := err / Julia.exp10 (Float.ofNat (valDec.get!.length - 1))
+      err := err / JuliaBase.F64.exp10 (Float.ofNat (valDec.get!.length - 1))
     if !tail.isEmpty then
-      let fact ← parseFloat? ("1" ++ tail)
+      let fact ← JuliaBase.F64.parse? ("1" ++ tail)
       val := val * fact
       err := err * fact
     return indep val err id
-  | [v] => let x ← parseFloat? v; return indep x 0.0 id
+  | [v] => let x ← JuliaBase.F64.parse? v; return indep x 0.0 id
   | _ => none
 
 /-! ### Display -/
@@ -179,10 +179,10 @@ def display (m : Measurement) : String :=
   let val :=
     if m.err == 0.0 || !m.err.isFinite then m.val
     else
-      let errDigits := -hidigit m.err + 2
-      let digits := if m.val.isFinite then max (-hidigit m.val + 2) errDigits else errDigits
-      roundDigits m.val digits
-  s!"{JuliaBase.F64.showString val} ± {JuliaBase.F64.showString (roundSigdigits m.err 2)}"
+      let errDigits := -JuliaBase.F64.hidigit m.err + 2
+      let digits := if m.val.isFinite then max (-JuliaBase.F64.hidigit m.val + 2) errDigits else errDigits
+      JuliaBase.F64.roundDigits m.val digits
+  s!"{JuliaBase.F64.showString val} ± {JuliaBase.F64.showString (JuliaBase.F64.roundSigdigits m.err 2)}"
 
 instance : ToString Measurement := ⟨display⟩
 
@@ -219,10 +219,10 @@ private def zeroPointLen? (s : String) : Option Nat :=
 
 /-- Shared rounding of `print_special`/`special_print`: `(digits, val, err)`. -/
 private def specialRound (m : Measurement) : Int × Float × Float :=
-  let errDigits := -hidigit m.err + 2
-  let digits := if m.val.isFinite then max (-hidigit m.val + 2) errDigits else errDigits
-  let val := if m.err == 0.0 || !m.err.isFinite then m.val else roundExtra (roundDigits m.val digits)
-  let err := roundExtra (roundSigdigits m.err 2)
+  let errDigits := -JuliaBase.F64.hidigit m.err + 2
+  let digits := if m.val.isFinite then max (-JuliaBase.F64.hidigit m.val + 2) errDigits else errDigits
+  let val := if m.err == 0.0 || !m.err.isFinite then m.val else roundExtra (JuliaBase.F64.roundDigits m.val digits)
+  let err := roundExtra (JuliaBase.F64.roundSigdigits m.err 2)
   (digits, val, err)
 
 /-- MeasureSystems' `print_special(io, M)` (`MeasureSystems.jl:153-189`): the
@@ -238,11 +238,11 @@ def printSpecial (m : Measurement) : String :=
     let serr := if serr.contains 'e' then (sciParts serr).1 else serr
     let (m1, m2) := sciParts sval
     let ms := serr.replace "." ""
-    let zs := digits + 1 + hidigit m.val + neg - m1.length
+    let zs := digits + 1 + JuliaBase.F64.hidigit m.val + neg - m1.length
     let z := String.ofList (List.replicate zs.toNat '0')
     m1 ++ z ++ "(" ++ errDigitsStr ms true ++ ") × 10" ++ FieldAlgebra.printExpoInt (m2.toInt?.getD 0)
   else
-    let zs := digits + 1 + hidigit m.val + neg - sval.length +
+    let zs := digits + 1 + JuliaBase.F64.hidigit m.val + neg - sval.length +
       (match zeroPointLen? sval with | some k => (k : Int) - 1 | none => 0)
     if zs < 0 && sval.endsWith ".0" then
       sval ++ "(±" ++ FieldAlgebra.printSpecialFloat err ++ ")"
@@ -262,11 +262,11 @@ def specialPrint (m : Measurement) : String :=
     let serr := if serr.contains 'e' then (sciParts serr).1 else serr
     let (m1, m2) := sciParts sval
     let ms := serr.replace "." ""
-    let zs := digits + 1 + hidigit m.val + neg - m1.length
+    let zs := digits + 1 + JuliaBase.F64.hidigit m.val + neg - m1.length
     let z := String.ofList (List.replicate zs.toNat '0')
     m1 ++ z ++ "(" ++ errDigitsStr ms false ++ ") \\times 10^{" ++ m2 ++ "}"
   else
-    let zs := digits + 1 + hidigit m.val + neg - sval.length +
+    let zs := digits + 1 + JuliaBase.F64.hidigit m.val + neg - sval.length +
       (match zeroPointLen? sval with | some k => (k : Int) - 1 | none => 0)
     if zs < 0 && sval.endsWith ".0" then
       sval ++ " (\\pm " ++ FieldAlgebra.specialPrintFloat err ++ ")"
