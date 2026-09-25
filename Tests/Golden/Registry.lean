@@ -28,11 +28,16 @@ Comparison rules are those of schema §11 (`Tests.Golden.Compare`).
 
 ```
 import Tests.Golden.Registry
-open Tests.ElementOracle in
-initialize register
-  { name := "grassmann/arith", suite := "arith", op := "add|sub|neg",
-    eval := fun ctx args => … }
+open Tests.ElementOracle
+
+def arithEval : Evaluator := fun ctx args => …
+
+initialize
+  register { name := "grassmann/arith", suite := "arith", op := "add|sub|neg", eval := arithEval }
 ```
+
+(`initialize` takes a `do` sequence: a structure instance continued on the next line must be
+indented past the start of the statement, as above.)
 
 An evaluator that needs per-space tables (kernel plans, label tables) sets `prepare`
 instead: it is called once per (shard, op) with the shard's space and returns the evaluator
