@@ -39,6 +39,7 @@ JULIA_SUITES: dict[str, tuple[str, str]] = {
     "geophysics": ("main", "1"),
     "wilkinson": ("main", "1"),
     "meshtopology": ("main", "1"),
+    "grassmann": ("main", "1"),
     "fatou": ("threads", "auto"),
     "dendriform": ("env2", "1"),
     "demorgan": ("env2", "1"),
@@ -98,18 +99,6 @@ def main() -> int:
                 print(f"warning: Julia group {grp} failed", file=sys.stderr)
                 continue
             julia_jsons.append(out)
-        # the Grassmann twin joins once it runs on the shared harness (it then understands --json)
-        gb = ROOT / "oracle/bench/grassmann_bench.jl"
-        if gb.exists() and "main_suites" not in gb.read_text():
-            print("note: oracle/bench/grassmann_bench.jl is not on oracle/bench/harness.jl yet; skipped",
-                  file=sys.stderr)
-        elif gb.exists() and (not suites or "grassmann" in suites):
-            out = a.out / "julia-grassmann.json"
-            if run([a.julia, "--startup-file=no", f"--project={a.julia_env}", str(gb), "--json", str(out), *common], env) == 0 \
-                    and out.exists():
-                julia_jsons.append(out)
-            else:
-                print("warning: oracle/bench/grassmann_bench.jl produced no result file", file=sys.stderr)
 
     if not lean_json.exists():
         print("no Lean results; nothing to compare", file=sys.stderr)
