@@ -92,13 +92,13 @@ def genValues : Array GenValue :=
 `power_by_squaring` (a `DomainError` for `n < 0`, here `NaN`), `ℯ^x = exp(x)`). -/
 def GenValue.pow (g : GenValue) (e : Expo) : Float :=
   match g, e.makeint with
-  | .const x, .int n => powInt x n
-  | .const x, e => Julia.pow x e.toFloat
-  | .prime p, .int n => powInt (Float.ofNat p) n
-  | .prime p, e => Julia.pow (Float.ofNat p) e.toFloat
-  | .irrational x, .int n => if n < 0 then nan else powerBySquaring x n.toNat
-  | .irrational x, e => Julia.pow x e.toFloat
-  | .euler, e => Julia.exp e.toFloat
+  | .const x, .int n => JuliaBase.F64.powInt x n
+  | .const x, e => JuliaBase.F64.pow x e.toFloat
+  | .prime p, .int n => JuliaBase.F64.powInt (Float.ofNat p) n
+  | .prime p, e => JuliaBase.F64.pow (Float.ofNat p) e.toFloat
+  | .irrational x, .int n => if n < 0 then nan else JuliaBase.F64.powerBySquaring x n.toNat
+  | .irrational x, e => JuliaBase.F64.pow x e.toFloat
+  | .euler, e => JuliaBase.F64.exp e.toFloat
 
 namespace Consts
 

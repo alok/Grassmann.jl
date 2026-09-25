@@ -1,122 +1,12 @@
 /-!
-# Julia's floating-point kernels, bit for bit
+# Julia's `sum(::Vector{Float64})`, bit for bit
 
-Wilkinson's error bounds are only as meaningful as the arithmetic that
-produces them, so the port reproduces the exact kernels Julia runs (the
-Dekker `TwicePrecision` arithmetic of `base/twiceprecision.jl` is
-`JuliaBase.TwicePrecision`; what `JuliaBase` lacks lives here):
-
-* `Base.Math.two_mul` (an `fma`, as Julia uses on FMA hardware);
-* the compensated power-by-squaring `pow_body(::Float64, ::Integer)` from
-  `base/special/pow.jl`, which is what `x^9` evaluates to in Julia (and why
-  it is more accurate than repeated multiplication);
-* `power_by_squaring` (`base/intfuncs.jl`) and the `Float32` power;
-* `literal_pow`, the lowering of `x^k` for a literal `k`;
-* `sum(::Vector{Float64})`, whose pairwise blocking and SIMD accumulator
-  layout fix the rounding of `simpson`'s sums.
-
-`two_mul` is a true `fma` (Julia calls `fma` explicitly). Of the three
-`muladd`s in `pow_body`, LLVM fuses the two that accumulate the low-order error
-and leaves the final one unfused, as measured on the machine the goldens come
-from (Apple aarch64, Julia 1.13).
+`sum(::Vector{Float64})`, whose pairwise blocking and SIMD accumulator layout fix the
+rounding of `simpson`'s sums. (Julia's powers, `exp`/`log` and the `TwicePrecision` range
+arithmetic are in `JuliaBase`.)
 -/
 
 namespace Wilkinson
-
-/-- Julia `Base.Math.two_mul(x, y) = (x*y, fma(x, y, -x*y))`: `hi + lo = x·y`
-exactly (barring overflow). -/
-@[inline] def twoMul (x y : Float) : Float × Float :=
-  let xy := x * y
-  (xy, Float.fma x y (-xy))
-
-/-- The final `muladd(x, y, err)` of `pow_body`, which LLVM leaves **unfused**
-(`x*y + err`, two roundings); the error-accumulating `muladd(y, xnlo, x*ynlo)`
-is fused (`powBody` calls `Float.fma`). Measured against Julia 1.13 on 200000
-random `(x, n)`, `n ∈ [-300, 600]`: this combination reproduces every result
-(signed zeros of underflowing powers included); unfusing the error `muladd`
-misses 101 signed zeros, fusing the final one misses 4%. -/
-@[inline] def muladd (x y z : Float) : Float := x * y + z
-
-/-- Julia `^(x::Float64, n::Integer)`'s compensated power by squaring,
-`pow_body(x::Float64, n::Integer)` (base/special/pow.jl): an extended-precision
-square-and-multiply whose final `muladd` folds in the accumulated low parts. -/
-def powBody (x : Float) (n : Int) : Float :=
-  if n = 3 then x * x * x
-  else if n < 0 then
-    let rx := 1 / x
-    if n = -2 then rx * rx
-    else
-      let xnlo := if x.isFinite then -(Float.fma x rx (-1.0)) * rx else -0.0
-      loop rx xnlo 1.0 0.0 n.natAbs (n.natAbs + 1)
-  else loop x (-0.0) 1.0 0.0 n.toNat (n.toNat + 1)
-where
-  /-- The squaring loop, fuelled by the exponent. -/
-  loop (x xnlo y ynlo : Float) (n : Nat) : Nat → Float
-    | 0 => x * y
-    | fuel + 1 =>
-      if n > 1 then
-        let (y, ynlo) :=
-          if n % 2 = 1 then
-            let err := Float.fma y xnlo (x * ynlo)
-            let (y', ynlo') := twoMul x y
-            (y', ynlo' + err)
-          else (y, ynlo)
-        let err := x * 2 * xnlo
-        let (x', xnlo') := twoMul x x
-        loop x' (xnlo' + err) y ynlo (n / 2) fuel
-      else
-        let err := Float.fma y xnlo (x * ynlo)
-        if x.isFinite && err.isFinite then muladd x y err else x * y
-
-/-- Julia `x ^ n` for `x::Float64`, `n::Integer` (base/special/pow.jl:58-75).
-Exponents outside `[-2^12, 3·2^13]` use Julia's `log`/`exp` path, approximated
-here by the C library `pow`. -/
-def powInt (x : Float) (n : Int) : Float :=
-  if n = 0 then 1.0
-  else if -4096 ≤ n ∧ n ≤ 24576 then powBody x n
-  else Float.pow x (Float.ofInt n)
-
-/-- Julia `power_by_squaring(x, p)` for `x::Float64`, `p ≥ 1` (base/intfuncs.jl:394):
-the squaring order Julia uses, which fixes the rounding. -/
-def powerBySquaring (x : Float) (p : Nat) : Float :=
-  if p = 0 then 1.0
-  else if p = 1 then x
-  else if p = 2 then x * x
-  else
-    let t := trailingZeros p + 1
-    let p := p >>> t
-    -- `square_is_useful`: the first squaring reuses `x_squared_`
-    let x := if t - 1 > 0 then squareTimes (x * x) (t - 2) else x
-    outer x x p (p + 1)
-where
-  /-- Number of trailing zero bits. -/
-  trailingZeros (p : Nat) : Nat := go p 0 64
-  /-- Fuelled scan. -/
-  go (p acc : Nat) : Nat → Nat
-    | 0 => acc
-    | fuel + 1 => if p % 2 = 0 && p != 0 then go (p / 2) (acc + 1) fuel else acc
-  /-- Square `k` times. -/
-  squareTimes (x : Float) : Nat → Float
-    | 0 => x
-    | k + 1 => squareTimes (x * x) k
-  /-- `while p > 0`: square `t` times, multiply into `y`. -/
-  outer (x y : Float) (p : Nat) : Nat → Float
-    | 0 => y
-    | fuel + 1 =>
-      if p > 0 then
-        let t := trailingZeros p + 1
-        let x := squareTimes x t
-        outer x (y * x) (p >>> t) fuel
-      else y
-
-/-- Julia `x ^ n` for `x::Float32` (base/special/pow.jl:80-88, 108-113): `-2` and
-`3` are special-cased, other small exponents square in `Float64` and round once. -/
-def powInt32 (x : Float32) (n : Int) : Float32 :=
-  if n = 0 then 1.0
-  else if n = -2 then let i := 1 / x; i * i
-  else if n = 3 then x * x * x
-  else if n < 0 then (powerBySquaring (1 / x.toFloat) n.natAbs).toFloat32
-  else (powerBySquaring x.toFloat n.toNat).toFloat32
 
 /-- One `mapreduce_impl` block of Julia's `sum(::Vector{Float64})` as LLVM
 vectorises it on aarch64: `a[i0] + a[i0+1]`, then the `@simd` loop runs with
@@ -170,26 +60,5 @@ where
       else
         let imid := i0 + (i1 - i0) / 2
         impl i0 imid fuel + impl (imid + 1) i1 fuel
-
-/-- Julia `literal_pow(^, x, Val(k))` for `Float64` (base/intfuncs.jl:465-475):
-`x^2 = x*x`, `x^3 = x*x*x`, `x^-1 = inv(x)`, otherwise `x^k`. -/
-def literalPow (x : Float) (k : Int) : Float :=
-  match k with
-  | 0 => 1.0
-  | 1 => x
-  | 2 => x * x
-  | 3 => x * x * x
-  | -1 => 1 / x
-  | _ => powInt x k
-
-/-- Julia `literal_pow` for `Float32`. -/
-def literalPow32 (x : Float32) (k : Int) : Float32 :=
-  match k with
-  | 0 => 1.0
-  | 1 => x
-  | 2 => x * x
-  | 3 => x * x * x
-  | -1 => 1 / x
-  | _ => powInt32 x k
 
 end Wilkinson

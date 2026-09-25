@@ -53,20 +53,20 @@ def run : IO Suite := do
     let x := hexFloat (idx r 0)
     let n := int (idx r 1)
     let want := hexFloat (idx r 2)
-    let got := powInt x n
+    let got := JuliaBase.F64.powInt x n
     s := s.check (sameBits got want) fun _ => s!"{JuliaBase.F64.showString x}^{n}: got {JuliaBase.F64.showString got}, want {JuliaBase.F64.showString want}"
   -- Float^Float
   for r in arr (fld j "powf") do
     let x := hexFloat (idx r 0)
     let y := hexFloat (idx r 1)
     let want := hexFloat (idx r 2)
-    let got := pow x y
+    let got := JuliaBase.F64.pow x y
     s := s.check (sameBits got want) fun _ =>
       s!"{JuliaBase.F64.showString x}^{JuliaBase.F64.showString y}: got {JuliaBase.F64.showString got}, want {JuliaBase.F64.showString want}"
   -- exp/log family
   let funs := fld j "funs"
-  for (nm, f) in [("exp", Julia.exp), ("exp2", Julia.exp2), ("exp10", Julia.exp10),
-                  ("log", Julia.log), ("log2", Julia.log2), ("log10", Julia.log10)] do
+  for (nm, f) in [("exp", JuliaBase.F64.exp), ("exp2", JuliaBase.F64.exp2), ("exp10", JuliaBase.F64.exp10),
+                  ("log", JuliaBase.F64.log), ("log2", JuliaBase.F64.log2), ("log10", JuliaBase.F64.log10)] do
     for r in arr (fld funs nm) do
       let x := hexFloat (idx r 0)
       let want := hexFloat (idx r 1)
@@ -81,20 +81,20 @@ def run : IO Suite := do
     let wd := hexFloat (idx r 2)
     let ws := hexFloat (idx r 4)
     let wh := int (idx r 5)
-    s := s.check (sameBits (roundDigits x d) wd) fun _ =>
-      s!"round({JuliaBase.F64.showString x}, digits={d}): got {JuliaBase.F64.showString (roundDigits x d)}, want {JuliaBase.F64.showString wd}"
-    s := s.check (sameBits (roundSigdigits x n) ws) fun _ =>
-      s!"round({JuliaBase.F64.showString x}, sigdigits={n}): got {JuliaBase.F64.showString (roundSigdigits x n)}, want {JuliaBase.F64.showString ws}"
-    s := s.check (hidigit x == wh) fun _ => s!"hidigit({JuliaBase.F64.showString x}) = {hidigit x}, want {wh}"
+    s := s.check (sameBits (JuliaBase.F64.roundDigits x d) wd) fun _ =>
+      s!"round({JuliaBase.F64.showString x}, digits={d}): got {JuliaBase.F64.showString (JuliaBase.F64.roundDigits x d)}, want {JuliaBase.F64.showString wd}"
+    s := s.check (sameBits (JuliaBase.F64.roundSigdigits x n) ws) fun _ =>
+      s!"round({JuliaBase.F64.showString x}, sigdigits={n}): got {JuliaBase.F64.showString (JuliaBase.F64.roundSigdigits x n)}, want {JuliaBase.F64.showString ws}"
+    s := s.check (JuliaBase.F64.hidigit x == wh) fun _ => s!"hidigit({JuliaBase.F64.showString x}) = {JuliaBase.F64.hidigit x}, want {wh}"
   -- power_by_squaring on irrational bases
   for r in arr (fld j "pbs") do
     let nm := str (idx r 0)
     let p := (int (idx r 1)).toNat
     let want := hexFloat (idx r 2)
     let got := match nm with
-      | "φ" => powerBySquaring 1.618033988749895 p
-      | "γ" => powerBySquaring 0.5772156649015329 p
-      | _ => Julia.exp (Float.ofNat p)
+      | "φ" => JuliaBase.F64.powerBySquaring 1.618033988749895 p
+      | "γ" => JuliaBase.F64.powerBySquaring 0.5772156649015329 p
+      | _ => JuliaBase.F64.exp (Float.ofNat p)
     s := s.check (sameBits got want) fun _ => s!"{nm}^{p}: got {JuliaBase.F64.showString got}, want {JuliaBase.F64.showString want}"
   -- Constant operator table
   for r in arr (fld j "constant_ops") do
@@ -116,8 +116,8 @@ def run : IO Suite := do
         | o => (a.lpow ((o.drop 1).toString.toInt?.getD 0), jnumOf (idx r 2))
       s := s.check (jnumSame got want) fun _ => s!"Constant {op} on {a}: got {got} ({got.kind}), want {want} ({want.kind})"
   s := s.check (sameBits (hexFloat (fld j "unit_rtol")) 8.161992717227193e-15) fun _ => "eps()^0.9"
-  s := s.check (sameBits (Julia.exp10 0.1) (hexFloat (fld j "exp10_0.1"))) fun _ => "exp10(0.1)"
-  s := s.check (sameBits (Julia.pow (2.220446049250313e-16) 0.9) 8.161992717227193e-15) fun _ => "eps^0.9 via pow"
+  s := s.check (sameBits (JuliaBase.F64.exp10 0.1) (hexFloat (fld j "exp10_0.1"))) fun _ => "exp10(0.1)"
+  s := s.check (sameBits (JuliaBase.F64.pow (2.220446049250313e-16) 0.9) 8.161992717227193e-15) fun _ => "eps^0.9 via pow"
   return s
 
 end Tests.FieldAlgebra.FieldConstantsTests

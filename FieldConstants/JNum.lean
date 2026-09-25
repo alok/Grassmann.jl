@@ -1,4 +1,4 @@
-import FieldConstants.Julia.Math
+import FieldConstants.Julia.Float
 
 /-!
 # `JNum`: the payload of a Julia `FieldConstants.Constant{N}`
@@ -105,8 +105,8 @@ where
 (`Int64` stays `Int64`, `Float64` uses `pow_body`). A negative `n` on an
 `Int64` (a `DomainError` in Julia) is computed in `Float64`. -/
 def npow : JNum → Int → JNum
-  | int a, n => if n ≥ 0 then int (ipow a n.toNat) else float (powInt (Float.ofInt a.toInt) n)
-  | float x, n => float (powInt x n)
+  | int a, n => if n ≥ 0 then int (ipow a n.toNat) else float (JuliaBase.F64.powInt (Float.ofInt a.toInt) n)
+  | float x, n => float (JuliaBase.F64.powInt x n)
 
 /-- `Constant{N}^n` for a *literal* integer `n`: Julia lowers `x^n` to
 `literal_pow`, which for a `Constant` computes `inv(x)^(-n)` when `n < 0`. -/
@@ -117,22 +117,22 @@ instance : HPow JNum Int JNum := ⟨lpow⟩
 instance : HPow JNum Nat JNum := ⟨fun x n => lpow x n⟩
 
 /-- Julia `x^y` with a `Float64` exponent. -/
-def fpow (x : JNum) (y : Float) : JNum := float (pow x.toFloat y)
+def fpow (x : JNum) (y : Float) : JNum := float (JuliaBase.F64.pow x.toFloat y)
 
 /-- Julia `sqrt`. -/
 def sqrt (x : JNum) : JNum := float x.toFloat.sqrt
 /-- Julia `cbrt` (Julia's own, via `JuliaBase.F64.cbrt`). -/
 def cbrt (x : JNum) : JNum := float (JuliaBase.F64.cbrt x.toFloat)
 /-- Julia `log`. -/
-def log (x : JNum) : JNum := float (Julia.log x.toFloat)
+def log (x : JNum) : JNum := float (JuliaBase.F64.log x.toFloat)
 /-- Julia `log10`. -/
-def log10 (x : JNum) : JNum := float (Julia.log10 x.toFloat)
+def log10 (x : JNum) : JNum := float (JuliaBase.F64.log10 x.toFloat)
 /-- Julia `log2`. -/
-def log2 (x : JNum) : JNum := float (Julia.log2 x.toFloat)
+def log2 (x : JNum) : JNum := float (JuliaBase.F64.log2 x.toFloat)
 /-- Julia `exp`. -/
-def exp (x : JNum) : JNum := float (Julia.exp x.toFloat)
+def exp (x : JNum) : JNum := float (JuliaBase.F64.exp x.toFloat)
 /-- Julia `exp10`. -/
-def exp10 (x : JNum) : JNum := float (Julia.exp10 x.toFloat)
+def exp10 (x : JNum) : JNum := float (JuliaBase.F64.exp10 x.toFloat)
 /-- Julia `abs`. -/
 def abs : JNum → JNum
   | int a => int (if a < 0 then -a else a)
@@ -189,8 +189,8 @@ def logdb (x : JNum) : JNum := JNum.mul 10 (JNum.log10 x)
 /-- Julia `FieldConstants.expdb(x) = exp10(0.1)^x`. For an `Int64` exponent this
 is `^(Float64, Integer)`; note `expdb(20) = 100.00000000000011`. -/
 def expdb : JNum → JNum
-  | .int n => .float (Julia.powInt 1.2589254117941673 n.toInt)
-  | .float x => .float (Julia.pow 1.2589254117941673 x)
+  | .int n => .float (JuliaBase.F64.powInt 1.2589254117941673 n.toInt)
+  | .float x => .float (JuliaBase.F64.pow 1.2589254117941673 x)
 
 /-- Julia `FieldConstants.dB = logdb`. -/
 abbrev dB := logdb

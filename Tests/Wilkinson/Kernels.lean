@@ -27,19 +27,19 @@ def suite : TestM Unit := do
   for c in jArr (jGet j "pow") do
     let x := hexF64 (jGet c "x")
     let n := jInt (jGet c "n")
-    let r := powInt x n
+    let r := JuliaBase.F64.powInt x n
     check s!"{x}^{n}" (sameFloat r (hexF64 (jGet c "r"))) s!"got {r}, expected {hexF64 (jGet c "r")}"
     let rf := JNum.powF64 x (Float.ofInt n)
     check s!"{x}^{n}.0" (sameFloat rf (hexF64 (jGet c "rf"))) s!"got {rf}, expected {hexF64 (jGet c "rf")}"
   for c in jArr (jGet j "literal_pow") do
     let x := hexF64 (jGet c "x")
     let k := jInt (jGet c "k")
-    check s!"literal_pow({x}, {k})" (sameFloat (literalPow x k) (hexF64 (jGet c "r")))
+    check s!"literal_pow({x}, {k})" (sameFloat (JuliaBase.F64.literalPow x k) (hexF64 (jGet c "r")))
   for c in jArr (jGet j "pow32") do
     let x := hexF32 (jGet c "x")
     let n := jInt (jGet c "n")
-    check s!"{x}f0^{n}" (sameF32 (powInt32 x n) (hexF32 (jGet c "r")))
-      s!"got {powInt32 x n}, expected {hexF32 (jGet c "r")}"
+    check s!"{x}f0^{n}" (sameF32 (JuliaBase.F32.powInt x n) (hexF32 (jGet c "r")))
+      s!"got {JuliaBase.F32.powInt x n}, expected {hexF32 (jGet c "r")}"
   for c in jArr (jGet j "sum") do
     let n := jNat (jGet c "n")
     let s := juliaSum (sumVec n (jNat (jGet c "seed")))
@@ -66,12 +66,12 @@ def suite : TestM Unit := do
     checkEq s!"BigFloat({q})" (reprStr (BigFloat.ofRat 256 q)) (reprStr (jBig (jGet c "r")))
   checkEq "eps(BigFloat)" (reprStr (BigFloat.round 256 false 1 (-255))) (reprStr (jBig (jGet j "bigeps")))
   -- Julia's table-driven exp/log, bit for bit
-  for (key, f) in [("exp", JuliaMath.exp), ("log", JuliaMath.log)] do
+  for (key, f) in [("exp", JuliaBase.F64.exp), ("log", JuliaBase.F64.log)] do
     let cs := jArr (jGet j key)
     let bad := cs.toList.filter fun c => let a := jArr c; !sameFloat (f (hexF64 a[0]!)) (hexF64 a[1]!)
     check s!"{key}(::Float64) ({cs.size} values)" bad.isEmpty
       s!"{bad.length} differ, first {(bad.head?.map fun c => hexF64 (jArr c)[0]!).getD 0}"
-  for (key, f) in [("exp32", JuliaMath.exp32), ("log32", JuliaMath.log32)] do
+  for (key, f) in [("exp32", JuliaBase.F32.exp), ("log32", JuliaBase.F32.log)] do
     let cs := jArr (jGet j key)
     let bad := cs.toList.filter fun c => let a := jArr c; !sameF32 (f (hexF32 a[0]!)) (hexF32 a[1]!)
     check s!"{key}(::Float32) ({cs.size} values)" bad.isEmpty

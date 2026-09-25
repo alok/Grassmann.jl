@@ -5,6 +5,12 @@ import Tests.Util.Random
 Julia's own numerics against the oracle (`Tests/JuliaBase/math.json`, written by
 `gen_golden.jl math`), all bit for bit, and property checks of the exact IEEE toolkit:
 
+* `u64`/`u32`: Julia's own `exp`, `exp2`, `exp10`, `expm1`, `log`, `log2`, `log10`,
+  `log1p` for `Float64` (`F64.exp`, …) and `Float32` (`F32.exp`, …);
+* `powf64`/`powi64`/`powf32`/`powi32`, `lit64`/`lit32`, `pbs64`: `x^y`, `x^n`,
+  `literal_pow` and `power_by_squaring` (the fixed Julia defect
+  `float32-pow-large-odd-sign` is checked against the sign-corrected value);
+* `rdig`/`rsig`/`hidigit`: `round(x; digits)`, `round(x; sigdigits)`, `Base.hidigit`;
 * `eps64`/`eps32`, `exponent64`/`exponent32`, `rat64`/`rat32`: `F64.epsOf`, `F32.epsOf`,
   `IEEEFloat.exponent`, and the correctly rounded `IEEEFloat.ofFraction`/`ofRat` of big
   rationals.
@@ -26,8 +32,97 @@ def sameF32 (x y : Float32) : Bool := (x.isNaN && y.isNaN) || x.toBits == y.toBi
 /-- An integer field. -/
 def int (s : String) : Int := s.toInt?.getD 0
 
+/-- Julia's unary `Float64` kernels by name. -/
+def unary64 : String → Option (Float → Float)
+  | "exp" => some F64.exp
+  | "exp2" => some F64.exp2
+  | "exp10" => some F64.exp10
+  | "expm1" => some F64.expm1
+  | "log" => some F64.log
+  | "log2" => some F64.log2
+  | "log10" => some F64.log10
+  | "log1p" => some F64.log1p
+  | _ => none
+
+/-- Julia's unary `Float32` kernels by name. -/
+def unary32 : String → Option (Float32 → Float32)
+  | "exp" => some F32.exp
+  | "exp2" => some F32.exp2
+  | "exp10" => some F32.exp10
+  | "expm1" => some F32.expm1
+  | "log" => some F32.log
+  | "log2" => some F32.log2
+  | "log10" => some F32.log10
+  | "log1p" => some F32.log1p
+  | _ => none
+
+/-- Rows hitting the documented Julia defect `float32-pow-large-odd-sign`: `x^n` for
+`x::Float32 < 0` and an odd `n` (after Julia's `clamp(n, Int32)`) outside
+`power_by_squaring`'s range, where Julia drops the sign (`F32.powInt` applies it). -/
+def f32PowSignDefect (x : Float32) (n : Int) : Bool :=
+  let n := max (-2147483648) (min 2147483647 n)
+  x < 0 && n % 2 != 0 && !(-4096 ≤ n && n ≤ 24576)
+
 /-- Check one `math.json` row (rows of kinds this module does not know are skipped). -/
 def checkRow (t : Tally) : List String → Tally
+  | ["u64", name, hx, hr] =>
+    match unary64 name with
+    | some f =>
+      let got := f (f64 hx)
+      t.check (sameFloat got (f64 hr)) fun _ =>
+        s!"{name}({F64.showString (f64 hx)}): got {F64.showString got}, want {F64.showString (f64 hr)}"
+    | none => t.check false fun _ => s!"unknown Float64 function {name}"
+  | ["u32", name, hx, hr] =>
+    match unary32 name with
+    | some f =>
+      let got := f (f32 hx)
+      t.check (sameF32 got (f32 hr)) fun _ =>
+        s!"{name}({F32.showString (f32 hx)}): got {F32.showString got}, want {F32.showString (f32 hr)}"
+    | none => t.check false fun _ => s!"unknown Float32 function {name}"
+  | ["powf64", hx, hy, hr] =>
+    let got := F64.pow (f64 hx) (f64 hy)
+    t.check (sameFloat got (f64 hr)) fun _ =>
+      s!"{F64.showString (f64 hx)}^{F64.showString (f64 hy)}: got {F64.showString got}, want {F64.showString (f64 hr)}"
+  | ["powi64", hx, n, hr] =>
+    let got := F64.powInt (f64 hx) (int n)
+    t.check (sameFloat got (f64 hr)) fun _ =>
+      s!"{F64.showString (f64 hx)}^{n}: got {F64.showString got}, want {F64.showString (f64 hr)}"
+  | ["powf32", hx, hy, hr] =>
+    let got := F32.pow (f32 hx) (f32 hy)
+    t.check (sameF32 got (f32 hr)) fun _ =>
+      s!"{F32.showString (f32 hx)}^{F32.showString (f32 hy)}: got {F32.showString got}, want {F32.showString (f32 hr)}"
+  | ["powi32", hx, n, hr] =>
+    let x := f32 hx
+    if f32PowSignDefect x (int n) then
+      -- the fixed defect: the same magnitude with the sign of an odd power
+      t.check (sameF32 (F32.powInt x (int n)) (-(f32 hr))) fun _ => s!"{F32.showString x}^{n} (sign fixed)"
+    else
+      let got := F32.powInt x (int n)
+      t.check (sameF32 got (f32 hr)) fun _ =>
+        s!"{F32.showString x}^{n}: got {F32.showString got}, want {F32.showString (f32 hr)}"
+  | ["lit64", hx, k, hr] =>
+    let got := F64.literalPow (f64 hx) (int k)
+    t.check (sameFloat got (f64 hr)) fun _ =>
+      s!"literal_pow({F64.showString (f64 hx)}, {k}): got {F64.showString got}, want {F64.showString (f64 hr)}"
+  | ["lit32", hx, k, hr] =>
+    let got := F32.literalPow (f32 hx) (int k)
+    t.check (sameF32 got (f32 hr)) fun _ =>
+      s!"literal_pow({F32.showString (f32 hx)}, {k}): got {F32.showString got}, want {F32.showString (f32 hr)}"
+  | ["pbs64", hx, p, hr] =>
+    let got := F64.powerBySquaring (f64 hx) (int p).toNat
+    t.check (sameFloat got (f64 hr)) fun _ =>
+      s!"power_by_squaring({F64.showString (f64 hx)}, {p}): got {F64.showString got}, want {F64.showString (f64 hr)}"
+  | ["rdig", hx, d, hr] =>
+    let got := F64.roundDigits (f64 hx) (int d)
+    t.check (sameFloat got (f64 hr)) fun _ =>
+      s!"round({F64.showString (f64 hx)}, digits = {d}): got {F64.showString got}, want {F64.showString (f64 hr)}"
+  | ["rsig", hx, n, hr] =>
+    let got := F64.roundSigdigits (f64 hx) (int n)
+    t.check (sameFloat got (f64 hr)) fun _ =>
+      s!"round({F64.showString (f64 hx)}, sigdigits = {n}): got {F64.showString got}, want {F64.showString (f64 hr)}"
+  | ["hidigit", hx, h] =>
+    t.check (F64.hidigit (f64 hx) == int h) fun _ =>
+      s!"hidigit({F64.showString (f64 hx)}): got {F64.hidigit (f64 hx)}, want {h}"
   | ["eps64", hx, hr] =>
     let got := F64.epsOf (f64 hx)
     t.check (sameFloat got (f64 hr)) fun _ => s!"eps({F64.showString (f64 hx)}): got {F64.showString got}"

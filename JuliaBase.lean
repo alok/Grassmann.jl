@@ -1,5 +1,7 @@
 import JuliaBase.Num
 import JuliaBase.IEEE
+import JuliaBase.Math
+import JuliaBase.Round
 import JuliaBase.Ryu
 import JuliaBase.Float
 import JuliaBase.Complex
@@ -16,15 +18,20 @@ verified bit for bit against the Julia 1.13 oracle (`Tests/JuliaBase/`).
   `cld`, NaN-propagating `max`/`min` with `-0.0 < 0.0`, `isapprox` (default
   `rtol = √eps` when `atol = 0`), `round` (half to even), `sign`, `copysign`, `flipsign`,
   `nextfloat`/`prevfloat`, `isless`/`isequal`, `hypot`, Julia's own `cbrt`,
-  `Float64(::Rational)`, `exponent`/`ldexp`, `expm1`/`log1p` (to a few ulps), the float
-  constants, `isodd`, `power_by_squaring`, and the oracle comparator `F64.ulpDist`. This is
-  the one home of Julia's scalar semantics: `StaticVectors` and `AbstractTensors` build on
-  it rather than keeping copies.
+  `Float64(::Rational)`, `exponent`/`ldexp`, the float constants (`Float64` and `Float32`),
+  `isodd`, `power_by_squaring`, and the oracle comparator `F64.ulpDist`. This is the one
+  home of Julia's scalar semantics: every other package builds on it rather than keeping
+  copies.
 * `JuliaBase.IEEE`: the exact, format-generic IEEE-754 toolkit (`IEEEFloat` over `Float` and
   `Float32`): exact decoding (`decode`, `toRat?`), correctly rounded conversion from dyadic,
   rational and decimal values (`ofDyadic`, `ofFraction`, `ofRat`, `ofDecimal`), the constants
   and neighbours of either format, Julia `exponent`, `eps(x)` (`F64.epsOf`, `F32.epsOf`) and
   `ulpDistance`.
+* `JuliaBase.Math` (tables in `JuliaBase.MathTables`): Julia's own pure-Julia kernels, bit for
+  bit (Julia does not call `libm` for these): `exp`/`exp2`/`exp10`, `expm1`,
+  `log`/`log2`/`log10`, `log1p`, `^(x, y)` and `^(x, n::Integer)` (`pow_body`), `literal_pow`
+  and `power_by_squaring`, for `Float64` (`F64.exp`, …) and `Float32` (`F32.exp`, …).
+* `JuliaBase.Round`: `round(x; digits)`, `round(x; sigdigits)` and `Base.hidigit`.
 * `JuliaBase.Ryu`: Ryu shortest round-trip digits (`reduce_shortest`) for `Float64` and
   `Float32`, including the compact 6-significant-digit reduction.
 * `JuliaBase.Float`: `writeShortest` (Julia `Ryu.writeshortest` with all its keyword options),

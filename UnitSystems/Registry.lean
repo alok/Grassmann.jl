@@ -121,7 +121,7 @@ def scalarFunctions : List (String × (UnitSystem α → α)) :=
 exists for `Num` only). -/
 def sackurtetrode (U : UnitSystem Num) (P : Num := atmosphere U) (T : Num := kelvin U)
     (m : Num := dalton U) : Num :=
-  let e52 : Num := .c (.float (Julia.exp 2.5))
+  let e52 : Num := .c (.float (JuliaBase.F64.exp 2.5))
   let inner := e52 * boltzmann U *
     UnitAlg.sqrt (boltzmann U / gravity U / turn U / planckreduced U ^ (2 : Int)) ^ (3 : Int)
   let arg := inner * (T / P * UnitAlg.sqrt (m * T) ^ (3 : Int))

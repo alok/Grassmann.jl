@@ -31,7 +31,7 @@ def suite : TestM Unit := do
   checkSet "floatset(Float64, 3000; scale = log)" (logset .f64) (jGet j "logset64") false
   checkSet "floatset(Float32, 3000; scale = log)" (logset .f32) (jGet j "logset32") true
   for (n, g) in [10, 100, 2999].zip (jArr (jGet j "logset64_n")).toList do
-    checkSet s!"floatset(Float64, {n}; scale = log)" (floatset n JuliaMath.log) g false
+    checkSet s!"floatset(Float64, {n}; scale = log)" (floatset n JuliaBase.F64.log) g false
   checkSet "floatset(Float64, 10)" (floatset 10) (jGet j "idset64") false
   for g in jArr (jGet j "colon32") do
     let a := jArr (jGet g "args")

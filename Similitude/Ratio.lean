@@ -41,7 +41,7 @@ def Scalar.powExpo (x : Scalar) : Expo → Scalar
   | .rat q => x.qpow q
   | .float y => match x with
     | .grp g => .grp (g.fpow y)
-    | x => .ofFloat (Julia.pow x.toFloat y)
+    | x => .ofFloat (JuliaBase.F64.pow x.toFloat y)
 
 /-- `ratio_calc(e, U, S)` for constant exponents `e`, from the eleven constant ratios. -/
 def ratioOf (cr : Array Scalar) (e : Exps 11) : Scalar :=

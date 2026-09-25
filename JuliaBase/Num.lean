@@ -5,8 +5,8 @@ Everything here reproduces what Julia 1.13 computes, bit for bit, on the oracle
 machine (Apple Silicon, where `Core.Intrinsics.have_fma(Float64)` is `true` and
 `muladd` lowers to a fused multiply-add). Lean core already gives us correctly
 rounded `+ - * / sqrt fma`, so the ports below only have to replay Julia's
-operation order. The exceptions are `F64.expm1`/`F64.log1p` (and their `F32` versions),
-which are accurate to a few ulps rather than bit-exact (see their section).
+operation order. Julia's own transcendental kernels (`exp`, `log`, `expm1`, `log1p`, `^`)
+are in `JuliaBase.Math`.
 
 Citations are to Julia's `share/julia/base/`.
 -/
@@ -326,13 +326,9 @@ and `Inf`; the value here is then unspecified.) -/
 (`scalbn`). -/
 @[inline] def ldexp (x : Float) (k : Int) : Float := x.scaleB k
 
-/-! ### Constants and `libm` substitutes
+/-! ### Constants
 
-Julia computes its transcendental functions with its own pure-Julia `libm`, Lean's `Float`
-with the platform C `libm`; both are faithful to within an ulp or two, which is the
-tolerance the oracle suites allow for them. `expm1` and `log1p` are missing from Lean
-core and are computed here in pure Lean (a C shim would need lakefile changes, and
-`@[extern]` symbols do not run in the interpreter). -/
+Julia's own `exp`, `log`, `expm1`, `log1p` and `^` kernels are in `JuliaBase.Math`. -/
 
 /-- Julia `Float64(π)`. -/
 def pi : Float := Float.ofBits 0x400921FB54442D18
@@ -348,34 +344,6 @@ def log2e : Float := Float.ofBits 0x3FF71547652B82FE
 
 /-- Julia `log10(ℯ)`. -/
 def log10e : Float := Float.ofBits 0x3FDBCB7B1526E50E
-
-/-- Julia `expm1(x::Float64)` = `eˣ - 1`, accurate near `0` (a few ulps; Julia's own
-kernel is in special/exp.jl).
-
-Kahan's trick: with `u = exp x` (rounded), `(u - 1)·x / log u` cancels the rounding error
-of `u`. Exact special cases: `expm1(±0) = ±0`, `expm1(-Inf) = -1`, `expm1(Inf) = Inf`,
-NaN propagates. -/
-def expm1 (x : Float) : Float :=
-  let u := Float.exp x
-  if u == 1 then x
-  else if u.isInf then u
-  else
-    let um1 := u - 1
-    if um1 == -1 then -1 else um1 * (x / Float.log u)
-
-/-- Julia `log1p(x::Float64)` = `log(1 + x)`, accurate near `0` (a few ulps; Julia's own
-kernel is special/log.jl:335).
-
-Goldberg's trick: with `u = 1 + x` (rounded), `log(u)·x / (u - 1)` cancels the rounding
-error of `u`. Exact special cases: `log1p(±0) = ±0`, `log1p(-1) = -Inf`,
-`log1p(Inf) = Inf`; NaN and `x < -1` give NaN (Julia throws a `DomainError` for
-`x < -1`). -/
-def log1p (x : Float) : Float :=
-  let u := 1 + x
-  if u == 1 then x
-  else if u.isInf then (if x > 0 then u else nan)
-  else if u == 0 then -inf
-  else Float.log u * (x / (u - 1))
 
 end F64
 
@@ -467,13 +435,6 @@ def hypot (x y : Float32) : Float32 :=
     let x' := x.toFloat
     let y' := y.toFloat
     (Float.fma x' x' (y' * y')).sqrt.toFloat32
-
-/-- Julia `expm1(x::Float32)`, via `F64.expm1` and rounded (a few ulps, like
-`F64.expm1`). -/
-@[inline] def expm1 (x : Float32) : Float32 := (F64.expm1 x.toFloat).toFloat32
-
-/-- Julia `log1p(x::Float32)`, via `F64.log1p` and rounded. -/
-@[inline] def log1p (x : Float32) : Float32 := (F64.log1p x.toFloat).toFloat32
 
 end F32
 

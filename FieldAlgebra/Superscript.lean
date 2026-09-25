@@ -86,8 +86,8 @@ def makeint (x : Float) : JNum :=
     let ne := (2.220446049250313e-16 * ax).sqrt
     if ne < 1.0 then
       let t := (if x < 0 then -((-x).floor) else x.floor)   -- `x ÷ 1`
-      if log10 ax - log rem / log 1.7 > 20.0 then .int (Int64.ofInt t.toInt64.toInt)
-      else if log10 ax - log10 (1.0 - rem) > 17.0 then .int (Int64.ofInt t.toInt64.toInt + 1)
+      if JuliaBase.F64.log10 ax - JuliaBase.F64.log rem / JuliaBase.F64.log 1.7 > 20.0 then .int (Int64.ofInt t.toInt64.toInt)
+      else if JuliaBase.F64.log10 ax - JuliaBase.F64.log10 (1.0 - rem) > 17.0 then .int (Int64.ofInt t.toInt64.toInt + 1)
       else .float x
     else .float x
 
@@ -197,7 +197,7 @@ partial def printExpoBased (d : String) : Expo → String
         | .float _ => d ++ printExpoFloat x
 where
   /-- Julia `10^x` for a `Float64` exponent (`Int^Float64`). -/
-  powFloat10 (x : Float) : Float := pow 10.0 x
+  powFloat10 (x : Float) : Float := JuliaBase.F64.pow 10.0 x
 
 /-- The captures of Julia's regex `r"(\d+.\d+)[e](-?\d+)"` on a printed float in
 scientific notation: the mantissa *without its sign* (the regex starts matching
@@ -256,7 +256,7 @@ partial def latexpoBased (d : String) : Expo → String
         | .int m => latexpoBased d (.rat (Rat.divInt 1 m.toInt))
         | .float _ =>
           if isTen && (JuliaBase.F64.showString x.abs).length > 5 then
-            (if x < 0 then "/" else "") ++ (makeint (pow 10.0 x.abs)).toString ++
+            (if x < 0 then "/" else "") ++ (makeint (JuliaBase.F64.pow 10.0 x.abs)).toString ++
               (if x < 0 then "" else "\\cdot ")
           else d ++ latexpoFloat x
       else if isTen then

@@ -1,4 +1,4 @@
-import JuliaBase.Num
+import JuliaBase.Math
 
 /-!
 Julia's `Complex{T}` (Julia `base/complex.jl`): the port's one computable complex number

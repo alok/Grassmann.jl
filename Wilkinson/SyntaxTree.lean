@@ -109,9 +109,9 @@ where
 /-- Julia `log(abs(literal))` as `Float64`, with Julia's own `log` kernels
 (`log(::Int)` works in `Float64`, `log(::Float32)` in `Float32`). -/
 def logAbs : Lit → Float
-  | .int v => JuliaMath.log (Float.ofInt v.natAbs)
-  | .f64 v => JuliaMath.log v.abs
-  | .f32 v => (JuliaMath.log32 v.abs).toFloat
+  | .int v => F64.log (Float.ofInt v.natAbs)
+  | .f64 v => F64.log v.abs
+  | .f32 v => (F32.log v.abs).toFloat
   | .big v => (BigFloat.log v.abs).toFloat
   | .bigint _ => 0
 

@@ -1,6 +1,4 @@
 import FieldConstants.Julia.Float
-import FieldConstants.Julia.Tables
-import FieldConstants.Julia.Math
 import FieldConstants.JNum
 import FieldConstants.Num
 
@@ -13,8 +11,8 @@ numeric semantics every downstream unit-system package relies on:
 
 * `FieldConstants.Julia.parseFloat`: correctly rounded decimal parsing (printing,
   `rem`, `round` and `isapprox` come from `JuliaBase`);
-* `FieldConstants.Julia.exp`/`log`/`pow`/`powInt`: bit-exact ports of Julia's own
-  `Base.Math` kernels (Julia does not use libm for these);
+* Julia's own `Base.Math` kernels (`exp`/`log`/`pow`/`powInt`, `round(digits/sigdigits)`)
+  come from `JuliaBase.Math` and `JuliaBase.Round` (`JuliaBase.F64.exp`, …);
 * `FieldConstants.JNum`: `Int64`/`Float64` payloads with Julia promotion,
   wrapping and `literal_pow` rules, and `logdb`/`expdb`/`dB`.
 

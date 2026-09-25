@@ -108,16 +108,16 @@ def npow (c : Coef) (n : Nat) : Coef :=
   match c with
   | int a => int (a ^ n)
   | rat a => rat (a ^ n)
-  | float x => float (powInt x n)
+  | float x => float (JuliaBase.F64.powInt x n)
 
 /-- Julia `c^r` for a rational exponent: `x^(num/den)` in `Float64`. -/
 def rpow (c : Coef) (r : Rat) : Coef :=
   match c with
   | int 1 => float 1.0
-  | _ => float (pow c.toFloat (ofRat (r.num < 0) r.num.natAbs r.den))
+  | _ => float (JuliaBase.F64.pow c.toFloat (ofRat (r.num < 0) r.num.natAbs r.den))
 
 /-- Julia `c^y` for a `Float64` exponent. -/
-def fpow (c : Coef) (y : Float) : Coef := float (pow c.toFloat y)
+def fpow (c : Coef) (y : Float) : Coef := float (JuliaBase.F64.pow c.toFloat y)
 
 /-- Julia `sqrt` (always `Float64`). -/
 def sqrt (c : Coef) : Coef := float c.toFloat.sqrt

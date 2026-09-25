@@ -673,3 +673,15 @@ source = "DirectSum.jl src/*"
 notes = "directsum.md §8.3"
 correct = "see the quirk catalog"
 policy = "skip"
+
+# ---------------------------------------------------------------------------------------------
+# JuliaBase numerics (Tests/JuliaBase/math.json rows are not tagged; the test applies the fix)
+# ---------------------------------------------------------------------------------------------
+
+[[defect]]
+id = "float32-pow-large-odd-sign"
+title = "Float32^Integer outside power_by_squaring's range drops the sign of an odd power ((-1f0)^100001 == 1f0)"
+source = "julia base/special/pow.jl:79-89 (Julia 1.13: `s` is computed, then `pow_body(x, widen(T)(n))` is returned without it)"
+notes = "JuliaBase.F32.powInt; Tests/JuliaBase/Math.lean compares math.json `powi32` rows against the sign-corrected value"
+correct = "copysign(pow_body(|x|, n), s): negative for x < 0 and odd n (after clamp(n, Int32))"
+policy = "skip"
