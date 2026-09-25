@@ -11,7 +11,7 @@ operands converted to `Multivector`. DirectSum's kernel interface (`DirectSum.Op
 it over dense vectors gives an independent **value** evaluator for
 
 * arith: `add`, `sub`, `neg`, `mul`/`div`/`rdiv` by a number;
-* products: every op except `sandwich`/`tsandwich` (whose reference projects, §8.3);
+* products: every op, `sandwich`/`tsandwich` with the reference's projection rule (§8.3);
 * unary: `neg`, the involutions, complements, `metric`/`antimetric`, `even`/`odd`,
   `real`/`imag`, and the grade projections `scalar`…`volume`, `grade:k`.
 
@@ -233,6 +233,84 @@ def arithEval (N : Nat) (op : String) : Evaluator := fun _ args => do
     return valuesOnly ((← NumVec.ofElem? N a).scale s⁻¹)
   | _, _ => none
 
+/-! ## Sandwich products (schema §8.3) -/
+
+/-- The tables a sandwich needs: the geometric product and the three involutions. -/
+structure SandwichTables where
+  /-- `a * b`. -/
+  mul : BinaryTable
+  /-- `~a`. -/
+  rev : UnaryTable
+  /-- `involute(a)`. -/
+  inv : UnaryTable
+  /-- `clifford(a)`. -/
+  cli : UnaryTable
+
+/-- Build the sandwich tables of `V`. -/
+def SandwichTables.build (V : TensorBundle) : SandwichTables :=
+  { mul := binaryTable V .mul, rev := unaryTable V .reverse, inv := unaryTable V .involute,
+    cli := unaryTable V .clifford }
+
+/-- The Multivector-path sandwich of `x` by `y`: `x ⊘ y = ~y * x * involute(y)`, or for
+`tsandwich` (`y >>> x`) `y * x * clifford(y)` (grassmann-products.md §4.6). -/
+def sandwichCore (N : Nat) (t : SandwichTables) (tsandwich : Bool) (x y : NumVec) : Option NumVec := do
+  if tsandwich then
+    applyBinary N t.mul (← applyBinary N t.mul y x) (← applyUnary N t.cli y)
+  else
+    applyBinary N t.mul (← applyBinary N t.mul (← applyUnary N t.rev y) x) (← applyUnary N t.inv y)
+
+/-- One-blade dense vector `c·e_B`. -/
+def NumVec.single (N : Nat) (pos : Nat) (c : Scalar) : Option NumVec :=
+  match c with
+  | .exact q => some (.exact ((Array.replicate N 0).set! pos q))
+  | .float f => some (.float ((FloatArray.mk (Array.replicate N 0)).set! pos f))
+  | _ => none
+
+/-- Componentwise sum. -/
+def NumVec.add (a b : NumVec) : NumVec := NumVec.axpy 1 a b
+
+/-- The reference of `sandwich` (`a ⊘ b`, sandwiched `x = a`) and `tsandwich` (`a >>> b`,
+sandwiched `x = b`), schema §8.3: the Multivector-path result, projected onto the grade of a
+graded `x` unless the partner `y′` is a Multivector (a Multivector, a Couple with odd `B`, a
+PseudoCouple whose `B` parity differs from `n`'s) or both `x` and `y′` are terms; a
+Couple/PseudoCouple `x` is sandwiched part by part (each part a term) and summed. -/
+def sandwichEval (n : Nat) (t : SandwichTables) (tsandwich : Bool) : Evaluator := fun _ args => do
+  let a ← args[0]?
+  let b ← args[1]?
+  let (x, y) := if tsandwich then (b, a) else (a, b)
+  let N := 2 ^ n
+  let yv ← NumVec.ofElem? N y
+  let pc := fun (e : GoldenElem) => Bits.popcount (e.bits.getD 0)
+  let yMulti := y.kind == .multivector || (y.kind == .couple && pc y % 2 == 1)
+    || (y.kind == .pseudoCouple && pc y % 2 != n % 2)
+  let yTerm := !yMulti && y.kind.isTerm
+  -- one graded (term) part `v` of grade `g`
+  let part := fun (v : NumVec) (g : Nat) (isTerm : Bool) => do
+    let r ← sandwichCore N t tsandwich v yv
+    return if yMulti || (isTerm && yTerm) then r else NumVec.project n g r
+  let graded := x.kind == .zero || x.kind == .one || x.kind == .submanifold || x.kind == .single
+    || x.kind == .chain
+  if graded then
+    let g := match x.kind with
+      | .zero | .one => 0
+      | .submanifold | .single => pc x
+      | _ => x.grade.getD 0
+    return valuesOnly (← part (← NumVec.ofElem? N x) g x.kind.isTerm)
+  else if x.kind == .couple || x.kind == .pseudoCouple then
+    let d ← x.dense
+    let B := x.bits.getD 0
+    let top : UInt64 := Bits.lowMask n
+    -- the two parts (degenerate B puts both on one blade: then the parts are not separable)
+    if (x.kind == .couple && B == 0) || (x.kind == .pseudoCouple && B == top) then none
+    let (b1, b2) := if x.kind == .couple then ((0 : UInt64), B) else (B, top)
+    let p1 := Leibniz.basisRank n b1
+    let p2 := Leibniz.basisRank n b2
+    let r1 ← part (← NumVec.single N p1 (d.get p1)) (Bits.popcount b1) true
+    let r2 ← part (← NumVec.single N p2 (d.get p2)) (Bits.popcount b2) true
+    return valuesOnly (r1.add r2)
+  else
+    return valuesOnly (← sandwichCore N t tsandwich (← NumVec.ofElem? N x) yv)
+
 /-- `directsum/reference`, prepared for a shard's space and an op: the DirectSum tables are
 built here, once per (shard, op). -/
 def referencePrepare (p : PrepCtx) : Prepared :=
@@ -255,6 +333,8 @@ def referencePrepare (p : PrepCtx) : Prepared :=
         let a ← args[0]?
         let b ← args[1]?
         return valuesOnly (← applyBinary N t (← NumVec.ofElem? N a) (← NumVec.ofElem? N b))⟩
+    else if op == "sandwich" || op == "tsandwich" then
+      ⟨sandwichEval V.n (SandwichTables.build V) (op == "tsandwich")⟩
     else if op == "neg" then
       ⟨fun _ args => do
         let a ← args[0]?
