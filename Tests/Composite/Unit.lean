@@ -224,6 +224,32 @@ def e3 (t : Tally) : Tally := Id.run do
   t := expect t "log10(1+0.5v12)" (Multivector.addScalar 1.0 hm).log10 [0.04845500650402821, 0, 0, 0, 0.20135959813668655, 0, 0, 0] 1e-7 1e-9
   t := expect t "tanh(0.5v12) (multivector)" hm.tanh [0, 0, 0, 0, 0.5463024898580239, 0, 0, 0] 1e-9 1e-12
   t := expect t "exp2(1.0v12)" (toMultivector (⟨3, 1.0⟩ : Single E3 2 Float)).exp2 [0.7692389013639721, 0, 0, 0, 0.6389612763136348, 0, 0, 0]
+  -- pseudo-couples and co-spinors
+  let pc : PseudoCouple E3 Float := ⟨0, 1.0, 2.0⟩
+  t := expect t "exp(1.0v+2.0v123)" pc.exp [-1.1312043837568135, 0, 0, 0, 0, 0, 0, 2.4717266720048188]
+  t := expect t "log(1.0v+2.0v123)" pc.log [0.8047189562170501, 0, 0, 0, 0, 0, 0, 1.1071487177940904]
+  t := expect t "log1p(1.0v+2.0v123)" pc.log1p [1.0397207708399179, 0, 0, 0, 0, 0, 0, 0.7853981633974483]
+  t := expect t "expm1(1.0v+2.0v123)" pc.expm1 [-2.1312043837568133, 0, 0, 0, 0, 0, 0, 2.4717266720048188]
+  let pc3 : PseudoCouple E3 Float := ⟨4, 1.0, 2.0⟩
+  t := expect t "exp(1.0v3+2.0v123) (series)" pc3.exp [-0.6421481248556042, 0, 0, -0.48905626147518083, 1.0686074211144896, 0, 0, 1.4031192506619508]
+  t := expect t "expm1(1.0v3+2.0v123) (series)" pc3.expm1 [-1.6421481248556042, 0, 0, -0.48905626147518083, 1.0686074211144896, 0, 0, 1.4031192506619508]
+  let cs : CoSpinor E3 Float := (Half.ofList? [0.3, -0.2, 0.1, 0.4]).get!
+  t := expect t "exp(CoSpinor)" (CoSpinor.exp cs) [0.9862909824513748, 0.28281100790489416, -0.18854067193659613, 0.09427033596829806, 0.039856858772278674, 0.07971371754455735, 0.11957057631683597, 0.41699713906895947]
+  t := expect t "expm1(CoSpinor)" (CoSpinor.expm1 cs) [-0.013709017548625229, 0.28281100790489416, -0.18854067193659613, 0.09427033596829806, 0.039856858772278674, 0.07971371754455735, 0.11957057631683597, 0.41699713906895947]
+  -- hyperbolic couples (series) and the inverse functions of couples
+  let hc : Couple E3 Float := ⟨1, 0.5, 0.2⟩
+  t := expect t "cosh(0.5+0.2v1)" hc.cosh.toMultivector [1.1502537598798628, 0.10491524575100228, 0, 0, 0, 0, 0, 0]
+  t := expect t "sinh(0.5+0.2v1)" hc.sinh.toMultivector [0.5315519976425583, 0.22703170419541568, 0, 0, 0, 0, 0, 0]
+  -- Julia divides hyperbolic couples with the elliptic formula (defect couple-inv-hyperbolic);
+  -- the true tanh splits over the idempotents: (tanh 0.7 ± tanh 0.3)/2
+  t := expect t "tanh(0.5+0.2v1) (fixed)" hc.tanh.toMultivector
+    [(Float.tanh 0.7 + Float.tanh 0.3) / 2, (Float.tanh 0.7 - Float.tanh 0.3) / 2, 0, 0, 0, 0, 0, 0] 1e-9 1e-12
+  t := expect t "asinh(0.5+0.2v12)" (Couple.asinh (⟨3, 0.5, 0.2⟩ : Couple E3 Float)).toMultivector [0.4884827894227804, 0, 0, 0, 0.17925945451498054, 0, 0, 0]
+  t := expect t "acosh(2.0+0.3v12)" (Couple.acosh (⟨3, 2.0, 0.3⟩ : Couple E3 Float)).toMultivector [1.3338227904809452, 0, 0, 0, 0.17070047143619652, 0, 0, 0]
+  t := expect t "atanh(0.5+0.2v12)" (Couple.atanh (⟨3, 0.5, 0.2⟩ : Couple E3 Float)).toMultivector [0.5166065433919413, 0, 0, 0, 0.2565289547045195, 0, 0, 0]
+  t := expect t "acoth(2.0+0.2v12)" (Couple.acoth (⟨3, 2.0, 0.2⟩ : Couple E3 Float)).toMultivector [0.540609615312701, 0, 0, 0, -0.06541369803702848, 0, 0, 0]
+  t := expect t "asinh(0.5+0.2v1)" (Couple.asinh hc).toMultivector [0.47416980682288906, 0.17849675925946665, 0, 0, 0, 0, 0, 0]
+  t := expect t "atanh(0.5+0.2v1)" (Couple.atanh hc).toMultivector [0.5884100659485825, 0.2788904617454707, 0, 0, 0, 0, 0, 0]
   -- the co/pseudo family
   t := expect t "pseudoexp(0.5v3)" (ch E3 1 [0, 0, 0.5]).coexp [0, 0, 0, 0.479425538604203, 0, 0, 0, 0.8775825618903728]
   t := expect t "pseudoabs(3v1+4v2)" (toMultivector (ch E3 1 [3.0, 4.0, 0]).coabs) [0, 0, 0, 0, 0, 0, 0, 5.0]
