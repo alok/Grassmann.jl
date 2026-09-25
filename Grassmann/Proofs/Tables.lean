@@ -29,9 +29,6 @@ variable {n : Nat}
 
 /-! ## Metrics of the checked spaces -/
 
-/-- The Euclidean metric `(1, …, 1)` (`ℝⁿ`, Julia `V"n"`). -/
-def gEuclid (n : Nat) : Fin n → Rat := fun _ => 1
-
 /-- The spacetime metric `(-1, 1, 1, 1)` (`STA = S!"-+++"`). -/
 def gSTA : Fin 4 → Rat := fun i => if i.1 = 0 then -1 else 1
 
@@ -53,9 +50,6 @@ def UnaryAgrees (V : TensorBundle) (op : UnOp) (f : BitVec n → BitVec n) (k : 
 conformal spaces). -/
 def UnaryAgreesC (V : TensorBundle) (op : UnOp) (f : BitVec n → BitVec n) (k : BitVec n → Rat) : Prop :=
   ∀ a : BitVec n, Matches (Grassmann.Kernel.unTermsC V op (mask a)) (f a) (k a) = true
-
-/-- The complement-sign-and-metric coefficient of the Hodge star on blade `a`. -/
-def hodgeCoef (g : Fin n → Rat) (a : BitVec n) : Rat := signOf (sign a (~~~a)) * mf g a
 
 /-- All unary checks of one space: reversion, grade involution, right
 complement and Hodge star, at blade and container level. -/

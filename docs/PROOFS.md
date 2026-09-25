@@ -68,6 +68,9 @@ The `UInt64` kernels of `DirectSum.Bits`, for **all** 64-bit masks:
 | `popcount_eq_bitCount` | the SWAR `Bits.popcount` is the bit count | proved |
 | `lowestBit_eq`, `and_sub_one_eq`, `ctz_eq` | `x &&& (0 - x)` isolates the lowest set bit, `x &&& (x - 1)` clears it, `Bits.ctz` is its index (all nonzero masks) | proved |
 | `metricProduct_eq` | the loop `TensorBundle.metricProduct` computes the metric factor `Π_{i∈b} V[i+1]`, for every space | proved |
+| `sumIndices_eq` | `Bits.sumIndices b = Σ_{i∈b} (i+1)` (six masked popcounts; an additive version of the basis argument) | proved |
+| `parityrightRaw_eq_sigma` | Julia's closed form `(Σ(i+1) + k(k+1)/2) mod 2` of the right-complement sign is `σ(a, ā)`, in every width | proved |
+| `complement_eq` | Leibniz `complement n b` (no tangent, no null generators) is `b ⊕ (2ⁿ - 1)` | proved |
 
 Method for `popcount` (`DirectSum.Proofs.Popcount`): numbers are written as
 little-endian field sums `Σ f(j) 2^{wj}`; every SWAR step is an identity between
@@ -155,6 +158,7 @@ multiply-accumulate plans (`Grassmann.Kernel.build`, DESIGN.md §5.1).
 | `implMul_eq_mul_of_signature` | hence **the implementation's geometric product is the spec product on all multivectors of every plain signature space of dimension `≤ 64`** (`R7_mul`, `S33_mul` instantiate it) |
 | `IsDiagSpace.terms_mul`, `implMul_eq_mul_of_diag` | in every `DiagonalForm` space (any entries: zeros, negatives, fractions; not dual, no conformal pair, no tangent variables) of dimension `≤ 64`, the implementation's `±\|Π dᵢ\|` with the sign mask of the negative entries is the spec `(-1)^σ Π dᵢ`, so its geometric product is the spec product on all multivectors (`PGA4_mul`, `D6_mul` instantiate it) |
 | `IsFlatSpace.gradeOf_mask`, `implReverse_eq_reverse`, `implInvolute_eq_involute` | in every flat space of dimension `≤ 64` the implementation's grade (a SWAR popcount) is the grade, and its reversion and grade involution are the spec's on all multivectors |
+| `IsPlainSpace.terms_complementright`, `IsPlainSpace.terms_hodge`, `implCompl_eq_compl`, `implHodge_eq_hodge` | in every plain space (no `∞`/`∅`, no tangent variables, not dyadic) of dimension `≤ 64`, the implementation's right complement and Hodge star (blade rules and the container rules of the reference kernels) are the spec's on all multivectors; with the spec theorems, the implementation satisfies `!!x = (-1)^{k(n-k)} x` and `⋆⋆x = (-1)^{k(n-k)} det(g) x` (`implCompl_implCompl`, `implHodge_implHodge`; `R7_hodge`, `PGA4_hodge` instantiate it) |
 | `IsFlatSpace.terms_wedge`, `implWedge_eq_wedge_of_flat` | in every space without a conformal pair or tangent variables (any metric: signatures, `DiagonalForm`s including degenerate ones, `MetricTensor`s) and every width `≤ 64`, the implementation's exterior product is the spec exterior product on all multivectors (`PGA4_wedge` instantiates it) |
 
 **Checked** by the kernel (`Grassmann.Proofs.Tables`), on every basis blade
@@ -218,11 +222,13 @@ generated kernels) are exercised; they are not proved.
 
 ## Not covered (yet)
 
-* `Bits.sumIndices` (the complement signs) is not proved for all masks; the
-  other `Bits` kernels are.
-* The complements are linked per space (checked, `n ≤ 4`) and tested (`n ≤ 7`),
-  not in general: their blade rules use `Bits.sumIndices` and the Leibniz
-  `complement` mask.
+* Every `Bits` kernel the products, involutions and complements use is proved
+  for all masks (`parity`, `prefixParity`, `reorderParity`, `popcount`,
+  `lowestBit`, `ctz`, `sumIndices`); `pext`/`pdep` (used for subspace
+  embeddings) are not.
+* The left complements (`complementleft`, `complementlefthodge`) and the
+  conformal complements (with the null factors `2`/`½`) are linked per space
+  (checked, tested), not in general.
 * The other contractions (`⨼`, `<<`, `>>`), `cross`, `veedot`, `antidot` and the
   sandwiches have no spec yet; `Tests/Grassmann/Props.lean` tests their
   algebraic laws. The regressive product is linked blade by blade, not yet

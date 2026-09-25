@@ -176,6 +176,12 @@ theorem implContract_eq_contract (hn : n ≤ 64) {V : TensorBundle} {g : Fin n �
   ext c
   exact congrFun (bilin_eq_twist (fun a b => ofTerms_of_matches hn (h a b)) x y) c
 
+/-- The Euclidean metric `(1, …, 1)` (`ℝⁿ`, Julia `V"n"`). -/
+def gEuclid (n : Nat) : Fin n → Rat := fun _ => 1
+
+/-- The complement-sign-and-metric coefficient of the Hodge star on blade `a`. -/
+def hodgeCoef (g : Fin n → Rat) (a : BitVec n) : Rat := signOf (sign a (~~~a)) * mf g a
+
 /-! ## Signature spaces, in general -/
 
 /-- The diagonal metric of a signature mask on `n` generators: `-1` where the

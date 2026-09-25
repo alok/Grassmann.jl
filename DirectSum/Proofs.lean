@@ -3,6 +3,7 @@ import DirectSum.Proofs.Metric
 import DirectSum.Proofs.UInt64
 import DirectSum.Proofs.Popcount
 import DirectSum.Proofs.LowestBit
+import DirectSum.Proofs.Complement
 
 /-!
 # DirectSum.Proofs: the blade sign rules, proved for every dimension
@@ -28,6 +29,9 @@ Theorems about the bit-level sign rules of `DirectSum.Bits`/`DirectSum.Parity`
 * `DirectSum.Proofs.LowestBit`: `Bits.lowestBit`, `x &&& (x - 1)` and `Bits.ctz`
   on all nonzero masks, and the metric-factor loop `TensorBundle.metricProduct`
   of every space (`metricProduct_eq`).
+* `DirectSum.Proofs.Complement`: `Bits.sumIndices` (`sumIndices_eq`), Julia's
+  closed form of the complement sign (`parityrightRaw_eq_sigma`: it is
+  `σ(a, ā)`) and the Leibniz complement mask (`complement_eq`).
 
 No `sorry`, no axioms beyond Lean's standard three, no `native_decide`.
 -/

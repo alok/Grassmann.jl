@@ -36,13 +36,14 @@ open Bits
 
 /-! ## Linear functionals on `UInt64` -/
 
-private theorem toNat_shl_one {k : Nat} (hk : k < 64) : ((1 : UInt64) <<< k.toUInt64).toNat = 2 ^ k := by
+/-- `1 <<< k` is `2^k` below 64. -/
+theorem toNat_shl_one {k : Nat} (hk : k < 64) : ((1 : UInt64) <<< k.toUInt64).toNat = 2 ^ k := by
   rw [UInt64.toNat_shiftLeft, UInt64.toNat_one, Nat.toUInt64_eq, UInt64.toNat_ofNat',
     Nat.mod_eq_of_lt (Nat.lt_trans hk (by decide)), Nat.mod_eq_of_lt hk, Nat.one_shiftLeft,
     Nat.mod_eq_of_lt (Nat.pow_lt_pow_right (by decide) hk)]
 
 /-- The low `m` bits of `x`, xor the next one, are the low `m+1` bits. -/
-private theorem low_succ (x : UInt64) {m : Nat} (hm : m < 64) :
+theorem low_succ (x : UInt64) {m : Nat} (hm : m < 64) :
     UInt64.ofNat (x.toNat % 2 ^ (m + 1))
       = UInt64.ofNat (x.toNat % 2 ^ m) ^^^ (if x.toNat.testBit m then (1 : UInt64) <<< m.toUInt64 else 0) := by
   apply UInt64.toNat_inj.mp

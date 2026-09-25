@@ -1,6 +1,7 @@
 import Grassmann.Proofs.Link
 import Grassmann.Proofs.General
 import Grassmann.Proofs.Diagonal
+import Grassmann.Proofs.Complements
 import Grassmann.Proofs.Tables
 import Grassmann.Proofs.Conformal
 import Grassmann.Proofs.Regressive
@@ -28,6 +29,11 @@ proved in general, what is checked by kernel evaluation and what is tested):
 * `Grassmann.Proofs.Diagonal`: in every `DiagonalForm` space (any entries,
   zeros and negatives included) of dimension `≤ 64`, the geometric product is
   the spec product on all multivectors (`implMul_eq_mul_of_diag`).
+* `Grassmann.Proofs.Complements`: in every plain space (no null generators, no
+  tangent variables, not dyadic) of dimension `≤ 64`, the right complement and
+  the Hodge star are the spec's on all multivectors, so the implementation
+  satisfies the double-complement identities (`implCompl_implCompl`,
+  `implHodge_implHodge`).
 * `Grassmann.Proofs.Tables`: `decide +kernel` checks of the geometric and
   exterior products, reversion, involution, complement and Hodge tables, and of
   the reference plans, in `ℝ2`, `ℝ3`, `STA`, `PGA2`, `PGA3` and `D!"1,2,-3"`;

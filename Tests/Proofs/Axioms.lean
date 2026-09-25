@@ -71,3 +71,9 @@ import Grassmann.Proofs
 
 /-- info: 'Grassmann.Proofs.implMul_eq_mul_of_diag' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Grassmann.Proofs.implMul_eq_mul_of_diag
+
+/-- info: 'DirectSum.Proofs.sumIndices_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms DirectSum.Proofs.sumIndices_eq
+
+/-- info: 'Grassmann.Proofs.implHodge_implHodge' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.implHodge_implHodge
