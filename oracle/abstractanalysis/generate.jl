@@ -108,7 +108,14 @@ cvs = map(CVS) do (name, f, eps4, deep)
         "cumsum" => fs([cumsum(x)[i] for i in 1:12]), "cumprod" => fs([cumprod(x)[i] for i in 1:12]),
         "supseq3" => fs([supseq(x, 3)[i] for i in 1:10]), "infseq3" => fs([infseq(x, 3)[i] for i in 1:10]),
         "sum_of_sum" => limrec(sum(S)), "prod_of_sum" => limrec(prod(S)),
-        "sum_rerun" => limrec(S(1 => 0.5)))
+        "sum_rerun" => limrec(S(1 => 0.5)),
+        # P2 arithmetic: `^` and `/` on limits and countable vectors, limsup/liminf limits
+        "sum_sq" => limrec(S ^ 2.0), "two_pow_sum" => limrec(2.0 ^ S),
+        "sum_div_prod" => limrec(S / P), "abs_pow_prod" => limrec(map(abs, S) ^ P),
+        "limsup3" => limrec(limsup(x, 3)), "liminf3" => limrec(liminf(x, 3)),
+        "pow2_terms" => fs([(2.0 ^ x)[i] for i in 1:12]),
+        "div_terms" => fs([(x / (x + 1.0))[i] for i in 1:12]),
+        "powx_terms" => fs([(abs(x) ^ x)[i] for i in 1:12]))
     eps4 && (rec["sum_eps4"] = limrec(S[1e-4]))
     deep && (rec["sum_eps8"] = limrec(S[1e-8]))
     rec
@@ -122,6 +129,8 @@ series = Dict(
     "prod_naturals_10" => limrec(prod(Naturals(10))),
     "prod_naturals_20" => limrec(prod(Naturals(20))),
     "prod_naturals_25" => limrec(prod(Naturals(25))),
+    "product_log_0.5" => limrec(log(prod(FunctionVector((x, i) -> 1 + x^i, 4)))(0.5)),
+    "product_log_0.3" => limrec(log(prod(FunctionVector((x, i) -> 1 + x^i, 4)))(0.3)),
 )
 
 wjson("limits.json", Dict("meta" => META, "maps" => maps, "orbithold" => hold,
@@ -147,6 +156,7 @@ vecs = map(1:200) do t
             r["limsup$m"] = fs(limsup(x, m)); r["liminf$m"] = fs(liminf(x, m))
         end
     end
+    r["limsup_2_3"] = fs(limsup(x, 2, 3)); r["liminf_2_3"] = fs(liminf(x, 2, 3))
     r
 end
 scalars = Dict("supnorm_3_5" => fs(supnorm(3, 5)), "supnorm_m2.5" => fs(supnorm(-2.5)),
@@ -207,6 +217,19 @@ cycles = Dict(
     "eq_rot" => C4(1, 2, 3) == C4(2, 3, 1), "eq_rev" => C4(1, 2, 3) == C4(1, 3, 2),
     "disjoint" => AbstractAnalysis.isdisjoint(C4(1, 2), C4(3, 4)))
 dihedral = [perm(x) for x in (group([Permutation(C4(1, 3))]) * group([Permutation(C4(1, 2, 3, 4))])).v]
+# `orders(G)` only works for scalar elements: a permutation is an `AbstractVector`, so
+# `order(p, *, inv)` builds `group(p.v)` and throws (see `orders` in AbstractAnalysis/Magma.lean).
+odd4 = AbstractAnalysis.Semimagma(S4.v[findall(isodd.(S4.v))], *, inv)
+parity = Dict(
+    "decompose" => [Dict("p" => perm(p), "show" => sprint(show, AbstractAnalysis.decompose(p)))
+                    for p in S4.v],
+    "iseven" => Dict("S3" => iseven(S3), "A3" => iseven(AlternatingGroup(3)),
+                     "A4" => iseven(AlternatingGroup(4)), "odd4" => iseven(odd4)),
+    "isodd" => Dict("S3" => isodd(S3), "A4" => isodd(AlternatingGroup(4)), "odd4" => isodd(odd4)),
+    "cycle_isodd" => [isodd(C4(1, 2)), isodd(C4(1, 2, 3)), isodd(C4(1, 2, 3, 4))],
+    "zorders" => [Dict("n" => n, "g" => g,
+                       "orders" => orders(group([g], (a, b) -> mod(a + b, n), a -> mod(-a, n))))
+                  for n in 2:12 for g in 1:n-1])
 wjson("groups.json", Dict("meta" => META,
     "symmetric" => Dict(string(N) => [perm(p) for p in SymmetricGroup(N).v] for N in 1:4),
     "alternating" => Dict(string(N) => [perm(p) for p in AlternatingGroup(N).v] for N in 1:4),
@@ -219,7 +242,7 @@ wjson("groups.json", Dict("meta" => META,
                         [subrec(group([p, q]), S4) for (p, q) in S4pairs[1:12]],
                         [subrec(group([p]), S3) for p in S3.v], [subrec(S3, S3)]),
     "modmagmas" => modmagmas, "zgroups" => zgroups, "gaussian" => gauss,
-    "unityroots" => roots, "cycles" => cycles, "dihedral" => dihedral))
+    "unityroots" => roots, "cycles" => cycles, "dihedral" => dihedral, "parity" => parity))
 
 # ---------------------------------------------------------------- float printing
 frng = MersenneTwister(0x5EED)

@@ -171,6 +171,14 @@ def sign (p : Perm N) : Int := if p.transpositionCount % 2 = 0 then 1 else -1
 /-- Julia `iseven(p)`. -/
 def isEven (p : Perm N) : Bool := p.transpositionCount % 2 = 0
 
+/-- Julia `isodd(p) = isodd(order(p))` (src/perm.jl:21). -/
+def isOdd (p : Perm N) : Bool := p.transpositionCount % 2 = 1
+
+/-- The element commutator `g⁻¹ h⁻¹ g h`. Julia's `commutator(g, h) = commutator(group(g),
+group(h))` (src/perm.jl:51) passes the permutations' image vectors as generators (a
+permutation is an `AbstractVector{Int}`), so it is broken; this is the intended element. -/
+def commutator (g h : Perm N) : Perm N := g⁻¹ * h⁻¹ * g * h
+
 /-- The true order of `p` in the group: the lcm of its cycle lengths. -/
 def groupOrder (p : Perm N) : Nat := (p.cycles.map List.length).foldl Nat.lcm 1
 
@@ -179,6 +187,8 @@ instance : JuliaRepr (Perm N) :=
   ⟨fun p => JuliaRepr.repr p.toList.toArray, fun p => JuliaRepr.repr p.toList.toArray, false⟩
 
 instance : ApproxEq (Perm N) := ⟨(· == ·)⟩
+
+instance : HasParity (Perm N) := ⟨isEven⟩
 
 /-- The permutation group law (`*`, `inv`). -/
 abbrev law (N : Nat) : Law (Perm N) := ⟨(· * ·), Perm.inv⟩
@@ -217,15 +227,97 @@ def transpositionCount (c : Cycle N) : Nat := c.v.length - 1
 /-- Julia `isdisjoint(a, b)`: no shared entries. -/
 def isDisjoint (a b : Cycle N) : Bool := a.v.all fun x => !b.v.contains x
 
+/-- Julia `isabelian(a, b)` (src/perm.jl:118): whether the cycles commute. Julia tests the
+condition `isdisjoint(a, b) || a == b` with the quirk-#21 `==` (same entry set): that accepts
+`(1,2,3)` with its inverse `(1,3,2)` (correctly, by luck) but also `(1,2,3,4)` with `(1,2,4,3)`,
+which do not commute (see `Julia.cycleIsAbelian`); this decides commutation exactly. -/
+def isAbelian (a b : Cycle N) : Bool := a.isDisjoint b || a.toPerm * b.toPerm == b.toPerm * a.toPerm
+
+/-- Julia `levicivita(c) = isodd(c) ? -1 : 1`. -/
+def sign (c : Cycle N) : Int := if c.transpositionCount % 2 = 0 then 1 else -1
+
+/-- Julia `iseven(c) = iseven(order(c))` (src/perm.jl:22): an odd-length cycle. -/
+def isEven (c : Cycle N) : Bool := c.transpositionCount % 2 = 0
+
+/-- Julia `isodd(c) = isodd(order(c))` (src/perm.jl:21): an even-length cycle. -/
+def isOdd (c : Cycle N) : Bool := c.transpositionCount % 2 = 1
+
+/-- Display as Julia shows a cycle (an `AbstractVector{Int}`): `[1, 2, 3]`. -/
+instance : JuliaRepr (Cycle N) :=
+  ⟨fun c => JuliaRepr.repr c.toList.toArray, fun c => JuliaRepr.repr c.toList.toArray, false⟩
+
 end Cycle
+
+/-- Julia `Transposition{N} = Cycle{N,Values{2,Int}}` (src/perm.jl:58): a 2-cycle. -/
+abbrev Transposition (N : Nat) := {c : Cycle N // c.v.length = 2}
+
+/-- The transposition of the 1-based entries `a ≠ b`. -/
+def Transposition.mk? {N : Nat} (a b : Nat) : Option (Transposition N) :=
+  let c : Cycle N := Cycle.ofList [a, b]
+  if h : c.v.length = 2 then if a != b then some ⟨c, h⟩ else none else none
+
+/-- Julia `CycleProduct{N}`: a product of cycles, the rightmost applied first (src/perm.jl:71-80). -/
+structure CycleProduct (N : Nat) where
+  /-- The cycles. -/
+  cycles : List (Cycle N)
+  deriving DecidableEq
 
 /-- Julia `Permutation(c::CycleProduct)`: the product with the rightmost cycle
 applied first (identity for the empty product). -/
 def cycleProduct {N : Nat} (cs : List (Cycle N)) : Perm N := cs.foldl (fun acc c => acc * c.toPerm) 1
 
+namespace CycleProduct
+
+variable {N : Nat}
+
+/-- Julia `Permutation(c::CycleProduct)`. -/
+def toPerm (c : CycleProduct N) : Perm N := cycleProduct c.cycles
+
+/-- Julia `order(c::CycleProduct)`: the transposition count, `Σ (|cᵢ| - 1)` (src/perm.jl:109). -/
+def transpositionCount (c : CycleProduct N) : Nat := (c.cycles.map Cycle.transpositionCount).foldl (· + ·) 0
+
+/-- Julia `levicivita(c) = prod(levicivita.(c.v))`. -/
+def sign (c : CycleProduct N) : Int := (c.cycles.map Cycle.sign).foldl (· * ·) 1
+
+/-- Julia's display: a `CycleProduct` is an `AbstractVector{Int}` whose entries are cycles,
+so it shows as `[[1, 2], [3, 4]]`, and the empty product as `Int64[]`. -/
+def repr (c : CycleProduct N) : String :=
+  if c.cycles.isEmpty then "Int64[]"
+  else "[" ++ ", ".intercalate (c.cycles.map fun x => JuliaRepr.repr x) ++ "]"
+
+instance : JuliaRepr (CycleProduct N) := ⟨repr, repr, false⟩
+
+end CycleProduct
+
+/-- Julia `CycleProduct(p)` (src/perm.jl:84-93): the nontrivial disjoint cycles, each from its
+smallest element, in order of that element. -/
+def Perm.cycleProductOf {N : Nat} (p : Perm N) : CycleProduct N := ⟨p.cycles.map (⟨·⟩)⟩
+
+/-- Julia `decompose(p)` (src/perm.jl:94-97): the single `Cycle` when `p` has exactly one
+nontrivial cycle, the `CycleProduct` otherwise. -/
+def Perm.decompose {N : Nat} (p : Perm N) : Cycle N ⊕ CycleProduct N :=
+  match p.cycles with
+  | [c] => .inl ⟨c⟩
+  | cs => .inr ⟨cs.map (⟨·⟩)⟩
+
+/-- Julia's display of a `decompose` result. -/
+def decomposeRepr {N : Nat} : Cycle N ⊕ CycleProduct N → String
+  | .inl c => JuliaRepr.repr c
+  | .inr c => JuliaRepr.repr c
+
+/-- Julia `decompose(G::Semimagma) = Semimagma(decompose.(G.v))` (src/perm.jl:103). -/
+def Semimagma.decompose {N : Nat} {L : Law (Perm N)} (G : Semimagma (Perm N) L) :
+    Array (Cycle N ⊕ CycleProduct N) :=
+  G.v.map Perm.decompose
+
 /-- Julia `Cycle ==` as written (**quirk #21**): equal lengths and the same
 entry set, so `(1,2,3) == (1,3,2)`. -/
 def Julia.cycleEq {N : Nat} (a b : Cycle N) : Bool := a.v.length == b.v.length && a.v.all b.v.contains
+
+/-- Julia `isabelian(a, b) = isdisjoint(a, b) || a == b` as written, with the quirk-#21 `==`:
+`(1,2,3,4)` and `(1,2,4,3)` count as commuting although they do not (`Cycle.isAbelian` decides
+commutation). -/
+def Julia.cycleIsAbelian {N : Nat} (a b : Cycle N) : Bool := a.isDisjoint b || Julia.cycleEq a b
 
 /-! ## Standard permutation groups -/
 

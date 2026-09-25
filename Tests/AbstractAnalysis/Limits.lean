@@ -119,6 +119,24 @@ def countable (name : String) (f : Nat → Float) (j : Json) : TestM Unit := do
   limCheck s!"{name}.sum(sum)" S.sum (jGet j "sum_of_sum")
   limCheck s!"{name}.prod(sum)" S.prod (jGet j "prod_of_sum")
   limCheck s!"{name}.rerun" (S.rerun ⟨1, 0.5⟩) (jGet j "sum_rerun")
+  -- `^` and `/` (Julia's own `Float64 ^ Float64` via `JuliaBase.F64.pow`)
+  limCheck s!"{name}.sum^2" (Limit.opRight JuliaBase.F64.pow S (2 : Float)) (jGet j "sum_sq")
+  limCheck s!"{name}.2^sum" (Limit.opLeft JuliaBase.F64.pow (2 : Float) S) (jGet j "two_pow_sum")
+  limCheck s!"{name}.sum^2 (libm)" (S ^ (2 : Float)) (jGet j "sum_sq") 1e-15
+  limCheck s!"{name}.2^sum (libm)" ((2 : Float) ^ S) (jGet j "two_pow_sum") 1e-15
+  limCheck s!"{name}.sum/prod" (S / P) (jGet j "sum_div_prod")
+  limCheck s!"{name}.abs(sum)^prod" (Limit.op₂ JuliaBase.F64.pow (S.map Float.abs dist) P) (jGet j "abs_pow_prod")
+  limCheck s!"{name}.abs(sum)^prod (libm)" (S.map Float.abs dist ^ P) (jGet j "abs_pow_prod") 1e-15
+  limCheck s!"{name}.limsup3" (x.limsup 3) (jGet j "limsup3")
+  limCheck s!"{name}.liminf3" (x.liminf 3) (jGet j "liminf3")
+  check s!"{name}.2^x" (GoldenVal.close (⟨((x.map (JuliaBase.F64.pow 2 ·)).slice 1 12)⟩ : FloatArray)
+    (jGet j "pow2_terms") 0)
+  check s!"{name}.2^x (HPow)" (GoldenVal.close (⟨(((2 : Float) ^ x).slice 1 12)⟩ : FloatArray)
+    (jGet j "pow2_terms") 1e-15)
+  check s!"{name}.x/(x+1)" (GoldenVal.close (⟨((x / (x + (1 : Float))).slice 1 12)⟩ : FloatArray)
+    (jGet j "div_terms") 0)
+  check s!"{name}.abs(x)^x" (GoldenVal.close (⟨((CountableVector.zipWith JuliaBase.F64.pow (x.map Float.abs) x).slice 1 12)⟩ : FloatArray)
+    (jGet j "powx_terms") 0)
 
 /-- The suite. -/
 def suite : TestM Unit := do
@@ -154,5 +172,9 @@ def suite : TestM Unit := do
     (jGet s "product_0.3") 1e-15
   for n in [10, 20, 25] do
     limCheck s!"prod(Naturals({n}))" (prodNaturals n) (jGet s s!"prod_naturals_{n}")
+  limCheck "log(product(1+x^i))(0.5)" ((Product.log ⟨⟨fun x i => 1 + powi x i, 4⟩⟩).eval 0.5)
+    (jGet s "product_log_0.5")
+  limCheck "log(product(1+x^i))(0.3)" ((Product.log ⟨⟨fun x i => 1 + powi x i, 4⟩⟩).eval 0.3)
+    (jGet s "product_log_0.3") 1e-15
 
 end Tests.AbstractAnalysis.Limits

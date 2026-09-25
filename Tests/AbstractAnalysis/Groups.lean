@@ -152,5 +152,73 @@ def suite : TestM Unit := do
   checkEq "groupOrder (1 2 3 4)" (Cycle.ofList [1, 2, 3, 4] : Cycle 4).toPerm.groupOrder 4
   checkEq "isCyclic S3 (clean)" (Semimagma.isCyclic (SymmetricGroup 3)) false
   checkEq "isCyclic A3 (clean)" (Semimagma.isCyclic (AlternatingGroup 3)) true
+  -- parity, decompose, orders (P2)
+  let pj := jGet j "parity"
+  for e in jArr (jGet pj "decompose") do
+    let p := jPerm 4 (jGet e "p")
+    checkEq s!"decompose({p.toList})" (decomposeRepr p.decompose) (jStr (jGet e "show"))
+    -- the pieces multiply back to `p`
+    let back := match p.decompose with
+      | .inl c => c.toPerm
+      | .inr c => c.toPerm
+    checkEq s!"decompose({p.toList}) recomposes" back.toList p.toList
+  let S3 := SymmetricGroup 3
+  let S4 := SymmetricGroup 4
+  let odd4 : Semimagma (Perm 4) (Perm.law 4) := ⟨S4.v.filter Perm.isOdd⟩
+  let ev := jGet pj "iseven"
+  checkEq "iseven(S3)" (Semimagma.isEven S3) (jBool (jGet ev "S3"))
+  checkEq "iseven(A3)" (Semimagma.isEven (AlternatingGroup 3)) (jBool (jGet ev "A3"))
+  checkEq "iseven(A4)" (Semimagma.isEven (AlternatingGroup 4)) (jBool (jGet ev "A4"))
+  checkEq "iseven(odd4)" (Semimagma.isEven odd4) (jBool (jGet ev "odd4"))
+  let od := jGet pj "isodd"
+  checkEq "isodd(S3)" (Semimagma.isOdd S3) (jBool (jGet od "S3"))
+  checkEq "isodd(A4)" (Semimagma.isOdd (AlternatingGroup 4)) (jBool (jGet od "A4"))
+  checkEq "isodd(odd4)" (Semimagma.isOdd odd4) (jBool (jGet od "odd4"))
+  checkEq "isodd(cycles)" [(Cycle.ofList [1, 2] : Cycle 4).isOdd, (Cycle.ofList [1, 2, 3] : Cycle 4).isOdd,
+      (Cycle.ofList [1, 2, 3, 4] : Cycle 4).isOdd]
+    ((jArr (jGet pj "cycle_isodd")).toList.map jBool)
+  for e in jArr (jGet pj "zorders") do
+    let n := jInt (jGet e "n")
+    let g := jInt (jGet e "g")
+    let G := Semimagma.group (L := ⟨fun a b => (a + b) % n, fun a => (-a) % n⟩) #[g]
+    checkEq s!"orders(Z{n}⟨{g}⟩)" (Semimagma.orders G).toList (jNats (jGet e "orders")).toList
+  checkEq "orders(magma(im))" (Semimagma.orders m).toList ((jNats (jGet gj "orders")).toList)
+  -- `orders` on permutations (Julia throws): the cyclic subgroup orders are the lcm of cycle lengths
+  checkEq "orders(S4) = groupOrder" (Semimagma.orders S4).toList (S4.v.toList.map Perm.groupOrder)
+  -- commutators, Transposition, cycle commutation
+  let a : Perm 4 := (Cycle.ofList [1, 2, 3] : Cycle 4).toPerm
+  let b : Perm 4 := (Cycle.ofList [1, 2] : Cycle 4).toPerm
+  checkEq "commutator g⁻¹h⁻¹gh" (Perm.commutator a b).toList (a⁻¹ * b⁻¹ * a * b).toList
+  checkEq "commutator of commuting = 1" (Perm.commutator a (a * a)).toList [1, 2, 3, 4]
+  checkEq "commutators of S4 are even" (S4.v.all fun g => S4.v.all fun h => (Perm.commutator g h).isEven) true
+  checkEq "Transposition (1,2)" ((Transposition.mk? 1 2 : Option (Transposition 4)).map (·.1.toList)) (some [1, 2])
+  checkEq "Transposition (1,1)" ((Transposition.mk? 1 1 : Option (Transposition 4)).isSome) false
+  let c4 : Cycle 4 := Cycle.ofList [1, 2, 3, 4]
+  let c4' : Cycle 4 := Cycle.ofList [1, 2, 4, 3]
+  checkEq "isabelian (1234),(1243) Julia" (Julia.cycleIsAbelian c4 c4') true
+  checkEq "isabelian (1234),(1243)" (Cycle.isAbelian c4 c4') false
+  checkEq "isabelian (123),(132)" (Cycle.isAbelian (Cycle.ofList [1, 2, 3] : Cycle 4) (Cycle.ofList [1, 3, 2])) true
+  checkEq "isabelian (12),(34)" (Cycle.isAbelian (Cycle.ofList [1, 2] : Cycle 4) (Cycle.ofList [3, 4])) true
+  checkEq "CycleProduct order" (S4.v.toList.map fun p => p.cycleProductOf.transpositionCount)
+    (S4.v.toList.map Perm.transpositionCount)
+  checkEq "CycleProduct sign" (S4.v.toList.map fun p => p.cycleProductOf.sign) (S4.v.toList.map Perm.sign)
+  -- `g * H`, `H + g` on semimagmas (plain operation)
+  checkEq "2*m (HMul)" ((⟨2, 0⟩ : JuliaBase.Complex Int) * m).v.toList (gl "times2")
+  checkEq "m+1 (HAdd)" (m + (⟨1, 0⟩ : JuliaBase.Complex Int)).v.toList (gl "plus1")
+  -- categories
+  checkEq "isCategory(S3, 1)" (Semimagma.isCategory S3 1) true
+  checkEq "isGroupoid(S3)" (Semimagma.isGroupoid S3) true
+  checkEq "isSemicategory(S3)" (Semimagma.isSemicategory S3) true
+  -- ModsExt: residues with `==` as `gequal`
+  let z7 : Semimagma (Fin 7) (Law.mulMod 6) := Semimagma.group #[3]
+  checkEq "U(7) = ⟨3⟩" z7.order 6
+  checkEq "U(7) is a group" (Semimagma.isGroup z7) true
+  checkEq "U(7) is cyclic" (Semimagma.isCyclic z7) true
+  let z12 : Semimagma (Fin 12) (Law.addMod 11) := Semimagma.group #[8]
+  checkEq "Z12⟨8⟩" (z12.v.toList.map (·.1)) [8, 4, 0]
+  checkEq "Z12⟨8⟩ group" (Semimagma.isGroup z12) true
+  checkEq "invMod 7 3" (invMod 7 3) 5
+  checkEq "invMod 12 5" (invMod 12 5) 5
+  checkEq "invMod units of 30" ((List.range 30).filter (Nat.gcd · 30 == 1) |>.all fun a => a * invMod 30 a % 30 == 1) true
 
 end Tests.AbstractAnalysis.Groups

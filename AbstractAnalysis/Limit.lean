@@ -195,6 +195,15 @@ instance [Div V] : HDiv (Limit S V) V (Limit (Derived S V) V) := ⟨opRight (· 
 instance {S' : Type} [Add V] : HAdd (Limit S V) (Limit S' V) (Limit (Derived (S × S') V) V) := ⟨op₂ (· + ·)⟩
 instance {S' : Type} [Mul V] : HMul (Limit S V) (Limit S' V) (Limit (Derived (S × S') V) V) := ⟨op₂ (· * ·)⟩
 instance {S' : Type} [Sub V] : HSub (Limit S V) (Limit S' V) (Limit (Derived (S × S') V) V) := ⟨op₂ (· - ·)⟩
+/-- Julia `L₁ / L₂` (src/metric.jl:157-175). -/
+instance {S' : Type} [Div V] : HDiv (Limit S V) (Limit S' V) (Limit (Derived (S × S') V) V) := ⟨op₂ (· / ·)⟩
+/-- Julia `a ^ L` (src/metric.jl:157-164). -/
+instance [HPow V V V] : HPow V (Limit S V) (Limit (Derived S V) V) := ⟨opLeft (· ^ ·)⟩
+/-- Julia `L ^ b` (src/metric.jl:165-170). -/
+instance [HPow V V V] : HPow (Limit S V) V (Limit (Derived S V) V) := ⟨opRight (· ^ ·)⟩
+/-- Julia `L₁ ^ L₂` (src/metric.jl:171-175). -/
+instance {S' : Type} [HPow V V V] : HPow (Limit S V) (Limit S' V) (Limit (Derived (S × S') V) V) :=
+  ⟨op₂ (· ^ ·)⟩
 
 /-- Julia `sum(L::Limit)` (src/metric.jl:211-216): the series of the values of
 `L`, over the same number of states, measured with the default `supnorm`. -/
@@ -410,5 +419,23 @@ def Product.eval {β α : Type} [JNumber α] [Metric α] (p : Product β α) (x 
 
 /-- Julia `prod(f::FunctionArray) = Product(f)`. -/
 def FunctionVector.product {β α : Type} (f : FunctionVector β α) : Product β α := ⟨f⟩
+
+/-- Julia `log(x::Product) = sum(log(x.v))` (src/AbstractAnalysis.jl:220): the series of the
+logarithms of the family (Julia's own `log`). -/
+def Product.log {β : Type} (p : Product β Float) : Series β Float :=
+  (p.family.map JuliaBase.F64.log).series
+
+/-- Julia `limsup(x::AbstractCountable, m = 5, args…) = limit(supseq(x, m), args…)`
+(src/metric.jl:537-540): a `Limit` at `n` (default: the length). -/
+def CountableVector.limsup {α : Type} [Max α] (x : CountableVector α) (m : Nat := 5)
+    (n : Nat := x.len) (d : α → α → Float := by exact AbstractAnalysis.Metric.dist) :
+    Limit (Indexed α) α :=
+  (x.supseq m).limit n d
+
+/-- Julia `liminf(x::AbstractCountable, m = 5, args…) = limit(infseq(x, m), args…)`. -/
+def CountableVector.liminf {α : Type} [Min α] (x : CountableVector α) (m : Nat := 5)
+    (n : Nat := x.len) (d : α → α → Float := by exact AbstractAnalysis.Metric.dist) :
+    Limit (Indexed α) α :=
+  (x.infseq m).limit n d
 
 end AbstractAnalysis

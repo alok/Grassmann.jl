@@ -89,6 +89,12 @@ instance [Div α] : HDiv α (CountableVector α) (CountableVector α) := ⟨fun 
 instance [Div α] : HDiv (CountableVector α) α (CountableVector α) := ⟨fun x b => x.map (· / b)⟩
 /-- Julia `x ^ p` (pointwise). -/
 instance [HPow α β α] : HPow (CountableVector α) β (CountableVector α) := ⟨fun x p => x.map (· ^ p)⟩
+/-- Julia `a ^ x` (`Base.:^(a::Number, x::CountableArray) = map(Fix1(^, a), x)`,
+src/AbstractAnalysis.jl:103-109). -/
+instance [HPow α α α] : HPow α (CountableVector α) (CountableVector α) := ⟨fun a x => x.map (a ^ ·)⟩
+/-- Julia `x ^ y` for two countable vectors (pointwise, the shorter length). -/
+instance [HPow α α α] : HPow (CountableVector α) (CountableVector α) (CountableVector α) :=
+  ⟨zipWith (· ^ ·)⟩
 
 /-- Julia `CountableVector(r::AbstractRange)`: `i ↦ x0 + h*(i-1)`
 (src/AbstractAnalysis.jl:78-80). -/
@@ -137,6 +143,23 @@ variable {α β γ : Type} {N : Nat}
 instance [Add α] : Add (CountableArray α N) := ⟨zipWith (· + ·)⟩
 instance [Mul α] : Mul (CountableArray α N) := ⟨zipWith (· * ·)⟩
 instance [Sub α] : Sub (CountableArray α N) := ⟨zipWith (· - ·)⟩
+/-- Julia `a / b` on arrays (src/AbstractAnalysis.jl:103-109). -/
+instance [Div α] : Div (CountableArray α N) := ⟨zipWith (· / ·)⟩
+/-- Julia `a ^ b` on arrays. -/
+instance [HPow α α α] : HPow (CountableArray α N) (CountableArray α N) (CountableArray α N) :=
+  ⟨zipWith (· ^ ·)⟩
+/-- Julia `a ⊙ x` for a number `a` (`map(Fix1(⊙, a), x)`). -/
+instance [Mul α] : HMul α (CountableArray α N) (CountableArray α N) := ⟨fun a x => x.map (a * ·)⟩
+/-- Julia `x ⊙ b` for a number `b` (`map(Fix2(⊙, b), x)`). -/
+instance [Mul α] : HMul (CountableArray α N) α (CountableArray α N) := ⟨fun x b => x.map (· * b)⟩
+instance [Add α] : HAdd α (CountableArray α N) (CountableArray α N) := ⟨fun a x => x.map (a + ·)⟩
+instance [Add α] : HAdd (CountableArray α N) α (CountableArray α N) := ⟨fun x b => x.map (· + b)⟩
+instance [Sub α] : HSub α (CountableArray α N) (CountableArray α N) := ⟨fun a x => x.map (a - ·)⟩
+instance [Sub α] : HSub (CountableArray α N) α (CountableArray α N) := ⟨fun x b => x.map (· - b)⟩
+instance [Div α] : HDiv α (CountableArray α N) (CountableArray α N) := ⟨fun a x => x.map (a / ·)⟩
+instance [Div α] : HDiv (CountableArray α N) α (CountableArray α N) := ⟨fun x b => x.map (· / b)⟩
+instance [HPow α α α] : HPow α (CountableArray α N) (CountableArray α N) := ⟨fun a x => x.map (a ^ ·)⟩
+instance [HPow α α α] : HPow (CountableArray α N) α (CountableArray α N) := ⟨fun x b => x.map (· ^ b)⟩
 
 /-- View a vector as a rank-1 array. -/
 def ofVector (x : CountableVector α) : CountableArray α 1 := ⟨fun i => x.f i[0], #v[x.len]⟩
@@ -170,6 +193,9 @@ def countableTuple {α β : Type} (x : CountableVector α) (y : CountableVector 
 /-- Julia `CountableArray(n, m)`: the grid of index tuples. -/
 def CountableArray.grid (n m : Nat) : CountableArray (Int × Int) 2 := countableTuple (Naturals n) (Naturals m)
 
+/-- Julia `CountableArray(n...)` of any rank: the grid of index tuples, `x[i…] = (i…)`. -/
+def CountableArray.gridN {N : Nat} (size : Vector Nat N) : CountableArray (Vector Nat N) N := ⟨id, size⟩
+
 /-- Julia `FunctionVector{T,F}`: a family `x ↦ f(x, i)` indexed by `i ≥ 1`
 (src/AbstractAnalysis.jl:133-167). -/
 structure FunctionVector (β α : Type) where
@@ -201,6 +227,22 @@ variable {α β γ : Type}
 instance [Add α] : Add (FunctionVector β α) := ⟨zipWith (· + ·)⟩
 instance [Mul α] : Mul (FunctionVector β α) := ⟨zipWith (· * ·)⟩
 instance [Mul α] : HMul α (FunctionVector β α) (FunctionVector β α) := ⟨fun a x => x.map (a * ·)⟩
+/-- Julia `a - b` of function families (src/AbstractAnalysis.jl:169-175). -/
+instance [Sub α] : Sub (FunctionVector β α) := ⟨zipWith (· - ·)⟩
+/-- Julia `a / b` of function families. -/
+instance [Div α] : Div (FunctionVector β α) := ⟨zipWith (· / ·)⟩
+/-- Julia `a ^ b` of function families. -/
+instance [HPow α α α] : HPow (FunctionVector β α) (FunctionVector β α) (FunctionVector β α) :=
+  ⟨zipWith (· ^ ·)⟩
+instance [Mul α] : HMul (FunctionVector β α) α (FunctionVector β α) := ⟨fun x b => x.map (· * b)⟩
+instance [Add α] : HAdd α (FunctionVector β α) (FunctionVector β α) := ⟨fun a x => x.map (a + ·)⟩
+instance [Add α] : HAdd (FunctionVector β α) α (FunctionVector β α) := ⟨fun x b => x.map (· + b)⟩
+instance [Sub α] : HSub α (FunctionVector β α) (FunctionVector β α) := ⟨fun a x => x.map (a - ·)⟩
+instance [Sub α] : HSub (FunctionVector β α) α (FunctionVector β α) := ⟨fun x b => x.map (· - b)⟩
+instance [Div α] : HDiv α (FunctionVector β α) (FunctionVector β α) := ⟨fun a x => x.map (a / ·)⟩
+instance [Div α] : HDiv (FunctionVector β α) α (FunctionVector β α) := ⟨fun x b => x.map (· / b)⟩
+instance [HPow α α α] : HPow α (FunctionVector β α) (FunctionVector β α) := ⟨fun a x => x.map (a ^ ·)⟩
+instance [HPow α α α] : HPow (FunctionVector β α) α (FunctionVector β α) := ⟨fun x b => x.map (· ^ b)⟩
 
 end FunctionVector
 
@@ -220,5 +262,47 @@ structure Series (β α : Type) where
 structure Product (β α : Type) where
   /-- The function family. -/
   family : FunctionVector β α
+
+/-- Julia `FunctionArray{T,N}` of any rank: a family `x ↦ f(x, i…)` indexed by 1-based
+multi-indices over a nominal size (src/AbstractAnalysis.jl:133-167). Julia's
+`FunctionMatrix{T}(f, n, m)` builds its size from `n` twice (quirk #24); `FunctionMatrix` here
+takes both. -/
+structure FunctionArray (β α : Type) (N : Nat) where
+  /-- Julia `counter(x)`: `f(x, i…)`. -/
+  f : β → Vector Nat N → α
+  /-- Nominal size. -/
+  size : Vector Nat N
+
+/-- Julia `FunctionMatrix` = rank-2 `FunctionArray`. -/
+abbrev FunctionMatrix (β α : Type) := FunctionArray β α 2
+
+namespace FunctionArray
+
+variable {α β γ : Type} {N : Nat}
+
+/-- Julia `(x::FunctionArray)(u)`: the countable array `i… ↦ f(u, i…)`. -/
+@[inline] def eval (x : FunctionArray β α N) (u : β) : CountableArray α N := ⟨x.f u, x.size⟩
+
+/-- Julia `x[i…] = Fix2(f, i…)`: the function at a multi-index. -/
+@[inline] def term (x : FunctionArray β α N) (i : Vector Nat N) : β → α := fun u => x.f u i
+
+/-- Julia `map(f, x)`. -/
+@[inline] def map (g : α → γ) (x : FunctionArray β α N) : FunctionArray β γ N :=
+  ⟨fun u i => g (x.f u i), x.size⟩
+
+/-- Julia pointwise `binop`: the size is the pointwise `min`. -/
+@[inline] def zipWith (g : α → α → γ) (a b : FunctionArray β α N) : FunctionArray β γ N :=
+  ⟨fun u i => g (a.f u i) (b.f u i), Vector.zipWith min a.size b.size⟩
+
+/-- A rank-1 family as a `FunctionArray`. -/
+def ofVector (x : FunctionVector β α) : FunctionArray β α 1 := ⟨fun u i => x.f u i[0], #v[x.len]⟩
+
+instance [Add α] : Add (FunctionArray β α N) := ⟨zipWith (· + ·)⟩
+instance [Sub α] : Sub (FunctionArray β α N) := ⟨zipWith (· - ·)⟩
+instance [Mul α] : Mul (FunctionArray β α N) := ⟨zipWith (· * ·)⟩
+instance [Div α] : Div (FunctionArray β α N) := ⟨zipWith (· / ·)⟩
+instance [Mul α] : HMul α (FunctionArray β α N) (FunctionArray β α N) := ⟨fun a x => x.map (a * ·)⟩
+
+end FunctionArray
 
 end AbstractAnalysis
