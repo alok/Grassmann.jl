@@ -117,6 +117,10 @@ def suite : Suite := ⟨"cartan", do
   bench "eval_a" (ops := K) (param := s!"{K}") fun s =>
     let a' := blackBox s a
     chkA (buildFlat (F := Float) K fun k => a'.eval2 (xs.get! k) (ys.get! k))
+  -- the same evaluations through the prepared evaluator (Lean only; its twin is `eval_a`)
+  bench "eval_a_prepared" (ops := K) (param := s!"{K}") fun s =>
+    let e := (blackBox s a).grid2Eval
+    chkA (buildFlat (F := Float) K fun k => e.eval (xs.get! k) (ys.get! k))
   -- finite elements on a structured triangulation (Julia `volumes`, `gradienthat`, `gradient`,
   -- `assembleload`); ns per element (per node for the load)
   let mm ← size 300 10

@@ -57,16 +57,20 @@ def walkUp (p : FloatArray) (t : Float) : Nat → Nat → Nat
 
 /-- `countBelow p t 0 p.size` for an ascending `p` (a range's points): the count guessed from the
 end points (`(t - p₀)/(p_{n-1} - p₀)·(n-1)`, exact up to a step or two on a uniform grid),
-corrected by at most four steps each way and verified (`p[h-1] < t ≤ p[h]`, which pins the count
-of an ascending array); the bisection when the guess fails (and outside or at `NaN`). -/
+verified (`p[h-1] < t ≤ p[h]`, which pins the count of an ascending array), else corrected by at
+most four steps each way and verified again; the bisection when that fails (and outside or at
+`NaN`). -/
 def countBelowAsc (p : FloatArray) (t : Float) : Nat :=
   let n := p.size
   if n < 2 then countBelow p t 0 n else
   let a := p.get! 0
   let z := p.get! (n - 1)
-  let g := (t - a) / (z - a) * Float.ofNat (n - 1)
-  if g ≥ 0 && g ≤ Float.ofNat (n - 1) then
-    let h := walkUp p t 4 (walkDown p t 4 (g.floor.toUInt64.toNat + 1))
+  let m := (n - 1).toUInt64.toFloat
+  let g := (t - a) / (z - a) * m
+  if g ≥ 0 && g ≤ m then
+    let h0 := g.floor.toUInt64.toNat + 1
+    if (h0 == 0 || p.get! (h0 - 1) < t) && (h0 == n || p.get! h0 ≥ t) then h0 else
+    let h := walkUp p t 4 (walkDown p t 4 h0)
     if (h == 0 || p.get! (h - 1) < t) && (h == n || p.get! h ≥ t) then h else countBelow p t 0 n
   else countBelow p t 0 n
 
@@ -165,7 +169,7 @@ def cellComp {b : GridBundle N P G} (t : TensorField b F) (x : Vector Float N) (
     else 0
 
 /-- The fiber whose flat encoding is `w` copies of `x` (the zero and `NaN` fibers). -/
-@[inline] def fill (x : Float) : F := FlatFiber.read (buildFlat (F := Float) (FlatFiber.width F) fun _ => x) 0
+@[inline] def fill (x : Float) : F := FlatFiber.ofComps fun _ => x
 
 /-- Julia `t(x)` for a grid field (`linterp`, `bilinterp`, `trilinterp`, `quadlinterp`,
 `quintlinterp`; `grid.jl:108-456`), for coordinates `x` (axis 1 first): multilinear interpolation
@@ -188,7 +192,7 @@ where
           if i == 0 then 1 else if i == (b.space.coords[a]).size then 2 else 0
         if status.all (· == 0) then
           let idx : Vector Nat N := br.map (· - 1)
-          FlatFiber.read (buildFlat (F := Float) (FlatFiber.width F) fun c => cellComp t x idx st c N 0) 0
+          FlatFiber.ofComps fun c => cellComp t x idx st c N 0
         else
           -- an out-of-range axis through an open face gives zero; otherwise reposition
           let glued (a : Fin N) : Option (Glue N) :=
@@ -225,32 +229,227 @@ repositioned through a glued one, `NaN` fibers at `NaN`). -/
     let w := FlatFiber.width F
     let x1 := c0.get! i
     let x2 := c0.get! (i + 1)
-    FlatFiber.read (buildFlat (F := Float) w fun c =>
-      linterpComp (F := F) x x1 x2 (t.data.get! (i * w + c)) (t.data.get! ((i + 1) * w + c))) 0
+    FlatFiber.ofComps fun c =>
+      linterpComp (F := F) x x1 x2 (t.data.get! (i * w + c)) (t.data.get! ((i + 1) * w + c))
   | none => t.eval #v[x]
 
+/-- Component `c` of the bilinear interpolation of the cell `(i, j)` of a 2-D grid (axes `c0`,
+`c1`, `n0 = c0.size` points on the first, fibers of `w` floats in `d`):
+`linterp_y(linterp_x(f₁₁, f₂₁), linterp_x(f₁₂, f₂₂))`, the operations of `cellComp`. -/
+@[inline] def bilinComp (r : Bool) (c0 c1 d : FloatArray) (w n0 i j c : Nat) (x y : Float) : Float :=
+  let o1 := (j * n0 + i) * w + c
+  let o2 := o1 + n0 * w
+  let x1 := c0.get! i
+  let x2 := c0.get! (i + 1)
+  let f1 := Interp.lin r x x1 x2 (d.get! o1) (d.get! (o1 + w))
+  let f2 := Interp.lin r x x1 x2 (d.get! o2) (d.get! (o2 + w))
+  Interp.lin r y (c1.get! j) (c1.get! (j + 1)) f1 f2
+
+/-- Component `c` of the trilinear interpolation of the cell `(i, j, k)` of a 3-D grid (strides
+`n0` and `n01 = n0·n1` points): `linterp_z` of two bilinear interpolations, as `cellComp`. -/
+@[inline] def trilinComp (r : Bool) (c0 c1 c2 d : FloatArray) (w n0 n01 i j k c : Nat)
+    (x y z : Float) : Float :=
+  let o := (k * n01 + j * n0 + i) * w + c
+  let sy := n0 * w
+  let sz := n01 * w
+  let x1 := c0.get! i
+  let x2 := c0.get! (i + 1)
+  let y1 := c1.get! j
+  let y2 := c1.get! (j + 1)
+  let b1 := Interp.lin r y y1 y2 (Interp.lin r x x1 x2 (d.get! o) (d.get! (o + w)))
+    (Interp.lin r x x1 x2 (d.get! (o + sy)) (d.get! (o + sy + w)))
+  let b2 := Interp.lin r y y1 y2 (Interp.lin r x x1 x2 (d.get! (o + sz)) (d.get! (o + sz + w)))
+    (Interp.lin r x x1 x2 (d.get! (o + sz + sy)) (d.get! (o + sz + sy + w)))
+  Interp.lin r z (c2.get! k) (c2.get! (k + 1)) b1 b2
+
 /-- Julia `t(x, y)` for a 2-D field: inside the grid the bilinear interpolation of the cell
-(`linterp_y(linterp_x(f₁₁, f₂₁), linterp_x(f₁₂, f₂₂))`, the operations of `eval`), else `eval`. -/
+(`linterp_y(linterp_x(f₁₁, f₂₁), linterp_x(f₁₂, f₂₂))`, the operations of `eval`), built
+component by component without an intermediate array (`FlatFiber.ofComps`), else `eval`. -/
 @[specialize] def eval2 {b : GridBundle 2 P G} (t : TensorField b F) (x y : Float) : F :=
   let c0 := b.space.coords[0]
   let c1 := b.space.coords[1]
   match bracket b.space.axes[0] c0 x, bracket b.space.axes[1] c1 y with
   | some i, some j =>
-    let w := FlatFiber.width F
-    let n0 := b.space.axes[0].length
-    let x1 := c0.get! i
-    let x2 := c0.get! (i + 1)
-    let y1 := c1.get! j
-    let y2 := c1.get! (j + 1)
-    let lo := j * n0
-    let hi := (j + 1) * n0
-    FlatFiber.read (buildFlat (F := Float) w fun c =>
-      let f1 := linterpComp (F := F) x x1 x2 (t.data.get! ((lo + i) * w + c)) (t.data.get! ((lo + i + 1) * w + c))
-      let f2 := linterpComp (F := F) x x1 x2 (t.data.get! ((hi + i) * w + c)) (t.data.get! ((hi + i + 1) * w + c))
-      linterpComp (F := F) y y1 y2 f1 f2) 0
+    FlatFiber.ofComps fun c =>
+      bilinComp (LinearFiber.recipDiv F) c0 c1 t.data (FlatFiber.width F) c0.size i j c x y
   | _, _ => t.eval #v[x, y]
-/-- Julia `t(x, y, z)` for a 3-D field. -/
-@[inline] def eval3 {b : GridBundle 3 P G} (t : TensorField b F) (x y z : Float) : F := t.eval #v[x, y, z]
+
+/-- Julia `t(x, y, z)` for a 3-D field: inside the grid the trilinear interpolation of the cell
+(the operations of `eval`), else `eval`. -/
+@[specialize] def eval3 {b : GridBundle 3 P G} (t : TensorField b F) (x y z : Float) : F :=
+  let c0 := b.space.coords[0]
+  let c1 := b.space.coords[1]
+  let c2 := b.space.coords[2]
+  match bracket b.space.axes[0] c0 x, bracket b.space.axes[1] c1 y, bracket b.space.axes[2] c2 z with
+  | some i, some j, some k =>
+    FlatFiber.ofComps fun c =>
+      trilinComp (LinearFiber.recipDiv F) c0 c1 c2 t.data (FlatFiber.width F) c0.size
+        (c0.size * c1.size) i j k c x y z
+  | _, _, _ => t.eval #v[x, y, z]
+
+end TensorField
+
+/-! ## Prepared evaluators
+
+`t(x, y)` evaluated at many points (a streamplot's Euler steps, a raster, `eval_a`) repeats the
+per-field work of `eval2`: reading the axes out of the base and, for a range axis, the division
+behind the bracket guess. `Grid2Eval`/`Grid3Eval` do that once; `eval` is then `eval2`/`eval3`
+bit for bit (the same bracket, the same operations), and `withComps` hands the components of the
+value to a continuation without building the fiber. -/
+
+/-- An axis prepared for repeated bracketing (Julia `searchpoints`): its points, and for an
+increasing range the slope `s = (n − 1)/(p_{n−1} − p₀)` of the guess `(t − p₀)·s`, which is then
+verified (so the bracket is `bracket`'s, whatever the rounding of the guess). -/
+structure AxisSearch where
+  /-- The points. -/
+  p : FloatArray
+  /-- An increasing range: guess, then verify. -/
+  asc : Bool
+  /-- `p₀`. -/
+  p0 : Float
+  /-- `(n − 1)/(p_{n−1} − p₀)`. -/
+  s : Float
+  /-- `n − 1` as a float. -/
+  m : Float
+
+namespace AxisSearch
+
+/-- Prepare the axis `a` with the points `c`. -/
+def ofAxis (a : Axis) (c : FloatArray) : AxisSearch :=
+  let n := c.size
+  let asc := a.isRange && n ≥ 2 && c.get! 0 < c.get! 1
+  let m := (n - 1).toUInt64.toFloat
+  ⟨c, asc, c.get! 0, m / (c.get! (n - 1) - c.get! 0), m⟩
+
+/-- The number of points `< t` (`Interp.countBelow` over all points), from the guess on a range. -/
+@[inline] def count (a : AxisSearch) (t : Float) : Nat :=
+  let p := a.p
+  let n := p.size
+  if a.asc then
+    let g := (t - a.p0) * a.s
+    if g ≥ 0 && g ≤ a.m then
+      let h0 := g.floor.toUInt64.toNat + 1
+      if (h0 == 0 || p.get! (h0 - 1) < t) && (h0 == n || p.get! h0 ≥ t) then h0 else
+      let h := Interp.walkUp p t 4 (Interp.walkDown p t 4 h0)
+      if (h == 0 || p.get! (h - 1) < t) && (h == n || p.get! h ≥ t) then h
+      else Interp.countBelow p t 0 n
+    else Interp.countBelow p t 0 n
+  else Interp.countBelow p t 0 n
+
+/-- The 0-based lower corner of the cell containing `t` (`TensorField.bracket`), or `p.size` when
+`t` is outside the axis (or `NaN`). -/
+@[inline] def cell (a : AxisSearch) (t : Float) : Nat :=
+  let k := a.count t
+  let i := if k == 0 && t == a.p.get! 0 then 1 else k
+  if i == 0 || i == a.p.size then a.p.size else i - 1
+
+end AxisSearch
+
+section Prepared
+
+variable {P G F : Type} [FlatFiber F] [LinearFiber F]
+
+/-- A 2-D grid field prepared for evaluation at many points. -/
+structure Grid2Eval (F : Type) where
+  /-- Axis 1. -/
+  ax : AxisSearch
+  /-- Axis 2. -/
+  ay : AxisSearch
+  /-- The flat fibers. -/
+  d : FloatArray
+  /-- Floats per fiber. -/
+  w : Nat
+  /-- Grassmann division by a real (`* (1/s)`, `LinearFiber.recipDiv`). -/
+  r : Bool
+  /-- The evaluation outside the grid (`TensorField.eval`: zero or repositioned). -/
+  slow : Float → Float → F
+
+/-- Prepare a 2-D grid field for evaluation (Julia `t(x, y)` at many points). -/
+def TensorField.grid2Eval {b : GridBundle 2 P G} (t : TensorField b F) : Grid2Eval F :=
+  ⟨.ofAxis b.space.axes[0] b.space.coords[0], .ofAxis b.space.axes[1] b.space.coords[1], t.data,
+   FlatFiber.width F, LinearFiber.recipDiv F, fun x y => t.eval #v[x, y]⟩
+
+namespace Grid2Eval
+
+/-- Component `c` of the value in the cell `(i, j)` (`TensorField.bilinComp`). -/
+@[inline] def comp (g : Grid2Eval F) (i j c : Nat) (x y : Float) : Float :=
+  TensorField.bilinComp g.r g.ax.p g.ay.p g.d g.w g.ax.p.size i j c x y
+
+/-- Julia `t(x, y)`: `TensorField.eval2` bit for bit. -/
+@[inline] def eval (g : Grid2Eval F) (x y : Float) : F :=
+  let i := g.ax.cell x
+  let j := g.ay.cell y
+  if i < g.ax.p.size && j < g.ay.p.size then FlatFiber.ofComps fun c => g.comp i j c x y
+  else g.slow x y
+
+/-- The components of `t(x, y)` handed to `k` (component `c` for `c < width F`; no fiber is
+built inside the grid; outside, the components of `eval`'s value). -/
+@[inline] def withComps {β : Type} (g : Grid2Eval F) (x y : Float) (k : (Nat → Float) → β) : β :=
+  let i := g.ax.cell x
+  let j := g.ay.cell y
+  if i < g.ax.p.size && j < g.ay.p.size then k fun c => g.comp i j c x y
+  else
+    let v := FlatFiber.write (Flat.zeros g.w) 0 (g.slow x y)
+    k fun c => v.get! c
+
+end Grid2Eval
+
+/-- A 3-D grid field prepared for evaluation at many points. -/
+structure Grid3Eval (F : Type) where
+  /-- Axis 1. -/
+  ax : AxisSearch
+  /-- Axis 2. -/
+  ay : AxisSearch
+  /-- Axis 3. -/
+  az : AxisSearch
+  /-- The flat fibers. -/
+  d : FloatArray
+  /-- Floats per fiber. -/
+  w : Nat
+  /-- Grassmann division by a real. -/
+  r : Bool
+  /-- The evaluation outside the grid (`TensorField.eval`). -/
+  slow : Float → Float → Float → F
+
+/-- Prepare a 3-D grid field for evaluation (Julia `t(x, y, z)` at many points). -/
+def TensorField.grid3Eval {b : GridBundle 3 P G} (t : TensorField b F) : Grid3Eval F :=
+  ⟨.ofAxis b.space.axes[0] b.space.coords[0], .ofAxis b.space.axes[1] b.space.coords[1],
+   .ofAxis b.space.axes[2] b.space.coords[2], t.data, FlatFiber.width F, LinearFiber.recipDiv F,
+   fun x y z => t.eval #v[x, y, z]⟩
+
+namespace Grid3Eval
+
+/-- Component `c` of the value in the cell `(i, j, k)` (`TensorField.trilinComp`). -/
+@[inline] def comp (g : Grid3Eval F) (i j k c : Nat) (x y z : Float) : Float :=
+  let n0 := g.ax.p.size
+  TensorField.trilinComp g.r g.ax.p g.ay.p g.az.p g.d g.w n0 (n0 * g.ay.p.size) i j k c x y z
+
+/-- Julia `t(x, y, z)`: `TensorField.eval3` bit for bit. -/
+@[inline] def eval (g : Grid3Eval F) (x y z : Float) : F :=
+  let i := g.ax.cell x
+  let j := g.ay.cell y
+  let k := g.az.cell z
+  if i < g.ax.p.size && j < g.ay.p.size && k < g.az.p.size then
+    FlatFiber.ofComps fun c => g.comp i j k c x y z
+  else g.slow x y z
+
+/-- The components of `t(x, y, z)` handed to `k` (see `Grid2Eval.withComps`). -/
+@[inline] def withComps {β : Type} (g : Grid3Eval F) (x y z : Float) (k : (Nat → Float) → β) : β :=
+  let i := g.ax.cell x
+  let j := g.ay.cell y
+  let l := g.az.cell z
+  if i < g.ax.p.size && j < g.ay.p.size && l < g.az.p.size then k fun c => g.comp i j l c x y z
+  else
+    let v := FlatFiber.write (Flat.zeros g.w) 0 (g.slow x y z)
+    k fun c => v.get! c
+
+end Grid3Eval
+
+end Prepared
+
+namespace TensorField
+
+variable {N : Nat} {P G F : Type} [FlatFiber F] [LinearFiber F]
 
 /-- Julia `t(p)` at an affine point. -/
 @[inline] def evalAt {b : GridBundle N P G} (t : TensorField b F) (p : AffinePoint N) : F :=
@@ -279,7 +478,7 @@ def resamplePointwise [Inhabited G] {b : GridBundle N P G} (t : TensorField b F)
     let i : Vector Nat N := Vector.ofFn fun a => brk[a][j[a]]!
     if i.all (· != 0) then
       let idx := i.map (· - 1)
-      FlatFiber.read (buildFlat (F := Float) (FlatFiber.width F) fun c => cellComp t x idx st c N 0) 0
+      FlatFiber.ofComps fun c => cellComp t x idx st c N 0
     else t.eval x
 
 /-- Julia `resample(t, n)` (`Cartan.jl:220-224`): the field interpolated onto the resampled grid
@@ -313,9 +512,9 @@ def leafInterp {b : GridBundle 2 P G} (t : TensorField b F) (x : Float) (j : Fin
   -- the linear index of point `k` of the leaf at the 0-based index `l` of axis `j`
   let lin (l k : Nat) : Nat := if j.1 = 1 then k + n0 * l else l + n0 * k
   ofFn _ fun k =>
-    FlatFiber.read (buildFlat (F := Float) w fun c =>
+    FlatFiber.ofComps fun c =>
       linterpComp (F := F) x (p.get! (i - 1)) (p.get! i)
-        (t.data.get! (lin (i - 1) k * w + c)) (t.data.get! (lin i k * w + c))) 0
+        (t.data.get! (lin (i - 1) k * w + c)) (t.data.get! (lin i k * w + c))
 
 /-- Julia `orbit(f, x, n)` (`Cartan.jl:516-525`): the iterates `x, f(x), f(f(x)), …` of a field map,
 one per entry of `n`, stacked along a new last axis `n` of the base (Julia's field over

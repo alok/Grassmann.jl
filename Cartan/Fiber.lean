@@ -79,6 +79,15 @@ def writeFrom (src : FloatArray) (off : Nat) : (k j : Nat) → FloatArray → Fl
   | 0, _, _ => rfl
   | k + 1, j, a => by rw [writeFrom, size_writeFrom src off k (j + 1), FloatArray.size_set!']
 
+/-- Push `f i, f (i+1), …, f (i+k-1)` onto `a` (tail recursive, fuelled by `k`). -/
+@[specialize] def floatsLoop (f : Nat → Float) : (k i : Nat) → FloatArray → FloatArray
+  | 0, _, a => a
+  | k + 1, i, a => floatsLoop f k (i + 1) (a.push (f i))
+
+/-- The flat array `f 0, …, f (n-1)` (the encoding a fiber is decoded from by `ofComps`). -/
+@[inline] def floatsOfFn (n : Nat) (f : Nat → Float) : FloatArray :=
+  floatsLoop f n 0 (FloatArray.emptyWithCapacity n)
+
 /-- A fiber type whose elements are `width` consecutive `Float`s in a `FloatArray` (Julia: an
 isbits element type stored inline in `Array{F}`). -/
 class FlatFiber (F : Type) where
@@ -107,6 +116,12 @@ class FlatFiber (F : Type) where
   readInto (a : FloatArray) (off : Nat) (x : F) : F := read a off
   /-- Reusing storage does not change what is read. -/
   readInto_eq (a : FloatArray) (off : Nat) (x : F) : readInto a off x = read a off := by intros; rfl
+  /-- The element whose flat encoding is `f 0, …, f (width - 1)` (an interpolated or computed
+  fiber, `Cartan.Interp`). The default decodes the pushed components; `Float` is `f 0`, with no
+  array at all. -/
+  ofComps (f : Nat → Float) : F := read (floatsOfFn width f) 0
+  /-- `ofComps` decodes the components. -/
+  ofComps_eq (f : Nat → Float) : ofComps f = read (floatsOfFn width f) 0 := by intros; rfl
 
 attribute [simp] FlatFiber.size_push
 
@@ -169,6 +184,10 @@ instance instFlatFiberFloat : FlatFiber Float where
   size_push a x := by simp
   write a off x := a.set! off x
   size_write a off x := FloatArray.size_set!' a off x
+  ofComps f := f 0
+  ofComps_eq f := by
+    show f 0 = (floatsLoop f 1 0 (FloatArray.emptyWithCapacity 1)).get! 0
+    simp [floatsLoop, FloatArray.push, FloatArray.get!, FloatArray.emptyWithCapacity]
 
 instance : LinearFiber Float := ⟨false⟩
 

@@ -104,6 +104,29 @@ def run : TestM Unit := do
     (pairs.map fun (x, y) => bitsOf (v2.eval #v[x, y]))
   checkEq "eval2 = eval (torus)" (pairs.map fun (x, y) => (fT2.eval2 (4 * x) (2 * y)).toBits)
     (pairs.map fun (x, y) => (fT2.eval #v[4 * x, 2 * y]).toBits)
+  -- the prepared evaluators are `eval2`/`eval3` bit for bit, inside, outside and at `NaN`
+  let e2 := s2.grid2Eval
+  checkEq "grid2Eval = eval2 (scalar)" (pairs.map fun (x, y) => (e2.eval x y).toBits)
+    (pairs.map fun (x, y) => (s2.eval2 x y).toBits)
+  let ev := v2.grid2Eval
+  checkEq "grid2Eval = eval2 (chain)" (pairs.map fun (x, y) => bitsOf (ev.eval x y))
+    (pairs.map fun (x, y) => bitsOf (v2.eval2 x y))
+  checkEq "grid2Eval.withComps = eval2 (chain)"
+    (pairs.map fun (x, y) => ev.withComps x y fun f => [f 0, f 1, f 2].map Float.toBits)
+    (pairs.map fun (x, y) => bitsOf (v2.eval2 x y))
+  let eT := fT2.grid2Eval
+  checkEq "grid2Eval = eval2 (torus)" (pairs.map fun (x, y) => (eT.eval (4 * x) (2 * y)).toBits)
+    (pairs.map fun (x, y) => (fT2.eval2 (4 * x) (2 * y)).toBits)
+  let triples : List (Float × Float × Float) :=
+    pts.flatMap fun x => [(x, 0.3, 0.9), (0.1, x, 0.2), (0.7, 1.1, x), (x, x, x)]
+  let e3 := s3.grid3Eval
+  checkEq "grid3Eval = eval3" (triples.map fun (x, y, z) => (e3.eval (2 * x) (3 * y) z).toBits)
+    (triples.map fun (x, y, z) => (s3.eval3 (2 * x) (3 * y) z).toBits)
+  checkEq "eval3 = eval" (triples.map fun (x, y, z) => (s3.eval3 (2 * x) (3 * y) z).toBits)
+    (triples.map fun (x, y, z) => (s3.eval #v[2 * x, 3 * y, z]).toBits)
+  checkEq "grid3Eval.withComps = eval3"
+    (triples.map fun (x, y, z) => e3.withComps (2 * x) (3 * y) z fun f => (f 0).toBits)
+    (triples.map fun (x, y, z) => (s3.eval3 (2 * x) (3 * y) z).toBits)
   -- the guessed search counts as the bisection on ascending ranges, at and between the points
   for a in [Axis.range 0 1 1000, Axis.colon (-3) 0.1 7, Axis.linRange (-1) 2 37, Axis.range 5 6 2] do
     let c := a.toFloatArray
@@ -114,5 +137,8 @@ def run : TestM Unit := do
     let ts := ts ++ c.toList ++ [(0 : Float) / 0, 1e300, -1e300]
     check s!"countBelowAsc = countBelow on {a}" (ts.all fun t =>
       Interp.countBelowAsc c t == Interp.countBelow c t 0 n)
+    let sa := AxisSearch.ofAxis a c
+    check s!"AxisSearch.count = countBelow on {a}" (ts.all fun t =>
+      sa.count t == Interp.countBelow c t 0 n)
 
 end Tests.CartanTests.Eval
