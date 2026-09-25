@@ -143,6 +143,9 @@ variable {α : Type} [Coeff α]
 /-- Julia `quatvalue(q::TensorAlgebra) = quatvalue(Spinor(even(q)))` for a multivector. -/
 @[inline] def quatvalueOf (m : Multivector V α) : Values α 4 := quatvalue (m.half false)
 
+/-- Julia `quatvalues = quatvalue` (`src/multivectors.jl:1093`). -/
+@[inline] def quatvalues (q : Spinor V α) : Values α 4 := quatvalue q
+
 end Spinor
 
 namespace CoSpinor

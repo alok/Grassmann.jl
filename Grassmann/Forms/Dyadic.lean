@@ -104,6 +104,9 @@ structure Projector (V : TensorBundle) (G : Nat) (α : Type) [Coeff α] where
   /-- The eigenvalue (Julia `P.λ`, default `1`). -/
   lam : α
 
+/-- Julia `const Proj = Projector` (`forms.jl:382`); `Proj(v, λ)` is `Projector.ofVector`. -/
+abbrev Proj (V : TensorBundle) (G : Nat) (α : Type) [Coeff α] := Projector V G α
+
 namespace Projector
 
 variable {V W : TensorBundle} {G H : Nat} {α : Type} [Coeff α]

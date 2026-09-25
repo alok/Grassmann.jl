@@ -93,9 +93,13 @@ def suite : IO Tally := do
   t := t.ok (toString (O * (c [1, 1, 1] ∧ c [0, 1, 0]) : Chain ℝ3 2 Int) ==
     toString ((T * c [1, 1, 1] : Chain ℝ3 1 Int) ∧ (T * c [0, 1, 0] : Chain ℝ3 1 Int))) fun _ => "O(x∧y)"
   t := t.ok ((lieBracket [T, U]).toRows == [[4, -10, -2], [10, 0, 18], [6, -16, -4]]) fun _ => "𝓛[T,U]"
+  t := t.ok ((𝓛[T, U]).toRows == (lieBracket [T, U]).toRows) fun _ => "𝓛[…] notation"
   let Tf := T.map Float.ofInt
   t := t.ok (toString Tf.characteristic == "3.0v₁ - 12.0v₂ - 16.0v₃") fun _ => s!"characteristic {Tf.characteristic}"
   t := t.ok (toString Tf.eigpolys == "5.33333v₁ - 4.0v₂ - 3.0v₃") fun _ => "eigpolys"
+  t := t.ok (Tf.disc == Tf.discriminant && Tf.disccomplex == Tf.discriminantcomplex &&
+    (match Tf.discreal, Tf.discriminantreal with | .ok a, .ok b => a == b | .error _, .error _ => true | _, _ => false))
+    fun _ => "disc, discreal, disccomplex"
   t := t.ok (toString (Endomorphism.companion (n := 3) (Values.ofFn fun i => (i.1 + 1 : Int))) ==
     "(0v₁+1v₂+0v₃)v₁ + (0v₁+0v₂+1v₃)v₂ + (-1v₁-2v₂-3v₃)v₃") fun _ => "companion"
   t := t.ok (lieBracketString == "LieBracket[...]") fun _ => "LieBracket"

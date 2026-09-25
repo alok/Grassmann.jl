@@ -277,6 +277,23 @@ def discriminantcomplex (X : Endomorphism V (.chain 1) Float) : Float :=
     t * t - 4 * X.det
   else (discriminantValues X.eigvalscomplex).re
 
+/-- Julia `discriminantreal(X)` (`forms.jl:1531-1533`): `tr² − 4 det` for `n = 2`, else
+`det(vandermondereal(X))²` (an error where the eigenvalues are not real). -/
+def discriminantreal (X : Endomorphism V (.chain 1) Float) : Except String Float :=
+  if V.n = 2 then
+    let t := X.tr
+    .ok (t * t - 4 * X.det)
+  else X.eigvalsreal.map discriminantValues
+
+/-- Julia `disc = discriminant` (`forms.jl:1537`). -/
+@[inline] def disc (X : Endomorphism V (.chain 1) Float) : Float := X.discriminant
+
+/-- Julia `discreal = discriminantreal` (`forms.jl:1537`). -/
+@[inline] def discreal (X : Endomorphism V (.chain 1) Float) : Except String Float := X.discriminantreal
+
+/-- Julia `disccomplex = discriminantcomplex` (`forms.jl:1537`). -/
+@[inline] def disccomplex (X : Endomorphism V (.chain 1) Float) : Float := X.discriminantcomplex
+
 end TensorOperator
 
 namespace TensorOperator
