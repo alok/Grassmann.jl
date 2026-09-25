@@ -383,6 +383,18 @@ def thirtySixPi : Float := 36 * f64! 3.141592653589793
   | 0, _, acc => acc
   | k + 1, i, acc => mapFloatsLoop f k (i + 1) (acc.set! i (f (acc.get! i)))
 
+/-- Julia `AppendixI` (`profiles.jl:48`, unused upstream): the chord stations of the NACA
+report 824 appendix tables. -/
+def appendixI : FloatArray :=
+  #[0, f64! 0.005, f64! 0.0125, f64! 0.025, f64! 0.05, f64! 0.075, f64! 0.1, f64! 0.15, f64! 0.2, f64! 0.25,
+    f64! 0.3, f64! 0.4, f64! 0.5, f64! 0.6, f64! 0.7, f64! 0.8, f64! 0.9, f64! 0.95, 1].foldl FloatArray.push .empty
+
+/-- Julia `AppendixII` (`profiles.jl:49`, unused upstream). -/
+def appendixII : FloatArray :=
+  #[0, f64! 0.005, f64! 0.0075, f64! 0.0125, f64! 0.025, f64! 0.05, f64! 0.075, f64! 0.1, f64! 0.15, f64! 0.2,
+    f64! 0.25, f64! 0.3, f64! 0.35, f64! 0.4, f64! 0.45, f64! 0.5, f64! 0.55, f64! 0.6, f64! 0.65, f64! 0.7,
+    f64! 0.75, f64! 0.8, f64! 0.85, f64! 0.9, f64! 0.95, 1].foldl FloatArray.push .empty
+
 /-- `f` applied to every entry (a tail-recursive loop, specialized at each call site). The result
 is written in place into a copy of `xs` (one `memcpy`, then no allocation per entry: a
 `FloatArray.push` is an out-of-line runtime call, docs/PERF.md). -/
@@ -468,6 +480,10 @@ def slopeAt (p : Profile) (x c : Float) (x0 : Float := 0) : Float :=
   match p with
   | .flatPlate _ => 0
   | _ => p.slope ((x - x0) / c)
+
+/-- Julia `profileslope(P::CircularArc, x::Chain) = profileslope(P, x[2])` (`profiles.jl:101`):
+the slope at the chord coordinate of a homogeneous point `(1, x, y)`. -/
+def slopeAtPoint (p : Profile) (x : Array Float) : Float := p.slope (x[1]?.getD F64.nan)
 
 /-- Julia `profileangle(p, x, c, x0) = atan(profileslope(p, x, c, x0))` (`profiles.jl:40`). -/
 def angleAt (p : Profile) (x c : Float) (x0 : Float := 0) : Float := F64.atan (p.slopeAt x c x0)

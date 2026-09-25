@@ -355,6 +355,11 @@ def upper (p : Profile) (c : Float := 1) (x0 : Float := 0) : TensorField p.base 
 def lower (p : Profile) (c : Float := 1) (x0 : Float := 0) : TensorField p.base (Complex Float) :=
   fieldOf p.base (profileSurfaces (axisData (p.interval c x0)) p.fieldData c p.samples).2
 
+/-- Julia `upperlower(z::Profile, c = 1, x0 = 0)` (`airfoils.jl:52`). -/
+def upperlower (p : Profile) (c : Float := 1) (x0 : Float := 0) :
+    TensorField p.base (Complex Float) × TensorField p.base (Complex Float) :=
+  (p.upper c x0, p.lower c x0)
+
 end Profile
 
 /-! ## Joukowski -/
