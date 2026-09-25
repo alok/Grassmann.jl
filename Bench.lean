@@ -3,6 +3,7 @@ import Bench.Harness.Optional
 import Bench.Math
 import Bench.MeshTopology
 import Bench.Fatou
+import Bench.Geophysics
 
 /-!
 Benchmarks (`lake exe bench`, driver `Bench/Main.lean`). Every suite runs on the harness of
