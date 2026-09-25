@@ -63,3 +63,52 @@ Conclusions:
   counting sorts, bucketed edge lookup and hash maps are linear or `n log n`.
 * Per-element loops that Julia keeps in isbits tuples (`degrees`, Lagrange node lists) cost Lean
   3–20× (heap `Vector`s, boxed `Nat` arrays); acceptable for one-shot setup.
+
+||||||| 1058011
+
+
+## 2026-09-24: Fatou escape-time kernel (Apple M4 Max, 12P+4E cores)
+
+Wall times, best of 5–7. Julia 1.13 with Fatou 1.2.4; "handwritten" is a Julia kernel with
+Fatou's exact grid and loop (counts checked equal), threaded over rows like `Fatou.Compute`
+(`oracle/fatou/bench.jl`). Lean: `Tests/Fatou/Bench.lean` (`fatou K` / `fatou K (par := false)`).
+
+| raster | iterations | Lean seq | Lean par (Tasks) | Julia handwritten 1 / 16 thr | Fatou.jl 1 / 16 thr |
+|---|---|---|---|---|---|
+| Mandelbrot 1000², N=100 | 29.2 M | 67 ms | 10.7 ms | 62 / 8.8 ms | 2539 / 1760 ms |
+| README filled Julia 1501×1001, N=80 | 30.0 M | 92 ms | 14.5 ms | 76 / 19 ms | 3123 / 2758 ms |
+| README Newton z³−1 800² | 3.0 M | 71 ms | 7.9 ms | 69 / 8.9 ms | 405 / 349 ms |
+| README generalized Newton sin z−1 500² | 2.8 M | 210 ms | 20 ms | 255 / 27 ms | 543 / 330 ms |
+
+Findings:
+* The fused tail-recursive sweep specialized on the map compiles to a 12-instruction inner loop
+  (no loads, no allocation) at the latency bound of `z ↦ z² + c`. Per-pixel work (four array
+  pushes, the colouring, the pixel lookup) is the rest.
+* Loop-invariant parameters as separate scalar arguments, not a structure: a structure's fields
+  are reloaded on every iteration (≈20% on Mandelbrot).
+* Nothing shared between parallel chunks may be reference-counted per pixel: a boxed `seed`
+  in the chunk parameters made the 16-thread run 8× slower than the sequential one (atomic
+  RC contention).
+* Pixel coordinates must reach the kernel as data (`Fatou.Source`), not inside a closure:
+  specializing on a closed `Define` copied `Rectangle.xs` into the specialized loop and
+  rebuilt the whole axis per pixel (a 800² raster took minutes).
+* A decimal literal inlined into a specialized kernel can stay a runtime
+  `Float.ofScientific` call with big-number arithmetic (`1.0` in the inlined Baudin–Smith
+  division: Newton 255 → 69 ms once hoisted into top-level constants). Integer literals
+  (`Float.ofNat`) are cheap. `JuliaBase.ComplexF64.div`/`inv` are not `@[inline]`, so
+  `Fatou.C64.div`/`inv` restate them inlined (bit-identical, oracle-checked).
+* Concatenating the chunk outputs costs ≈3 ns per float (`FloatArray` has no bulk copy);
+  the three float arrays are concatenated by parallel tasks.
+* The same specializer hazard bites callers: a closed value (e.g. `let Z := fatou K` with a
+  literal `K`) used inside a `for` body was copied into the specialized loop and recomputed
+  on every iteration (a 10⁴-step loop took 3 s instead of 1 ms). Pass such values to a
+  separate function, or make them depend on runtime input.
+* The kernel's output sizes are proved (`sweep_sized`, `spawnChunks_sizes`), so `fatou`
+  builds its `FilledSet rows cols` without a runtime check; the proof-carrying version
+  (subtypes, a `List` of tasks) measured the same as the checked one.
+
+## Rule: hoist Float literals out of hot loops (2026-09-24, Fatou port)
+
+A decimal literal such as `0.5` or `2.0` inside a function that gets inlined into a specialized hot
+loop can stay a runtime `Float.ofScientific` call. Measured 3.7× slower on Newton-basin rasters.
+Bind such constants to top-level `def`s (closed terms, evaluated once) and refer to those.
