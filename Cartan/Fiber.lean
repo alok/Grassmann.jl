@@ -94,7 +94,7 @@ theorem size_buildLoop {F : Type} [FlatFiber F] (f : Nat → F) : ∀ (k i : Nat
 /-- `Float` fibers: one float each. -/
 instance instFlatFiberFloat : FlatFiber Float where
   width := 1
-  read a i := a[i]!
+  read a i := a.get! i
   push a x := a.push x
   size_push a x := by simp
 
@@ -103,7 +103,7 @@ instance : LinearFiber Float := ⟨false⟩
 /-- `ComplexF64` fibers: `(re, im)`, as Julia stores `Complex{Float64}`. -/
 instance : FlatFiber (Complex Float) where
   width := 2
-  read a i := ⟨a[i]!, a[i + 1]!⟩
+  read a i := ⟨a.get! i, a.get! (i + 1)⟩
   push a z := (a.push z.re).push z.im
   size_push a z := by simp
 

@@ -9,6 +9,7 @@ import Cartan.Algebra
 import Cartan.Parameters
 import Cartan.Slice
 import Cartan.Show
+import Cartan.Props
 
 /-!
 # Cartan: tensor fields over discretized manifolds
