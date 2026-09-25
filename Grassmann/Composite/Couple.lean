@@ -16,12 +16,16 @@ being a type parameter; here the blade is data):
 | op | `β = -1` (elliptic) | `β = +1` (hyperbolic) | `β = 0` (parabolic) |
 |---|---|---|---|
 | `exp` | `eᵃ(cos θ + B sin θ)` | `eᵃ(cosh θ + B sinh θ)` | `eᵃ(1 + bB)` |
-| `log`, `log1p`, `sqrt`, `cbrt`, `cosh`, `sinh` | Julia's `ComplexF64` functions | `log(radius) + angle`, `radius^(1/n)·exp(angle/n)`, series | (`angle` undefined: `NaN`) |
+| `log`, `log1p`, `sqrt`, `cbrt` | Julia's `ComplexF64` functions | `log(radius) + angle`, `radius^(1/n)·exp(angle/n)` | (`angle` undefined: `NaN`) |
+| `cosh`, `sinh` | Julia's `ComplexF64` functions | `cosh a cosh b + sinh a sinh b·B`, … | `cosh a + b sinh a·B`, … |
 
 with `θ = |b|·√|abs2(B)|`. Result types: a `Single` becomes a `Couple` under
 `exp`, `log`, `sqrt` (Julia returns a `Couple`, or a `Single` when the scalar
 part is structurally absent; the values agree), while `cosh`/`sinh` of a `Single`
-stay single terms (`Single V 0`, `Single V G`), exactly as Julia's series do.
+stay single terms (`Single V 0`, `Single V G`), exactly as Julia's series do. Julia sums the
+`cosh`/`sinh` series of a non-elliptic blade until the partial sums agree to `√eps`; the
+closed forms here (with `√|β|` for non-unit blades) are that series' limit, so they agree with
+Julia to its truncation (`≤ 1e-8` relative) and are exact where Julia's are not.
 
 Julia defects fixed here (port-notes §8.3): the parabolic `exp` of a couple
 returns `eᵃ(1 + t)` instead of `eᵃ(1 + bB)` (item 1); a zero angle gives
@@ -140,6 +144,35 @@ def sinh (β : Float) (t : BPair) : BPair :=
   let ui := q.im / f6
   let f := norm t
   tauLoop β τ.re τ.im t.re t.im ur ui f (Float.sqrt (ur * ur + ui * ui)) f 5 seriesFuel
+
+/-- `cosh(a + bB)` in closed form, `B² = β` (the sum of Grassmann's series, `C:458-481`, which
+Julia truncates at relative change `√eps`): with `s = √|β|`, `cosh a·cosh(bs) + sinh a·sinh(bs)/s·B`
+for `β > 0`, `cosh a·cos(bs) + sinh a·sin(bs)/s·B` for `β < 0`, `cosh a + b·sinh a·B` for
+`β = 0`. -/
+def coshClosed (β : Float) (t : BPair) : BPair :=
+  let a := t.re
+  let b := t.im
+  if β == f0 then ⟨Float.cosh a, b * Float.sinh a⟩
+  else if b == f0 then ⟨Float.cosh a, f0⟩
+  else
+    let s := Float.sqrt β.abs
+    let θ := b * s
+    if β > f0 then ⟨Float.cosh a * Float.cosh θ, Float.sinh a * Float.sinh θ / s⟩
+    else ⟨Float.cosh a * Float.cos θ, Float.sinh a * Float.sin θ / s⟩
+
+/-- `sinh(a + bB)` in closed form, `B² = β` (see `coshClosed`): `sinh a·cosh(bs) +
+cosh a·sinh(bs)/s·B` for `β > 0`, `sinh a·cos(bs) + cosh a·sin(bs)/s·B` for `β < 0`,
+`sinh a + b·cosh a·B` for `β = 0`. -/
+def sinhClosed (β : Float) (t : BPair) : BPair :=
+  let a := t.re
+  let b := t.im
+  if β == f0 then ⟨Float.sinh a, b * Float.cosh a⟩
+  else if b == f0 then ⟨Float.sinh a, f0⟩
+  else
+    let s := Float.sqrt β.abs
+    let θ := b * s
+    if β > f0 then ⟨Float.sinh a * Float.cosh θ, Float.cosh a * Float.sinh θ / s⟩
+    else ⟨Float.sinh a * Float.cos θ, Float.cosh a * Float.sin θ / s⟩
 
 /-- The loop of the one-blade `qlog`: `prod ↦ prod ⟑ w²`, `term = prod/k`, `k` by 2 to `x`. -/
 def qlogPairLoop (β w2r w2i : Float) (x : Nat) (Sr Si pr pi ur ui n1 n2 n3 : Float) (k : Nat) :
@@ -300,18 +333,19 @@ when `B² = -1` (Julia has no `cbrt(::ComplexF64)`, a `MethodError`), otherwise
     ⟨z.bits, s * e.re, s * e.im⟩
 
 /-- Julia `cosh(z::Couple)` (`src/composite.jl:458-481`): the complex `cosh` when
-`B² = -1`, otherwise Grassmann's generic series. -/
+`B² = -1`, otherwise the sum of Grassmann's generic series in closed form
+(`BPair.coshClosed`; Julia's truncated series agrees to its `√eps` stopping rule). -/
 @[inline] def cosh (z : Couple V Float) : Couple V Float :=
   let β := z.blSq
   if β == -f1 then onBlade z.bits (ComplexF64.cosh z.toComplex)
-  else ofPair z.bits (BPair.cosh β z.pair)
+  else ofPair z.bits (BPair.coshClosed β z.pair)
 
 /-- Julia `sinh(z::Couple)` (`src/composite.jl:517-539`): the complex `sinh` when
-`B² = -1`, otherwise Grassmann's generic series. -/
+`B² = -1`, otherwise the series' sum in closed form (`BPair.sinhClosed`). -/
 @[inline] def sinh (z : Couple V Float) : Couple V Float :=
   let β := z.blSq
   if β == -f1 then onBlade z.bits (ComplexF64.sinh z.toComplex)
-  else ofPair z.bits (BPair.sinh β z.pair)
+  else ofPair z.bits (BPair.sinhClosed β z.pair)
 
 /-- Julia `a / b` of two couples on the same blade (`src/algebra.jl:556-605`): the complex
 division when `B² = -1` (Julia's robust `ComplexF64` algorithm), otherwise
@@ -444,16 +478,16 @@ for a zero term, else `exp(log(t)/3)`. -/
     Couple.exp ⟨l.bits, l.re / f3, l.im / f3⟩
 
 /-- `cosh` of the scaled blade `c·e_b` as a scalar: `cosh(c)` (Julia's `TensorGraded{V,0}`
-method) for the scalar blade, otherwise Grassmann's generic series, whose partial sums
-never leave the scalars. -/
+method) for the scalar blade, otherwise the sum of Grassmann's generic series (whose partial
+sums never leave the scalars) in closed form: `cosh(c√β)`, `cos(c√-β)` or `1`. -/
 @[inline] def coshBlade (V : TensorBundle) (b : UInt64) (c : Float) : Float :=
   if b == 0 then Float.cosh c
-  else (BPair.cosh (bladeSq V b) ⟨f0, c⟩).re
+  else (BPair.coshClosed (bladeSq V b) ⟨f0, c⟩).re
 
 /-- `sinh` of the scaled blade `c·e_b` as its coefficient on `e_b` (see `coshBlade`). -/
 @[inline] def sinhBlade (V : TensorBundle) (b : UInt64) (c : Float) : Float :=
   if b == 0 then Float.sinh c
-  else (BPair.sinh (bladeSq V b) ⟨f0, c⟩).im
+  else (BPair.sinhClosed (bladeSq V b) ⟨f0, c⟩).im
 
 /-- Julia `cosh(t)` of a term (`C:456`, `C:458-481`): a scalar. -/
 @[inline] def cosh (s : Single V G Float) : Single V 0 Float :=

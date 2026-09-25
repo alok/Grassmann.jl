@@ -55,6 +55,12 @@ def expectM {V : TensorBundle} (t : Tally) (name : String) (got want : Multivect
 def expectF (t : Tally) (name : String) (got want : Float) (rtol : Float := 1e-13) : Tally :=
   t.check (near #[got] #[want] rtol) fun _ => s!"{name}: got {got} want {want}"
 
+/-- The tolerance of `cosh`/`sinh` (and `cos`/`sin`/`tan`/`tanh` built on them) of elements
+whose square is a scalar: Julia sums Grassmann's series until the partial sums agree to `√eps`,
+the port evaluates the series' limit in closed form (`Couple.cosh`, `Chain.cos`, …); the two
+differ by Julia's truncation (`~1e-11` for these inputs). -/
+def seriesTol : Float := 1e-9
+
 /-- Exact equality of floats (NaN = NaN, signed zeros distinct). -/
 def same (a b : Float) : Bool := F64.isequal a b
 
@@ -106,8 +112,8 @@ def e3 (t : Tally) : Tally := Id.run do
   t := expect t "log(1+0.5v1)" c2.log.toMultivector [-0.14384103622589053, 0.5493061443340549, 0, 0, 0, 0, 0, 0]
   t := expect t "sqrt(1+0.5v1)" c2.sqrt.toMultivector [0.9659258262890682, 0.25881904510252074, 0, 0, 0, 0, 0, 0]
   t := expect t "cbrt(1+0.5v1)" c2.cbrt.toMultivector [0.9692073842687158, 0.17550685828461604, 0, 0, 0, 0, 0, 0]
-  t := expect t "cosh(1+0.5v1)" c2.cosh.toMultivector [1.7400177902090013, 0.6123918250026203, 0, 0, 0, 0, 0, 0]
-  t := expect t "sinh(1+0.5v1)" c2.sinh.toMultivector [1.3251873801254557, 0.8040920746317085, 0, 0, 0, 0, 0, 0]
+  t := expect t "cosh(1+0.5v1)" c2.cosh.toMultivector [1.7400177902090013, 0.6123918250026203, 0, 0, 0, 0, 0, 0] seriesTol
+  t := expect t "sinh(1+0.5v1)" c2.sinh.toMultivector [1.3251873801254557, 0.8040920746317085, 0, 0, 0, 0, 0, 0] seriesTol
   t := expect t "log1p(1+0.5v1)" c2.log1p.toMultivector [0.6608779199911597, 0.2554128118829953, 0, 0, 0, 0, 0, 0]
   t := expect t "expm1(1+0.5v1) (series)" c2.expm1.toMultivector [2.065205168660134, 1.4164838979600063, 0, 0, 0, 0, 0, 0]
   t := expect t "(1+0.5v1)^3" (c2.pow 3).toMultivector [1.75, 1.625, 0, 0, 0, 0, 0, 0]
@@ -145,11 +151,11 @@ def e3 (t : Tally) : Tally := Id.run do
   t := expect t "exp(b)" b.exp [0.8584704679084777, 0, 0, 0, 0.2857088041056532, 0.1904725360704355, 0.380945072140871, 0]
   t := expect t "expEven(b)" (toMultivector b.expEven) [0.8584704679084777, 0, 0, 0, 0.2857088041056532, 0.1904725360704355, 0.380945072140871, 0]
   t := expect t "expm1(b)" b.expm1 [-0.14152953209276206, 0, 0, 0, 0.28570880412104, 0.19047253608069337, 0.38094507216138673, 0]
-  t := expect t "cosh(b)" (toMultivector b.cosh) [0.8584704679072379, 0, 0, 0, 0, 0, 0, 0]
+  t := expect t "cosh(b)" (toMultivector b.cosh) [0.8584704679072379, 0, 0, 0, 0, 0, 0, 0] seriesTol
   t := expect t "sinh(b)" (toMultivector b.sinh) [0, 0, 0, 0, 0.28570880410562455, 0.19047253607041642, 0.38094507214083284, 0]
-  t := expect t "cos(b)" (toMultivector b.cos) [1.1485382162599247, 0, 0, 0, 0, 0, 0, 0]
+  t := expect t "cos(b)" (toMultivector b.cos) [1.1485382162599247, 0, 0, 0, 0, 0, 0, 0] seriesTol
   t := expect t "sin(b)" (toMultivector b.sin) [0, 0, 0, 0, 0.31471170758883643, 0.20980780505922425, 0.4196156101184485, 0]
-  t := expect t "tan(b)" (toMultivector b.tan) [0, 0, 0, 0, 0.2740106538323617, 0.18267376922157444, 0.3653475384431489, 0]
+  t := expect t "tan(b)" (toMultivector b.tan) [0, 0, 0, 0, 0.2740106538323617, 0.18267376922157444, 0.3653475384431489, 0] seriesTol
   t := expect t "log(b)" b.log [-0.6189983495307403, 0, 0, 0, 0.8750112841954446, 0.5833408561302997, 1.1666817122605972, 0]
   t := expect t "sqrt(b)" b.sqrt [0.518911844577261, 0, 0, 0, 0.2890487571693053, 0.1926991714462046, 0.3853983428924085, 0]
   t := expect t "b^3" (b.pow 3) [0, 0, 0, 0, -0.08700000000000001, -0.05800000000000001, -0.11600000000000002, 0]
@@ -157,10 +163,10 @@ def e3 (t : Tally) : Tally := Id.run do
   -- vector chain w = 0.3v1 + 0.4v2
   let w := ch E3 1 [0.3, 0.4, 0.0]
   t := expect t "exp(w)" w.exp [1.1276259652063807, 0.3126571832962484, 0.41687624439499793, 0, 0, 0, 0, 0]
-  t := expect t "cosh(w)" (toMultivector w.cosh) [1.1276259652058704, 0, 0, 0, 0, 0, 0, 0]
-  t := expect t "sinh(w)" (toMultivector w.sinh) [0, 0.31265718328889713, 0.4168762443851962, 0, 0, 0, 0, 0]
-  t := expect t "cos(w)" (toMultivector w.cos) [0.8775825618898637, 0, 0, 0, 0, 0, 0, 0]
-  t := expect t "sin(w)" (toMultivector w.sin) [0, 0.28765532316984954, 0.3835404308931327, 0, 0, 0, 0, -0.0]
+  t := expect t "cosh(w)" (toMultivector w.cosh) [1.1276259652058704, 0, 0, 0, 0, 0, 0, 0] seriesTol
+  t := expect t "sinh(w)" (toMultivector w.sinh) [0, 0.31265718328889713, 0.4168762443851962, 0, 0, 0, 0, 0] seriesTol
+  t := expect t "cos(w)" (toMultivector w.cos) [0.8775825618898637, 0, 0, 0, 0, 0, 0, 0] seriesTol
+  t := expect t "sin(w)" (toMultivector w.sin) [0, 0.28765532316984954, 0.3835404308931327, 0, 0, 0, 0, -0.0] seriesTol
   t := expect t "w^5" (w.pow 5) [0, 0.01875, 0.025, 0, 0, 0, 0, 0]
   t := expect t "exp(v1+v2+v3)" (ch E3 1 [1.0, 1.0, 1.0]).exp [2.9145774401759277, 1.580586563566668, 1.580586563566668, 1.580586563566668, 0, 0, 0, 0]
   -- multivectors
@@ -184,17 +190,17 @@ def e3 (t : Tally) : Tally := Id.run do
   t := expect t "exp(0.7v123)" (Single.exp (⟨7, 0.7⟩ : Single E3 3 Float)).toMultivector [0.7648421872844885, 0, 0, 0, 0, 0, 0, 0.644217687237691]
   t := expect t "exp(2.0v)" (Single.exp (⟨0, 2.0⟩ : Single E3 0 Float)).toMultivector [7.38905609893065, 0, 0, 0, 0, 0, 0, 0]
   let h : Single E3 2 Float := ⟨3, 0.5⟩
-  t := expect t "tan(0.5v12)" (toMultivector h.tan) [0, 0, 0, 0, 0.46211715724935354, 0, 0, 0]
-  t := expect t "tanh(0.5v12)" (toMultivector h.tanh) [0, 0, 0, 0, 0.5463024898580239, 0, 0, 0]
-  t := expect t "cosh(0.5v12)" (toMultivector h.cosh) [0.8775825618898637, 0, 0, 0, 0, 0, 0, 0]
-  t := expect t "sinh(0.5v12)" (toMultivector h.sinh) [0, 0, 0, 0, 0.4794255386164159, 0, 0, 0]
-  t := expect t "cos(1.0v12)" (toMultivector (Single.cos (⟨3, 1.0⟩ : Single E3 2 Float))) [1.543080634803725, 0, 0, 0, 0, 0, 0, 0]
-  t := expect t "sin(1.0v12)" (toMultivector (Single.sin (⟨3, 1.0⟩ : Single E3 2 Float))) [0, 0, 0, 0, 1.175201193643034, 0, 0, 0]
-  t := expect t "cos(1.0v1)" (toMultivector (Single.cos (⟨1, 1.0⟩ : Single E3 1 Float))) [0.5403023058795628, 0, 0, 0, 0, 0, 0, 0]
-  t := expect t "sin(1.0v1)" (toMultivector (Single.sin (⟨1, 1.0⟩ : Single E3 1 Float))) [0, 0.8414709848086585, 0, 0, 0, 0, 0, 0]
+  t := expect t "tan(0.5v12)" (toMultivector h.tan) [0, 0, 0, 0, 0.46211715724935354, 0, 0, 0] seriesTol
+  t := expect t "tanh(0.5v12)" (toMultivector h.tanh) [0, 0, 0, 0, 0.5463024898580239, 0, 0, 0] seriesTol
+  t := expect t "cosh(0.5v12)" (toMultivector h.cosh) [0.8775825618898637, 0, 0, 0, 0, 0, 0, 0] seriesTol
+  t := expect t "sinh(0.5v12)" (toMultivector h.sinh) [0, 0, 0, 0, 0.4794255386164159, 0, 0, 0] seriesTol
+  t := expect t "cos(1.0v12)" (toMultivector (Single.cos (⟨3, 1.0⟩ : Single E3 2 Float))) [1.543080634803725, 0, 0, 0, 0, 0, 0, 0] seriesTol
+  t := expect t "sin(1.0v12)" (toMultivector (Single.sin (⟨3, 1.0⟩ : Single E3 2 Float))) [0, 0, 0, 0, 1.175201193643034, 0, 0, 0] seriesTol
+  t := expect t "cos(1.0v1)" (toMultivector (Single.cos (⟨1, 1.0⟩ : Single E3 1 Float))) [0.5403023058795628, 0, 0, 0, 0, 0, 0, 0] seriesTol
+  t := expect t "sin(1.0v1)" (toMultivector (Single.sin (⟨1, 1.0⟩ : Single E3 1 Float))) [0, 0.8414709848086585, 0, 0, 0, 0, 0, 0] seriesTol
   t := expect t "cos(0.5v123)" (toMultivector (Single.cos (⟨7, 0.5⟩ : Single E3 3 Float))) [1.1276259652063807, 0, 0, 0, 0, 0, 0, 0]
   t := expect t "sin(0.5v123)" (toMultivector (Single.sin (⟨7, 0.5⟩ : Single E3 3 Float))) [0, 0, 0, 0, 0, 0, 0, 0.5210953054937474]
-  t := expect t "cos(1.0v)" (toMultivector (Single.cos (⟨0, 1.0⟩ : Single E3 0 Float))) [0.5403023058795628, 0, 0, 0, 0, 0, 0, 0]
+  t := expect t "cos(1.0v)" (toMultivector (Single.cos (⟨0, 1.0⟩ : Single E3 0 Float))) [0.5403023058795628, 0, 0, 0, 0, 0, 0, 0] seriesTol
   t := expect t "2^(0.5v12)" (Single.rpow 2.0 h).toMultivector [0.9405421046832438, 0, 0, 0, 0.3396771251026685, 0, 0, 0]
   t := expect t "exp10(0.5v12)" (Single.rpow 10.0 h).toMultivector [0.40730731015394683, 0, 0, 0, 0.9132911666577952, 0, 0, 0]
   t := expect t "log(2.0v)" (Single.log (⟨0, 2.0⟩ : Single E3 0 Float)).toMultivector [0.6931471805599453, 0, 0, 0, 0, 0, 0, 0]
@@ -239,7 +245,7 @@ def e3 (t : Tally) : Tally := Id.run do
   -- hyperbolic couples (series) and the inverse functions of couples
   let hc : Couple E3 Float := ⟨1, 0.5, 0.2⟩
   t := expect t "cosh(0.5+0.2v1)" hc.cosh.toMultivector [1.1502537598798628, 0.10491524575100228, 0, 0, 0, 0, 0, 0]
-  t := expect t "sinh(0.5+0.2v1)" hc.sinh.toMultivector [0.5315519976425583, 0.22703170419541568, 0, 0, 0, 0, 0, 0]
+  t := expect t "sinh(0.5+0.2v1)" hc.sinh.toMultivector [0.5315519976425583, 0.22703170419541568, 0, 0, 0, 0, 0, 0] seriesTol
   -- Julia divides hyperbolic couples with the elliptic formula (defect couple-inv-hyperbolic);
   -- the true tanh splits over the idempotents: (tanh 0.7 ± tanh 0.3)/2
   t := expect t "tanh(0.5+0.2v1) (fixed)" hc.tanh.toMultivector
@@ -254,8 +260,8 @@ def e3 (t : Tally) : Tally := Id.run do
   t := expect t "pseudoexp(0.5v3)" (ch E3 1 [0, 0, 0.5]).coexp [0, 0, 0, 0.479425538604203, 0, 0, 0, 0.8775825618903728]
   t := expect t "pseudoabs(3v1+4v2)" (toMultivector (ch E3 1 [3.0, 4.0, 0]).coabs) [0, 0, 0, 0, 0, 0, 0, 5.0]
   t := expect t "pseudoinv(2v12)" (toMultivector (ch E3 2 [2.0, 0, 0]).coinv) [0, 0, 0, 0, 0.5, 0, 0, 0]
-  t := expect t "pseudosin(0.5v3)" (ch E3 1 [0, 0, 0.5]).cosin [0, 0, 0, 0.5210953054814953, 0, 0, 0, 0]
-  t := expect t "pseudocosh(0.5v3)" (ch E3 1 [0, 0, 0.5]).cocosh [0, 0, 0, 0, 0, 0, 0, 0.8775825618898637]
+  t := expect t "pseudosin(0.5v3)" (ch E3 1 [0, 0, 0.5]).cosin [0, 0, 0, 0.5210953054814953, 0, 0, 0, 0] seriesTol
+  t := expect t "pseudocosh(0.5v3)" (ch E3 1 [0, 0, 0.5]).cocosh [0, 0, 0, 0, 0, 0, 0, 0.8775825618898637] seriesTol
   t := expect t "geomabs(3v1+4v123)" (mv E3 [0, 3.0, 0, 0, 0, 0, 0, 4.0]).geomabs [5.0, 0, 0, 0, 0, 0, 0, 5.0]
   t := expect t "unitize(3v1+4v123)" (mv E3 [0, 3.0, 0, 0, 0, 0, 0, 4.0]).unitize [0, 0.6000000000000001, 0, 0, 0, 0, 0, 0.8]
   return t
@@ -268,13 +274,13 @@ def spaces (t : Tally) : Tally := Id.run do
   t := expect t "E2 cos(1+0.5v12)" z.cos [0.6092589091577942, 0, 0, -0.4384865798925953]
   t := expect t "E2 sin(1+0.5v12)" z.sin [0.948864531437168, 0, 0, 0.28154899513533443]
   t := expect t "E2 tan(1+0.5v12)" z.tan [0.8068774121630847, 0, 0, 1.042830728344361]
-  t := expect t "E2 cos(0.3v1+0.4v2)" (toMultivector (ch E2 1 [0.3, 0.4]).cos) [1.1276259652058704, 0, 0, 0]
+  t := expect t "E2 cos(0.3v1+0.4v2)" (toMultivector (ch E2 1 [0.3, 0.4]).cos) [1.1276259652058704, 0, 0, 0] seriesTol
   -- ℝ4: I² = +1
   let bb := ch E4 2 [0.3, 0.2, 0.1, 0.4, 0.5, 0.7]
   t := expect t "E4 exp(bivector) (series)" bb.exp [0.5269074368582443, 0, 0, 0, 0, 0.21935060373512008, 0.18972844044841117, 0.06561778090739673, 0.32996290666837663, 0.42707685299387516, 0.5718107714164264, 0, 0, 0, 0, 0.1253537950370727]
   t := expect t "E4 cosh(bivector)" (toMultivector bb.cosh) [0.526907436813054, 0, 0, 0, 0, 5.801997060957461e-18, 0, 0, 0, 0, -3.1221221146036047e-19, 0, 0, 0, 0, 0.12535379508086913] 1e-13 1e-16
   t := expect t "E4 sinh(bivector)" (toMultivector bb.sinh) [-5.794953248061134e-19, 0, 0, 0, 0, 0.21935060419470212, 0.1897284403181839, 0.06561778113586925, 0.32996290690476016, 0.42707685314256144, 0.5718107718865565, 0, 0, 0, 0, 1.438002236516593e-18] 1e-13 1e-16
-  t := expect t "E4 cos(1.0v) = cosh(1) (quirk B2)" (toMultivector (Single.cos (⟨0, 1.0⟩ : Single E4 0 Float))) [1.543080634803725, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  t := expect t "E4 cos(1.0v) = cosh(1) (quirk B2)" (toMultivector (Single.cos (⟨0, 1.0⟩ : Single E4 0 Float))) [1.543080634803725, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] seriesTol
   t := expect t "E4 log(-2.0v) (sign lost, I² = +1)" (Single.log (⟨0, -2.0⟩ : Single E4 0 Float)).toMultivector [0.6931471805599453, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
   t := expect t "E4 exp(vector)" (ch E4 1 [0.3, 0.4, 0.1, 0.2]).exp [1.1537877015640245, 0.3152266138575838, 0.4203021518101118, 0.10507553795252796, 0.2101510759050559, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
   t := expect t "E4 log(1+0.1v12) (qlog)" (toMultivector (sp E4 [1.0, 0.1, 0, 0, 0, 0, 0, 0]).log) [0.004975165426397965, 0, 0, 0, 0, 0.09966865249077625, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -391,7 +397,7 @@ def identities (t : Tally) : Tally := Id.run do
   t := expect t "exp = 1 + expm1" m.exp (Multivector.addScalar 1.0 m.expm1).v.toList 1e-15
   -- sin/cos of a chain against the multivector route
   let b := ch E3 2 [0.3, 0.2, 0.4]
-  t := expect t "cos(b) = Multivector cos" (toMultivector b.cos) (toMultivector b).cos.v.toList 1e-12
+  t := expect t "cos(b) = Multivector cos" (toMultivector b.cos) (toMultivector b).cos.v.toList seriesTol
   t := expect t "sin(b) = Multivector sin" (toMultivector b.sin) (toMultivector b).sin.v.toList 1e-12
   -- spinor trig (odd I) against the multivector route
   t := expect t "cos(q) = Multivector cos" (toMultivector q.cos) (toMultivector q).cos.v.toList 1e-12
@@ -467,9 +473,27 @@ def powers (t : Tally) : Tally := Id.run do
   t := expect t "2^v12" ((2 : Nat) ^ b : Couple E3 Float).toMultivector [Float.cos l2, 0, 0, 0, Float.sin l2, 0, 0, 0] 1e-15
   return t
 
+/-- The closed forms of the one-blade `cosh`/`sinh` against Grassmann's series
+(`BPair.cosh`/`BPair.sinh`, Julia's loop and stopping rule): equal to the series' `√eps`
+truncation, for every sign and size of `β = B²`. -/
+def closedSeries (t : Tally) : Tally := Id.run do
+  let mut t := t
+  for β in [1.0, -1.0, 0.0, 2.5, -0.3, 4.0] do
+    for (a, b) in [(0.5, 0.3), (-1.2, 0.7), (0.0, 1.5), (2.0, -0.4), (0.1, 0.0)] do
+      let z : BPair := ⟨a, b⟩
+      let c := BPair.coshClosed β z
+      let cs := BPair.cosh β z
+      let s := BPair.sinhClosed β z
+      let ss := BPair.sinh β z
+      t := t.check (near #[c.re, c.im] #[cs.re, cs.im] 1e-8 1e-12) fun _ =>
+        s!"cosh closed/series β={β} z=({a}, {b}): {c.re}, {c.im} vs {cs.re}, {cs.im}"
+      t := t.check (near #[s.re, s.im] #[ss.re, ss.im] 1e-8 1e-12) fun _ =>
+        s!"sinh closed/series β={β} z=({a}, {b}): {s.re}, {s.im} vs {ss.re}, {ss.im}"
+  return t
+
 /-- Run the unit tests; returns `(passed, failed)`. -/
 def run : IO (Nat × Nat) := do
-  let t := powers (identities (fixes (atanh2Tests (spaces (e3 {})))))
+  let t := closedSeries (powers (identities (fixes (atanh2Tests (spaces (e3 {}))))))
   IO.println s!"[composite/unit] pass={t.pass} fail={t.fail}"
   for m in t.msgs do IO.eprintln s!"[composite/unit]   FAIL {m}"
   return (t.pass, t.fail)

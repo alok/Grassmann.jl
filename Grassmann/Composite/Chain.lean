@@ -42,18 +42,37 @@ variable [Kernels V]
 @[inline] def scalarV (V : TensorBundle) (l : Layout) (x : Float) : Values Float (l.size V.n) :=
   Values.ofFn fun i => if i.1 = 0 then x else f0
 
+/-- `cosh t` for an element with `t ⟑ t = p` a scalar: `cosh √p`, `cos √-p`, or `1`. -/
+@[inline] def coshOfSquare (p : Float) : Float :=
+  if p > f0 then Float.cosh (Float.sqrt p) else if p < f0 then Float.cos (Float.sqrt (-p)) else f1
+
+/-- `sinh t / t` for an element with `t ⟑ t = p` a scalar: `sinh √p/√p`, `sin √-p/√-p`, or `1`. -/
+@[inline] def sinhOfSquareOver (p : Float) : Float :=
+  if p > f0 then sinhOver (Float.sqrt p) else if p < f0 then sinOver (Float.sqrt (-p)) else f1
+
+/-- `x ⟑ x` of a grade-`g` chain (`g ≥ 1`) when it is structurally a scalar and the space is a
+plain signature space (vectors, pseudovectors, every grade when `n ≤ 3`: the cross terms cancel
+exactly, as in Julia's product): `Σ xᵢ²·(e_bᵢ ⟑ e_bᵢ)`, a loop over the coefficients with no
+product kernel; `none` otherwise. -/
+@[inline] def chainSqFast? (g : Nat) (x : Values Float ((Layout.chain g).size V.n)) : Option Float :=
+  let s := plainNeg V
+  if s != notPlain && (g ≤ 1 || g + 1 ≥ V.n || V.n ≤ 3) then some (weightedSum (plainSq s) (.chain g) x)
+  else none
+
 /-- `cosh` of a grade-`g` chain (its coefficients `x`) as a spinor: `cosh(x₀)` for
 `g = 0` (Julia `C:456`), otherwise Grassmann's generic series (`C:458-481`) over
-`τ = x⟑x`. -/
+`τ = x⟑x`, summed in closed form when `τ` is a scalar. -/
 @[specialize V] def coshChainV (g : Nat) (x : Values Float ((Layout.chain g).size V.n)) : Half V false Float :=
   if g == 0 then Half.scalarF (Float.cosh (getD x 0))
-  else
+  else match chainSqFast? g x with
+  | some p => Half.scalarF (coshOfSquare p)
+  | none =>
     let τ : Half V false Float := ⟨Kernels.bin .mul (.chain g) (.chain g) (halfLayout false) x x⟩
     if vScalarOnly τ.v then
-      -- `τ` is exactly a scalar: every partial sum and term of the spinor series is one, so the
-      -- series runs on the scalar with the same operations (its norm `√(x·x)`)
-      let S := coshGenericTail (· + ·) (· * ·) (· / ·) (fun y => Float.sqrt (y * y)) τ.scalarValue
-      Half.scalarF (f1 + S)
+      -- `τ = p` is exactly a scalar: every partial sum and term of the spinor series is one;
+      -- the series' limit in closed form, `cosh √p`, `cos √-p` or `1` (Julia's truncated sum
+      -- agrees to its `√eps` stopping rule)
+      Half.scalarF (coshOfSquare τ.scalarValue)
     else Half.addScalar f1 (coshGenericTail Half.addF Half.smul' Half.sdiv Half.fnorm τ)
 
 /-- `sinh` of a grade-`g` chain (its coefficients `x`) as the half of parity `g`:
@@ -62,16 +81,18 @@ variable [Kernels V]
 @[specialize V] def sinhChainV (g : Nat) (x : Values Float ((Layout.chain g).size V.n)) :
     Values Float ((halfLayout (g % 2 == 1)).size V.n) :=
   if g == 0 then scalarV V _ (Float.sinh (getD x 0))
-  else
+  else match chainSqFast? g x with
+  | some p => embedChain V g (halfLayout (g % 2 == 1)) (sinhOfSquareOver p) x
+  | none =>
     let lp := halfLayout (g % 2 == 1)
     let τ : Values Float ((halfLayout false).size V.n) :=
       Kernels.bin .mul (.chain g) (.chain g) (halfLayout false) x x
     let t0 : Values Float (lp.size V.n) := embedChain V g lp f1 x
     if vScalarOnly τ then
-      -- `τ` is exactly a scalar `τ₀`: the right products by it are coefficient-wise
-      let τ0 := getD τ 0
-      sinhGenericWith (vzip (· + ·)) (fun y k => vmap (· / k) y) vnorm (fun y => vmap (· * τ0) y)
-        (fun d y => let c := τ0 / natF d; vmap (· * c) y) t0
+      -- `τ = p` is exactly a scalar: the series' limit `t·sinh(√p)/√p` (`sin`, `1` for
+      -- `p ≤ 0`) in closed form
+      let c := sinhOfSquareOver (getD τ 0)
+      vmap (· * c) t0
     else
     let mulτ := fun (y : Values Float (lp.size V.n)) => Kernels.bin .mul lp (halfLayout false) lp y τ
     sinhGenericWith (vzip (· + ·)) (fun y k => vmap (· / k) y) vnorm mulτ
@@ -255,7 +276,13 @@ inverse of `cosh t` is undefined. -/
 
 /-- AbstractTensors `cos(t) = cosh(I ⟑ t)` (`AT:407`) of a chain: a spinor. -/
 @[specialize V] def cos (c : Chain V G Float) : Half V false Float :=
-  coshChainV (pseudoGrade V - G) (mulPseudoChain G c.v)
+  let s := plainNeg V
+  let g' := V.n - G
+  if s != notPlain && G ≤ V.n && g' ≥ 1 && (g' ≤ 1 || g' + 1 ≥ V.n || V.n ≤ 3) then
+    -- plain space: `I ⟑ e_b = ±e_{b ⊻ I}`, so `(I⟑t)² = Σ tᵢ²·(e_{bᵢ⊻I})²`, a scalar here
+    let m := pseudoMask V
+    Half.scalarF (coshOfSquare (weightedSum (fun b => plainSq s (b ^^^ m)) (.chain G) c.v))
+  else coshChainV (pseudoGrade V - G) (mulPseudoChain G c.v)
 
 /-- AbstractTensors `sin(t) = sinh(I ⟑ t)/I` (`AT:408`) of a chain: the half of the parity
 of `G`. -/
