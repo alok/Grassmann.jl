@@ -296,6 +296,30 @@ abbrev pseudo {α : Type u} {β γ : Type v} {δ : Type w} [ComplementRight α �
     [ComplementRight α' β'] [Sandwich β β' γ] [ComplementLeft γ δ] (x : α) (R : α') : δ :=
   co₂ sandwich x R
 
+/-- Julia `pseudosandwich = cosandwich` (AT:561). -/
+abbrev pseudosandwich {α α' : Type u} {β β' γ : Type v} {δ : Type w} [ComplementRight α β]
+    [ComplementRight α' β'] [Sandwich β β' γ] [ComplementLeft γ δ] (x : α) (R : α') : δ :=
+  cosandwich x R
+
+/-- Julia `antisandwich(R, x) = complementleft(complementright(R) >>> complementright(x))`
+(AT:568). -/
+@[inline] def antisandwich {α α' : Type u} {β β' γ : Type v} {δ : Type w} [ComplementRight α β]
+    [ComplementRight α' β'] [HShiftRight β β' γ] [ComplementLeft γ δ] (R : α) (x : α') : δ :=
+  complementLeft (complementRight R >>> complementRight x)
+
+/-- Julia `pseudograde(t, G) = t(grade(V) - G)` (DirectSum): the part of grade `mdims(V) - G`. -/
+abbrev pseudogradeProj {X : Type u} {M : Type v} {V : M} {T : Type w} {β : Type v} (G : Nat)
+    [TensorAlgebra X M V T] [HasMDims M] [GradeProj X (HasMDims.mdims V - G) β] : X → β :=
+  GradeProj.proj (G := HasMDims.mdims V - G)
+
+/-- Julia `a ⊗ λ = a*λ` for a tensor and a scalar (AT:333-334). -/
+instance (priority := low) instTensorProdScalarRight {X : Type u} {M : Type v} {V : M} {T : Type w}
+    {α : Type} [TensorAlgebra X M V T] [Coeff α] [HMul X α X] : TensorProd X α X := ⟨(· * ·)⟩
+
+/-- Julia `λ ⊗ a = λ*a` for a scalar and a tensor (AT:335-336). -/
+instance (priority := low) instTensorProdScalarLeft {X : Type u} {M : Type v} {V : M} {T : Type w}
+    {α : Type} [TensorAlgebra X M V T] [Coeff α] [HMul α X X] : TensorProd α X X := ⟨(· * ·)⟩
+
 /-! ## Uniform scaling (Julia `LinearAlgebra.UniformScaling`, AT:287-316)
 
 `λI` is a dimension-free pseudoscalar: `V(λI)` is `λ` times the unit
@@ -373,6 +397,10 @@ scoped infixl:70 " ∗ " => reverseProduct
 scoped infixl:70 " ⊛ " => scalarProduct
 /-- Sandwich (Julia `⊘`). -/
 scoped infixl:70 " ⊘ " => Sandwich.sandwich
+/-- Julia `a << b = contraction(b, ~a)` (AT:260; Julia precedence 14, above `+`). -/
+scoped infixl:75 " << " => shiftLeftContraction
+/-- Julia `a >> b = contraction(~a, b)` (AT:261). -/
+scoped infixl:75 " >> " => shiftRightContraction
 /-- Tensor product (Julia `⊗`). -/
 scoped infixl:70 " ⊗ " => TensorProd.tensorProd
 /-- Symmetrized product (Julia `⊙`). -/

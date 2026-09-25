@@ -423,6 +423,15 @@ cotangent. -/
 method ambiguity B4 does not arise here). -/
 @[inline] def cometric (a b : X) : X := coabs (a - b)
 
+/-- Julia `antiabs = coabs` (AT:551). -/
+abbrev antiabs (t : X) : X := coabs t
+/-- Julia `antiabs2 = coabs2` (AT:551). -/
+abbrev antiabs2 (t : X) : X := coabs2 t
+/-- Julia's binary `antimetric = cometric` (AT:551). -/
+abbrev antimetric (a b : X) : X := cometric a b
+/-- Julia `pseudometric = cometric` (AT:551). -/
+abbrev pseudometric (a b : X) : X := cometric a b
+
 /-- Julia `pseudo<f>` is the same function as `co<f>` (AT:532-548). -/
 abbrev pseudoabs (t : X) : X := coabs t
 /-- Julia `pseudoabs2`. -/
