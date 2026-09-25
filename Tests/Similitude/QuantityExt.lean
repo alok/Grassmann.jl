@@ -29,6 +29,16 @@ example : Quantity .English Dim.energy Float :=
   Sys.Metric.qty Dim.energy (1.0 : Float) * Dim.energy.conv .Metric .English
 #guard (neper .Metric).display == "𝟏 = 1.0 [log(𝟙)] Metric"
 
+/-! Julia `d(v, U, S)` (values from the oracle) and the intended `morphism(U)`. -/
+#guard (Dim.energy.convert (.ofFloat 2.0) .Metric .English).toString == "g₀⋅ft⋅lb⋅2 = 2.7116358966628007"
+#guard (Dim.energy.convert (.ofInt 2) .English .Metric).toString == "g₀⁻¹ft⁻¹lb⁻¹2 = 1.4751242985545305"
+#guard (Dim.energy.convert (.ofFloat 0.5) .Gauss .Metric).toString == "2⁷5⁷/2 = 5.0e6"
+#guard (Dim.energy.convert (.ofInt 3) .Metric .Metric).toString == "3 = 3.0"
+#guard (Dim.length.convert (.ofFloat 0.5) .English).toString == "ft⁻¹/2 = 1.6404199475065615"
+-- Metric sets `g₀ = 1`: a force is a mass times an acceleration, `F ↦ M L T⁻²`
+#guard ((Sys.Metric.morphism.map fun r => r[0]!.print).toList) ==
+  ["0", "1", "1", "-2", "0", "0", "0", "0", "0", "0", "0"]
+
 /-- The extended quantity algebra against the oracle. -/
 def quantityExtSuite : IO Suite := do
   let j ← loadJson "similitude/quantity_ext.json"

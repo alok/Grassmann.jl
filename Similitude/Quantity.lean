@@ -201,6 +201,19 @@ instance (priority := low) {U S : Sys} {d₁ d₂ : Dim} {α : Type} :
     HDiv (Quantity U d₁ α) (Quantity S d₂ α) (ConvertUnit U S d₁) :=
   ⟨fun _ _ => ⟨⟩⟩
 
+/-- Julia `d(v, U, S = Metric) = v/ratio(d, U, S)` (`dimension.jl:252`): a number `v`
+of dimension `d` given in `S`, expressed in `U` (Similitude's exact arithmetic:
+`energy(2.0, Metric, English) = g₀⋅ft⋅lb⋅2`). -/
+def _root_.UnitSystems.Dim.convert (d : Dim) (v : Scalar) (U : Sys) (S : Sys := .Metric) : Scalar :=
+  v / ratio d.toGroup.v U S
+
+/-- The intended Julia `morphism(U)` (`dimension.jl:160`, which fails with a
+`MethodError` on `param(::Group)`): the `11 × 11` matrix whose column `j` is the
+image under `U` of the `j`-th USQ base dimension `F M L T Q Θ N J A R C`. -/
+def _root_.UnitSystems.Sys.morphism (U : Sys) : Array (Array Expo) :=
+  let cols := (List.finRange 11).toArray.map fun j => (U.image (Exps.unit j)).toExpos
+  (List.range 11).toArray.map fun i => cols.map fun c => c[i]!
+
 /-- The natural unit of dimension `d` expressed in `U` (Julia `d(U)`,
 `dimension.jl:248`): `U(ratio(d, Natural, U), d)`. -/
 def naturalUnit (U : Sys) (d : Dim) : Q U d := ⟨ratio d.toGroup.v .Natural U⟩
