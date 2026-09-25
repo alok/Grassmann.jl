@@ -142,8 +142,9 @@ instance {α : Type} [Packed α] [Inhabited α] [FlatFiber α] {n : Nat} : FlatF
   push a v := pushValues v n 0 a
   size_push a v := size_pushValues v n 0 a
 
+/-- Static vectors divide entrywise (StaticVectors `v / s = map(c -> c/s)`), so as their entries do. -/
 instance {α : Type} [Packed α] [Inhabited α] [FlatFiber α] [LinearFiber α] {n : Nat} :
-    LinearFiber (Values α n) := ⟨false⟩
+    LinearFiber (Values α n) := ⟨LinearFiber.recipDiv α⟩
 
 /-! ## Grassmann elements -/
 
