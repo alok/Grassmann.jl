@@ -93,6 +93,32 @@ def run : TestM Unit := do
   -- round trips of the blade encodings
   check "ops couple read-back" (C.fiberArray.toList.all fun z => z.bits == 3)
   check "ops phasor read-back" (P.fiberArray.toList.all fun z => z.angle.bits == 3)
+  -- metric fields (Julia `metricextensorfield`, `metrictensorfield`, `fullmetricextensor`):
+  -- per-point diagonal metrics `diag(10i, 10i+1, 10i+2, 10i+3)` on the blades `1, v₁, v₂, v₁₂`
+  let gm : Array (DiagonalOperator ℝ2 .full Float) := (Array.range 5).map fun i =>
+    ⟨Values.ofFn fun j => Float.ofNat (10 * i + j.1)⟩
+  let g0 := GridBundle.ofAxis ax
+  let gb : GridBundle 1 Float (DiagonalOperator ℝ2 .full Float) :=
+    ⟨g0.space, g0.top, .pointwise gm, 0, g0.size_top⟩
+  checkEq "ops metricextensorfield" (gb.metricextensorfield.fiberArray.toList.map (·.d.toList))
+    (gm.toList.map (·.d.toList))
+  checkEq "ops metrictensorfield" (gb.metrictensorfield.fiberArray.toList.map (·.d.toList))
+    ((List.range 5).map fun i => [Float.ofNat (10 * i + 1), Float.ofNat (10 * i + 2)])
+  checkEq "ops fullmetricextensor (grid)" (gb.fullmetricextensor.toList.map (·.d.toList))
+    (gm.toList.map (·.d.toList))
+  -- a mesh on the full vertices 2, 3, 4 of five points: the field has three metrics, the full
+  -- extensor all five
+  let pts : Array Float := #[0, 1, 2, 3, 4]
+  let cloud : PointCloud Float (DiagonalOperator ℝ2 .full Float) :=
+    ⟨(PointCloud.ofArray pts).points, .pointwise gm, 0⟩
+  let sb : SimplexBundle 2 Float (DiagonalOperator ℝ2 .full Float) :=
+    ⟨cloud, MeshTopology.SimplexTopology.ofElements #[#v[2, 3], #v[3, 4]] (p := some 5)⟩
+  checkEq "ops metricextensorfield (mesh)" (sb.metricextensorfield.fiberArray.toList.map (·.d.toList))
+    ([1, 2, 3].map fun i => (gm[i]!).d.toList)
+  checkEq "ops fullmetricextensor (mesh)" (sb.fullmetricextensor.toList.map (·.d.toList))
+    (gm.toList.map (·.d.toList))
+  checkEq "ops fullmetrictensor (mesh)" (sb.fullmetrictensor.toList.map (·.d.toList))
+    ((List.range 5).map fun i => [Float.ofNat (10 * i + 1), Float.ofNat (10 * i + 2)])
   -- flat linear algebra of operator fields agrees with the pointwise operations
   let s := E + E
   check "ops E + E" ((List.range 5).all fun i =>

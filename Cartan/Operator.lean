@@ -365,6 +365,15 @@ def metricextensorfield [FlatFiber G] [Inhabited G] (b : GridBundle N P G) :
 def metrictensorfield {G' : Type} [FlatFiber G'] [Inhabited G] [SubMetric G G'] (b : GridBundle N P G) :
     TensorField b.induced G' := TensorField.ofFn b.induced fun i => SubMetric.submetric (b.metric.get i)
 
+/-- Julia `fullmetricextensor(m)` (`fiber.jl:149`) of a grid: every point's metric (a grid is its
+own full mesh). -/
+def fullmetricextensor [Inhabited G] (b : GridBundle N P G) : Array G :=
+  (Array.range (card b)).map b.metric.get
+
+/-- Julia `fullmetrictensor(m)` (`fiber.jl:150`) of a grid. -/
+def fullmetrictensor {G' : Type} [Inhabited G] [SubMetric G G'] (b : GridBundle N P G) : Array G' :=
+  b.fullmetricextensor.map SubMetric.submetric
+
 end GridBundle
 
 namespace SimplexBundle
@@ -384,6 +393,16 @@ def metricextensorfield [FlatFiber G] [Inhabited G] (b : SimplexBundle n P G) :
 def metrictensorfield {G' : Type} [FlatFiber G'] [Inhabited G] [SubMetric G G'] (b : SimplexBundle n P G) :
     TensorField b.induced G' :=
   TensorField.ofFn b.induced fun i => SubMetric.submetric (b.cloud.metric.get (b.image i - 1))
+
+/-- Julia `fullmetricextensor(m) = fiber(fullcoordinates(m))` (`fiber.jl:149`): the metric at
+every point of the full mesh, not only at the bundle's vertices. -/
+def fullmetricextensor [FlatFiber P] [Inhabited G] (b : SimplexBundle n P G) : Array G :=
+  (Array.range b.cloud.size).map b.cloud.metric.get
+
+/-- Julia `fullmetrictensor(m) = submetric(fullmetricextensor(m))` (`fiber.jl:150`). -/
+def fullmetrictensor {G' : Type} [FlatFiber P] [Inhabited G] [SubMetric G G']
+    (b : SimplexBundle n P G) : Array G' :=
+  b.fullmetricextensor.map SubMetric.submetric
 
 end SimplexBundle
 
