@@ -3,7 +3,7 @@ version = "0.1.0"
 description = "Lean 4 port of Michael Reed's Grassmann.jl ecosystem (DirectSum, Leibniz, AbstractTensors, Grassmann, Cartan, ...)"
 keywords = ["math", "geometric-algebra", "clifford-algebra", "differential-geometry"]
 license = "AGPL-3.0-or-later"
-defaultTargets = ["StaticVectors", "AbstractTensors", "Leibniz", "DirectSum", "Grassmann", "tests", "bench"]
+defaultTargets = ["JuliaBase", "StaticVectors", "AbstractTensors", "Leibniz", "DirectSum", "Grassmann", "tests", "bench"]
 testDriver = "tests"
 
 [leanOptions]
@@ -11,6 +11,9 @@ autoImplicit = false
 relaxedAutoImplicit = false
 pp.unicode.fun = true
 maxRecDepth = 4096
+
+[[lean_lib]]
+name = "JuliaBase"
 
 [[lean_lib]]
 name = "StaticVectors"
