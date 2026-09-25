@@ -81,17 +81,59 @@ syntax (name := verifyDispatch) "verify_kernel_dispatch " ident " : " term : com
       for sp in sps do
         let kname := sandwichName pre sp
         let ok ← withLocalDeclD `r (vals sp.lr) fun r => withLocalDeclD `x (vals sp.lx) fun x => do
-          let f := if sp.shift then ``SandwichKernels.tsandwich else ``SandwichKernels.sandwich
-          let e := mkAppN (mkConst f) #[Ve, sinst, int, coeffInt, layoutExpr sp.lr, layoutExpr sp.lx, r, x]
+          let e := match sp.kind with
+            | .sandwich => mkAppN (mkConst ``SandwichKernels.sandwich)
+                #[Ve, sinst, int, coeffInt, layoutExpr sp.lr, layoutExpr sp.lx, r, x]
+            | .tsandwich => mkAppN (mkConst ``SandwichKernels.tsandwich)
+                #[Ve, sinst, int, coeffInt, layoutExpr sp.lr, layoutExpr sp.lx, r, x]
+            | .rsandwich => mkAppN (mkConst ``SandwichKernels.rsandwich)
+                #[Ve, sinst, int, coeffInt, layoutExpr sp.lr, layoutExpr sp.lx, layoutExpr sp.lc, r, x]
           let r ← withCanUnfoldPred (fun cfg info => if isKernel info.name then pure false
               else canUnfoldDefault cfg info) (whnf e)
           return r.isAppOf kname
-        unless ok do bad := bad.push s!"{if sp.shift then ">>>" else "⊘"} {layoutTag sp.lr} {layoutTag sp.lx}"
+        unless ok do bad := bad.push s!"{sp.describe} {layoutTag sp.lr} {layoutTag sp.lx}"
+      -- the linear kernels
+      let lins := linearSpecs V.n (Policy.default V.n)
+      for s in lins do
+        let kname := linName pre s
+        let ok ← withLocalDeclD `x (vals s.la) fun x => withLocalDeclD `y (vals s.lb) fun y =>
+            withLocalDeclD `k int fun k => do
+          let head (f : Name) := mkApp4 (mkConst f) Ve inst int coeffInt
+          let e := match s.op with
+            | .add => mkApp3 (head ``Kernels.add) (layoutExpr s.la) x y
+            | .sub => mkApp3 (head ``Kernels.sub) (layoutExpr s.la) x y
+            | .neg => mkApp2 (head ``Kernels.neg) (layoutExpr s.la) x
+            | .smul => mkApp3 (head ``Kernels.smul) (layoutExpr s.la) k x
+            | .muls => mkApp3 (head ``Kernels.muls) (layoutExpr s.la) x k
+            | .conv => mkApp3 (head ``Kernels.conv) (layoutExpr s.la) (layoutExpr s.lc) x
+            | .convAdd => mkApp5 (head ``Kernels.convAdd) (layoutExpr s.la) (layoutExpr s.lb) (layoutExpr s.lc) x y
+            | .convSub => mkApp5 (head ``Kernels.convSub) (layoutExpr s.la) (layoutExpr s.lb) (layoutExpr s.lc) x y
+          let r ← withCanUnfoldPred (fun cfg info => if isKernel info.name then pure false
+              else canUnfoldDefault cfg info) (whnf e)
+          return r.isAppOf kname
+        unless ok do bad := bad.push s!"linear {s.describe}"
+      -- the dynamic layer's loops
+      let dinst ← synthInstance (mkApp (mkConst ``DynKernels) Ve)
+      let dls := planDynLoops V pre (planAll V (Policy.default V.n)) (Policy.default V.n).maxEntries
+      for d in dls do
+        let kname := d.alias.getD (dynLoopName pre d)
+        let ok ← withLocalDeclD `x (vals d.la) fun x => withLocalDeclD `y (vals d.lb) fun y => do
+          let e := mkAppN (mkConst ``DynKernels.loop) #[Ve, dinst, int, coeffInt, opExpr (.bin d.op),
+            layoutExpr d.la, layoutExpr d.lb, layoutExpr d.lc, x, y]
+          let r ← withCanUnfoldPred (fun cfg info => if isKernel info.name then pure false
+              else canUnfoldDefault cfg info) (whnf e)
+          return r.isAppOf kname
+        unless ok do bad := bad.push s!"loop {opTag (.bin d.op)} {layoutTag d.la} {layoutTag d.lb} {layoutTag d.lc}"
       unless bad.isEmpty do
-        throwError "{bad.size} of {assigned.size + sps.size} specifications of {V} do not dispatch to their kernel: {bad.toList.take 20}"
-      return assigned.size + sps.size
+        throwError "{bad.size} of {assigned.size + sps.size + lins.size + dls.size} specifications of {V} do not \
+          dispatch to their kernel: {bad.toList.take 20}"
+      return (assigned.size + sps.size, lins.size + dls.size)
     elabCommand (← `(/-- Number of kernel specifications whose dispatch was verified at compile time. -/
-      def $name : Nat := $(quote count)))
+      def $name : Nat := $(quote count.1)))
+    let extra := mkIdent (name.getId.appendAfter "Linear")
+    elabCommand (← `(/-- Number of linear kernels and dynamic loops whose dispatch was verified at
+      compile time. -/
+      def $extra : Nat := $(quote count.2)))
   | _ => throwUnsupportedSyntax
 
 verify_kernel_dispatch dispatchedR2 : ℝ2
@@ -150,5 +192,16 @@ example : (SandwichKernels.sandwich (V := ℝ3) (α := Int) .even (.chain 1)
     ⟨#[1, 1, 0, 0], rfl⟩ ⟨#[1, 0, 0], rfl⟩).toList = [0, 2, 0] := by decide
 example : (SandwichKernels.tsandwich (V := ℝ3) (α := Int) .even (.chain 1)
     ⟨#[1, 1, 0, 0], rfl⟩ ⟨#[1, 0, 0], rfl⟩).toList = [0, -2, 0] := by decide
+
+/-- The fused `R * e₁ * ~R` (unprojected, a co-spinor `e₁, e₂, e₃, e₁₂₃`): `-2e₂`. -/
+example : (SandwichKernels.rsandwich (V := ℝ3) (α := Int) .even (.chain 1) .odd
+    ⟨#[1, 1, 0, 0], rfl⟩ ⟨#[1, 0, 0], rfl⟩).toList = [0, -2, 0, 0] := by decide
+
+/-- Linear kernels: a promoted sum (`e₁ + 2e₂ + 3e₃` plus the bivector `e₁₂ - e₂₃`) and a grade
+projection of a multivector. -/
+example : (Kernels.convAdd (V := ℝ3) (α := Int) (.chain 1) (.chain 2) .full
+    ⟨#[1, 2, 3], rfl⟩ ⟨#[1, 0, -1], rfl⟩).toList = [0, 1, 2, 3, 1, 0, -1, 0] := by decide
+example : (Kernels.conv (V := ℝ3) (α := Int) .full (.chain 2)
+    ⟨#[1, 2, 3, 4, 5, 6, 7, 8], rfl⟩).toList = [5, 6, 7] := by decide
 
 end CodegenTests.Dispatch

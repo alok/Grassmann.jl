@@ -54,9 +54,15 @@ namespace CodegenTests.Typed
     let ts := refBinProj V .mul .odd .even (.chain 1) (refBin V .mul .even (.chain 1) .odd r u)
       (refUn V .clifford .even .even r)
     t := t.check (same (R >>> U : Chain V 1 Float).v ts) s!"{name} Spinor >>> Chain1"
-    -- `R * v * ~R` through the typed products
+    -- `R * v * ~R` (one fused kernel, `RevSandwich`) against the three typed products
     let rv := refBin V .mul .odd .even .odd (refBin V .mul .even (.chain 1) .odd r u) (refUn V .reverse .even .even r)
     t := t.check (same (R * U * ~R : CoSpinor V Float).v rv) s!"{name} R*v*~R"
+    let uwu := refBin V .mul .even (.chain 1) .odd (refBin V .mul (.chain 1) (.chain 1) .even u w)
+      (refUn V .reverse (.chain 1) (.chain 1) u)
+    t := t.check (same (U * W * ~U : CoSpinor V Float).v uwu) s!"{name} u*w*~u"
+    -- no fused kernel for multivectors: `a * b * ~a` stays the three products
+    let aba := refBin V .mul .full .full .full (refBin V .mul .full .full .full a b) (refUn V .reverse .full .full a)
+    t := t.check (same (A * B * ~A).v aba) s!"{name} a*b*~a"
     t := t.check (same (~A).v (refUn V .reverse .full .full a)) s!"{name} reverse"
     t := t.check (same (⋆A : Multivector V Float).v (refUn V .complementrighthodge .full .full a)) s!"{name} hodge"
     t := t.check (same (⋆U : Chain V (n - 1) Float).v (refUn V .complementrighthodge (.chain 1) (.chain (n - 1)) u))
@@ -102,9 +108,18 @@ run_cmd do
 
 namespace CodegenTests.Typed
 
+/-- `a * b * ~a` of dynamic elements (no `RevSandwich` instance): it still elaborates, to the
+three products. -/
+def dynPattern (t : Tally) : Tally :=
+  let a : TA ℝ3 Float := .multi ⟨Values.ofFn fun i => i.1.toUInt64.toFloat + 1⟩
+  let b : TA ℝ3 Float := .chain 1 ⟨Values.ofFn fun i => 2 - i.1.toUInt64.toFloat⟩
+  let x := a * b * ~a
+  let y := TA.mulF (TA.mulF a b) (TA.reverseF a)
+  t.check (x.kind == y.kind && x.toDense.v.toArray == y.toDense.v.toArray) "TA a*b*~a"
+
 /-- Run the suite. -/
 def run : IO Tally := do
-  let mut t : Tally := {}
+  let mut t : Tally := dynPattern {}
   t := checkTyped "ℝ2" ℝ2 11 t
   t := checkTyped "ℝ3" ℝ3 12 t
   t := checkTyped "ℝ4" ℝ4 13 t
