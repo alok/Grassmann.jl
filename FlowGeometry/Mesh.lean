@@ -43,6 +43,37 @@ structured grid with `m` points per column. -/
 def rectangletriangle (i m : Nat) : Vector Nat 3 :=
   rectangletriangleIJ ((i - 1) % (2 * (m - 1)) + 1) ((i - 1) / (2 * (m - 1)) + 1) m
 
+/-- The vertices of triangle `i` of cell row `j` lie in `1 … m·JL` (port notes §8.2: the mesh index
+bounds). -/
+theorem rectangletriangleIJ_bounds {i j JL m : Nat} (hi : 1 ≤ i ∧ i ≤ 2 * (JL - 1)) (hj : 1 ≤ j ∧ j + 1 ≤ m) :
+    ∀ v ∈ (rectangletriangleIJ i j JL).toList, 1 ≤ v ∧ v ≤ m * JL := by
+  have hq : (j - 1) * JL + JL + JL ≤ m * JL := by
+    have h1 : (j - 1 + 2) * JL ≤ m * JL := Nat.mul_le_mul_right JL (by omega)
+    have h2 : (j - 1 + 2) * JL = (j - 1) * JL + JL + JL := by
+      rw [Nat.add_mul]; omega
+    omega
+  have hd : i / 2 + 1 ≤ JL := by omega
+  intro v hv
+  unfold rectangletriangleIJ at hv
+  dsimp only at hv
+  split at hv <;> simp at hv <;> omega
+
+/-- Every vertex of `rectangletriangle i JL`, for `1 ≤ i ≤ 2(m-1)(JL-1)`, is a point of the `m × JL`
+grid: `rectangletriangles m JL` only refers to existing points. -/
+theorem rectangletriangle_bounds {i m JL : Nat} (hJL : 2 ≤ JL) (hi : 1 ≤ i ∧ i ≤ 2 * (m - 1) * (JL - 1)) :
+    ∀ v ∈ (rectangletriangle i JL).toList, 1 ≤ v ∧ v ≤ m * JL := by
+  unfold rectangletriangle
+  have hpos : 0 < 2 * (JL - 1) := by omega
+  have hr := Nat.mod_lt (i - 1) hpos
+  have h : (i - 1) / (2 * (JL - 1)) < m - 1 := by
+    rw [Nat.div_lt_iff_lt_mul hpos]
+    have : 2 * (m - 1) * (JL - 1) = (m - 1) * (2 * (JL - 1)) := by
+      rw [Nat.mul_comm 2 (m - 1), Nat.mul_assoc]
+    omega
+  generalize (i - 1) / (2 * (JL - 1)) = q at h ⊢
+  generalize (i - 1) % (2 * (JL - 1)) = r at hr ⊢
+  exact rectangletriangleIJ_bounds ⟨by omega, by omega⟩ ⟨by omega, by omega⟩
+
 /-- The triangles of an `m × JL` structured grid (column `JL` points each). -/
 def rectangletriangleList (m JL : Nat) : Array (Vector Nat 3) :=
   (Array.range (2 * (m - 1) * (JL - 1))).map fun i => rectangletriangle (i + 1) JL
@@ -60,6 +91,23 @@ def rectangleboundLoop (n JL : Nat) : Array Nat :=
   let down := (Array.range (n - 1)).map fun i => JL * (n - 1) - JL * i   -- JL*(n-1):-JL:JL
   let back := (Array.range (JL - 2)).map fun i => JL - 1 - i              -- JL-1:-1:2
   up ++ top ++ down ++ back ++ #[1]
+
+/-- The boundary loop visits `2(n-1) + 2(JL-1)` points and returns to the first: it has
+`2n + 2JL - 3` entries. -/
+theorem rectangleboundLoop_size {n JL : Nat} (hn : 1 ≤ n) (hJL : 2 ≤ JL) :
+    (rectangleboundLoop n JL).size = 2 * n + 2 * JL - 3 := by
+  simp [rectangleboundLoop]
+  omega
+
+/-- The loop is closed: it starts and ends at point `1`. -/
+theorem rectangleboundLoop_closed {n JL : Nat} (hn : 1 ≤ n) :
+    (rectangleboundLoop n JL)[0]? = some 1 ∧ (rectangleboundLoop n JL).back? = some 1 := by
+  refine ⟨?_, by simp [rectangleboundLoop, Array.back?_push]⟩
+  unfold rectangleboundLoop
+  rw [Array.getElem?_append_left (by simp; omega), Array.getElem?_append_left (by simp; omega),
+    Array.getElem?_append_left (by simp; omega), Array.getElem?_append_left (by simp; omega)]
+  simp
+  exact ⟨0, by simp [Array.getElem?_range]; omega, Nat.mul_zero JL⟩
 
 /-- Julia `rectanglebounds(n = 51, JL = 51)` (`FlowGeometry.jl:96-99`): the boundary edges of the
 grid as a closed loop. -/
