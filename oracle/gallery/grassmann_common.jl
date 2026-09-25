@@ -51,6 +51,72 @@ function dump_stream(name, f, rect, gridsize; stride = 4)
     println(name, ": ", length(ap), " arrows, ", length(lp), " line points")
 end
 
+# ---- paper graphs: the LightGraphsExt emulation (ext/LightGraphsExt.jl:19-48) with an
+# ordered, de-duplicated edge list (`add_edge!` into a SimpleDiGraph)
+function sdg_term!(E, x)
+    ind = (signbit(value(x)) ? reverse : identity)(Grassmann.indices(basis(x)))
+    if Grassmann.rank(x) == 2
+        e = (ind[1], ind[2]); e ∉ E && push!(E, e)
+    else
+        sdg!(E, ∂(x))
+    end
+    E
+end
+function sdg!(E, x::Chain{V}) where V
+    N, G = mdims(V), Grassmann.rank(x)
+    ib = Grassmann.indexbasis(N, G)
+    for k in 1:Grassmann.binomial(N, G)
+        if !iszero(x.v[k])
+            B = Grassmann.symmetricmask(V, ib[k], ib[k])[1]
+            count_ones(B) ≠ 1 && sdg_term!(E, x.v[k] * Grassmann.getbasis(V, B))
+        end
+    end
+    E
+end
+function sdg!(E, x::Multivector{V}) where V
+    N = mdims(V)
+    for i in 2:N
+        R = Grassmann.binomsum(N, i); ib = Grassmann.indexbasis(N, i)
+        for k in 1:Grassmann.binomial(N, i)
+            if !iszero(x.v[k+R])
+                B = Grassmann.symmetricmask(V, ib[k], ib[k])[1]
+                count_ones(B) ≠ 1 && sdg_term!(E, x.v[k+R] * Grassmann.getbasis(V, B))
+            end
+        end
+    end
+    E
+end
+sdg!(E, x::Grassmann.TensorTerm) = sdg_term!(E, x)
+
+"""
+A paper graph figure: GraphPlot's `circular_layout` drawn y-down (vertex k at
+(cos θ, -sin θ), θ = 2π(k-1)/n), grey disks with labels, light edges with grey arrowheads;
+disks and heads are data-space polygons, as in the Lean render.
+"""
+function graph_figure(name, x, expr)
+    n = mdims(Manifold(x))
+    E = sdg!(Tuple{Int,Int}[], x)
+    dumpdata(name, Dict("expr" => expr, "nv" => n, "edges" => [[a, b] for (a, b) in E]))
+    pos(k) = (θ = 2π * (k - 1) / n; (cos(θ), -sin(θ)))
+    r, L, W = 0.12, 0.11, 0.045
+    fig = Figure(size = (500, 500))
+    ax = Axis(fig[1, 1], aspect = DataAspect())
+    hidedecorations!(ax); hidespines!(ax); limits!(ax, -1.3, 1.3, -1.3, 1.3)
+    for (a, b) in E
+        (px, py), (qx, qy) = pos(a), pos(b)
+        d = hypot(qx - px, qy - py); ux, uy = (qx - px) / d, (qy - py) / d
+        lines!(ax, [px + r * ux, qx - (r + L) * ux], [py + r * uy, qy - (r + L) * uy], color = "#D3D3D3", linewidth = 3)
+        tx, ty = qx - r * ux, qy - r * uy; bx, by = tx - L * ux, ty - L * uy
+        poly!(ax, Point2f[(tx, ty), (bx - W * uy, by + W * ux), (bx + W * uy, by - W * ux)], color = :gray)
+    end
+    for k in 1:n
+        x0, y0 = pos(k)
+        poly!(ax, Point2f[(x0 + r * cos(2π * i / 48), y0 + r * sin(2π * i / 48)) for i in 0:47], color = "#A9A9A9")
+        text!(ax, x0, y0, text = string(k), fontsize = 18, align = (:center, :center))
+    end
+    savefig(name, fig)
+end
+
 "A README plane figure: `streamplot(vectorfield(t), -1.5..1.5, -1.5..1.5)` and its data."
 function plane_figure(name, t)
     f = vectorfield(t)
