@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "33-dyadic-tensors.md-104",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/tutorials.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"dyadic-tensors.md:104","input":"Λ(ℝ3)","display":"DirectSum.Basis{⟨111⟩,8}(v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","out":{"kind":"Other","type":"DirectSum.Basis{⟨111⟩, 8}","str":"DirectSum.Basis{⟨111⟩,8}(v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","compact_str":"DirectSum.Basis{⟨111⟩,8}(v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)"}},
+    {"block":"dyadic-tensors.md:104","input":"Λ(ℝ3)'","display":"DirectSum.Basis{⟨---⟩',8}(w, w¹, w², w³, w¹², w¹³, w²³, w¹²³)","out":{"kind":"Other","type":"DirectSum.Basis{⟨---⟩', 8}","str":"DirectSum.Basis{⟨---⟩',8}(w, w¹, w², w³, w¹², w¹³, w²³, w¹²³)","compact_str":"DirectSum.Basis{⟨---⟩',8}(w, w¹, w², w³, w¹², w¹³, w²³, w¹²³)"}},
+    {"block":"dyadic-tensors.md:109","input":"@mixedbasis ℝ2","display":"(⟨++--⟩*, v, v₁, v₂, w¹, w², v₁₂, v₁w¹, v₁w², v₂w¹, v₂w², w¹², v₁₂w¹, v₁₂w², v₁w¹², v₂w¹², v₁₂w¹²)","out":{"kind":"Other","type":"Tuple{Submanifold{⟨++--⟩*, 4, 0x000000000000000f}, One{⟨11⟩}, Submanifold{⟨11⟩, 1, 0x0000000000000001}, Submanifold{⟨11⟩, 1, 0x0000000000000002}, Submanifold{⟨--⟩', 1, 0x0000000000000001}, Submanifold{⟨--⟩', 1, 0x0000000000000002}, Submanifold{⟨11⟩, 2, 0x0000000000000003}, Submanifold{⟨++--⟩*, 2, 0x0000000000000005}, Submanifold{⟨++--⟩*, 2, 0x0000000000000009}, Submanifold{⟨++--⟩*, 2, 0x0000000000000006}, Submanifold{⟨++--⟩*, 2, 0x000000000000000a}, Submanifold{⟨--⟩', 2, 0x0000000000000003}, Submanifold{⟨++--⟩*, 3, 0x0000000000000007}, Submanifold{⟨++--⟩*, 3, 0x000000000000000b}, Submanifold{⟨++--⟩*, 3, 0x000000000000000d}, Submanifold{⟨++--⟩*, 3, 0x000000000000000e}, Submanifold{⟨++--⟩*, 4, 0x000000000000000f}}","str":"(⟨++--⟩*, v, v₁, v₂, w¹, w², v₁₂, v₁w¹, v₁w², v₂w¹, v₂w², w¹², v₁₂w¹, v₁₂w², v₁w¹², v₂w¹², v₁₂w¹²)","compact_str":"(⟨++--⟩*, v, v₁, v₂, w¹, w², v₁₂, v₁w¹, v₁w², v₂w¹, v₂w², w¹², v₁₂w¹, v₁₂w², v₁w¹², v₂w¹², v₁₂w¹²)"}},
+    {"block":"dyadic-tensors.md:109","input":"w1+2w2","display":"1w¹ + 2w²","out":{"kind":"Chain","T":"Int64","V":"⟨--⟩'","grade":1,"dense":["0","1","2","0"],"str":"1w¹ + 2w²","compact_str":"1w¹+2w²"}},
+    {"block":"dyadic-tensors.md:109","input":"ans(v1+v2)","display":"0v","out":{"kind":"Chain","T":"Int64","V":"⟨++--⟩*","grade":0,"dense":["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],"str":"0v","compact_str":"0v"}},
+    {"block":"dyadic-tensors.md:109","input":"ℒ = (v1+2v2)∧(3w1+4w2)","display":"0v₁₂ + 3v₁w¹ + 4v₁w² + 6v₂w¹ + 8v₂w² + 0w¹²","out":{"kind":"Chain","T":"Int64","V":"⟨++--⟩*","grade":2,"dense":["0","0","0","0","0","0","3","4","6","8","0","0","0","0","0","0"],"str":"0v₁₂ + 3v₁w¹ + 4v₁w² + 6v₂w¹ + 8v₂w² + 0w¹²","compact_str":"0v₁₂+3v₁w¹+4v₁w²+6v₂w¹+8v₂w²+0w¹²"}},
+    {"block":"dyadic-tensors.md:109","input":"ℒ(v1+v2)","display":"0v₁ + 0v₂ + 9w¹ + 12w²","out":{"kind":"Chain","T":"Int64","V":"⟨++--⟩*","grade":1,"dense":["0","0","0","9","12","0","0","0","0","0","0","0","0","0","0","0"],"str":"0v₁ + 0v₂ + 9w¹ + 12w²","compact_str":"0v₁+0v₂+9w¹+12w²"}},
+    {"block":"dyadic-tensors.md:109","input":"L = [1,2] * [3,4]'; L * [1,1]","display":"2-element Vector{Int64}:\n  7\n 14","out":{"kind":"Other","type":"Vector{Int64}","str":"[7, 14]","compact_str":"[7, 14]"}}
+  ],
+  "stats": {
+    "cases": 8,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

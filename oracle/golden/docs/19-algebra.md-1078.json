@@ -1,0 +1,27 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "19-algebra.md-1078",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/algebra.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"algebra.md:1078","input":"basis\"3\"","display":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","out":{"kind":"Other","type":"Tuple{Submanifold{3, 3, 0x0000000000000007}, One{⟨111⟩}, Submanifold{⟨111⟩, 1, 0x0000000000000001}, Submanifold{⟨111⟩, 1, 0x0000000000000002}, Submanifold{⟨111⟩, 1, 0x0000000000000004}, Submanifold{⟨111⟩, 2, 0x0000000000000003}, Submanifold{⟨111⟩, 2, 0x0000000000000005}, Submanifold{⟨111⟩, 2, 0x0000000000000006}, Submanifold{⟨111⟩, 3, 0x0000000000000007}}","str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","compact_str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)"}},
+    {"block":"algebra.md:1078","input":"B = v12+2v13-3v23","display":"1v₁₂ + 2v₁₃ - 3v₂₃","out":{"kind":"Chain","T":"Int64","V":"⟨111⟩","grade":2,"dense":["0","0","0","0","1","2","-3","0"],"str":"1v₁₂ + 2v₁₃ - 3v₂₃","compact_str":"1v₁₂+2v₁₃-3v₂₃"}},
+    {"block":"algebra.md:1078","input":"operator(B)","display":"3×3 Endomorphism{⟨111⟩, Simplex{⟨111⟩, Chain{⟨111⟩, 1, Int64, 3}, 3}}:\n v₁₂₃  v₁  v₂   v₃\n   v₁   4  12   -6\n   v₂  12  -6   -4\n   v₃  -6  -4  -12","out":{"kind":"Other","type":"Endomorphism{⟨111⟩, Simplex{⟨111⟩, Chain{⟨111⟩, 1, Int64, 3}, 3}}","str":"(4v₁+12v₂-6v₃)v₁ + (12v₁-6v₂-4v₃)v₂ + (-6v₁-4v₂-12v₃)v₃","compact_str":"(4v₁+12v₂-6v₃)v₁+(12v₁-6v₂-4v₃)v₂+(-6v₁-4v₂-12v₃)v₃"}},
+    {"block":"algebra.md:1078","input":"inv(operator(B))","display":"3×3 Endomorphism{⟨111⟩, Simplex{⟨111⟩, Chain{⟨111⟩, 1, Float64, 3}, 3}}:\n v₁₂₃  v₁          v₂          v₃\n   v₁   0.0204082   0.0612245  -0.0306122\n   v₂   0.0612245  -0.0306122  -0.0204082\n   v₃  -0.0306122  -0.0204082  -0.0612245","out":{"kind":"Other","type":"Endomorphism{⟨111⟩, Simplex{⟨111⟩, Chain{⟨111⟩, 1, Float64, 3}, 3}}","str":"(0.0204082v₁+0.0612245v₂-0.0306122v₃)v₁ + (0.0612245v₁-0.0306122v₂-0.0204082v₃)v₂ + (-0.0306122v₁-0.0204082v₂-0.0612245v₃)v₃","compact_str":"(0.0204082v₁+0.0612245v₂-0.0306122v₃)v₁+(0.0612245v₁-0.0306122v₂-0.0204082v₃)v₂+(-0.0306122v₁-0.0204082v₂-0.0612245v₃)v₃"}},
+    {"block":"algebra.md:1078","input":"operator(inv(B))","display":"3×3 Endomorphism{⟨111⟩, Simplex{⟨111⟩, Chain{⟨111⟩, 1, Float64, 3}, 3}}:\n v₁₂₃  v₁          v₂          v₃\n   v₁   0.0204082   0.0612245  -0.0306122\n   v₂   0.0612245  -0.0306122  -0.0204082\n   v₃  -0.0306122  -0.0204082  -0.0612245","out":{"kind":"Other","type":"Endomorphism{⟨111⟩, Simplex{⟨111⟩, Chain{⟨111⟩, 1, Float64, 3}, 3}}","str":"(0.0204082v₁+0.0612245v₂-0.0306122v₃)v₁ + (0.0612245v₁-0.0306122v₂-0.0204082v₃)v₂ + (-0.0306122v₁-0.0204082v₂-0.0612245v₃)v₃","compact_str":"(0.0204082v₁+0.0612245v₂-0.0306122v₃)v₁+(0.0612245v₁-0.0306122v₂-0.0204082v₃)v₂+(-0.0306122v₁-0.0204082v₂-0.0612245v₃)v₃"}},
+    {"block":"algebra.md:1078","input":"Matrix(operator(B))","display":"3×3 Matrix{Int64}:\n  4  12   -6\n 12  -6   -4\n -6  -4  -12","out":{"kind":"Other","type":"Matrix{Int64}","str":"[4 12 -6; 12 -6 -4; -6 -4 -12]","compact_str":"[4 12 -6; 12 -6 -4; -6 -4 -12]"}}
+  ],
+  "stats": {
+    "cases": 6,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

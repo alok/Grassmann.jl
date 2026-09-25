@@ -1,0 +1,27 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "48-dual-basis-products",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/probe2.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"dual basis products","input":"@mixedbasis ℝ2","display":"(⟨++--⟩*, v, v₁, v₂, w¹, w², v₁₂, v₁w¹, v₁w², v₂w¹, v₂w², w¹², v₁₂w¹, v₁₂w², v₁w¹², v₂w¹², v₁₂w¹²)","out":{"kind":"Other","type":"Tuple{Submanifold{⟨++--⟩*, 4, 0x000000000000000f}, One{⟨11⟩}, Submanifold{⟨11⟩, 1, 0x0000000000000001}, Submanifold{⟨11⟩, 1, 0x0000000000000002}, Submanifold{⟨--⟩', 1, 0x0000000000000001}, Submanifold{⟨--⟩', 1, 0x0000000000000002}, Submanifold{⟨11⟩, 2, 0x0000000000000003}, Submanifold{⟨++--⟩*, 2, 0x0000000000000005}, Submanifold{⟨++--⟩*, 2, 0x0000000000000009}, Submanifold{⟨++--⟩*, 2, 0x0000000000000006}, Submanifold{⟨++--⟩*, 2, 0x000000000000000a}, Submanifold{⟨--⟩', 2, 0x0000000000000003}, Submanifold{⟨++--⟩*, 3, 0x0000000000000007}, Submanifold{⟨++--⟩*, 3, 0x000000000000000b}, Submanifold{⟨++--⟩*, 3, 0x000000000000000d}, Submanifold{⟨++--⟩*, 3, 0x000000000000000e}, Submanifold{⟨++--⟩*, 4, 0x000000000000000f}}","str":"(⟨++--⟩*, v, v₁, v₂, w¹, w², v₁₂, v₁w¹, v₁w², v₂w¹, v₂w², w¹², v₁₂w¹, v₁₂w², v₁w¹², v₂w¹², v₁₂w¹²)","compact_str":"(⟨++--⟩*, v, v₁, v₂, w¹, w², v₁₂, v₁w¹, v₁w², v₂w¹, v₂w², w¹², v₁₂w¹, v₁₂w², v₁w¹², v₂w¹², v₁₂w¹²)"}},
+    {"block":"dual basis products","input":"v1*w1","out":{"kind":"Error","error":"ErrorException","msg":"cannot convert from ⟨11⟩ to ⟨++--⟩*"},"defects":["mixedbasis-products"]},
+    {"block":"dual basis products","input":"w1*v1","out":{"kind":"Error","error":"ErrorException","msg":"cannot convert from ⟨11⟩ to ⟨++--⟩*"},"defects":["mixedbasis-products"]},
+    {"block":"dual basis products","input":"v1∧w1","out":{"kind":"Error","error":"ErrorException","msg":"cannot convert from ⟨11⟩ to ⟨++--⟩*"},"defects":["mixedbasis-products"]},
+    {"block":"dual basis products","input":"w1(v1)","out":{"kind":"Error","error":"ErrorException","msg":"cannot convert from ⟨11⟩ to ⟨++--⟩*"},"defects":["mixedbasis-products"]},
+    {"block":"dual basis products","input":"w1(v2)","out":{"kind":"Error","error":"ErrorException","msg":"cannot convert from ⟨11⟩ to ⟨++--⟩*"},"defects":["mixedbasis-products"]}
+  ],
+  "stats": {
+    "cases": 6,
+    "errors": 5,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {"mixedbasis-products":5}
+  }
+}

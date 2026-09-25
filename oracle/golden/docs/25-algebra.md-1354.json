@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "25-algebra.md-1354",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/algebra.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"algebra.md:1354","input":"@basis S\"∞∅++\"","display":"(⟨∞∅11⟩, v, v∞, v∅, v₁, v₂, v∞∅, v∞₁, v∞₂, v∅₁, v∅₂, v₁₂, v∞∅₁, v∞∅₂, v∞₁₂, v∅₁₂, v∞∅₁₂)","out":{"kind":"Other","type":"Tuple{Submanifold{⟨∞∅++⟩, 4, 0x000000000000000f}, One{⟨∞∅11⟩}, Submanifold{⟨∞∅11⟩, 1, 0x0000000000000001}, Submanifold{⟨∞∅11⟩, 1, 0x0000000000000002}, Submanifold{⟨∞∅11⟩, 1, 0x0000000000000004}, Submanifold{⟨∞∅11⟩, 1, 0x0000000000000008}, Submanifold{⟨∞∅11⟩, 2, 0x0000000000000003}, Submanifold{⟨∞∅11⟩, 2, 0x0000000000000005}, Submanifold{⟨∞∅11⟩, 2, 0x0000000000000009}, Submanifold{⟨∞∅11⟩, 2, 0x0000000000000006}, Submanifold{⟨∞∅11⟩, 2, 0x000000000000000a}, Submanifold{⟨∞∅11⟩, 2, 0x000000000000000c}, Submanifold{⟨∞∅11⟩, 3, 0x0000000000000007}, Submanifold{⟨∞∅11⟩, 3, 0x000000000000000b}, Submanifold{⟨∞∅11⟩, 3, 0x000000000000000d}, Submanifold{⟨∞∅11⟩, 3, 0x000000000000000e}, Submanifold{⟨∞∅11⟩, 4, 0x000000000000000f}}","str":"(⟨∞∅11⟩, v, v∞, v∅, v₁, v₂, v∞∅, v∞₁, v∞₂, v∅₁, v∅₂, v₁₂, v∞∅₁, v∞∅₂, v∞₁₂, v∅₁₂, v∞∅₁₂)","compact_str":"(⟨∞∅11⟩, v, v∞, v∅, v₁, v₂, v∞∅, v∞₁, v∞₂, v∅₁, v∅₂, v₁₂, v∞∅₁, v∞∅₂, v∞₁₂, v∅₁₂, v∞∅₁₂)"}},
+    {"block":"algebra.md:1354","input":"v∞^2, v∅^2, v1^2, v2^2","display":"(𝟎, 𝟎, 1v, 1v)","out":{"kind":"Other","type":"Tuple{Zero{⟨∞∅11⟩}, Zero{⟨∞∅11⟩}, Single{⟨∞∅11⟩, 0, v, Int64}, Single{⟨∞∅11⟩, 0, v, Int64}}","str":"(𝟎, 𝟎, 1v, 1v)","compact_str":"(𝟎, 𝟎, 1v, 1v)"}},
+    {"block":"algebra.md:1354","input":"v∞ ⋅ v∅, v∞∅^2","display":"(-1v, 1v)","out":{"kind":"Other","type":"Tuple{Single{⟨∞∅11⟩, 0, v, Int64}, Single{⟨∞∅11⟩, 0, v, Int64}}","str":"(-1v, 1v)","compact_str":"(-1v, 1v)"}},
+    {"block":"algebra.md:1354","input":"v∞∅ * v∞, v∞∅ * v∅","display":"(-1v∞, 1v∅)","out":{"kind":"Other","type":"Tuple{Single{⟨∞∅11⟩, 1, v∞, Int64}, Single{⟨∞∅11⟩, 1, v∅, Int64}}","str":"(-1v∞, 1v∅)","compact_str":"(-1v∞, 1v∅)"}},
+    {"block":"algebra.md:1354","input":"v∞ * v∅, v∅ * v∞","display":"(-1 + 1v∞∅ + 0v∞₁ + 0v∞₂ + 0v∅₁ + 0v∅₂ + 0v₁₂ + 0v∞∅₁₂, -1 - 1v∞∅ + 0v∞₁ + 0v∞₂ + 0v∅₁ + 0v∅₂ + 0v₁₂ + 0v∞∅₁₂)","out":{"kind":"Other","type":"Tuple{Spinor{⟨∞∅11⟩, Int64, 8}, Spinor{⟨∞∅11⟩, Int64, 8}}","str":"(-1 + 1v∞∅ + 0v∞₁ + 0v∞₂ + 0v∅₁ + 0v∅₂ + 0v₁₂ + 0v∞∅₁₂, -1 - 1v∞∅ + 0v∞₁ + 0v∞₂ + 0v∅₁ + 0v∅₂ + 0v₁₂ + 0v∞∅₁₂)","compact_str":"(-1+1v∞∅+0v∞₁+0v∞₂+0v∅₁+0v∅₂+0v₁₂+0v∞∅₁₂, -1-1v∞∅+0v∞₁+0v∞₂+0v∅₁+0v∅₂+0v₁₂+0v∞∅₁₂)"}},
+    {"block":"algebra.md:1377","input":"⋆v∞, !v∞, ⋆v∅, !v∅","display":"(1v∞₁₂, 2v∅₁₂, -1v∅₁₂, -0.5v∞₁₂)","out":{"kind":"Other","type":"Tuple{Single{⟨∞∅11⟩, 3, v∞₁₂, Int64}, Single{⟨∞∅11⟩, 3, v∅₁₂, Int64}, Single{⟨∞∅11⟩, 3, v∅₁₂, Int64}, Single{⟨∞∅11⟩, 3, v∞₁₂, Float64}}","str":"(1v∞₁₂, 2v∅₁₂, -1v∅₁₂, -0.5v∞₁₂)","compact_str":"(1v∞₁₂, 2v∅₁₂, -1v∅₁₂, -0.5v∞₁₂)"}},
+    {"block":"algebra.md:1377","input":"!v∞ * v12 == -2v∅, !v∅ * v12 == v∞/2","display":"(true, true)","out":{"kind":"Other","type":"Tuple{Bool, Bool}","str":"(true, true)","compact_str":"(true, true)"}},
+    {"block":"algebra.md:1377","input":"⋆v∞ * v12 == -v∞, ⋆v∅ * v12 == v∅","display":"(true, true)","out":{"kind":"Other","type":"Tuple{Bool, Bool}","str":"(true, true)","compact_str":"(true, true)"}},
+    {"block":"algebra.md:1377","input":"v∞ * !v∞, v∅ * !v∅","display":"(0 + 0v∞∅ + 0v∞₁ + 0v∞₂ + 0v∅₁ + 0v∅₂ - 2v₁₂ + 2v∞∅₁₂, -0.0 - 0.0v∞∅ - 0.0v∞₁ - 0.0v∞₂ - 0.0v∅₁ - 0.0v∅₂ + 0.5v₁₂ + 0.5v∞∅₁₂)","out":{"kind":"Other","type":"Tuple{Spinor{⟨∞∅11⟩, Int64, 8}, Spinor{⟨∞∅11⟩, Float64, 8}}","str":"(0 + 0v∞∅ + 0v∞₁ + 0v∞₂ + 0v∅₁ + 0v∅₂ - 2v₁₂ + 2v∞∅₁₂, -0.0 - 0.0v∞∅ - 0.0v∞₁ - 0.0v∞₂ - 0.0v∅₁ - 0.0v∅₂ + 0.5v₁₂ + 0.5v∞∅₁₂)","compact_str":"(0+0v∞∅+0v∞₁+0v∞₂+0v∅₁+0v∅₂-2v₁₂+2v∞∅₁₂, -0.0-0.0v∞∅-0.0v∞₁-0.0v∞₂-0.0v∅₁-0.0v∅₂+0.5v₁₂+0.5v∞∅₁₂)"}}
+  ],
+  "stats": {
+    "cases": 9,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

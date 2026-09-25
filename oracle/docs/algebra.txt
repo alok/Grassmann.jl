@@ -1,0 +1,150 @@
+### algebra.md:28 | fresh
+Values(1,2,3) + Values(2,3,4)
+### algebra.md:151
+Λ(ℝ^3)
+Λ(tangent(ℝ^2))
+Λ(tangent((ℝ^0)',3,3))
+### algebra.md:170
+indices(Λ(3).v12)
+### algebra.md:283 | fresh
+V = Submanifold(4)
+dump(V)
+G4 = collect(V)
+dump(G4.v12)
+G4.v12 + 2G4.v14
+typeof(G4.v12 + G4.v14)
+### algebra.md:309
+G42 = collect(V(1,4))
+sqrt(2) + G42.v14
+typeof(ans)
+### algebra.md:320 | fresh
+@basis 3
+dump(v)
+1 + v12 - v13
+typeof(ans)
+### algebra.md:335
+Chain{V,1}(Values(4,5,6))
+Chain{V,1}(4,5,6)
+value(Chain(4,5,6))
+wedge(Chain(1,2,3),Chain(4,5,6))
+Spinor{V}(1,2,3,4)
+### algebra.md:436 | fresh
+complexify(1+im)
+complexify(Chain(1,2))
+vectorize(1+2im)
+vectorize(Couple(1,2))
+### algebra.md:475 | fresh
+complementright(Multivector(1,2,3,4,5,6,7,8))
+complementleft(Multivector(1,2,3,4,5,6,7,8))
+complementrighthodge(Multivector(1,2,3,4,5,6,7,8))
+complementlefthodge(Multivector(1,2,3,4,5,6,7,8))
+### algebra.md:498 | fresh
+@basis S"++-"
+hodge(Multivector{V}(1,2,3,4,5,6,7,8))
+### algebra.md:510
+vee(Chain{V}(1,2,3),hodge(Chain{V}(4,5,6)))
+### algebra.md:510-euclid | fresh
+@basis 3
+vee(Chain{V}(1,2,3),hodge(Chain{V}(4,5,6)))
+### algebra.md:535 | fresh
+Chain(1,2,3)*Chain(4,5,6)
+### algebra.md:626 cayley | fresh
+cayley(Submanifold(1),wedge)
+cayley(Submanifold(1),vee)
+cayley(Submanifold(1),<)
+cayley(Submanifold(1),>)
+cayley(Submanifold(1),<<)
+cayley(Submanifold(1),>>)
+cayley(Submanifold(S"-"),wedge)
+cayley(Submanifold(S"-"),vee)
+cayley(Submanifold(S"-"),<)
+cayley(Submanifold(S"-"),>)
+cayley(Submanifold(S"-"),<<)
+cayley(Submanifold(S"-"),>>)
+cayley(Submanifold(2),wedge)
+cayley(Submanifold(2),vee)
+cayley(Submanifold(2),<)
+cayley(Submanifold(2),>)
+cayley(Submanifold(2),<<)
+cayley(Submanifold(2),>>)
+cayley(Submanifold(S"+-"),wedge)
+cayley(Submanifold(S"+-"),vee)
+cayley(Submanifold(S"+-"),<)
+cayley(Submanifold(S"+-"),>)
+cayley(Submanifold(S"+-"),<<)
+cayley(Submanifold(S"+-"),>>)
+cayley(Submanifold(3),wedge)
+cayley(Submanifold(3),vee)
+cayley(Submanifold(3),*)
+cayley(Submanifold(3),<)
+cayley(Submanifold(3),>)
+cayley(Submanifold(3),<<)
+cayley(Submanifold(3),>>)
+### algebra.md:934 | fresh
+basis"3"
+wedge(!v12,!v23)
+!vee(v12,v23)
+wedge(v12,!v12)
+### algebra.md:1031 | fresh
+i,j,k = hyperplanes(ℝ^3)
+i^2, j^2, k^2, i*j*k
+-(j+k) * (j+k)
+-(j+k) * i
+### algebra.md:1038 | fresh
+basis"--"
+v1^2, v2^2, v12^2, v1*v2*v12
+### algebra.md:1053 | fresh
+[1 2; 3 4]\[5,6]
+@TensorOperator([1 2; 3 4])\Chain(5,6)
+### algebra.md:1078 | fresh
+basis"3"
+B = v12+2v13-3v23
+operator(B)
+inv(operator(B))
+operator(inv(B))
+Matrix(operator(B))
+### algebra.md:1104 | fresh
+tangent(ℝ^3)(∇)
+(ℝ^3)(∇)
+### algebra.md:1116 | fresh
+@basis tangent(ℝ^3,2,3); ⋆d(v1+v2+v3)
+### algebra.md:1120 | fresh
+∂(Λ(tangent(ℝ^4,2,4)).v1234)
+### algebra.md:1175 | fresh
+basis"2"
+exp(π/4*v12)*v1*~exp(π/4*v12)
+~exp(π/4*v12)*v1*exp(π/4*v12)
+### algebra.md:1342 | fresh
+[(χ(Δ(ω)),χ(Δ(∂(ω)))) for ω ∈ (Λ(ℝ5).v12,Λ(ℝ5).v123,Λ(ℝ5).v1234,Λ(ℝ5).v12345)]
+### algebra.md:1354 | fresh
+@basis S"∞∅++"
+v∞^2, v∅^2, v1^2, v2^2
+v∞ ⋅ v∅, v∞∅^2
+v∞∅ * v∞, v∞∅ * v∅
+v∞ * v∅, v∅ * v∞
+### algebra.md:1377
+⋆v∞, !v∞, ⋆v∅, !v∅
+!v∞ * v12 == -2v∅, !v∅ * v12 == v∞/2
+⋆v∞ * v12 == -v∞, ⋆v∅ * v12 == v∅
+v∞ * !v∞, v∅ * !v∅
+### algebra.md:1397 (Reduce-free variant) | fresh
+@mixedbasis tangent(ℝ^1)
+### algebra.md:1408 | fresh
+@basis tangent(ℝ,2,2)
+∂1 * ∂1v1
+∂1 * ∂2
+v1*∂12
+∂12*∂2
+@mixedbasis tangent(ℝ^2,2,2);
+V(∇)
+V(∇) ⋅ V(∇)
+ans*∂1
+### algebra.md:1436 (Int field variant) | fresh
+basis"2"
+3*v1
+inv(3*v1)
+### algebra.md:1459 (numeric variant) | fresh
+basis"2"
+(1*v1 + 2*v2) ⋅ (3*v1 + 4*v2)
+(1*v1 + 2*v2) ∧ (3*v1 + 4*v2)
+(1*v1 + 2*v2) * (3*v1 + 4*v2)

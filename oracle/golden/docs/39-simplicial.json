@@ -1,0 +1,33 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "39-simplicial",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/probe1.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"simplicial","input":"ω = Λ(ℝ5).v123","display":"v₁₂₃","out":{"kind":"Submanifold","T":"Int64","V":"⟨11111⟩","grade":3,"bits":7,"dense":["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","1","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],"str":"v₁₂₃","compact_str":"v₁₂₃"}},
+    {"block":"simplicial","input":"∂(ω)","display":"1v₁₂ - 1v₁₃ + 0v₁₄ + 0v₁₅ + 1v₂₃ + 0v₂₄ + 0v₂₅ + 0v₃₄ + 0v₃₅ + 0v₄₅","out":{"kind":"Chain","T":"Int64","V":"⟨11111⟩","grade":2,"dense":["0","0","0","0","0","0","1","-1","0","0","1","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],"str":"1v₁₂ - 1v₁₃ + 0v₁₄ + 0v₁₅ + 1v₂₃ + 0v₂₄ + 0v₂₅ + 0v₃₄ + 0v₃₅ + 0v₄₅","compact_str":"1v₁₂-1v₁₃+0v₁₄+0v₁₅+1v₂₃+0v₂₄+0v₂₅+0v₃₄+0v₃₅+0v₄₅"}},
+    {"block":"simplicial","input":"skeleton(ω)","display":"0 + 2v₁ + 2v₂ + 2v₃ + 1v₁₂ + 1v₁₃ + 1v₂₃ + 1v₁₂₃","out":{"kind":"Multivector","T":"Int64","V":"⟨11111⟩","dense":["0","2","2","2","0","0","1","1","0","0","1","0","0","0","0","0","1","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],"str":"0 + 2v₁ + 2v₂ + 2v₃ + 1v₁₂ + 1v₁₃ + 1v₂₃ + 1v₁₂₃","compact_str":"0+2v₁+2v₂+2v₃+1v₁₂+1v₁₃+1v₂₃+1v₁₂₃"}},
+    {"block":"simplicial","input":"χ(skeleton(ω))","display":"1","out":{"kind":"Number","T":"Int64","value":"1","str":"1","compact_str":"1"}},
+    {"block":"simplicial","input":"betti(skeleton(ω))","display":"5-element Values{5, Int64} with indices SOneTo(5):\n 1\n 0\n 0\n 0\n 0","out":{"kind":"Other","type":"Values{5, Int64}","str":"[1, 0, 0, 0, 0]","compact_str":"[1, 0, 0, 0, 0]"}},
+    {"block":"simplicial","input":"χ(skeleton(∂(ω)))","display":"0","out":{"kind":"Number","T":"Int64","value":"0","str":"0","compact_str":"0"}},
+    {"block":"simplicial","input":"betti(skeleton(∂(ω)))","display":"5-element Values{5, Int64} with indices SOneTo(5):\n 1\n 1\n 0\n 0\n 0","out":{"kind":"Other","type":"Values{5, Int64}","str":"[1, 1, 0, 0, 0]","compact_str":"[1, 1, 0, 0, 0]"}},
+    {"block":"simplicial","input":"subcomplex(ω)","out":{"kind":"Error","error":"MethodError","msg":"MethodError: objects of type Laplacian are not callable."},"defects":["laplacian-not-callable"]},
+    {"block":"simplicial","input":"[(χ(skeleton(ω)),χ(skeleton(∂(ω)))) for ω ∈ (Λ(ℝ5).v12,Λ(ℝ5).v123,Λ(ℝ5).v1234,Λ(ℝ5).v12345)]","display":"4-element Vector{Tuple{Int64, Int64}}:\n (1, 2)\n (1, 0)\n (1, 2)\n (1, 0)","out":{"kind":"Other","type":"Vector{Tuple{Int64, Int64}}","str":"[(1, 2), (1, 0), (1, 2), (1, 0)]","compact_str":"[(1, 2), (1, 0), (1, 2), (1, 0)]"}},
+    {"block":"simplicial","input":"[betti(skeleton(∂(ω))) for ω ∈ (Λ(ℝ5).v12,Λ(ℝ5).v123,Λ(ℝ5).v1234,Λ(ℝ5).v12345)]","display":"4-element Vector{Values{5, Int64}}:\n [2, 0, 0, 0, 0]\n [1, 1, 0, 0, 0]\n [0, -2, 0, 0, 0]\n [1, -4, -5, 0, 0]","out":{"kind":"Other","type":"Vector{Values{5, Int64}}","str":"Values{5, Int64}[[2, 0, 0, 0, 0], [1, 1, 0, 0, 0], [0, -2, 0, 0, 0], [1, -4, -5, 0, 0]]","compact_str":"Values{5, Int64}[[2, 0, 0, 0, 0], [1, 1, 0, 0, 0], [0, -2, 0, 0, 0], [1, -4, -5, 0, 0]]"}},
+    {"block":"simplicial","input":"chain(Λ(ℝ5).v1234)","display":"1v₁₂ + 0v₁₃ - 1v₁₄ + 0v₁₅ + 1v₂₃ + 0v₂₄ + 0v₂₅ + 1v₃₄ + 0v₃₅ + 0v₄₅","out":{"kind":"Chain","T":"Int64","V":"⟨11111⟩","grade":2,"dense":["0","0","0","0","0","0","1","0","-1","0","1","0","0","1","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],"str":"1v₁₂ + 0v₁₃ - 1v₁₄ + 0v₁₅ + 1v₂₃ + 0v₂₄ + 0v₂₅ + 1v₃₄ + 0v₃₅ + 0v₄₅","compact_str":"1v₁₂+0v₁₃-1v₁₄+0v₁₅+1v₂₃+0v₂₄+0v₂₅+1v₃₄+0v₃₅+0v₄₅"}},
+    {"block":"simplicial","input":"path(Λ(ℝ5).v1234)","display":"1v₁₂ + 0v₁₃ + 0v₁₄ + 0v₁₅ + 1v₂₃ + 0v₂₄ + 0v₂₅ + 1v₃₄ + 0v₃₅ + 0v₄₅","out":{"kind":"Chain","T":"Int64","V":"⟨11111⟩","grade":2,"dense":["0","0","0","0","0","0","1","0","0","0","1","0","0","1","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],"str":"1v₁₂ + 0v₁₃ + 0v₁₄ + 0v₁₅ + 1v₂₃ + 0v₂₄ + 0v₂₅ + 1v₃₄ + 0v₃₅ + 0v₄₅","compact_str":"1v₁₂+0v₁₃+0v₁₄+0v₁₅+1v₂₃+0v₂₄+0v₂₅+1v₃₄+0v₃₅+0v₄₅"}}
+  ],
+  "stats": {
+    "cases": 12,
+    "errors": 1,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {"laplacian-not-callable":1}
+  }
+}

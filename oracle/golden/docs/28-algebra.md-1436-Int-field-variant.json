@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "28-algebra.md-1436-Int-field-variant",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/algebra.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"algebra.md:1436 (Int field variant)","input":"basis\"2\"","display":"(⟨11⟩, v, v₁, v₂, v₁₂)","out":{"kind":"Other","type":"Tuple{Submanifold{2, 2, 0x0000000000000003}, One{⟨11⟩}, Submanifold{⟨11⟩, 1, 0x0000000000000001}, Submanifold{⟨11⟩, 1, 0x0000000000000002}, Submanifold{⟨11⟩, 2, 0x0000000000000003}}","str":"(⟨11⟩, v, v₁, v₂, v₁₂)","compact_str":"(⟨11⟩, v, v₁, v₂, v₁₂)"}},
+    {"block":"algebra.md:1436 (Int field variant)","input":"3*v1","display":"3v₁","out":{"kind":"Single","T":"Int64","V":"⟨11⟩","grade":1,"bits":1,"dense":["0","3","0","0"],"str":"3v₁","compact_str":"3v₁"}},
+    {"block":"algebra.md:1436 (Int field variant)","input":"inv(3*v1)","display":"0.3333333333333333v₁","out":{"kind":"Single","T":"Float64","V":"⟨11⟩","grade":1,"bits":1,"dense":["0.0","0.3333333333333333","0.0","0.0"],"str":"0.3333333333333333v₁","compact_str":"0.333333v₁"}}
+  ],
+  "stats": {
+    "cases": 3,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

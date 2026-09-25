@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "49-dualbasis",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/probe2.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"dualbasis","input":"@dualbasis ℝ^3","display":"(⟨---⟩', w, w¹, w², w³, w¹², w¹³, w²³, w¹²³)","out":{"kind":"Other","type":"Tuple{Submanifold{⟨---⟩', 3, 0x0000000000000007}, One{⟨---⟩'}, Submanifold{⟨---⟩', 1, 0x0000000000000001}, Submanifold{⟨---⟩', 1, 0x0000000000000002}, Submanifold{⟨---⟩', 1, 0x0000000000000004}, Submanifold{⟨---⟩', 2, 0x0000000000000003}, Submanifold{⟨---⟩', 2, 0x0000000000000005}, Submanifold{⟨---⟩', 2, 0x0000000000000006}, Submanifold{⟨---⟩', 3, 0x0000000000000007}}","str":"(⟨---⟩', w, w¹, w², w³, w¹², w¹³, w²³, w¹²³)","compact_str":"(⟨---⟩', w, w¹, w², w³, w¹², w¹³, w²³, w¹²³)"}},
+    {"block":"dualbasis","input":"w1*w1","display":"-1w","out":{"kind":"Single","T":"Int64","V":"⟨---⟩'","grade":0,"bits":0,"dense":["-1","0","0","0","0","0","0","0"],"str":"-1w","compact_str":"-1w"}},
+    {"block":"dualbasis","input":"w12","display":"w¹²","out":{"kind":"Submanifold","T":"Int64","V":"⟨---⟩'","grade":2,"bits":3,"dense":["0","0","0","0","1","0","0","0"],"str":"w¹²","compact_str":"w¹²"}}
+  ],
+  "stats": {
+    "cases": 3,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

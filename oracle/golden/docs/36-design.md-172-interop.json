@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "36-design.md-172-interop",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/tutorials.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"design.md:172 interop","input":"a = Λ(ℝ^2).v1 + Λ(ℝ^2).v2","display":"1v₁ + 1v₂","out":{"kind":"Chain","T":"Int64","V":"⟨++⟩","grade":1,"dense":["0","1","1","0"],"str":"1v₁ + 1v₂","compact_str":"1v₁+1v₂"}},
+    {"block":"design.md:172 interop","input":"b = Λ(ℝ^3).v3","display":"v₃","out":{"kind":"Submanifold","T":"Int64","V":"⟨+++⟩","grade":1,"bits":4,"dense":["0","0","0","1","0","0","0","0"],"str":"v₃","compact_str":"v₃"}},
+    {"block":"design.md:172 interop","input":"a ∧ b","display":"0v₁₂ - 1v₁₃ - 1v₂₃","out":{"kind":"Chain","T":"Int64","V":"⟨+++⟩","grade":2,"dense":["0","0","0","0","0","-1","-1","0"],"str":"0v₁₂ - 1v₁₃ - 1v₂₃","compact_str":"0v₁₂-1v₁₃-1v₂₃"}},
+    {"block":"design.md:172 interop","input":"a * b","out":{"kind":"Error","error":"ErrorException","msg":"unsupported transformation"},"defects":["interop-product-unsupported"]}
+  ],
+  "stats": {
+    "cases": 4,
+    "errors": 1,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {"interop-product-unsupported":1}
+  }
+}

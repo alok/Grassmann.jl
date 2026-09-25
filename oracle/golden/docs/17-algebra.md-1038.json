@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "17-algebra.md-1038",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/algebra.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"algebra.md:1038","input":"basis\"--\"","display":"(⟨--⟩, v, v₁, v₂, v₁₂)","out":{"kind":"Other","type":"Tuple{Submanifold{⟨--⟩, 2, 0x0000000000000003}, One{⟨--⟩}, Submanifold{⟨--⟩, 1, 0x0000000000000001}, Submanifold{⟨--⟩, 1, 0x0000000000000002}, Submanifold{⟨--⟩, 2, 0x0000000000000003}}","str":"(⟨--⟩, v, v₁, v₂, v₁₂)","compact_str":"(⟨--⟩, v, v₁, v₂, v₁₂)"}},
+    {"block":"algebra.md:1038","input":"v1^2, v2^2, v12^2, v1*v2*v12","display":"(-1v, -1v, -1v, -1v)","out":{"kind":"Other","type":"NTuple{4, Single{⟨--⟩, 0, v, Int64}}","str":"(-1v, -1v, -1v, -1v)","compact_str":"(-1v, -1v, -1v, -1v)"}}
+  ],
+  "stats": {
+    "cases": 2,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

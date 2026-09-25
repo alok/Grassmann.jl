@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "20-algebra.md-1104",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/algebra.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"algebra.md:1104","input":"tangent(ℝ^3)(∇)","display":"0v₁₂ + 0v₁₃ + 1∂₁v₁ + 0v₂₃ + 1∂₁v₂ + 1∂₁v₃","out":{"kind":"Chain","T":"Int64","V":"T¹⟨+++₁⟩","grade":2,"dense":["0","0","0","0","0","0","0","1","0","1","1","0","0","0","0","0"],"str":"0v₁₂ + 0v₁₃ + 1∂₁v₁ + 0v₂₃ + 1∂₁v₂ + 1∂₁v₃","compact_str":"0v₁₂+0v₁₃+1∂₁v₁+0v₂₃+1∂₁v₂+1∂₁v₃"}},
+    {"block":"algebra.md:1104","input":"(ℝ^3)(∇)","display":"1v₁ + 1v₂ + 1v₃","out":{"kind":"Chain","T":"Int64","V":"⟨+++⟩","grade":1,"dense":["0","1","1","1","0","0","0","0"],"str":"1v₁ + 1v₂ + 1v₃","compact_str":"1v₁+1v₂+1v₃"}}
+  ],
+  "stats": {
+    "cases": 2,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

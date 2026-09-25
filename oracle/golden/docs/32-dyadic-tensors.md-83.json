@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "32-dyadic-tensors.md-83",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/tutorials.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"dyadic-tensors.md:83","input":"@basis ℝ3","display":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","out":{"kind":"Other","type":"Tuple{Submanifold{3, 3, 0x0000000000000007}, One{⟨111⟩}, Submanifold{⟨111⟩, 1, 0x0000000000000001}, Submanifold{⟨111⟩, 1, 0x0000000000000002}, Submanifold{⟨111⟩, 1, 0x0000000000000004}, Submanifold{⟨111⟩, 2, 0x0000000000000003}, Submanifold{⟨111⟩, 2, 0x0000000000000005}, Submanifold{⟨111⟩, 2, 0x0000000000000006}, Submanifold{⟨111⟩, 3, 0x0000000000000007}}","str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","compact_str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)"}},
+    {"block":"dyadic-tensors.md:83","input":"T = Chain{V,1}(Chain(v1),v1+v2,v1+v3)","display":"(1v₁+0v₂+0v₃)v₁ + (1v₁+1v₂+0v₃)v₂ + (1v₁+0v₂+1v₃)v₃","out":{"kind":"Chain","T":"Chain{⟨111⟩, 1, Int64, 3}","V":"⟨111⟩","grade":1,"dense":["0v₁ + 0v₂ + 0v₃","1v₁ + 0v₂ + 0v₃","1v₁ + 1v₂ + 0v₃","1v₁ + 0v₂ + 1v₃","0v₁ + 0v₂ + 0v₃","0v₁ + 0v₂ + 0v₃","0v₁ + 0v₂ + 0v₃","0v₁ + 0v₂ + 0v₃"],"str":"(1v₁+0v₂+0v₃)v₁ + (1v₁+1v₂+0v₃)v₂ + (1v₁+0v₂+1v₃)v₃","compact_str":"(1v₁+0v₂+0v₃)v₁+(1v₁+1v₂+0v₃)v₂+(1v₁+0v₂+1v₃)v₃"}},
+    {"block":"dyadic-tensors.md:83","input":"barycenter(T) ∈ T, (v1+v2+v3) ∈ T","display":"(true, false)","out":{"kind":"Other","type":"Tuple{Bool, Bool}","str":"(true, false)","compact_str":"(true, false)"}},
+    {"block":"dyadic-tensors.md:83","input":"barycenter(T)","display":"3v₁ + 1v₂ + 1v₃","out":{"kind":"Chain","T":"Int64","V":"⟨111⟩","grade":1,"dense":["0","3","1","1","0","0","0","0"],"str":"3v₁ + 1v₂ + 1v₃","compact_str":"3v₁+1v₂+1v₃"}},
+    {"block":"dyadic-tensors.md:83","input":"T\\barycenter(T) == inv(T)⋅barycenter(T)","display":"true","out":{"kind":"Bool","T":"Bool","value":"true","str":"true","compact_str":"true"}},
+    {"block":"dyadic-tensors.md:83","input":"T\\barycenter(T)","display":"1.0v₁ + 1.0v₂ + 1.0v₃","out":{"kind":"Chain","T":"Float64","V":"⟨111⟩","grade":1,"dense":["0.0","1.0","1.0","1.0","0.0","0.0","0.0","0.0"],"str":"1.0v₁ + 1.0v₂ + 1.0v₃","compact_str":"1.0v₁+1.0v₂+1.0v₃"}},
+    {"block":"dyadic-tensors.md:83","input":"inv(T)","display":"(1.0v₁+0.0v₂+0.0v₃)v₁ + (-1.0v₁+1.0v₂-0.0v₃)v₂ + (-1.0v₁+0.0v₂+1.0v₃)v₃","out":{"kind":"Chain","T":"Chain{⟨111⟩, 1, Float64, 3}","V":"⟨111⟩","grade":1,"dense":["0.0v₁ + 0.0v₂ + 0.0v₃","1.0v₁ + 0.0v₂ + 0.0v₃","-1.0v₁ + 1.0v₂ - 0.0v₃","-1.0v₁ + 0.0v₂ + 1.0v₃","0.0v₁ + 0.0v₂ + 0.0v₃","0.0v₁ + 0.0v₂ + 0.0v₃","0.0v₁ + 0.0v₂ + 0.0v₃","0.0v₁ + 0.0v₂ + 0.0v₃"],"str":"(1.0v₁+0.0v₂+0.0v₃)v₁ + (-1.0v₁+1.0v₂-0.0v₃)v₂ + (-1.0v₁+0.0v₂+1.0v₃)v₃","compact_str":"(1.0v₁+0.0v₂+0.0v₃)v₁+(-1.0v₁+1.0v₂-0.0v₃)v₂+(-1.0v₁+0.0v₂+1.0v₃)v₃"}},
+    {"block":"dyadic-tensors.md:83","input":"T:T","display":"5v","out":{"kind":"Chain","T":"Int64","V":"⟨111⟩","grade":0,"dense":["5","0","0","0","0","0","0","0"],"str":"5v","compact_str":"5v"}},
+    {"block":"dyadic-tensors.md:83","input":"sqrt(T:T)","display":"2.23606797749979v","out":{"kind":"Single","T":"Float64","V":"⟨111⟩","grade":0,"bits":0,"dense":["2.23606797749979","0.0","0.0","0.0","0.0","0.0","0.0","0.0"],"str":"2.23606797749979v","compact_str":"2.23607v"}}
+  ],
+  "stats": {
+    "cases": 9,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

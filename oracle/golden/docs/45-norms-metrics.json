@@ -1,0 +1,37 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "45-norms-metrics",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/probe2.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"norms/metrics","input":"basis\"3\"","display":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","out":{"kind":"Other","type":"Tuple{Submanifold{3, 3, 0x0000000000000007}, One{⟨111⟩}, Submanifold{⟨111⟩, 1, 0x0000000000000001}, Submanifold{⟨111⟩, 1, 0x0000000000000002}, Submanifold{⟨111⟩, 1, 0x0000000000000004}, Submanifold{⟨111⟩, 2, 0x0000000000000003}, Submanifold{⟨111⟩, 2, 0x0000000000000005}, Submanifold{⟨111⟩, 2, 0x0000000000000006}, Submanifold{⟨111⟩, 3, 0x0000000000000007}}","str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","compact_str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)"}},
+    {"block":"norms/metrics","input":"A = Multivector{V}(1,2,3,4,5,6,7,8)","display":"1 + 2v₁ + 3v₂ + 4v₃ + 5v₁₂ + 6v₁₃ + 7v₂₃ + 8v₁₂₃","out":{"kind":"Multivector","T":"Int64","V":"⟨111⟩","dense":["1","2","3","4","5","6","7","8"],"str":"1 + 2v₁ + 3v₂ + 4v₃ + 5v₁₂ + 6v₁₃ + 7v₂₃ + 8v₁₂₃","compact_str":"1+2v₁+3v₂+4v₃+5v₁₂+6v₁₃+7v₂₃+8v₁₂₃"}},
+    {"block":"norms/metrics","input":"norm(A)","display":"14.2828568570857","out":{"kind":"Number","T":"Float64","value":"14.2828568570857","str":"14.2828568570857","compact_str":"14.2829"}},
+    {"block":"norms/metrics","input":"metric(A)","display":"1 + 2v₁ + 3v₂ + 4v₃ + 5v₁₂ + 6v₁₃ + 7v₂₃ + 8v₁₂₃","out":{"kind":"Multivector","T":"Int64","V":"⟨111⟩","dense":["1","2","3","4","5","6","7","8"],"str":"1 + 2v₁ + 3v₂ + 4v₃ + 5v₁₂ + 6v₁₃ + 7v₂₃ + 8v₁₂₃","compact_str":"1+2v₁+3v₂+4v₃+5v₁₂+6v₁₃+7v₂₃+8v₁₂₃"}},
+    {"block":"norms/metrics","input":"mdims(A), gdims(A,2), tdims(A)","out":{"kind":"Error","error":"MethodError","msg":"MethodError: Multivector{⟨111⟩, Int64, 8}(::Multivector{⟨111⟩, Int64, 8}) is ambiguous."},"defects":["gdims-multivector"]},
+    {"block":"norms/metrics","input":"a = 1v1+2v2+3v3","display":"1v₁ + 2v₂ + 3v₃","out":{"kind":"Chain","T":"Int64","V":"⟨111⟩","grade":1,"dense":["0","1","2","3","0","0","0","0"],"str":"1v₁ + 2v₂ + 3v₃","compact_str":"1v₁+2v₂+3v₃"}},
+    {"block":"norms/metrics","input":"abs(a), abs2(a), norm(a), unit(a)","display":"(3.7416573867739413v, 14v, 3.7416573867739413, 0.267261v₁ + 0.534522v₂ + 0.801784v₃)","out":{"kind":"Other","type":"Tuple{Single{⟨111⟩, 0, v, Float64}, Chain{⟨111⟩, 0, Int64, 1}, Float64, Chain{⟨111⟩, 1, Float64, 3}}","str":"(3.7416573867739413v, 14v, 3.7416573867739413, 0.267261v₁ + 0.534522v₂ + 0.801784v₃)","compact_str":"(3.74166v, 14v, 3.74166, 0.267261v₁+0.534522v₂+0.801784v₃)"}},
+    {"block":"norms/metrics","input":"inv(a)","display":"0.0714286v₁ + 0.142857v₂ + 0.214286v₃","out":{"kind":"Chain","T":"Float64","V":"⟨111⟩","grade":1,"dense":["0.0","0.07142857142857142","0.14285714285714285","0.21428571428571427","0.0","0.0","0.0","0.0"],"str":"0.0714286v₁ + 0.142857v₂ + 0.214286v₃","compact_str":"0.0714286v₁+0.142857v₂+0.214286v₃"}},
+    {"block":"norms/metrics","input":"a/a","display":"1.0 + 0.0v₁₂ + 0.0v₁₃ + 0.0v₂₃","out":{"kind":"Spinor","T":"Float64","V":"⟨111⟩","dense":["0.9999999999999999","0.0","0.0","0.0","0.0","0.0","0.0","0.0"],"str":"1.0 + 0.0v₁₂ + 0.0v₁₃ + 0.0v₂₃","compact_str":"1.0+0.0v₁₂+0.0v₁₃+0.0v₂₃"}},
+    {"block":"norms/metrics","input":"inv(1+v12)","display":"0.5 - 0.5v₁₂","out":{"kind":"Couple","T":"Float64","V":"⟨111⟩","bits":3,"dense":["0.5","0.0","0.0","0.0","-0.5","0.0","0.0","0.0"],"str":"0.5 - 0.5v₁₂","compact_str":"0.5-0.5v₁₂"}},
+    {"block":"norms/metrics","input":"abs(1+v12)","display":"1.4142135623730951v","out":{"kind":"Single","T":"Float64","V":"⟨111⟩","grade":0,"bits":0,"dense":["1.4142135623730951","0.0","0.0","0.0","0.0","0.0","0.0","0.0"],"str":"1.4142135623730951v","compact_str":"1.41421v"}},
+    {"block":"norms/metrics","input":"inv(2+v1)","display":"0.4 - 0.2v₁","out":{"kind":"Couple","T":"Float64","V":"⟨111⟩","bits":1,"dense":["0.4","-0.2","0.0","0.0","0.0","0.0","0.0","0.0"],"str":"0.4 - 0.2v₁","compact_str":"0.4-0.2v₁"}},
+    {"block":"norms/metrics","input":"B = 1+2v1+3v12","display":"1 + 2v₁ + 3v₁₂","out":{"kind":"Multivector","T":"Int64","V":"⟨111⟩","dense":["1","2","0","0","3","0","0","0"],"str":"1 + 2v₁ + 3v₁₂","compact_str":"1+2v₁+3v₁₂"}},
+    {"block":"norms/metrics","input":"~B*B","display":"14 + 4v₁ + 12v₂","out":{"kind":"Multivector","T":"Int64","V":"⟨111⟩","dense":["14","4","12","0","0","0","0","0"],"str":"14 + 4v₁ + 12v₂","compact_str":"14+4v₁+12v₂"}},
+    {"block":"norms/metrics","input":"inv(B)","out":{"kind":"Error","error":"ErrorException","msg":"inv(1 + 2v₁ + 3v₁₂) is undefined"},"defects":["inv-mixed-undefined"]},
+    {"block":"norms/metrics","input":"B*inv(B)","out":{"kind":"Error","error":"ErrorException","msg":"inv(1 + 2v₁ + 3v₁₂) is undefined"},"defects":["inv-mixed-undefined"]}
+  ],
+  "stats": {
+    "cases": 16,
+    "errors": 3,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {"gdims-multivector":1,"inv-mixed-undefined":2}
+  }
+}

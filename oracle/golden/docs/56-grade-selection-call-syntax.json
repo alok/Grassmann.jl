@@ -1,0 +1,27 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "56-grade-selection-call-syntax",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/probe3.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"grade selection call syntax","input":"basis\"3\"","display":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","out":{"kind":"Other","type":"Tuple{Submanifold{3, 3, 0x0000000000000007}, One{⟨111⟩}, Submanifold{⟨111⟩, 1, 0x0000000000000001}, Submanifold{⟨111⟩, 1, 0x0000000000000002}, Submanifold{⟨111⟩, 1, 0x0000000000000004}, Submanifold{⟨111⟩, 2, 0x0000000000000003}, Submanifold{⟨111⟩, 2, 0x0000000000000005}, Submanifold{⟨111⟩, 2, 0x0000000000000006}, Submanifold{⟨111⟩, 3, 0x0000000000000007}}","str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","compact_str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)"}},
+    {"block":"grade selection call syntax","input":"A = 1 + 2v1 + 3v12 + 4v123","display":"1 + 2v₁ + 3v₁₂ + 4v₁₂₃","out":{"kind":"Multivector","T":"Int64","V":"⟨111⟩","dense":["1","2","0","0","3","0","0","4"],"str":"1 + 2v₁ + 3v₁₂ + 4v₁₂₃","compact_str":"1+2v₁+3v₁₂+4v₁₂₃"}},
+    {"block":"grade selection call syntax","input":"A(0), A(1), A(2), A(3)","display":"(1v, 2v₁ + 0v₂ + 0v₃, 3v₁₂ + 0v₁₃ + 0v₂₃, 4v₁₂₃)","out":{"kind":"Other","type":"Tuple{Chain{⟨111⟩, 0, Int64, 1}, Chain{⟨111⟩, 1, Int64, 3}, Chain{⟨111⟩, 2, Int64, 3}, Chain{⟨111⟩, 3, Int64, 1}}","str":"(1v, 2v₁ + 0v₂ + 0v₃, 3v₁₂ + 0v₁₃ + 0v₂₃, 4v₁₂₃)","compact_str":"(1v, 2v₁+0v₂+0v₃, 3v₁₂+0v₁₃+0v₂₃, 4v₁₂₃)"}},
+    {"block":"grade selection call syntax","input":"grade(A,1)","display":"2v₁ + 0v₂ + 0v₃","out":{"kind":"Chain","T":"Int64","V":"⟨111⟩","grade":1,"dense":["0","2","0","0","0","0","0","0"],"str":"2v₁ + 0v₂ + 0v₃","compact_str":"2v₁+0v₂+0v₃"}},
+    {"block":"grade selection call syntax","input":"A[1], A[2]","display":"([2, 0, 0], [3, 0, 0])","out":{"kind":"Other","type":"Tuple{Values{3, Int64}, Values{3, Int64}}","str":"([2, 0, 0], [3, 0, 0])","compact_str":"([2, 0, 0], [3, 0, 0])"}},
+    {"block":"grade selection call syntax","input":"value(A)","display":"8-element Values{8, Int64} with indices SOneTo(8):\n 1\n 2\n 0\n 0\n 3\n 0\n 0\n 4","out":{"kind":"Other","type":"Values{8, Int64}","str":"[1, 2, 0, 0, 3, 0, 0, 4]","compact_str":"[1, 2, 0, 0, 3, 0, 0, 4]"}}
+  ],
+  "stats": {
+    "cases": 6,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

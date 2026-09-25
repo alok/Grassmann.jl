@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "24-algebra.md-1342",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/algebra.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"algebra.md:1342","input":"[(χ(Δ(ω)),χ(Δ(∂(ω)))) for ω ∈ (Λ(ℝ5).v12,Λ(ℝ5).v123,Λ(ℝ5).v1234,Λ(ℝ5).v12345)]","out":{"kind":"Error","error":"MethodError","msg":"MethodError: objects of type Laplacian are not callable."},"defects":["laplacian-not-callable"]}
+  ],
+  "stats": {
+    "cases": 1,
+    "errors": 1,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {"laplacian-not-callable":1}
+  }
+}

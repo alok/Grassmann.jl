@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "52-exp-special-cases",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/probe2.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"exp special cases","input":"basis\"3\"","display":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","out":{"kind":"Other","type":"Tuple{Submanifold{3, 3, 0x0000000000000007}, One{⟨111⟩}, Submanifold{⟨111⟩, 1, 0x0000000000000001}, Submanifold{⟨111⟩, 1, 0x0000000000000002}, Submanifold{⟨111⟩, 1, 0x0000000000000004}, Submanifold{⟨111⟩, 2, 0x0000000000000003}, Submanifold{⟨111⟩, 2, 0x0000000000000005}, Submanifold{⟨111⟩, 2, 0x0000000000000006}, Submanifold{⟨111⟩, 3, 0x0000000000000007}}","str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","compact_str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)"}},
+    {"block":"exp special cases","input":"exp(0.5v1)","display":"1.1276259652063807 + 0.5210953054937474v₁","out":{"kind":"Couple","T":"Float64","V":"⟨111⟩","bits":1,"dense":["1.1276259652063807","0.5210953054937474","0.0","0.0","0.0","0.0","0.0","0.0"],"str":"1.1276259652063807 + 0.5210953054937474v₁","compact_str":"1.12763+0.521095v₁"}},
+    {"block":"exp special cases","input":"exp(0.5v12)","display":"0.8775825618903728 + 0.479425538604203v₁₂","out":{"kind":"Couple","T":"Float64","V":"⟨111⟩","bits":3,"dense":["0.8775825618903728","0.0","0.0","0.0","0.479425538604203","0.0","0.0","0.0"],"str":"0.8775825618903728 + 0.479425538604203v₁₂","compact_str":"0.877583+0.479426v₁₂"}},
+    {"block":"exp special cases","input":"@basis S\"-++\"","display":"(⟨-++⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","out":{"kind":"Other","type":"Tuple{Submanifold{⟨-++⟩, 3, 0x0000000000000007}, One{⟨-++⟩}, Submanifold{⟨-++⟩, 1, 0x0000000000000001}, Submanifold{⟨-++⟩, 1, 0x0000000000000002}, Submanifold{⟨-++⟩, 1, 0x0000000000000004}, Submanifold{⟨-++⟩, 2, 0x0000000000000003}, Submanifold{⟨-++⟩, 2, 0x0000000000000005}, Submanifold{⟨-++⟩, 2, 0x0000000000000006}, Submanifold{⟨-++⟩, 3, 0x0000000000000007}}","str":"(⟨-++⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","compact_str":"(⟨-++⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)"}},
+    {"block":"exp special cases","input":"exp(0.5v1)","display":"0.8775825618903728 + 0.479425538604203v₁","out":{"kind":"Couple","T":"Float64","V":"⟨-++⟩","bits":1,"dense":["0.8775825618903728","0.479425538604203","0.0","0.0","0.0","0.0","0.0","0.0"],"str":"0.8775825618903728 + 0.479425538604203v₁","compact_str":"0.877583+0.479426v₁"}},
+    {"block":"exp special cases","input":"exp(0.5v12)","display":"1.1276259652063807 + 0.5210953054937474v₁₂","out":{"kind":"Couple","T":"Float64","V":"⟨-++⟩","bits":3,"dense":["1.1276259652063807","0.0","0.0","0.0","0.5210953054937474","0.0","0.0","0.0"],"str":"1.1276259652063807 + 0.5210953054937474v₁₂","compact_str":"1.12763+0.521095v₁₂"}},
+    {"block":"exp special cases","input":"@basis S\"∞∅+\"","display":"(⟨∞∅1⟩, v, v∞, v∅, v₁, v∞∅, v∞₁, v∅₁, v∞∅₁)","out":{"kind":"Other","type":"Tuple{Submanifold{⟨∞∅+⟩, 3, 0x0000000000000007}, One{⟨∞∅1⟩}, Submanifold{⟨∞∅1⟩, 1, 0x0000000000000001}, Submanifold{⟨∞∅1⟩, 1, 0x0000000000000002}, Submanifold{⟨∞∅1⟩, 1, 0x0000000000000004}, Submanifold{⟨∞∅1⟩, 2, 0x0000000000000003}, Submanifold{⟨∞∅1⟩, 2, 0x0000000000000005}, Submanifold{⟨∞∅1⟩, 2, 0x0000000000000006}, Submanifold{⟨∞∅1⟩, 3, 0x0000000000000007}}","str":"(⟨∞∅1⟩, v, v∞, v∅, v₁, v∞∅, v∞₁, v∅₁, v∞∅₁)","compact_str":"(⟨∞∅1⟩, v, v∞, v∅, v₁, v∞∅, v∞₁, v∅₁, v∞∅₁)"}},
+    {"block":"exp special cases","input":"exp(0.5v∞1)","display":"1.0 + 0.0v∞∅ + 0.5v∞₁ + 0.0v∅₁","out":{"kind":"Spinor","T":"Float64","V":"⟨∞∅1⟩","dense":["1.0","0.0","0.0","0.0","0.0","0.5","0.0","0.0"],"str":"1.0 + 0.0v∞∅ + 0.5v∞₁ + 0.0v∅₁","compact_str":"1.0+0.0v∞∅+0.5v∞₁+0.0v∅₁"}},
+    {"block":"exp special cases","input":"exp(0.5v∞∅)","display":"1.12763 + 0.521095v∞∅ + 0.0v∞₁ + 0.0v∅₁","out":{"kind":"Spinor","T":"Float64","V":"⟨∞∅1⟩","dense":["1.1276259652063807","0.0","0.0","0.0","0.5210953054937474","0.0","0.0","0.0"],"str":"1.12763 + 0.521095v∞∅ + 0.0v∞₁ + 0.0v∅₁","compact_str":"1.12763+0.521095v∞∅+0.0v∞₁+0.0v∅₁"}}
+  ],
+  "stats": {
+    "cases": 9,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

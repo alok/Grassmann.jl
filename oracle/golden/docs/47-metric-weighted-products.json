@@ -1,0 +1,28 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "47-metric-weighted-products",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/probe2.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"metric-weighted products","input":"@basis D\"2,3,5\"","display":"(⟨2,3,5⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","out":{"kind":"Other","type":"Tuple{Submanifold{⟨2,3,5⟩, 3, 0x0000000000000007}, One{⟨2,3,5⟩}, Submanifold{⟨2,3,5⟩, 1, 0x0000000000000001}, Submanifold{⟨2,3,5⟩, 1, 0x0000000000000002}, Submanifold{⟨2,3,5⟩, 1, 0x0000000000000004}, Submanifold{⟨2,3,5⟩, 2, 0x0000000000000003}, Submanifold{⟨2,3,5⟩, 2, 0x0000000000000005}, Submanifold{⟨2,3,5⟩, 2, 0x0000000000000006}, Submanifold{⟨2,3,5⟩, 3, 0x0000000000000007}}","str":"(⟨2,3,5⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","compact_str":"(⟨2,3,5⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)"}},
+    {"block":"metric-weighted products","input":"v1*v1, v2*v2, v3*v3","display":"(2v, 3v, 5v)","out":{"kind":"Other","type":"Tuple{Single{⟨2,3,5⟩, 0, v, Int64}, Single{⟨2,3,5⟩, 0, v, Int64}, Single{⟨2,3,5⟩, 0, v, Int64}}","str":"(2v, 3v, 5v)","compact_str":"(2v, 3v, 5v)"}},
+    {"block":"metric-weighted products","input":"v12*v12","display":"-6v","out":{"kind":"Single","T":"Int64","V":"⟨2,3,5⟩","grade":0,"bits":0,"dense":["-6","0","0","0","0","0","0","0"],"str":"-6v","compact_str":"-6v"}},
+    {"block":"metric-weighted products","input":"v1⋅v1","display":"2v","out":{"kind":"Single","T":"Int64","V":"⟨2,3,5⟩","grade":0,"bits":0,"dense":["2","0","0","0","0","0","0","0"],"str":"2v","compact_str":"2v"}},
+    {"block":"metric-weighted products","input":"⋆v1","display":"2v₂₃","out":{"kind":"Single","T":"Int64","V":"⟨2,3,5⟩","grade":2,"bits":6,"dense":["0","0","0","0","0","0","2","0"],"str":"2v₂₃","compact_str":"2v₂₃"}},
+    {"block":"metric-weighted products","input":"!v1","display":"1v₂₃","out":{"kind":"Single","T":"Int64","V":"⟨2,3,5⟩","grade":2,"bits":6,"dense":["0","0","0","0","0","0","1","0"],"str":"1v₂₃","compact_str":"1v₂₃"}},
+    {"block":"metric-weighted products","input":"hodge(v1)","display":"2v₂₃","out":{"kind":"Single","T":"Int64","V":"⟨2,3,5⟩","grade":2,"bits":6,"dense":["0","0","0","0","0","0","2","0"],"str":"2v₂₃","compact_str":"2v₂₃"}}
+  ],
+  "stats": {
+    "cases": 7,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

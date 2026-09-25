@@ -1,0 +1,34 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "54-sandwich-scaling",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/probe3.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"sandwich scaling","input":"basis\"3\"","display":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","out":{"kind":"Other","type":"Tuple{Submanifold{3, 3, 0x0000000000000007}, One{⟨111⟩}, Submanifold{⟨111⟩, 1, 0x0000000000000001}, Submanifold{⟨111⟩, 1, 0x0000000000000002}, Submanifold{⟨111⟩, 1, 0x0000000000000004}, Submanifold{⟨111⟩, 2, 0x0000000000000003}, Submanifold{⟨111⟩, 2, 0x0000000000000005}, Submanifold{⟨111⟩, 2, 0x0000000000000006}, Submanifold{⟨111⟩, 3, 0x0000000000000007}}","str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","compact_str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)"}},
+    {"block":"sandwich scaling","input":"v1⊘(3v1)","display":"-9v₁","out":{"kind":"Single","T":"Int64","V":"⟨111⟩","grade":1,"bits":1,"dense":["0","-9","0","0","0","0","0","0"],"str":"-9v₁","compact_str":"-9v₁"}},
+    {"block":"sandwich scaling","input":"(3v1)>>>v1","display":"-9v₁","out":{"kind":"Single","T":"Int64","V":"⟨111⟩","grade":1,"bits":1,"dense":["0","-9","0","0","0","0","0","0"],"str":"-9v₁","compact_str":"-9v₁"}},
+    {"block":"sandwich scaling","input":"v2⊘(3v1)","display":"9v₂","out":{"kind":"Single","T":"Int64","V":"⟨111⟩","grade":1,"bits":2,"dense":["0","0","9","0","0","0","0","0"],"str":"9v₂","compact_str":"9v₂"}},
+    {"block":"sandwich scaling","input":"v2⊘v1","display":"1v₂","out":{"kind":"Single","T":"Int64","V":"⟨111⟩","grade":1,"bits":2,"dense":["0","0","1","0","0","0","0","0"],"str":"1v₂","compact_str":"1v₂"}},
+    {"block":"sandwich scaling","input":"v1>>>v2","display":"1v₂","out":{"kind":"Single","T":"Int64","V":"⟨111⟩","grade":1,"bits":2,"dense":["0","0","1","0","0","0","0","0"],"str":"1v₂","compact_str":"1v₂"}},
+    {"block":"sandwich scaling","input":"inv(3v1)*v2*(3v1)","display":"-1.0v₂","out":{"kind":"Single","T":"Float64","V":"⟨111⟩","grade":1,"bits":2,"dense":["0.0","0.0","-1.0","0.0","0.0","0.0","0.0","0.0"],"str":"-1.0v₂","compact_str":"-1.0v₂"}},
+    {"block":"sandwich scaling","input":"exp(π/8*v12)","display":"0.9238795325112867 + 0.3826834323650898v₁₂","out":{"kind":"Couple","T":"Float64","V":"⟨111⟩","bits":3,"dense":["0.9238795325112867","0.0","0.0","0.0","0.3826834323650898","0.0","0.0","0.0"],"str":"0.9238795325112867 + 0.3826834323650898v₁₂","compact_str":"0.92388+0.382683v₁₂"}},
+    {"block":"sandwich scaling","input":"exp(π/8*v12)^2","display":"0.7071067811865475 + 0.7071067811865476v₁₂","out":{"kind":"Couple","T":"Float64","V":"⟨111⟩","bits":3,"dense":["0.7071067811865475","0.0","0.0","0.0","0.7071067811865476","0.0","0.0","0.0"],"str":"0.7071067811865475 + 0.7071067811865476v₁₂","compact_str":"0.707107+0.707107v₁₂"}},
+    {"block":"sandwich scaling","input":"2^v12","display":"0.7692389013639721 + 0.6389612763136348v₁₂","out":{"kind":"Couple","T":"Float64","V":"⟨111⟩","bits":3,"dense":["0.7692389013639721","0.0","0.0","0.0","0.6389612763136348","0.0","0.0","0.0"],"str":"0.7692389013639721 + 0.6389612763136348v₁₂","compact_str":"0.769239+0.638961v₁₂"}},
+    {"block":"sandwich scaling","input":"v12^2","display":"-1v","out":{"kind":"Single","T":"Int64","V":"⟨111⟩","grade":0,"bits":0,"dense":["-1","0","0","0","0","0","0","0"],"str":"-1v","compact_str":"-1v"}},
+    {"block":"sandwich scaling","input":"(v1+v2)^3","display":"2v₁ + 2v₂ + 0v₃","out":{"kind":"Chain","T":"Int64","V":"⟨111⟩","grade":1,"dense":["0","2","2","0","0","0","0","0"],"str":"2v₁ + 2v₂ + 0v₃","compact_str":"2v₁+2v₂+0v₃"}},
+    {"block":"sandwich scaling","input":"v12^-1","display":"-1.0v₁₂","out":{"kind":"Single","T":"Float64","V":"⟨111⟩","grade":2,"bits":3,"dense":["0.0","0.0","0.0","0.0","-1.0","0.0","0.0","0.0"],"str":"-1.0v₁₂","compact_str":"-1.0v₁₂"}}
+  ],
+  "stats": {
+    "cases": 13,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

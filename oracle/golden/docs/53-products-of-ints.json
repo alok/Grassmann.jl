@@ -1,0 +1,38 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "53-products-of-ints",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/probe2.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"products of ints","input":"basis\"3\"","display":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","out":{"kind":"Other","type":"Tuple{Submanifold{3, 3, 0x0000000000000007}, One{⟨111⟩}, Submanifold{⟨111⟩, 1, 0x0000000000000001}, Submanifold{⟨111⟩, 1, 0x0000000000000002}, Submanifold{⟨111⟩, 1, 0x0000000000000004}, Submanifold{⟨111⟩, 2, 0x0000000000000003}, Submanifold{⟨111⟩, 2, 0x0000000000000005}, Submanifold{⟨111⟩, 2, 0x0000000000000006}, Submanifold{⟨111⟩, 3, 0x0000000000000007}}","str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","compact_str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)"}},
+    {"block":"products of ints","input":"(1v1+2v2+3v3) * (4v1+5v2+6v3)","display":"32 - 3v₁₂ - 6v₁₃ - 3v₂₃","out":{"kind":"Spinor","T":"Int64","V":"⟨111⟩","dense":["32","0","0","0","-3","-6","-3","0"],"str":"32 - 3v₁₂ - 6v₁₃ - 3v₂₃","compact_str":"32-3v₁₂-6v₁₃-3v₂₃"}},
+    {"block":"products of ints","input":"(1v1+2v2+3v3) ∧ (4v1+5v2+6v3)","display":"-3v₁₂ - 6v₁₃ - 3v₂₃","out":{"kind":"Chain","T":"Int64","V":"⟨111⟩","grade":2,"dense":["0","0","0","0","-3","-6","-3","0"],"str":"-3v₁₂ - 6v₁₃ - 3v₂₃","compact_str":"-3v₁₂-6v₁₃-3v₂₃"}},
+    {"block":"products of ints","input":"(1v1+2v2+3v3) ⋅ (4v1+5v2+6v3)","display":"32v","out":{"kind":"Chain","T":"Int64","V":"⟨111⟩","grade":0,"dense":["32","0","0","0","0","0","0","0"],"str":"32v","compact_str":"32v"}},
+    {"block":"products of ints","input":"(1v1+2v2+3v3) × (4v1+5v2+6v3)","display":"-3v₁ + 6v₂ - 3v₃","out":{"kind":"Chain","T":"Int64","V":"⟨111⟩","grade":1,"dense":["0","-3","6","-3","0","0","0","0"],"str":"-3v₁ + 6v₂ - 3v₃","compact_str":"-3v₁+6v₂-3v₃"}},
+    {"block":"products of ints","input":"(1v1+2v2+3v3) ∨ (4v12+5v13+6v23)","display":"8v","out":{"kind":"Chain","T":"Int64","V":"⟨111⟩","grade":0,"dense":["8","0","0","0","0","0","0","0"],"str":"8v","compact_str":"8v"}},
+    {"block":"products of ints","input":"v1 ∨ v23","display":"v","out":{"kind":"One","T":"Int64","V":"⟨111⟩","grade":0,"bits":0,"dense":["1","0","0","0","0","0","0","0"],"str":"v","compact_str":"v"}},
+    {"block":"products of ints","input":"v23 ∨ v1","display":"v","out":{"kind":"One","T":"Int64","V":"⟨111⟩","grade":0,"bits":0,"dense":["1","0","0","0","0","0","0","0"],"str":"v","compact_str":"v"}},
+    {"block":"products of ints","input":"v12 ∨ v13","display":"v₁","out":{"kind":"Submanifold","T":"Int64","V":"⟨111⟩","grade":1,"bits":1,"dense":["0","1","0","0","0","0","0","0"],"str":"v₁","compact_str":"v₁"}},
+    {"block":"products of ints","input":"v12 > v1","display":"v₂","out":{"kind":"Submanifold","T":"Int64","V":"⟨111⟩","grade":1,"bits":2,"dense":["0","0","1","0","0","0","0","0"],"str":"v₂","compact_str":"v₂"}},
+    {"block":"products of ints","input":"v1 < v12","display":"v₂","out":{"kind":"Submanifold","T":"Int64","V":"⟨111⟩","grade":1,"bits":2,"dense":["0","0","1","0","0","0","0","0"],"str":"v₂","compact_str":"v₂"}},
+    {"block":"products of ints","input":"v12 >> v1","display":"-1v₂","out":{"kind":"Single","T":"Int64","V":"⟨111⟩","grade":1,"bits":2,"dense":["0","0","-1","0","0","0","0","0"],"str":"-1v₂","compact_str":"-1v₂"}},
+    {"block":"products of ints","input":"v1 << v12","display":"v₂","out":{"kind":"Submanifold","T":"Int64","V":"⟨111⟩","grade":1,"bits":2,"dense":["0","0","1","0","0","0","0","0"],"str":"v₂","compact_str":"v₂"}},
+    {"block":"products of ints","input":"v1 > v12","display":"𝟎","out":{"kind":"Zero","T":"Int64","V":"⟨111⟩","grade":0,"dense":["0","0","0","0","0","0","0","0"],"str":"𝟎","compact_str":"𝟎"}},
+    {"block":"products of ints","input":"v12 < v1","display":"𝟎","out":{"kind":"Zero","T":"Int64","V":"⟨111⟩","grade":0,"dense":["0","0","0","0","0","0","0","0"],"str":"𝟎","compact_str":"𝟎"}},
+    {"block":"products of ints","input":"(v1+v2) > v12","display":"𝟎","out":{"kind":"Zero","T":"Int64","V":"⟨111⟩","grade":0,"dense":["0","0","0","0","0","0","0","0"],"str":"𝟎","compact_str":"𝟎"}},
+    {"block":"products of ints","input":"v12 < (v1+v2)","display":"𝟎","out":{"kind":"Zero","T":"Int64","V":"⟨111⟩","grade":0,"dense":["0","0","0","0","0","0","0","0"],"str":"𝟎","compact_str":"𝟎"}}
+  ],
+  "stats": {
+    "cases": 17,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "15-algebra.md-934",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/algebra.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"algebra.md:934","input":"basis\"3\"","display":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","out":{"kind":"Other","type":"Tuple{Submanifold{3, 3, 0x0000000000000007}, One{⟨111⟩}, Submanifold{⟨111⟩, 1, 0x0000000000000001}, Submanifold{⟨111⟩, 1, 0x0000000000000002}, Submanifold{⟨111⟩, 1, 0x0000000000000004}, Submanifold{⟨111⟩, 2, 0x0000000000000003}, Submanifold{⟨111⟩, 2, 0x0000000000000005}, Submanifold{⟨111⟩, 2, 0x0000000000000006}, Submanifold{⟨111⟩, 3, 0x0000000000000007}}","str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","compact_str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)"}},
+    {"block":"algebra.md:934","input":"wedge(!v12,!v23)","display":"-1v₁₃","out":{"kind":"Single","T":"Int64","V":"⟨111⟩","grade":2,"bits":5,"dense":["0","0","0","0","0","-1","0","0"],"str":"-1v₁₃","compact_str":"-1v₁₃"}},
+    {"block":"algebra.md:934","input":"!vee(v12,v23)","display":"-1v₁₃","out":{"kind":"Single","T":"Int64","V":"⟨111⟩","grade":2,"bits":5,"dense":["0","0","0","0","0","-1","0","0"],"str":"-1v₁₃","compact_str":"-1v₁₃"}},
+    {"block":"algebra.md:934","input":"wedge(v12,!v12)","display":"1v₁₂₃","out":{"kind":"Single","T":"Int64","V":"⟨111⟩","grade":3,"bits":7,"dense":["0","0","0","0","0","0","0","1"],"str":"1v₁₂₃","compact_str":"1v₁₂₃"}}
+  ],
+  "stats": {
+    "cases": 4,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

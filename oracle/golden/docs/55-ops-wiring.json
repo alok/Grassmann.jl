@@ -1,0 +1,34 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "55-ops-wiring",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/probe3.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"ops wiring","input":"basis\"3\"","display":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","out":{"kind":"Other","type":"Tuple{Submanifold{3, 3, 0x0000000000000007}, One{⟨111⟩}, Submanifold{⟨111⟩, 1, 0x0000000000000001}, Submanifold{⟨111⟩, 1, 0x0000000000000002}, Submanifold{⟨111⟩, 1, 0x0000000000000004}, Submanifold{⟨111⟩, 2, 0x0000000000000003}, Submanifold{⟨111⟩, 2, 0x0000000000000005}, Submanifold{⟨111⟩, 2, 0x0000000000000006}, Submanifold{⟨111⟩, 3, 0x0000000000000007}}","str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","compact_str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)"}},
+    {"block":"ops wiring","input":"a = 1v1+2v2+3v3; b = 4v12+5v13+6v23","display":"4v₁₂ + 5v₁₃ + 6v₂₃","out":{"kind":"Chain","T":"Int64","V":"⟨111⟩","grade":2,"dense":["0","0","0","0","4","5","6","0"],"str":"4v₁₂ + 5v₁₃ + 6v₂₃","compact_str":"4v₁₂+5v₁₃+6v₂₃"}},
+    {"block":"ops wiring","input":"a ⨼ b, a ⨽ b, a < b, a > b","display":"(-23v₁ - 14v₂ + 17v₃, 𝟎, -23v₁ - 14v₂ + 17v₃, 𝟎)","out":{"kind":"Other","type":"Tuple{Chain{⟨111⟩, 1, Int64, 3}, Zero{⟨111⟩}, Chain{⟨111⟩, 1, Int64, 3}, Zero{⟨111⟩}}","str":"(-23v₁ - 14v₂ + 17v₃, 𝟎, -23v₁ - 14v₂ + 17v₃, 𝟎)","compact_str":"(-23v₁-14v₂+17v₃, 𝟎, -23v₁-14v₂+17v₃, 𝟎)"}},
+    {"block":"ops wiring","input":"b ⨼ a, b ⨽ a, b < a, b > a","display":"(𝟎, -23v₁ - 14v₂ + 17v₃, 𝟎, -23v₁ - 14v₂ + 17v₃)","out":{"kind":"Other","type":"Tuple{Zero{⟨111⟩}, Chain{⟨111⟩, 1, Int64, 3}, Zero{⟨111⟩}, Chain{⟨111⟩, 1, Int64, 3}}","str":"(𝟎, -23v₁ - 14v₂ + 17v₃, 𝟎, -23v₁ - 14v₂ + 17v₃)","compact_str":"(𝟎, -23v₁-14v₂+17v₃, 𝟎, -23v₁-14v₂+17v₃)"}},
+    {"block":"ops wiring","input":"a ⊛ a, a ∗ a","display":"(14v, 14 + 0v₁₂ + 0v₁₃ + 0v₂₃)","out":{"kind":"Other","type":"Tuple{Single{⟨111⟩, 0, v, Int64}, Quaternion{⟨111⟩, Int64}}","str":"(14v, 14 + 0v₁₂ + 0v₁₃ + 0v₂₃)","compact_str":"(14v, 14+0v₁₂+0v₁₃+0v₂₃)"}},
+    {"block":"ops wiring","input":"b ∗ b","display":"77 + 0v₁₂ + 0v₁₃ + 0v₂₃","out":{"kind":"Spinor","T":"Int64","V":"⟨111⟩","dense":["77","0","0","0","0","0","0","0"],"str":"77 + 0v₁₂ + 0v₁₃ + 0v₂₃","compact_str":"77+0v₁₂+0v₁₃+0v₂₃"}},
+    {"block":"ops wiring","input":"|a","out":{"kind":"Error","error":"ParseError","msg":"ParseError:"},"defects":["docs-unparseable"]},
+    {"block":"ops wiring","input":"a ⟑ b","display":"-23v₁ - 14v₂ + 17v₃ + 8v₁₂₃","out":{"kind":"CoSpinor","T":"Int64","V":"⟨111⟩","dense":["0","-23","-14","17","0","0","0","8"],"str":"-23v₁ - 14v₂ + 17v₃ + 8v₁₂₃","compact_str":"-23v₁-14v₂+17v₃+8v₁₂₃"}},
+    {"block":"ops wiring","input":"a ⊖ b","display":"-23v₁ - 14v₂ + 17v₃ + 8v₁₂₃","out":{"kind":"CoSpinor","T":"Int64","V":"⟨111⟩","dense":["0","-23","-14","17","0","0","0","8"],"str":"-23v₁ - 14v₂ + 17v₃ + 8v₁₂₃","compact_str":"-23v₁-14v₂+17v₃+8v₁₂₃"}},
+    {"block":"ops wiring","input":"a ⊙ b","out":{"kind":"Error","error":"UndefVarError","msg":"UndefVarError: `permutations` not defined in `Grassmann`"},"defects":["symmetrize-permutations"]},
+    {"block":"ops wiring","input":"a ⊠ b","out":{"kind":"Error","error":"UndefVarError","msg":"UndefVarError: `permutations` not defined in `Grassmann`"},"defects":["symmetrize-permutations"]},
+    {"block":"ops wiring","input":"a × (4v1+5v2+6v3)","display":"-3v₁ + 6v₂ - 3v₃","out":{"kind":"Chain","T":"Int64","V":"⟨111⟩","grade":1,"dense":["0","-3","6","-3","0","0","0","0"],"str":"-3v₁ + 6v₂ - 3v₃","compact_str":"-3v₁+6v₂-3v₃"}},
+    {"block":"ops wiring","input":"a ∥ 2a","display":"true","out":{"kind":"Bool","T":"Bool","value":"true","str":"true","compact_str":"true"}}
+  ],
+  "stats": {
+    "cases": 13,
+    "errors": 3,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {"docs-unparseable":1,"symmetrize-permutations":2}
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "30-quick-start.md-5",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/tutorials.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"quick-start.md:5","input":"@basis ℝ^2","display":"(⟨++⟩, v, v₁, v₂, v₁₂)","out":{"kind":"Other","type":"Tuple{Submanifold{⟨++⟩, 2, 0x0000000000000003}, One{⟨++⟩}, Submanifold{⟨++⟩, 1, 0x0000000000000001}, Submanifold{⟨++⟩, 1, 0x0000000000000002}, Submanifold{⟨++⟩, 2, 0x0000000000000003}}","str":"(⟨++⟩, v, v₁, v₂, v₁₂)","compact_str":"(⟨++⟩, v, v₁, v₂, v₁₂)"}},
+    {"block":"quick-start.md:5","input":"v1*v2","display":"v₁₂","out":{"kind":"Submanifold","T":"Int64","V":"⟨++⟩","grade":2,"bits":3,"dense":["0","0","0","1"],"str":"v₁₂","compact_str":"v₁₂"}},
+    {"block":"quick-start.md:5","input":"v1|v2","display":"𝟎","out":{"kind":"Zero","T":"Int64","V":"⟨++⟩","grade":0,"dense":["0","0","0","0"],"str":"𝟎","compact_str":"𝟎"}},
+    {"block":"quick-start.md:5","input":"v1∧v2","display":"v₁₂","out":{"kind":"Submanifold","T":"Int64","V":"⟨++⟩","grade":2,"bits":3,"dense":["0","0","0","1"],"str":"v₁₂","compact_str":"v₁₂"}},
+    {"block":"quick-start.md:15","input":"a = v1+v2","display":"1v₁ + 1v₂","out":{"kind":"Chain","T":"Int64","V":"⟨++⟩","grade":1,"dense":["0","1","1","0"],"str":"1v₁ + 1v₂","compact_str":"1v₁+1v₂"}},
+    {"block":"quick-start.md:15","input":"n = v1","display":"v₁","out":{"kind":"Submanifold","T":"Int64","V":"⟨++⟩","grade":1,"bits":1,"dense":["0","1","0","0"],"str":"v₁","compact_str":"v₁"}},
+    {"block":"quick-start.md:15","input":"-n*a/n","display":"-1.0v₁ + 1.0v₂","out":{"kind":"CoSpinor","T":"Float64","V":"⟨++⟩","dense":["0.0","-1.0","1.0","0.0"],"str":"-1.0v₁ + 1.0v₂","compact_str":"-1.0v₁+1.0v₂"}},
+    {"block":"quick-start.md:23","input":"R = exp(π/4*v12)","display":"0.7071067811865476 + 0.7071067811865475v₁₂","out":{"kind":"Couple","T":"Float64","V":"⟨++⟩","bits":3,"dense":["0.7071067811865476","0.0","0.0","0.7071067811865475"],"str":"0.7071067811865476 + 0.7071067811865475v₁₂","compact_str":"0.707107+0.707107v₁₂"}},
+    {"block":"quick-start.md:23","input":"~R*v1*R","display":"2.22045e-16v₁ + 1.0v₂","out":{"kind":"Chain","T":"Float64","V":"⟨++⟩","grade":1,"dense":["0.0","2.220446049250313e-16","1.0","0.0"],"str":"2.22045e-16v₁ + 1.0v₂","compact_str":"2.22045e-16v₁+1.0v₂"}}
+  ],
+  "stats": {
+    "cases": 9,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

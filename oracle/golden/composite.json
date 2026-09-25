@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "composite",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/composite.jl"
+  },
+  "totals": {
+    "cases": 1192,
+    "errors": 137,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {"inv-mixed-undefined":55,"scalar-trig-hyperbolic":3,"term-power-period4":14,"trig-mixed-op-undefined":77,"zero-method-gaps":5}
+  },
+  "shards": [
+    {"shard":"E2","file":"composite/E2.json","cases":234,"bytes":42973,"errors":15,"ref_mismatch":0,"unexplained":0,"space":"E2"},
+    {"shard":"E3","file":"composite/E3.json","cases":234,"bytes":54159,"errors":18,"ref_mismatch":0,"unexplained":0,"space":"E3"},
+    {"shard":"E4","file":"composite/E4.json","cases":234,"bytes":74160,"errors":33,"ref_mismatch":0,"unexplained":0,"space":"E4"},
+    {"shard":"M4","file":"composite/M4.json","cases":234,"bytes":73820,"errors":33,"ref_mismatch":0,"unexplained":0,"space":"M4"},
+    {"shard":"CGA3","file":"composite/CGA3.json","cases":256,"bytes":126540,"errors":38,"ref_mismatch":0,"unexplained":0,"space":"CGA3"}
+  ]
+}
