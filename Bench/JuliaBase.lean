@@ -25,39 +25,42 @@ open _root_.JuliaBase Bench
 @[inline] def wordFloat (w : UInt64) : Float :=
   Float.ofBits ((w &&& (0x800FFFFFFFFFFFFF : UInt64)) ||| (((991 : UInt64) + ((w >>> 52) &&& 63)) <<< 52))
 
+/-- The loop of `sumMap`. `@[specialize]` on the recursive function itself: a `where`-local loop
+of a specialized function is not specialized, and called `f` as a closure on boxed floats (the
+Julia twin's loops are specialized on `f`). -/
+@[specialize] def sumMapLoop (f : Float → Float) (xs : FloatArray) (i : Nat) (acc : Float) : Nat → Float
+  | 0 => acc
+  | fuel + 1 => if h : i < xs.size then sumMapLoop f xs (i + 1) (acc + f xs[i]) fuel else acc
+
 /-- `∑ f xs[i]`. -/
-@[specialize] def sumMap (f : Float → Float) (xs : FloatArray) : Float :=
-  go 0 0
-where
-  /-- Tail-recursive loop. -/
-  go (i : Nat) (acc : Float) : Float :=
-    if h : i < xs.size then go (i + 1) (acc + f xs[i]) else acc
-  termination_by xs.size - i
+@[inline] def sumMap (f : Float → Float) (xs : FloatArray) : Float := sumMapLoop f xs 0 0 xs.size
+
+/-- The loop of `totalBytes` (specialized per call site, see `sumMapLoop`). -/
+@[specialize] def totalBytesLoop (f : Float → String) (xs : FloatArray) (i acc : Nat) : Nat → Nat
+  | 0 => acc
+  | fuel + 1 =>
+    if h : i < xs.size then totalBytesLoop f xs (i + 1) (acc + (f xs[i]).utf8ByteSize) fuel else acc
 
 /-- `∑ bytes (f xs[i])`: total printed length. -/
-@[specialize] def totalBytes (f : Float → String) (xs : FloatArray) : Nat :=
-  go 0 0
-where
-  /-- Tail-recursive loop. -/
-  go (i acc : Nat) : Nat :=
-    if h : i < xs.size then go (i + 1) (acc + (f xs[i]).utf8ByteSize) else acc
-  termination_by xs.size - i
+@[inline] def totalBytes (f : Float → String) (xs : FloatArray) : Nat := totalBytesLoop f xs 0 0 xs.size
 
 /-- `∑ parse s`. -/
 def sumParse (ss : Array String) : Float :=
   ss.foldl (fun acc s => acc + F64.parse s) 0
 
-/-- `∑ (re + im) (f zs[i])` over complex numbers stored as `(re, im)` pairs. -/
-@[specialize] def sumComplex (f : Complex Float → Complex Float) (zs : FloatArray) : Float :=
-  go 0 0
-where
-  /-- Tail-recursive loop. -/
-  go (i : Nat) (acc : Float) : Float :=
+/-- The loop of `sumComplex` (specialized per call site, see `sumMapLoop`). -/
+@[specialize] def sumComplexLoop (f : Complex Float → Complex Float) (zs : FloatArray) (i : Nat)
+    (acc : Float) : Nat → Float
+  | 0 => acc
+  | fuel + 1 =>
     if h : i + 1 < zs.size then
       let w := f ⟨zs[i], zs[i + 1]⟩
-      go (i + 2) (acc + (w.re + w.im))
+      sumComplexLoop f zs (i + 2) (acc + (w.re + w.im)) fuel
     else acc
-  termination_by zs.size - i
+
+/-- `∑ (re + im) (f zs[i])` over complex numbers stored as `(re, im)` pairs. -/
+@[inline] def sumComplex (f : Complex Float → Complex Float) (zs : FloatArray) : Float :=
+  sumComplexLoop f zs 0 0 zs.size
 
 /-- `∑ (re + im) (zs[i] / ws[i])`. -/
 def sumDiv (zs : FloatArray) : Float :=
