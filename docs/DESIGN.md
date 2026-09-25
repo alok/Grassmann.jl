@@ -35,6 +35,7 @@ touch a module.
 
 ```
 lakefile.toml / lean-toolchain (leanprover/lean4:v4.35.0-rc3)   # zero [[require]]
+JuliaBase/      # Julia Base semantics: F64/F32/JInt numerics, Complex, show, ranges
 StaticVectors/  AbstractTensors/  Leibniz/  DirectSum/  Grassmann/     # core
 Cartan/  MeshTopology/  Adapode/  Fatou/                                 # geometry & numerics
 FieldAlgebra/  FieldConstants/  UnitSystems/  Similitude/  MeasureSystems/
@@ -80,6 +81,11 @@ does.
    Tests may use `#guard`/`decide`.
 8. **Atomic commits:** one logical change each, building green. Message
    format `area: imperative summary`.
+9. **One home for Julia `Base`.** Scalar Julia semantics (`F64.max`/`min`,
+   `isapprox`, `hypot`, `cbrt`, `Float64(::Rational)`, `expm1`/`log1p`, the
+   `Complex` type and its `ComplexF64` algorithms, `show`) live in `JuliaBase`
+   and nowhere else. Other libraries import it; they add only their own class
+   instances (`Coeff`, `Analytic`, `JNorm`, …) on top.
 
 ## 3. The space layer (DirectSum)
 
@@ -157,7 +163,8 @@ class Coeff (α : Type) extends Add α, Sub α, Mul α, Neg α, Inhabited α whe
 ```
 
 Instances: `Float`, `Float32`, `Int`, `Rat`, and `Complex α` (our own
-computable `Complex`). Recursive instances (`Chain V G α` as a coefficient)
+computable `JuliaBase.Complex`, Julia's `Complex{T}`; the `Float64` algorithms live in
+the `JuliaBase.ComplexF64` namespace). Recursive instances (`Chain V G α` as a coefficient)
 come later. Transcendentals use a separate class `Analytic α` (sqrt, exp,
 log, sin, cos, sinh, cosh, atan2, …), with instances for `Float` and
 `Complex Float`.
