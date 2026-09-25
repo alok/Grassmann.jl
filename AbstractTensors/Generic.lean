@@ -154,6 +154,19 @@ with right division `a ⟑ inv(b)`. -/
 @[specialize] def log1pSeries (t : X) : X :=
   qlog (t * inv (addScalar 2 t))
 
+/-- Julia `isapprox(a::TensorAlgebra, b::TensorAlgebra; atol, rtol, nans)`
+(AT:229-232): with `x, y = norm(a), norm(b)`,
+`(isfinite(x) && isfinite(y) && norm(a - b) ≤ max(atol, rtol·max(x, y))) || (nans && isnan(x) && isnan(y))`.
+The default `rtol` is `rtoldefault(Float64) = √eps`, and `0` when `atol > 0`.
+(Julia's `TensorGraded` method additionally compares manifolds and grades,
+which are type indices here.) -/
+def isapprox (a b : X) (atol : Float := 0) (rtol : Float := if atol > 0 then 0 else Julia.rtolF)
+    (nans : Bool := false) : Bool :=
+  let x := norm a
+  let y := norm b
+  (x.isFinite && y.isFinite && norm (a - b) ≤ Julia.max atol (rtol * Julia.max x y)) ||
+    (nans && x.isNaN && y.isNaN)
+
 end Generic
 
 /-- The homogeneous carrier of AbstractTensors' derived transcendental

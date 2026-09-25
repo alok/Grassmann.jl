@@ -75,6 +75,40 @@ example : co (fun x : T2 => x ∧ x) a = ⟨4, 4⟩ := by decide
 -- Unparenthesized, `a ∧ b = c` reads `a ∧ (b = c)`, which is rejected for
 -- tensors (neither `And a _` nor `Wedge T2 Prop _` typechecks).
 
+/-! ### Scalar instances (port-notes §6.2, §6.5) -/
+
+-- `(sqrt(2))ˣ == sqrt(2)`, `(sqrt(2))₊ == sqrt(2)`, `(sqrt(2))₋ == 0`, `(im)ǂ == -im`
+example : (2.5 : Float)ˣ = 2.5 := rfl
+example : (2.5 : Float)₊ = 2.5 := rfl
+example : ((2.5 : Float)₋) = 0 := rfl
+example : ((3 : Int)₋) = 0 := by decide
+example : ((⟨0, 1⟩ : Complex Int)ǂ) = ⟨0, -1⟩ := by decide
+-- `!x = x·I` for a scalar and `!(λI) = λ`; `hodge(3) = 3I`
+example : (!(2 : Int)) = UniformScaling.mk 2 := rfl
+example : (!(UniformScaling.mk (5 : Int))) = 5 := rfl
+example : ⋆(3 : Int) = UniformScaling.mk 3 := rfl
+-- scalar `wedgedot` and `contraction` (AT:350-351): `contraction(2,3) = 6`
+example : (2 : Int) ⟑ (3 : Int) = 6 := by decide
+example : (2 : Int) ⋅ (3 : Int) = 6 := by decide
+example : scalar (7 : Int) = 7 := rfl
+
+/-! ### Kind classes and accessors (port-notes §8.2 item 1) -/
+
+/-- A toy graded element: grade `G` in an `n`-dimensional space. -/
+structure Graded (n G : Nat) where
+  /-- its coefficient -/
+  c : Int
+
+instance {n G : Nat} : TensorGraded (Graded n G) Nat n G Int := {}
+
+example : Manifold (⟨1⟩ : Graded 4 2) = 4 := rfl
+example : rank (⟨1⟩ : Graded 4 2) = 2 := rfl
+example : mdims (⟨1⟩ : Graded 4 2) = 4 := rfl
+example : tdimsOf (⟨1⟩ : Graded 4 2) = 16 := by decide
+example : gdimsOf (⟨1⟩ : Graded 4 2) = 6 := by decide
+example : isScalarGrade (⟨1⟩ : Graded 4 0) = true := rfl
+example : valuetype (⟨1⟩ : Graded 4 2) = Int := rfl
+
 /-! ### Core readings still work in the same file -/
 
 example (p q : Prop) (hp : p) (hq : q) : p ∧ q := ⟨hp, hq⟩

@@ -346,16 +346,18 @@ scoped infixr:35 " ∧ " => Wedge.wedge
 scoped infixr:30 " ∨ " => Vee.vee
 /-- Cross product; overloads `Prod` (35, right-assoc) through a choice node. -/
 scoped infixr:35 " × " => Cross.cross
-/-- Geometric product (Julia `⟑`, precedence of `*`). -/
-scoped infixl:70 " ⟑ " => WedgeDot.wedgedot
 /-- Geometric product at `+` precedence (Julia `⊖`). -/
 scoped infixl:65 " ⊖ " => WedgeDot.wedgedot
+/-- Geometric product (Julia `⟑`, precedence of `*`); declared after `⊖` so
+that terms print with `⟑`. -/
+scoped infixl:70 " ⟑ " => WedgeDot.wedgedot
 /-- Anti-geometric product (Julia `⟇`, precedence of `+`). -/
 scoped infixl:65 " ⟇ " => VeeDot.veedot
-/-- Right contraction (Julia `⋅`, `dot`). -/
-scoped infixl:70 " ⋅ " => Contraction.contraction
 /-- Right contraction (Julia `⨽`, `>`, `|`). -/
 scoped infixl:70 " ⨽ " => Contraction.contraction
+/-- Right contraction (Julia `⋅`, `dot`); declared after `⨽` so that terms
+print with `⋅`. -/
+scoped infixl:70 " ⋅ " => Contraction.contraction
 /-- Left contraction (Julia `⨼`, `<`). -/
 scoped infixl:70 " ⨼ " => leftContraction
 /-- Reverse-geometric product (Julia `∗`). -/

@@ -163,6 +163,17 @@ def suite : TestM Unit := do
   -- stops at a relative change below `√eps`, so it is accurate to about 1e-8.
   check ((Generic.logBase 2 (8.0 : Float) - 3).abs < 1e-7) fun _ =>
     s!"logBase 2 8 = {showF (Generic.logBase 2 (8.0 : Float))}"
+  -- Julia `isapprox` on tensors (AT:229), port-notes §6.6 grid: `a ≈ a + 1e-9` holds,
+  -- `a ≈ a + 1e-7` fails, `rtol = 1e-6` accepts it, `atol = 1e-2` accepts `a + 1e-3`.
+  let za : Complex Float := ⟨1, 2⟩
+  let bump (e : Float) : Complex Float := za + (⟨e, 0⟩ : Complex Float)
+  check (Generic.isapprox za (bump 1e-9) && !Generic.isapprox za (bump 1e-7) &&
+      Generic.isapprox za (bump 1e-7) (rtol := 1e-6) && Generic.isapprox za (bump 1e-3) (atol := 1e-2))
+    fun _ => "Generic.isapprox tolerance grid"
+  check (Generic.isapprox (⟨Float.nan, 0⟩ : Complex Float) ⟨Float.nan, 0⟩ (nans := true) &&
+      !Generic.isapprox (⟨Float.nan, 0⟩ : Complex Float) ⟨Float.nan, 0⟩) fun _ => "isapprox nans"
+  check (Generic.isZero (0 : Float) && Generic.isZero (-0.0 : Float) && !Generic.isZero (1e-300 : Float))
+    fun _ => "iszero is exact (iszero(1e-300v1) == false)"
   -- A non-finite input terminates (Julia's uncapped loop spins forever on expm1(-Inf)).
   check (TensorRing.expm1 (-Float.inf : Float)).isNaN fun _ => "expm1(-Inf) terminates with NaN"
 
