@@ -12,6 +12,7 @@ import Tests.Cartan.Operators
 import Tests.Cartan.Solve
 import Tests.Cartan.Element
 import Tests.Cartan.FFT
+import Tests.Cartan.Spectral
 
 /-!
 Cartan test aggregator.
@@ -40,5 +41,6 @@ def run : IO (Nat × Nat) := runSuite "Cartan" do
   Tests.CartanTests.SolveTests.run
   Tests.CartanTests.ElementTests.run
   Tests.CartanTests.FFTTests.run
+  Tests.CartanTests.SpectralTests.run
 
 end Tests.Cartan

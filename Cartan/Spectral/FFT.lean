@@ -29,12 +29,6 @@ namespace Cartan.Spectral
 
 open JuliaBase
 
-/-- `2π`. -/
-def twoPi : Float := f64! 6.283185307179586
-
-/-- `π`. -/
-def piF : Float := f64! 3.141592653589793
-
 /-- Complex vectors as interleaved `(re, im)` pairs. -/
 abbrev CVec := FloatArray
 
