@@ -319,6 +319,6 @@ lake build DirectSum.Proofs Grassmann.Spec Grassmann.Proofs Grassmann.Tactic Tes
 
 About 25 s for the kernel checks in `Grassmann.Proofs.Tables`, 18 s for
 `Grassmann.Proofs.Conformal` and 6 s for `Grassmann.Proofs.Regressive` (they
-build in parallel); the tactic examples take about 10 s, everything else builds
+build in parallel); the tactic examples take about 5 s, everything else builds
 in seconds. The run-time suite is `Tests.Proofs.runAll : IO (Nat × Nat)`,
 about 2600 checks, 5 s compiled.
