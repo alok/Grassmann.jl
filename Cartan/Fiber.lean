@@ -55,6 +55,20 @@ theorem _root_.FloatArray.get!_set!_ne (a : FloatArray) (i j : Nat) (x : Float) 
   cases a with | mk ds =>
   simp [FloatArray.set!, FloatArray.get!, Array.set!, getElem!_def, h]
 
+/-- Two float arrays with the same size and the same entries are equal. -/
+theorem _root_.FloatArray.ext_get! {a b : FloatArray} (hs : a.size = b.size)
+    (h : ∀ i, i < a.size → a.get! i = b.get! i) : a = b := by
+  cases a with | mk xs =>
+  cases b with | mk ys =>
+  simp only [FloatArray.size] at hs h
+  congr 1
+  apply Array.ext hs
+  intro i h1 h2
+  have := h i h1
+  simp only [FloatArray.get!, getElem!_def, Array.getElem?_eq_getElem h1,
+    Array.getElem?_eq_getElem h2] at this
+  exact this
+
 /-- `a[off + j] := src[j]` for `j ∈ [j₀, j₀ + k)` (in place once unshared; the default `write`). -/
 def writeFrom (src : FloatArray) (off : Nat) : (k j : Nat) → FloatArray → FloatArray
   | 0, _, a => a

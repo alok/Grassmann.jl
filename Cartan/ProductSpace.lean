@@ -113,12 +113,79 @@ def length (p : ProductSpace N) : Nat := MeshTopology.gridLength p.size
   let c := p.coords[a]
   c.get! (k / MeshTopology.axisStride p.size a.1 % c.size)
 
-/-- The point with 0-based column-major linear index `k` (Julia `p[k+1]`, `topology.jl:77-94`). -/
-@[inline] def point (p : ProductSpace N) (k : Nat) : AffinePoint N :=
-  ⟨Values.ofFnScan (fun (st : Nat) (a : Fin N) =>
-    let c := p.coords[a]
+/-- Write the coordinates `a, a+1, …, a+r-1` of the point with linear index `k` into `buf`
+(`buf[a] := coords[a][k / st % size]`, `st` the stride of axis `a`: the product of the sizes
+before it). -/
+def pointLoop (p : ProductSpace N) (k : Nat) : (r a st : Nat) → FloatArray → FloatArray
+  | 0, _, _, buf => buf
+  | r + 1, a, st, buf =>
+    let c := p.coords[a]!
     let n := c.size
-    (st * n, c.get! (k / st % n))) 1⟩
+    pointLoop p k r (a + 1) (st * n) (buf.set! a (c.get! (k / st % n)))
+
+@[simp] theorem size_pointLoop (p : ProductSpace N) (k : Nat) :
+    ∀ (r a st : Nat) (buf : FloatArray), (pointLoop p k r a st buf).size = buf.size
+  | 0, _, _, _ => rfl
+  | r + 1, a, st, buf => by
+    simp only [pointLoop]; rw [size_pointLoop p k r, FloatArray.size_set!']
+
+/-- The point with 0-based column-major linear index `k` written into the storage of `x`
+(Julia `p[k+1]`, `topology.jl:77-94`): in place when `x` is unshared, so a loop over the points
+that hands each one to a function and then reuses it allocates nothing
+(`TensorField.tabulatePoint`). -/
+@[inline] def pointInto (p : ProductSpace N) (k : Nat) (x : AffinePoint N) : AffinePoint N :=
+  ⟨⟨pointLoop p k N 0 1 x.coords.data, by
+    show (pointLoop p k N 0 1 x.coords.data).size = N
+    rw [size_pointLoop]; exact x.coords.size_eq⟩⟩
+
+/-- The point with 0-based column-major linear index `k` (Julia `p[k+1]`, `topology.jl:77-94`). -/
+@[inline] def point (p : ProductSpace N) (k : Nat) : AffinePoint N := pointInto p k default
+
+/-- `pointLoop` leaves the entries outside `[a, a + r)` alone. -/
+theorem get!_pointLoop_outside (p : ProductSpace N) (k : Nat) :
+    ∀ (r a st : Nat) (buf : FloatArray) (j : Nat), j < a ∨ a + r ≤ j →
+      (pointLoop p k r a st buf).get! j = buf.get! j
+  | 0, _, _, _, _, _ => rfl
+  | r + 1, a, st, buf, j, h => by
+    simp only [pointLoop]
+    rw [get!_pointLoop_outside p k r (a + 1) _ _ j (by omega),
+      FloatArray.get!_set!_ne _ a j _ (by omega)]
+
+/-- The entries `pointLoop` writes do not depend on the buffer. -/
+theorem get!_pointLoop_congr (p : ProductSpace N) (k : Nat) :
+    ∀ (r a st : Nat) (buf buf' : FloatArray) (j : Nat), a + r ≤ buf.size → a + r ≤ buf'.size →
+      a ≤ j → j < a + r → (pointLoop p k r a st buf).get! j = (pointLoop p k r a st buf').get! j
+  | 0, _, _, _, _, _, _, _, h1, h2 => absurd h2 (by omega)
+  | r + 1, a, st, buf, buf', j, hb, hb', h1, h2 => by
+    simp only [pointLoop]
+    by_cases hj : j = a
+    · subst hj
+      rw [get!_pointLoop_outside p k r (j + 1) _ _ j (Or.inl (by omega)),
+        get!_pointLoop_outside p k r (j + 1) _ _ j (Or.inl (by omega)),
+        FloatArray.get!_set!_self _ j _ (by omega), FloatArray.get!_set!_self _ j _ (by omega)]
+    · exact get!_pointLoop_congr p k r (a + 1) _ _ _ _
+        (by rw [FloatArray.size_set!']; omega) (by rw [FloatArray.size_set!']; omega)
+        (by omega) (by omega)
+
+/-- The point does not depend on the storage it is written into. -/
+theorem pointInto_congr (p : ProductSpace N) (k : Nat) (x y : AffinePoint N) :
+    pointInto p k x = pointInto p k y := by
+  cases x with | mk xc =>
+  cases y with | mk yc =>
+  cases xc with | mk xd hx =>
+  cases yc with | mk yd hy =>
+  have hx' : xd.size = N := hx
+  have hy' : yd.size = N := hy
+  simp only [pointInto, AffinePoint.mk.injEq, Values.mk.injEq]
+  apply FloatArray.ext_get! (by rw [size_pointLoop, size_pointLoop, hx', hy'])
+  intro j hj
+  rw [size_pointLoop] at hj
+  exact get!_pointLoop_congr p k N 0 1 xd yd j (by omega) (by omega) (Nat.zero_le _) (by omega)
+
+/-- Reusing storage does not change the point. -/
+theorem pointInto_eq (p : ProductSpace N) (k : Nat) (x : AffinePoint N) :
+    pointInto p k x = point p k :=
+  pointInto_congr p k x default
 
 /-- The point at the 0-based multi-index `idx` (Julia `p[i₁+1, …, i_N+1]`). -/
 @[inline] def pointAt (p : ProductSpace N) (idx : Vector Nat N) : AffinePoint N :=

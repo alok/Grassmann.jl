@@ -179,9 +179,43 @@ variable {P G : Type} [Coordinates M P G]
 @[inline] def tabulate (m : M) (f : Coordinate P G → F) : TensorField m F :=
   ofFn m fun i => f (FrameBundle.coordinate m i)
 
+/-- The loop of `tabulatePoint`: the point `i` is written into the storage of the point `i-1`
+(`Coordinates.pointInto`), which `f` has released by then unless it kept it, so the points of a
+grid are not allocated one by one. -/
+@[specialize] def fillPoints (m : M) (f : P → F) : (k i off : Nat) → P → FloatArray → FloatArray
+  | 0, _, _, _, a => a
+  | k + 1, i, off, x, a =>
+    let x := Coordinates.pointInto m i x
+    fillPoints m f k (i + 1) (off + FlatFiber.width F) x (FlatFiber.write a off (f x))
+
+theorem fillPoints_eq (m : M) (f : P → F) : ∀ (k i off : Nat) (x : P) (a : FloatArray),
+    fillPoints m f k i off x a = fillLoop (fun i => f (Coordinates.point m i)) k i off a
+  | 0, _, _, _, _ => rfl
+  | k + 1, i, off, x, a => by
+    simp only [fillPoints, fillLoop, Coordinates.pointInto_eq]
+    exact fillPoints_eq m f k (i + 1) _ _ _
+
+/-- The fibers of `tabulatePoint m f` (the first point is built, the others reuse it). -/
+@[inline] def pointsData (m : M) (f : P → F) : FloatArray :=
+  let buf := Flat.zeros (FlatFiber.width F * card m)
+  if card m = 0 then buf else fillPoints m f (card m) 0 0 (Coordinates.point m 0) buf
+
+theorem pointsData_eq (m : M) (f : P → F) : pointsData m f =
+    fillLoop (fun i => f (Coordinates.point m i)) (card m) 0 0
+      (Flat.zeros (FlatFiber.width F * card m)) := by
+  unfold pointsData
+  split
+  · rename_i h; rw [h]; rfl
+  · rw [fillPoints_eq]
+
 /-- `tabulate` with a function of the point only (Julia `fun(point(x))`). -/
 @[inline] def tabulatePoint (m : M) (f : P → F) : TensorField m F :=
-  ofFn m fun i => f (Coordinates.point m i)
+  { data := pointsData m f, size_data := by rw [pointsData_eq, size_fillLoop, Flat.size_zeros] }
+
+/-- `tabulatePoint` is `ofFn` of the points. -/
+theorem tabulatePoint_eq (m : M) (f : P → F) :
+    tabulatePoint m f = ofFn m fun i => f (Coordinates.point m i) := by
+  simp only [tabulatePoint, ofFn, pointsData_eq]
 
 /-- Julia `TensorField(dom)` for a frame bundle (C13 → C5): the identity field, whose fibers are
 the base points. -/

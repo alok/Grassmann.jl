@@ -95,6 +95,11 @@ class Coordinates (M : Type) [FrameBundle M] (P G : outParam Type) where
   point : M → Nat → P
   /-- Julia `metricextensor(m)[i+1]`. -/
   metricAt : M → Nat → G
+  /-- `point m i` written into the storage of a previous point (in place when that point is
+  unshared); loops over the points use it to avoid allocating each one. -/
+  pointInto : M → Nat → P → P := fun m i _ => point m i
+  /-- Reusing storage does not change the point. -/
+  pointInto_eq : ∀ m i x, pointInto m i x = point m i := by intros; rfl
 
 export FrameBundle (card)
 
@@ -121,12 +126,20 @@ end FrameBundle
 class GridPoint (N : Nat) (P : Type) where
   /-- The point with 0-based linear index `k`. -/
   pointOf : ProductSpace N → Nat → P
+  /-- `pointOf ps k` written into the storage of a previous point (in place when unshared). -/
+  pointInto : ProductSpace N → Nat → P → P := fun ps k _ => pointOf ps k
+  /-- Reusing storage does not change the point. -/
+  pointInto_eq : ∀ ps k x, pointInto ps k x = pointOf ps k := by intros; rfl
 
 /-- 1-D real points: the coordinate vector itself (Julia `PointArray(0, range)`). -/
-instance : GridPoint 1 Float := ⟨fun ps k => (ps.coords[0]).get! k⟩
+instance : GridPoint 1 Float where
+  pointOf ps k := (ps.coords[0]).get! k
 
 /-- Affine points of a `ProductSpace` (Julia `Chain{affinemanifold(N),1}`). -/
-instance {N : Nat} : GridPoint N (AffinePoint N) := ⟨ProductSpace.point⟩
+instance {N : Nat} : GridPoint N (AffinePoint N) where
+  pointOf := ProductSpace.point
+  pointInto := ProductSpace.pointInto
+  pointInto_eq := ProductSpace.pointInto_eq
 
 /-- Julia `GridBundle{N}` over a `PointArray` of a `ProductSpace` (`fiber.jl:446-528`): a tensor
 product grid of points with a `QuotientTopology` (boundary gluing) and a metric. -/
@@ -154,6 +167,8 @@ instance [Inhabited G] : Inhabited (GridBundle N P G) :=
 instance [GridPoint N P] [Inhabited G] : Coordinates (GridBundle N P G) P G where
   point m k := GridPoint.pointOf m.space k
   metricAt m k := m.metric.get k
+  pointInto m k x := GridPoint.pointInto m.space k x
+  pointInto_eq m k x := GridPoint.pointInto_eq m.space k x
 
 /-- Julia `size(m)`. -/
 @[inline] def size (m : GridBundle N P G) : Vector Nat N := m.space.size
@@ -353,7 +368,9 @@ def size [FlatFiber P] (m : PointCloud P G) : Nat := m.points.size / FlatFiber.w
   FlatFiber.read m.points (i * FlatFiber.width P)
 
 instance [FlatFiber P] : FrameBundle (PointCloud P G) := ⟨size⟩
-instance [FlatFiber P] [Inhabited G] : Coordinates (PointCloud P G) P G := ⟨get, fun m i => m.metric.get i⟩
+instance [FlatFiber P] [Inhabited G] : Coordinates (PointCloud P G) P G where
+  point := get
+  metricAt m i := m.metric.get i
 
 end PointCloud
 
