@@ -132,3 +132,89 @@ Bind such constants to top-level `def`s (closed terms, evaluated once) and refer
   patterns as immediates but is not faster: the remaining cost is the out-of-line
   `lean_float_to_bits`/`lean_float_of_bits` calls (`bl` in the disassembly), five or so per `exp`.
   Unboxed `FloatArray` tables save two of them (7.3 → 6.6 ns).
+
+## 2026-09-24: generated product kernels (`grassmann_kernels`, DESIGN.md §5.2) vs Julia
+
+Apple M4 Max, one thread. Lean: `lake exe bench grassmann` (`Bench/Grassmann/Products.lean`);
+Julia 1.13.0 with Grassmann 0.8.46: `oracle/bench/grassmann_bench.jl`. Both run the same loop:
+ns per call over 10⁷ calls (10⁶ for the CGA3 multivector product), operands drawn from a ring
+of 1024 random `Float64` elements (nothing loop-invariant), every result's coefficients summed
+into the accumulator (so every output is computed), best of 7 after a warm-up. Lean's call
+sites are ordinary typed expressions at concrete types (`a * b`, `v ⊘ R`, `~m`), so their
+dispatch folds to the generated kernels specialized at `Float`. "ref" is the reference kernel
+(the interpreted plans every space used before code generation).
+
+| op | ℝ3 Julia | ℝ3 Lean | STA Julia | STA Lean | PGA3 Julia | PGA3 Lean | CGA3 Julia | CGA3 Lean |
+|---|---|---|---|---|---|---|---|---|
+| harness: sum of an operand | 0.75 | 1.11 | 1.08 | 1.80 | 1.08 | 1.96 | 2.49 | 4.01 |
+| harness: copy of an operand (one result) | 0.69 | 9.98 | 1.07 | 11.2 | 1.06 | 11.4 | 2.47 | 14.8 |
+| `Multivector*Multivector` | 8.14 | **14.7** | 41.4 | **37.6** | 35.8 | **32.6** | 146 | **146** |
+| `Spinor*Spinor` | 2.23 | 11.9 | 8.16 | 14.3 | 8.56 | 13.3 | 31.0 | **38.5** |
+| `R*v*~R` | 4.11 | 27.8 | 27.5 | **30.3** | 42.5 | **30.1** | 54.6 | **58.5** |
+| `v ⊘ R` (fused) | 2.80 | 11.6 | 6.99 | 14.6 | 8.32 | 13.7 | 17.1 | **24.2** |
+| `R >>> v` (fused) | 2.80 | 11.7 | 7.27 | 14.6 | 8.31 | 15.3 | 17.3 | **24.2** |
+| `Chain1∧Chain1` | 0.69 | 10.3 | 2.29 | 13.2 | 2.31 | 13.4 | 3.02 | 12.5 |
+| `Chain2*Chain1` | 2.17 | 11.8 | 3.18 | 11.9 | 3.06 | 12.1 | 5.40 | 18.0 |
+| `~m` (reverse) | 0.77 | 10.9 | 1.07 | 12.9 | 1.07 | 13.1 | 2.54 | 21.2 |
+| `m := ~m` in place | 0.52 | 3.59 | 1.27 | 3.88 | 1.27 | 3.88 | 1.19 | 5.78 |
+| `⋆m` (Hodge) | 0.74 | 10.8 | 1.13 | 13.2 | 1.53 | 13.0 | 40.2 | **21.1** |
+| `⋆v` (Hodge of a vector) | 0.68 | 10.1 | 0.70 | 11.0 | 0.68 | 11.4 | 3.33 | 11.4 |
+| ref `Multivector*Multivector` | | 158 | | 424 | | 346 | | 1496 |
+| ref `Spinor*Spinor` | | 93.2 | | 161 | | 149 | | 430 |
+
+Bold: within 1.5× of Julia (or faster).
+
+Findings:
+* **Where the arithmetic dominates, the generated kernels match Julia**: the multivector products
+  of STA, PGA3 and CGA3 (0.91–1.0×), the CGA3 spinor product (1.24×), the rotor sandwich
+  `R*v*~R` of STA, PGA3, CGA3 (0.71–1.1×), the fused CGA3 sandwiches (1.4×), and the conformal
+  Hodge star (0.52×: Julia's conformal complement is not unrolled). Against the reference
+  kernels the gain is 10× (ℝ3 158 → 14.7 ns, CGA3 1496 → 146 ns).
+* **Everything small sits on an allocation floor of ≈ 9–13 ns.** Every Lean result is a fresh
+  `FloatArray`: allocate, copy, free (the "copy of an operand" row). Julia's results are
+  `isbits` tuples that live in registers, so its small operations cost 0.7–3 ns. ℝ3 `∧`,
+  `~`, `⋆` are at the floor (the kernel itself is ≈ 1 ns), ℝ3 `Multivector*Multivector` is
+  floor + 4.7 ns. Within the storage contract (DESIGN.md §2: bulk Floats in `FloatArray`)
+  the floor is not avoidable per result; it is avoided by **updating in place**: a kernel
+  writes its outputs into an operand of the output's size when that operand is exclusive,
+  so `m := ~m` (or `m := m * n`) allocates nothing (3.6 ns vs 10.9 ns).
+* `R*v*~R` is three typed products, hence three allocations; `⊘` and `>>>` are fused (one
+  kernel per `(R, x)` layout pair keeping `(~R) x` in registers, one allocation).
+
+Fixes made while profiling the generated C (`set_option trace.compiler.ir.result true`):
+* Outputs written with unchecked `set` into a copy of an operand or of the zero vector, instead
+  of a `FloatArray.push` per output: `lean_float_array_push` is an out-of-line runtime call
+  (capacity and exclusivity checks, size update). ℝ3 `Multivector*Multivector` 21 → 14.7 ns.
+* The fallback of a dispatch branch that does not fold receives the space as a `@[noinline]`
+  constant. LCNF folds neither `Nat.mod` nor `Nat.beq`, so the parity layouts of the typed
+  instances (`halfLayout ((G + H) % 2 == 1)`) stay closed `Bool` terms and their dispatch is a
+  run-time branch (cheap); but the `abbrev` space in the fallback branch was inlined as a
+  structure literal and allocated before the branch on every call (`lean_alloc_ctor(0, 6, 3)`
+  in the loop): `R >>> v` 80 → 33 ns before fusion.
+* Fused sandwiches (`SandwichKernels`): ℝ3 `v ⊘ R` 26.5 → 11.6 ns, `R >>> v` 32.4 → 11.7 ns,
+  CGA3 38.9 → 24.2 ns. The typed layer reaches them through `SandwichKernels V`; code generic
+  over the space must carry `[SandwichKernels V]` next to `[Kernels V]` to get them.
+* Harness: `Values.foldl` is a structural loop with `Nat` arithmetic per element (≈ 2 ns per
+  coefficient; the sum uses `FloatArray.foldl`), and `xs[i]!` built its `Inhabited` default (a
+  zero multivector) on every iteration. Julia side: `@elapsed(run(N))` of a pure loop whose
+  result is unused is deleted by Julia's effect analysis (it reported 0.0 ns for `~m`); every
+  result now goes to a global sink.
+
+Build cost of the pre-generated kernels (`Grassmann.Kernel.Generated`, one module per space;
+elaboration and compilation to C, then clang `-O3` of the C file):
+
+| space | kernels | entries | fused sandwiches (entries) | `Multivector*Multivector` entries | elaborate + compile | clang | C size |
+|---|---|---|---|---|---|---|---|
+| ℝ2 | 372 | 832 | 50 (296) | 16 | 2.0 s | 1.9 s | 2.2 MB |
+| ℝ3 | 514 | 2624 | 72 (1120) | 64 | 3.2 s | 3.0 s | 3.9 MB |
+| ℝ4 | 682 | 8800 | 98 (4320) | 256 | 5.8 s | 5.3 s | 7.4 MB |
+| STA | 682 | 8800 | 98 (4320) | 256 | 5.6 s | 5.3 s | 7.3 MB |
+| PGA2 | 514 | 2077 | 72 (864) | 48 | 3.1 s | 3.1 s | 3.7 MB |
+| PGA3 | 682 | 6899 | 98 (3296) | 192 | 5.2 s | 5.0 s | 6.7 MB |
+| CGA2 | 682 | 8800 | 98 (4320) | 256 | 6.0 s | 5.5 s | 7.3 MB |
+| CGA3 | 876 | 30944 | 128 (16896) | 1024 | 13 s | 11 s | 16.9 MB |
+
+52 s CPU (14 s wall on 16 cores) to elaborate, 39 s CPU (11 s wall) for clang; the `.olean`s
+total 110 MB. The CGA3 multivector product stays generated. `basis!` of an `n = 6` space
+(`S!"+++++-"`, dense families other than `Multivector*Multivector` dropped) emits 1002 kernels
+with 64 873 entries and 162 fused sandwiches in about 20 s.
