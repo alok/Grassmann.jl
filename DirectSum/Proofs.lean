@@ -2,6 +2,7 @@ import DirectSum.Proofs.Sign
 import DirectSum.Proofs.Metric
 import DirectSum.Proofs.UInt64
 import DirectSum.Proofs.Popcount
+import DirectSum.Proofs.LowestBit
 
 /-!
 # DirectSum.Proofs: the blade sign rules, proved for every dimension
@@ -24,6 +25,9 @@ Theorems about the bit-level sign rules of `DirectSum.Bits`/`DirectSum.Parity`
   `signOf_parityjoin`).
 * `DirectSum.Proofs.Popcount`: the SWAR `Bits.popcount` is the bit count on all
   `UInt64` masks (`popcount_eq_bitCount`), via field sums that never overflow.
+* `DirectSum.Proofs.LowestBit`: `Bits.lowestBit`, `x &&& (x - 1)` and `Bits.ctz`
+  on all nonzero masks, and the metric-factor loop `TensorBundle.metricProduct`
+  of every space (`metricProduct_eq`).
 
 No `sorry`, no axioms beyond Lean's standard three, no `native_decide`.
 -/

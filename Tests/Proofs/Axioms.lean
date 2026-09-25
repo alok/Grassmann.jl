@@ -65,3 +65,9 @@ import Grassmann.Proofs
 
 /-- info: 'Grassmann.Proofs.implReverse_eq_reverse' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Grassmann.Proofs.implReverse_eq_reverse
+
+/-- info: 'DirectSum.Proofs.metricProduct_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms DirectSum.Proofs.metricProduct_eq
+
+/-- info: 'Grassmann.Proofs.implMul_eq_mul_of_diag' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.implMul_eq_mul_of_diag

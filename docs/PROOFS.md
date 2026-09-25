@@ -66,6 +66,8 @@ The `UInt64` kernels of `DirectSum.Bits`, for **all** 64-bit masks:
 | `reorderParity_cocycle`, `reorderParity_swap` | the implementation itself satisfies the cocycle and swap identities | proved |
 | `parityjoin_eq`, `signOf_parityjoin` | Julia's `parityjoin` (the signature-space product sign) is the spec blade coefficient | proved |
 | `popcount_eq_bitCount` | the SWAR `Bits.popcount` is the bit count | proved |
+| `lowestBit_eq`, `and_sub_one_eq`, `ctz_eq` | `x &&& (0 - x)` isolates the lowest set bit, `x &&& (x - 1)` clears it, `Bits.ctz` is its index (all nonzero masks) | proved |
+| `metricProduct_eq` | the loop `TensorBundle.metricProduct` computes the metric factor `Π_{i∈b} V[i+1]`, for every space | proved |
 
 Method for `popcount` (`DirectSum.Proofs.Popcount`): numbers are written as
 little-endian field sums `Σ f(j) 2^{wj}`; every SWAR step is an identity between
@@ -151,6 +153,7 @@ multiply-accumulate plans (`Grassmann.Kernel.build`, DESIGN.md §5.1).
 | `mulSign_eq_coef` | for every space and every `n ≤ 64`, `(-1)^{TensorBundle.mulSign a b}` is the spec coefficient of the signature metric `V.sigBits`, on every pair of blades |
 | `IsSignatureSpace.terms_mul` | in every plain signature space (`Signature` or `Int` metric, no conformal pair, no tangent variables), `terms₂ .mul a b` is the single term `(-1)^{parityjoin} e_{a⊕b}` for all 64-bit masks; `metricProduct` is a product of `±1`s, so its absolute value is `1` whatever its loop visits |
 | `implMul_eq_mul_of_signature` | hence **the implementation's geometric product is the spec product on all multivectors of every plain signature space of dimension `≤ 64`** (`R7_mul`, `S33_mul` instantiate it) |
+| `IsDiagSpace.terms_mul`, `implMul_eq_mul_of_diag` | in every `DiagonalForm` space (any entries: zeros, negatives, fractions; not dual, no conformal pair, no tangent variables) of dimension `≤ 64`, the implementation's `±\|Π dᵢ\|` with the sign mask of the negative entries is the spec `(-1)^σ Π dᵢ`, so its geometric product is the spec product on all multivectors (`PGA4_mul`, `D6_mul` instantiate it) |
 | `IsFlatSpace.gradeOf_mask`, `implReverse_eq_reverse`, `implInvolute_eq_involute` | in every flat space of dimension `≤ 64` the implementation's grade (a SWAR popcount) is the grade, and its reversion and grade involution are the spec's on all multivectors |
 | `IsFlatSpace.terms_wedge`, `implWedge_eq_wedge_of_flat` | in every space without a conformal pair or tangent variables (any metric: signatures, `DiagonalForm`s including degenerate ones, `MetricTensor`s) and every width `≤ 64`, the implementation's exterior product is the spec exterior product on all multivectors (`PGA4_wedge` instantiates it) |
 
@@ -215,13 +218,8 @@ generated kernels) are exercised; they are not proved.
 
 ## Not covered (yet)
 
-* `Bits.ctz`, `Bits.sumIndices` and the `metricProduct` loop are not proved for
-  all masks (`Bits.popcount` is). They are exercised by every check and test
-  above.
-* `DiagonalForm` products in general dimension go through `metricProduct`, whose
-  loop visits the set bits with `ctz`, so they are checked (`PGA*`,
-  `D!"1,2,-3"`) and tested (`PGA4`, `D5`), not proved; plain signature spaces
-  are proved in every dimension (`implMul_eq_mul_of_signature`).
+* `Bits.sumIndices` (the complement signs) is not proved for all masks; the
+  other `Bits` kernels are.
 * The complements are linked per space (checked, `n ≤ 4`) and tested (`n ≤ 7`),
   not in general: their blade rules use `Bits.sumIndices` and the Leibniz
   `complement` mask.
