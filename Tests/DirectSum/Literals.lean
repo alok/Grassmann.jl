@@ -56,6 +56,16 @@ example : (⟨0b11⟩ : Submanifold (ℝ^3) 2) ⊆ ℝ^3 := by decide
 #guard ((ℝ^4).sub [1, 4]).showBasis == "DirectSum.Basis{⟨+__+⟩,4}(v, v₁, v₄, v₁₄)"
 #guard toString (ℝ^3).tangent.subtangent == "T¹⟨___₁⟩"
 
+-- metric kinds (Julia `Signature(D"1,-2,3") = ⟨+-+⟩`, `DiagonalForm(S"-+-") = ⟨-1,1,-1⟩`, duals,
+-- `Signature(D"0,1,1") = ⟨+++⟩`, `Signature((ℝ^3)(1,3)) = ⟨++⟩`, `Signature(D"1,-2,3"(2,3)) = ⟨-+⟩`)
+#guard (match (D!"1,-2,3").toSignature with | .ok W => W.toString | .error e => e) == "⟨+-+⟩"
+#guard (match (S!"-+-").toDiagonal with | .ok W => W.toString | .error e => e) == "⟨-1,1,-1⟩"
+#guard (match (D!"1,-2,3")′.toSignature with | .ok W => W.toString | .error e => e) == "⟨-+-⟩'"
+#guard (match (S!"-+-")′.toDiagonal with | .ok W => W.toString | .error e => e) == "⟨-1,1,-1⟩'"
+#guard (match (D!"0,1,1").toSignature with | .ok W => W.toString | .error e => e) == "⟨+++⟩"
+#guard ((ℝ^3).sub [1, 3]).toSignature.toString == "⟨++⟩"
+#guard ((D!"1,-2,3").sub [2, 3]).toSignature.toString == "⟨-+⟩"
+
 /-! ## Runtime goldens -/
 
 /-- `(description, holds)` pairs. -/

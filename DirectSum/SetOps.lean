@@ -251,6 +251,38 @@ def unionAll (a : TensorBundle) (bs : List TensorBundle) : Except String TensorB
 def interAll (a : TensorBundle) (bs : List TensorBundle) : Except String TensorBundle :=
   bs.foldlM inter a
 
+/-! ## Metric kinds (`DirectSum.jl src/DirectSum.jl:380-390`) -/
+
+/-- Julia `Signature(V::DiagonalForm) = Signature{N,M}(signbit.(V[:]))`: the signs of the
+(dual-negated) diagonal, options kept (`Signature(D"1,-2,3") = ⟨+-+⟩`, `Signature(D"0,1,1")
+= ⟨+++⟩`); an `Int` space becomes `Signature(n)`, a `Signature` is unchanged. Julia throws for
+tangent spaces (it reads `N` signs from the `grade(V)` values); the port signs the Grassmann
+generators and leaves the tangent slots positive. `MetricTensor` spaces have no signature. -/
+def toSignature (V : TensorBundle) : Except String TensorBundle :=
+  match V.metric with
+  | .signature _ => .ok V
+  | .euclid => .ok { V with metric := .signature 0 }
+  | .diagonal _ =>
+    let bits := V.diagValues.zipIdx.foldl (fun acc (x, i) => if x < 0 then acc ||| shl 1 i else acc) 0
+    .ok { V with metric := .signature bits }
+  | .tensor _ => .error s!"no Signature of the MetricTensor space {V}"
+
+/-- Julia `DiagonalForm(V::Signature) = DiagonalForm{N,M}([t ? -1 : 1 for t ∈ V[:]])`
+(`DiagonalForm(S"-+-") = ⟨-1,1,-1⟩`), options kept. For a dual space Julia's `V[:]` are the
+signs of the primal space, which the dual form then negates on read:
+`DiagonalForm(S"-+-"') = ⟨-1,1,-1⟩'`. An `Int` space gives all ones, a
+`DiagonalForm` is unchanged. Spaces with null generators or a `MetricTensor` have no diagonal
+form (Julia prints a malformed `⟨∞∅1⟩` for `S"∞∅+"`). -/
+def toDiagonal (V : TensorBundle) : Except String TensorBundle :=
+  if V.nulls != 0 then .error s!"no DiagonalForm of the conformal space {V}" else
+  match V.metric with
+  | .diagonal _ => .ok V
+  | .euclid => .ok { V with metric := .diagonal ((List.range V.grade).toArray.map fun _ => 1) }
+  | .signature s =>
+    let read := (List.range V.grade).toArray.map fun k => if testBit s k then (-1 : Rat) else 1
+    .ok { V with metric := .diagonal read }
+  | .tensor _ => .error s!"no DiagonalForm of the MetricTensor space {V}"
+
 /-- Julia `subtangent(V) = V(grade(V)+1:mdims(V)…)` (`DirectSum.jl src/generic.jl`):
 the subspace of the tangent generators, `subtangent(tangent(ℝ^3)) = T¹⟨___₁⟩`. -/
 def subtangent (V : TensorBundle) : SubSpace V := ⟨V.diffmask⟩
@@ -337,6 +369,14 @@ def metricAt (s : SubSpace V) (i : Nat) : Rat :=
 
 /-- Julia `M[:]`: the metrics of the included generators. -/
 def metricList (s : SubSpace V) : List Rat := (indicesList s.mask).map V.metricAt
+
+/-- Julia `Signature(V::Submanifold)` of a subspace of a diagonal space: the signs of the
+included generators (`Signature((ℝ^3)(1,3)) = ⟨++⟩`, `Signature(D"1,-2,3"(2,3)) = ⟨-+⟩`), with
+the parent's options (not its tangent variables: tangent subspaces are not ported). -/
+def toSignature (s : SubSpace V) : TensorBundle :=
+  let bits := s.metricList.zipIdx.foldl (fun acc (x, i) => if x < 0 then acc ||| shl 1 i else acc) 0
+  { n := s.rank, metric := .signature bits, hasinf := V.hasinf && testBit s.mask 0,
+    dyadmode := V.dyadmode, polymode := V.polymode }
 
 /-- Julia `collect(M)` / `show(Λ(M))` for a subspace (`DirectSum.jl src/basis.jl`):
 `DirectSum.Basis{⟨+__+⟩,4}(v, v₁, v₄, v₁₄)`, the blades of the included
