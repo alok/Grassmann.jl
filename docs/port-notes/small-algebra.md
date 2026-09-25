@@ -1290,7 +1290,7 @@ This is about 60 LOC and gets its own unit table of goldens.
 - `Permutation (N : Nat)`: `v : Vector (Fin N) N` stored 0-based, with display adding 1. Optional erased `isPerm` proof field (the standout: `inv`, `mul`, `one` preserve bijectivity, `p * p⁻¹ = 1`, sign multiplicative). `Cycle N`, `CycleProduct N`. Rename `order(::Perm)` to `transpositionCount` (keep an `order` alias for Julia parity) and provide the true `groupOrder` (lcm of cycle lengths) separately.
 - Countable sets: pure `Nat → Int`/`Rat` functions. Proof standout: Szudzik `elegantPair`/`elegantinversion` inverse theorems (`Nat.sqrt` lemmas, `omega`), `fusc` recurrence and Calkin–Wilf bijectivity (stretch). Keep `Julia.cantorinversion` (buggy) and add a correct `cantorUnpair` with an inverse proof.
 - Primes (weak dep): `nthPrime` via an incremental sieve cache. Mods: skip, or provide `GEqual (Fin n)`.
-- Float fidelity: Julia `pow`/`exp`/`log`/`cos` are pure-Julia implementations; Lean's `Float` calls libm. Expect 1-ulp differences, so the oracle uses rtol 1e-13 on Float outputs and exact on counts (n) where the stopping iteration is not borderline.
+- Float fidelity: Julia `pow`/`exp`/`log`/`cos` are pure-Julia implementations; Lean's `Float` calls libm. Expect 1-ulp differences, so the oracle uses rtol 1e-13 on Float outputs and exact on counts (n) where the stopping iteration is not borderline. (Port status: `pow`/`exp`/`log` are now Julia's own kernels, bit for bit, in `JuliaBase.Math`; `cos` is still libm.)
 
 ### 8.7 Wilkinson → `Chakravala/Wilkinson/{Expr,SyntaxTree,FloatRange,Analysis,PolyForms,Plot}.lean` (~600 LOC core + optional CAS ~400)
 - `inductive PExpr | var (s : String) | int (z : Int) | float (x : Float) | rat (q : Rat) | call (op : String) (args : Array PExpr)`. `^` stays a call with its exponent as a child (the literal-exponent special cases in `sub`/`abs`/`expravg` need to know it).
@@ -1370,7 +1370,7 @@ For each width w ∈ {8,16,32,64,128}: 200 random `UInt_w` values, recording `st
 - `reduce_forms.json`: for 200 random polynomials with small integer roots/coefficients: `rcall(e,:expand)`, `:horner`, `:factor` (string and `exprval`). This is the target for the Lean `PolyForms` printers. Also `polyhorner/polyfactors/polyexpand` outputs.
 - `floatset.json`: the full `collect(floatset(Float64,3000; scale=log))` (3,000 Float64 reprs) plus N ∈ {10, 100, 2999}.
 - `stieltjes.json`: for 30 polynomials: `stj[1]` (full vector), `Ω`, `simpson`, `geonorm`, using the **copied kernels** from `probes/small/wk3.jl` (Wilkinson itself cannot load because of PyPlot/Conda). Also the BigFloat variant with ω from Float64, and `exacterr` vectors for the expand/horner/factor triples.
-- Tolerances: stj elements rtol 1e-12 (exp/log libm differences); Ω exact (flag borderline overflow points); smp rtol 1e-12.
+- Tolerances: stj elements rtol 1e-12 (exp/log libm differences); Ω exact (flag borderline overflow points); smp rtol 1e-12. (Port status: `exp`/`log` are Julia's own kernels from `JuliaBase.Math`, so the port matches bit for bit.)
 
 ### 9.7 Cross-package
 The AbstractLattices ↔ Grassmann wedge methods are covered by the Grassmann oracle. Cartan's use of `Limit`/`SequenceArray` with `TensorField` states is covered by the Cartan oracle. Make sure the AbstractAnalysis Lean API accepts the state types Cartan needs before freezing it.

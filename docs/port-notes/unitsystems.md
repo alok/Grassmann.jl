@@ -1218,7 +1218,7 @@ These methods dispatch on `lightspeed == DAY*𝘤/au` (IAU☉ only; IAUE/IAUJ ha
   - `n < 0`: `^(inv(x), -n)`.
   - Hence `Constant(10)^-2 == 0.010000000000000002` and `Constant(10)^-28 == 1.0000000000000015e-28` (`inv(10) = 0.1` first).
 - **Float64^Int** (`N^b` inside `Constant{N^b}`) uses Julia's compensated power-by-squaring `Base.Math.pow_body`: double-double `two_mul` with FMA, and `x*x*x` for n = 3. It is correctly rounded or nearly so. `x^2` equals `x*x`.
-- **Float64^Float64** uses Julia's native `pow`. `sqrt` is IEEE-exact. `exp`, `log`, `log10`, `exp10` are Julia-native implementations and may differ from C libm in the last ulp.
+- **Float64^Float64** uses Julia's native `pow`. `sqrt` is IEEE-exact. `exp`, `log`, `log10`, `exp10` are Julia-native implementations and may differ from C libm in the last ulp. (Port status: all of these are ported bit for bit in `JuliaBase.Math`, `JuliaBase.F64.pow`/`exp`/…)
 - `Number/Constant` computes `a*inv(b)`, i.e. two roundings. `Constant/Constant` is a single division.
 
 ### 4.10 Reproducibility budget (measured)
@@ -1946,7 +1946,7 @@ One dimension is not integral: `jovianyear`'s fitted dimension has halves (bug �
    - Literal negative exponents on computed constants mean `inv` then power.
    - Positive integer powers follow Julia's `pow_body`: `x*x` for n = 2, `x*x*x` for n = 3, compensated squaring otherwise. Emulate `two_mul` with Veltkamp splitting if no FMA is exposed; alternatively accept ≤ 2-ulp differences and rely on tolerance.
    - The integer powers that actually occur are ≤ 12 (`𝟓^12` in Nautical's μ₀; `pop` has `time^5`).
-4. Julia's `exp`, `log`, `log10`, `exp10` (used only in `sackurtetrode`, `logdb`, `expdb`, `Constant(exp(5/2))`) may differ from libm by 1 ulp. Test them at rtol 1e-15.
+4. Julia's `exp`, `log`, `log10`, `exp10` (used only in `sackurtetrode`, `logdb`, `expdb`, `Constant(exp(5/2))`) may differ from libm by 1 ulp. Test them at rtol 1e-15. (Port status: `JuliaBase.Math` reproduces them bit for bit, and the tests are exact.)
 5. Keep Julia's IEEE behaviour for FFF (μ₀ = 0 gives Inf/NaN). Do not "fix" it in compat mode.
 
 ### 8.5 Tricky-semantics checklist

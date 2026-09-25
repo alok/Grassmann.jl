@@ -35,7 +35,8 @@ touch a module.
 
 ```
 lakefile.toml / lean-toolchain (leanprover/lean4:v4.35.0-rc3)   # zero [[require]]
-JuliaBase/      # Julia Base semantics: F64/F32/JInt numerics, Complex, show, ranges
+JuliaBase/      # Julia Base semantics: F64/F32/JInt numerics, exact IEEE, Julia's own exp/log/pow,
+                #   parse/round, sum, Complex, show, ranges, Float16
 StaticVectors/  AbstractTensors/  Leibniz/  DirectSum/  Grassmann/     # core
 Cartan/  MeshTopology/  Adapode/  Fatou/                                 # geometry & numerics
 FieldAlgebra/  FieldConstants/  UnitSystems/  Similitude/  MeasureSystems/
@@ -82,10 +83,14 @@ does.
 8. **Atomic commits:** one logical change each, building green. Message
    format `area: imperative summary`.
 9. **One home for Julia `Base`.** Scalar Julia semantics (`F64.max`/`min`,
-   `isapprox`, `hypot`, `cbrt`, `Float64(::Rational)`, `expm1`/`log1p`, the
-   `Complex` type and its `ComplexF64` algorithms, `show`) live in `JuliaBase`
-   and nowhere else. Other libraries import it; they add only their own class
-   instances (`Coeff`, `Analytic`, `JNorm`, …) on top.
+   `isapprox`, `hypot`, `cbrt`, `Float64(::Rational)`, the exact IEEE toolkit
+   `IEEEFloat`, Julia's own `exp`/`log`/`expm1`/`log1p`/`^` kernels, `parse`,
+   `round(digits/sigdigits)`, `sum(::Vector{Float64})`, `Float16`, the
+   `Complex` type and its `ComplexF64` algorithms, `show`, ranges) live in
+   `JuliaBase` and nowhere else. Other libraries import it; they add only their
+   own class instances (`Coeff`, `Analytic`, `JNorm`, …) on top. A package that
+   needs more of Julia `Base` adds it to `JuliaBase` (with oracle goldens in
+   `Tests/JuliaBase/`), not locally.
 
 ## 3. The space layer (DirectSum)
 
