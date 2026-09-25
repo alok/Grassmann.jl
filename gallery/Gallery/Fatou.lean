@@ -65,6 +65,32 @@ def c₀ : C64 := ⟨-0.06, 0.67⟩
       iter := true, ϵ := some 0.05, cmap := "cubehelix", label := "sin(z) - 1" }
     (map := some newtonSin)
 
+/-! ## Four figures of the Fatou.jl wiki (`Explore-Fatou-sets-&-fractals.md`) -/
+
+/-- Wiki (1): `newton(:(z^3-1),ϵ=0.001,n=800,cmap="brg")`, coloured by the angle of the root
+reached. -/
+@[inline] def wikiRoots : Define :=
+  newton (fun z _ => z ^ 3 - (1 : Float)) (fun z _ => (3 : Float) * z ^ 2)
+    { n := 800, ϵ := some 0.001, cmap := "brg", label := "z ^ 3 - 1" } (map := some newtonCubic)
+
+/-- Wiki (2): `newton(:(z^3-1),m=2,n=800,N=37,ϵ=0.27,iter=true,cmap="ocean")`; REDUCE's map
+`(z^3 + 2)/(3z^2)`. -/
+@[inline] def wikiSnowflake : Define :=
+  newton (fun z _ => z ^ 3 - (1 : Float)) (fun z _ => (3 : Float) * z ^ 2)
+    { m := some 2, n := 800, N := 37, ϵ := some 0.27, iter := true, cmap := "ocean", label := "z ^ 3 - 1" }
+    (map := some fun z _ => (z ^ 3 + (2 : Float)) / ((3 : Float) * z ^ 2))
+
+/-- Wiki (3): `newton(:(z^3-1),m=-0.5,n=800,N=10,cmap="hsv")`; REDUCE's map
+`(7z^3 - 1)/(6z^2)`. -/
+@[inline] def wikiHsv : Define :=
+  newton (fun z _ => z ^ 3 - (1 : Float)) (fun z _ => (3 : Float) * z ^ 2)
+    { m := some (-0.5), n := 800, N := 10, cmap := "hsv", label := "z ^ 3 - 1" }
+    (map := some fun z _ => ((7 : Float) * z ^ 3 - (1 : Float)) / ((6 : Float) * z ^ 2))
+
+/-- Wiki orbit example (3): the basilica, `juliafill("z^2-1",∂=[-2,2],iter=true,n=800)`. -/
+@[inline] def wikiBasilica : Define :=
+  juliafill (fun z _ => z ^ 2 - (1 : Float)) { bounds := .interval (-2) 2, iter := true, n := 800, label := "z ^ 2 - 1" }
+
 /-! ## Rendering -/
 
 /-- A LeanPlot colormap by name, including the gallery's extra tables (`gist_earth`). -/
@@ -212,6 +238,31 @@ def entries : List Entry := [
     source := "`newton(:(sin(z)-1),m=1-1im,∂=[-2π/3,-π/3,-π/6,π/6],n=500,N=33,iter=true,ϵ=0.05,cmap=\"cubehelix\") |> fatou |> plot` (`README.md:106-116`)"
     build := fun j? => pure (rasterEntry (fatou genNewton) (620, 500) false false
       (genNewton.yLabel.getD "") j?) }
+]
+
+/-- The URL of a Fatou.jl wiki image. -/
+def wikiImg (stem : String) : String :=
+  s!"https://raw.githubusercontent.com/wiki/chakravala/Fatou.jl/img/{stem}.png"
+
+/-- Four wiki figures (`Explore-Fatou-sets-&-fractals.md`; strings there are `Expr`s here,
+since `parse(::String)` is gone from Julia). -/
+def wikiEntries : List Entry := [
+  { name := "fatou-wiki-newton-roots", group := "Fatou wiki", upstream := wikiImg "nf1-roots"
+    title := "Newton basins of z³ − 1 by the root reached (brg)"
+    source := "`newton(:(z^3-1),ϵ=0.001,n=800,cmap=\"brg\") |> fatou |> plot` (wiki example (1))"
+    build := fun j? => pure (rasterEntry (fatou wikiRoots) (620, 500) false true (wikiRoots.yLabel.getD "") j?) },
+  { name := "fatou-wiki-newton-snowflake", group := "Fatou wiki", upstream := wikiImg "nf2-iter"
+    title := "Newton fractal of z³ − 1 with multiplicity m = 2 (ocean)"
+    source := "`newton(:(z^3-1),m=2,n=800,N=37,ϵ=0.27,iter=true,cmap=\"ocean\") |> fatou |> plot` (wiki example (2))"
+    build := fun j? => pure (rasterEntry (fatou wikiSnowflake) (620, 500) false true (wikiSnowflake.yLabel.getD "") j?) },
+  { name := "fatou-wiki-newton-hsv", group := "Fatou wiki", upstream := wikiImg "nf3-limit"
+    title := "Generalized Newton fractal of z³ − 1 with m = −0.5, limit angle (hsv)"
+    source := "`newton(:(z^3-1),m=-0.5,n=800,N=10,cmap=\"hsv\") |> fatou |> plot` (wiki example (3))"
+    build := fun j? => pure (rasterEntry (fatou wikiHsv) (620, 500) false true (wikiHsv.yLabel.getD "") j?) },
+  { name := "fatou-wiki-basilica", group := "Fatou wiki", upstream := wikiImg "o3-iter"
+    title := "The basilica, filled Julia set of z² − 1 (iteration counts, default colormap)"
+    source := "`juliafill(:(z^2-1),∂=[-2,2],iter=true,n=800) |> fatou |> plot` (wiki orbit example (3))"
+    build := fun j? => pure (rasterEntry (fatou wikiBasilica) (620, 500) false true "" j?) }
 ]
 
 end Gallery.FatouFigs

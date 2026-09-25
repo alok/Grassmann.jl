@@ -1,0 +1,1 @@
+The wiki image is PyPlot `imshow` with a LaTeX title; both sides here draw a heatmap over the bounds with the plain-text `String(K)` title and the Makie colormap of the same name. The iterated map is REDUCE's `(2z³+1)/(3z²)`.

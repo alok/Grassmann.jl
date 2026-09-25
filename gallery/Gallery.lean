@@ -30,6 +30,6 @@ namespace Gallery
 
 /-- Every figure, in page order. -/
 def registry : List Entry :=
-  FatouFigs.entries ++ GrassmannFigs.entries ++ Graphs.entries ++ WilkinsonFigs.entries
+  FatouFigs.entries ++ FatouFigs.wikiEntries ++ GrassmannFigs.entries ++ Graphs.entries ++ WilkinsonFigs.entries
 
 end Gallery

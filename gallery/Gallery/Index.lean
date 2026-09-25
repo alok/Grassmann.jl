@@ -96,9 +96,10 @@ def render (root : System.FilePath) (rows : Array (Entry × Array Check × Strin
   for p in pending do
     s := s ++ s!"| {p.id} | {cell p.what} | {cell p.needs} |\n"
   s := s ++ "\n## Reproducible now, not yet in the gallery\n\n" ++
-    "* The Fatou wiki gallery (`docs/port-notes/fatou.md` §6.4: about 40 Newton, Julia-set and orbit " ++
-    "images with ColorSchemes/PyPlot colormaps) and the 176² default-keyword sets: the Fatou port " ++
-    "computes all of them (`Tests/Fatou/Catalog.lean`).\n" ++
+    "* The rest of the Fatou wiki gallery (`docs/port-notes/fatou.md` §6.4: about 40 Newton, Julia-set " ++
+    "and orbit images; four are above) and the 176² default-keyword sets: the Fatou port computes them " ++
+    "(`Tests/Fatou/Catalog.lean`); maps with `exp`/`log`/complex powers need REDUCE's Newton forms " ++
+    "written out.\n" ++
     "* The `raster` point-set rasterization of ColorTypesExt (`plot-inventory.md` §4.10) has no " ++
     "documented figure.\n"
   s := s ++ "\nVideos (21 YouTube talks) and LaTeX formula images (Fatou basins, Dendriform) are " ++

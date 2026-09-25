@@ -22,7 +22,8 @@ function fatou_figure(name, K; figsize, bare = false)
     # cell edges exactly at the bounds, like `imshow(extent = bounds)`
     xe = range(∂[1], ∂[2], length = size(Z, 2) + 1)
     ye = range(∂[3], ∂[4], length = size(Z, 1) + 1)
-    hm = heatmap!(ax, xe, ye, permutedims(reverse(Z, dims = 1)), colormap = Symbol(K.cmap))
+    # PyPlot's default colormap is viridis when `cmap = ""`
+    hm = heatmap!(ax, xe, ye, permutedims(reverse(Z, dims = 1)), colormap = isempty(K.cmap) ? :viridis : Symbol(K.cmap))
     bare || Colorbar(fig[1, 2], hm)
     savefig(name, fig)
 end
