@@ -315,7 +315,7 @@ namespace Column
 variable {n : Nat} (C : Column n)
 
 /-- Julia `temperature(hG, i, W, U)` (`Geophysics.jl:647-661`). -/
-def temperatureAt (hG : Float) (i : Fin n) : Float :=
+@[inline] def temperatureAt (hG : Float) (i : Fin n) : Float :=
   let T0 := C.T.get i
   let a0 := C.a.get i
   let h0 := C.h.get i
@@ -334,20 +334,20 @@ def temperatureAt (hG : Float) (i : Fin n) : Float :=
 the argument of `sqrt(1 - (Δh/ha)^2)` is negative (a `DomainError`). Every
 operation computes the temperature first, so all of them throw; Lean returns
 `NaN` for all of them (otherwise `NaN^0 = 1` would let a pressure through). -/
-def domainError (hG : Float) (i : Fin n) : Bool :=
+@[inline] def domainError (hG : Float) (i : Fin n) : Bool :=
   let a0 := C.a.get i
   a0.isInf && a0 < (f64% 0.0) &&
     (let x := (hG - C.h.get i) / C.ha
      (f64% 1.0) - x * x < (f64% 0.0))
 
 /-- Julia `pressure(hG, T, i, W, U)` (`Geophysics.jl:736-744`). -/
-def pressureT (hG T : Float) (i : Fin n) : Float :=
+@[inline] def pressureT (hG T : Float) (i : Fin n) : Float :=
   let a := C.a.get i
   C.p.get i * (if a == (f64% 0.0) then exp (C.gR * (hG - C.h.get i) / T)
     else pow (T / C.T.get i) (C.gR / a))
 
 /-- Julia `density(hG, T, i, W, U)` (`Geophysics.jl:752-761`). -/
-def densityT (hG T : Float) (i : Fin n) : Float :=
+@[inline] def densityT (hG T : Float) (i : Fin n) : Float :=
   let a := C.a.get i
   C.rho.get i *
     (if a == (f64% 0.0) then exp (C.gR * (hG - C.h.get i) / T)
