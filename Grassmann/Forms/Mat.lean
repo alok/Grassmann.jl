@@ -89,6 +89,15 @@ the sizes are right, so the branch is perfectly predicted). -/
 @[inline] def rd (a : Packed.Arr α) (i : Nat) : α :=
   if h : i < Packed.size a then Packed.get a ⟨i, h⟩ else Coeff.zero
 
+/-- Checked write `a[i] := x` (in place when `a` is unshared). The small straight-line kernels
+build their results by writes into (a copy of) an input of the result's size rather than by
+pushes: a `FloatArray` push is an out-of-line runtime call, a write an inline store. The copy
+is made by the first write when the input is still referenced (reference counting keeps the
+input's later reads correct either way); a fresh array of zeros would cost a `Float` literal
+conversion per entry (`Coeff.zero` is not a closed term inside the kernels). -/
+@[inline] def wset (a : Packed.Arr α) (i : Nat) (x : α) : Packed.Arr α :=
+  if h : i < Packed.size a then Packed.set a ⟨i, h⟩ x else a
+
 /-- Package raw storage of the right size (the loops push exactly `k` entries;
 the fallback is unreachable). -/
 @[inline] def finish {k : Nat} (res : Packed.Arr α) : Values α k :=
@@ -172,15 +181,52 @@ def toCols (A : Mat r c α) : List (List α) :=
 /-- Map the entries (Julia `map(f, T)`, `forms.jl:1126`). -/
 @[inline] def map {β : Type} [Coeff β] (f : α → β) (A : Mat r c α) : Mat r c β := ⟨A.v.map f⟩
 
-/-- Combine two matrices entrywise. -/
-@[inline] def zipWith (f : α → α → α) (A B : Mat r c α) : Mat r c α := ⟨Values.zipWith f A.v B.v⟩
+/-- `a[i] := f a[i] b[i]` for `i, …, n-1`, in place when `a` is unshared (one copy otherwise):
+the elementwise operations of the Padé/series code run on fresh temporaries, where this
+allocates nothing, while a push into a new array allocates per result. -/
+@[specialize] def zipInto (f : α → α → α) (b : Packed.Arr α) (n : Nat) (i : Nat) (a : Packed.Arr α) :
+    Packed.Arr α :=
+  if i < n then
+    let a := if h : i < Packed.size a then Packed.set a ⟨i, h⟩ (f (Packed.get a ⟨i, h⟩) (rd b i)) else a
+    zipInto f b n (i + 1) a
+  else a
+termination_by n - i
 
-instance : Add (Mat r c α) := ⟨fun A B => ⟨A.v + B.v⟩⟩
-instance : Sub (Mat r c α) := ⟨fun A B => ⟨A.v - B.v⟩⟩
-instance : Neg (Mat r c α) := ⟨fun A => ⟨-A.v⟩⟩
-instance : HMul α (Mat r c α) (Mat r c α) := ⟨fun s A => ⟨A.v.map (s * ·)⟩⟩
-instance : HMul (Mat r c α) α (Mat r c α) := ⟨fun A s => ⟨A.v.map (· * s)⟩⟩
-instance [Div α] : HDiv (Mat r c α) α (Mat r c α) := ⟨fun A s => ⟨A.v.map (· / s)⟩⟩
+/-- `a[i] := f a[i]` for `i, …, n-1`, in place when `a` is unshared. -/
+@[specialize] def mapInto (f : α → α) (n : Nat) (i : Nat) (a : Packed.Arr α) : Packed.Arr α :=
+  if i < n then
+    let a := if h : i < Packed.size a then Packed.set a ⟨i, h⟩ (f (Packed.get a ⟨i, h⟩)) else a
+    mapInto f n (i + 1) a
+  else a
+termination_by n - i
+
+/-- Combine two matrices entrywise (`f A[i,j] B[i,j]`; in place on `A`'s storage when unshared). -/
+@[inline] def zipWith (f : α → α → α) (A B : Mat r c α) : Mat r c α :=
+  ⟨finish (zipInto f B.v.data (r * c) 0 A.v.data)⟩
+
+/-- Map the entries within the coefficient type (in place when unshared). -/
+@[inline] def mapSelf (f : α → α) (A : Mat r c α) : Mat r c α := ⟨finish (mapInto f (r * c) 0 A.v.data)⟩
+
+/-- `A + B` (a call, specialised once per coefficient type: the loops are not inlined into
+every expression). -/
+@[specialize] def add (A B : Mat r c α) : Mat r c α := zipWith (· + ·) A B
+/-- `A - B`. -/
+@[specialize] def sub (A B : Mat r c α) : Mat r c α := zipWith (· - ·) A B
+/-- `-A`. -/
+@[specialize] def neg (A : Mat r c α) : Mat r c α := A.mapSelf (- ·)
+/-- `s A`. -/
+@[specialize] def smulL (s : α) (A : Mat r c α) : Mat r c α := A.mapSelf (s * ·)
+/-- `A s`. -/
+@[specialize] def smulR (A : Mat r c α) (s : α) : Mat r c α := A.mapSelf (· * s)
+/-- `A / s`. -/
+@[specialize] def sdiv [Div α] (A : Mat r c α) (s : α) : Mat r c α := A.mapSelf (· / s)
+
+instance : Add (Mat r c α) := ⟨add⟩
+instance : Sub (Mat r c α) := ⟨sub⟩
+instance : Neg (Mat r c α) := ⟨neg⟩
+instance : HMul α (Mat r c α) (Mat r c α) := ⟨smulL⟩
+instance : HMul (Mat r c α) α (Mat r c α) := ⟨smulR⟩
+instance [Div α] : HDiv (Mat r c α) α (Mat r c α) := ⟨sdiv⟩
 instance : Inhabited (Mat r c α) := ⟨zero⟩
 instance [BEq α] : BEq (Mat r c α) := ⟨fun A B => A.v == B.v⟩
 
@@ -217,7 +263,9 @@ the others added left to right). -/
 @[inline] def mulVec2 (a x : Packed.Arr α) : Packed.Arr α :=
   let x0 := rd x 0
   let x1 := rd x 1
-  Packed.push (Packed.push (Packed.mkEmpty 2) ((rd a 0 * x0 + rd a 2 * x1))) ((rd a 1 * x0 + rd a 3 * x1))
+  let o := wset x 0 ((rd a 0 * x0 + rd a 2 * x1))
+  let o := wset o 1 ((rd a 1 * x0 + rd a 3 * x1))
+  o
 
 /-- `A x` for an `3 × 3` matrix, unrolled (Julia's order: the first product, then
 the others added left to right). -/
@@ -225,7 +273,10 @@ the others added left to right). -/
   let x0 := rd x 0
   let x1 := rd x 1
   let x2 := rd x 2
-  Packed.push (Packed.push (Packed.push (Packed.mkEmpty 3) (((rd a 0 * x0 + rd a 3 * x1) + rd a 6 * x2))) (((rd a 1 * x0 + rd a 4 * x1) + rd a 7 * x2))) (((rd a 2 * x0 + rd a 5 * x1) + rd a 8 * x2))
+  let o := wset x 0 (((rd a 0 * x0 + rd a 3 * x1) + rd a 6 * x2))
+  let o := wset o 1 (((rd a 1 * x0 + rd a 4 * x1) + rd a 7 * x2))
+  let o := wset o 2 (((rd a 2 * x0 + rd a 5 * x1) + rd a 8 * x2))
+  o
 
 /-- `A x` for an `4 × 4` matrix, unrolled (Julia's order: the first product, then
 the others added left to right). -/
@@ -234,7 +285,11 @@ the others added left to right). -/
   let x1 := rd x 1
   let x2 := rd x 2
   let x3 := rd x 3
-  Packed.push (Packed.push (Packed.push (Packed.push (Packed.mkEmpty 4) ((((rd a 0 * x0 + rd a 4 * x1) + rd a 8 * x2) + rd a 12 * x3))) ((((rd a 1 * x0 + rd a 5 * x1) + rd a 9 * x2) + rd a 13 * x3))) ((((rd a 2 * x0 + rd a 6 * x1) + rd a 10 * x2) + rd a 14 * x3))) ((((rd a 3 * x0 + rd a 7 * x1) + rd a 11 * x2) + rd a 15 * x3))
+  let o := wset x 0 ((((rd a 0 * x0 + rd a 4 * x1) + rd a 8 * x2) + rd a 12 * x3))
+  let o := wset o 1 ((((rd a 1 * x0 + rd a 5 * x1) + rd a 9 * x2) + rd a 13 * x3))
+  let o := wset o 2 ((((rd a 2 * x0 + rd a 6 * x1) + rd a 10 * x2) + rd a 14 * x3))
+  let o := wset o 3 ((((rd a 3 * x0 + rd a 7 * x1) + rd a 11 * x2) + rd a 15 * x3))
+  o
 
 /-- `A B` of `2 × 2` matrices, unrolled (each entry in Julia's order). -/
 @[inline] def mul2 (a b : Packed.Arr α) : Packed.Arr α :=
@@ -242,7 +297,11 @@ the others added left to right). -/
   let a1 := rd a 1
   let a2 := rd a 2
   let a3 := rd a 3
-  Packed.push (Packed.push (Packed.push (Packed.push (Packed.mkEmpty 4) ((a0 * rd b 0 + a2 * rd b 1))) ((a1 * rd b 0 + a3 * rd b 1))) ((a0 * rd b 2 + a2 * rd b 3))) ((a1 * rd b 2 + a3 * rd b 3))
+  let o := wset a 0 ((a0 * rd b 0 + a2 * rd b 1))
+  let o := wset o 1 ((a1 * rd b 0 + a3 * rd b 1))
+  let o := wset o 2 ((a0 * rd b 2 + a2 * rd b 3))
+  let o := wset o 3 ((a1 * rd b 2 + a3 * rd b 3))
+  o
 
 /-- `A B` of `3 × 3` matrices, unrolled (each entry in Julia's order). -/
 @[inline] def mul3 (a b : Packed.Arr α) : Packed.Arr α :=
@@ -255,7 +314,16 @@ the others added left to right). -/
   let a6 := rd a 6
   let a7 := rd a 7
   let a8 := rd a 8
-  Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.mkEmpty 9) (((a0 * rd b 0 + a3 * rd b 1) + a6 * rd b 2))) (((a1 * rd b 0 + a4 * rd b 1) + a7 * rd b 2))) (((a2 * rd b 0 + a5 * rd b 1) + a8 * rd b 2))) (((a0 * rd b 3 + a3 * rd b 4) + a6 * rd b 5))) (((a1 * rd b 3 + a4 * rd b 4) + a7 * rd b 5))) (((a2 * rd b 3 + a5 * rd b 4) + a8 * rd b 5))) (((a0 * rd b 6 + a3 * rd b 7) + a6 * rd b 8))) (((a1 * rd b 6 + a4 * rd b 7) + a7 * rd b 8))) (((a2 * rd b 6 + a5 * rd b 7) + a8 * rd b 8))
+  let o := wset a 0 (((a0 * rd b 0 + a3 * rd b 1) + a6 * rd b 2))
+  let o := wset o 1 (((a1 * rd b 0 + a4 * rd b 1) + a7 * rd b 2))
+  let o := wset o 2 (((a2 * rd b 0 + a5 * rd b 1) + a8 * rd b 2))
+  let o := wset o 3 (((a0 * rd b 3 + a3 * rd b 4) + a6 * rd b 5))
+  let o := wset o 4 (((a1 * rd b 3 + a4 * rd b 4) + a7 * rd b 5))
+  let o := wset o 5 (((a2 * rd b 3 + a5 * rd b 4) + a8 * rd b 5))
+  let o := wset o 6 (((a0 * rd b 6 + a3 * rd b 7) + a6 * rd b 8))
+  let o := wset o 7 (((a1 * rd b 6 + a4 * rd b 7) + a7 * rd b 8))
+  let o := wset o 8 (((a2 * rd b 6 + a5 * rd b 7) + a8 * rd b 8))
+  o
 
 /-- `A B` of `4 × 4` matrices, unrolled (each entry in Julia's order). -/
 @[inline] def mul4 (a b : Packed.Arr α) : Packed.Arr α :=
@@ -275,11 +343,27 @@ the others added left to right). -/
   let a13 := rd a 13
   let a14 := rd a 14
   let a15 := rd a 15
-  Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.mkEmpty 16) ((((a0 * rd b 0 + a4 * rd b 1) + a8 * rd b 2) + a12 * rd b 3))) ((((a1 * rd b 0 + a5 * rd b 1) + a9 * rd b 2) + a13 * rd b 3))) ((((a2 * rd b 0 + a6 * rd b 1) + a10 * rd b 2) + a14 * rd b 3))) ((((a3 * rd b 0 + a7 * rd b 1) + a11 * rd b 2) + a15 * rd b 3))) ((((a0 * rd b 4 + a4 * rd b 5) + a8 * rd b 6) + a12 * rd b 7))) ((((a1 * rd b 4 + a5 * rd b 5) + a9 * rd b 6) + a13 * rd b 7))) ((((a2 * rd b 4 + a6 * rd b 5) + a10 * rd b 6) + a14 * rd b 7))) ((((a3 * rd b 4 + a7 * rd b 5) + a11 * rd b 6) + a15 * rd b 7))) ((((a0 * rd b 8 + a4 * rd b 9) + a8 * rd b 10) + a12 * rd b 11))) ((((a1 * rd b 8 + a5 * rd b 9) + a9 * rd b 10) + a13 * rd b 11))) ((((a2 * rd b 8 + a6 * rd b 9) + a10 * rd b 10) + a14 * rd b 11))) ((((a3 * rd b 8 + a7 * rd b 9) + a11 * rd b 10) + a15 * rd b 11))) ((((a0 * rd b 12 + a4 * rd b 13) + a8 * rd b 14) + a12 * rd b 15))) ((((a1 * rd b 12 + a5 * rd b 13) + a9 * rd b 14) + a13 * rd b 15))) ((((a2 * rd b 12 + a6 * rd b 13) + a10 * rd b 14) + a14 * rd b 15))) ((((a3 * rd b 12 + a7 * rd b 13) + a11 * rd b 14) + a15 * rd b 15))
+  let o := wset a 0 ((((a0 * rd b 0 + a4 * rd b 1) + a8 * rd b 2) + a12 * rd b 3))
+  let o := wset o 1 ((((a1 * rd b 0 + a5 * rd b 1) + a9 * rd b 2) + a13 * rd b 3))
+  let o := wset o 2 ((((a2 * rd b 0 + a6 * rd b 1) + a10 * rd b 2) + a14 * rd b 3))
+  let o := wset o 3 ((((a3 * rd b 0 + a7 * rd b 1) + a11 * rd b 2) + a15 * rd b 3))
+  let o := wset o 4 ((((a0 * rd b 4 + a4 * rd b 5) + a8 * rd b 6) + a12 * rd b 7))
+  let o := wset o 5 ((((a1 * rd b 4 + a5 * rd b 5) + a9 * rd b 6) + a13 * rd b 7))
+  let o := wset o 6 ((((a2 * rd b 4 + a6 * rd b 5) + a10 * rd b 6) + a14 * rd b 7))
+  let o := wset o 7 ((((a3 * rd b 4 + a7 * rd b 5) + a11 * rd b 6) + a15 * rd b 7))
+  let o := wset o 8 ((((a0 * rd b 8 + a4 * rd b 9) + a8 * rd b 10) + a12 * rd b 11))
+  let o := wset o 9 ((((a1 * rd b 8 + a5 * rd b 9) + a9 * rd b 10) + a13 * rd b 11))
+  let o := wset o 10 ((((a2 * rd b 8 + a6 * rd b 9) + a10 * rd b 10) + a14 * rd b 11))
+  let o := wset o 11 ((((a3 * rd b 8 + a7 * rd b 9) + a11 * rd b 10) + a15 * rd b 11))
+  let o := wset o 12 ((((a0 * rd b 12 + a4 * rd b 13) + a8 * rd b 14) + a12 * rd b 15))
+  let o := wset o 13 ((((a1 * rd b 12 + a5 * rd b 13) + a9 * rd b 14) + a13 * rd b 15))
+  let o := wset o 14 ((((a2 * rd b 12 + a6 * rd b 13) + a10 * rd b 14) + a14 * rd b 15))
+  let o := wset o 15 ((((a3 * rd b 12 + a7 * rd b 13) + a11 * rd b 14) + a15 * rd b 15))
+  o
 
 /-- Matrix-vector product `A x` (Julia `matmul(value(A), value(x))`,
 `forms.jl:957-959`): `out[i] = A[i,1] x[1] + A[i,2] x[2] + …`, metric-free. -/
-@[inline] def mulVec (A : Mat r c α) (x : Values α c) : Values α r :=
+@[specialize] def mulVec (A : Mat r c α) (x : Values α c) : Values α r :=
   let a := A.v.data
   let xd := x.data
   if r = c then
@@ -306,7 +390,7 @@ forms are generated from. -/
 
 /-- Matrix product `A B` (Julia's operator composition `A ⋅ B`, columns
 `matmul(A, B[j])`, `forms.jl:941, 948-950`). -/
-@[inline] def mul (A : Mat r c α) (B : Mat c k α) : Mat r k α :=
+@[specialize] def mul (A : Mat r c α) (B : Mat c k α) : Mat r k α :=
   let a := A.v.data
   let b := B.v.data
   if r = c ∧ c = k then
@@ -347,9 +431,18 @@ where
 @[inline] def diag (A : Mat r c α) : Values α (min r c) :=
   Values.ofFn fun i => rd A.v.data (i.1 * r + i.1)
 
+/-- `a[i·r + i] += s` for the diagonal positions `i, …, m-1` (in place when `a` is unshared). -/
+@[specialize] def addDiagLoop (s : α) (r m : Nat) (i : Nat) (a : Packed.Arr α) : Packed.Arr α :=
+  if i < m then
+    let p := i * r + i
+    let a := if h : p < Packed.size a then Packed.set a ⟨p, h⟩ (Packed.get a ⟨p, h⟩ + s) else a
+    addDiagLoop s r m (i + 1) a
+  else a
+termination_by m - i
+
 /-- Add `s` to the diagonal (Julia `T + s*I`, `forms.jl:1143-1153`). -/
 @[inline] def addDiag (A : Mat r c α) (s : α) : Mat r c α :=
-  ofFn fun i j => if i.1 = j.1 then A.get i j + s else A.get i j
+  ⟨finish (addDiagLoop s r (min r c) 0 A.v.data)⟩
 
 /-- The Frobenius pairing Julia computes for `A : B` (`forms.jl:936`):
 `sum(value(a) .⋅ value(b))`, i.e. the column dots `Σ_i f(A[i,j]) B[i,j]`

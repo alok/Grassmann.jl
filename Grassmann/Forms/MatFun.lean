@@ -38,9 +38,17 @@ variable {n : Nat}
 /-- Julia's `nA = maximum(sum.(value.(map.(abs, value(A)))))`: the largest column
 absolute sum (the 1-norm), each column summed left to right. -/
 def norm1 (A : Mat n n Float) : Float :=
-  (List.range n).foldl (fun m j =>
-    let s := (List.range n).foldl (fun acc i => if i == 0 then (A.getD i j).abs else acc + (A.getD i j).abs) 0
-    if j == 0 then s else F64.max m s) 0
+  let a := A.v.data
+  if n = 0 then 0 else norm1Loop a n 1 (colAbs a n 0 1 (Float.abs (Mat.rd (α := Float) a 0)))
+where
+  /-- `acc + |A[i,j]| + …` over the rows `i, …, n-1` of column `j` (left to right). -/
+  colAbs (a : FloatArray) (n j i : Nat) (acc : Float) : Float :=
+    if i < n then colAbs a n j (i + 1) (acc + Float.abs (Mat.rd (α := Float) a (j * n + i))) else acc
+  termination_by n - i
+  /-- Julia's `maximum` over the column sums `j, …, n-1`. -/
+  norm1Loop (a : FloatArray) (n j : Nat) (m : Float) : Float :=
+    if j < n then norm1Loop a n (j + 1) (F64.max m (colAbs a n j 1 (Float.abs (Mat.rd (α := Float) a (j * n))))) else m
+  termination_by n - j
 
 /-- `λI + M` (Julia `S(c)*I + M`, adding to the diagonal only). -/
 @[inline] def addI (c : Float) (M : Mat n n Float) : Mat n n Float := M.addDiag c
