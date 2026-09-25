@@ -94,8 +94,10 @@ the type `Values α (n+1)` rules that out. -/
 /-- Julia `accumulate(op, v)` (`SV/mapreduce.jl:300`): the left scan
 `[v₁, op(v₁,v₂), op(op(v₁,v₂),v₃), …]`. -/
 @[inline] def accumulate (op : α → α → α) (v : Values α n) : Values α n :=
-  ofFnScan (σ := Option α)
-    (fun s i => let y := match s with | none => v.get i | some a => op a (v.get i); (some y, y)) none
+  match n, v with
+  | 0, v => v
+  -- the running value starts at `v₁` (no `Option` state: one allocation for the result only)
+  | _ + 1, v => ofFnScan (fun s i => if i.1 == 0 then (s, s) else let y := op s (v.get i); (y, y)) v.head
 
 /-- Julia `accumulate(op, v; init)`: `[op(init,v₁), op(op(init,v₁),v₂), …]`. -/
 @[inline] def accumulateInit {β : Type u} [Packed β] (op : β → α → β) (init : β) (v : Values α n) :

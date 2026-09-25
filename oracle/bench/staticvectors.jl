@@ -23,6 +23,10 @@ sv_addall(as::Vector{Values{k,Float64}}) where {k} = sum(foldl(+, as; init = zer
 sv_cross1(a, b) = cross(a, b)[1]
 sv_normalize1(a) = normalize(a)[1]
 sv_scale1(a) = (a * 2.5)[1]
+sv_max1(a) = maximum(a)
+sv_cumsumlast(a) = cumsum(a)[end]
+sv_reverse1(a) = reverse(a)[1]
+sv_construct3(a) = sum(Values(a[3], a[1], a[2]))
 
 function sv_dimcases(ctx, d, m)
     p = "$(m)×$(d)"
@@ -33,6 +37,10 @@ function sv_dimcases(ctx, d, m)
     bench!(i -> sv_sumone(norm, blackbox(i, as)), ctx, "norm$d"; ops = m, param = p)
     bench!(i -> sv_sumone(sv_normalize1, blackbox(i, as)), ctx, "normalize$d"; ops = m, param = p)
     bench!(i -> sv_sumone(sv_scale1, blackbox(i, as)), ctx, "scale$d"; ops = m, param = p)
+    bench!(i -> sv_sumone(sum, blackbox(i, as)), ctx, "sum$d"; ops = m, param = p)
+    bench!(i -> sv_sumone(sv_max1, blackbox(i, as)), ctx, "maximum$d"; ops = m, param = p)
+    bench!(i -> sv_sumone(sv_cumsumlast, blackbox(i, as)), ctx, "cumsum$d"; ops = m, param = p)
+    bench!(i -> sv_sumone(sv_reverse1, blackbox(i, as)), ctx, "reverse$d"; ops = m, param = p)
 end
 
 function suite_staticvectors(ctx)
@@ -41,6 +49,7 @@ function suite_staticvectors(ctx)
     as = sv_vecs(3, m, randfloats(3m, UInt64(0xA11CE), -1.0, 1.0))
     bs = sv_vecs(3, m, randfloats(3m, UInt64(0xB0B0), -1.0, 1.0))
     bench!(i -> sv_sumpair(sv_cross1, blackbox(i, as), bs), ctx, "cross3"; ops = m, param = "$(m)×3")
+    bench!(i -> sv_sumone(sv_construct3, blackbox(i, as)), ctx, "construct3"; ops = m, param = "$(m)×3")
     sv_dimcases(ctx, 16, m)
 end
 

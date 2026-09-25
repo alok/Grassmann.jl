@@ -6,8 +6,8 @@ import StaticVectors
 
 Julia twin: `oracle/bench/staticvectors.jl` (`StaticVectors.Values{n,Float64}`, an isbits
 tuple). ns per vector operation over arrays of 1000 random vectors (identical on both sides):
-accumulation (`add`), `dot`, `cross`, `norm`, `normalize`, and a scalar multiple, at `n = 3`
-and `n = 16`. In Lean a `Values Float n` is a packed `FloatArray`: one heap object per vector,
+accumulation (`add`), `dot`, `cross`, `norm`, `normalize`, a scalar multiple, `sum`, `maximum`,
+`cumsum`, `reverse` and construction from scalars, at `n = 3` and `n = 16`. In Lean a `Values Float n` is a packed `FloatArray`: one heap object per vector,
 so every operation that returns a vector allocates.
 -/
 
@@ -63,6 +63,22 @@ def scaleFactor : Float := 2.5
 /-- First component of `a * 2.5` (Julia `(a * 2.5)[1]`). -/
 @[inline] def scale1 {k : Nat} (a : Values Float (k + 1)) : Float := (a * scaleFactor).get 0
 
+/-- `sum(a)`. -/
+@[inline] def sum1 {k : Nat} (a : Values Float k) : Float := a.sum
+
+/-- `maximum(a)`. -/
+@[inline] def max1 {k : Nat} (a : Values Float (k + 1)) : Float := a.maximum
+
+/-- Last entry of `cumsum(a)`. -/
+@[inline] def cumsumLast {k : Nat} (a : Values Float (k + 1)) : Float := a.cumsum.last
+
+/-- First entry of `reverse(a)`. -/
+@[inline] def reverse1 {k : Nat} (a : Values Float (k + 1)) : Float := a.reverse.get 0
+
+/-- `Values(x, y, z)` from three floats, summed (construction of a static vector). -/
+@[inline] def construct3 (a : Values Float 3) : Float :=
+  (vals![a.get 2, a.get 0, a.get 1]).sum
+
 /-- Cases at dimension `k + 1`. Inlined at each literal `k`, so every operation is compiled for
 a static length (as Julia's `Values{3,Float64}` is); with a runtime `k` the operations run as
 generic loops through closures, about 2× slower still. -/
@@ -76,6 +92,10 @@ generic loops through closures, about 2× slower still. -/
   bench s!"norm{d}" (ops := m) (param := p) fun s => sumOne (fun a => a.norm) (blackBox s as)
   bench s!"normalize{d}" (ops := m) (param := p) fun s => sumOne normalize1 (blackBox s as)
   bench s!"scale{d}" (ops := m) (param := p) fun s => sumOne scale1 (blackBox s as)
+  bench s!"sum{d}" (ops := m) (param := p) fun s => sumOne sum1 (blackBox s as)
+  bench s!"maximum{d}" (ops := m) (param := p) fun s => sumOne max1 (blackBox s as)
+  bench s!"cumsum{d}" (ops := m) (param := p) fun s => sumOne cumsumLast (blackBox s as)
+  bench s!"reverse{d}" (ops := m) (param := p) fun s => sumOne reverse1 (blackBox s as)
 
 /-- The suite. -/
 def suite : Suite := ⟨"staticvectors", do
@@ -84,6 +104,7 @@ def suite : Suite := ⟨"staticvectors", do
   let as := vecs 3 m (randFloats (3 * m) 0xA11CE (-1) 1)
   let bs := vecs 3 m (randFloats (3 * m) 0xB0B0 (-1) 1)
   bench "cross3" (ops := m) (param := s!"{m}×3") fun s => sumPair cross1 (blackBox s as) bs
+  bench "construct3" (ops := m) (param := s!"{m}×3") fun s => sumOne construct3 (blackBox s as)
   dimCases 15 m⟩
 
 end Bench.StaticVectors

@@ -168,7 +168,10 @@ syntax "vals![" term,* "]" : term
 macro_rules
   | `(vals![$xs,*]) => do
     let n := Lean.Syntax.mkNumLit (toString xs.getElems.size)
-    `(StaticVectors.Values.ofFn (n := $n) fun i => ([$xs,*] : List _)[i.1]!)
+    -- a chain of pushes onto an empty packed array (no intermediate list)
+    let arr ← xs.getElems.foldlM (init := ← `(StaticVectors.Packed.mkEmpty $n))
+      fun acc x => `(StaticVectors.Packed.push $acc $x)
+    `((⟨$arr, by simp⟩ : StaticVectors.Values _ $n))
 
 /-- Julia `ones(Values{n,T})`. -/
 @[inline] def Values.ones {α : Type u} [Packed α] [OfNat α 1] {n : Nat} : Values α n := Values.replicate 1
