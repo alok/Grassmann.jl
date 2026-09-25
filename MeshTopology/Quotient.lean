@@ -285,7 +285,11 @@ def resolveAtRef (m : QuotientTopology N) (a : Fin N) (idx : Vector Int N) (q11 
 /-- `(maps.get (idx without axis a))` with `x` inserted at axis `a2`, built in one pass. -/
 @[inline] def placeGhost (maps : ProductTopology (N - 1)) (idx : Vector Int N) (a a2 : Fin N)
     (x : Int) : Vector Int N :=
-  Vector.ofFn fun k =>
+  Vector.ofFn (placeGhostCoord maps idx a a2 x)
+where
+  /-- Coordinate `k` of the result. -/
+  placeGhostCoord (maps : ProductTopology (N - 1)) (idx : Vector Int N) (a a2 : Fin N) (x : Int)
+      (k : Fin N) : Int :=
     if h : k.1 < a2.1 then
       maps.axes[k.1]'(by have := a2.2; omega) |>.get
         (idx[if k.1 < a.1 then k.1 else k.1 + 1]'(by have := a2.2; split <;> omega))
@@ -336,14 +340,35 @@ def toArray (m : QuotientTopology N) : Array (Vector Int N) :=
 /-- The 1-based linear index of `m[Val(K), idx…]`, or `0` when the result lies outside the grid
 (an open face). The allocation-light entry point for stencils. -/
 def ghostLinear (m : QuotientTopology N) (K : Nat) (idx : Vector Int N) : Nat :=
-  go (m.ghost K idx) 0 0 1
+  match m.soleOut K idx with
+  | none => linIdx idx 0 0 1
+  | some a =>
+    let i := idx[a]
+    let low := i < 2
+    match m.glue[if low then lowFace a else highFace a] with
+    | none => linIdx idx 0 0 1
+    | some g =>
+      let a2 := faceAxis g.target
+      linPlace g.maps idx a a2 (ghostCoord low (g.target.1 % 2 = 0) i m.size[a] m.size[a2]) 0 0 1
 where
-  /-- Column-major linear index of `r`, checking each coordinate is in range. -/
-  go (r : Vector Int N) (k acc stride : Nat) : Nat :=
+  /-- Column-major linear index of `idx`, `0` if a coordinate is out of range. -/
+  linIdx (idx : Vector Int N) (k acc stride : Nat) : Nat :=
     if h : k < N then
-      let c := r[k]
+      let ck := idx[k]
       let n := m.size[k]
-      if 0 < c && c ≤ (n : Int) then go r (k + 1) (acc + (c.toNat - 1) * stride) (stride * n) else 0
+      if 0 < ck && ck ≤ (n : Int) then linIdx idx (k + 1) (acc + (ck.toNat - 1) * stride) (stride * n)
+      else 0
+    else acc + 1
+  termination_by N - k
+  /-- The same for the coordinates of `placeGhost maps idx a a2 x`, without building it. -/
+  linPlace (maps : ProductTopology (N - 1)) (idx : Vector Int N) (a a2 : Fin N) (x : Int)
+      (k acc stride : Nat) : Nat :=
+    if h : k < N then
+      let ck := placeGhost.placeGhostCoord maps idx a a2 x ⟨k, h⟩
+      let n := m.size[k]
+      if 0 < ck && ck ≤ (n : Int) then
+        linPlace maps idx a a2 x (k + 1) (acc + (ck.toNat - 1) * stride) (stride * n)
+      else 0
     else acc + 1
   termination_by N - k
 

@@ -41,8 +41,8 @@ theorem QuotientTopology.placeGhost_eq {N : Nat} (maps : ProductTopology (N - 1)
         (by have := a.2; omega) := by
   apply Vector.ext
   intro k hk
-  simp only [placeGhost, Vector.getElem_ofFn, Vector.getElem_cast, Vector.getElem_insertIdx,
-    ProductTopology.get]
+  simp only [placeGhost, placeGhost.placeGhostCoord, Vector.getElem_ofFn, Vector.getElem_cast,
+    Vector.getElem_insertIdx, ProductTopology.get]
   by_cases h1 : k < a2.1
   · by_cases h3 : k < a.1 <;> simp [h1, h3, Vector.getElem_eraseIdx]
   · by_cases h2 : k = a2.1

@@ -79,6 +79,10 @@ def quotientProps : TestM Unit := do
               inRange := inRange && (List.finRange N).all fun k => 0 < r[k] && r[k] ≤ (m.size[k] : Int)
           if hp : p < tbl.len then
             agree := agree && tbl.get ⟨a, h.2.1⟩ ⟨p, hp⟩ up == m.ghostLinear (a + 1) q
+          -- the allocation-free ghostLinear is the linear index of ghost (0 off the grid)
+          let inGrid := (List.finRange N).all fun k => 0 < r[k] && r[k] ≤ (m.size[k] : Int)
+          agree := agree &&
+            m.ghostLinear (a + 1) q == (if inGrid then (linearIndex m.size r).toNat else 0)
     check s!"{lbl} ghosts of glued faces stay in the grid" inRange
     check s!"{lbl} NeighborTable agrees with ghostLinear" agree
     -- closed identification: idempotent, and vertices number 1..nodes onto representatives
