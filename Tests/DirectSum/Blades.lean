@@ -82,7 +82,8 @@ def agree (V : TensorBundle) (mine : Except String BladeResult) (jl : Option (Te
       | .nested _ inner => inner.terms.map (·.1) == ts.map (·.1)
       | _ => normTerms r.terms == normTerms ts
     let kindOk := k1 == kind
-    let strOk := s1 == s || s2 == s
+    -- Julia prints signed zeros (`-0.0v∞`) that exact arithmetic cannot see
+    let strOk := s1 == s || s2 == s || normSignedZero s2 == normSignedZero s
     (termsOk && kindOk && strOk,
       s!"terms {termsOk} kind {kindOk} ({k1} vs {kind}) str `{s1}` vs `{s}`")
 
