@@ -230,10 +230,13 @@ e.g. `v₁₂`, `w¹`, `∂₁v₂`, `v∞∅₁`; `label = true` gives the ASCI
 def bladeLabel (b : UInt64) (label : Bool := false) : String :=
   Leibniz.printLabel V.labelCtx b label V.names
 
-/-- Julia `labels(V)` (`DirectSum.jl src/basis.jl:19-32`): ASCII labels in basis
-order; element 1 is always the vector prefix (`v`, even for a dual space). -/
-def labels : Array String :=
-  (Leibniz.indexBasisAll V.n).map fun b => if b == 0 then V.names.1 else V.bladeLabel b true
+/-- Julia `labels(V, vec, cov, duo, dif)` (`DirectSum.jl src/basis.jl:19-32`):
+ASCII labels in basis order. The names default to `v w ∂ ϵ` whatever the
+space's naming scheme (as in Julia), and element 1 is always the vector prefix
+(`v`, even for a dual space). -/
+def labels (names : Leibniz.Names := Leibniz.pre) : Array String :=
+  (Leibniz.indexBasisAll V.n).map fun b =>
+    if b == 0 then names.1 else Leibniz.printLabel V.labelCtx b true names
 
 /-! ## Well-formedness -/
 
