@@ -40,19 +40,19 @@ per generator of `V`. -/
 @[inline] def ofPoints? (pts : List (Chain W 1 α)) : Option (Simplex V W α) := ofColumnList? pts
 
 /-- Julia `↓(W)` of a vector: its coordinates without the first (homogeneous) one. -/
-def dropFirst (x : Chain W 1 α) : Chain (Forms.drop1 W) 1 α :=
+@[specialize] def dropFirst (x : Chain W 1 α) : Chain (Forms.drop1 W) 1 α :=
   Chain.ofFn fun i => getD x.v (i.1 + 1)
 
 /-- Julia `affineframe(t, y = t[1])` (`composite.jl:900-903`): the edge vectors
 `tᵢ − y` (`i = 2 … n`) without their homogeneous coordinate (`y` defaults to the
 first vertex). -/
-def affineframe (T : Simplex V W α) (y : Option (Chain W 1 α) := none) :
+@[specialize] def affineframe (T : Simplex V W α) (y : Option (Chain W 1 α) := none) :
     Simplex (TensorBundle.euclidean (V.n - 1)) (Forms.drop1 W) α :=
   let y0 := fun (i : Nat) => match y with | some y => getD y.v i | none => T.entry i 0
   TensorOperator.ofFn fun i j => T.entry (i.1 + 1) (j.1 + 1) - y0 (i.1 + 1)
 
 /-- The sum of the columns, a left fold from the first (Julia `sum(value(t))`). -/
-def colSum (T : Simplex V W α) : Chain W 1 α :=
+@[specialize] def colSum (T : Simplex V W α) : Chain W 1 α :=
   let n := (Layout.chain 1).size V.n
   ⟨Values.ofFn fun i =>
     match n with
@@ -84,7 +84,7 @@ a full-dimensional simplex in homogeneous coordinates. -/
 
 /-- Julia `volumes(m)` for one simplex (`composite.jl:933`): `|detsimplex(t)|`, or
 the edge length of a segment in a 2-generator space. -/
-def volume [Div α] [Analytic α] (T : Simplex V W α) : α :=
+@[specialize] def volume [Div α] [Analytic α] (T : Simplex V W α) : α :=
   if W.n = 2 && V.n = 2 then
     let dx := T.entry 1 1 - T.entry 1 0
     Analytic.abs dx
@@ -92,7 +92,7 @@ def volume [Div α] [Analytic α] (T : Simplex V W α) : α :=
 
 /-- Julia `edgelength(e) = |p₂ − p₁|` (`composite.jl:931`), the Euclidean length
 of the difference of the two vertices without the homogeneous coordinate. -/
-def edgelength [Analytic α] (T : Simplex V W α) : α :=
+@[specialize] def edgelength [Analytic α] (T : Simplex V W α) : α :=
   let d := fun (i : Nat) => T.entry i 1 - T.entry i 0
   let s := (List.range (W.n - 1)).foldl (fun acc i => acc + d (i + 1) * d (i + 1)) Coeff.zero
   Analytic.sqrt s
@@ -100,7 +100,7 @@ def edgelength [Analytic α] (T : Simplex V W α) : α :=
 /-- Julia `v ∈ t` for a full simplex (`composite.jl:734-739`): whether every Cramer
 numerator `v ∧ yₙ₋₁`, `xᵢ ∧ v ∧ yₙ₋₁₋ᵢ`, `xₙ₋₁ ∧ v` has the sign of
 `det t = t₁ ∧ yₙ₋₁` (signed zeros count, as Julia's `signbit`). -/
-def contains [SignBit α] (T : Simplex V W α) (v : Chain W 1 α) : Bool :=
+@[specialize] def contains [SignBit α] (T : Simplex V W α) (v : Chain W 1 α) : Bool :=
   let n := W.n
   let N := V.n
   if N ≠ n ∨ N < 2 then false
@@ -108,8 +108,8 @@ def contains [SignBit α] (T : Simplex V W α) (v : Chain W 1 α) : Bool :=
     let (xs, ys) := T.prefixSuffix
     let x := fun (i : Nat) => xs[i - 1]!
     let y := fun (i : Nat) => ys[i - 1]!
-    let vv := v.v.toArray
-    let top := fun (a : Array α) => (a[0]?).getD Coeff.zero
+    let vv := v.v.data
+    let top := fun (a : Packed.Arr α) => Mat.rd a 0
     let s := SignBit.signbit (top (wedgeRaw n 1 (N - 1) (x 1) (y (N - 1))))
     let first := top (wedgeRaw n 1 (N - 1) vv (y (N - 1)))
     let mid := (List.range (N - 2)).map fun k =>
@@ -123,7 +123,7 @@ coordinates of a simplex (column `i` for vertex `i`), vectors of `↓(W)`. For a
 simplex Julia's Cramer formula on the rows of `t` (Hodge complements of the
 numerators times `1/det`); with fewer vertices than dimensions `t (tᵀt)⁻¹` without
 the homogeneous row. -/
-def gradient [Div α] (T : Simplex V W α) : Simplex V (Forms.drop1 W) α :=
+@[specialize] def gradient [Div α] (T : Simplex V W α) : Simplex V (Forms.drop1 W) α :=
   let n := W.n
   let M := V.n
   if M < n then
@@ -138,21 +138,19 @@ def gradient [Div α] (T : Simplex V W α) : Simplex V (Forms.drop1 W) α :=
     let (xs, ys) := t.prefixSuffix
     let x := fun (i : Nat) => xs[i - 1]!
     let y := fun (i : Nat) => ys[i - 1]!
-    let neg := fun (a : Array α) => a.map (- ·)
     let mid := fun (i : Nat) => wedgeRaw M (N - i) i (y (N - i)) (x i)
-    let vals : List (Array α) :=
+    let vals : List (Packed.Arr α) :=
       if N % 2 == 0 then ((List.range (N - 1)).map fun k => mid (k + 1)) ++ [x N]
-      else ((List.range (N - 1)).map fun k => let i := k + 1; if i % 2 == 1 then mid i else neg (mid i)) ++ [x N]
-    let det := ((wedgeRaw M 1 N (x 1) (y N))[0]?).getD Coeff.zero
+      else ((List.range (N - 1)).map fun k => let i := k + 1; if i % 2 == 1 then mid i else negP (mid i)) ++ [x N]
+    let det := Mat.rd (wedgeRaw M 1 N (x 1) (y N)) 0
     let r := Coeff.one / det
     -- `⋆(valₖ / det)`: an (M-1)-blade to a vector (Euclidean Hodge = right complement)
-    let rows := vals.toArray.map fun v => complementRaw M (M - 1) (v.map (· * r))
-    TensorOperator.ofFn fun k i => ((rows[k.1]?).bind (·[i.1]?)).getD Coeff.zero
+    ofRowsP (vals.toArray.map fun v => complementRaw M (M - 1) (scaleP v r))
 
 /-- Cartan `gradienthat` of one element (`element.jl:458-472`): for a segment
 (`W` of 2 generators) the columns `∓1/length`; otherwise the barycentric
 gradients (Cartan's triangle formula through `curls` gives the same vectors). -/
-def gradienthat [Div α] [Analytic α] (T : Simplex V W α) : Simplex V (Forms.drop1 W) α :=
+@[specialize] def gradienthat [Div α] [Analytic α] (T : Simplex V W α) : Simplex V (Forms.drop1 W) α :=
   if W.n = 2 && V.n = 2 then
     let c := Coeff.one / T.volume
     TensorOperator.ofFn fun _ j => if j.1 = 0 then -c else c
@@ -160,7 +158,7 @@ def gradienthat [Div α] [Analytic α] (T : Simplex V W α) : Simplex V (Forms.d
 
 /-- Julia `area(m)` of a polygon (`composite.jl:974-980`): `|⋆(m[end]∧m[1] + Σ mᵢ∧mᵢ₊₁)|/2`
 for homogeneous 2-D points, with the Euclidean norm. -/
-def area [Kernels W] [Div α] [Analytic α] (pts : List (Chain W 1 α)) : α :=
+@[specialize] def area [Kernels W] [Div α] [Analytic α] (pts : List (Chain W 1 α)) : α :=
   match pts with
   | [] => Coeff.zero
   | p :: _ =>

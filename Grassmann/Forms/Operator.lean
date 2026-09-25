@@ -240,7 +240,7 @@ chain, `T:T = 5v`). -/
 
 /-- Julia's Gershgorin row radii `Σ_{j≠i} |T[i,j]|` (`forms.jl:1521-1523`),
 as `Float`s. -/
-def gerschgorin [JNorm α] (T : TensorOperator V ld W lc α) : Values Float (lc.size W.n) :=
+@[specialize] def gerschgorin [JNorm α] (T : TensorOperator V ld W lc α) : Values Float (lc.size W.n) :=
   Values.ofFn fun i =>
     (List.range (ld.size V.n)).foldl (fun acc j =>
       acc + (if j == i.1 then 0 else JNorm.norm (T.entry i.1 j))) 0
@@ -327,7 +327,7 @@ variable {V : TensorBundle} {l : Layout} {α : Type} [Coeff α]
 
 /-- Julia `bivector(A)` of a grade-1 endomorphism (`forms.jl:614-616`): the
 coefficient of `eᵢ ∧ eⱼ` (`i < j`) is `A[j,i]` (the lower triangle). -/
-def bivector (A : Endomorphism V (.chain 1) α) : Chain V 2 α :=
+@[specialize] def bivector (A : Endomorphism V (.chain 1) α) : Chain V 2 α :=
   Chain.ofFn fun k =>
     let b := (Leibniz.indexBasis V.n 2)[k.1]!
     let i := (DirectSum.Bits.indices b)[0]!
@@ -336,7 +336,7 @@ def bivector (A : Endomorphism V (.chain 1) α) : Chain V 2 α :=
 
 /-- Julia `companion(x)` (`forms.jl:829-835`): the companion matrix of the monic
 polynomial `zⁿ + xₙ zⁿ⁻¹ + … + x₁`, columns `e₂, …, eₙ, -x`. -/
-def companion {n : Nat} (x : Values α n) : Endomorphism (TensorBundle.euclidean n) (.chain 1) α :=
+@[specialize] def companion {n : Nat} (x : Values α n) : Endomorphism (TensorBundle.euclidean n) (.chain 1) α :=
   TensorOperator.ofFn fun i j =>
     if j.1 + 1 = n then -(x.get ⟨i.1, Nat.lt_of_lt_of_eq i.2 (Forms.chainOne_size n)⟩)
     else if i.1 = j.1 + 1 then Coeff.one else Coeff.zero

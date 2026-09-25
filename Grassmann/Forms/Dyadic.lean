@@ -181,7 +181,7 @@ variable {V : TensorBundle} {α : Type} [Coeff α]
 
 /-- Julia `S ⋅ b = Σₖ vₖ (λₖ (vₖ ⋅ b))` (`forms.jl:983`), with the conjugating
 coefficient dot; the terms are added left to right. -/
-def apply [Conj α] (S : SpectralOperator V α) (b : Chain V 1 α) : Chain V 1 α :=
+@[specialize] def apply [Conj α] (S : SpectralOperator V α) (b : Chain V 1 α) : Chain V 1 α :=
   let term := fun (k : Nat) =>
     let vk : Values α ((Layout.chain 1).size V.n) := Values.ofFn fun i => S.vecs.entry i.1 k
     let s := getD S.vals k * Forms.vdot vk b.v
@@ -192,7 +192,7 @@ def apply [Conj α] (S : SpectralOperator V α) (b : Chain V 1 α) : Chain V 1 �
 
 /-- Julia `Chain(S) = Σₖ outer(vₖ λₖ, vₖ)` (`forms.jl:431`): the materialised
 endomorphism, `M[i,j] = Σₖ vₖ[i] λₖ conj(vₖ[j])` (a left fold over `k`). -/
-def toOperator [Conj α] (S : SpectralOperator V α) : Endomorphism V (.chain 1) α :=
+@[specialize] def toOperator [Conj α] (S : SpectralOperator V α) : Endomorphism V (.chain 1) α :=
   let n := S.size
   TensorOperator.ofFn fun i j =>
     let t := fun (k : Nat) => S.vecs.entry i.1 k * getD S.vals k * conj (S.vecs.entry j.1 k)

@@ -58,7 +58,7 @@ namespace Chain
 
 /-- Julia `W(x)` for a subspace `W ⊆ V` given by a mask (`forms.jl:48-66`): the
 blades of `x` inside `W`, renumbered by `pext`. -/
-def project (x : Chain V G α) (S : SubSpace V) : Chain (Forms.restrict V S.mask) G α :=
+@[specialize] def project (x : Chain V G α) (S : SubSpace V) : Chain (Forms.restrict V S.mask) G α :=
   let S' := S.mask &&& lowMask V.n
   let bsW := Leibniz.indexBasis (Forms.restrict V S.mask).n G
   Chain.ofFn fun i =>
@@ -67,7 +67,7 @@ def project (x : Chain V G α) (S : SubSpace V) : Chain (Forms.restrict V S.mask
 
 /-- Julia `W(x)` for `V ⊆ W` (`forms.jl:67-85`): the embedding of an element of a
 subspace, its blades renumbered by `pdep` into the mask `S` of `W`. -/
-def embedSub (S : SubSpace W) (x : Chain (Forms.restrict W S.mask) G α) : Chain W G α :=
+@[specialize] def embedSub (S : SubSpace W) (x : Chain (Forms.restrict W S.mask) G α) : Chain W G α :=
   let S' := S.mask &&& lowMask W.n
   Chain.ofFn fun i =>
     let b := (Leibniz.indexBasis W.n G)[i.1]!
@@ -76,7 +76,7 @@ def embedSub (S : SubSpace W) (x : Chain (Forms.restrict W S.mask) G α) : Chain
 /-- Julia `W(x)` for a space `V` whose generators are the first ones of `W`
 (`ℝ^4(x)`, `(V ⊕ V')(x)`; `forms.jl:67-85` with `mixed(V, B) = B`): the same blades,
 zero on the new generators. A dual `V` inside a dyadic `W` shifts by `V.n`. -/
-def embed (x : Chain V G α) (W : TensorBundle) : Chain W G α :=
+@[specialize] def embed (x : Chain V G α) (W : TensorBundle) : Chain W G α :=
   let shift := if V.isdual && W.isdyadic then V.n else 0
   Chain.ofFn fun i =>
     let b := (Leibniz.indexBasis W.n G)[i.1]!
@@ -88,13 +88,13 @@ end Chain
 namespace Multivector
 
 /-- Julia `W(m)` for a subspace `W ⊆ V` (`forms.jl:98-111`), with `pext`. -/
-def project (m : Multivector V α) (S : SubSpace V) : Multivector (Forms.restrict V S.mask) α :=
+@[specialize] def project (m : Multivector V α) (S : SubSpace V) : Multivector (Forms.restrict V S.mask) α :=
   let S' := S.mask &&& lowMask V.n
   let bsW := Leibniz.indexBasisAll (Forms.restrict V S.mask).n
   Multivector.ofFn fun i => m.coeff (pdep bsW[i.1]! S')
 
 /-- Julia `W(m)` for `V` the first generators of `W` (`forms.jl:112-134`). -/
-def embed (m : Multivector V α) (W : TensorBundle) : Multivector W α :=
+@[specialize] def embed (m : Multivector V α) (W : TensorBundle) : Multivector W α :=
   Multivector.ofFn fun i =>
     let b := (Leibniz.indexBasisAll W.n)[i.1]!
     if b &&& ~~~(lowMask V.n) == 0 then m.coeff b else Coeff.zero
@@ -109,7 +109,7 @@ end Multivector
 /-! ## Multilinear forms -/
 
 /-- `y₁ ∧ … ∧ y_k` of vectors of `V` (Julia `∧(y...)`), grade `k`. -/
-def wedgeVectors [Kernels V] (ys : List (Chain V 1 α)) : Chain V ys.length α :=
+@[specialize] def wedgeVectors [Kernels V] (ys : List (Chain V 1 α)) : Chain V ys.length α :=
   let rec go : (g : Nat) → Chain V g α → (cs : List (Chain V 1 α)) → Chain V (g + cs.length) α
     | _, acc, [] => acc
     | g, acc, c :: cs => (go (g + 1) (acc ∧ c) cs).cast (by rw [List.length_cons]; omega)
@@ -119,7 +119,7 @@ namespace Chain
 
 /-- Julia `t(y₁, …, y_k) = t ⋅ (y₁ ∧ … ∧ y_k)` (`forms.jl:293`): a grade-`G` element
 evaluated on `k` vectors (`B(x, y) = -24v`, `v₁₂(v₁, v₂) = v`). -/
-def eval [Kernels V] (t : Chain V G α) (ys : List (Chain V 1 α)) : Chain V (G - ys.length) α :=
+@[specialize] def eval [Kernels V] (t : Chain V G α) (ys : List (Chain V 1 α)) : Chain V (G - ys.length) α :=
   contraction t (wedgeVectors ys)
 
 end Chain
@@ -127,7 +127,7 @@ end Chain
 namespace Multivector
 
 /-- Julia `m(y₁, …, y_k) = m ⋅ (y₁ ∧ … ∧ y_k)` (`forms.jl:294`). -/
-def eval [Kernels V] (m : Multivector V α) (ys : List (Chain V 1 α)) : Multivector V α :=
+@[specialize] def eval [Kernels V] (m : Multivector V α) (ys : List (Chain V 1 α)) : Multivector V α :=
   contraction m (wedgeVectors ys)
 
 end Multivector
@@ -137,7 +137,7 @@ end Multivector
 /-- Julia `vecdot(x, y)` (`forms.jl:838-881`): the coefficient dot
 `Σ conj(xᵦ) yᵦ` over the blades of the smaller of the two layouts (the other
 element restricted to it), a left fold. -/
-def vecdot {X Y : Type} {lx ly : Layout} [Conj α] [InLayout X V lx α] [InLayout Y V ly α] (x : X) (y : Y) : α :=
+@[specialize] def vecdot {X Y : Type} {lx ly : Layout} [Conj α] [InLayout X V lx α] [InLayout Y V ly α] (x : X) (y : Y) : α :=
   let xv := InLayout.vals x
   let yv := InLayout.vals y
   if lx.size V.n ≤ ly.size V.n then

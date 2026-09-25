@@ -45,37 +45,101 @@ abbrev E (n : Nat) : TensorBundle := TensorBundle.euclidean n
 /-- A grade-`g` vector of the `n`-space as raw coefficients. -/
 abbrev GVec (α : Type) [Coeff α] (n g : Nat) := Values α (Leibniz.binomial n g)
 
-/-- `a ∧ b` of a grade-`g` and a grade-`h` vector (the reference wedge kernel). -/
+/-- The wedge plan `grade g ∧ grade h → grade g+h` of the `n`-space: DirectSum's
+multiply-accumulate plan (`Kernel.build`), whose accumulation order is Julia's. -/
+def wedgePlanBuild (n g h : Nat) : Kernel.Plan :=
+  match Kernel.build { V := E n, op := .bin .wedge, la := .chain g, lb := .chain h, lc := .chain (g + h) } with
+  | .ok p => p
+  | .error _ => {}
+
+/-- The largest dimension whose wedge plans and complement tables are cached. -/
+def cacheDim : Nat := 8
+
+/-- The wedge plans of the spaces up to `cacheDim`, built once on first use
+(closed-term thunks: no hash lookup on the hot path). -/
+def wedgePlans : Array (Array (Array (Thunk Kernel.Plan))) :=
+  (Array.range (cacheDim + 1)).map fun n => (Array.range (n + 1)).map fun g =>
+    (Array.range (n + 1)).map fun h => Thunk.mk fun _ => wedgePlanBuild n g h
+
+/-- The wedge plan of `g ∧ h` in `n` dimensions (cached, or the memoized reference
+plan beyond `cacheDim`). -/
+@[inline] def wedgePlan (n g h : Nat) : Kernel.Plan :=
+  if n ≤ cacheDim && g ≤ n && h ≤ n then (wedgePlans[n]![g]![h]!).get
+  else match Kernel.plan { V := E n, op := .bin .wedge, la := .chain g, lb := .chain h, lc := .chain (g + h) } with
+    | .ok p => p
+    | .error _ => {}
+
+/-- `a ∧ b` of raw grade-`g` and grade-`h` coefficient storage in `n` dimensions. -/
+@[inline] def wedgeP (n g h : Nat) (a b : Packed.Arr α) : Packed.Arr α :=
+  let p := wedgePlan n g h
+  if ha : p.Aligned then Kernel.Plan.rows₂ p ha a b p.outputs 0 (Packed.mkEmpty p.outputs)
+  else Packed.mkEmpty 0
+
+/-- `a ∧ b` of a grade-`g` and a grade-`h` vector (the wedge plan). -/
 @[inline] def wedgeGH {n g h : Nat} (a : GVec α n g) (b : GVec α n h) : GVec α n (g + h) :=
-  Kernel.refBin (E n) .wedge (.chain g) (.chain h) (.chain (g + h)) a b
+  Mat.finish (wedgeP n g h a.data b.data)
+
+/-- Whether `e_A ∧ e_B = -e_{A∪B}` for disjoint blades: the parity of the pairs
+`i ∈ A`, `j ∈ B` with `j < i`. -/
+def mergeNeg (a b : UInt64) : Bool := go b 0 64
+where
+  /-- Scan the bits of `b`, counting the bits of `a` above each. -/
+  go (b : UInt64) (acc : Nat) : Nat → Bool
+    | 0 => acc % 2 == 1
+    | fuel + 1 =>
+      if b == 0 then acc % 2 == 1
+      else
+        let low := b &&& (0 - b)
+        go (b ^^^ low) (acc + DirectSum.Bits.popcount (a &&& ~~~(low ||| (low - 1)))) fuel
 
 /-- The source position and sign of each coefficient of the right complement of
-a grade-`g` vector in `n` dimensions: `(!a)[j] = ±a[src j]` (every blade has a
-single complement, `±e_{I∁}`). -/
+a grade-`g` vector in `n` dimensions: `(!a)[j] = ±a[src j]`, `!e_B = ±e_{B∁}` with
+the sign of `e_B ∧ e_{B∁}` (Euclidean; checked against DirectSum's complement). -/
 def complementTable (n g : Nat) : Array (Nat × Bool) :=
-  let out := Leibniz.indexBasis n (n - g)
-  out.map fun c =>
+  (Leibniz.indexBasis n (n - g)).map fun c =>
     let b := c ^^^ DirectSum.Bits.lowMask n
-    let neg := match (E n).apply₁ .complementright b with
-      | .ok (.single q _) => q < 0
-      | _ => false
-    (Leibniz.bladeRank n b, neg)
+    (Leibniz.bladeRank n b, mergeNeg b c)
 
-/-- The right complement `!a` of a grade-`g` vector (metric-free), by direct
+/-- The complement tables of the spaces up to `cacheDim`, built once on first use. -/
+def complementTables : Array (Array (Thunk (Array (Nat × Bool)))) :=
+  (Array.range (cacheDim + 1)).map fun n => (Array.range (n + 1)).map fun g =>
+    Thunk.mk fun _ => complementTable n g
+
+/-- The complement table of grade `g` in `n` dimensions (cached up to `cacheDim`). -/
+@[inline] def complementTableC (n g : Nat) : Array (Nat × Bool) :=
+  if n ≤ cacheDim && g ≤ n then (complementTables[n]![g]!).get else complementTable n g
+
+/-- The right complement of raw grade-`g` storage in `n` dimensions, by direct
 negation as Julia's generated complement does (so signed zeros survive:
 `!(0.0 e₁₂) = -0.0 e₃` where the sign is negative). -/
-def complementG {n g : Nat} (a : GVec α n g) : GVec α n (n - g) :=
-  let tab := complementTable n g
-  Values.ofFn fun j =>
-    let (src, neg) := tab[j.1]!
-    let x := getD a src
-    if neg then -x else x
+@[inline] def complementP (n g : Nat) (a : Packed.Arr α) : Packed.Arr α :=
+  let tab := complementTableC n g
+  Mat.pushLoop (fun j =>
+    let (src, neg) := tab[j]!
+    let x := Mat.rd a src
+    if neg then -x else x) tab.size 0 (Packed.mkEmpty tab.size)
+
+/-- The right complement `!a` of a grade-`g` vector (metric-free). -/
+@[inline] def complementG {n g : Nat} (a : GVec α n g) : GVec α n (n - g) :=
+  Mat.finish (complementP n g a.data)
+
+/-- Negate raw storage entrywise. -/
+@[inline] def negP (a : Packed.Arr α) : Packed.Arr α :=
+  Mat.pushLoop (fun i => -Mat.rd a i) (Packed.size a) 0 (Packed.mkEmpty (Packed.size a))
+
+/-- Scale raw storage entrywise (`x * s`). -/
+@[inline] def scaleP (a : Packed.Arr α) (s : α) : Packed.Arr α :=
+  Mat.pushLoop (fun i => Mat.rd a i * s) (Packed.size a) 0 (Packed.mkEmpty (Packed.size a))
+
+/-- Raw storage defaults to empty (for `xs[i]!` on arrays of raw columns; scoped:
+`open Grassmann.Forms`). -/
+scoped instance instInhabitedPackedArr : Inhabited (Packed.Arr α) := ⟨Packed.mkEmpty 0⟩
 
 /-- The scalar `1` as a grade-0 vector. -/
 @[inline] def oneG (n : Nat) : GVec α n 0 := Values.replicate Coeff.one
 
 /-- Wedge the vectors `cs` onto `acc`, left to right: `((acc ∧ c₁) ∧ c₂) ∧ …`. -/
-def wedgeFold {n : Nat} : (g : Nat) → GVec α n g → (cs : List (GVec α n 1)) → GVec α n (g + cs.length)
+@[specialize] def wedgeFold {n : Nat} : (g : Nat) → GVec α n g → (cs : List (GVec α n 1)) → GVec α n (g + cs.length)
   | _, acc, [] => acc
   | g, acc, c :: cs => (wedgeFold (g + 1) (wedgeGH acc c) cs).cast (by
       rw [List.length_cons, Nat.add_assoc, Nat.add_comm 1 cs.length])
@@ -102,6 +166,27 @@ instance : SignBit Float := ⟨JuliaBase.F64.signbit⟩
 instance : SignBit Int := ⟨fun x => x < 0⟩
 instance : SignBit Rat := ⟨fun x => x < 0⟩
 
+/-! ### Straight-line forms of the plans in 2 and 3 dimensions
+
+The wedge plans evaluated symbolically: every output starts from `0` and adds or
+subtracts the products in plan order (Julia's order), so these are bit-identical to
+the plan interpreter (and to Julia), signed zeros included. -/
+
+/-- `u ∧ v` of two vectors of the plane: `(0 + u₁v₂) − u₂v₁`. -/
+@[inline] def wedge2 (u1 u2 v1 v2 : α) : α := (Coeff.zero + u1 * v2) - u2 * v1
+
+/-- `u ∧ v` of two vectors of space: `(B₁₂, B₁₃, B₂₃)`. -/
+@[inline] def wedge3 (u1 u2 u3 v1 v2 v3 : α) : α × α × α :=
+  ((Coeff.zero + u1 * v2) - u2 * v1, (Coeff.zero + u1 * v3) - u3 * v1, (Coeff.zero + u2 * v3) - u3 * v2)
+
+/-- `B ∧ w` of a bivector and a vector of space (the top coefficient). -/
+@[inline] def wedge21 (b12 b13 b23 w1 w2 w3 : α) : α :=
+  ((Coeff.zero + b12 * w3) - b13 * w2) + b23 * w1
+
+/-- `u ∧ B` of a vector and a bivector of space (the top coefficient). -/
+@[inline] def wedge12 (u1 u2 u3 b12 b13 b23 : α) : α :=
+  ((Coeff.zero + u1 * b23) - u2 * b13) + u3 * b12
+
 end Forms
 
 namespace TensorOperator
@@ -111,13 +196,13 @@ variable {V W : TensorBundle} {α : Type} [Coeff α]
 open Forms
 
 /-- The columns of a grade-1 operator as grade-1 vectors of the codomain. -/
-def cols1 (T : Simplex V W α) : List (GVec α W.n 1) :=
+@[specialize] def cols1 (T : Simplex V W α) : List (GVec α W.n 1) :=
   (List.finRange ((Layout.chain 1).size V.n)).map fun j => T.mat.col j
 
 /-- The `g`-th compound `Λᵍ T` (Julia `compound(T, g)`, `composite.jl:715-720`,
 `forms.jl:586`): column `I` is the wedge of the columns indexed by the
 `g`-subset `I`, i.e. `(Λᵍ T)[J, I] = det T[J, I]`. `Λ⁰ T` is the `1×1` identity. -/
-def compound (T : Simplex V W α) (g : Nat) : TensorOperator V (.chain g) W (.chain g) α :=
+@[specialize] def compound (T : Simplex V W α) (g : Nat) : TensorOperator V (.chain g) W (.chain g) α :=
   let cs := T.cols1.toArray
   ⟨Mat.ofCols fun j =>
     let I := DirectSum.Bits.indices (Leibniz.indexBasis V.n g)[j.1]!
@@ -126,80 +211,98 @@ def compound (T : Simplex V W α) (g : Nat) : TensorOperator V (.chain g) W (.ch
 /-- Julia `∧(T) = t₁ ∧ … ∧ tₙ` (`algebra.jl:115`, `forms.jl:596`): the wedge of
 all columns, a grade-`n` element of the codomain (the pseudoscalar `det·I` for
 a square operator). -/
-def wedgeAll (T : Simplex V W α) : Chain W V.n α :=
+@[specialize] def wedgeAll (T : Simplex V W α) : Chain W V.n α :=
   ⟨castLen (wedgeList T.cols1)⟩
 
 /-- Julia `∧(T)` with more columns than dimensions (`algebra.jl:115-121`): the
 `1 × C(n,m)` top compound `Λᵐ T` as a grade-`m` chain of the domain (Julia
 `map(Real, compound(t, m))`). -/
-def wedgeAllWide (T : Simplex V W α) : Chain V W.n α :=
+@[specialize] def wedgeAllWide (T : Simplex V W α) : Chain V W.n α :=
   let C := T.compound W.n
   ⟨Values.ofFn fun j => C.entry 0 j.1⟩
 
 /-- Julia `det(T) = !∧(T)` (`composite.jl:952`, `forms.jl:595`) for a square
 grade-1 operator: the scalar coefficient (Julia prints it as the grade-0 chain
 `-3v`). For a non-square operator this is the first coefficient of the wedge. -/
-@[inline] def det (T : Simplex V W α) : α := at0 T.wedgeAll.v
+@[specialize] def det (T : Simplex V W α) : α :=
+  -- raw column-major reads: `(i, j)` at `j·n + i`
+  let a := T.mat.v.data
+  if V.n = 2 ∧ W.n = 2 then wedge2 (Mat.rd a 0) (Mat.rd a 1) (Mat.rd a 2) (Mat.rd a 3)
+  else if V.n = 3 ∧ W.n = 3 then
+    let (b12, b13, b23) := wedge3 (Mat.rd a 0) (Mat.rd a 1) (Mat.rd a 2) (Mat.rd a 3) (Mat.rd a 4) (Mat.rd a 5)
+    wedge21 b12 b13 b23 (Mat.rd a 6) (Mat.rd a 7) (Mat.rd a 8)
+  else at0 T.wedgeAll.v
 
-/-- The wedge `a ∧ b` of raw coefficient arrays of grades `g`, `h` in `n` dimensions. -/
-def wedgeRaw (n g h : Nat) (a b : Array α) : Array α :=
-  (wedgeGH (n := n) (g := g) (h := h) (Values.ofFn fun i => a[i.1]?.getD Coeff.zero)
-    (Values.ofFn fun i => b[i.1]?.getD Coeff.zero)).toArray
+/-- The wedge `a ∧ b` of raw coefficient storage of grades `g`, `h` in `n` dimensions. -/
+@[inline] def wedgeRaw (n g h : Nat) (a b : Packed.Arr α) : Packed.Arr α := wedgeP n g h a b
 
-/-- The right complement of a raw grade-`g` coefficient array in `n` dimensions. -/
-def complementRaw (n g : Nat) (a : Array α) : Array α :=
-  (complementG (n := n) (g := g) (Values.ofFn fun i => a[i.1]?.getD Coeff.zero)).toArray
+/-- The right complement of raw grade-`g` storage in `n` dimensions. -/
+@[inline] def complementRaw (n g : Nat) (a : Packed.Arr α) : Packed.Arr α := complementP n g a
+
+/-- Column `j` of an operator as raw storage. -/
+@[inline] def colP {ld lc : Layout} (T : TensorOperator V ld W lc α) (j : Nat) : Packed.Arr α :=
+  let r := lc.size W.n
+  let a := T.mat.v.data
+  Mat.pushLoop (fun i => Mat.rd a (j * r + i)) r 0 (Packed.mkEmpty r)
 
 /-- Julia's `Cramer` symbols (`composite.jl:707-712`): the prefix wedges
 `x₁ = t₁`, `xᵢ₊₁ = xᵢ ∧ tᵢ₊₁` and the suffix wedges `y₁ = tₘ`,
-`yᵢ₊₁ = tₘ₋ᵢ ∧ yᵢ`, as raw coefficient arrays of grades `1 … m` (entry `k-1` is
-grade `k`), built in Julia's association order. -/
-def prefixSuffix (T : Simplex V W α) : Array (Array α) × Array (Array α) :=
+`yᵢ₊₁ = tₘ₋ᵢ ∧ yᵢ`, as raw storage of grades `1 … m` (entry `k-1` is grade `k`),
+built in Julia's association order. -/
+@[specialize] def prefixSuffix (T : Simplex V W α) : Array (Packed.Arr α) × Array (Packed.Arr α) :=
   let n := W.n
-  let cs := (T.cols1.map (·.toArray)).toArray
-  let m := cs.size
+  let m := (Layout.chain 1).size V.n
+  let cs := (Array.range m).map T.colP
   if m = 0 then (#[], #[])
   else
-    let xs := (List.range (m - 1)).foldl (fun (acc : Array (Array α)) k =>
+    let xs := (List.range (m - 1)).foldl (fun (acc : Array (Packed.Arr α)) k =>
       acc.push (wedgeRaw n (k + 1) 1 acc[k]! cs[k + 1]!)) #[cs[0]!]
-    let ys := (List.range (m - 1)).foldl (fun (acc : Array (Array α)) k =>
+    let ys := (List.range (m - 1)).foldl (fun (acc : Array (Packed.Arr α)) k =>
       acc.push (wedgeRaw n 1 (k + 1) cs[m - 2 - k]! acc[k]!)) #[cs[m - 1]!]
     (xs, ys)
 
 /-- Julia's Cramer numerators `val` (`_inv`, `composite.jl:749-759`) for a
 square operator with `m = n` columns: the `(n-1)`-blades whose complements are
 the adjugate rows, with Julia's sign pattern. -/
-def cramerVals (T : Simplex V W α) : Array (Array α) :=
+@[specialize] def cramerVals (_T : Simplex V W α) (xs ys : Array (Packed.Arr α)) : Array (Packed.Arr α) :=
   let n := W.n
   let m := V.n
-  let (xs, ys) := T.prefixSuffix
   let m1 := m - 1
-  if m1 = 0 then #[#[Coeff.one]]
+  if m1 = 0 then #[Packed.push (Packed.mkEmpty 1) Coeff.one]
   else
     let x := fun (i : Nat) => xs[i - 1]!   -- grade i
     let y := fun (i : Nat) => ys[i - 1]!   -- grade i
     let mid := fun (i : Nat) => wedgeRaw n (m1 - i) i (y (m1 - i)) (x i)
-    let neg := fun (a : Array α) => a.map (- ·)
     if m1 % 2 == 0 then
       #[y m1] ++ ((List.range (m1 - 1)).map fun k => mid (k + 1)).toArray ++ #[x m1]
     else if m ≠ n then
       #[y m1] ++ ((List.range (m1 - 1)).map fun k =>
-        let i := k + 1; if i % 2 == 0 then mid i else neg (mid i)).toArray ++ #[neg (x m1)]
+        let i := k + 1; if i % 2 == 0 then mid i else negP (mid i)).toArray ++ #[negP (x m1)]
     else
-      #[neg (y m1)] ++ ((List.range (m1 - 1)).map fun k =>
-        let i := k + 1; if i % 2 == 1 then mid i else neg (mid i)).toArray ++ #[x m1]
+      #[negP (y m1)] ++ ((List.range (m1 - 1)).map fun k =>
+        let i := k + 1; if i % 2 == 1 then mid i else negP (mid i)).toArray ++ #[x m1]
+
+/-- The adjugate rows `!(valᵢ)` of a square operator (vectors of the codomain),
+from the Cramer symbols. -/
+@[specialize] def adjugateRowsOf (T : Simplex V W α) (xs ys : Array (Packed.Arr α)) : Array (Packed.Arr α) :=
+  if V.n = 1 then #[Packed.push (Packed.mkEmpty 1) Coeff.one]
+  else (T.cramerVals xs ys).map (complementRaw W.n (W.n - 1))
 
 /-- The adjugate rows `!(valᵢ)` of a square operator (vectors of the codomain). -/
-def adjugateRows (T : Simplex V W α) : Array (Array α) :=
-  if V.n = 1 then #[#[Coeff.one]]
-  else (T.cramerVals).map (complementRaw W.n (W.n - 1))
+@[specialize] def adjugateRows (T : Simplex V W α) : Array (Packed.Arr α) :=
+  let (xs, ys) := T.prefixSuffix
+  T.adjugateRowsOf xs ys
+
+/-- The operator with the given rows. -/
+@[inline] def ofRowsP {V' W' : TensorBundle} (rs : Array (Packed.Arr α)) : Simplex V' W' α :=
+  TensorOperator.ofFn fun i j => match rs[i.1]? with
+    | some r => Mat.rd r j.1
+    | none => Coeff.zero
 
 /-- Julia `adjugate(T)` of a square grade-1 operator (`composite.jl:796-803`,
 `forms.jl:607-609`): the classical adjugate, `adj(T) T = det(T) I`, exact.
 Its row `i` is `!(yₙ₋ᵢ ∧ xᵢ₋₁)` (with signs). -/
-def adjugate (T : Simplex V W α) : Simplex W V α :=
-  let rs := T.adjugateRows
-  TensorOperator.ofFn fun i j => (rs[i.1]?.bind (·[j.1]?)).getD Coeff.zero
+@[specialize] def adjugate (T : Simplex V W α) : Simplex W V α := ofRowsP T.adjugateRows
 
 /-- Julia `cofactor(T) = transpose(adjugate(T))` (`composite.jl:805-812`). -/
 @[inline] def cofactor (T : Simplex V W α) : Simplex V W α := T.adjugate.transpose
@@ -207,25 +310,63 @@ def adjugate (T : Simplex V W α) : Simplex W V α :=
 /-- Julia's Cramer determinant `dt = t₁ ∧ yₙ₋₁` (`_inv`, `composite.jl:758`): the
 top coefficient of `t₁ ∧ (t₂ ∧ … ∧ tₙ)` (associated as Julia's suffix wedges,
 so it can differ in the last bit from `det`, the left fold). -/
-def cramerDet (T : Simplex V W α) : α :=
-  let (xs, ys) := T.prefixSuffix
+@[specialize] def cramerDetOf (T : Simplex V W α) (xs ys : Array (Packed.Arr α)) : α :=
   let m := V.n
   if m ≤ 1 then T.det
-  else ((wedgeRaw W.n 1 (m - 1) xs[0]! ys[m - 2]!)[0]?).getD Coeff.zero
+  else Mat.rd (wedgeRaw W.n 1 (m - 1) xs[0]! ys[m - 2]!) 0
+
+/-- Julia's Cramer determinant `dt = t₁ ∧ yₙ₋₁` (`_inv`, `composite.jl:758`). -/
+@[specialize] def cramerDet (T : Simplex V W α) : α :=
+  let (xs, ys) := T.prefixSuffix
+  T.cramerDetOf xs ys
 
 /-- The inverse of a square grade-1 operator by Cramer's rule (Julia `inv`,
 `composite.jl:761-772`): the adjugate times `1/dt`, Julia's `dt = t₁ ∧ yₙ₋₁`
 (Julia computes `!(valᵢ / dt)`, and a tensor divided by a number is multiplied
 by its reciprocal, `algebra.jl:704-706`). For one column, `c · (1/c²)` (Julia
 `inv(t[1]) = ~t/abs2(t)` as a row). -/
-def invSquare [Div α] (T : Simplex V W α) : Simplex W V α :=
+@[specialize] def invSquare [Div α] (T : Simplex V W α) : Simplex W V α :=
   if V.n = 1 then
     let c := T.entry 0 0
     let r := Coeff.one / (c * c)
     TensorOperator.ofFn fun _ _ => c * r
+  else if V.n = 2 ∧ W.n = 2 then
+    -- val = (−t₂, t₁), dt = t₁ ∧ t₂; rows `!(valᵢ · (1/dt))`, `!e₁ = e₂`, `!e₂ = −e₁`
+    let raw := T.mat.v.data
+    let e := fun (k : Nat) => Mat.rd raw k
+    let (a, c, b, d) := (e 0, e 1, e 2, e 3)
+    let r := Coeff.one / wedge2 a c b d
+    let (p1, p2) := ((-b) * r, (-d) * r)
+    let (q1, q2) := (a * r, c * r)
+    -- column-major `[[-p₂, p₁], [-q₂, q₁]]`
+    ⟨⟨Mat.finish (Packed.push (Packed.push (Packed.push (Packed.push (Packed.mkEmpty 4) (-p2)) (-q2)) p1) q1)⟩⟩
+  else if V.n = 3 ∧ W.n = 3 then
+    -- val = (y₂, y₁ ∧ x₁, x₂) = (t₂∧t₃, t₃∧t₁, t₁∧t₂), dt = t₁ ∧ y₂; rows `!(valᵢ · (1/dt))`,
+    -- `!e₂₃ = e₁`, `!e₁₃ = −e₂`, `!e₁₂ = e₃`
+    let raw := T.mat.v.data
+    let e := fun (k : Nat) => Mat.rd raw k
+    let (a1, a2, a3) := (e 0, e 1, e 2)
+    let (b1, b2, b3) := (e 3, e 4, e 5)
+    let (c1, c2, c3) := (e 6, e 7, e 8)
+    let (y12, y13, y23) := wedge3 b1 b2 b3 c1 c2 c3
+    let r := Coeff.one / wedge12 a1 a2 a3 y12 y13 y23
+    let (m12, m13, m23) := wedge3 c1 c2 c3 a1 a2 a3
+    let (x12, x13, x23) := wedge3 a1 a2 a3 b1 b2 b3
+    let row := fun (v12 v13 v23 : α) => (v23 * r, -(v13 * r), v12 * r)
+    let r1 := row y12 y13 y23
+    let r2 := row m12 m13 m23
+    let r3 := row x12 x13 x23
+    -- rows r₁, r₂, r₃ stored column-major
+    let push3 := fun (out : Packed.Arr α) (x y z : α) => Packed.push (Packed.push (Packed.push out x) y) z
+    let out := push3 (Packed.mkEmpty 9) r1.1 r2.1 r3.1
+    let out := push3 out r1.2.1 r2.2.1 r3.2.1
+    let out := push3 out r1.2.2 r2.2.2 r3.2.2
+    ⟨⟨Mat.finish out⟩⟩
   else
-    let r := Coeff.one / T.cramerDet
-    T.adjugate.map (· * r)
+    -- one pass over the Cramer symbols for both the adjugate and `dt`
+    let (xs, ys) := T.prefixSuffix
+    let r := Coeff.one / T.cramerDetOf xs ys
+    ofRowsP ((T.adjugateRowsOf xs ys).map (scaleP · r))
 
 /-- Checked write of raw packed storage (a no-op out of range). -/
 @[inline] def wr (a : Packed.Arr α) (i : Nat) (x : α) : Packed.Arr α :=
@@ -234,7 +375,7 @@ def invSquare [Div α] (T : Simplex V W α) : Simplex W V α :=
 /-- Gauss-Jordan elimination with partial pivoting (by `norm`) on the augmented
 pair `(a | b)` of column-major `n × n` buffers, from column `k` on: at the end
 `b` holds `A⁻¹`. Tail-recursive, in place on unshared buffers. -/
-def gaussJordanLoop [Div α] (norm : α → Float) (n : Nat) (a b : Packed.Arr α) (k : Nat) :
+@[specialize] def gaussJordanLoop [Div α] (norm : α → Float) (n : Nat) (a b : Packed.Arr α) (k : Nat) :
     Packed.Arr α × Packed.Arr α :=
   if k < n then
     let idx := fun (i j : Nat) => j * n + i
@@ -270,7 +411,7 @@ termination_by n - k
 /-- The inverse of a square matrix by Gauss-Jordan elimination with partial
 pivoting (for the layouts Julia's Cramer inverse does not cover, and the
 matrix functions). -/
-def gaussJordan {n : Nat} [Div α] (norm : α → Float) (A : Mat n n α) : Mat n n α :=
+@[specialize] def gaussJordan {n : Nat} [Div α] (norm : α → Float) (A : Mat n n α) : Mat n n α :=
   let (_, b) := gaussJordanLoop norm n A.v.data (Mat.identity : Mat n n α).v.data 0
   ⟨Mat.finish b⟩
 
@@ -278,7 +419,7 @@ def gaussJordan {n : Nat} [Div α] (norm : α → Float) (A : Mat n n α) : Mat 
 `forms.jl:607`): Cramer's rule when square; otherwise the Moore-Penrose
 pseudo-inverse, `(TᵀT)⁻¹Tᵀ` with fewer columns than dimensions and `Tᵀ(TTᵀ)⁻¹`
 with more. -/
-def inv [Div α] (T : Simplex V W α) : Simplex W V α :=
+@[specialize] def inv [Div α] (T : Simplex V W α) : Simplex W V α :=
   if V.n = W.n then T.invSquare
   else if V.n < W.n then
     let tt : Simplex W V α := T.transpose
@@ -302,16 +443,16 @@ the determinant as Julia's `!(t₁ ∧ yₙ₋₁)`. -/
 /-- Julia `value(T) \ v` (`composite.jl:722-732`): solve `T c = v` by Cramer's rule
 (numerators `x_{i-1} ∧ v ∧ y_{n-i}` over `det`) for a square operator; the
 least-norm / least-squares solution `pinv(T) v` otherwise. -/
-def solve [Div α] (T : Simplex V W α) (v : Chain W 1 α) : Chain V 1 α :=
+@[specialize] def solve [Div α] (T : Simplex V W α) (v : Chain W 1 α) : Chain V 1 α :=
   if V.n = W.n ∧ V.n ≥ 2 then
     let n := W.n
     let (xs, ys) := T.prefixSuffix
     let m := V.n
     let N := m - 1
-    let vv := v.v.toArray
+    let vv := v.v.data
     let x := fun (i : Nat) => xs[i - 1]!
     let y := fun (i : Nat) => ys[i - 1]!
-    let top := fun (a : Array α) => a[0]?.getD Coeff.zero
+    let top := fun (a : Packed.Arr α) => Mat.rd a 0
     let first := top (wedgeRaw n 1 N vv (y N))
     let mid := (List.range (N - 1)).map fun k =>
       let i := k + 1
@@ -337,7 +478,7 @@ variable {V : TensorBundle} {α : Type} [Coeff α]
 open Forms
 
 /-- `ω ∧ ω ∧ … ∧ ω` (`k` factors, a left fold) of a bivector, grade `2k`. -/
-def wedgePower {n : Nat} (ω : GVec α n 2) : (k : Nat) → GVec α n (2 * k)
+@[specialize] def wedgePower {n : Nat} (ω : GVec α n 2) : (k : Nat) → GVec α n (2 * k)
   | 0 => oneG n
   | 1 => ω
   | k + 2 => (wedgeGH (wedgePower ω (k + 1)) ω).cast (by congr 1)
@@ -346,7 +487,7 @@ def wedgePower {n : Nat} (ω : GVec α n 2) : (k : Nat) → GVec α n (2 * k)
 `!(ω^∧k) / k!` (`!ω` when `k = 1`): the Pfaffian as a grade-0 chain in even
 dimension, a vector in odd dimension (`pfaffian(2v₁₂ + 3v₁₃ + 6v₂₃) = 6v₁ - 3v₂ + 2v₃`).
 The division by `k!` is Julia's tensor division, by the reciprocal. -/
-def pfaffian [Div α] (ω : Chain V 2 α) : Chain V (V.n - 2 * (V.n / 2)) α :=
+@[specialize] def pfaffian [Div α] (ω : Chain V 2 α) : Chain V (V.n - 2 * (V.n / 2)) α :=
   let k := V.n / 2
   let c : GVec α V.n (V.n - 2 * k) := complementG (wedgePower (n := V.n) ω.v k)
   if k ≤ 1 then ⟨c⟩

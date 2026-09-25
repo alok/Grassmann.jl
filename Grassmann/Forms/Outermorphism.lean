@@ -70,13 +70,13 @@ def layoutGrades (n : Nat) : Layout → List Nat
 
 /-- The grade-`g` block of a coefficient vector stored in layout `l` (the grades
 of a layout are stored grade-major, lexicographic within a grade). -/
-def gradeBlock {α : Type} [Coeff α] (n : Nat) (l : Layout) (x : Values α (l.size n)) (g : Nat) :
+@[specialize] def gradeBlock {α : Type} [Coeff α] (n : Nat) (l : Layout) (x : Values α (l.size n)) (g : Nat) :
     Values α (Leibniz.binomial n g) :=
   let off := ((layoutGrades n l).takeWhile (· != g)).foldl (fun acc k => acc + Leibniz.choose n k) 0
   Values.ofFn fun i => getD x (off + i.1)
 
 /-- Concatenate per-grade blocks into layout `l` (grades in storage order). -/
-def ofGradeBlocks {α : Type} [Coeff α] (n : Nat) (l : Layout) (f : (g : Nat) → Values α (Leibniz.binomial n g)) :
+@[specialize] def ofGradeBlocks {α : Type} [Coeff α] (n : Nat) (l : Layout) (f : (g : Nat) → Values α (Leibniz.binomial n g)) :
     Values α (l.size n) :=
   let arr := (layoutGrades n l).foldl (fun (acc : Array α) g => acc ++ (f g).toArray) #[]
   Values.ofFn fun i => arr[i.1]?.getD Coeff.zero
@@ -98,14 +98,14 @@ variable {V W U : TensorBundle} {α : Type} [Coeff α]
 
 /-- The `g`-th compound (Julia `O[g]`, `compound(O, g)`, `forms.jl:740, 762`);
 the `1 × 1` identity for `g = 0` and zero beyond `min(n, m)`. -/
-def block (O : Outermorphism V W α) (g : Nat) : TensorOperator V (.chain g) W (.chain g) α :=
+@[specialize] def block (O : Outermorphism V W α) (g : Nat) : TensorOperator V (.chain g) W (.chain g) α :=
   if g = 0 then TensorOperator.identity
   else match O.blocks[g - 1]? with
     | some b => ⟨b.toMat _ _⟩
     | none => TensorOperator.zero
 
 /-- Julia `outermorphism(F)` of a grade-1 map (`forms.jl:719-721`): its compounds. -/
-def ofSimplex (F : Simplex V W α) : Outermorphism V W α :=
+@[specialize] def ofSimplex (F : Simplex V W α) : Outermorphism V W α :=
   ⟨((List.range (min V.n W.n)).map fun k => DMat.ofMat (F.compound (k + 1)).mat).toArray⟩
 
 /-- The grade-1 map (Julia `O.v[1]`). -/
@@ -114,15 +114,32 @@ def ofSimplex (F : Simplex V W α) : Outermorphism V W α :=
 /-- The image of a coefficient vector stored in layout `l` (Julia `contraction(O, x)`,
 `forms.jl:1050-1073`): the scalar part is kept, grade `g ≤ k` goes through
 `Λᵍ F`, higher grades of the codomain are zero. -/
-def applyValues (O : Outermorphism V W α) (l : Layout) (x : Values α (l.size V.n)) :
+@[specialize] def applyValues (O : Outermorphism V W α) (l : Layout) (x : Values α (l.size V.n)) :
     Values α (l.size W.n) :=
   let k := O.depth
-  let domGrades := Forms.layoutGrades V.n l
-  Forms.ofGradeBlocks W.n l fun g =>
-    if g = 0 then Forms.castLen (Forms.gradeBlock V.n l x 0)
-    else if g ≤ k && domGrades.contains g then
-      (O.block g).applyValues (Forms.gradeBlock V.n l x g)
-    else zeroValues _
+  let n := V.n
+  let m := W.n
+  let xd := x.data
+  -- the codomain grades in storage order; the domain block of grade `g` starts at
+  -- `off` = the sizes of the domain layout's lower grades
+  let grades := Forms.layoutGrades m l
+  let domGrades := Forms.layoutGrades n l
+  let res := grades.foldl (fun (acc : Packed.Arr α × Nat) g =>
+    let (out, off) := acc
+    let inDom := domGrades.contains g
+    let off' := if inDom then off + Leibniz.choose n g else off
+    let rg := Leibniz.choose m g
+    if g = 0 then (Packed.push out (Mat.rd xd off), off')
+    else if g ≤ k && inDom then
+      match O.blocks[g - 1]? with
+      | some b =>
+        let a := b.mat.v.data
+        let r := b.rows
+        let c := b.cols
+        (Mat.pushLoop (fun i => Mat.sdot0 id a xd r 1 c i off) rg 0 out, off')
+      | none => (Mat.pushLoop (fun _ => Coeff.zero) rg 0 out, off')
+    else (Mat.pushLoop (fun _ => Coeff.zero) rg 0 out, off')) (Packed.mkEmpty (l.size m), 0)
+  Mat.finish res.1
 
 /-- Julia `O(x) = O ⋅ x` for any element of the domain algebra (`forms.jl:723,
 1050-1073`): a `Chain` of grade `g` goes to a `Chain` of grade `g`, a `Spinor`
@@ -133,16 +150,16 @@ to a `Spinor`, a `CoSpinor` to a `CoSpinor`, a `Multivector` to a `Multivector`.
 
 /-- Julia `O ⋅ Couple` (`forms.jl:1054`): the sum of the images of its parts,
 a `Multivector` of the codomain. -/
-def applyCouple (O : Outermorphism V W α) (z : Couple V α) : Multivector W α :=
+@[specialize] def applyCouple (O : Outermorphism V W α) (z : Couple V α) : Multivector W α :=
   ⟨O.applyValues .full (toMultivector z).v⟩
 
 /-- Julia `O ⋅ PseudoCouple` (`forms.jl:1055`). -/
-def applyPseudoCouple (O : Outermorphism V W α) (z : PseudoCouple V α) : Multivector W α :=
+@[specialize] def applyPseudoCouple (O : Outermorphism V W α) (z : PseudoCouple V α) : Multivector W α :=
   ⟨O.applyValues .full (toMultivector z).v⟩
 
 /-- The full `2ᵐ × 2ⁿ` block-diagonal matrix (Julia `TensorOperator(O)`,
 `forms.jl:765-774`): `1` at the scalar, then every compound on its grade. -/
-def toOperator (O : Outermorphism V W α) : TensorOperator V .full W .full α :=
+@[specialize] def toOperator (O : Outermorphism V W α) : TensorOperator V .full W .full α :=
   TensorOperator.ofFn fun i j =>
     let bi := (Leibniz.indexBasisAll W.n)[i.1]!
     let bj := (Leibniz.indexBasisAll V.n)[j.1]!
@@ -154,7 +171,7 @@ def toOperator (O : Outermorphism V W α) : TensorOperator V .full W .full α :=
 
 /-- Julia `tr(O) = 1 + Σ_g tr(Λᵍ F)` (`forms.jl:744`); for a square `F` this
 is `det(I + F)`. -/
-def tr (O : Outermorphism V W α) : α :=
+@[specialize] def tr (O : Outermorphism V W α) : α :=
   (List.range O.blocks.size).foldl (fun acc k => acc + (O.block (k + 1)).tr) Coeff.one
 
 /-- Julia `scalar(O) = tr(O) / 2ⁿ` (`forms.jl:743`). -/
@@ -164,7 +181,7 @@ def tr (O : Outermorphism V W α) : α :=
 `Λᵏ F`, `k = min(n, m)`; for a square map the pseudoscalar `det(F)·I` of the
 codomain. (For `n > m` Julia instead collects the `C(n,m)` scalars of the
 `1 × C(n,m)` top compound.) -/
-def wedgeAll (O : Outermorphism V W α) : Chain W (min V.n W.n) α :=
+@[specialize] def wedgeAll (O : Outermorphism V W α) : Chain W (min V.n W.n) α :=
   let B := O.block (min V.n W.n)
   ⟨Values.ofFn fun i => B.entry i.1 0⟩
 
@@ -181,7 +198,7 @@ def wedgeAll (O : Outermorphism V W α) : Chain W (min V.n W.n) α :=
 
 /-- The transpose `W → V` blockwise (Julia `transpose(O)`, `forms.jl:742`, a
 `MethodError` there). -/
-def transpose (O : Outermorphism V W α) : Outermorphism W V α :=
+@[specialize] def transpose (O : Outermorphism V W α) : Outermorphism W V α :=
   ⟨O.blocks.map fun b => DMat.ofMat b.mat.transpose⟩
 
 /-- The zero outermorphism (Julia `zero(O)`: zero compounds, `forms.jl:757-760`). -/

@@ -63,6 +63,11 @@ the sizes are right, so the branch is perfectly predicted). -/
 @[inline] def rd (a : Packed.Arr α) (i : Nat) : α :=
   if h : i < Packed.size a then Packed.get a ⟨i, h⟩ else Coeff.zero
 
+/-- Package raw storage of the right size (the loops push exactly `k` entries;
+the fallback is unreachable). -/
+@[inline] def finish {k : Nat} (res : Packed.Arr α) : Values α k :=
+  if h : Packed.size res = k then ⟨res, h⟩ else zeroValues k
+
 /-- Entry `(i, j)` (0-based; Julia `A[i+1, j+1]`). -/
 @[inline] def get (A : Mat r c α) (i : Fin r) (j : Fin c) : α :=
   A.v.get ⟨j.1 * r + i.1, colMajor_lt i.2 j.2⟩
@@ -71,10 +76,20 @@ the sizes are right, so the branch is perfectly predicted). -/
 @[inline] def getD (A : Mat r c α) (i j : Nat) : α :=
   if i < r ∧ j < c then rd A.v.data (j * r + i) else Coeff.zero
 
+/-- Push the entries `i, …, r-1` of column `j` (`g i j`) onto `out`. -/
+@[specialize] def fillCol (g : Nat → Nat → α) (r j : Nat) (i : Nat) (out : Packed.Arr α) : Packed.Arr α :=
+  if i < r then fillCol g r j (i + 1) (Packed.push out (g i j)) else out
+termination_by r - i
+
+/-- Push the columns `j, …, c-1` (column-major) onto `out`. -/
+@[specialize] def fillCols (g : Nat → Nat → α) (r c : Nat) (j : Nat) (out : Packed.Arr α) : Packed.Arr α :=
+  if j < c then fillCols g r c (j + 1) (fillCol g r j 0 out) else out
+termination_by c - j
+
 /-- Build from the entries (Julia `[f(i,j) for i=1:r, j=1:c]`), column by column. -/
 @[inline] def ofFn (f : Fin r → Fin c → α) : Mat r c α :=
-  ⟨Values.ofFn fun t =>
-    f ⟨t.1 % r, Nat.mod_lt _ (pos_of_lt_mul t.2)⟩ ⟨t.1 / r, div_lt_of_lt_mul t.2⟩⟩
+  ⟨finish (fillCols (fun i j => if h : i < r ∧ j < c then f ⟨i, h.1⟩ ⟨j, h.2⟩ else Coeff.zero) r c 0
+    (Packed.mkEmpty (r * c)))⟩
 
 /-- The zero matrix. -/
 @[inline] def zero : Mat r c α := ⟨zeroValues _⟩
@@ -86,8 +101,18 @@ the sizes are right, so the branch is perfectly predicted). -/
 @[inline] def diagonal {n : Nat} (d : Values α n) : Mat n n α :=
   ofFn fun i j => if i.1 = j.1 then d.get i else Coeff.zero
 
-/-- Build from columns given as coefficient vectors (Julia `hcat`). -/
-@[inline] def ofCols (f : Fin c → Values α r) : Mat r c α := ofFn fun i j => (f j).get i
+/-- Push the columns `j, …, c-1`, each computed once by `f`. -/
+@[specialize] def colsLoop (f : Fin c → Values α r) (j : Nat) (out : Packed.Arr α) : Packed.Arr α :=
+  if h : j < c then
+    let col := (f ⟨j, h⟩).data
+    colsLoop f (j + 1) (fillCol (fun i _ => rd col i) r j 0 out)
+  else out
+termination_by c - j
+
+/-- Build from columns given as coefficient vectors (Julia `hcat`); each column is
+computed once. -/
+@[inline] def ofCols (f : Fin c → Values α r) : Mat r c α :=
+  ⟨finish (colsLoop f 0 (Packed.mkEmpty (r * c)))⟩
 
 /-- Build from a list of rows (Julia's row-wise matrix literal `[1 2; 3 4]`), if
 the shape is right. -/
@@ -154,11 +179,6 @@ product, then the others added left to right (Julia `+(x₁, x₂, …)`); zero 
   | 0 => Coeff.zero
   | n + 1 => sdot f a b sa sb n (pa + sa) (pb + sb) (f (rd a pa) * rd b pb)
 
-/-- Package raw storage of the right size (the loops push exactly `k` entries;
-the fallback is unreachable). -/
-@[inline] def finish {k : Nat} (res : Packed.Arr α) : Values α k :=
-  if h : Packed.size res = k then ⟨res, h⟩ else zeroValues k
-
 /-- Push `g i` for `i = i₀, …, n-1` onto `out`. -/
 @[specialize] def pushLoop (g : Nat → α) (n : Nat) (i : Nat) (out : Packed.Arr α) : Packed.Arr α :=
   if i < n then pushLoop g n (i + 1) (Packed.push out (g i)) else out
@@ -184,11 +204,12 @@ termination_by n - i
 @[inline] def mul (A : Mat r c α) (B : Mat c k α) : Mat r k α :=
   let a := A.v.data
   let b := B.v.data
-  ⟨finish (pushLoop (fun t => sdot0 id a b r 1 c (t % r) ((t / r) * c)) (r * k) 0
-    (Packed.mkEmpty (r * k)))⟩
+  ⟨finish (fillCols (fun i j => sdot0 id a b r 1 c i (j * c)) r k 0 (Packed.mkEmpty (r * k)))⟩
 
 /-- The transpose (Julia `_transpose`, `forms.jl:305-308`). -/
-@[inline] def transpose (A : Mat r c α) : Mat c r α := ofFn fun i j => A.get j i
+@[inline] def transpose (A : Mat r c α) : Mat c r α :=
+  let a := A.v.data
+  ⟨finish (fillCols (fun i j => rd a (i * r + j)) c r 0 (Packed.mkEmpty (r * c)))⟩
 
 /-- The sum of the diagonal `Σ_{i<min(r,c)} A[i,i]`, a left fold from the first
 entry (Julia `tr`, `forms.jl:314-316`: `sum(Values(m[1][1], …))`). -/
@@ -227,17 +248,6 @@ def embed {R C : Nat} (A : Mat r c α) (ro co : Nat) (out : Mat R C α) : Mat R 
   Mat.ofFn fun i j =>
     if ro ≤ i.1 ∧ i.1 < ro + r ∧ co ≤ j.1 ∧ j.1 < co + c then A.getD (i.1 - ro) (j.1 - co)
     else out.get i j
-
-/-! ## Lemmas -/
-
-@[simp] theorem get_ofFn (f : Fin r → Fin c → α) (i : Fin r) (j : Fin c) :
-    (ofFn f).get i j = f i j := by
-  simp only [get, ofFn, Values.get_ofFn]
-  have hr : 0 < r := Nat.lt_of_le_of_lt (Nat.zero_le _) i.2
-  congr 1
-  · ext; simp [Nat.mod_eq_of_lt i.2]
-  · ext; simp
-    rw [Nat.add_comm, Nat.add_mul_div_right _ _ hr, Nat.div_eq_of_lt i.2, Nat.zero_add]
 
 end Mat
 

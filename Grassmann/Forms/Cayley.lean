@@ -29,14 +29,14 @@ variable {V : TensorBundle} {α : Type} [Coeff α]
 
 /-- Julia `operator(fun, V, G)` (`forms.jl:1198-1201`): the matrix of a linear map
 of grade-`G` chains, column `j` = `f(eⱼ)`. -/
-def TensorOperator.ofLinear {W : TensorBundle} {H G : Nat} (f : Chain V G α → Chain W H α) :
+@[specialize] def TensorOperator.ofLinear {W : TensorBundle} {H G : Nat} (f : Chain V G α → Chain W H α) :
     TensorOperator V (.chain G) W (.chain H) α :=
   ⟨Mat.ofCols fun j => (f (Chain.ofFn fun i => if i.1 = j.1 then Coeff.one else Coeff.zero)).v⟩
 
 /-- Julia `operator(t, G)` (`forms.jl:1186-1188`): the matrix of `x ↦ x ⊘ t` on
 grade `G`, column `j` = `eⱼ ⊘ t = (~t) ⟑ eⱼ ⟑ involute(t)` projected on grade `G`
 (for a versor `t` the sandwich preserves the grade). -/
-def operator {X : Type} [Kernels V] [DenseLayout X V α] (t : X) (G : Nat) : Endomorphism V (.chain G) α :=
+@[specialize] def operator {X : Type} [Kernels V] [DenseLayout X V α] (t : X) (G : Nat) : Endomorphism V (.chain G) α :=
   let r := DenseLayout.values t
   ⟨Mat.ofCols fun j =>
     sandwichCore (layoutOf X) (.chain G) .full (.chain G) none r
@@ -50,7 +50,7 @@ def operatorDiag {X : Type} [Kernels V] [DenseLayout X V α] (t : X) (G : Nat) :
 /-- Julia `gradedoperator(t)` / `outermorphism(t)` of an element
 (`forms.jl:1190-1196`): the sandwich matrices of every grade `1 … n` as an
 `Outermorphism` (each grade computed, not the compounds of the grade-1 one). -/
-def gradedoperator {X : Type} [Kernels V] [DenseLayout X V α] (t : X) : Outermorphism V V α :=
+@[specialize] def gradedoperator {X : Type} [Kernels V] [DenseLayout X V α] (t : X) : Outermorphism V V α :=
   ⟨((List.range V.n).map fun k => DMat.ofMat (operator t (k + 1)).mat).toArray⟩
 
 /-! ## Metric tensors -/
@@ -58,7 +58,7 @@ def gradedoperator {X : Type} [Kernels V] [DenseLayout X V α] (t : X) : Outermo
 /-- Julia `metricdyad(V)` / `metrictensor(V)` (`forms.jl:1582-1593`): the Gram
 matrix `gᵢⱼ = eᵢ ⋅ eⱼ` as a grade-1 endomorphism (`Rat` metric values embedded with
 `Coeff.ofRat`). -/
-def metrictensor (V : TensorBundle) : Endomorphism V (.chain 1) α :=
+@[specialize] def metrictensor (V : TensorBundle) : Endomorphism V (.chain 1) α :=
   let g := V.gram
   TensorOperator.ofFn fun i j => Coeff.ofRat ((g[i.1]?.bind (·[j.1]?)).getD 0)
 

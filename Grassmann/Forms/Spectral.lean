@@ -31,7 +31,7 @@ variable {α : Type} [Coeff α]
 
 /-- Julia's `x^k` for a literal non-negative exponent: `1`, `x`, `x*x`, `x*x*x`
 (`Base.literal_pow`), then binary powering (Julia `power_by_squaring`). -/
-def literalPow (x : α) : Nat → α
+@[specialize] def literalPow (x : α) : Nat → α
   | 0 => Coeff.one
   | 1 => x
   | 2 => x * x
@@ -50,7 +50,7 @@ def literalPow (x : α) : Nat → α
 
 /-- Julia `sylvester(x)` of a vector (`forms.jl:1225-1227`):
 `(Π_{j≠i} nozero(xⱼ - xᵢ))ᵢ`, `j` ascending, a left fold from the first factor. -/
-def sylvesterValues {n : Nat} (x : Values α n) : Values α n :=
+@[specialize] def sylvesterValues {n : Nat} (x : Values α n) : Values α n :=
   Values.ofFn fun i =>
     let fs := (List.range n).filter (· != i.1) |>.map fun j => nozero (getD x j - x.get i)
     match fs with
@@ -63,7 +63,7 @@ def eigmultsValues {n : Nat} [BEq α] (x : Values α n) : Values Int n :=
 
 /-- Julia `vandermonde(x)` (`composite.jl:872-876`, `forms.jl:1528`): the matrix
 `V[i,j] = xᵢ^(j-1)` on `ℝⁿ`. -/
-def vandermonde {n : Nat} (x : Values α n) : Endomorphism (TensorBundle.euclidean n) (.chain 1) α :=
+@[specialize] def vandermonde {n : Nat} (x : Values α n) : Endomorphism (TensorBundle.euclidean n) (.chain 1) α :=
   TensorOperator.ofFn fun i j =>
     literalPow (getD x i.1) j.1
 
@@ -89,7 +89,7 @@ def rowMajor {W : TensorBundle} {ld lc : Layout} (X : TensorOperator V ld W lc F
 
 /-- Julia `characteristic_exact(X)` (`forms.jl:1500-1517`): `cₖ₋₁ = ±tr(Λ^{n-k+1} X)`
 (sign `+` iff `n − k` is odd), exact over `Int`. -/
-def characteristicExact (X : Endomorphism V (.chain 1) α) : Chain V 1 α :=
+@[specialize] def characteristicExact (X : Endomorphism V (.chain 1) α) : Chain V 1 α :=
   let n := V.n
   let out := fun (g : Nat) => (X.compound g).tr
   ⟨Values.ofFn fun k =>
@@ -99,7 +99,7 @@ def characteristicExact (X : Endomorphism V (.chain 1) α) : Chain V 1 α :=
 /-- Julia `characteristic(X)` (`forms.jl:1445-1462`): the monic characteristic
 polynomial's lower coefficients `(c₀, …, c_{n-1})`, by Julia's closed forms for
 `n ≤ 4` and `characteristicExact` beyond. -/
-def characteristic [Div α] (X : Endomorphism V (.chain 1) α) : Chain V 1 α :=
+@[specialize] def characteristic [Div α] (X : Endomorphism V (.chain 1) α) : Chain V 1 α :=
   let n := V.n
   let c := fun (l : List α) => (⟨Values.ofFn fun i => l[i.1]?.getD Coeff.zero⟩ : Chain V 1 α)
   if n = 1 then c [-X.entry 0 0]
@@ -127,7 +127,7 @@ def characteristic [Div α] (X : Endomorphism V (.chain 1) α) : Chain V 1 α :=
 /-- Julia `eigpolys(X, G)` (`forms.jl:1249-1257`): the normalised elementary
 symmetric polynomial `e_G(λ)/C(n,G)` of the eigenvalues, `(-1)^G c_{n-G}/C(n,G)`
 (`det X` for `G = n`, `1` for `G = 0`). -/
-def eigpolysAt [Div α] (X : Endomorphism V (.chain 1) α) (G : Nat) : α :=
+@[specialize] def eigpolysAt [Div α] (X : Endomorphism V (.chain 1) α) (G : Nat) : α :=
   let n := V.n
   if G = 0 then Coeff.one
   else if n = G then X.det
@@ -138,7 +138,7 @@ def eigpolysAt [Div α] (X : Endomorphism V (.chain 1) α) (G : Nat) : α :=
 
 /-- Julia `eigpolys(X)` (`forms.jl:1233-1240`): `(E₁, …, Eₙ)`, `Eₖ = eₖ(λ)/C(n,k)`
 computed from the characteristic polynomial (`n = 2`: from `scalar(X)` and `det X`). -/
-def eigpolys [Div α] (X : Endomorphism V (.chain 1) α) : Chain V 1 α :=
+@[specialize] def eigpolys [Div α] (X : Endomorphism V (.chain 1) α) : Chain V 1 α :=
   let n := V.n
   if n = 2 then ⟨Values.ofFn fun k => X.eigpolysAt (k.1 + 1)⟩
   else
@@ -269,7 +269,7 @@ variable {V : TensorBundle} {α : Type} [Coeff α]
 
 /-- Julia `characteristic_exact(O)` (`forms.jl:1511-1515`): from the traces of the
 stored compounds. -/
-def characteristicExact (O : Outermorphism V V α) : Chain V 1 α :=
+@[specialize] def characteristicExact (O : Outermorphism V V α) : Chain V 1 α :=
   let n := V.n
   ⟨Values.ofFn fun k =>
     let t := (O.block (n - k.1)).tr
@@ -277,7 +277,7 @@ def characteristicExact (O : Outermorphism V V α) : Chain V 1 α :=
 
 /-- Julia `characteristic(O)` (`forms.jl:1442-1444`): the grade-1 closed forms for
 `n < 5`, the stored compounds otherwise. -/
-def characteristic [Div α] (O : Outermorphism V V α) : Chain V 1 α :=
+@[specialize] def characteristic [Div α] (O : Outermorphism V V α) : Chain V 1 α :=
   if V.n < 5 then O.base.characteristic else O.characteristicExact
 
 end Outermorphism
@@ -288,20 +288,20 @@ variable {V : TensorBundle} {α : Type} [Coeff α]
 
 /-- Julia `characteristic(D) = characteristic_exact(D)` (`forms.jl:1441, 1505-1510`):
 `cₖ₋₁ = ±e_{n-k+1}(d)`, the elementary symmetric polynomials of the diagonal. -/
-def characteristic (D : DiagonalMorphism V α) : Chain V 1 α :=
+@[specialize] def characteristic (D : DiagonalMorphism V α) : Chain V 1 α :=
   let n := V.n
   ⟨Values.ofFn fun k =>
     let t := (DiagonalMorphism.compound D (n - k.1)).tr
     if (n - (k.1 + 1)) % 2 == 1 then t else -t⟩
 
 /-- Julia `eigpolys(D, G)` (`forms.jl:1258-1260`): `e_G(d)/C(n,G)`, or `Π d` for `G = n`. -/
-def eigpolysAt [Div α] (D : DiagonalMorphism V α) (G : Nat) : α :=
+@[specialize] def eigpolysAt [Div α] (D : DiagonalMorphism V α) (G : Nat) : α :=
   if G = 0 then Coeff.one
   else if V.n = G then DiagonalMorphism.det D
   else (DiagonalMorphism.compound D G).scalar
 
 /-- Julia `eigpolys(D)` (`forms.jl:1241-1246, 1268`). -/
-def eigpolys [Div α] (D : DiagonalMorphism V α) : Chain V 1 α :=
+@[specialize] def eigpolys [Div α] (D : DiagonalMorphism V α) : Chain V 1 α :=
   ⟨Values.ofFn fun k => D.eigpolysAt (k.1 + 1)⟩
 
 /-- Julia `eigvals(D)` (`forms.jl:1374-1383`): the roots of the characteristic

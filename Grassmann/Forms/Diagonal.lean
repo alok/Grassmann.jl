@@ -153,7 +153,7 @@ instance : HAdd (DiagonalOperator V l α) (Endomorphism V l α) (Endomorphism V 
 /-- `Π_{i ∈ I} dᵢ` over the generators of blade `b` in ascending order, a left
 fold from the first factor (Julia's generated `*(m.v[i]...)`); `1` for the
 scalar blade. -/
-def bladeProduct {n : Nat} (d : Values α n) (b : UInt64) : α :=
+@[specialize] def bladeProduct {n : Nat} (d : Values α n) (b : UInt64) : α :=
   match (DirectSum.Bits.indices b).toList with
   | [] => Coeff.one
   | i :: is => is.foldl (fun acc k => acc * getD d (k - 1)) (getD d (i - 1))
@@ -166,17 +166,17 @@ variable {V : TensorBundle} {α : Type} [Coeff α]
 
 /-- Julia `compound(D, g)` (`forms.jl:517-520`): the diagonal of the products
 `Π_{i∈I} dᵢ` over the `g`-subsets `I`. -/
-def compound (D : DiagonalMorphism V α) (g : Nat) : DiagonalOperator V (.chain g) α :=
+@[specialize] def compound (D : DiagonalMorphism V α) (g : Nat) : DiagonalOperator V (.chain g) α :=
   ⟨Values.ofFn fun k => DiagonalOperator.bladeProduct D.d (Leibniz.indexBasis V.n g)[k.1]!⟩
 
 /-- Julia `outermorphism(D)` (`forms.jl:521-523`): the diagonal outermorphism,
 `1` on the scalar and `Π_{i∈I} dᵢ` on every blade `I`. -/
-def outermorphism (D : DiagonalMorphism V α) : DiagonalOutermorphism V α :=
+@[specialize] def outermorphism (D : DiagonalMorphism V α) : DiagonalOutermorphism V α :=
   ⟨Values.ofFn fun k =>
     if k.1 = 0 then Coeff.one else DiagonalOperator.bladeProduct D.d (Leibniz.indexBasisAll V.n)[k.1]!⟩
 
 /-- Julia `∧(D) = Chain{V,n}(prod(diagonal))` (`forms.jl:515`). -/
-def wedgeAll (D : DiagonalMorphism V α) : Chain V V.n α :=
+@[specialize] def wedgeAll (D : DiagonalMorphism V α) : Chain V V.n α :=
   ⟨Values.ofFn fun _ => DiagonalOperator.bladeProduct D.d (DirectSum.Bits.lowMask V.n)⟩
 
 /-- Julia `det(D) = !∧(D)` (`forms.jl:513`): the product of the diagonal. -/
@@ -184,7 +184,7 @@ def wedgeAll (D : DiagonalMorphism V α) : Chain V V.n α :=
 
 /-- Julia `adjugate(D)` (`forms.jl:526-528`): `(Π_{j≠i} dⱼ)ᵢ`, the reversed
 `(n-1)`-th compound. -/
-def adjugate (D : DiagonalMorphism V α) : DiagonalMorphism V α :=
+@[specialize] def adjugate (D : DiagonalMorphism V α) : DiagonalMorphism V α :=
   let c := (compound D (V.n - 1)).d
   ⟨Values.ofFn fun i => getD c (V.n - 1 - i.1)⟩
 
