@@ -77,10 +77,21 @@ def factorial : Nat → Nat
   | 0 => 1
   | k + 1 => (k + 1) * factorial k
 
+/-- `k` as a coefficient, a sum of ones (exact for the small integers used here; `Coeff.ofInt`
+at `Float` converts through `Float.ofScientific`, a bignum parse per call). -/
+def natCoeff : Nat → α
+  | 0 => Coeff.zero
+  | k + 1 => natCoeff k + Coeff.one
+
+/-- `m!` as a coefficient, the product `1·2·…·m` of `natCoeff`s (exact at `Float` for `m ≤ 18`). -/
+def factorialCoeff : Nat → α
+  | 0 => Coeff.one
+  | k + 1 => factorialCoeff k * natCoeff (k + 1)
+
 /-- Julia `detsimplex(t) = det(t)/(n-1)!` (`composite.jl:934`): the signed volume of
 a full-dimensional simplex in homogeneous coordinates. -/
 @[inline] def detsimplex [Div α] (T : Simplex V W α) : α :=
-  T.det * (Coeff.one / Coeff.ofInt (factorial (W.n - 1)))
+  T.det * (Coeff.one / factorialCoeff (W.n - 1))
 
 /-- Julia `volumes(m)` for one simplex (`composite.jl:933`): `|detsimplex(t)|`, or
 the edge length of a segment in a 2-generator space. -/

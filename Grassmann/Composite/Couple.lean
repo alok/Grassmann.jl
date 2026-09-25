@@ -174,6 +174,39 @@ def sinhClosed (β : Float) (t : BPair) : BPair :=
     if β > f0 then ⟨Float.sinh a * Float.cosh θ, Float.cosh a * Float.sinh θ / s⟩
     else ⟨Float.sinh a * Float.cos θ, Float.cosh a * Float.sin θ / s⟩
 
+/-- The number of trailing zero bits of a positive `p` (`JuliaBase.powBySquaring`'s
+`trailing_zeros`), on `UInt64`. -/
+def tz64 (p : UInt64) : Nat → Nat
+  | 0 => 0
+  | fuel + 1 => if p &&& 1 == 1 || p == 0 then 0 else tz64 (p >>> 1) fuel + 1
+
+/-- The state machine of `JuliaBase.powBySquaring` on a complex number, unboxed: square `x`
+`s` more times, then `y := x` (`init`) or `y := y ⟑ x`, then the next bit group of `p`. Julia's
+complex `*`: `(a c - b d, a d + b c)`. -/
+def cPowRun (xr xi yr yi : Float) (s : Nat) (p : UInt64) (init : Bool) : Nat → BPair
+  | 0 => ⟨yr, yi⟩
+  | fuel + 1 =>
+    if s > 0 then cPowRun (xr * xr - xi * xi) (xr * xi + xi * xr) yr yi (s - 1) p init fuel
+    else
+      let yr' := if init then xr else yr * xr - yi * xi
+      let yi' := if init then xi else yr * xi + yi * xr
+      if p == 0 then ⟨yr', yi'⟩
+      else
+        let t := tz64 p 64 + 1
+        cPowRun xr xi yr' yi' t (if t ≥ 64 then 0 else p >>> t.toUInt64) false fuel
+
+/-- Julia `power_by_squaring(z, p)` of a complex number (`JuliaBase.powBySquaring` at
+`Complex Float` with its multiplication), without boxing: the same operations in the same
+order, one result allocated. -/
+def cPow (re im : Float) (p : Nat) : BPair :=
+  if p == 0 then ⟨f1, f0⟩
+  else if p == 1 then ⟨re, im⟩
+  else if p == 2 then ⟨re * re - im * im, re * im + im * re⟩
+  else
+    let q := p.toUInt64
+    let t := tz64 q 64 + 1
+    cPowRun re im re im (t - 1) (if t ≥ 64 then 0 else q >>> t.toUInt64) true (4 * 64 + 4)
+
 /-- The loop of the one-blade `qlog`: `prod ↦ prod ⟑ w²`, `term = prod/k`, `k` by 2 to `x`. -/
 def qlogPairLoop (β w2r w2i : Float) (x : Nat) (Sr Si pr pi ur ui n1 n2 n3 : Float) (k : Nat) :
     Nat → BPair
@@ -368,9 +401,11 @@ otherwise Julia's repeated/binary multiplication in the blade algebra, and
   else
     let β := z.blSq
     if β == -f1 then
-      let w := z.toComplex
-      onBlade z.bits (if k ≥ 0 then powBySquaring (· * ·) ⟨f1, f0⟩ w k.toNat
-        else powBySquaring (· * ·) ⟨f1, f0⟩ (ComplexF64.inv w) k.natAbs)
+      -- `Complex(z)^k` by squaring, unboxed (`BPair.cPow`, the operations of `powBySquaring`)
+      if k ≥ 0 then ofPair z.bits (BPair.cPow z.re z.im k.natAbs)
+      else
+        let w := ComplexF64.inv z.toComplex
+        ofPair z.bits (BPair.cPow w.re w.im k.natAbs)
     else if k ≥ 0 then ofPair z.bits (powJulia (BPair.mul β) BPair.one z.pair k.toNat)
     else ofPair z.bits (powJulia (BPair.mul β) BPair.one (BPair.inv β z.pair) k.natAbs)
 

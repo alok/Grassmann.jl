@@ -463,6 +463,12 @@ def powers (t : Tally) : Tally := Id.run do
   t := t.check (same' ((2 : Nat) ^ b : Couple E3 Float).toMultivector (Single.rpow 2.0 b).toMultivector) fun _ => "2 ^ v12"
   t := t.check (same' ((2.0 : Float) ^ m) (m.rpow 2.0)) fun _ => "2.0 ^ m"
   t := t.check (same' ((3 : Nat) ^ c : Multivector E3 Float) (Chain.rpow 3.0 c)) fun _ => "3 ^ (v1+v2)"
+  -- the unboxed complex power (`BPair.cPow`) is `JuliaBase.powBySquaring` at `Complex Float`
+  let zc : Couple E3 Float := ⟨3, 0.9, -0.7⟩
+  for k in List.range 41 do
+    let w := JuliaBase.powBySquaring (· * ·) (⟨1, 0⟩ : JuliaBase.Complex Float) zc.toComplex k
+    let got := zc.pow k
+    t := t.check (same got.re w.re && same got.im w.im) fun _ => s!"elliptic couple ^ {k}: {got.re} {got.im} vs {w.re} {w.im}"
   -- Julia's values
   t := expect t "v12^2" (b ^ 2 : Couple E3 Float).toMultivector [-1, 0, 0, 0, 0, 0, 0, 0]
   t := expect t "v12^-1" (b ^ (-1 : Int) : Couple E3 Float).toMultivector [0, 0, 0, 0, -1, 0, 0, 0]
