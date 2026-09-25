@@ -2,7 +2,9 @@
 # between runtime-selected systems and Similitude dimension-group products.
 isdefined(Main, :BenchHarness) || include(joinpath(@__DIR__, "harness.jl"))
 using .BenchHarness
-using UnitSystems, Similitude
+using UnitSystems, Similitude, MeasureSystems
+const us_MS = MeasureSystems
+const us_M = MeasureSystems.Measurements
 const us_US = UnitSystems
 const us_FC = UnitSystems.FieldConstants
 
@@ -28,21 +30,104 @@ function us_dimproducts(ds::Vector{Any})
     end
     acc
 end
+# Similitude's exact `ratio(d, U, S)` at run time, as a Float64.
+function us_ratioall(ds::Vector{Any}, ps::Vector{Any})
+    acc = 0.0
+    for d in ds, (U, S) in ps
+        acc += Float64(float(Similitude.ratio(d, U, S)))
+    end
+    acc
+end
+# Similitude quantities with Float64 values (dimensions carried at run time).
+function us_qarith(as::Vector, bs::Vector)
+    acc = 0.0
+    for (a, b) in zip(as, bs)
+        acc += Float64(((a * b) / (a + a)).v)
+    end
+    acc
+end
+function us_qconvert(as::Vector, bs::Vector)
+    acc = 0.0
+    for (a, b) in zip(as, bs)
+        acc += Float64(float(((a / b)(Similitude.English)).v))
+    end
+    acc
+end
+# Measurements arithmetic with correlated error propagation.
+function us_measarith(as::Vector, bs::Vector)
+    acc = 0.0
+    for (a, b) in zip(as, bs)
+        c = a * b + a / b - a * a
+        acc += us_M.value(c) + us_M.uncertainty(c)
+    end
+    acc
+end
+# MeasureSystems' measured conversion factors.
+function us_measratio(ds::Vector{Any}, ps::Vector{Any})
+    acc = 0.0
+    for d in ds, (U, S) in ps
+        y = us_MS.FieldAlgebra.product(us_MS.ratio(d, U, S))
+        acc += y isa us_M.Measurement ? us_M.value(y) + us_M.uncertainty(y) : Float64(y)
+    end
+    acc
+end
+# `energy(v, English, Metric)` with literal systems: Julia folds the factor.
+function us_convlit(xs::Vector{Float64})
+    acc = 0.0
+    for v in xs
+        acc += us_US.energy(v, us_US.English, us_US.Metric)
+    end
+    acc
+end
+# `energy(U, Metric)` with `U` chosen at run time (dynamic dispatch).
+function us_convany(us::Vector{Any})
+    acc = 0.0
+    for U in us
+        acc += us_val(us_US.energy(U, us_US.Metric))
+    end
+    acc
+end
 
 function suite_unitsystems(ctx)
     qs = Any[getfield(us_US, q) for q in us_US.Convert]
     ps = Any[(us_US.Metric, us_US.English), (us_US.English, us_US.Metric), (us_US.SI2019, us_US.Gauss),
              (us_US.Planck, us_US.Metric), (us_US.Hartree, us_US.SI2019), (us_US.IAU, us_US.Metric)]
-    bench!(i -> us_convertall(qs, blackbox(i, ps)), ctx, "convert_pairs";
-           ops = length(qs) * length(ps), param = "$(length(qs))×$(length(ps))")
+    # Lean has three evaluation strategies for the same factors (chains on `Num`, per-pair
+    # tables, unboxed chains); Julia's twin is the same runtime-dispatch loop for all three.
+    for name in ("convert_pairs", "convert_pairs_sys", "convert_pairs_numf")
+        bench!(i -> us_convertall(qs, blackbox(i, ps)), ctx, name;
+               ops = length(qs) * length(ps), param = "$(length(qs))×$(length(ps))")
+    end
+    n = sized(ctx, 10000, 100)
+    xs = [1.0 + i / n for i in 0:n-1]
+    bench!(i -> us_convlit(blackbox(i, xs)), ctx, "convert_literal"; ops = n, param = "n=$n")
+    ua = Any[us_US.English, us_US.Gauss, us_US.Planck, us_US.Hartree]
+    bench!(i -> us_convany(blackbox(i, ua)), ctx, "convert_any"; ops = length(ua), param = "$(length(ua))")
     us = Any[us_US.Metric, us_US.English, us_US.Gauss, us_US.Planck, us_US.Hartree, us_US.IAU,
              us_US.Stoney, us_US.QCD]
-    bench!(i -> us_naturalall(qs, blackbox(i, us)), ctx, "natural_systems";
-           ops = length(qs) * length(us), param = "$(length(qs))×$(length(us))")
+    for name in ("natural_systems", "natural_systems_sys")
+        bench!(i -> us_naturalall(qs, blackbox(i, us)), ctx, name;
+               ops = length(qs) * length(us), param = "$(length(qs))×$(length(us))")
+    end
     ds = Any[q in (:length, :time, :angle, :molarmass, :luminousefficacy) ? Similitude.evaldim(q) :
              getfield(Similitude, q) for q in us_US.Convert]
     bench!(i -> us_dimproducts(blackbox(i, ds)), ctx, "dim_products";
            ops = length(ds)^2, param = "$(length(ds))²")
+    bench!(i -> us_ratioall(blackbox(i, ds), ps), ctx, "ratio_runtime";
+           ops = length(ds) * length(ps), param = "$(length(ds))×$(length(ps))")
+    m = sized(ctx, 1000, 20)
+    qx = [1.0 + i / m for i in 0:m-1]
+    qas = [Similitude.Metric(x, Similitude.energy) for x in qx]
+    qbs = [Similitude.Metric(x + 0.5, Similitude.evaldim(:time)) for x in qx]
+    bench!(i -> us_qarith(blackbox(i, qas), qbs), ctx, "quantity_arith"; ops = m, param = "n=$m")
+    bench!(i -> us_qconvert(blackbox(i, qas), qbs), ctx, "quantity_convert"; ops = m, param = "n=$m")
+    as = [us_M.measurement(1.0 + i / m, 0.01 * (1 + i % 7)) for i in 0:m-1]
+    bs = [us_M.measurement(2.0 + i / m, 0.02) for i in 0:m-1]
+    bench!(i -> us_measarith(blackbox(i, as), bs), ctx, "measurement_arith"; ops = m, param = "n=$m")
+    mps = Any[(us_MS.Metric, us_MS.English), (us_MS.English, us_MS.Metric), (us_MS.SI2019, us_MS.Gauss),
+              (us_MS.Planck, us_MS.Metric), (us_MS.Hartree, us_MS.SI2019), (us_MS.IAU, us_MS.Metric)]
+    bench!(i -> us_measratio(blackbox(i, ds), mps), ctx, "measured_ratio";
+           ops = length(ds) * length(mps), param = "$(length(ds))×$(length(mps))")
 end
 
 register!("unitsystems", suite_unitsystems)

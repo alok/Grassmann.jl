@@ -20,6 +20,7 @@ Not provided: phasors with a non-real amplitude or a non-blade angle (Julia's `a
 `complexify` and the 2-argument call `z(t, θ)` produce them): `Phasor V α` stores a real amplitude
 and a couple angle.
 -/
+import Grassmann.Basis
 import Grassmann.Composite.Norm
 import Grassmann.Composite.Project
 
@@ -165,14 +166,8 @@ def hyperplanes (V : TensorBundle) : List (Single V (V.n - 1) Float) :=
 
 end Composite
 
-/-- Julia `𝕚 = hyperplanes(ℝ3)[1] = v₂₃` (`src/Grassmann.jl:71`): the quaternion unit `i`. -/
-def 𝕚 : Single ℝ3 2 Float := ⟨6, 1⟩
 
-/-- Julia `𝕛 = hyperplanes(ℝ3)[2] = -v₁₃`. -/
-def 𝕛 : Single ℝ3 2 Float := ⟨5, -1⟩
 
-/-- Julia `𝕜 = hyperplanes(ℝ3)[3] = v₁₂`. -/
-def 𝕜 : Single ℝ3 2 Float := ⟨3, 1⟩
 
 namespace TensorOperator
 

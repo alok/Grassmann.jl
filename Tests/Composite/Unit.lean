@@ -529,7 +529,7 @@ def phasorApi (t : Tally) : Tally := Id.run do
   t := t.check (hs E3 == [(6, 1.0), (5, -1.0), (3, 1.0)]) fun _ => s!"hyperplanes(ℝ^3) = {hs E3}"
   t := t.check (hs E2 == [(2, -1.0), (1, 1.0)]) fun _ => s!"hyperplanes(ℝ^2) = {hs E2}"
   t := t.check (hs E4 == [(14, -1.0), (13, 1.0), (11, -1.0), (7, 1.0)]) fun _ => s!"hyperplanes(ℝ^4) = {hs E4}"
-  t := t.check ((Composite.hyperplanes ℝ3).map (fun h => (h.bits, h.val)) == [(𝕚.bits, 𝕚.val), (𝕛.bits, 𝕛.val), (𝕜.bits, 𝕜.val)])
+  t := t.check ((Composite.hyperplanes ℝ3).map (fun h => (h.bits, h.val)) == [((𝕚 : Single ℝ3 2 Float).bits, (𝕚 : Single ℝ3 2 Float).val), ((𝕛 : Single ℝ3 2 Float).bits, (𝕛 : Single ℝ3 2 Float).val), ((𝕜 : Single ℝ3 2 Float).bits, (𝕜 : Single ℝ3 2 Float).val)])
     fun _ => "𝕚, 𝕛, 𝕜 = hyperplanes(ℝ3)"
   let m := fun (x y : Single ℝ3 2 Float) => (toMultivector x * toMultivector y : Multivector ℝ3 Float).v.toList
   t := t.check (m 𝕚 𝕛 == [0, 0, 0, 0, -1, 0, 0, 0] && m 𝕛 𝕜 == [0, 0, 0, 0, 0, 0, -1, 0] &&

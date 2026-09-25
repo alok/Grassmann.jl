@@ -16,7 +16,7 @@ def run : IO (Nat × Nat) := do
   IO.println "MeasureSystems"
   let mut pass := 0
   let mut fail := 0
-  for suite in [measuresSuite, measurementsSuite, systemConstantsSuite, ratiosSuite] do
+  for suite in [measuresSuite, measurementsSuite, systemConstantsSuite, ratiosSuite, derivedSuite] do
     let (p, f) ← (← suite).report
     pass := pass + p
     fail := fail + f

@@ -16,6 +16,12 @@ namespace Tests.SimilitudeTests
 
 open Lean Tests.Units FieldConstants FieldAlgebra UnitSystems Similitude
 
+/-! Julia `dimensions`/`Dimension` (`dimension.jl:230, 303-305`). -/
+#guard (Sys.Metric.qty Dim.energy (2.0 : Float)).dimensions.print == "FL"
+#guard (Dimension (Sys.English.qty Dim.magneticflux (1 : Scalar))).print ==
+  (Dim.magneticflux.toGroup).print
+#guard (Dim.conv Dim.power .Metric .English).dimensions.print == "FLT⁻¹"
+
 /-! Typed quantities: the dimension is computed by the elaborator. -/
 example : Q .Metric (USQ.F * USQ.F * USQ.L) :=
   Sys.Metric.qty Dim.energy (2 : Scalar) * Sys.Metric.qty Dim.force (3 : Scalar)

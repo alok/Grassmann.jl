@@ -16,9 +16,11 @@ namespace Bench.Geophysics
 
 open _root_.Geophysics Bench
 
-/-- Sum an operation of a column over a grid. -/
-def loop (C : Column 11) (o : Op) (hs : FloatArray) (i : Nat) (acc : Float) : Float :=
-  if h : i < hs.size then loop C o hs (i + 1) (acc + C.eval o (hs[i]'h)) else acc
+/-- Sum an operation of a column over a grid (Julia `temperature(h, W)` etc.: the
+per-operation functions `Column.temperature`, …). -/
+@[specialize] def loop (C : Column 11) (f : Column 11 → Float → Float) (hs : FloatArray) (i : Nat)
+    (acc : Float) : Float :=
+  if h : i < hs.size then loop C f hs (i + 1) (acc + f C (hs[i]'h)) else acc
 termination_by hs.size - i
 
 /-- Sum a scalar function over a grid. -/
@@ -40,8 +42,12 @@ def suite : Suite := ⟨"geophysics", do
   let p := s!"n={n}"
   let C := Earth1959.native
   let hs := grid n (-2000.0) 0.8
-  for o in [Op.temperature, .pressure, .density, .sonicspeed, .viscosity, .kinematic] do
-    bench o.name (ops := n) (param := p) fun s => loop (blackBox s C) o hs 0 0.0
+  bench "temperature" (ops := n) (param := p) fun s => loop (blackBox s C) Column.temperature hs 0 0.0
+  bench "pressure" (ops := n) (param := p) fun s => loop (blackBox s C) Column.pressure hs 0 0.0
+  bench "density" (ops := n) (param := p) fun s => loop (blackBox s C) Column.density hs 0 0.0
+  bench "sonicspeed" (ops := n) (param := p) fun s => loop (blackBox s C) Column.sonicspeed hs 0 0.0
+  bench "viscosity" (ops := n) (param := p) fun s => loop (blackBox s C) Column.viscosity hs 0 0.0
+  bench "kinematic" (ops := n) (param := p) fun s => loop (blackBox s C) Column.kinematic hs 0 0.0
   let xs := grid n 0.5 1.0e-6
   bench "pow_neg5.25" (ops := n) (param := p) fun s => loopF fPow (blackBox s xs) 0 0.0
   bench "pow_neg5.25_libm" (ops := n) (param := p) fun s => loopF fLibPow (blackBox s xs) 0 0.0

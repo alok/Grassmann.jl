@@ -78,6 +78,10 @@ structure Planet where
   geM : Float := 0.0
   /-- cached Metric `_gravity(π/2, P)` (normal gravity at the pole) -/
   gpM : Float := 0.0
+  /-- cached Metric `aspectratio(P)*(gp/ge) - 1` of Somigliana's formula -/
+  somK : Float := 0.0
+  /-- cached `f*(2 - f)` of Somigliana's formula -/
+  somE : Float := 0.0
   deriving Inhabited
 
 /-- `Float64(π)`. -/
@@ -326,11 +330,15 @@ def gravityPole (U : Sys := .Metric) : Float :=
 def gravity (ϕ : Float) (U : Sys := .Metric) : Float :=
   let s := sin ϕ
   let sϕ2 := s * s
-  let ge := P.gravityEquator U
-  let gp := P.gravityPole U
-  let f := P.flattening
-  ge * ((1.0 + (P.aspectratio * (gp / ge) - 1.0) * sϕ2) /
-    Float.sqrt (1.0 - (f * (2.0 - f)) * sϕ2))
+  if U == .Metric then
+    -- the planet constants of the formula are cached (Julia folds them)
+    P.geM * ((f64! 1.0 + P.somK * sϕ2) / Float.sqrt (f64! 1.0 - P.somE * sϕ2))
+  else
+    let ge := P.gravityEquator U
+    let gp := P.gravityPole U
+    let f := P.flattening
+    ge * ((f64! 1.0 + (P.aspectratio * (gp / ge) - f64! 1.0) * sϕ2) /
+      Float.sqrt (f64! 1.0 - (f * (f64! 2.0 - f)) * sϕ2))
 
 /-- The altitude factor of `gravitygeodetic`, `2*(1 + f + m - 2f*sin(ϕ)^2)`. -/
 def geodeticSlope (ϕ : Float) : Float :=
@@ -376,7 +384,9 @@ def Planet.of (f a t Gm : JNum) : Planet :=
                     obl := p.oblatenessAt halfπ .Metric }
   let p := { p with q0v := p.q0Raw, q01v := p.q01Raw }
   let p := { p with j2 := p.dynamicformfactorRaw }
-  { p with geM := p.gravityNormal 0.0 .Metric, gpM := p.gravityNormal halfπ .Metric }
+  let p := { p with geM := p.gravityNormal 0.0 .Metric, gpM := p.gravityNormal halfπ .Metric }
+  let f := p.flattening
+  { p with somK := p.aspectratio * (p.gpM / p.geM) - 1.0, somE := f * (2.0 - f) }
 
 /-- Earth, the WGS 84 spheroid (`Geophysics.jl:76`, `planets.jl:29`). -/
 def Earth : Planet :=

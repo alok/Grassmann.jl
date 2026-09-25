@@ -10,7 +10,8 @@ Julia's Grassmann overrides `isscalar` for its mixed-grade containers (`norm(t) 
 -/
 import Grassmann
 
-open Grassmann AbstractTensors
+open Grassmann hiding istensor isgraded isterm isscalar isvector isbivector istrivector isvolume isone iszero isfinite
+open AbstractTensors
 
 namespace AbstractTensorsKindTests
 

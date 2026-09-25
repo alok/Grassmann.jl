@@ -13,8 +13,14 @@ namespace Tests.SimilitudeTests
 
 open Lean Tests.Units FieldConstants FieldAlgebra UnitSystems Similitude
 
-/-- Units Similitude does not define as typed quantities (see `Similitude.Units`). -/
-def derivedSkipped : List String := ["neper", "bel", "decibel", "rem"]
+/-- Units Similitude does not define as typed quantities (see `Similitude.Units`):
+`rem` is `nothing` in Julia; the logarithmic units are checked separately. -/
+def derivedSkipped : List String := ["rem"]
+
+/-- The logarithmic units (`LogQuantity`), displayed in Metric. -/
+def logUnits : List (String × String) :=
+  [("neper", (neper .Metric).display), ("bel", (bel .Metric).display),
+   ("decibel", (decibel .Metric).display)]
 
 /-- Derived units against the oracle. -/
 def derivedSuite : IO Suite := do
@@ -23,6 +29,9 @@ def derivedSuite : IO Suite := do
   for r in arr j do
     let nm := str (idx r 0)
     if derivedSkipped.contains nm then continue
+    if let some got := logUnits.lookup nm then
+      s := s.check (got == str (idx r 2)) fun _ => s!"{nm}(Metric): got {got}, want {str (idx r 2)}"
+      continue
     match Units.table.lookup nm with
     | none => s := s.check false fun _ => s!"no Lean unit {nm}"
     | some ⟨U, d, q⟩ =>

@@ -135,6 +135,20 @@ for a in payloads
     a isa Real && a > 0 && push!(cops, ["log10", kindv(ca), kindv(log10(ca))])
     push!(cops, ["show", kindv(ca), repr(ca)])
 end
+for a in payloads
+    ca = C(a)
+    push!(cops, ["exp2", kindv(ca), kindv(exp2(ca))])
+    a > 0 && push!(cops, ["log3", kindv(ca), kindv(log(3, ca))])
+    r = try kindv(2^ca) catch; "ERROR" end
+    push!(cops, ["2^", kindv(ca), r])
+    push!(cops, ["1.5^", kindv(ca), kindv(1.5^ca)])
+    a >= 0 && push!(cops, ["^1//2", kindv(ca), kindv(ca^(1//2))])
+    a >= 0 && push!(cops, ["^-2//3", kindv(ca), kindv(ca^(-2//3))])
+    push!(cops, ["Int", kindv(ca), (try kindv(Int(ca)) catch; "ERROR" end)])
+    b = C(a isa Int ? a + 1 : a * (1 + 1e-9))
+    push!(cops, ["isapprox", kindv(ca), kindv(b), isapprox(ca, b)])
+    push!(cops, ["isapprox", kindv(ca), kindv(ca), isapprox(ca, ca)])
+end
 push!(cops, ["^70", kindv(C(2)), kindv(C(2)^70)])
 push!(cops, ["^-28", kindv(C(10)), kindv(C(10)^-28)])
 push!(cops, ["logdb", kindv(100), kindv(FieldConstants.logdb(100))])

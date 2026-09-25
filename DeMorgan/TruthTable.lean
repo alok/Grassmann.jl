@@ -43,11 +43,6 @@ class Connectives (α : Type) where
   /-- `p ↔ q` (Julia `<-->`/`↔`) -/
   iff : α → α → α
 
-/-- Julia `∧` (AbstractLattices `wedge`, DM:48); overloads Lean's `And` (35, right-assoc)
-through a choice node within `open DeMorgan`, as Grassmann's exterior product does. -/
-scoped infixr:35 " ∧ " => Connectives.and
-/-- Julia `∨` (AbstractLattices `vee`, DM:49); overloads Lean's `Or` (30, right-assoc). -/
-scoped infixr:30 " ∨ " => Connectives.or
 /-- Julia `¬` (DM:58); overloads Lean's `¬` by type within `open DeMorgan`. -/
 scoped prefix:max "¬" => Connectives.not
 /-- Julia `-->` / `→` (DM:52, 58). Right-associative, below `∧`/`∨` as in Julia. -/

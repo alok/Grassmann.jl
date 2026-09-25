@@ -63,8 +63,16 @@ modnames = [:g₀, :atm, :T₀, :ft, :ftUS, :lb, :inHg, :Ωᵢₜ, :Vᵢₜ, :Δ
     :lc, :mc, :ρΛ, :𝘦ₙ, :ς, :lcq, :mcq, :𝘦ᵣ, :tcq, :em, :mi, :slug, :lbm, :lbmUS, :rankine, :kelvin, :ħ1990, :ħ2014,
     :mₑ1990, :mₑ2014, :δμ₀, :ly, :mₛ, :GG, :RK, :KJ, :eV, :κ, :σ, :μB, :ε₀, :kₑ, :mₚ, :Da, :𝔉, :Φ₀, :Z₀, :G₀, :Eₕ,
     :a₀, :rₑ, :RH, :Ry, :ℓP, :tP, :TP, :lS, :tS, :mS, :qS, :lA, :tA, :mA, :qA, :lQCD, :tQCD, :mQCD, :BTU, :BTUJ,
-    :HP, :gal, :kcal, :cal]
+    :HP, :gal, :kcal, :cal,
+    # ASCII and other aliases (`systems.jl:65-78`), calories (`UnitSystems.jl:343-344`)
+    :BTUftlb, :Mu, :Ru, :SB, :hh, :cc, :m0, :e0, :ke, :me, :mp, :mu, :mᵤ, :ee, :FF, :Z0, :G0, :Eh, :a0, :re, :g0,
+    :lP, :aL, :ϵ₀, :mpe, :mep, :meu, :mpu, :ainv, :aG,
+    :kcalₜₕ, :kcal₄, :kcal₁₀, :kcal₂₀, :kcalₘ, :kcalᵢₜ, :calₜₕ, :cal₄, :cal₁₀, :cal₂₀, :calₘ, :calᵢₜ]
 modconsts = Dict(string(n) => tryenc(() -> getfield(US, n)) for n in modnames)
+# the irrationals UnitSystems re-exports, as Float64
+for n in (:eulergamma, :golden, :φ)
+    modconsts[string(n)] = enc(Float64(getfield(US, n)))
+end
 writejson(joinpath(OUT, "constants.json"), Dict("julia" => string(VERSION), "constants" => modconsts))
 
 # ---------- one-argument functions of every system ----------

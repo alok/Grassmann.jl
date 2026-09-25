@@ -115,4 +115,41 @@ def ratiosSuite : IO Suite := do
     s := checkMNum s s!"{q.name}({a.name},{b.name})" (MValue.exact (ratio d a b)).toMNum r 4
   return s
 
+/-- Derived units with uncertainties, in their own system and in Metric
+(`derived.json`), and `δμ₀`, `μE☾` (`constants.json`). -/
+def derivedSuite : IO Suite := do
+  let j ← loadJson "measuresystems/derived.json"
+  let mut s : Suite := { name := "measured derived units" }
+  for r in arr j do
+    let nm := str (idx r 0)
+    match MeasureSystems.Units.derivedTable.lookup nm with
+    | none => s := s.check false fun _ => s!"no unit {nm}"
+    | some ⟨_, _, q⟩ =>
+      if !(str (idx r 1)).startsWith "Similitude." then
+        s := s.check (toString q == str (idx r 1)) fun _ => s!"{nm}: got {q}, want {str (idx r 1)}"
+      let m := q.to .Metric
+      s := s.check (toString m == str (idx r 2)) fun _ => s!"{nm}(Metric): got {m}, want {str (idx r 2)}"
+      s := checkMNum s s!"{nm}(Metric)" m.val.toMNum r 3
+  let c ← loadJson "measuresystems/constants.json"
+  for r in arr c do
+    match str (idx r 0) with
+    | "δμ₀" =>
+      s := s.check (δμ₀.toMeas.display == str (idx r 1)) fun _ => s!"δμ₀: got {δμ₀.toMeas.display}"
+      s := checkMNum s "δμ₀" δμ₀ r 2
+    | "μE☾" =>
+      s := s.check (μE.toMeas.display == str (idx r 1)) fun _ => s!"μE☾: got {μE.toMeas.display}"
+      s := checkMNum s "μE☾" μE.toMNum r 2
+    | nm =>
+      if nm.startsWith "sackurtetrode(" then
+        let U := sysOf! ((nm.drop 14).dropEnd 1).toString
+        let (shown, m) := MeasureSystems.sackurtetrode U
+        s := s.check (shown == str (idx r 1)) fun _ => s!"{nm}: got {shown}, want {str (idx r 1)}"
+        s := checkMNum s nm m r 2
+      else match MeasureSystems.Constants.table.lookup nm with
+      | some (shown, m) =>
+        s := s.check (shown == str (idx r 1)) fun _ => s!"{nm}: got {shown}, want {str (idx r 1)}"
+        s := checkMNum s nm m r 2
+      | none => s := s.check false fun _ => s!"no constant {nm}"
+  return s
+
 end Tests.MeasureSystemsTests

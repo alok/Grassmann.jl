@@ -9,6 +9,7 @@ import UnitSystems.Show
 import UnitSystems.Dim
 import UnitSystems.DimModel
 import UnitSystems.DimProofs
+import UnitSystems.Text
 
 /-!
 # UnitSystems

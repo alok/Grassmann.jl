@@ -1,4 +1,5 @@
 import Similitude.Registry
+import Std.Data.HashMap
 
 /-!
 # Exact conversion ratios
@@ -69,10 +70,51 @@ def pairTable : Array (Thunk (Array Scalar × Array Bool)) :=
 def pairData (U S : Sys) : Array Scalar × Array Bool :=
   (pairTable[U.ctorIdx * Sys.all.length + S.ctorIdx]!).get
 
-/-- Julia `ratio(d, U, S)`: the exact factor converting a quantity of USQ
-dimension `d` from `U` to `S`. -/
-def ratio (d : Exps 11) (U S : Sys) : Scalar :=
+/-- `ratio(d, U, S)` computed from the cached constant ratios of the pair. -/
+def ratioUncached (d : Exps 11) (U S : Sys) : Scalar :=
   ratioOf (pairData U S).1 (usqMap.apply d)
+
+/-- A cache key: the exponents with their element type, and the two systems. -/
+structure RatioKey where
+  /-- `0` `Int`, `1` `Rational` (numerator, denominator pairs), `2` `Float64` bits -/
+  kind : UInt8
+  /-- the exponents -/
+  e : Array Int
+  /-- source system -/
+  U : Nat
+  /-- target system -/
+  S : Nat
+  deriving BEq, Hashable
+
+/-- The cache key of `ratio d U S`. -/
+def RatioKey.of (d : Exps 11) (U S : Sys) : RatioKey :=
+  match d with
+  | .int v => ⟨0, v.toArray, U.ctorIdx, S.ctorIdx⟩
+  | .exact v => ⟨1, v.toArray.flatMap (fun q => #[q.num, (q.den : Int)]), U.ctorIdx, S.ctorIdx⟩
+  | .float v => ⟨2, v.1.toList.toArray.map (fun x => (x.toBits.toNat : Int)), U.ctorIdx, S.ctorIdx⟩
+
+private unsafe def ratioCacheImpl : IO.Ref (Std.HashMap RatioKey Scalar) :=
+  unsafeBaseIO (IO.mkRef {})
+
+/-- The process-global cache of runtime ratios. -/
+@[implemented_by ratioCacheImpl]
+private opaque ratioCache : IO.Ref (Std.HashMap RatioKey Scalar)
+
+private unsafe def ratioImpl (d : Exps 11) (U S : Sys) : Scalar := unsafeBaseIO do
+  let k := RatioKey.of d U S
+  match (← ratioCache.get).get? k with
+  | some r => return r
+  | none =>
+    let r := ratioUncached d U S
+    ratioCache.modify (·.insert k r)
+    return r
+
+/-- Julia `ratio(d, U, S)`: the exact factor converting a quantity of USQ
+dimension `d` from `U` to `S`. Julia recomputes it on every runtime call; here
+it is computed once per `(d, U, S)` and cached for the process (logically
+`ratioUncached d U S`, as the plan caches of `Grassmann.Kernel.Reference`). -/
+@[implemented_by ratioImpl]
+def ratio (d : Exps 11) (U S : Sys) : Scalar := ratioUncached d U S
 
 /-- Would Julia throw computing `x^e`? Raising an `Int` (or a group with an `Int`
 coefficient other than `±1`) to a negative runtime power is a `DomainError`
@@ -95,6 +137,7 @@ dimensions whose own ratio between `U` and `S` is exactly one (for display);
 def convertDim (ones : Array Bool) (d : Exps 11) : Exps 11 :=
   let keep (i : Fin 11) : Bool := !(ones[i.1]?.getD false)
   match d with
+  | .int v => .int (Vector.ofFn fun i => if keep i then v[i] else 0)
   | .exact v => .exact (Vector.ofFn fun i => if keep i then v[i] else 0)
   | .float v => .float (FVec.ofFn fun i => if keep i then v.get i else 0.0)
 
@@ -118,6 +161,7 @@ variable {U S : Sys} {d : Dim}
 /-- The exact factor. -/
 def ratio (_ : ConvertUnit U S d) : Scalar := Similitude.ratio d.toGroup.v U S
 
+
 /-- The inverse conversion (Julia's `inv(::ConvertUnit)` is broken,
 `dimension.jl:245`; this is the intended meaning). -/
 def inv (_ : ConvertUnit U S d) : ConvertUnit S U d := ⟨⟩
@@ -134,6 +178,21 @@ def convertDim (_ : ConvertUnit U S d) : Exps 11 :=
   Similitude.convertDim (pairData U S).2 d.toGroup.v
 
 instance : ToString (ConvertUnit U S d) := ⟨fun _ => showConvert d.toGroup.v U S⟩
+
+/-- Julia `a * b` of two factors between the same systems (`dimension.jl:265`). -/
+def mul {d₁ d₂ : Dim} (_ : ConvertUnit U S d₁) (_ : ConvertUnit U S d₂) : ConvertUnit U S (d₁ * d₂) := ⟨⟩
+
+/-- Julia `a / b` of two factors between the same systems (`dimension.jl:266`). -/
+def div {d₁ d₂ : Dim} (_ : ConvertUnit U S d₁) (_ : ConvertUnit U S d₂) : ConvertUnit U S (d₁ / d₂) := ⟨⟩
+
+instance {d₁ d₂ : Dim} : HMul (ConvertUnit U S d₁) (ConvertUnit U S d₂) (ConvertUnit U S (d₁ * d₂)) :=
+  ⟨mul⟩
+instance {d₁ d₂ : Dim} : HDiv (ConvertUnit U S d₁) (ConvertUnit U S d₂) (ConvertUnit U S (d₁ / d₂)) :=
+  ⟨div⟩
+
+/-- Julia `c^n` (`dimension.jl:263`, where Julia builds a malformed `Quantity{U,S}`;
+the intended factor of dimension `d^n`). -/
+def npow (_ : ConvertUnit U S d) (n : Nat) : ConvertUnit U S (d ^ n) := ⟨⟩
 
 end ConvertUnit
 

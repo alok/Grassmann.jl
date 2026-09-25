@@ -147,12 +147,12 @@ def hyperplanes (V : TensorBundle) : Array (Single V (V.n - 1) Int) :=
 
 /-- Julia `𝕚 = hyperplanes(ℝ3)[1] = v₂₃` (`src/Grassmann.jl:71`): the quaternion unit
 `i` as a bivector of `ℝ3` (`𝕚 * 𝕛 = -v₁₂`… with the dynamic layer's kinds). -/
-def «𝕚» : Single ℝ3 2 Int := ⟨6, 1⟩
+def «𝕚» {α : Type} [AbstractTensors.Coeff α] : Single ℝ3 2 α := ⟨6, AbstractTensors.Coeff.one⟩
 
 /-- Julia `𝕛 = hyperplanes(ℝ3)[2] = -v₁₃`. -/
-def «𝕛» : Single ℝ3 2 Int := ⟨5, -1⟩
+def «𝕛» {α : Type} [AbstractTensors.Coeff α] : Single ℝ3 2 α := ⟨5, -AbstractTensors.Coeff.one⟩
 
 /-- Julia `𝕜 = hyperplanes(ℝ3)[3] = v₁₂`. -/
-def «𝕜» : Single ℝ3 2 Int := ⟨3, 1⟩
+def «𝕜» {α : Type} [AbstractTensors.Coeff α] : Single ℝ3 2 α := ⟨3, AbstractTensors.Coeff.one⟩
 
 end Grassmann

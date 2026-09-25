@@ -8,6 +8,8 @@ import Similitude.Quantity
 import Similitude.Physics
 import Similitude.Derived
 import Similitude.Quotient
+import Similitude.LogQuantity
+import Similitude.Latex
 
 /-!
 # Similitude

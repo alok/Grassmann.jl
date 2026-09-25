@@ -60,7 +60,7 @@ def normalize : Coef → Coef
 
 /-- Value as a `Float64`. -/
 def toFloat : Coef → Float
-  | int n => Float.ofInt n
+  | int n => intToFloat n
   | rat q => JuliaBase.IEEEFloat.ofRat Float q
   | float x => x
 
@@ -95,6 +95,28 @@ def neg : Coef → Coef
   | int a => int (-a)
   | rat a => rat (-a)
   | float x => float (-x)
+
+/-- Julia `-` with promotion. -/
+def sub : Coef → Coef → Coef
+  | int a, int b => int (a - b)
+  | int a, rat b => rat (a - b)
+  | rat a, int b => rat (a - b)
+  | rat a, rat b => rat (a - b)
+  | a, b => float (a.toFloat - b.toFloat)
+
+/-- Julia `/` with promotion: `Int / Int` is `Float64` (one rounding), rationals
+stay rational. -/
+def div : Coef → Coef → Coef
+  | int a, rat b => rat (a / b)
+  | rat a, int b => rat (a / b)
+  | rat a, rat b => rat (a / b)
+  | a, b => float (a.toFloat / b.toFloat)
+
+/-- Julia `iszero`. -/
+def isZero : Coef → Bool
+  | int a => a == 0
+  | rat a => a == 0
+  | float x => x == 0.0
 
 /-- Julia `inv`: `Int ↦ Float64`, `Rational ↦ Rational`. -/
 def inv : Coef → Coef
@@ -155,9 +177,14 @@ def FVec.ofFn {n : Nat} (f : Fin n → Float) : FVec n :=
 @[inline] def FVec.get {n : Nat} (v : FVec n) (i : Fin n) : Float := v.1[i.1]'(by rw [v.2]; exact i.2)
 
 /-- Exponent vector of a group element with its Julia element type:
-`exact` covers `Int` and `Rational{Int}` (it is an `Int` vector exactly when
-every entry is integral, Julia's `promoteints`), `float` is `Float64`. -/
+`int` is an `Int` vector, `exact` a `Rational{Int}` vector (it counts as an `Int`
+vector when every entry is integral, Julia's `promoteints`), `float` is
+`Float64`. Arithmetic keeps integral results in `int`, whose entries are small
+`Int`s (unboxed scalars): a product of two dimension groups is one array of
+integer additions, with no `Rat` (a heap object and a `gcd` per entry). -/
 inductive Exps (n : Nat) where
+  /-- `Int` exponents -/
+  | int (v : Vector Int n)
   /-- `Int`/`Rational{Int}` exponents -/
   | exact (v : Vector Rat n)
   /-- `Float64` exponents -/
@@ -167,19 +194,35 @@ namespace Exps
 
 variable {n : Nat}
 
+/-- Rational exponents, stored as `int` when all are integral. -/
+def ofRats (v : Vector Rat n) : Exps n :=
+  if v.all (·.den == 1) then int (v.map (·.num)) else exact v
+
+/-- The exact exponents as rationals (`none` for `Float64`). -/
+def toRats? : Exps n → Option (Vector Rat n)
+  | int v => some (v.map fun (k : Int) => (k : Rat))
+  | exact v => some v
+  | float _ => none
+
 /-- Entry `i` as an `Expo`, with the vector's element type. -/
 def get (e : Exps n) (i : Fin n) : Expo :=
   match e with
+  | int v => .int v[i]
   | exact v => if v.all (·.den == 1) then .int v[i].num else .rat v[i]
   | float v => .float (v.get i)
 
 /-- Entry as a `Float64`. -/
-def getFloat (e : Exps n) (i : Fin n) : Float := (e.get i).toFloat
+def getFloat (e : Exps n) (i : Fin n) : Float :=
+  match e with
+  | int v => intToFloat v[i]
+  | float v => v.get i
+  | e => (e.get i).toFloat
 
 /-- All entries with the vector's element type (the `Int`/`Rational` decision is
 made once, unlike repeated `get`). -/
 def toExpos (e : Exps n) : Array Expo :=
   match e with
+  | int v => v.toArray.map .int
   | exact v =>
     if v.all (·.den == 1) then v.toArray.map (.int ·.num) else v.toArray.map .rat
   | float v => v.1.toList.toArray.map .float
@@ -187,6 +230,7 @@ def toExpos (e : Exps n) : Array Expo :=
 /-- Is every exponent zero (Julia `iszero(norm(v))`)? -/
 def allZero (e : Exps n) : Bool :=
   match e with
+  | int v => v.all (· == 0)
   | exact v => v.all (· == 0)
   | float v => v.1.toList.all (· == 0.0)
 
@@ -197,42 +241,70 @@ def isFloat : Exps n → Bool
 
 /-- Is this an `Int` vector (exact and all integral)? -/
 def isInt : Exps n → Bool
+  | int _ => true
   | exact v => v.all (·.den == 1)
   | float _ => false
 
 /-- The zero vector (`Int` eltype). -/
-def zero : Exps n := exact (Vector.replicate n 0)
+def zero : Exps n := int (Vector.replicate n 0)
 
 /-- Unit vector `eᵢ` (`valueat(i, N, G)`). -/
-def unit (i : Fin n) : Exps n := exact (Vector.ofFn fun j => if j == i then 1 else 0)
+def unit (i : Fin n) : Exps n := int (Vector.ofFn fun j => if j == i then 1 else 0)
 
-/-- Pointwise combination with Julia promotion (`Float64` contaminates). -/
-def zipWith (fq : Rat → Rat → Rat) (ff : Float → Float → Float) (a b : Exps n) : Exps n :=
+/-- Pointwise combination with Julia promotion (`Float64` contaminates); `fi` on
+two `Int` vectors, `fq` on rationals (integral results are stored as `int`). -/
+@[inline] def zipWith (fi : Int → Int → Int) (fq : Rat → Rat → Rat) (ff : Float → Float → Float)
+    (a b : Exps n) : Exps n :=
   match a, b with
-  | exact u, exact v => exact (Vector.zipWith fq u v)
-  | a, b => float (FVec.ofFn fun i => ff (a.getFloat i) (b.getFloat i))
+  | int u, int v => int (Vector.zipWith fi u v)
+  | float _, _ | _, float _ => float (FVec.ofFn fun i => ff (a.getFloat i) (b.getFloat i))
+  | a, b => match a.toRats?, b.toRats? with
+    | some u, some v => ofRats (Vector.zipWith fq u v)
+    | _, _ => float (FVec.ofFn fun i => ff (a.getFloat i) (b.getFloat i))
 
 /-- Pointwise map with Julia promotion. -/
-def map (fq : Rat → Rat) (ff : Float → Float) : Exps n → Exps n
-  | exact u => exact (u.map fq)
-  | a => float (FVec.ofFn fun i => ff (a.getFloat i))
+@[inline] def map (fq : Rat → Rat) (ff : Float → Float) : Exps n → Exps n
+  | float u => float (FVec.ofFn fun i => ff (u.get i))
+  | a => match a.toRats? with
+    | some u => ofRats (u.map fq)
+    | none => a
+
+/-- `a + b` on exponents. `Rat` arithmetic takes a GMP `gcd` even for small
+values; exponent vectors are sparse, so zeros and integers skip it. -/
+@[inline] def ratAdd (a b : Rat) : Rat :=
+  if a.num == 0 then b else if b.num == 0 then a
+  else if a.den == 1 && b.den == 1 then ((a.num + b.num : Int) : Rat) else a + b
+/-- `a - b` on exponents (see `ratAdd`). -/
+@[inline] def ratSub (a b : Rat) : Rat :=
+  if b.num == 0 then a else if a.num == 0 then -b
+  else if a.den == 1 && b.den == 1 then ((a.num - b.num : Int) : Rat) else a - b
+/-- `a * b` on exponents (see `ratAdd`). -/
+@[inline] def ratMul (a b : Rat) : Rat :=
+  if a.num == 0 || b.num == 0 then 0
+  else if a.den == 1 && b.den == 1 then ((a.num * b.num : Int) : Rat) else a * b
 
 /-- `a + b` (group multiplication). -/
-def add : Exps n → Exps n → Exps n := zipWith (· + ·) (· + ·)
+def add : Exps n → Exps n → Exps n := zipWith (· + ·) ratAdd (· + ·)
 /-- `a - b` (group division). -/
-def sub : Exps n → Exps n → Exps n := zipWith (· - ·) (· - ·)
+def sub : Exps n → Exps n → Exps n := zipWith (· - ·) ratSub (· - ·)
 /-- `-a` (group inverse). -/
-def neg : Exps n → Exps n := map (- ·) (- ·)
+def neg : Exps n → Exps n
+  | int u => int (u.map (- ·))
+  | a => map (- ·) (- ·) a
 /-- `k·a` for a rational `k` (group power). -/
-def smul (k : Rat) : Exps n → Exps n := map (k * ·) (JuliaBase.IEEEFloat.ofRat Float k * ·)
+def smul (k : Rat) : Exps n → Exps n
+  | int u => if k.den == 1 then int (u.map (k.num * ·)) else ofRats (u.map fun (x : Int) => ratMul k x)
+  | a => map (ratMul k ·) (JuliaBase.IEEEFloat.ofRat Float k * ·) a
 /-- `y·a` for a `Float64` `y`: always a `Float64` vector. -/
 def fmul (y : Float) (a : Exps n) : Exps n := float (FVec.ofFn fun i => y * a.getFloat i)
 
 /-- Julia `==` of exponent vectors (numeric, across element types). -/
 def beq (a b : Exps n) : Bool :=
   match a, b with
+  | int u, int v => u == v
   | exact u, exact v => u == v
-  | a, b => (List.finRange n).all fun i => a.getFloat i == b.getFloat i
+  | float _, _ | _, float _ => (List.finRange n).all fun i => a.getFloat i == b.getFloat i
+  | a, b => a.toRats? == b.toRats?
 
 end Exps
 
@@ -253,6 +325,8 @@ def mk' (v : Exps B.n) (c : Coef) : Group B := ⟨v, c.normalize⟩
 
 /-- The identity `𝟙` (`one(g)`). -/
 def one : Group B := ⟨.zero, .int 1⟩
+
+instance : Inhabited (Group B) := ⟨one⟩
 
 /-- Generator `bᵢ` (`valueat(i, N, G)`); index `i` is 0-based. -/
 def gen (i : Fin B.n) : Group B := ⟨.unit i, .int 1⟩
@@ -306,7 +380,7 @@ instance : One (Group B) := ⟨one⟩
 
 /-- A group element from integer exponents. -/
 def ofInts (xs : List Int) (c : Coef := .int 1) : Group B :=
-  mk' (.exact (Vector.ofFn fun (i : Fin B.n) => (xs.getD i.1 0 : Rat))) c
+  mk' (.int (Vector.ofFn fun (i : Fin B.n) => xs.getD i.1 0)) c
 
 /-! ### Display (`printdims`, `showgroup`) -/
 
@@ -342,7 +416,7 @@ def showPre (g : Group B) : String := g.showWith B.text B.charNames B.unit
 /-- Julia `latexdims`/`latexgroup_pre` (`FieldAlgebra.jl:192-297`): the LaTeX
 monomial with `\cdot ` separators and the `\textbf{1}` identity (master branch). -/
 def latexPre (g : Group B) (names : Array String := B.latex) (charNames : Bool := B.charNames)
-    (glyph : String := "\\textbf{1}") : String := Id.run do
+    (glyph : String := "\\textbf{1}") (coefSep : Bool := true) : String := Id.run do
   let es := g.v.toExpos
   let mut out := ""
   for h : i in [0:es.size] do
@@ -359,7 +433,7 @@ def latexPre (g : Group B) (names : Array String := B.latex) (charNames : Bool :
         | .float x => (match makeint x with | .float y => specialPrintFloat y | j => j.toString)
         | k => k.showMakeint)
     else
-      out := out ++ (if iz then "" else "\\cdot ") ++ (match c with
+      out := out ++ (if iz || !coefSep then "" else "\\cdot ") ++ (match c with
         | .float x => (match makeint x with | .float y => specialPrintFloat y | j => j.toString)
         | k => k.showMakeint)
   return out

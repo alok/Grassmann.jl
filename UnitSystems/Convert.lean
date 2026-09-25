@@ -1,4 +1,5 @@
 import UnitSystems.Physics
+import Std.Data.HashMap
 
 /-!
 # The 131 conversion factors
@@ -472,13 +473,21 @@ def name (q : Conv) : String := ((reprStr q).splitOn ".").getLast!
 /-- Look a quantity up by its Julia name. -/
 def ofName? (s : String) : Option Conv := all.find? (·.name == s)
 
+/-- `q(U,S)`, deliberately not inlined: at a call site with a literal quantity and
+literal systems (`Conv.factorOf .energy (English Num) (Metric Num)`) the whole
+application is a closed term, which the compiler evaluates once and hoists, as
+Julia folds `energy(English, Metric)` into a constant. -/
+@[noinline] def factorOf (q : Conv) (U S : UnitSystem α) : α := q.factor U S
+
 /-- Julia `q(v::Real, U, S)` for a value `v` given in `S` (`UnitSystems.jl:300-305`):
 `v` unchanged when `U` and `S` are the same system or the factor is exactly one,
-otherwise `v / q(U,S)` (for a plain `v` that is `v*inv(q(U,S))`). -/
-def convert (q : Conv) (v : α) (U S : UnitSystem α) : α :=
+otherwise `v / q(U,S)` (for a plain `v` that is `v*inv(q(U,S))`). Inlined, with the
+factor and the `===` test out of line, so that with literal `q`, `U`, `S` both are
+closed terms computed once and the conversion is one division. -/
+@[inline] def convert (q : Conv) (v : α) (U S : UnitSystem α) : α :=
   if U.ident S then v
   else
-    let u := q.factor U S
+    let u := factorOf q U S
     if isOne u then v else v / u
 
 /-- Julia `q(U) = q(Natural, U)`: one natural unit of `q` expressed in `U`.
@@ -492,6 +501,190 @@ def natural (q : Conv) (U : UnitSystem α) : α :=
   | .luminousefficacy => U.Kcd
   | .permeability => U.μ₀
   | q => q.factor (Natural α) U
+
+/-- `all` lists the quantities in constructor order (the per-pair tables index by `ctorIdx`). -/
+theorem ctorIdx_all : all.map Conv.ctorIdx = List.range 131 := by decide
+
+/-! ### Fast paths
+
+Julia compiles `energy(v, English, Metric)` to one multiplication: the factor is a
+function of type parameters and folds to a constant. The Lean equivalents:
+
+* literal systems: `convert`/`convertF` with `factorOf`/`floatFactor` out of line,
+  so the factor is a closed term, computed once (`unitsystems/convert_literal`);
+* named systems chosen at run time (`Sys`): all 131 factors of an ordered pair of
+  systems are computed on first use and cached (`factorSys`, `convertSys`,
+  `naturalSys`), so a conversion is an array read (`unitsystems/convert_sys`);
+* arbitrary systems: the chains over bare `Float64` (`UnitAlg Float`), or
+  `factorAny`, which recognises the named systems by their parameters first. -/
+
+/-- Julia's `q(v, U, S)` for a plain `v::Float64` as one operation on `v`: multiply
+by `k` (`mul`) or divide by it. -/
+structure FloatFactor where
+  /-- the constant -/
+  k : Float
+  /-- multiply (`true`) or divide (`false`) -/
+  mul : Bool
+  deriving Inhabited
+
+/-- The `FloatFactor` of a `Num` factor `u`: `v` unchanged when `u` is one;
+`v / u` for a plain `v` and a `Constant` `u` is `v * inv(u)` (`FieldConstants.jl:93`,
+two roundings), for a plain `u` one division. -/
+def FloatFactor.ofNum (u : Num) : FloatFactor :=
+  if u.v.isOne then ⟨f64! 1.0, true⟩
+  else if u.const then ⟨u.v.inv.toFloat, true⟩
+  else ⟨u.toFloat, false⟩
+
+/-- Apply a `FloatFactor`. -/
+@[inline] def FloatFactor.apply (f : FloatFactor) (v : Float) : Float :=
+  if f.mul then v * f.k else v / f.k
+
+/-- `q(v, U, S)` for `v::Float64` as a `FloatFactor` (the identity when the systems
+are `===`). Not inlined, so that literal arguments make it a closed term. -/
+@[noinline] def floatFactor (q : Conv) (U S : UnitSystem Num) : FloatFactor :=
+  if U.ident S then ⟨f64! 1.0, true⟩ else FloatFactor.ofNum (q.factor U S)
+
+/-- Julia `q(v::Float64, U, S)`, bit for bit (`Num` semantics with a plain value):
+with literal `q`, `U`, `S` one multiplication by a precomputed constant. -/
+@[inline] def convertF (q : Conv) (v : Float) (U S : UnitSystem Num) : Float :=
+  (floatFactor q U S).apply v
+
+/-- All 131 factors `q(U,S)` of one ordered pair of named systems, indexed by
+`Conv.ctorIdx`, with their `FloatFactor`s unpacked. -/
+structure PairFactors where
+  /-- `q(U,S)` as `Num` -/
+  num : Array Num
+  /-- `FloatFactor.k` -/
+  k : FloatArray
+  /-- `FloatFactor.mul` (`1` = multiply) -/
+  mul : ByteArray
+  /-- are the two systems `===`? -/
+  same : Bool
+  deriving Inhabited
+
+/-- Compute the factors of a pair of systems. -/
+def PairFactors.build (U S : UnitSystem Num) : PairFactors :=
+  let same := U.ident S
+  let num := all.toArray.map fun q => q.factor U S
+  let ff := num.map fun u => if same then ⟨f64! 1.0, true⟩ else FloatFactor.ofNum u
+  { num, k := ⟨ff.map (·.k)⟩, mul := ⟨ff.map fun f => if f.mul then 1 else 0⟩, same }
+
+/-- One lazily computed `PairFactors` per ordered pair of the 48 named systems
+(index `48·U + S`). -/
+def pairTable : Array (Thunk PairFactors) :=
+  (List.range (48 * 48)).toArray.map fun k => Thunk.mk fun _ =>
+    let sys := Sys.all.toArray
+    PairFactors.build ((sys[k / 48]!).sys Num) ((sys[k % 48]!).sys Num)
+
+/-- The factors of a pair of named systems (computed on first use). -/
+@[inline] def pairFactors (U S : Sys) : PairFactors := (pairTable[U.ctorIdx * 48 + S.ctorIdx]!).get
+
+/-- Julia `q(U, S)` for named systems chosen at run time: an array read after the
+first use of the pair. Bit-identical to `q.factor (U.sys Num) (S.sys Num)`. -/
+def factorSys (q : Conv) (U S : Sys) : Num := (pairFactors U S).num[q.ctorIdx]!
+
+/-- Julia `q(v, U, S)` for a `Num` value and named systems chosen at run time. -/
+def convertSysNum (q : Conv) (v : Num) (U S : Sys) : Num :=
+  let p := pairFactors U S
+  if p.same then v
+  else
+    let u := p.num[q.ctorIdx]!
+    if u.v.isOne then v else v / u
+
+/-- Julia `q(v::Float64, U, S)` for named systems chosen at run time. -/
+def convertSys (q : Conv) (v : Float) (U S : Sys) : Float :=
+  let p := pairFactors U S
+  let i := q.ctorIdx
+  let k := p.k.get! i
+  if p.mul.get! i == 1 then v * k else v / k
+
+/-- Julia `q(U) = q(Natural, U)` for a named system chosen at run time (the
+accessor for `angle`, `molarmass`, `luminousefficacy`, `permeability`). -/
+def naturalSys (q : Conv) (U : Sys) : Num :=
+  match q with
+  | .angle => (U.sys Num).θ
+  | .molarmass => (U.sys Num).Mᵤ
+  | .luminousefficacy => (U.sys Num).Kcd
+  | .permeability => (U.sys Num).μ₀
+  | q => factorSys q .Natural U
+
+end Conv
+
+namespace Sys
+
+/-- The sixteen parameters of a system's Julia type: the eleven defining constants
+and the five couplings. -/
+def params (U : UnitSystem Num) : List Num :=
+  [U.kB, U.ħ, U.c, U.μ₀, U.mₑ, U.Mᵤ, U.Kcd, U.θ, U.lam, U.αL, U.g₀,
+   U.C.αG, U.C.α, U.C.μₑᵤ, U.C.μₚᵤ, U.C.ΩΛ]
+
+/-- The hash of one parameter: payload bits, kind and `Constant` flag. -/
+@[inline] def numHash (x : Num) : UInt64 :=
+  match x.v with
+  | .int n => n.toUInt64 ^^^ 0x9E3779B97F4A7C15 ^^^ (if x.const then 0 else 0xC2B2AE3D27D4EB4F)
+  | .float f => f.toBits ^^^ (if x.const then 0 else 0xC2B2AE3D27D4EB4F)
+
+/-- A hash of a system for bucketing (four of its parameters; `identFull` decides). -/
+def paramHash (U : UnitSystem Num) : UInt64 :=
+  mixHash (mixHash (numHash U.kB) (numHash U.ħ)) (mixHash (numHash U.mₑ) (numHash U.g₀))
+
+/-- Julia `===` of two systems' types: the eleven constants and the coupling. -/
+def identFull (U S : UnitSystem Num) : Bool :=
+  U.ident S && U.C.αG.ident S.C.αG && U.C.α.ident S.C.α && U.C.μₑᵤ.ident S.C.μₑᵤ &&
+    U.C.μₚᵤ.ident S.C.μₚᵤ && U.C.ΩΛ.ident S.C.ΩΛ
+
+/-- `identFull` is reflexive (the pointer-equality fast path of `ofSystem?`). -/
+theorem identFull_refl (U : UnitSystem Num) : identFull U U = true := by
+  simp [identFull, UnitSystem.ident, UnitAlg.ident, Num.ident_refl]
+
+/-- The named systems by parameter hash, in Julia order. -/
+def byHash : Std.HashMap UInt64 (List Sys) :=
+  all.foldl (fun m s => m.alter (paramHash (s.sys Num)) fun
+    | some l => some (l ++ [s]) | none => some [s]) {}
+
+/-- The named system whose Julia type this system has (`===` on the eleven
+defining constants and the coupling), if any; ties go to the first in Julia order.
+Julia `unitname` of an arbitrary system is this name, or `Unknown`. Not inlined, so
+that it is computed once for a literal system. -/
+@[noinline] def ofSystem? (U : UnitSystem Num) : Option Sys :=
+  (byHash.getD (paramHash U) []).find? fun s =>
+    -- a named system is usually passed as the very object `s.sys Num`
+    withPtrEq (s.sys Num) U (fun _ => identFull (s.sys Num) U) fun h => h ▸ identFull_refl _
+
+end Sys
+
+/-- Julia `unitname(U)`/`show(U)` of any system (`UnitSystems.jl:186-187`,
+`initdata.jl:169-171`): the name of the named system with the same Julia type,
+otherwise `Unknown`. -/
+def UnitSystem.unitname (U : UnitSystem Num) : String :=
+  match Sys.ofSystem? U with
+  | some s => s.name
+  | none => "Unknown"
+
+section rescale
+variable {α : Type} [UnitAlg α]
+
+/-- Julia's callable system `(U::UnitSystem)(JK, Js, ms, Hm, kg)`
+(`UnitSystems.jl:205-221`): rescale the entropy, action, speed, permeability and
+mass units by the factors (the molar mass, luminous efficacy, angle,
+rationalization, gravity and coupling are kept), and the Lorentz constant by
+`inv(ms)` unless it is one. `Metric(1.0, 1.0, 1.0, 1.0, 1.0)` is an `Unknown`
+system: its parameters are plain numbers. -/
+def UnitSystem.rescale (U : UnitSystem α) (JK Js ms Hm kg : α) : UnitSystem α :=
+  { U with kB := U.kB * JK, ħ := U.ħ * Js, c := U.c * ms, μ₀ := U.μ₀ * Hm, mₑ := U.mₑ * kg,
+           αL := if UnitAlg.isOne U.αL then U.αL else U.αL / ms }
+
+end rescale
+
+namespace Conv
+
+/-- Julia `q(U, S)` for any two systems: named systems (recognised by their
+parameters, `Sys.ofSystem?`) read the per-pair table, other systems evaluate the
+chain. Bit-identical to `q.factor U S`. -/
+@[inline] def factorAny (q : Conv) (U S : UnitSystem Num) : Num :=
+  match Sys.ofSystem? U, Sys.ofSystem? S with
+  | some u, some s => factorSys q u s
+  | _, _ => q.factor U S
 
 end Conv
 

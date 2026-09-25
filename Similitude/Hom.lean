@@ -50,9 +50,18 @@ def applyFloat (m : LinMap) (d : Fin 11 → Float) : FVec 11 :=
   FVec.ofFn fun i => (m.rows.getD i.1 []).foldl
     (fun acc (j, k) => acc + (Float.ofInt k / 2.0) * (if h : j < 11 then d ⟨j, h⟩ else 0.0)) 0.0
 
+/-- Apply the map to integer exponents: `Int` arithmetic on the doubled
+coefficients, halved at the end (an odd entry makes the image rational). -/
+def applyInt (m : LinMap) (d : Vector Int 11) : Exps 11 :=
+  let twice : Vector Int 11 := Vector.ofFn fun i => (m.rows.getD i.1 []).foldl
+    (fun acc (j, k) => acc + k * (if h : j < 11 then d[j] else 0)) 0
+  if twice.all (· % 2 == 0) then .int (twice.map (· / 2))
+  else .exact (twice.map fun t => mkRat t 2)
+
 /-- Apply the map to a USQ exponent vector, keeping Julia's element type. -/
 def apply (m : LinMap) : Exps 11 → Exps 11
-  | .exact v => .exact (m.applyRat fun i => v[i])
+  | .int v => m.applyInt v
+  | .exact v => Exps.ofRats (m.applyRat fun i => v[i])
   | .float v => .float (m.applyFloat v.get)
 
 /-- Apply the map to a USQ group; the image has coefficient `1` (Julia builds it
@@ -178,11 +187,11 @@ theorem usqMap_eq_usqToConst :
 
 /-- The USQ exponents of a type-level dimension as a group element. -/
 def _root_.UnitSystems.Dim.toGroup (d : Dim) : USQGroup :=
-  Group.mk' (.exact (Vector.ofFn fun i => d.toRats.getD i.1 0)) (.int 1)
+  Group.mk' (Exps.ofRats (Vector.ofFn fun i => d.toRats.getD i.1 0)) (.int 1)
 
 /-- The exponents of a doubled `HalfDim` (UnitSystems' exponent model) as an
 exact USQ vector. -/
 def _root_.UnitSystems.HalfDim.toExps (h : HalfDim) : Exps 11 :=
-  .exact (Vector.ofFn fun i => mkRat (h.toList.getD i.1 0) 2)
+  Exps.ofRats (Vector.ofFn fun i => mkRat (h.toList.getD i.1 0) 2)
 
 end Similitude

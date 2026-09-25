@@ -38,6 +38,10 @@ def Coupling.display (C : Coupling Num) : String :=
 /-- Julia `display` of a named system. -/
 def Sys.display (u : Sys) : String := (u.sys Num).display u.name
 
+/-- Julia `display(U)` of any system: its name (`unitname`: a named system's, or
+`Unknown`) and its parameters. -/
+def UnitSystem.displayAny (U : UnitSystem Num) : String := U.display U.unitname
+
 instance : ToString Sys := ⟨Sys.name⟩
 
 end UnitSystems

@@ -52,12 +52,16 @@ def conversionsSuite : IO (Suite × Suite) := do
     | some q =>
       let x := q.factor (sysOf (str (idx r 1))) (sysOf (str (idx r 2)))
       (s, e) := checkNum s e x (gnum (idx r 3)) fun _ => s!"{qn}({str (idx r 1)},{str (idx r 2)})"
+      -- the per-pair table of named systems
+      let y := q.factorSys (sysOf! (str (idx r 1))) (sysOf! (str (idx r 2)))
+      (s, e) := checkNum s e y (gnum (idx r 3)) fun _ => s!"factorSys {qn}({str (idx r 1)},{str (idx r 2)})"
   -- q(U) = q(Natural, U)
   let onearg := fld j "onearg"
   for q in Conv.all do
     let row := arr (fld onearg q.name)
     for (u, g) in Sys.all.zip row.toList do
       (s, e) := checkNum s e (q.natural (u.sys Num)) (gnum g) fun _ => s!"{q.name}({u.name})"
+      (s, e) := checkNum s e (q.naturalSys u) (gnum g) fun _ => s!"naturalSys {q.name}({u.name})"
   -- q(v, U, S) with a plain value v, and q(v, U) = q(v, U, Metric)
   for r in arr (fld j "values") do
     let some q := Conv.ofName? (str (idx r 0)) | continue
@@ -71,6 +75,15 @@ def conversionsSuite : IO (Suite × Suite) := do
       s!"{q.name}({v},{str (idx r 1)},{str (idx r 2)})"
     (s, e) := checkNum s e (q.convert v U (Metric Num)) (gnum (idx r 5)) fun _ =>
       s!"{q.name}({v},{str (idx r 1)})"
+    -- the fast paths: per-pair tables and the Float64 form
+    let (u, s') := (sysOf! (str (idx r 1)), sysOf! (str (idx r 2)))
+    (s, e) := checkNum s e (q.convertSysNum v u s') (gnum (idx r 4)) fun _ =>
+      s!"convertSysNum {q.name}({v},{str (idx r 1)},{str (idx r 2)})"
+    if let .float x := v.v then
+      (s, e) := checkNum s e (.p (.float (q.convertSys x u s'))) (gnum (idx r 4)) fun _ =>
+        s!"convertSys {q.name}({v},{str (idx r 1)},{str (idx r 2)})"
+      (s, e) := checkNum s e (.p (.float (q.convertF x U S))) (gnum (idx r 4)) fun _ =>
+        s!"convertF {q.name}({v},{str (idx r 1)},{str (idx r 2)})"
   return (s, e)
 
 end Tests.UnitSystemsTests

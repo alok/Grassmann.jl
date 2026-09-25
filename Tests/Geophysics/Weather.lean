@@ -81,6 +81,20 @@ def weatherChecks {n : Nat} (W : Weather n) (d : Json) (label : String) (t : Tal
     let F := W.state h
     t := t.fs [F.T, F.P] g fun _ => w s!"W({fmt h})"
   t := t.ops (fld d "ops") hs C.eval C.ratio (w "grid")
+  -- the per-operation column functions and Julia's named `<op>ratio` functions
+  let named (o : Op) (h : Float) : Float := match o with
+    | .temperature => W.temperatureratio h | .pressure => W.pressureratio h
+    | .density => W.densityratio h | .specificweight => W.specificweightratio h
+    | .specificvolume => W.specificvolumeratio h | .specificimpedance => W.specificimpedanceratio h
+    | .thermaldiffusivity => W.thermaldiffusivityratio h | .intensity => W.intensityratio h
+    | .kinematic => W.kinematicratio h | .elasticity => W.elasticityratio h
+    | .viscosity => W.viscosityratio h | .thermalconductivity => W.thermalconductivityratio h
+    | .heatvolume => W.heatvolumeratio h | .heatpressure => W.heatpressureratio h
+    | .heatratio => W.heatratioratio h | .prandtl => W.prandtlratio h
+    | .sonicspeed => W.sonicspeedratio h | .freedom => W.freedomratio h
+    | .specificenergy => W.specificenergyratio h | .specificenthalpy => W.specificenthalpyratio h
+    | .heatcapacity => C.ratio .heatcapacity h
+  t := t.ops (fld d "ops") hs (fun o h => Column.fn o C h) named (w "named grid")
   -- layer-level primitives
   for r in arr (fld d "primitive") do
     let i := (int (fld r "i")).toNat - 1

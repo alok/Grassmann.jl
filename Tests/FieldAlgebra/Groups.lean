@@ -157,6 +157,25 @@ def run : IO Suite := do
         s := s.check (got == want) fun _ => s!"{nm}: got {got}, want {want}"
       return s
     s := if str (fld r "basis") == "XYZ" then check xyz s else check named s
+  -- LogGroup / ExpGroup inverses and `isonezero`
+  for r in arr (fld j "loginv") do
+    let check (B : Basis) (s : Suite) : Suite := Id.run do
+      let mut s := s
+      let a := groupOf B (fld r "a")
+      let cases : List (String × Group B) :=
+        [("explog", a.log.exp), ("exp2log2", a.log2.exp2), ("exp10log10", a.log10.exp10),
+         ("explog3", (a.logb 3).exp), ("pow2log", a.log.bpow 2), ("logexp", a.exp.log),
+         ("log2exp2", a.exp2.log2), ("log10exp10", a.exp10.log10), ("logexp2", a.exp2.log),
+         ("log3exp", a.exp.logb (.num 3)), ("log2exp10", a.exp10.log2)]
+      for (nm, g) in cases do
+        let w := fld r nm
+        if str w != "ERROR" then
+          let (ok, msg) := groupMatches g w
+          s := s.check ok fun _ => s!"{nm} of {str (fld (fld r "a") "show")}: {msg}"
+      let io := (fld r "isonezero").getBool?.toOption.getD false
+      s := s.check (a.isonezero == io) fun _ => s!"isonezero {str (fld (fld r "a") "show")}"
+      return s
+    s := if str (fld r "basis") == "XYZ" then check xyz s else check named s
   return s
 
 end Tests.FieldAlgebra.GroupTests

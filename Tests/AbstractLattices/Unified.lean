@@ -38,10 +38,8 @@ example : (TruthValues.ofNat 2 0b0011 ∨ TruthValues.ofNat 2 0b0101).toNat = 7 
   (p ∧ q).not == (p.not ∨ q.not)
 
 -- Dendriform grafting `l ∨ r` (DF/arithmetic.jl:38-57)
-open Dendriform in
-example : (Tree.leaf ∨ Tree.leaf) = Tree.node .leaf .leaf := rfl
-open Dendriform in
-example : ((Tree.leaf ∨ Tree.leaf) ∨ Tree.leaf).deg = 2 := rfl
+example : (Dendriform.Tree.leaf ∨ Dendriform.Tree.leaf) = Dendriform.Tree.node .leaf .leaf := rfl
+example : ((Dendriform.Tree.leaf ∨ Dendriform.Tree.leaf) ∨ Dendriform.Tree.leaf).deg = 2 := rfl
 
 -- core `∧`/`∨` on propositions still elaborate
 example (p q : Prop) (hp : p) (hq : q) : p ∧ q := ⟨hp, hq⟩
@@ -56,8 +54,7 @@ section
 open Grassmann DeMorgan
 
 example : (TruthValues.ofNat 2 0b0011 ∧ TruthValues.ofNat 2 0b0101).toNat = 1 := by decide
-open Dendriform in
-example : (Tree.leaf ∨ Tree.leaf) = Tree.node .leaf .leaf := rfl
+example : (Dendriform.Tree.leaf ∨ Dendriform.Tree.leaf) = Dendriform.Tree.node .leaf .leaf := rfl
 #guard toString ((Chain.ofList? (V := ℝ3) (G := 1) [(1 : Int), 2, 3]).get! ∧
   (Chain.ofList? (V := ℝ3) (G := 1) [(4 : Int), 5, 6]).get! : Chain ℝ3 2 Int) == "-3v₁₂ - 6v₁₃ - 3v₂₃"
 end

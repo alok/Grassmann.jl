@@ -38,6 +38,8 @@ def constantsSuite : IO (Suite × Suite) := do
     let g := fld cs nm
     s := s.check (!g.isNull) fun _ => s!"no golden for {nm}"
     (s, e) := checkNum s e x (gnum g) fun _ => nm
+  for (nm, x) in irrationalConstants do
+    (s, e) := checkNum s e (.p (.float x)) (gnum (fld cs nm)) fun _ => nm
   return (s, e)
 
 end Tests.UnitSystemsTests

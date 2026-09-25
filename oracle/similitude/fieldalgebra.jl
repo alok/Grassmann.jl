@@ -90,5 +90,20 @@ for (nm, gens) in (("XYZ", chargens), ("Named", strgens))
     end
 end
 
-writejson(joinpath(OUT, "fieldalgebra.json"), Dict("julia" => string(VERSION), "prims" => prims, "groups" => groups, "loggroups" => lg))
+# ---------- LogGroup / ExpGroup inverses (drawn after the rows above) ----------
+linv = Any[]
+for (nm, gens) in (("XYZ", chargens), ("Named", strgens))
+    for i in 1:30
+        a = rgroup(gens)
+        push!(linv, Dict("basis" => nm, "a" => encg(a),
+            "explog" => tryg(() -> exp(log(a))), "exp2log2" => tryg(() -> exp2(log2(a))),
+            "exp10log10" => tryg(() -> exp10(log10(a))), "explog3" => tryg(() -> exp(log(3, a))),
+            "pow2log" => tryg(() -> 2^log(a)), "logexp" => tryg(() -> log(exp(a))),
+            "log2exp2" => tryg(() -> log2(exp2(a))), "log10exp10" => tryg(() -> log10(exp10(a))),
+            "logexp2" => tryg(() -> log(exp2(a))), "log3exp" => tryg(() -> log(3, exp(a))),
+            "log2exp10" => tryg(() -> log2(exp10(a))), "isonezero" => FA.isonezero(a)))
+    end
+end
+
+writejson(joinpath(OUT, "fieldalgebra.json"), Dict("julia" => string(VERSION), "prims" => prims, "groups" => groups, "loggroups" => lg, "loginv" => linv))
 println("wrote fieldalgebra.json")

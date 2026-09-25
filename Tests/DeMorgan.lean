@@ -7,7 +7,7 @@ the README tables (port-notes §6.3, verbatim), compile-time `decide` checks of 
 tautology checker, and properties of the fixed merge.
 -/
 
-open DeMorgan Tests.Small
+open DeMorgan AbstractLattices Tests.Small
 
 namespace Tests.DeMorgan
 

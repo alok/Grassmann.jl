@@ -111,4 +111,28 @@ for (a, b) in ((:Metric, :English), (:Metric, :Gauss), (:Metric, :Planck), (:Met
     end
 end
 save("ratios", cv)
+
+# ---------- 5. derived units and constants with uncertainty ----------
+# every Similitude derived unit (the functions of the system at Metric), in its own
+# system and in Metric, and the measured module constants (`δμ₀`, `RH`, …)
+dn = Any[]
+for nm in (:hyperfine, :loschmidt, :wienwavelength, :wienfrequency, :mechanicalheat, :eddington, :solarmass, :jupitermass, :earthmass, :lunarmass, :earthradius, :greatcircle, :radarmile, :hubble, :cosmological, :steradian, :spatian, :degree, :squaredegree, :gradian, :bradian, :arcminute, :arcsecond, :second, :minute, :hour, :day, :gaussianmonth, :siderealmonth, :synodicmonth, :year, :gaussianyear, :siderealyear, :jovianyear, :angstrom, :inch, :foot, :surveyfoot, :yard, :meter, :earthmeter, :mile, :statutemile, :meridianmile, :admiraltymile, :nauticalmile, :lunardistance, :astronomicalunit, :jupiterdistance, :lightyear, :parsec, :barn, :hectare, :acre, :surveyacre, :liter, :gallon, :quart, :pint, :cup, :fluidounce, :teaspoon, :tablespoon, :bubnoff, :ips, :fps, :fpm, :ms, :kmh, :mph, :knot, :mps, :grain, :gram, :earthgram, :kilogram, :tonne, :ton, :pound, :ounce, :slug, :slinch, :hyl, :dyne, :newton, :poundal, :poundforce, :kilopond, :psi, :pascal, :bar, :barye, :technicalatmosphere, :atmosphere, :inchmercury, :torr, :electronvolt, :erg, :joule, :footpound, :calorie, :kilocalorie, :meancalorie, :earthcalorie, :thermalunit, :gasgallon, :tontnt, :watt, :horsepower, :horsepowerwatt, :horsepowermetric, :electricalhorsepower, :tonsrefrigeration, :boilerhorsepower, :coulomb, :earthcoulomb, :ampere, :volt, :henry, :ohm, :siemens, :farad, :weber, :tesla, :abcoulomb, :abampere, :abvolt, :abhenry, :abohm, :abmho, :abfarad, :maxwell, :gauss, :oersted, :gilbert, :statcoulomb, :statampere, :statvolt, :stathenry, :statohm, :statmho, :statfarad, :statweber, :stattesla, :kelvin, :rankine, :celsius, :fahrenheit, :sealevel, :boiling, :mole, :earthmole, :poundmole, :slugmole, :slinchmole, :katal, :amagat, :lumen, :candela, :lux, :phot, :footcandle, :nit, :apostilb, :stilb, :lambert, :footlambert, :bril, :talbot, :lumerg, :hertz, :apm, :rpm, :kayser, :diopter, :rayleigh, :flick, :gforce, :galileo, :eotvos, :darcy, :poise, :reyn, :stokes, :rayl, :mpge, :langley, :jansky, :solarflux, :curie, :gray, :roentgen, :gaussgravitation)
+    x = getfield(MS, nm)
+    q = x isa MS.Quantity ? x : (try x(MS.Metric) catch; nothing end)
+    qm = try q(MS.Metric) catch; nothing end
+    push!(dn, [string(nm), showstr(q), showstr(qm), mv(qm)...])
+end
+save("derived", dn)
+mc = Any[]
+for nm in (:δμ₀, :RH, :Ry, :eV, :κ, :σ, :μB, :ε₀, :kₑ, :mₚ, :Da, :𝔉, :Φ₀, :Z₀, :G₀, :Eₕ, :a₀, :rₑ, :RK, :KJ,
+           :BTUJ, :BTUftlb, :kcal, :cal, :μE☾)
+    x = getfield(MS, nm)
+    push!(mc, [string(nm), showstr(x), (x isa M.Measurement ? [h(x.val), h(x.err)] : x isa MS.Quantity ? mv(x) : ve(x))...])
+end
+for s in (:Metric, :SI2019, :English, :Gauss, :Planck)
+    x = MS.sackurtetrode(getfield(MS, s))
+    y = FA.product(x)
+    push!(mc, ["sackurtetrode(" * string(s) * ")", showstr(x), (y isa M.Measurement ? [h(y.val), h(y.err)] : [h(Float64(y)), h(0.0)])...])
+end
+save("constants", mc)
 println("done")
