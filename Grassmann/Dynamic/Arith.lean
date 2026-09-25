@@ -300,21 +300,25 @@ def mulScalar (x : TA V α) (s : α) : TA V α :=
   | multi m => multi ⟨m.v.map (· * s)⟩
   | phasor amp θ => phasor (amp * s) θ
 
-/-- Julia `x / s` for a scalar `s` (entrywise division; `Zero/s = Zero`, `∞/s = ∞`). -/
+/-- Julia `x / s` for a scalar `s`: the containers (`Chain`, `Spinor`, `CoSpinor`,
+`Multivector`) divide entrywise; terms and couples are multiplied by `1/s` (Julia
+`/(a::TensorGraded, b::Real) = a*(1/b)`, `src/algebra.jl:703-712`, so `7.0v₁/10.0` is
+`0.7000000000000001v₁`); `Zero/s = Zero`, `∞/s = ∞`. -/
 def divScalar [Div α] (x : TA V α) (s : α) : TA V α :=
+  let r := Coeff.one / s
   match x with
   | zero => zero
-  | one => single 0 (Coeff.one / s)
+  | one => single 0 r
   | infinity => infinity
-  | blade b => single b (Coeff.one / s)
-  | single b v => single b (v / s)
+  | blade b => single b r
+  | single b v => single b (v * r)
   | chain g c => chain g ⟨c.v.map (· / s)⟩
-  | couple b re im => couple b (re / s) (im / s)
-  | pseudo b re im => pseudo b (re / s) (im / s)
+  | couple b re im => couple b (re * r) (im * r)
+  | pseudo b re im => pseudo b (re * r) (im * r)
   | spinor h => spinor ⟨h.v.map (· / s)⟩
   | cospinor h => cospinor ⟨h.v.map (· / s)⟩
   | multi m => multi ⟨m.v.map (· / s)⟩
-  | phasor amp θ => phasor (amp / s) θ
+  | phasor amp θ => phasor (amp * r) θ
 
 /-- Julia `a - b = a + (-b)` (see the module docstring). -/
 @[inline] def sub (a b : TA V α) : TA V α := add a (neg b)

@@ -8,6 +8,8 @@ import Grassmann.Dynamic.Norms
 import Grassmann.Dynamic.Layout
 import Grassmann.Dynamic.Laws
 import Grassmann.Dynamic.Equal
+import Grassmann.Dynamic.Ops
+import Grassmann.Dynamic.Division
 
 /-!
 # The dynamic, Julia-exact element layer (`Grassmann.TA`)
