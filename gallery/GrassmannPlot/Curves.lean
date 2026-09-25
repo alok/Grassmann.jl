@@ -161,7 +161,7 @@ instance instScatterSimplex : MakiePlot .scatter (SimplexBundle n P G) where
 /-- Julia `text(p::SimplexBundle; text = string.(vertices(p)))` (`MakieExt.jl:613`): each vertex
 labelled by its (1-based) mesh id. -/
 instance instTextSimplex : MakiePlot .text (SimplexBundle n P G) where
-  plot c m _ := c.drawText (submeshPoints m) ((Array.range (card m)).map fun i => toString (m.image i))
+  plot c m a := c.drawText (submeshPoints m) ((Array.range (card m)).map fun i => toString (m.image i)) a.fontsize
   dim _ := dimOfWidth (FlatFiber.width P - 1)
 
 variable [LinearFiber P]
@@ -182,7 +182,7 @@ instance instScatterFace : MakiePlot .scatter (FaceBundle n P G) where
 /-- Julia `text(p::FaceBundle; text = string.(subelements(p)))` (`MakieExt.jl:615`): each
 element labelled by its (1-based) element id at its centroid. -/
 instance instTextFace : MakiePlot .text (FaceBundle n P G) where
-  plot c m _ := c.drawText (centroidPoints m) ((Array.range (card m)).map fun e => toString (m.top.getFacet (e + 1)))
+  plot c m a := c.drawText (centroidPoints m) ((Array.range (card m)).map fun e => toString (m.top.getFacet (e + 1))) a.fontsize
   dim _ := dimOfWidth (FlatFiber.width P - 1)
 
 end Simplex

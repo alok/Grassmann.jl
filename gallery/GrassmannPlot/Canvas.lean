@@ -83,6 +83,8 @@ structure Attrs where
   poly : Bool := false
   /-- Makie `gap` of `voxels` (data units subtracted from the voxel size). -/
   gap : Float := 0
+  /-- Makie `fontsize` of `text`. -/
+  fontsize : Float := 14
   deriving Inhabited
 
 namespace Attrs

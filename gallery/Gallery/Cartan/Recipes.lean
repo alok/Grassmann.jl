@@ -1,7 +1,7 @@
 import Gallery.Cartan.PlotMd
 
 /-!
-# Cartan's own plot recipes: `scaledarrows`, `arrowsbundle`
+# Cartan's own plot recipes and simplex meshes: `scaledarrows`, `arrowsbundle`, `linegraph`, `mesh`
 
 `scaledarrows` and `arrowsbundle` (`ext/MakieExt.jl:290-299, 371-385`) scale the arrows by the
 sample spacing of the base points: `lengthscale = spacing(M)/(Σ|t|/n)/3` (`/2` for the bundle).
@@ -16,6 +16,7 @@ fields instead, with the same code paths:
 | `cartan-arrowsbundle-helix` | `arrowsbundle!(M, T)`: the points and the arrows of `±T` |
 | `cartan-scaledarrows-frame` | `scaledarrows!(S, F)` of a two-column tangent frame (Julia `TensorOperator` fibers, here the column fields) |
 | `cartan-linegraph-polar`, `…-gridsize` | `linegraph!(xyz)` and `linegraph!(xyz, gridsize = (5, 7))` of the plot.md polar surface |
+| `cartan-simplex-mesh` | `mesh(t::ScalarMap)`, `wireframe!`, `scatter!`, `text!` of a triangulated square (`initmeshdata` P/E/T) |
 
 `planes`, `scaledplanes` (the non-mutating forms return `nothing` and draw every parallelogram
 in a figure of its own) and `planesbundle` (B4: undefined `M`) fail in Cartan 0.4.16; their
@@ -69,6 +70,21 @@ def linegraphChecks (c : Canvas) (j : Json) : Array Check :=
   #[eqCheck "lines" ns.length (jnat (jget j "lines")),
     eqCheck "points per line" ns ((jarr (jget j "points")).map jnat).toList] ++
   summaryChecks "speed colours (binary32)" speed (jget j "speed") 1e-6 ++ ptsChecks "points" pts (jget j "coords") 1e-7
+
+/-- The triangulated square of `cartan-simplex-mesh`: 5×5 homogeneous points `(1, x, y)`
+(x fastest) and two triangles per cell. -/
+def square : SimplexBundle 3 (Chain ℝ3 1 Float) :=
+  let xs := (Cartan.Axis.range (-1) 1 5).toFloatArray
+  let pts := (Array.range 25).map fun k =>
+    (Chain.ofFn fun i => if i.1 = 0 then 1 else if i.1 = 1 then xs.get! (k % 5) else xs.get! (k / 5) : Chain ℝ3 1 Float)
+  let els := (Array.range 16).foldl (init := #[]) fun acc c =>
+    let a := 1 + c % 4 + 5 * (c / 4)
+    (acc.push #v[a, a + 1, a + 6]).push #v[a, a + 6, a + 5]
+  SimplexBundle.ofPoints pts els
+
+/-- Julia `TensorField(pt, [p[2]^2 - p[3]^2 for p in points(pt)])`. -/
+def squareF : TensorField square Float :=
+  TensorField.tabulatePoint square fun p => let x := getD p.v 1; let y := getD p.v 2; x * x - y * y
 
 /-- A lengthscale check. -/
 def lengthscaleCheck (lean julia : Float) : Check :=
@@ -128,6 +144,26 @@ def entries : List Entry := [
                  ptsChecks "origins" (Field.fiberPoints frameS) (jget j "origins") ++
                  ptsChecks "column 1" (Field.fiberPoints frameCols[0]!) dirs[0]! ++
                  ptsChecks "column 2" (Field.fiberPoints frameCols[1]!) dirs[1]! },
+  entry "cartan-simplex-mesh" "a simplex mesh coloured by nodal values, with its edges, vertices and vertex ids"
+    "`pt, pe = initmeshdata(P, E, T, Val(2)); mesh(TensorField(pt, x²-y²)); wireframe!(pt); scatter!(pt); text!(pt)` (`MakieExt.jl:608-619, 799-874`)"
+    fun j? => do
+      let c := GrassmannPlot.mesh squareF |>.wireframe square { color := some (.solid RGBA.black) }
+        |>.scatter square { color := some (.solid RGBA.white), strokecolor := RGBA.black, strokewidth := 1 }
+        |>.text square { fontsize := 10 }
+      let texts := match c.items[3]? with
+        | some it => match it.mark with | .text _ ss _ => ss.toList | _ => []
+        | none => []
+      let faces := match c.items[0]? with
+        | some it => match it.mark with | .mesh m => m.mesh.numTriangles | _ => 0
+        | none => 0
+      return { fig := c.figure
+               checks := withDump j? fun j =>
+                 ptsChecks "vertices" (itemPoints c 0) (jget j "vertices") ++
+                 #[eqCheck "triangles" faces (jnat (jget j "faces"))] ++
+                 summaryChecks "colour values (binary32)" (itemColorValues c 0) (jget (jget j "color") "values") 1e-7 ++
+                 ptsChecks "wireframe" (itemPoints c 1) (jget j "wireframe") ++
+                 ptsChecks "vertices (scatter)" (itemPoints c 2) (jget j "scatter") ++
+                 #[eqCheck "vertex labels" texts ((jarr (jget j "text")).map jstr).toList] },
   entry "cartan-linegraph-polar" "linegraph of the polar surface: every grid line coloured by its speed"
     "`fig = Figure(); Axis3(fig[1,1]); linegraph!(xyz)` (`MakieExt.jl:627-660`, the surface of `plot.md:242-252`)"
     fun j? => do
