@@ -38,8 +38,19 @@ def nonzero (t : Terms) : Terms := t.filter (·.2 != 0)
 /-- Scale every coefficient. -/
 def scale (t : Terms) (c : Rat) : Terms := t.map fun (k, x) => (k, c * x)
 
-/-- Sort by position in the `n`-dimensional multivector layout. -/
-def sortBasis (n : Nat) (t : Terms) : Terms := t.qsort fun a b => basisRank n a.1 < basisRank n b.1
+/-- Insert a term into a list sorted by `basisRank n`, after every term of equal
+or lower rank (so inserting left to right is stable). -/
+def insertByRank (n : Nat) (x : UInt64 × Rat) : List (UInt64 × Rat) → List (UInt64 × Rat)
+  | [] => [x]
+  | y :: ys => if basisRank n x.1 < basisRank n y.1 then x :: y :: ys else y :: insertByRank n x ys
+
+/-- Sort by position in the `n`-dimensional multivector layout. A stable
+insertion sort by structural recursion: term lists here have a handful of
+entries (at most `2ⁿ`, usually one to four), and unlike `Array.qsort` the
+kernel can evaluate it, so `decide +kernel` checks conformal blade tables
+(`Grassmann.Proofs.Conformal`). -/
+def sortBasis (n : Nat) (t : Terms) : Terms :=
+  (t.toList.foldl (fun acc x => insertByRank n x acc) []).toArray
 
 end Terms
 

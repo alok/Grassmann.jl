@@ -8,6 +8,7 @@ beyond Lean's three standard axioms: `sorryAx` (a `sorry`), a custom `axiom`, or
 import DirectSum.Proofs
 import Grassmann.Spec
 import Grassmann.Proofs
+import Grassmann.Tactic
 
 /-- info: 'DirectSum.Proofs.reorderParity_eq_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms DirectSum.Proofs.reorderParity_eq_spec
@@ -77,3 +78,33 @@ import Grassmann.Proofs
 
 /-- info: 'Grassmann.Proofs.implHodge_implHodge' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Grassmann.Proofs.implHodge_implHodge
+
+/-- info: 'Grassmann.Proofs.CGA3_mul_assoc' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.CGA3_mul_assoc
+
+/-- info: 'Grassmann.Proofs.conf_table_5' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.conf_table_5
+
+/-- info: 'Grassmann.Tactic.eq_of_coords' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Tactic.eq_of_coords
+
+/-- info: 'Grassmann.Tactic.coords_of_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Tactic.coords_of_eq
+
+/-- info: 'Grassmann.Spec.Cl.instRing' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Spec.Cl.instRing
+
+/-- info: 'Grassmann.Spec.Cl.isGrade_sandwich_of_even' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Spec.Cl.isGrade_sandwich_of_even
+
+/-- info: 'Grassmann.Spec.Cl.sandwich_sq_of_vector' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Spec.Cl.sandwich_sq_of_vector
+
+/-- info: 'Grassmann.Proofs.implMul_assoc_of_signature' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.implMul_assoc_of_signature
+
+/-- info: 'Grassmann.Proofs.isGrade_implSandwich_of_signature' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.isGrade_implSandwich_of_signature
+
+/-- info: 'Grassmann.Proofs.implWedge_comm_of_flat' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.implWedge_comm_of_flat

@@ -5,6 +5,7 @@ import Grassmann.Proofs.Complements
 import Grassmann.Proofs.Tables
 import Grassmann.Proofs.Conformal
 import Grassmann.Proofs.Regressive
+import Grassmann.Proofs.Transport
 
 /-!
 # Grassmann.Proofs: the implementation meets the specification
@@ -40,8 +41,15 @@ proved in general, what is checked by kernel evaluation and what is tested):
   the contraction `⋅` (lifted to all multivectors: `R3_contract`, …).
 * `Grassmann.Proofs.Regressive`: the regressive product `∨` on every pair of
   blades.
+* `Grassmann.Proofs.Transport`: the headline laws stated for the
+  implementation's operations in whole families of spaces: associativity of
+  the geometric product in every plain signature space and every
+  `DiagonalForm` space, reversion and involution of products, the Clifford
+  relation, grade preservation of sandwiches (dimension `≤ 4`), associativity
+  and graded commutativity of the exterior product in every flat space.
 * `Grassmann.Proofs.Conformal`: the conformal (null-basis, Chevalley) product
   by transport of structure to a diagonal metric: a transported blade table
   makes the product isomorphic to `Cl(p,q)` and associative on all multivectors
-  (proved); the table itself is checked exhaustively by the test suite.
+  (proved); the tables of `S!"∞∅+"`, `CGA2` and `CGA3` are kernel-checked, so
+  `CGA2_mul_assoc` and `CGA3_mul_assoc` are unconditional.
 -/

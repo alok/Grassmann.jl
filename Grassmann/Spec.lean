@@ -6,6 +6,8 @@ import Grassmann.Spec.Involution
 import Grassmann.Spec.Hodge
 import Grassmann.Spec.Vector
 import Grassmann.Spec.Contraction
+import Grassmann.Spec.Ring
+import Grassmann.Spec.Sandwich
 
 /-!
 # Grassmann.Spec: a proved specification of the geometric algebra
@@ -34,7 +36,18 @@ data structures, with its laws proved in every dimension (docs/PROOFS.md):
   `uv = B(u,v) + u ∧ v` and `uv + vu = 2B(u,v)`, over every commutative ring
   (characteristic 2 included);
 * `Grassmann.Spec.Contraction`: Julia's contraction `x ⋅ y = ⟨~y x⟩_{p-q}` and
-  the regressive product `∨` (De Morgan dual of `∧`, associative).
+  the regressive product `∨` (De Morgan dual of `∧`, associative);
+* `Grassmann.Spec.Ring`: `Cl g` is a `Lean.Grind.Ring`, so `grind` normalizes
+  multivector expressions as non-commutative polynomials;
+* `Grassmann.Spec.Sandwich`: the involutions of the basic operations, grade
+  closure, and sandwiches `R x R̃`: multiplicativity, the isometry
+  `(R v R̃)² = v²`, and grade preservation for even `R`
+  (`isGrade_sandwich_of_even`: in dimension `≤ 4` the sandwich of a vector by
+  an even element is a vector).
+
+`Grassmann.Spec.Grind` (imported by `Grassmann.Tactic`, not by this root) makes
+these laws available to `grind`: the `grassmann` lemma set and normalization
+rules for the involutions (docs/TACTICS.md).
 
 `Grassmann.Proofs` links this model to the kernels of the implementation.
 -/
