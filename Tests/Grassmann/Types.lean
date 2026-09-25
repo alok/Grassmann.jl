@@ -168,6 +168,39 @@ def run : IO Tally := do
 
 end GrassmannTests.Types
 
+/-! ## `basis!` -/
+
+namespace GrassmannTests.BasisE3
+basis! S!"+++"
+end GrassmannTests.BasisE3
+
+namespace GrassmannTests.BasisCGA
+basis! S!"∞∅+++"
+end GrassmannTests.BasisCGA
+
+namespace GrassmannTests.Basis
+
+open BasisE3 in
+example : Couple V Int := v₁ * v₂
+open BasisE3 in
+example : Chain V 1 Int := v1 + v₂
+open BasisE3 in
+example : Submanifold V 3 := v₁₂₃
+
+/-- `basis!` declares the space, the scalar, every blade and the ASCII aliases. -/
+def run : IO Tally := do
+  let mut t : Tally := {}
+  t := t.check (BasisE3.V == S!"+++" && BasisE3.v.bits == 0 && BasisE3.v₁₂.bits == 3
+    && BasisE3.v123.bits == 7) "basis! S!\"+++\" names"
+  let e : Couple BasisCGA.V Int := BasisCGA.«v∞» * BasisCGA.«v∅»
+  t := t.check (e.re == -1 && e.im == 1 && e.bits == 3) "v∞ v∅ = -1 + v∞∅"
+  t := t.check (BasisCGA.vinf.bits == 1 && BasisCGA.vo.bits == 2 && BasisCGA.vinfo1.bits == 7)
+    "conformal ASCII aliases"
+  t := t.check (toString (BasisCGA.«v∞∅₁₂₃» : Submanifold BasisCGA.V 5) == "v∞∅₁₂₃") "conformal blade name"
+  return t
+
+end GrassmannTests.Basis
+
 /-! ## The kernel extension point
 
 A default-priority `Kernels` instance for one concrete space replaces the
