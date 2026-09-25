@@ -8,6 +8,7 @@ import Grassmann.Composite.Ring
 import Grassmann.Composite.Norm
 import Grassmann.Composite.Project
 import Grassmann.Composite.Pow
+import Grassmann.Composite.Phasor
 
 /-!
 # Grassmann.Composite: transcendental functions of the typed elements

@@ -491,9 +491,50 @@ def closedSeries (t : Tally) : Tally := Id.run do
         s!"sinh closed/series β={β} z=({a}, {b}): {s.re}, {s.im} vs {ss.re}, {ss.im}"
   return t
 
+/-- The complex-like accessors, `∠`, `hyperplanes`, `𝕚 𝕛 𝕜`, `isdiag` (`Grassmann.Composite.Phasor`)
+against Julia's values. -/
+def phasorApi (t : Tally) : Tally := Id.run do
+  let mut t := t
+  let z : Couple E3 Float := ⟨3, 1.0, 2.0⟩
+  t := t.check (z.vectorizeChain.v.toList == [1.0, 2.0] && (Forms.restrict E3 z.bits).n == 2) fun _ =>
+    s!"vectorize(1+2v12) = {z.vectorizeChain.v.toList}"
+  t := t.check (z.reim == (1.0, 2.0)) fun _ => "reim(1+2v12)"
+  let p : Phasor E3 Float := (2.0 : Float) ∠ (⟨3, F64.pi / 3⟩ : Single E3 2 Float)
+  t := t.check (p.realvalue == 2.0 && same p.imagvalue 1.0471975511965976 && p.amplitude == 2.0 &&
+      p.phase == 0.0 && p.unitangle.bits == 3 && p.unitangle.val == 1.0) fun _ =>
+    s!"2 ∠ (π/3)v12: {p.realvalue} {p.imagvalue} {p.amplitude} {p.phase}"
+  t := t.check (p.vectorizeChain.v.toList == [2.0, F64.pi / 3]) fun _ => "vectorize(2 ∠ (π/3)v12)"
+  let q := (⟨3, 1.0⟩ : Single E3 2 Float).polarize
+  t := t.check (q.amp == 1.0 && q.angle.bits == 3 && q.angle.re == 0.0 && q.angle.im == 1.0) fun _ => "polarize(v12)"
+  let q2 := (⟨3, 2.0⟩ : Single E3 2 Float).polarize
+  t := t.check (q2.amp == 1.0 && q2.angle.im == 2.0) fun _ => "polarize(2v12) = 1 ∠ 2v12"
+  t := expectF t "radius(v1+v2)" (ch E3 1 [1, 1, 0]).radius 1.4142135623730951
+  t := expectF t "radius(2v12)" (⟨3, 2.0⟩ : Single E3 2 Float).radius 2.0
+  t := expectF t "radius(Multivector(1+2v12))" (toMultivector z).radius 2.23606797749979
+  let a := (ch E2 1 [1, 1]).angle
+  t := t.check (a.bits == 3 && a.re == 0.0 && same a.im 0.7853981633974483) fun _ => s!"angle(v1+v2) = {a.im}"
+  let s2 := sp E2 [1, 2]
+  t := t.check (s2.toComplex.re == 1.0 && s2.toComplex.im == 2.0) fun _ => "Complex(1+2v12)"
+  t := t.check (s2.toCouple.bits == 3 && s2.toCouple.re == 1.0 && s2.toCouple.im == 2.0) fun _ => "Couple(1+2v12)"
+  -- hyperplanes (docs 16, 38) and the quaternion units (docs 37)
+  let hs := fun (V : TensorBundle) => (Composite.hyperplanes V).map fun h => (h.bits, h.val)
+  t := t.check (hs E3 == [(6, 1.0), (5, -1.0), (3, 1.0)]) fun _ => s!"hyperplanes(ℝ^3) = {hs E3}"
+  t := t.check (hs E2 == [(2, -1.0), (1, 1.0)]) fun _ => s!"hyperplanes(ℝ^2) = {hs E2}"
+  t := t.check (hs E4 == [(14, -1.0), (13, 1.0), (11, -1.0), (7, 1.0)]) fun _ => s!"hyperplanes(ℝ^4) = {hs E4}"
+  t := t.check ((Composite.hyperplanes ℝ3).map (fun h => (h.bits, h.val)) == [(𝕚.bits, 𝕚.val), (𝕛.bits, 𝕛.val), (𝕜.bits, 𝕜.val)])
+    fun _ => "𝕚, 𝕛, 𝕜 = hyperplanes(ℝ3)"
+  let m := fun (x y : Single ℝ3 2 Float) => (toMultivector x * toMultivector y : Multivector ℝ3 Float).v.toList
+  t := t.check (m 𝕚 𝕛 == [0, 0, 0, 0, -1, 0, 0, 0] && m 𝕛 𝕜 == [0, 0, 0, 0, 0, 0, -1, 0] &&
+      m 𝕜 𝕚 == [0, 0, 0, 0, 0, 1, 0, 0]) fun _ => s!"𝕚𝕛, 𝕛𝕜, 𝕜𝕚 = {m 𝕚 𝕛} {m 𝕛 𝕜} {m 𝕜 𝕚}"
+  -- isdiag
+  let D : Endomorphism E3 (.chain 1) Float := TensorOperator.ofFn fun i j => if i.1 = j.1 then 2.0 else 0.0
+  let N : Endomorphism E3 (.chain 1) Float := TensorOperator.ofFn fun i j => if i.1 ≤ j.1 then 1.0 else 0.0
+  t := t.check (D.isdiag && !N.isdiag) fun _ => "isdiag"
+  return t
+
 /-- Run the unit tests; returns `(passed, failed)`. -/
 def run : IO (Nat × Nat) := do
-  let t := closedSeries (powers (identities (fixes (atanh2Tests (spaces (e3 {}))))))
+  let t := phasorApi (closedSeries (powers (identities (fixes (atanh2Tests (spaces (e3 {})))))))
   IO.println s!"[composite/unit] pass={t.pass} fail={t.fail}"
   for m in t.msgs do IO.eprintln s!"[composite/unit]   FAIL {m}"
   return (t.pass, t.fail)
