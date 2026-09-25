@@ -1,0 +1,242 @@
+# Budgets: the maximum Lean/Julia ratio (of the minima) per case, or an absolute `max_ns`.
+# The first rule whose shell pattern matches a key applies; `default` covers everything else.
+# `scripts/bench/compare.py --guard` fails when a case exceeds its budget or its Lean time
+# regresses by more than 20% against the previous run on the same machine.
+#
+# Target: within 2x of Julia everywhere (DESIGN.md asks for ~1.5x on the hot paths). The rules
+# below record the known gaps as measured on 2026-09-25 (docs/perf/latest.md) with 30% headroom
+# and a diagnosis; tighten a rule when its gap is fixed.
+
+default = 2.0
+
+# TruthValues N stores a BitVec (2^N): at N = 6 every column >= 2^63 is a GMP bignum and each connective allocates; Julia uses one UInt64. Fix: UInt64 storage for N <= 6.
+[[budget]]
+pattern = "demorgan/tv_formula_N6"
+ratio = 2100
+note = "TruthValues N stores a BitVec (2^N): at N = 6 every column >= 2^63 is a GMP bignum and each connective allocates; Julia uses one UInt64. Fix: UInt64 storage for N <= 6."
+
+# Expression names are built by String concatenation and the class arrays are copied in combine.
+[[budget]]
+pattern = "demorgan/truthtable_N4"
+ratio = 3.1
+note = "Expression names are built by String concatenation and the class arrays are copied in combine."
+
+# Values Float n is a heap FloatArray: every vector-valued op allocates (~10 ns with RC) and reductions are Nat-indexed, bounds-checked loops without unrolling or SIMD; Julia Values is an isbits tuple in registers. Fix: generated unrolled kernels for small n (as Grassmann) or unboxed-field structs for n <= 4.
+[[budget]]
+pattern = "staticvectors/add16"
+ratio = 49
+note = "Values Float n is a heap FloatArray: every vector-valued op allocates (~10 ns with RC) and reductions are Nat-indexed, bounds-checked loops without unrolling or SIMD; Julia Values is an isbits tuple in registers. Fix: generated unrolled kernels for small n (as Grassmann) or unboxed-field structs for n <= 4."
+[[budget]]
+pattern = "staticvectors/add3"
+ratio = 24
+note = "Values Float n is a heap FloatArray: every vector-valued op allocates (~10 ns with RC) and reductions are Nat-indexed, bounds-checked loops without unrolling or SIMD; Julia Values is an isbits tuple in registers. Fix: generated unrolled kernels for small n (as Grassmann) or unboxed-field structs for n <= 4."
+[[budget]]
+pattern = "staticvectors/cross3"
+ratio = 2.9
+note = "Values Float n is a heap FloatArray: every vector-valued op allocates (~10 ns with RC) and reductions are Nat-indexed, bounds-checked loops without unrolling or SIMD; Julia Values is an isbits tuple in registers. Fix: generated unrolled kernels for small n (as Grassmann) or unboxed-field structs for n <= 4."
+[[budget]]
+pattern = "staticvectors/dot16"
+ratio = 11
+note = "Values Float n is a heap FloatArray: every vector-valued op allocates (~10 ns with RC) and reductions are Nat-indexed, bounds-checked loops without unrolling or SIMD; Julia Values is an isbits tuple in registers. Fix: generated unrolled kernels for small n (as Grassmann) or unboxed-field structs for n <= 4."
+[[budget]]
+pattern = "staticvectors/dot3"
+ratio = 21
+note = "Values Float n is a heap FloatArray: every vector-valued op allocates (~10 ns with RC) and reductions are Nat-indexed, bounds-checked loops without unrolling or SIMD; Julia Values is an isbits tuple in registers. Fix: generated unrolled kernels for small n (as Grassmann) or unboxed-field structs for n <= 4."
+[[budget]]
+pattern = "staticvectors/norm16"
+ratio = 12
+note = "Values Float n is a heap FloatArray: every vector-valued op allocates (~10 ns with RC) and reductions are Nat-indexed, bounds-checked loops without unrolling or SIMD; Julia Values is an isbits tuple in registers. Fix: generated unrolled kernels for small n (as Grassmann) or unboxed-field structs for n <= 4."
+[[budget]]
+pattern = "staticvectors/norm3"
+ratio = 21
+note = "Values Float n is a heap FloatArray: every vector-valued op allocates (~10 ns with RC) and reductions are Nat-indexed, bounds-checked loops without unrolling or SIMD; Julia Values is an isbits tuple in registers. Fix: generated unrolled kernels for small n (as Grassmann) or unboxed-field structs for n <= 4."
+[[budget]]
+pattern = "staticvectors/normalize16"
+ratio = 24
+note = "Values Float n is a heap FloatArray: every vector-valued op allocates (~10 ns with RC) and reductions are Nat-indexed, bounds-checked loops without unrolling or SIMD; Julia Values is an isbits tuple in registers. Fix: generated unrolled kernels for small n (as Grassmann) or unboxed-field structs for n <= 4."
+[[budget]]
+pattern = "staticvectors/normalize3"
+ratio = 49
+note = "Values Float n is a heap FloatArray: every vector-valued op allocates (~10 ns with RC) and reductions are Nat-indexed, bounds-checked loops without unrolling or SIMD; Julia Values is an isbits tuple in registers. Fix: generated unrolled kernels for small n (as Grassmann) or unboxed-field structs for n <= 4."
+[[budget]]
+pattern = "staticvectors/scale16"
+ratio = 110
+note = "Values Float n is a heap FloatArray: every vector-valued op allocates (~10 ns with RC) and reductions are Nat-indexed, bounds-checked loops without unrolling or SIMD; Julia Values is an isbits tuple in registers. Fix: generated unrolled kernels for small n (as Grassmann) or unboxed-field structs for n <= 4."
+[[budget]]
+pattern = "staticvectors/scale3"
+ratio = 59
+note = "Values Float n is a heap FloatArray: every vector-valued op allocates (~10 ns with RC) and reductions are Nat-indexed, bounds-checked loops without unrolling or SIMD; Julia Values is an isbits tuple in registers. Fix: generated unrolled kernels for small n (as Grassmann) or unboxed-field structs for n <= 4."
+
+# IEEEFloat.parse? scans a List Char into a Nat and converts exactly through ofDecimal (bignum) for every input; Julia calls strtod. Fix: Clinger fast path (mantissa < 2^53, |exp10| <= 22: one exact multiply or divide) and String.Iterator scanning.
+[[budget]]
+pattern = "juliabase/parse_float"
+ratio = 98
+note = "IEEEFloat.parse? scans a List Char into a Nat and converts exactly through ofDecimal (bignum) for every input; Julia calls strtod. Fix: Clinger fast path (mantissa < 2^53, |exp10| <= 22: one exact multiply or divide) and String.Iterator scanning."
+
+# StepRangeLen.get converts its index with Float.ofInt (Int -> Nat -> OfScientific, ~35 ns); (i - r.offset).toInt64.toFloat is the same value for every Julia Int index.
+[[budget]]
+pattern = "juliabase/range_collect"
+ratio = 93
+note = "StepRangeLen.get converts its index with Float.ofInt (Int -> Nat -> OfScientific, ~35 ns); (i - r.offset).toInt64.toFloat is the same value for every Julia Int index."
+[[budget]]
+pattern = "juliabase/range_getindex"
+ratio = 79
+note = "StepRangeLen.get converts its index with Float.ofInt (Int -> Nat -> OfScientific, ~35 ns); (i - r.offset).toInt64.toFloat is the same value for every Julia Int index."
+
+# StepRangeLen.get converts its index with Float.ofInt (Int -> Nat -> OfScientific, ~35 ns); (i - r.offset).toInt64.toFloat is the same value for every Julia Int index.
+[[budget]]
+pattern = "juliabase/colon_collect"
+ratio = 90
+note = "StepRangeLen.get converts its index with Float.ofInt (Int -> Nat -> OfScientific, ~35 ns); (i - r.offset).toInt64.toFloat is the same value for every Julia Int index."
+
+# Bit-exact replay of the 8-accumulator SIMD layout of Julia sum with bounds-checked FloatArray reads; the C backend does not vectorize. Fix: a USize/uget loop that clang can vectorize, keeping the accumulator order.
+[[budget]]
+pattern = "juliabase/sum_f64"
+ratio = 8.3
+note = "Bit-exact replay of the 8-accumulator SIMD layout of Julia sum with bounds-checked FloatArray reads; the C backend does not vectorize. Fix: a USize/uget loop that clang can vectorize, keeping the accumulator order."
+
+# powInt 10.0 d with an Int d per call (Float.ofInt and toIntTrunc through Int); a table of the exact powers 10^0..10^22 gives identical results.
+[[budget]]
+pattern = "juliabase/round_digits"
+ratio = 7.7
+note = "powInt 10.0 d with an Int d per call (Float.ofInt and toIntTrunc through Int); a table of the exact powers 10^0..10^22 gives identical results."
+
+# Julia ComplexF64 algorithms on Julia kernels; ssqs returns a (Float x Int) pair (a boxed Float, Int exponent arithmetic) and the kernels pay out-of-line float_to_bits calls.
+[[budget]]
+pattern = "juliabase/complex_div"
+ratio = 5.9
+note = "Julia ComplexF64 algorithms on Julia kernels; ssqs returns a (Float x Int) pair (a boxed Float, Int exponent arithmetic) and the kernels pay out-of-line float_to_bits calls."
+[[budget]]
+pattern = "juliabase/complex_exp"
+ratio = 7.3
+note = "Julia ComplexF64 algorithms on Julia kernels; ssqs returns a (Float x Int) pair (a boxed Float, Int exponent arithmetic) and the kernels pay out-of-line float_to_bits calls."
+[[budget]]
+pattern = "juliabase/complex_log"
+ratio = 7.9
+note = "Julia ComplexF64 algorithms on Julia kernels; ssqs returns a (Float x Int) pair (a boxed Float, Int exponent arithmetic) and the kernels pay out-of-line float_to_bits calls."
+[[budget]]
+pattern = "juliabase/complex_sqrt"
+ratio = 4.7
+note = "Julia ComplexF64 algorithms on Julia kernels; ssqs returns a (Float x Int) pair (a boxed Float, Int exponent arithmetic) and the kernels pay out-of-line float_to_bits calls."
+
+# Ryu digit generation is exact, but the layout builds the String one push at a time through Nat digit arithmetic.
+[[budget]]
+pattern = "juliabase/show_float"
+ratio = 4.9
+note = "Ryu digit generation is exact, but the layout builds the String one push at a time through Nat digit arithmetic."
+
+# Leibniz.bladeRankImpl evaluates 2 ^ n (Nat.pow -> GMP mpz_pow_ui) on every call and binomsum re-sums choose n q; use b >>> n == 0 and the table offsets.
+[[budget]]
+pattern = "directsum/basis_index_n10"
+ratio = 51
+note = "Leibniz.bladeRankImpl evaluates 2 ^ n (Nat.pow -> GMP mpz_pow_ui) on every call and binomsum re-sums choose n q; use b >>> n == 0 and the table offsets."
+
+# printLabel builds labels through List/String concatenation. Also a semantic difference (check differs): Lean prints subscript 0 for generator 10 where Julia prints v10 (Leibniz printindex label rule for n >= 10).
+[[budget]]
+pattern = "directsum/blade_show_R10"
+ratio = 39
+note = "printLabel builds labels through List/String concatenation. Also a semantic difference (check differs): Lean prints subscript 0 for generator 10 where Julia prints v10 (Leibniz printindex label rule for n >= 10)."
+
+# Gram/Chevalley product evaluated per call over Rat terms (an allocation per term); kernels should read plan tables (DESIGN 5.3) instead of recomputing blade algebra.
+[[budget]]
+pattern = "directsum/blade_mul_CGA3"
+ratio = 9.5
+note = "Gram/Chevalley product evaluated per call over Rat terms (an allocation per term); kernels should read plan tables (DESIGN 5.3) instead of recomputing blade algebra."
+
+# ghost returns a heap Vector per lookup; the NeighborTable read (neighbortable_sweep_*, ~1 ns) is the fast path for stencils.
+[[budget]]
+pattern = "meshtopology/ghost_mobius"
+ratio = 4
+note = "ghost returns a heap Vector per lookup; the NeighborTable read (neighbortable_sweep_*, ~1 ns) is the fast path for stencils."
+[[budget]]
+pattern = "meshtopology/ghost_torus"
+ratio = 5.3
+note = "ghost returns a heap Vector per lookup; the NeighborTable read (neighbortable_sweep_*, ~1 ns) is the fast path for stencils."
+
+# Per-element loops over boxed Nat arrays and heap Vectors where Julia keeps isbits tuples (docs/PERF.md, 2026-09-24 MeshTopology); one-shot setup.
+[[budget]]
+pattern = "meshtopology/bilinear_sphere"
+ratio = 2.7
+note = "Per-element loops over boxed Nat arrays and heap Vectors where Julia keeps isbits tuples (docs/PERF.md, 2026-09-24 MeshTopology); one-shot setup."
+[[budget]]
+pattern = "meshtopology/degrees"
+ratio = 26
+note = "Per-element loops over boxed Nat arrays and heap Vectors where Julia keeps isbits tuples (docs/PERF.md, 2026-09-24 MeshTopology); one-shot setup."
+[[budget]]
+pattern = "meshtopology/edgesindices"
+ratio = 4.7
+note = "Per-element loops over boxed Nat arrays and heap Vectors where Julia keeps isbits tuples (docs/PERF.md, 2026-09-24 MeshTopology); one-shot setup."
+[[budget]]
+pattern = "meshtopology/elementfuns_hopf"
+ratio = 19
+note = "Per-element loops over boxed Nat arrays and heap Vectors where Julia keeps isbits tuples (docs/PERF.md, 2026-09-24 MeshTopology); one-shot setup."
+[[budget]]
+pattern = "meshtopology/elementfuns_mobius"
+ratio = 6.6
+note = "Per-element loops over boxed Nat arrays and heap Vectors where Julia keeps isbits tuples (docs/PERF.md, 2026-09-24 MeshTopology); one-shot setup."
+[[budget]]
+pattern = "meshtopology/elementfuns_torus"
+ratio = 7.2
+note = "Per-element loops over boxed Nat arrays and heap Vectors where Julia keeps isbits tuples (docs/PERF.md, 2026-09-24 MeshTopology); one-shot setup."
+[[budget]]
+pattern = "meshtopology/incidence"
+ratio = 2.9
+note = "Per-element loops over boxed Nat arrays and heap Vectors where Julia keeps isbits tuples (docs/PERF.md, 2026-09-24 MeshTopology); one-shot setup."
+[[budget]]
+pattern = "meshtopology/lagrange3_nodes"
+ratio = 7.3
+note = "Per-element loops over boxed Nat arrays and heap Vectors where Julia keeps isbits tuples (docs/PERF.md, 2026-09-24 MeshTopology); one-shot setup."
+
+# Group products add Rat exponent vectors (Exps = Vector Rat 11, a gcd per entry) and normalize the Coef; Julia Group uses Int Values. Fix: Int exponents in twelfths, as UnitSystems.Dim.
+[[budget]]
+pattern = "unitsystems/dim_products"
+ratio = 14
+note = "Group products add Rat exponent vectors (Exps = Vector Rat 11, a gcd per entry) and normalize the Coef; Julia Group uses Int Values. Fix: Int exponents in twelfths, as UnitSystems.Dim."
+
+# Julia constant-folds the literal exponent (literal_pow with Val(7)); Lean runs pow_body with a runtime Int exponent and Nat loop counters.
+[[budget]]
+pattern = "math/pow_int7"
+ratio = 3.7
+note = "Julia constant-folds the literal exponent (literal_pow with Val(7)); Lean runs pow_body with a runtime Int exponent and Nat loop counters."
+
+# Payne-Hanek reduction through Nat/bignum arithmetic; Julia uses UInt128 table words.
+[[budget]]
+pattern = "math/sin_1e10"
+ratio = 8.7
+note = "Payne-Hanek reduction through Nat/bignum arithmetic; Julia uses UInt128 table words."
+
+# Julia own kernels, bit-exact; the gap is out-of-line lean_float_to_bits/of_bits calls (about five per call, docs/PERF.md) and Int bookkeeping.
+[[budget]]
+pattern = "math/atan2"
+ratio = 2.7
+note = "Julia own kernels, bit-exact; the gap is out-of-line lean_float_to_bits/of_bits calls (about five per call, docs/PERF.md) and Int bookkeeping."
+[[budget]]
+pattern = "math/exp"
+ratio = 3.3
+note = "Julia own kernels, bit-exact; the gap is out-of-line lean_float_to_bits/of_bits calls (about five per call, docs/PERF.md) and Int bookkeeping."
+[[budget]]
+pattern = "math/expm1"
+ratio = 4.2
+note = "Julia own kernels, bit-exact; the gap is out-of-line lean_float_to_bits/of_bits calls (about five per call, docs/PERF.md) and Int bookkeeping."
+[[budget]]
+pattern = "math/log"
+ratio = 3
+note = "Julia own kernels, bit-exact; the gap is out-of-line lean_float_to_bits/of_bits calls (about five per call, docs/PERF.md) and Int bookkeeping."
+[[budget]]
+pattern = "math/log1p"
+ratio = 3.3
+note = "Julia own kernels, bit-exact; the gap is out-of-line lean_float_to_bits/of_bits calls (about five per call, docs/PERF.md) and Int bookkeeping."
+[[budget]]
+pattern = "math/sinh"
+ratio = 3.2
+note = "Julia own kernels, bit-exact; the gap is out-of-line lean_float_to_bits/of_bits calls (about five per call, docs/PERF.md) and Int bookkeeping."
+[[budget]]
+pattern = "math/tan"
+ratio = 2.9
+note = "Julia own kernels, bit-exact; the gap is out-of-line lean_float_to_bits/of_bits calls (about five per call, docs/PERF.md) and Int bookkeeping."
+
+# Somigliana formula on JuliaBase sin/cos/sqrt: the same out-of-line float_to_bits calls as math/*.
+[[budget]]
+pattern = "geophysics/gravity"
+ratio = 3
+note = "Somigliana formula on JuliaBase sin/cos/sqrt: the same out-of-line float_to_bits calls as math/*."

@@ -3,6 +3,37 @@
 Numbers are ns/op on Apple Silicon, Lean v4.35.0-rc3 (`lake build`, default -O3 C), Julia 1.13 with
 Grassmann 0.8.46. Record new measurements at the bottom with date and commit.
 
+## Lean vs Julia at a glance (2026-09-25, `uv run scripts/bench/run.py`)
+
+Every suite of `lake exe bench` has a Julia twin (`oracle/bench/`) measured by the same harness;
+the full table (131 cases, budgets, checks) is [`perf/latest.md`](perf/latest.md), the workflow
+[`perf/README.md`](perf/README.md), the run history [`perf/history.jsonl`](perf/history.jsonl).
+Minimum ns per operation, Apple M4 Max; ratio < 1 means Lean is faster. Every checksum agrees
+with Julia's (almost all bit for bit) except `directsum/blade_show_R10`, a real printing
+difference (below).
+
+| suite | geomean Lean/Julia | representative case | Lean | Julia | ratio |
+|---|---|---|---|---|---|
+| math (Julia's own scalar kernels) | 1.8× | `exp` / `sin` / `atan` / `x^2.5` | 6.4 / 5.7 / 2.2 / 13 ns | 2.5 / 3.3 / 4.6 / 19 ns | 2.5× / 1.8× / 0.47× / 0.69× |
+| juliabase (print, parse, sum, ranges, complex) | 11× | `show_float` / `parse_float` / `range_collect` | 149 ns / 2.2 µs / 41 ns | 40 / 29 / 0.57 ns | 3.7× / 75× / 71× |
+| staticvectors (`Values` ops) | 18× | `dot3` / `add3` | 9.6 / 10 ns | 0.62 / 0.56 ns | 16× / 18× |
+| directsum (blades, tables, plans) | 3.3× | `blade_mul_R5` / `plan_mul_R5` / `basis_index_n10` | 336 / 493 / 99 ns | 339 / 404 / 2.6 ns | 0.99× / 1.2× / 39× |
+| unitsystems (conversions, dimensions) | 2.6× | `convert_pairs` / `dim_products` | 373 ns / 1.5 µs | 417 / 139 ns | 0.89× / 11× |
+| geophysics (atmosphere, gravity) | 0.92× | `pressure` / `sonicspeed` | 19 / 76 ns | 13 / 174 ns | 1.5× / 0.44× |
+| dendriform (trees, groves) | 0.036× | `grove_sum_4_3` | 29 µs | 748 µs | 0.039× |
+| demorgan (truth values, tables) | 61× | `tv_formula_N6` | 669 ns | 0.43 ns | 1556× |
+| wilkinson (parse, exprval, errval) | 0.54× | `errval_horner9` (3000 points) | 2.3 ms | 2.6 ms | 0.88× |
+| meshtopology (stencils, simplices) | 0.79× | `ghost_sphere` / `simplex_topology` / `degrees` | 7.9 ns / 1.9 ms / 1.7 ms | 30 ns / 1.2 s / 89 µs | 0.26× / 0.0015× / 19× |
+| fatou (escape-time rasters) | 1.1× | `mandelbrot_seq` / `mandelbrot_par` (16 threads) | 71 / 11 ms | 60 / 9.5 ms | 1.2× / 1.1× |
+| grassmann (generated kernels; own harness, below) | — | `Multivector*Multivector` ℝ3 / CGA3 | 14.7 / 146 ns | 8.1 / 146 ns | 1.8× / 1.0× |
+
+Where Lean loses, it is almost always one of four causes, each with a known fix (details in the
+2026-09-25 section at the bottom): **heap-allocated small vectors** (`Values`/`FloatArray`
+results: StaticVectors, Grassmann's small products), **`Nat`/`Int`/bignum arithmetic in hot
+paths** (TruthValues as `BitVec (2^N)`, `2 ^ n` in Leibniz ranks, `Float.ofInt` in ranges,
+`Rat` exponents in dimension groups), **runtime `Float.ofScientific` literals** (fixed in
+`FieldConstants.JNum`: conversions 28× faster), and **no SIMD** (Julia's `sum`, reductions).
+
 ## 2026-09-24: storage / kernel spike (R3 full geometric product, Float)
 
 | variant | ns/op |
@@ -283,3 +314,56 @@ elaboration and compilation to C, then clang `-O3` of the C file):
 total 110 MB. The CGA3 multivector product stays generated. `basis!` of an `n = 6` space
 (`S!"+++++-"`, dense families other than `Multivector*Multivector` dropped) emits 1002 kernels
 with 64 873 entries and 162 fused sandwiches in about 20 s.
+
+## 2026-09-25: benchmark harness, Julia twins for every package, first Lean-vs-Julia sweep
+
+Commit `8d619251` (+ budgets); full table in `docs/perf/latest.md`, summary at the top of this
+file. Infrastructure: `Bench/Harness.lean` (named cases, warm-up, adaptive batch size, min/median
+ns per operation, checksum sinks, `--filter`, `--smoke`, `--json`), its twin
+`oracle/bench/harness.jl`, one `oracle/bench/<suite>.jl` per Lean suite with identical case keys,
+inputs and checksums, `scripts/bench/run.py` (build, run both, compare) and
+`scripts/bench/compare.py` (report, `history.jsonl`, `--guard` against `docs/perf/budgets.toml`
+and a 20% regression threshold). The old ad-hoc benches (`Bench.Math`, `Tests/*/Bench.lean`,
+`oracle/*/bench.jl`) are ported onto it.
+
+Harness pitfalls (details in `docs/perf/README.md`):
+* **Arity reduction defeats a naive black box.** `@[noinline] def blackBox (_salt : Nat) (x : α) := x`
+  loses its unused salt (`blackBox._redArg x`); `f (blackBox s 10)` then became a closed term
+  computed once, and cases reported 0.005 ns. The harness's `blackBox` is implemented by a
+  function whose result depends on the salt through an undecidable branch (`ptrAddrUnsafe`).
+* **An opaque `Define` is not specialized**: `fatou (blackBox s K)` ran the generic, boxed kernel
+  25× slower (1.59 s vs 67 ms); salt the size and inline the definition instead.
+* **`Nat.toFloat` of a value ≥ 2^53 takes ~8 µs** (`Float.ofScientific` leaves its fast path for
+  the `Float.Model` bignum path). Convert 64-bit values through `UInt64.toFloat`.
+
+Fixed on the way:
+* `FieldConstants.JNum.isApproxUnit` (UnitSystems' `unit` snapping, several per conversion
+  chain) evaluated its tolerance literal `8.161992717227193e-15` at run time; the exponent is
+  past `10^22`, so every call took the bignum model path (~1.3 µs). Decoded with `f64!`, and
+  `JNum.toFloat` of an `Int64` uses `Int64.toFloat`: `unitsystems/convert_pairs` 10.4 µs → 0.37 µs
+  per factor (Julia 0.42 µs), `natural_systems` 10 µs → 0.37 µs. All FieldAlgebra, UnitSystems,
+  Similitude, MeasureSystems and Geophysics tests unchanged.
+
+Open gaps (budgets record them with 30% headroom; each is a follow-up):
+
+| case | Lean / Julia | diagnosis | fix |
+|---|---|---|---|
+| `demorgan/tv_formula_N6` | 669 ns / 0.43 ns | `TruthValues N` is a `BitVec (2^N)`; at `N = 6` every column ≥ 2^63 is a GMP bignum, each connective allocates | `UInt64` storage for `N ≤ 6` |
+| `juliabase/parse_float` | 2.2 µs / 29 ns | `List Char` scan into a `Nat`, exact `ofDecimal` (bignum) for every input | Clinger fast path (mantissa < 2^53, \|e\| ≤ 22), `String.Iterator` |
+| `juliabase/range_*` | 40 ns / 0.6 ns | `StepRangeLen.get` converts the index with `Float.ofInt` (Int → Nat → OfScientific) | `(i - r.offset).toInt64.toFloat` (same value for Julia `Int` indices) |
+| `directsum/basis_index_n10` | 99 ns / 2.6 ns | `bladeRankImpl` computes `2 ^ n` (GMP `mpz_pow_ui`) per call; `binomsum` re-sums binomials | `b >>> n == 0`; read the tables' offsets |
+| `staticvectors/*`, small Grassmann ops | 10–40 ns / 0.5–3 ns | every vector-valued result is a fresh `FloatArray`; reductions are Nat-indexed, bounds-checked loops | unrolled generated kernels for small `n`, or unboxed-field structs for `n ≤ 4` |
+| `unitsystems/dim_products` | 1.5 µs / 139 ns | group products add `Rat` exponent vectors (a `gcd` per entry) | integer exponents in twelfths, as `UnitSystems.Dim` |
+| `directsum/blade_mul_CGA3` | 1.7 µs / 230 ns | Gram product recomputed per call over `Rat` terms | read plan tables (DESIGN §5.3) |
+| `directsum/blade_show_R10` | 310 ns / 10 ns, check ≠ | label strings built by `List`/`String` concatenation; **Lean prints `v₀` for generator 10, Julia `v10`** (label rule for `n ≥ 10`) | fix `Leibniz.printLabel`; build into one buffer |
+| `juliabase/sum_f64` | 0.55 / 0.087 ns per element | bit-exact replay of the SIMD accumulator layout with bounds-checked reads; no vectorization | `USize`/`uget` loop that clang can vectorize |
+| `math/*` (exp, log, expm1, sinh, tan) | 2–3× | Julia's kernels bit for bit; out-of-line `lean_float_to_bits`/`of_bits` calls and `Int` bookkeeping | runtime inline bit casts; `Int64` exponent arithmetic |
+| `meshtopology/degrees`, `elementfuns_*`, `lagrange3_nodes` | 5–19× | per-element loops over boxed `Nat` arrays and heap `Vector`s (Julia: isbits tuples) | packed `ByteArray`/`UInt32` storage |
+
+Where Lean already wins: Dendriform groves (25–35× faster: Julia's `Grove` arithmetic
+allocates matrices), Wilkinson's `errval` as a whole (Julia generates and compiles a function
+per call; with that function precompiled, `*_nocodegen`, Julia is 10–17× faster than Lean's AST
+interpreter, a follow-up: compile the AST to a closure tree or plan), MeshTopology setup (Julia's quadratic `vertices`/`findfirst`), the
+Geophysics viscosity and sonic-speed profiles (2–4×), `atan`/`x^2.5` and the cached `parity`
+table lookups (3×).
+
