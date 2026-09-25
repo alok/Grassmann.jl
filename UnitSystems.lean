@@ -6,6 +6,9 @@ import UnitSystems.Convert
 import UnitSystems.Derived
 import UnitSystems.Registry
 import UnitSystems.Show
+import UnitSystems.Dim
+import UnitSystems.DimModel
+import UnitSystems.DimProofs
 
 /-!
 # UnitSystems
