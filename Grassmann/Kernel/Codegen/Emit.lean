@@ -17,25 +17,43 @@ little beyond the compiler's own work) and adds it with `addDecl`, marked
 `@[specialize]`. Reads and writes are unchecked (`Fin` literals with
 kernel-checked bounds proofs), so the compiled kernel has no bounds checks, no
 branches and no loop: at `α = Float` it specializes to unboxed loads,
-multiply-adds and stores. `base` is an operand of the output's size when there
-is one (so `m := m * n` or `m := ~m` on an exclusive `m` allocates nothing) and
-otherwise the zero vector (a closed constant at each coefficient type): the first
-write copies it once, the others are in place. Measured at `Float` (ℝ3
-`Multivector*Multivector`, docs/PERF.md): 21 ns with a `FloatArray.push` chain
-(one runtime call per output), 14 ns with the writes.
+multiply-adds and stores.
+
+## The output buffer
+
+A kernel writes its outputs into one buffer, `base` (`Base`):
+
+* an operand of the output's size (`Base.arg`), so `m := ~m` on an exclusive `m` allocates
+  nothing; the writes of outputs the operand already holds are skipped (`Out.read` of the same
+  position: the identity entries of the sign maps, a copy in a conversion), so a map that
+  fixes every entry (`~v` of a vector) returns its operand untouched, shared or not;
+* when *both* operands of a binary kernel have the output's size, whichever of them is
+  exclusive at run time (`Base.pick`, `pickBase`): `a * m` with an exclusive `m` and a shared
+  `a` writes into `m` (every output is written, so which buffer is chosen is invisible);
+* otherwise a copy of the zero vector (`Base.zeros`, a closed constant at each coefficient
+  type), whose zero outputs are not written again.
+
+Measured at `Float` (ℝ3 `Multivector*Multivector`, docs/PERF.md): 21 ns with a
+`FloatArray.push` chain (one runtime call per output), 14 ns with the writes.
+
+## Exactness
 
 Each output sums its entries **in the reference order** (`Plan.row₂`), so a
 generated kernel agrees with the reference kernel bit for bit up to the sign of
 zero (the reference starts every sum from `0`, the kernel from its first term).
 Coefficients `±1` cost a single add or subtract; any other exact coefficient
-(diagonal metrics) is `Coeff.ofRat r * term`.
+(diagonal metrics) is `Coeff.ofRat r * term`. The linear kernels (`add` … `convSub`,
+`Grassmann.Kernels`) perform exactly the reference's operations, explicit `+ 0` of the promoted
+sums included.
+
+## Dispatch
 
 The dispatch functions and the `Kernels V` instance are emitted as syntax (they
 are small `match`es whose dependent motives the elaborator handles): per field,
 one `@[inline]` function per operation matching the layout triple, and one
 matching the operation; every unmatched case falls through to the reference
-kernel (`refBin`/`refBinProj`/`refUn`). At a call site whose operation and
-layouts are literals (every typed instance of the algebra layer), the
+kernel (`refBin`/`refBinProj`/`refUn`, `convertLayout`, `Values` arithmetic). At a call site
+whose operation and layouts are literals (every typed instance of the algebra layer), the
 projection of the instance, the dispatchers and the `match`es fold away and
 the call is a direct call of the kernel specialized at the coefficient type.
 Two caveats of the compiler (Lean v4.35): the grade patterns (`.chain 2`) compile
@@ -49,6 +67,23 @@ import Grassmann.Kernel.Codegen.Plans
 import Grassmann.Kernel.Class
 import Lean.Elab.Command
 import Lean.Compiler.Specialize
+
+namespace Grassmann.Kernel
+
+open DirectSum StaticVectors AbstractTensors
+
+/-- `pickBase`'s run-time choice: `x` when it is exclusive, else `y` when that is, else `x`. -/
+@[inline] unsafe def pickBaseImpl {α : Type} [Coeff α] {n : Nat} (x y : Values α n) : Values α n :=
+  if isExclusiveUnsafe x then x else if isExclusiveUnsafe y then y else x
+
+/-- The output buffer of a generated kernel with two operands of the output's size: logically
+`x`; at run time whichever of `x` and `y` is exclusive, so that the kernel's writes are in
+place (`pickBaseImpl`). A kernel using it writes every output, so the result does not depend on
+the buffer chosen. -/
+@[implemented_by pickBaseImpl]
+def pickBase {α : Type} [Coeff α] {n : Nat} (x _y : Values α n) : Values α n := x
+
+end Grassmann.Kernel
 
 namespace Grassmann.Kernel.Codegen
 
@@ -145,6 +180,11 @@ def get (r : Arith) (n : Nat) (v : Expr) (i : Nat) : Expr :=
   mkApp5 (mkConst ``Values.get [0]) r.α r.P (mkRawNatLit n) v
     (mkApp3 (mkConst ``Fin.mk) (mkRawNatLit n) (mkRawNatLit i) (ltProof i n))
 
+/-- The unchecked write `v.set ⟨i, _⟩ o` of `v : Values α n`. -/
+def set (r : Arith) (n : Nat) (v : Expr) (i : Nat) (o : Expr) : Expr :=
+  mkApp6 (mkConst ``Values.set [0]) r.α r.P (mkRawNatLit n) v
+    (mkApp3 (mkConst ``Fin.mk) (mkRawNatLit n) (mkRawNatLit i) (ltProof i n)) o
+
 /-- `base.set ⟨0, _⟩ o₀ |>.set ⟨1, _⟩ o₁ …` for `base : Values α n`, `n = os.size`: the
 outputs written into `base` (in place when `base` is exclusive; otherwise its first write
 copies it once). -/
@@ -152,12 +192,15 @@ def packSet (r : Arith) (base : Expr) (os : Array Expr) : Expr := Id.run do
   let n := os.size
   let mut v := base
   for h : i in [0:n] do
-    v := mkApp6 (mkConst ``Values.set [0]) r.α r.P (mkRawNatLit n) v
-      (mkApp3 (mkConst ``Fin.mk) (mkRawNatLit n) (mkRawNatLit i) (ltProof i n)) os[i]
+    v := r.set n v i os[i]
   return v
 
 /-- The zero vector `zeroValues n : Values α n`. -/
 def zeros (r : Arith) (n : Nat) : Expr := mkApp3 (mkConst ``Grassmann.zeroValues) r.α r.inst (mkRawNatLit n)
+
+/-- `pickBase x y : Values α n`. -/
+def pick (r : Arith) (n : Nat) (x y : Expr) : Expr :=
+  mkApp5 (mkConst ``Grassmann.Kernel.pickBase) r.α r.inst (mkRawNatLit n) x y
 
 end Arith
 
@@ -186,52 +229,128 @@ def rowSum (r : Arith) (p : Plan) (c : Nat) (term : Nat → Expr) : Expr := Id.r
       | some a, _ => r.add a (r.mul (r.ofRat (p.coef[t]?.getD 0)) v)
   return acc.getD r.zero
 
-/-- The type and value of the kernel of plan `p` from `Values α na (× Values α nb)` to
-`Values α nc` (`unary`: one operand). -/
-def kernelTerm (unary : Bool) (na nb nc : Nat) (p : Plan) (coefs : Array (Rat × Name) := #[]) :
+/-! ## The general kernel builder -/
+
+/-- A parameter of a generated kernel (after `{α : Type} [Coeff α]`). -/
+inductive Param where
+  /-- A coefficient vector `Values α n`. -/
+  | vec (n : Nat)
+  /-- A coefficient `α`. -/
+  | scalar
+  deriving Inhabited, BEq
+
+/-- Where a kernel writes its outputs (see the module docstring). -/
+inductive Base where
+  /-- Into parameter `k` (a vector of the output's size). -/
+  | arg (k : Nat)
+  /-- Into whichever of parameters `k₁`, `k₂` (both of the output's size) is exclusive. -/
+  | pick (k₁ k₂ : Nat)
+  /-- Into a copy of the zero vector. -/
+  | zeros
+  deriving Inhabited, BEq
+
+/-- One output of a kernel. -/
+inductive Out where
+  /-- The constant `0`. -/
+  | zero
+  /-- Exactly entry `i` of vector parameter `k`. -/
+  | read (k i : Nat)
+  /-- A term over the reads. -/
+  | val (e : Expr)
+  deriving Inhabited
+
+/-- Whether the output buffer `base` already holds output `c` (the write is skipped). -/
+def Out.held (o : Out) (base : Base) (c : Nat) : Bool :=
+  match o, base with
+  | .zero, .zeros => true
+  | .read k i, .arg k' => k == k' && i == c
+  | _, _ => false
+
+/-- The type and value of a straight-line kernel `{α} [Coeff α] (params…) : Values α nc`. The
+outputs are computed by `outs ar read param zero` from the reads `read k i` (entry `i` of vector
+parameter `k`, each let-bound once and only if used), the parameters and a let-bound zero; they
+are written into `base`, skipping the ones it already holds. -/
+def kernelCore (params : Array Param) (nc : Nat) (base : Base) (coefs : Array (Rat × Name))
+    (outs : Arith → (Nat → Nat → Expr) → (Nat → Expr) → Expr → MetaM (Array Out)) :
     MetaM (Expr × Expr) := do
   withLocalDecl `α .implicit (mkSort Level.one) fun α => do
   withLocalDecl `inst .instImplicit (mkApp (mkConst ``Coeff) α) fun inst => do
     let r := Arith.new α inst coefs
-    withLocalDeclD `x (r.values na) fun x => do
-      let body (y? : Option Expr) : MetaM (Expr × Expr) := do
-        let args := #[α, inst, x] ++ y?.toArray
-        -- the inputs each output reads, each read once
-        let mut usedX := Array.replicate na false
-        let mut usedY := Array.replicate nb false
-        for t in [0:p.size] do
-          usedX := usedX.set! (p.ia[t]!.toNat) true
-          if !unary then usedY := usedY.set! (p.ib[t]!.toNat) true
+    let names := (Array.range params.size).map fun k => Name.mkSimple s!"p{k}"
+    let tys := params.map fun | .vec n => r.values n | .scalar => α
+    let rec go (k : Nat) (acc : Array Expr) : MetaM (Expr × Expr) := do
+      if h : k < params.size then
+        withLocalDeclD names[k]! tys[k]! fun p => go (k + 1) (acc.push p)
+      else
+        -- every read of every vector parameter (unused ones are dropped by `mkLetFVars`)
         let mut rn : Array Name := #[]
         let mut rv : Array Expr := #[]
-        let mut slotX : Array Nat := Array.replicate na 0
-        let mut slotY : Array Nat := Array.replicate nb 0
-        for i in [0:na] do
-          if usedX[i]! then
-            slotX := slotX.set! i rv.size
-            rn := rn.push (.mkSimple s!"x{i}")
-            rv := rv.push (r.get na x i)
-        if let some y := y? then
-          for j in [0:nb] do
-            if usedY[j]! then
-              slotY := slotY.set! j rv.size
-              rn := rn.push (.mkSimple s!"y{j}")
-              rv := rv.push (r.get nb y j)
+        let mut off : Array Nat := #[]
+        for h : j in [0:params.size] do
+          off := off.push rv.size
+          if let .vec n := params[j] then
+            for i in [0:n] do
+              rn := rn.push (.mkSimple s!"x{j}_{i}")
+              rv := rv.push (r.get n acc[j]! i)
         withLets rn α rv fun reads => do
-          let term (t : Nat) : Expr :=
-            let a := reads[slotX[p.ia[t]!.toNat]!]!
-            if unary then a else r.mul a reads[slotY[p.ib[t]!.toNat]!]!
-          let outs := (Array.range nc).map fun c => rowSum r p c term
-          withLets ((Array.range nc).map fun c => .mkSimple s!"o{c}") α outs fun os => do
-            -- write the outputs into an operand of the output's size (in place when the
-            -- caller hands over an exclusive operand), else into a copy of the zero vector
-            let base := if na == nc then x else match y? with
-              | some y => if nb == nc then y else r.zeros nc
-              | none => r.zeros nc
-            let e ← mkLetFVars (reads ++ os) (r.packSet base os)
+        withLetDecl `z α r.zero fun z => do
+          let read (j i : Nat) : Expr := reads[off[j]! + i]!
+          let param (j : Nat) : Expr := acc[j]!
+          let os ← outs r read param z
+          -- the outputs to write, let-bound
+          let mut wn : Array Name := #[]
+          let mut wv : Array Expr := #[]
+          let mut wix : Array Nat := #[]
+          for h : c in [0:os.size] do
+            let o := os[c]
+            unless o.held base c do
+              match o with
+              | .zero => wix := wix.push c; wv := wv.push z; wn := wn.push (.mkSimple s!"o{c}")
+              | .read j i => wix := wix.push c; wv := wv.push (read j i); wn := wn.push (.mkSimple s!"o{c}")
+              | .val e => wix := wix.push c; wv := wv.push e; wn := wn.push (.mkSimple s!"o{c}")
+          withLets wn α wv fun ws => do
+            let b := match base with
+              | .arg j => param j
+              | .pick j₁ j₂ => r.pick nc (param j₁) (param j₂)
+              | .zeros => r.zeros nc
+            let mut v := b
+            for h : t in [0:ws.size] do
+              v := r.set nc v wix[t]! ws[t]
+            let e ← mkLetFVars (reads ++ #[z] ++ ws) v
+            let args := #[α, inst] ++ acc
             return (← mkForallFVars args (r.values nc), ← mkLambdaFVars args e)
-      if unary then body none
-      else withLocalDeclD `y (r.values nb) fun y => body (some y)
+    go 0 #[]
+
+/-- The output buffer of a kernel with vector parameters of sizes `ns` and output size `nc`:
+the pair of operands when both have the output's size (binary kernels), else the first operand
+of the output's size, else the zero vector. -/
+def chooseBase (ns : Array (Option Nat)) (nc : Nat) : Base :=
+  let fits := (Array.range ns.size).filter fun k => ns[k]! == some nc
+  match fits.toList with
+  | [k₁, k₂] => .pick k₁ k₂
+  | k :: _ => .arg k
+  | [] => .zeros
+
+/-- The output `c` of plan `p` (reading vector parameter `0`, and `1` for a binary plan) as an
+`Out`: `Out.read` when it is exactly one operand entry (a unary entry of coefficient `1`),
+`Out.zero` for an empty row. -/
+def planOut (r : Arith) (unary : Bool) (p : Plan) (c : Nat) (read : Nat → Nat → Expr) : Out :=
+  let s := (p.rowStart[c]?.getD 0).toNat
+  let e := (p.rowStart[c + 1]?.getD 0).toNat
+  if s == e then .zero
+  else if unary && e == s + 1 && p.code.get! s == 0 then .read 0 (p.ia[s]!.toNat)
+  else .val (rowSum r p c fun t =>
+    let a := read 0 (p.ia[t]!.toNat)
+    if unary then a else r.mul a (read 1 (p.ib[t]!.toNat)))
+
+/-- The type and value of the kernel of plan `p` from `Values α na (× Values α nb)` to
+`Values α nc` (`unary`: one operand). -/
+def kernelTerm (unary : Bool) (na nb nc : Nat) (p : Plan) (coefs : Array (Rat × Name) := #[]) :
+    MetaM (Expr × Expr) := do
+  let params := if unary then #[Param.vec na] else #[.vec na, .vec nb]
+  let base := chooseBase (if unary then #[some na] else #[some na, some nb]) nc
+  kernelCore params nc base coefs fun r read _ _ =>
+    return (Array.range nc).map fun c => planOut r unary p c read
 
 /-- Compile generated kernels in batches of 32, without a heartbeat limit and with a
 recursion depth for their long `let` chains (a whole space in one batch exceeds the default
@@ -245,17 +364,22 @@ def compileKernels (names : Array Name) : CommandElabM Unit := do
           maxRecDepth := max ctx.maxRecDepth 65536 }) <|
       compileDecls (names.extract (i * 32) ((i + 1) * 32))
 
-/-- Add the kernel `name` of plan `p` (not yet compiled), marked `@[specialize]`, with a
-docstring. -/
-def addKernel (name : Name) (doc : String) (unary : Bool) (na nb nc : Nat) (p : Plan)
-    (coefs : Array (Rat × Name) := #[]) : MetaM Unit := do
-  let (type, value) ← kernelTerm unary na nb nc p coefs
+/-- Add the declaration `name : type := value` (not yet compiled), marked `@[specialize]`,
+with a docstring. -/
+def addKernelDecl (name : Name) (doc : String) (type value : Expr) : MetaM Unit := do
   addDecl <| .defnDecl {
     name, levelParams := [], type, value
     hints := .regular (getMaxHeight (← getEnv) value + 1)
     safety := .safe }
   modifyEnv fun env => (Compiler.specializeAttr.setParam env name #[]).toOption.getD env
   addDocStringCore name doc
+
+/-- Add the kernel `name` of plan `p` (not yet compiled), marked `@[specialize]`, with a
+docstring. -/
+def addKernel (name : Name) (doc : String) (unary : Bool) (na nb nc : Nat) (p : Plan)
+    (coefs : Array (Rat × Name) := #[]) : MetaM Unit := do
+  let (type, value) ← kernelTerm unary na nb nc p coefs
+  addKernelDecl name doc type value
 
 /-- The coefficients other than `±1` of some plans (diagonal metrics), without repetitions. -/
 def nonUnitCoefs (ps : Array Plan) : Array Rat := Id.run do
@@ -305,6 +429,21 @@ are), so an uncovered shape costs what the reference kernel costs. -/
     (x : Values α (la.size V.n)) : Values α (lc.size V.n) :=
   refUn V op la lc x
 
+/-- `convertLayout`, out of line (the fallback of the generated conversions). -/
+@[noinline, specialize] def refConvOut {α : Type} [Coeff α] (n : Nat) (la lc : Layout)
+    (x : Values α (la.size n)) : Values α (lc.size n) :=
+  convertLayout n la lc x
+
+/-- The reference `conv la lc x + conv lb lc y`, out of line. -/
+@[noinline, specialize] def refConvAddOut {α : Type} [Coeff α] (n : Nat) (la lb lc : Layout)
+    (x : Values α (la.size n)) (y : Values α (lb.size n)) : Values α (lc.size n) :=
+  convertLayout n la lc x + convertLayout n lb lc y
+
+/-- The reference `conv la lc x - conv lb lc y`, out of line. -/
+@[noinline, specialize] def refConvSubOut {α : Type} [Coeff α] (n : Nat) (la lb lc : Layout)
+    (x : Values α (la.size n)) (y : Values α (lb.size n)) : Values α (lc.size n) :=
+  convertLayout n la lc x - convertLayout n lb lc y
+
 /-! ## Dispatch syntax -/
 
 /-- A layout as a pattern/term. -/
@@ -331,6 +470,8 @@ def layoutDoc : Layout → String
 structure Emitted where
   /-- Kernels by field and operation: `(field, op, [(spec, kernel name)])`. -/
   groups : Array (Field × KOp × Array (Spec × Name)) := #[]
+  /-- The linear kernels: `(spec, kernel name)`. -/
+  linear : Array (LinSpec × Name) := #[]
   /-- Number of kernels. -/
   kernels : Nat := 0
   /-- Total multiply-accumulate entries. -/
@@ -399,6 +540,119 @@ def fieldValue (V : Term) (field : Field) (ops : Array (KOp × Ident)) : Command
       alts := alts.push (← `(Lean.Parser.Term.matchAltExpr| | $op => $fb $V $op $la $lb $lc $x $y))
     `(fun $op $la $lb $lc $x $y => match $op:ident with $alts:matchAlt*)
 
+/-! ## Linear kernels (`add` … `convSub`) -/
+
+/-- The name of a linear kernel under the space prefix `pre`. -/
+def linName (pre : Name) (s : LinSpec) : Name :=
+  let ls := match s.op with
+    | .add | .sub | .neg | .smul | .muls => [s.la]
+    | .conv => [s.la, s.lc]
+    | .convAdd | .convSub => [s.la, s.lb, s.lc]
+  pre ++ Name.mkSimple ("_".intercalate ("k" :: s.op.tag :: ls.map layoutTag))
+
+/-- The type and value of a linear kernel of an `n`-generator space (the reference's operations
+exactly: `Grassmann.Kernels`' defaults). -/
+def linTerm (n : Nat) (s : LinSpec) : MetaM (Expr × Expr) := do
+  let (na, nb, nc) := (s.la.size n, s.lb.size n, s.lc.size n)
+  -- the position in `l` of the blade at position `c` of `s.lc`, if `l` stores it
+  let src (l : Layout) (c : Nat) : Option Nat :=
+    let b := (s.lc.blades n)[c]!
+    if l.contains n b then some (l.rank n b) else none
+  match s.op with
+  | .add | .sub =>
+    kernelCore #[.vec na, .vec na] na (.pick 0 1) #[] fun r read _ _ =>
+      return (Array.range na).map fun i =>
+        .val (if s.op == .add then r.add (read 0 i) (read 1 i) else r.sub (read 0 i) (read 1 i))
+  | .neg =>
+    kernelCore #[.vec na] na (.arg 0) #[] fun r read _ _ =>
+      return (Array.range na).map fun i => .val (r.neg (read 0 i))
+  | .smul =>
+    kernelCore #[.scalar, .vec na] na (.arg 1) #[] fun r read param _ =>
+      return (Array.range na).map fun i => .val (r.mul (param 0) (read 1 i))
+  | .muls =>
+    kernelCore #[.vec na, .scalar] na (.arg 0) #[] fun r read param _ =>
+      return (Array.range na).map fun i => .val (r.mul (read 0 i) (param 1))
+  | .conv =>
+    kernelCore #[.vec na] nc (chooseBase #[some na] nc) #[] fun _ _ _ _ =>
+      return (Array.range nc).map fun c => match src s.la c with
+        | some i => .read 0 i
+        | none => .zero
+  | .convAdd | .convSub =>
+    let add := s.op == .convAdd
+    kernelCore #[.vec na, .vec nb] nc (chooseBase #[some na, some nb] nc) #[] fun r read _ z =>
+      return (Array.range nc).map fun c =>
+        let op := if add then r.add else r.sub
+        match src s.la c, src s.lb c with
+        | some i, some j => .val (op (read 0 i) (read 1 j))
+        | some i, none => .val (op (read 0 i) z)
+        | none, some j => .val (op z (read 1 j))
+        | none, none => .zero
+
+/-- Emit the dispatcher of one linear operation: a `match` on its layouts, the reference the
+fallback (`Values` arithmetic, `convertLayout`); a conversion into its own layout is the
+identity. -/
+def emitLinDispatch (nLit : Term) (name : Ident) (op : LinOp) (ks : Array (LinSpec × Name))
+    (allLs : List Layout) : CommandElabM Unit := do
+  let (l, la, lb, lc, x, y, s) :=
+    (mkIdent `l, mkIdent `la, mkIdent `lb, mkIdent `lc, mkIdent `x, mkIdent `y, mkIdent `s)
+  let vals (l : Ident) : CommandElabM Term := `(StaticVectors.Values α (DirectSum.Layout.size $nLit $l))
+  let mut alts : Array (TSyntax ``Lean.Parser.Term.matchAlt) := #[]
+  match op with
+  | .neg =>
+    for (sp, k) in ks do
+      alts := alts.push (← `(Lean.Parser.Term.matchAltExpr| | $(← layoutStx sp.la), $x => $(mkCIdent k) $x))
+    alts := alts.push (← `(Lean.Parser.Term.matchAltExpr| | _, $x => -$x))
+    elabCommand (← `(command|
+      @[inline] def $name {α : Type} [AbstractTensors.Coeff α] ($l : DirectSum.Layout) ($x : $(← vals l)) :
+          $(← vals l) :=
+        match $l:ident, $x:ident with $alts:matchAlt*))
+  | .add | .sub =>
+    for (sp, k) in ks do
+      alts := alts.push (← `(Lean.Parser.Term.matchAltExpr| | $(← layoutStx sp.la), $x, $y => $(mkCIdent k) $x $y))
+    alts := alts.push <| ← if op == .add then `(Lean.Parser.Term.matchAltExpr| | _, $x, $y => $x + $y)
+      else `(Lean.Parser.Term.matchAltExpr| | _, $x, $y => $x - $y)
+    elabCommand (← `(command|
+      @[inline] def $name {α : Type} [AbstractTensors.Coeff α] ($l : DirectSum.Layout) ($x $y : $(← vals l)) :
+          $(← vals l) :=
+        match $l:ident, $x:ident, $y:ident with $alts:matchAlt*))
+  | .smul | .muls =>
+    for (sp, k) in ks do
+      alts := alts.push <| ← if op == .smul then
+          `(Lean.Parser.Term.matchAltExpr| | $(← layoutStx sp.la), $s, $x => $(mkCIdent k) $s $x)
+        else `(Lean.Parser.Term.matchAltExpr| | $(← layoutStx sp.la), $s, $x => $(mkCIdent k) $x $s)
+    alts := alts.push <| ← if op == .smul then
+        `(Lean.Parser.Term.matchAltExpr| | _, $s, $x => StaticVectors.Values.map ($s * ·) $x)
+      else `(Lean.Parser.Term.matchAltExpr| | _, $s, $x => StaticVectors.Values.map (· * $s) $x)
+    let sig ← if op == .smul then
+        `(command| @[inline] def $name {α : Type} [AbstractTensors.Coeff α] ($l : DirectSum.Layout) ($s : α)
+            ($x : $(← vals l)) : $(← vals l) := match $l:ident, $s:ident, $x:ident with $alts:matchAlt*)
+      else
+        `(command| @[inline] def $name {α : Type} [AbstractTensors.Coeff α] ($l : DirectSum.Layout)
+            ($x : $(← vals l)) ($s : α) : $(← vals l) := match $l:ident, $s:ident, $x:ident with $alts:matchAlt*)
+    elabCommand sig
+  | .conv =>
+    for (sp, k) in ks do
+      alts := alts.push (← `(Lean.Parser.Term.matchAltExpr|
+        | $(← layoutStx sp.la), $(← layoutStx sp.lc), $x => $(mkCIdent k) $x))
+    for l' in allLs do
+      alts := alts.push (← `(Lean.Parser.Term.matchAltExpr| | $(← layoutStx l'), $(← layoutStx l'), $x => $x))
+    alts := alts.push (← `(Lean.Parser.Term.matchAltExpr|
+      | $la, $lc, $x => Grassmann.Kernel.Codegen.refConvOut $nLit $la $lc $x))
+    elabCommand (← `(command|
+      @[inline] def $name {α : Type} [AbstractTensors.Coeff α] ($la $lc : DirectSum.Layout) ($x : $(← vals la)) :
+          $(← vals lc) :=
+        match $la:ident, $lc:ident, $x:ident with $alts:matchAlt*))
+  | .convAdd | .convSub =>
+    for (sp, k) in ks do
+      alts := alts.push (← `(Lean.Parser.Term.matchAltExpr|
+        | $(← layoutStx sp.la), $(← layoutStx sp.lb), $(← layoutStx sp.lc), $x, $y => $(mkCIdent k) $x $y))
+    let fb := mkCIdent (if op == .convAdd then ``refConvAddOut else ``refConvSubOut)
+    alts := alts.push (← `(Lean.Parser.Term.matchAltExpr| | $la, $lb, $lc, $x, $y => $fb $nLit $la $lb $lc $x $y))
+    elabCommand (← `(command|
+      @[inline] def $name {α : Type} [AbstractTensors.Coeff α] ($la $lb $lc : DirectSum.Layout)
+          ($x : $(← vals la)) ($y : $(← vals lb)) : $(← vals lc) :=
+        match $la:ident, $lb:ident, $lc:ident, $x:ident, $y:ident with $alts:matchAlt*))
+
 /-! ## Emitting a space -/
 
 /-- The kernel of every planned specification: its declaration name under `pre`, and
@@ -421,13 +675,14 @@ def assignKernels (pre : Name) (planned : Array Planned) : Array (Planned × Nam
     out := out.push (pl, nm, true)
   return out
 
-/-- Emit and compile every kernel of `planned` under the prefix `pre`, then the dispatchers
-and the `Kernels` instance for the space `V` (a term denoting `space`, e.g. an `abbrev`).
-The fallbacks receive the space as `Vrt`, a `@[noinline]` constant: an `abbrev` of a
-structure literal is inlined by the compiler, and where a dispatch does not fold at a call
-site the literal was rebuilt (allocated) on every call before the branch. -/
+/-- Emit and compile every kernel of `planned` and every linear kernel of `linear` under the
+prefix `pre`, then the dispatchers and the `Kernels` instance for the space `V` (a term
+denoting `space`, e.g. an `abbrev`). The fallbacks receive the space as `Vrt`, a
+`@[noinline]` constant: an `abbrev` of a structure literal is inlined by the compiler, and
+where a dispatch does not fold at a call site the literal was rebuilt (allocated) on every
+call before the branch. -/
 def emitSpace (space : TensorBundle) (V : Term) (Vrt : Term) (pre : Name) (planned : Array Planned)
-    (coefs : Array (Rat × Name) := #[]) : CommandElabM Emitted := do
+    (linear : Array LinSpec) (coefs : Array (Rat × Name) := #[]) : CommandElabM Emitted := do
   let n := space.n
   let mut em : Emitted := {}
   let mut names : Array Name := #[]
@@ -444,6 +699,13 @@ def emitSpace (space : TensorBundle) (V : Term) (Vrt : Term) (pre : Name) (plann
     liftTermElabM <| addKernel nm doc unary (k.la.size n) (k.lb.size n) (k.lc.size n) pl.plan coefs
     names := names.push nm
     em := { em with kernels := em.kernels + 1, entries := em.entries + pl.plan.size }
+  for s in linear do
+    let nm := linName pre s
+    let (type, value) ← liftTermElabM <| linTerm n s
+    liftTermElabM <| addKernelDecl nm s!"Generated linear kernel (DESIGN.md §5.2): {s.describe} in `{space}`."
+      type value
+    names := names.push nm
+    em := { em with kernels := em.kernels + 1, linear := em.linear.push (s, nm) }
   compileKernels names
   -- group by field and operation, in first-appearance order
   let mut groups : Array (Field × KOp × Array (Spec × Name)) := #[]
@@ -464,14 +726,31 @@ def emitSpace (space : TensorBundle) (V : Term) (Vrt : Term) (pre : Name) (plann
         {ks.size} layout triples; other triples use the reference kernel."
       ops := ops.push (op, mkCIdent nm)
     values := values.push (← fieldValue Vrt field ops)
+  -- the linear dispatchers
+  for op in LinOp.all do
+    let nm := pre ++ Name.mkSimple s!"lin_{op.tag}"
+    emitLinDispatch nLit (mkIdent (`_root_ ++ nm)) op (em.linear.filter (·.1.op == op)) (allLayouts n)
+    addDocStringCore nm s!"Generated dispatch of the linear kernels `{op.tag}` in `{space}`; other layouts \
+      use the reference."
+  let lin (op : LinOp) : Ident := mkCIdent (pre ++ Name.mkSimple s!"lin_{op.tag}")
   -- the instance
   let instId := mkIdent (`_root_ ++ pre ++ `instKernels)
+  let (l, la, lb, lc, x, y, s) :=
+    (mkIdent `l, mkIdent `la, mkIdent `lb, mkIdent `lc, mkIdent `x, mkIdent `y, mkIdent `s)
   elabCommand (← `(command|
     /-- The generated kernels of this space (DESIGN.md §5.2, §5.4). -/
     instance $instId:ident : Grassmann.Kernels $V where
       bin := $(values[0]!)
       binProj := $(values[1]!)
-      un := $(values[2]!)))
+      un := $(values[2]!)
+      add := fun $l $x $y => $(lin .add) $l $x $y
+      sub := fun $l $x $y => $(lin .sub) $l $x $y
+      neg := fun $l $x => $(lin .neg) $l $x
+      smul := fun $l $s $x => $(lin .smul) $l $s $x
+      muls := fun $l $x $s => $(lin .muls) $l $x $s
+      conv := fun $la $lc $x => $(lin .conv) $la $lc $x
+      convAdd := fun $la $lb $lc $x $y => $(lin .convAdd) $la $lb $lc $x $y
+      convSub := fun $la $lb $lc $x $y => $(lin .convSub) $la $lb $lc $x $y))
   return em
 
 end Grassmann.Kernel.Codegen

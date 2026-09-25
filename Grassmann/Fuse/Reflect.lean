@@ -10,8 +10,9 @@ primitives the whole layer is built from, and gives each primitive its exact mea
 | primitive | meaning |
 |---|---|
 | `Kernels.bin/binProj/un/unProj` (standard instances) | the reference plan of the key, in the generated kernels' order |
-| `SandwichKernels.sandwich/tsandwich` (standard instances) | the two plans of `sandwichTwo`/`tsandwichTwo` |
-| `Values.zipWith f`, `Values.map f`, `Values.replicate`, `Values.ofFn` | `f` applied to the coefficient nodes |
+| `Kernels.add/sub/neg/smul/muls/conv/convAdd/convSub` (standard instances) | the coefficientwise sums, negation, scalar multiples and re-indexing |
+| `SandwichKernels.sandwich/tsandwich/rsandwich` (standard instances) | the plans of `sandwichTwo`/`tsandwichTwo`/`rsandwichThree` |
+| `Values.zipWith f`, `zipSelf f`, `Values.map f`, `mapSelf f`, `mapWith f b`, `Values.replicate`, `Values.ofFn` | `f` applied to the coefficient nodes |
 | `convertLayout n la lc`, `zeroValues n`, `Values.cast` | re-indexing, zeros, identity |
 | `+ - * neg` of the coefficient type, `Coeff.zero/one/ofRat/ofInt`, integer literals | graph nodes |
 | `Values.get v i` (closed `i`) | coefficient `i` of `v` |
@@ -264,7 +265,11 @@ def opaqueScalar (e : Expr) : M Nat := do
 def primitiveNames : List Name :=
   [``Grassmann.Kernels.bin, ``Grassmann.Kernels.binProj, ``Grassmann.Kernels.un,
    ``Grassmann.Kernels.unProj, ``Grassmann.SandwichKernels.sandwich,
-   ``Grassmann.SandwichKernels.tsandwich, ``StaticVectors.Values.zipWith, ``StaticVectors.Values.map,
+   ``Grassmann.SandwichKernels.tsandwich, ``Grassmann.SandwichKernels.rsandwich,
+   ``Grassmann.Kernels.add, ``Grassmann.Kernels.sub, ``Grassmann.Kernels.neg, ``Grassmann.Kernels.smul,
+   ``Grassmann.Kernels.muls, ``Grassmann.Kernels.conv, ``Grassmann.Kernels.convAdd,
+   ``Grassmann.Kernels.convSub, ``StaticVectors.Values.zipSelf, ``StaticVectors.Values.mapSelf,
+   ``StaticVectors.Values.mapWith, ``StaticVectors.Values.zipWith, ``StaticVectors.Values.map,
    ``StaticVectors.Values.cast, ``StaticVectors.Values.replicate, ``StaticVectors.Values.ofFn,
    ``StaticVectors.Values.get, ``Grassmann.convertLayout, ``Grassmann.zeroValues,
    ``AbstractTensors.Coeff.zero, ``AbstractTensors.Coeff.one, ``AbstractTensors.Coeff.ofRat,
@@ -480,6 +485,99 @@ partial def reflectValsCore (e : Expr) : M (Array Nat) := do
           let rc ← gop (·.apply₁ cl r)
           return ← gop (·.apply₂ second t rc)
       return ← leafV e
+    if n == ``Grassmann.SandwichKernels.rsandwich && args.size == 9 then
+      if let some _ ← standardSandwich args[0]! args[1]! then
+        let V ← spaceOf args[0]!
+        let (lr, lx, lc) := (← layoutOf args[4]!, ← layoutOf args[5]!, ← layoutOf args[6]!)
+        let lt := Kernel.sandwichMid lr lx
+        let r ← reflectVals args[7]!
+        let x ← reflectVals args[8]!
+        let first ← planOf { V, op := .bin .mul, la := lr, lb := lx, lc := lt }
+        let rev ← planOf { V, op := .un .reverse, la := lr, lb := lr, lc := lr }
+        let second ← planOf { V, op := .bin .mul, la := lt, lb := lr, lc }
+        modify fun s => { s with kernels := s.kernels + 1 }
+        let t ← gop (·.apply₂ first r x)
+        let rr ← gop (·.apply₁ rev r)
+        return ← gop (·.apply₂ second t rr)
+      return ← leafV e
+    -- the linear kernels (`Kernels.add` … `Kernels.convSub`) of a standard instance
+    if (n == ``Grassmann.Kernels.add || n == ``Grassmann.Kernels.sub) && args.size == 7 then
+      if ← standardKernels args[1]! then
+        let x ← reflectVals args[5]!
+        let y ← reflectVals args[6]!
+        modify fun s => { s with kernels := s.kernels + 1 }
+        let mut out := #[]
+        for (xi, yi) in x.zip y do
+          out := out.push (← gop fun g => if n == ``Grassmann.Kernels.add then g.add xi yi else g.sub xi yi)
+        return out
+      return ← leafV e
+    if n == ``Grassmann.Kernels.neg && args.size == 6 then
+      if ← standardKernels args[1]! then
+        let x ← reflectVals args[5]!
+        modify fun s => { s with kernels := s.kernels + 1 }
+        return ← gop (·.mapV Graph.neg x)
+      return ← leafV e
+    if (n == ``Grassmann.Kernels.smul || n == ``Grassmann.Kernels.muls) && args.size == 7 then
+      if ← standardKernels args[1]! then
+        let left := n == ``Grassmann.Kernels.smul
+        let s ← reflectScalar (if left then args[5]! else args[6]!)
+        let x ← reflectVals (if left then args[6]! else args[5]!)
+        modify fun st => { st with kernels := st.kernels + 1 }
+        let mut out := #[]
+        for xi in x do out := out.push (← gop fun g => if left then g.mul s xi else g.mul xi s)
+        return out
+      return ← leafV e
+    if n == ``Grassmann.Kernels.conv && args.size == 7 then
+      if ← standardKernels args[1]! then
+        let V ← spaceOf args[0]!
+        let (la, lc) := (← layoutOf args[4]!, ← layoutOf args[5]!)
+        let x ← reflectVals args[6]!
+        modify fun s => { s with kernels := s.kernels + 1 }
+        return (lc.blades V.n).map fun b =>
+          if la.contains V.n b then x[la.rank V.n b]?.getD Graph.zero else Graph.zero
+      return ← leafV e
+    if (n == ``Grassmann.Kernels.convAdd || n == ``Grassmann.Kernels.convSub) && args.size == 9 then
+      if ← standardKernels args[1]! then
+        let V ← spaceOf args[0]!
+        let (la, lb, lc) := (← layoutOf args[4]!, ← layoutOf args[5]!, ← layoutOf args[6]!)
+        let x ← reflectVals args[7]!
+        let y ← reflectVals args[8]!
+        modify fun s => { s with kernels := s.kernels + 1 }
+        let conv (l : Layout) (v : Array Nat) : Array Nat := (lc.blades V.n).map fun b =>
+          if l.contains V.n b then v[l.rank V.n b]?.getD Graph.zero else Graph.zero
+        let mut out := #[]
+        for (xi, yi) in (conv la x).zip (conv lb y) do
+          out := out.push (← gop fun g => if n == ``Grassmann.Kernels.convAdd then g.add xi yi else g.sub xi yi)
+        return out
+      return ← leafV e
+    -- `Values.zipSelf`/`mapSelf`/`mapWith` (StaticVectors' in-place maps) as `zipWith`/`map`
+    if n == ``StaticVectors.Values.zipSelf && args.size ≥ 3 then
+      let x ← reflectVals args[args.size - 2]!
+      let y ← reflectVals args[args.size - 1]!
+      let f := args[args.size - 3]!
+      let α := (← read).α
+      return ← withLocalDeclD `a α fun a => withLocalDeclD `b α fun b => do
+        let body := (mkApp2 f a b).headBeta
+        let mut out := #[]
+        for (xi, yi) in x.zip y do
+          modify fun s => { s with locals := (s.locals.insert a.fvarId! xi).insert b.fvarId! yi }
+          out := out.push (← reflectScalar body)
+        modify fun s => { s with locals := (s.locals.erase a.fvarId!).erase b.fvarId! }
+        return out
+    if (n == ``StaticVectors.Values.mapSelf && args.size ≥ 2) ||
+        (n == ``StaticVectors.Values.mapWith && args.size ≥ 3) then
+      let x ← reflectVals args[args.size - 1]!
+      let f := if n == ``StaticVectors.Values.mapSelf then args[args.size - 2]!
+        else mkApp args[args.size - 3]! args[args.size - 2]!
+      let α := (← read).α
+      return ← withLocalDeclD `a α fun a => do
+        let body := (mkApp f a).headBeta
+        let mut out := #[]
+        for xi in x do
+          modify fun s => { s with locals := s.locals.insert a.fvarId! xi }
+          out := out.push (← reflectScalar body)
+        modify fun s => { s with locals := s.locals.erase a.fvarId! }
+        return out
     if n == ``StaticVectors.Values.zipWith && args.size ≥ 3 then
       let x ← reflectVals args[args.size - 2]!
       let y ← reflectVals args[args.size - 1]!

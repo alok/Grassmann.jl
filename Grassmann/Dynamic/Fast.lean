@@ -1,91 +1,48 @@
 /-
-Fast paths of the dynamic layer: container products and unary maps through the space's
-generated kernels (DESIGN.md §5.2), where they are bit for bit Julia's generated loops.
+Fast paths of the dynamic layer: container products and unary maps through compiled kernels,
+where they are bit for bit Julia's generated loops.
 
 The dynamic products (`TA.mul`, `TA.wedge`, …) evaluate Julia's generated loops through
 interpreted plans (`Grassmann.Dynamic.Loops`) so that `Float` results agree with Julia bit for
 bit, sign of zero included, in *every* space; the unary maps compute each entry from DirectSum's
 blade rules. Both are generic in the coefficient type and pay a plan lookup per call.
 
-In a space whose `Kernels` instance is generated and whose metric is diagonal and
-non-degenerate (not conformal, tangent or dyadic, `n ≤ 5`: `ℝ2`, `ℝ3`, `ℝ4`, `STA`, and
-`basis!` spaces of that shape), the generated kernel of a
+`grassmann_kernels`/`basis!` emit a `DynKernels V` instance (`Grassmann.Kernel.Dyn`) for every
+space they generate with at most five generators and no tangent or dyadic generators (the
+standard spaces `ℝ2` … `CGA3`, and user spaces through `basis!`): Julia's loops of the container
+shapes below as compiled straight-line kernels (the typed layer's generated kernel where its plan
+is Julia's loop entry for entry, a dedicated kernel from the loop plan otherwise: a degenerate
+metric's zero factors, a conformal space), and flags recording which generated unary kernels are
+Julia's entry-wise maps. The operator instances of `Grassmann.Dynamic.Ops` (`*`, `∧`, `∨`, `⋅`,
+`~`, `⋆`, …) call the `…F` functions here, which take
 
-* product of two chains strictly between the scalars and the pseudoscalar,
-* product of two containers (`Spinor`, `CoSpinor`, `Multivector`),
-* sign map (`reverse`, `involute`, `clifford`, `antireverse`) or complement of a container
+* for a product of two chains strictly between the scalars and the pseudoscalar, or of two
+  containers (`Spinor`, `CoSpinor`, `Multivector`), `DynKernels.loop` when `DynKernels.loops`;
+* for two terms, the blade sign (`parityjoin`) with `termProd`'s exact scaling when
+  `DynKernels.fast` (non-degenerate diagonal metrics);
+* for a sign map (`reverse`, `involute`, `clifford`, `antireverse`) or plain complement of a
+  container, the generated kernel when `DynKernels.signs`; for a Hodge complement when
+  `DynKernels.hodges`;
 
-is the same computation as Julia's loop: the same contributions in the same order (first
-operand outermost, one term per blade pair, no zero metric factors), summed from the first
-term (Julia's expression form, used below its `cache_limit` for `n ≤ 5`), entries negated
-with `-x`. The class `DynKernels V` records that a space qualifies (`fast`); the operator
-instances of `Grassmann.Dynamic.Ops` (`*`, `∧`, `∨`, `⋅`, `~`, `⋆`, …) call the `…F`
-functions here, which take the generated kernel when `fast` holds and the Julia loop
-otherwise. At a call site with a literal space the test folds and the kernel is specialized at
-the coefficient type (`Tests/Dynamic/Fast.lean` checks the two paths agree bit for bit on
-random `Float` operands with zero entries; docs/PERF.md has the timings).
+and Julia's loops (the full lattice) for everything else. At a call site with a literal space
+the flags fold and the kernel is specialized at the coefficient type (`Tests/Dynamic/Fast.lean`
+and `Tests/Codegen/Kernels.lean` check the two paths agree bit for bit on random `Float`
+operands with zero entries; docs/PERF.md has the timings).
 
 Julia's result kinds are unchanged: the fast paths cover exactly the branches of Julia's
 dispatch that end in a container loop and fall back to the full lattice for everything
 else (terms, couples, scalar or pseudoscalar factors, grades outside the range).
 -/
 import Grassmann.Dynamic.Products
+import Grassmann.Kernel.Dyn
 
 namespace Grassmann
 
 open DirectSum DirectSum.Bits StaticVectors AbstractTensors
 
-/-- Whether the dynamic layer may evaluate container products and unary maps of `V` through
-its `Kernels V` instance (see the module docstring): `true` only for spaces whose instance is
-generated for every shape used and whose metric is diagonal, non-degenerate, not conformal,
-tangent or dyadic, with `n ≤ 5`. The default instance says `false` (Julia's loops). -/
-class DynKernels (V : TensorBundle) where
-  /-- The generated kernels agree with Julia's loops bit for bit. -/
-  fast : Bool
-
-/-- Every space: Julia's loops. -/
-instance (priority := low) DynKernels.loops (V : TensorBundle) : DynKernels V := ⟨false⟩
-
-/-- `ℝ2` has generated kernels (`Grassmann.Kernel.Generated.R2`). -/
-instance : DynKernels ℝ2 := ⟨true⟩
-/-- `ℝ3` has generated kernels. -/
-instance : DynKernels ℝ3 := ⟨true⟩
-/-- `ℝ4` has generated kernels. -/
-instance : DynKernels ℝ4 := ⟨true⟩
-/-- `STA` has generated kernels (a non-degenerate signature). -/
-instance : DynKernels STA := ⟨true⟩
-
-/-- Whether a space's metric allows the fast paths when its kernels are generated: diagonal
-and non-degenerate, not conformal, tangent or dyadic, at most 5 generators. -/
-def _root_.DirectSum.TensorBundle.dynFastShape (V : TensorBundle) : Bool :=
-  V.n ≤ 5 && !V.hasconformal && !V.istangent && V.dyadmode == 0 && V.isdiag &&
-    (match V.metric with
-     | .diagonal d => d.all (· != 0)
-     | .tensor _ => false
-     | _ => true)
-
 namespace TA
 
 variable {V : TensorBundle} {α : Type} [Coeff α] [Kernels V] [DynKernels V]
-
-/-- The result layout of Julia's loop for the core product `op` of two chains of grades
-`g`, `h` strictly between `0` and `n` (`none`: Julia's result is `𝟎`). -/
-@[inline] def chainOut (n : Nat) (op : POp) (g h : Nat) : Option Layout :=
-  match op with
-  | .mul => some (halfL ((g + h) % 2 == 1))
-  | .wedge => if g + h > n then none else some (.chain (g + h))
-  | .vee => if g + h < n then none else some (.chain (g + h - n))
-  | .contraction => if g < h then none else some (.chain (g - h))
-
-/-- The result layout of Julia's loop for the core product `op` of two containers of layouts
-`la`, `lb` (halves multiply by parity, `∨` shifted by the parity of `n`). -/
-@[inline] def pairOut (n : Nat) (op : POp) : Layout → Layout → Layout
-  | .full, _ | _, .full => .full
-  | la, lb =>
-    let p := la == .odd
-    let q := lb == .odd
-    let r := p ^^ q
-    halfL (if op == .vee then r ^^ (n % 2 == 1) else r)
 
 /-- A container's layout and storage (`none` for terms, chains and couples). -/
 @[inline] def containerData? : TA V α → Option ((l : Layout) × Values α (l.size V.n))
@@ -94,40 +51,41 @@ variable {V : TensorBundle} {α : Type} [Coeff α] [Kernels V] [DynKernels V]
   | multi m => some ⟨.full, m.v⟩
   | _ => none
 
-/-- The core product `op(a, b)` (Julia's result kind), through the generated kernel where
-`DynKernels.fast` allows it (module docstring). -/
+/-- The product of two terms by the blade sign when `DynKernels.fast` (a non-degenerate
+diagonal metric): DirectSum's diagonal blade product (`TensorBundle.mulDiag`), scaled exactly as
+`termProd` scales its `BladeResult`: `x·y` on a positive disjoint product, `(x·y)·c` otherwise. -/
+@[inline] def singleMulF (A : UInt64) (x : α) (B : UInt64) (y : α) : TA V α :=
+  let d := A ^^^ B
+  match V.metric with
+  | .euclid | .signature _ =>
+    -- a signature: the sign is Julia's `parityjoin` (reordering and shared negative
+    -- generators), the factor `±1`
+    let neg := parityjoin V.sigBits A B
+    if A &&& B == 0 then single d (if neg then (x * y) * Coeff.ofRat (-1) else x * y)
+    else single d ((x * y) * Coeff.ofRat (if neg then -1 else 1))
+  | _ =>
+    let (c, d) := V.mulDiag A B
+    if A &&& B == 0 then single d (if c < 0 then (x * y) * Coeff.ofRat (-1) else x * y)
+    else single d ((x * y) * Coeff.ofRat c)
+
+/-- The core product `op(a, b)` (Julia's result kind), through the compiled loops where
+`DynKernels` allows it (module docstring). -/
 @[inline] def prodF (op : POp) (a b : TA V α) : TA V α :=
-  if DynKernels.fast V then
+  if DynKernels.loops V then
     match a, b with
     | single A x, single B y =>
-      -- DirectSum's diagonal blade product (`TensorBundle.mulDiag`), scaled exactly as
-      -- `termProd` scales its `BladeResult`: `x·y` on a positive disjoint product,
-      -- `(x·y)·c` otherwise
-      if op == .mul then
-        let d := A ^^^ B
-        match V.metric with
-        | .euclid | .signature _ =>
-          -- a signature: the sign is Julia's `parityjoin` (reordering and shared negative
-          -- generators), the factor `±1`
-          let neg := parityjoin V.sigBits A B
-          if A &&& B == 0 then single d (if neg then (x * y) * Coeff.ofRat (-1) else x * y)
-          else single d ((x * y) * Coeff.ofRat (if neg then -1 else 1))
-        | _ =>
-          let (c, d) := V.mulDiag A B
-          if A &&& B == 0 then single d (if c < 0 then (x * y) * Coeff.ofRat (-1) else x * y)
-          else single d ((x * y) * Coeff.ofRat c)
-      else prod op a b
+      if DynKernels.fast V && op == .mul then singleMulF A x B y else prod op a b
     | chain g x, chain h y =>
       if 0 < g && g < V.n && 0 < h && h < V.n then
-        match chainOut V.n op g h with
-        | some lc => ofLayout lc (Kernels.bin op.bin (.chain g) (.chain h) lc x.v y.v)
+        match dynChainOut V op.bin g h with
+        | some lc => ofLayout lc (DynKernels.loop op.bin (.chain g) (.chain h) lc x.v y.v)
         | none => zero
       else prod op a b
     | _, _ =>
       match containerData? a, containerData? b with
       | some ⟨la, x⟩, some ⟨lb, y⟩ =>
-        let lc := pairOut V.n op la lb
-        ofLayout lc (Kernels.bin op.bin la lb lc x y)
+        let lc := dynPairOut V.n op.bin la lb
+        ofLayout lc (DynKernels.loop op.bin la lb lc x y)
       | _, _ => prod op a b
   else prod op a b
 
@@ -143,7 +101,7 @@ variable {V : TensorBundle} {α : Type} [Coeff α] [Kernels V] [DynKernels V]
 /-- A sign map (`reverse`, `involute`, `clifford`, `antireverse`) with the fast path for
 containers and chains. -/
 @[inline] def signF (op : UnOp) (x : TA V α) : TA V α :=
-  if DynKernels.fast V then
+  if DynKernels.signs V then
     match x with
     | chain g c => chain g ⟨Kernels.un op (.chain g) (.chain g) c.v⟩
     | spinor h => spinor ⟨Kernels.un op .even .even h.v⟩
@@ -152,10 +110,14 @@ containers and chains. -/
     | _ => signMap op x
   else signMap op x
 
+/-- Whether the generated kernels compute the complement `op` exactly as Julia does. -/
+@[inline] def complementExact (V : TensorBundle) [DynKernels V] (op : UnOp) : Bool :=
+  if op == .complementright || op == .complementleft then DynKernels.signs V else DynKernels.hodges V
+
 /-- A complement (`complementright`, `complementleft`, `hodge`, `complementlefthodge`) with
 the fast path for containers and chains (the grade/parity flip of Julia's kinds). -/
 @[inline] def complementF (op : UnOp) (x : TA V α) : TA V α :=
-  if DynKernels.fast V then
+  if complementExact V op then
     match x with
     | chain g c => chain (V.n - g) ⟨Kernels.un op (.chain g) (.chain (V.n - g)) c.v⟩
     | spinor h => ofHalf (p := V.n % 2 == 1) ⟨Kernels.un op .even (halfLayout (V.n % 2 == 1)) h.v⟩

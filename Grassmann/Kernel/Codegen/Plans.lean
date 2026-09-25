@@ -31,10 +31,17 @@ generator runs at elaboration time in the interpreter.
   second product of the two-kernel `x ⊘ R` and `R >>> x`, and `Half.inv?`.
   (The typed sandwiches use the fused kernels of
   `Grassmann.Kernel.Codegen.Sandwich`.)
+* **Pseudoscalar projections** (`binProj .mul` with a grade-`n` chain on either side, onto a
+  chain or half of consistent parity): `I ⟑ x` and `x ⟑ I⁻¹` of the composite trigonometry
+  (`Grassmann.Composite.Chain`, `…Ring`).
 * **Other binary operations** (`⨼`, `<<`, `>>`, `⊛`, `×`, `⟇`, `antidot`):
   `Chain×Chain` into `TensorBundle.chainResult`.
 * **Unary maps**: every `UnOp` on every layout, type-preserving or (for the
   complements) into the complementary chain/half.
+* **Linear kernels** (`linearSpecs`, the `add` … `convSub` fields of `Kernels`): `+`, `-`,
+  negation and the two scalar multiples on every layout, the conversion between every pair of
+  layouts (grade projections, `even`/`odd`, `Multivector(t)`), and the promoted sum and
+  difference of every pair of distinct layouts into `Multivector` (DESIGN.md §4.2).
 
 Anything a space does not emit, and any key whose plan fails to build (Julia's
 errors: complements in dyadic spaces) or drops terms (a repeated tangent
@@ -65,6 +72,52 @@ structure Spec where
   key : PlanKey
   deriving Inhabited
 
+/-- A linear kernel of `Kernels V` (the fields `add` … `convSub`). -/
+inductive LinOp where
+  /-- `x + y` in one layout. -/
+  | add
+  /-- `x - y` in one layout. -/
+  | sub
+  /-- `-x`. -/
+  | neg
+  /-- `s·xᵢ`. -/
+  | smul
+  /-- `xᵢ·s`. -/
+  | muls
+  /-- The layout conversion `la → lc`. -/
+  | conv
+  /-- `conv la lc x + conv lb lc y`. -/
+  | convAdd
+  /-- `conv la lc x - conv lb lc y`. -/
+  | convSub
+  deriving DecidableEq, Repr, Hashable, Inhabited
+
+/-- Every linear operation. -/
+def LinOp.all : List LinOp := [.add, .sub, .neg, .smul, .muls, .conv, .convAdd, .convSub]
+
+/-- The name of a linear operation in kernel names. -/
+def LinOp.tag : LinOp → String
+  | .add => "add" | .sub => "sub" | .neg => "neg" | .smul => "smul" | .muls => "muls"
+  | .conv => "conv" | .convAdd => "convadd" | .convSub => "convsub"
+
+/-- One linear kernel: its operation and layouts (`la = lb = lc` for the one-layout
+operations, `lb = la` for the conversions). -/
+structure LinSpec where
+  /-- The operation. -/
+  op : LinOp
+  /-- The (first) operand layout. -/
+  la : Layout
+  /-- The second operand layout. -/
+  lb : Layout
+  /-- The result layout. -/
+  lc : Layout
+  deriving DecidableEq, Repr, Inhabited
+
+/-- A human-readable description of a linear kernel. -/
+def LinSpec.describe (s : LinSpec) : String :=
+  let two := s.op == .convAdd || s.op == .convSub
+  s!"`{s.op.tag}` {reprStr s.la}{if two then s!", {reprStr s.lb}" else ""} → {reprStr s.lc}"
+
 /-- What the generator emits for a space (see the module doc). -/
 structure Policy where
   /-- Operations with the typed and dense families. -/
@@ -86,6 +139,8 @@ structure Policy where
   halfLimit : Nat := 12
   /-- Kernels with more multiply-accumulate entries than this are left to the reference. -/
   maxEntries : Nat := 4096
+  /-- Emit the linear kernels (`add` … `convSub`: sums, scalar multiples, layout conversions). -/
+  linear : Bool := true
   deriving Inhabited
 
 /-- The default policy for an `n`-generator space (DESIGN.md §5.2). For `n ≥ 6`
@@ -184,11 +239,40 @@ def specs (V : TensorBundle) (pol : Policy) : Array Spec := Id.run do
         for lc in gradedLayouts n do
           if (parityOf lb).map (· ^^ p) == parityOf lc then
             out := out.push { field := .binProj, key := { V, op := .bin .mul, la := halfL p, lb, lc, project := true } }
+  -- products with the pseudoscalar, projected (the composite trigonometry of
+  -- `Grassmann.Composite`: `I ⟑ x` and `x ⟑ I⁻¹` onto a chain or half)
+  if pol.sandwich && n < pol.halfLimit && V.diffvars == 0 then
+    for l in gradedLayouts n do
+      for lc in gradedLayouts n do
+        if (parityOf l).map (· ^^ (n % 2 == 1)) == parityOf lc then
+          out := out.push
+            { field := .binProj, key := { V, op := .bin .mul, la := .chain n, lb := l, lc, project := true } }
+          out := out.push
+            { field := .binProj, key := { V, op := .bin .mul, la := l, lb := .chain n, lc, project := true } }
   -- unary maps
   for op in pol.unOps do
     for la in allLayouts n do
       let lc := unaryResult n op la
       out := out.push { field := .un, key := { V, op := .un op, la, lb := la, lc } }
+  return out
+
+/-- The linear kernels of an `n`-generator space under a policy: the one-layout operations on
+every layout, the conversions between every pair of distinct layouts, and the promoted sums and
+differences of every pair of distinct layouts into the full layout (the typed layer's sums of
+two element kinds, DESIGN.md §4.2). -/
+def linearSpecs (n : Nat) (pol : Policy) : Array LinSpec := Id.run do
+  if !pol.linear then return #[]
+  let ls := allLayouts n
+  let mut out : Array LinSpec := #[]
+  for op in [LinOp.add, .sub, .neg, .smul, .muls] do
+    for l in ls do out := out.push { op, la := l, lb := l, lc := l }
+  for la in ls do
+    for lc in ls do
+      if la != lc then out := out.push { op := .conv, la, lb := la, lc }
+  for op in [LinOp.convAdd, .convSub] do
+    for la in ls do
+      for lb in ls do
+        if la != lb then out := out.push { op, la, lb, lc := .full }
   return out
 
 /-! ## Blade tables -/

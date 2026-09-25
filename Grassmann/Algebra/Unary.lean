@@ -276,17 +276,23 @@ instance [AsChain X V G α] : Even X (Chain V G α) :=
 /-- Julia `odd(t)` of a homogeneous element. -/
 instance [AsChain X V G α] : Odd X (Chain V G α) :=
   ⟨fun x => if G % 2 == 1 then AsChain.toChain x else Chain.zero⟩
-/-- Julia `even(m)`: the even part as a `Spinor` (`src/products.jl:1488-1522`). -/
-instance (priority := low) [DenseLayout X V α] : Even X (Half V false α) := ⟨fun x => toHalf x false⟩
+/-- Julia `even(m)`: the even part as a `Spinor` (`src/products.jl:1488-1522`; `toHalf`, through
+the space's conversion kernel `Kernels.conv`). -/
+instance (priority := low) [DenseLayout X V α] : Even X (Half V false α) :=
+  ⟨fun x => ⟨Kernels.conv (layoutOf X) (halfLayout false) (DenseLayout.values x)⟩⟩
 /-- Julia `odd(m)`: the odd part as a `CoSpinor`. -/
-instance (priority := low) [DenseLayout X V α] : Odd X (Half V true α) := ⟨fun x => toHalf x true⟩
+instance (priority := low) [DenseLayout X V α] : Odd X (Half V true α) :=
+  ⟨fun x => ⟨Kernels.conv (layoutOf X) (halfLayout true) (DenseLayout.values x)⟩⟩
 
 /-- Julia `grade(t, G)` / `t(G)`: the grade-`G` part of any element as a chain
-(`scalar`, `vector`, `bivector`, `trivector` are `G = 0, 1, 2, 3`). -/
-instance [DenseLayout X V α] : GradeProj X G (Chain V G α) := ⟨fun x => gradePart x G⟩
+(`scalar`, `vector`, `bivector`, `trivector` are `G = 0, 1, 2, 3`; `gradePart`, through the
+space's conversion kernel `Kernels.conv`). -/
+instance [DenseLayout X V α] : GradeProj X G (Chain V G α) :=
+  ⟨fun x => ⟨Kernels.conv (layoutOf X) (.chain G) (DenseLayout.values x)⟩⟩
 
 /-- Julia `volume(t)` (`pseudoscalar`): the top-grade part. -/
-instance [DenseLayout X V α] : Volume X (Chain V V.n α) := ⟨fun x => gradePart x V.n⟩
+instance [DenseLayout X V α] : Volume X (Chain V V.n α) :=
+  ⟨fun x => ⟨Kernels.conv (layoutOf X) (.chain V.n) (DenseLayout.values x)⟩⟩
 
 end Parts
 

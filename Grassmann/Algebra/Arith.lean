@@ -24,8 +24,15 @@ Scalars act on the left and on the right (`s * x = map (s * ·)`,
 `x * s = map (· * s)`, `x / s = map (· / s)`, Julia `src/products.jl:830-851`),
 so non-commutative coefficients keep their order. A scalar times a unit blade is a
 `Single` (`2 * v₁ = 2v₁`).
+
+Dispatch: the container operations evaluate through the space's `Kernels` (`add`, `sub`, `neg`,
+`smul`, `muls`, and `convAdd`/`convSub` for the promoted sums): for the spaces with generated
+kernels, one straight-line kernel per operation and layout, written into an exclusive operand
+when there is one; otherwise the reference (`Values` arithmetic and `convertLayout`), which
+computes the same floating-point operations.
 -/
 import Grassmann.Types.Convert
+import Grassmann.Kernel.Class
 
 namespace Grassmann
 
@@ -33,21 +40,31 @@ open DirectSum StaticVectors AbstractTensors
 
 variable {V : TensorBundle} {G : Nat} {p : Bool} {α : Type} [Coeff α]
 
-/-! ## Same-type module operations -/
+/-! ## Same-type module operations
 
-instance : Add (Chain V G α) := ⟨fun a b => ⟨a.v + b.v⟩⟩
-instance : Sub (Chain V G α) := ⟨fun a b => ⟨a.v - b.v⟩⟩
-instance : Neg (Chain V G α) := ⟨fun a => ⟨-a.v⟩⟩
+Through the space's linear kernels (`Kernels.add`, `sub`, `neg`: straight-line code into an
+exclusive operand for the generated spaces, `Values` arithmetic otherwise; the same values). -/
+
+section Linear
+
+variable [Kernels V]
+
+instance : Add (Chain V G α) := ⟨fun a b => ⟨Kernels.add (.chain G) a.v b.v⟩⟩
+instance : Sub (Chain V G α) := ⟨fun a b => ⟨Kernels.sub (.chain G) a.v b.v⟩⟩
+instance : Neg (Chain V G α) := ⟨fun a => ⟨Kernels.neg (.chain G) a.v⟩⟩
+
+instance : Add (Half V p α) := ⟨fun a b => ⟨Kernels.add (halfLayout p) a.v b.v⟩⟩
+instance : Sub (Half V p α) := ⟨fun a b => ⟨Kernels.sub (halfLayout p) a.v b.v⟩⟩
+instance : Neg (Half V p α) := ⟨fun a => ⟨Kernels.neg (halfLayout p) a.v⟩⟩
+
+instance : Add (Multivector V α) := ⟨fun a b => ⟨Kernels.add .full a.v b.v⟩⟩
+instance : Sub (Multivector V α) := ⟨fun a b => ⟨Kernels.sub .full a.v b.v⟩⟩
+instance : Neg (Multivector V α) := ⟨fun a => ⟨Kernels.neg .full a.v⟩⟩
+
+end Linear
+
 instance : Zero (Chain V G α) := ⟨Chain.zero⟩
-
-instance : Add (Half V p α) := ⟨fun a b => ⟨a.v + b.v⟩⟩
-instance : Sub (Half V p α) := ⟨fun a b => ⟨a.v - b.v⟩⟩
-instance : Neg (Half V p α) := ⟨fun a => ⟨-a.v⟩⟩
 instance : Zero (Half V p α) := ⟨Half.zero⟩
-
-instance : Add (Multivector V α) := ⟨fun a b => ⟨a.v + b.v⟩⟩
-instance : Sub (Multivector V α) := ⟨fun a b => ⟨a.v - b.v⟩⟩
-instance : Neg (Multivector V α) := ⟨fun a => ⟨-a.v⟩⟩
 instance : Zero (Multivector V α) := ⟨Multivector.zero⟩
 
 instance : One (Multivector V α) := ⟨Multivector.one⟩
@@ -62,20 +79,28 @@ instance : Neg (PseudoCouple V α) := ⟨fun z => ⟨z.bits, -z.re, -z.im⟩⟩
 /-- Two grade-`G` terms or chains add to a `Chain V G` (Julia `adder`, rule 6,
 and `term ± Chain{G}`; `src/algebra.jl:747-855`). Below the default priority so
 that `Chain + Chain` uses the `Add` instance directly. -/
-instance (priority := 900) {X Y : Type} [AsChain X V G α] [AsChain Y V G α] :
+instance (priority := 900) {X Y : Type} [Kernels V] [AsChain X V G α] [AsChain Y V G α] :
     HAdd X Y (Chain V G α) := ⟨fun a b => AsChain.toChain a + AsChain.toChain b⟩
 
-instance (priority := 900) {X Y : Type} [AsChain X V G α] [AsChain Y V G α] :
+instance (priority := 900) {X Y : Type} [Kernels V] [AsChain X V G α] [AsChain Y V G α] :
     HSub X Y (Chain V G α) := ⟨fun a b => AsChain.toChain a - AsChain.toChain b⟩
 
-/-- Any other sum is a `Multivector` (DESIGN.md §4.2). -/
-instance (priority := low) {X Y : Type} [DenseLayout X V α] [DenseLayout Y V α] :
-    HAdd X Y (Multivector V α) := ⟨fun a b => toMultivector a + toMultivector b⟩
+/-- Any other sum is a `Multivector` (DESIGN.md §4.2): `Multivector(a) + Multivector(b)`, one
+promoted-sum kernel (`Kernels.convAdd`: explicit `+ 0` where one operand lacks a blade, as the
+promoted sum computes it). -/
+instance (priority := low) {X Y : Type} [Kernels V] [DenseLayout X V α] [DenseLayout Y V α] :
+    HAdd X Y (Multivector V α) :=
+  ⟨fun a b => ⟨Kernels.convAdd (layoutOf X) (layoutOf Y) .full (DenseLayout.values a) (DenseLayout.values b)⟩⟩
 
-instance (priority := low) {X Y : Type} [DenseLayout X V α] [DenseLayout Y V α] :
-    HSub X Y (Multivector V α) := ⟨fun a b => toMultivector a - toMultivector b⟩
+instance (priority := low) {X Y : Type} [Kernels V] [DenseLayout X V α] [DenseLayout Y V α] :
+    HSub X Y (Multivector V α) :=
+  ⟨fun a b => ⟨Kernels.convSub (layoutOf X) (layoutOf Y) .full (DenseLayout.values a) (DenseLayout.values b)⟩⟩
 
 /-! ## Scalars in sums (Julia `t ± n = t ± n·One(V)`, `src/products.jl:852-859`) -/
+
+section Scalars
+
+variable [Kernels V]
 
 instance : HAdd α (Multivector V α) (Multivector V α) := ⟨fun s m => Multivector.scalar s + m⟩
 instance : HAdd (Multivector V α) α (Multivector V α) := ⟨fun m s => m + Multivector.scalar s⟩
@@ -101,21 +126,33 @@ instance (priority := low) {X : Type} [DenseLayout X V α] : HSub α X (Multivec
 instance (priority := low) {X : Type} [DenseLayout X V α] : HSub X α (Multivector V α) :=
   ⟨fun x s => toMultivector x - Multivector.scalar s⟩
 
-/-! ## Scalar multiplication and division -/
+end Scalars
 
-instance : HMul α (Chain V G α) (Chain V G α) := ⟨fun s c => ⟨c.v.map (s * ·)⟩⟩
-instance : HMul (Chain V G α) α (Chain V G α) := ⟨fun c s => ⟨c.v.map (· * s)⟩⟩
-instance : SMul α (Chain V G α) := ⟨fun s c => ⟨c.v.map (s * ·)⟩⟩
+/-! ## Scalar multiplication and division
+
+Through the space's linear kernels (`Kernels.smul`/`muls`: `s·xᵢ`, `xᵢ·s`, the scalar on its own
+side). -/
+
+section ScalarMul
+
+variable [Kernels V]
+
+instance : HMul α (Chain V G α) (Chain V G α) := ⟨fun s c => ⟨Kernels.smul (.chain G) s c.v⟩⟩
+instance : HMul (Chain V G α) α (Chain V G α) := ⟨fun c s => ⟨Kernels.muls (.chain G) c.v s⟩⟩
+instance : SMul α (Chain V G α) := ⟨fun s c => ⟨Kernels.smul (.chain G) s c.v⟩⟩
+
+instance : HMul α (Half V p α) (Half V p α) := ⟨fun s h => ⟨Kernels.smul (halfLayout p) s h.v⟩⟩
+instance : HMul (Half V p α) α (Half V p α) := ⟨fun h s => ⟨Kernels.muls (halfLayout p) h.v s⟩⟩
+instance : SMul α (Half V p α) := ⟨fun s h => ⟨Kernels.smul (halfLayout p) s h.v⟩⟩
+
+instance : HMul α (Multivector V α) (Multivector V α) := ⟨fun s m => ⟨Kernels.smul .full s m.v⟩⟩
+instance : HMul (Multivector V α) α (Multivector V α) := ⟨fun m s => ⟨Kernels.muls .full m.v s⟩⟩
+instance : SMul α (Multivector V α) := ⟨fun s m => ⟨Kernels.smul .full s m.v⟩⟩
+
+end ScalarMul
+
 instance [Div α] : HDiv (Chain V G α) α (Chain V G α) := ⟨fun c s => ⟨c.v.map (· / s)⟩⟩
-
-instance : HMul α (Half V p α) (Half V p α) := ⟨fun s h => ⟨h.v.map (s * ·)⟩⟩
-instance : HMul (Half V p α) α (Half V p α) := ⟨fun h s => ⟨h.v.map (· * s)⟩⟩
-instance : SMul α (Half V p α) := ⟨fun s h => ⟨h.v.map (s * ·)⟩⟩
 instance [Div α] : HDiv (Half V p α) α (Half V p α) := ⟨fun h s => ⟨h.v.map (· / s)⟩⟩
-
-instance : HMul α (Multivector V α) (Multivector V α) := ⟨fun s m => ⟨m.v.map (s * ·)⟩⟩
-instance : HMul (Multivector V α) α (Multivector V α) := ⟨fun m s => ⟨m.v.map (· * s)⟩⟩
-instance : SMul α (Multivector V α) := ⟨fun s m => ⟨m.v.map (s * ·)⟩⟩
 instance [Div α] : HDiv (Multivector V α) α (Multivector V α) := ⟨fun m s => ⟨m.v.map (· / s)⟩⟩
 
 instance : HMul α (Single V G α) (Single V G α) := ⟨fun s x => ⟨x.bits, s * x.val⟩⟩

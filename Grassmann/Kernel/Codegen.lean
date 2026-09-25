@@ -6,10 +6,13 @@ kernel the emission policy selects (`Grassmann.Kernel.Codegen.Plans`), emits eac
 as a straight-line `@[specialize]` definition generic over `[Coeff α]`
 (`Grassmann.Kernel.Codegen.Emit`), and declares a `Kernels V` instance whose
 dispatch covers those shapes and falls back to the reference kernels for the
-rest. For spaces without tangent generators it also emits the fused sandwich
-kernels of `x ⊘ R` and `R >>> x` and a `SandwichKernels V` instance
-(`Grassmann.Kernel.Codegen.Sandwich`). `basis!` runs it for spaces with at most
-6 generators
+rest, including the linear kernels (sums, scalar multiples, layout conversions:
+`Kernels.add` … `Kernels.convSub`). For spaces without tangent generators it also emits
+the fused sandwich kernels of `x ⊘ R`, `R >>> x` and `R * x * ~R` and a
+`SandwichKernels V` instance (`Grassmann.Kernel.Codegen.Sandwich`), and for spaces with at
+most five generators and no tangent or dyadic generators the dynamic layer's compiled Julia
+loops and a `DynKernels V` instance (`Grassmann.Kernel.Codegen.Dyn`). `basis!` runs it for
+spaces with at most 6 generators
 (`Grassmann.Basis`; opt out with `basis! (kernels := false) V` or
 `set_option grassmann.basis.kernels false`).
 
@@ -21,9 +24,10 @@ end MyKernels
 
 The declarations go to `<current namespace>.<name>`, where `<name>` is the
 identifier `V` if it is one (`grassmann_kernels ℝ3` → `….ℝ3`) and the display of
-the space otherwise; the instances are `<prefix>.instKernels` and
-`<prefix>.instSandwichKernels` and have default priority, so it wins over the low-priority `Kernels.reference` (and a later
-user instance of the same space wins over it). A process-wide registry
+the space otherwise; the instances are `<prefix>.instKernels`,
+`<prefix>.instSandwichKernels` and `<prefix>.instDynKernels` and have default priority, so they
+win over the low-priority reference instances (and a later user instance of the same space wins
+over them). A process-wide registry
 (`kernelRegistry`) records the spaces that have kernels; a second
 `grassmann_kernels`/`basis!` for a registered space does nothing.
 
@@ -45,6 +49,7 @@ dominates (`Multivector*Multivector` of STA, PGA3, CGA3) and are 10× faster tha
 the reference kernels; small operations are bound by the allocation of their result.
 -/
 import Grassmann.Kernel.Codegen.Sandwich
+import Grassmann.Kernel.Codegen.Dyn
 import Lean.Meta.Eval
 
 namespace Grassmann.Kernel.Codegen
@@ -85,17 +90,22 @@ def generateKernels (t : Term) (V : TensorBundle) (pre : Name) (pol : Policy) : 
   elabCommand (← `(/-- The space of these generated kernels. -/ abbrev $spaceId : DirectSum.TensorBundle := $t))
   let planned := planAll V pol
   let sps := planSandwiches V
-  let coefs ← emitCoefs pre (nonUnitCoefs (planned.map (·.plan) ++ sps.flatMap (·.plans)))
+  let dls := planDynLoops V pre planned pol.maxEntries
+  let coefs ← emitCoefs pre (nonUnitCoefs (planned.map (·.plan) ++ sps.flatMap (·.plans) ++
+    (dls.filter (·.alias.isNone)).map (·.plan)))
   let t1 ← IO.monoMsNow
   let valueId := mkIdent (`_root_ ++ pre ++ `spaceValue)
   elabCommand (← `(/-- The space of these generated kernels as a run-time constant (never inlined,
     so the fallback kernels read one shared value). -/ @[noinline] def $valueId : DirectSum.TensorBundle :=
       $(mkCIdent (pre ++ `space))))
-  let em ← emitSpace V (mkCIdent (pre ++ `space)) (mkCIdent (pre ++ `spaceValue)) pre planned coefs
+  let em ← emitSpace V (mkCIdent (pre ++ `space)) (mkCIdent (pre ++ `spaceValue)) pre planned
+    (linearSpecs V.n pol) coefs
   let sw ← emitSandwiches V (mkCIdent (pre ++ `space)) pre sps coefs
+  let dk ← emitDyn V (mkCIdent (pre ++ `space)) (mkCIdent (pre ++ `spaceValue)) pre planned dls coefs
   let t2 ← IO.monoMsNow
   modifyEnv (kernelRegistry.addEntry · (V, pre))
-  trace[grassmann.codegen] "{V}: {em.kernels} kernels, {em.entries} entries, {sw} fused sandwiches; \
+  trace[grassmann.codegen] "{V}: {em.kernels} kernels ({em.linear.size} linear), {em.entries} entries, \
+    {sw} fused sandwiches, {dls.size} dynamic loops ({dk} dedicated kernels); \
     plans {t1 - t0} ms, emission and compilation {t2 - t1} ms"
 
 /-- `grassmann_kernels V`: generate straight-line kernels and a `Kernels V` instance for

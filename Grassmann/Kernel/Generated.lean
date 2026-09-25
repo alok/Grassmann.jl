@@ -13,7 +13,9 @@ import Grassmann.Kernel.Generated.CGA3
 `grassmann_kernels` output for `ℝ2`, `ℝ3`, `ℝ4`, `STA` (`S!"-+++"`), `PGA2`
 (`D!"0,1,1"`), `PGA3` (`D!"0,1,1,1"`), `CGA2` (`S!"∞∅++"`) and `CGA3`
 (`S!"∞∅+++"`), under `Grassmann.Kernel.Gen.<space>`, each with a `Kernels`
-instance (`Grassmann.Kernel.Gen.<space>.instKernels`). The literals `S!"+++"`,
+instance (`Grassmann.Kernel.Gen.<space>.instKernels`), a `SandwichKernels` instance (the fused
+`⊘`, `>>>` and `R * x * ~R`) and a `DynKernels` instance (the dynamic layer's compiled Julia
+loops, `Grassmann.Kernel.Dyn`). The literals `S!"+++"`,
 `V!"3"`, `ℝ^3`, ... elaborate to the same structure as `ℝ3`, so these instances
 serve them too, and `basis!` of one of these spaces reuses them.
 
