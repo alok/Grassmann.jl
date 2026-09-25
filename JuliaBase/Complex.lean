@@ -29,7 +29,10 @@ variable {α : Type u}
 /-- Julia `complex(x)` for a real `x`: `x + 0im`. -/
 @[inline] def ofReal [OfNat α 0] (x : α) : Complex α := ⟨x, 0⟩
 
+/-- Julia `zero(Complex{T})` = `0 + 0im`. -/
 instance [OfNat α 0] : OfNat (Complex α) 0 := ⟨⟨0, 0⟩⟩
+
+/-- Julia `one(Complex{T})` = `1 + 0im`. -/
 instance [OfNat α 0] [OfNat α 1] : OfNat (Complex α) 1 := ⟨⟨1, 0⟩⟩
 
 /-- Julia `+(z::Complex, w::Complex)` (complex.jl:288). -/
@@ -133,6 +136,7 @@ def div (z w : Complex Float) : Complex Float :=
     else scaleCD a b c d cd 1.0
   else cdiv a b c d 1.0  -- the unscaled path; multiplying by 1.0 is exact
 
+/-- `z / w` on `ComplexF64` is Julia's robust division. -/
 instance : Div (Complex Float) := ⟨div⟩
 
 /-- Julia `robust_cinv(c, d)` (complex.jl:503) as `(p, q)` scaled by `s`, written into the
