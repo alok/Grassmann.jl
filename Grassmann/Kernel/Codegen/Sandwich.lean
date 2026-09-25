@@ -229,9 +229,7 @@ def emitSandwiches (space : TensorBundle) (V : Term) (pre : Name) : CommandElabM
       {if sp.shift then "`R >>> x`" else "`x ⊘ R`"} for `R` a {layoutDoc sp.lr} and `x` a {layoutDoc sp.lx} \
       in `{space}` ({sp.first.size} + {sp.second.size} entries)."
     names := names.push nm
-  for i in [0:(names.size + 31) / 32] do
-    liftCoreM <| withTheReader Core.Context (fun ctx => { ctx with maxHeartbeats := 0 }) <|
-      compileDecls (names.extract (i * 32) ((i + 1) * 32))
+  compileKernels names
   let nLit : Term := quote n
   let (lr, lx, r, x) := (mkIdent `lr, mkIdent `lx, mkIdent `r, mkIdent `x)
   for shift in [false, true] do

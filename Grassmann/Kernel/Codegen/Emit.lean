@@ -219,6 +219,18 @@ def kernelTerm (unary : Bool) (na nb nc : Nat) (p : Plan) : MetaM (Expr × Expr)
       if unary then body none
       else withLocalDeclD `y (r.values nb) fun y => body (some y)
 
+/-- Compile generated kernels in batches of 32, without a heartbeat limit and with a
+recursion depth for their long `let` chains (a whole space in one batch exceeds the default
+heartbeat budget of the compiler's checks; an `n = 6` kernel nests hundreds of `let`s). -/
+def compileKernels (names : Array Name) : CommandElabM Unit := do
+  for i in [0:(names.size + 31) / 32] do
+    liftCoreM <| withTheReader Core.Context
+      (fun ctx => { ctx with
+        maxHeartbeats := 0
+        maxRecDepth := max ctx.maxRecDepth 65536
+        options := maxRecDepth.set ctx.options (max (maxRecDepth.get ctx.options) 65536) }) <|
+      compileDecls (names.extract (i * 32) ((i + 1) * 32))
+
 /-- Add the kernel `name` of plan `p` (not yet compiled), marked `@[specialize]`, with a
 docstring. -/
 def addKernel (name : Name) (doc : String) (unary : Bool) (na nb nc : Nat) (p : Plan) : MetaM Unit := do
@@ -391,13 +403,7 @@ def emitSpace (space : TensorBundle) (V : Term) (Vrt : Term) (pre : Name) (plann
     liftTermElabM <| addKernel nm doc unary (k.la.size n) (k.lb.size n) (k.lc.size n) pl.plan
     names := names.push nm
     em := { em with kernels := em.kernels + 1, entries := em.entries + pl.plan.size }
-  -- compile in small batches without a heartbeat limit (a whole space in one batch exceeds
-  -- the default budget in the compiler's checks)
-  let batch := 32
-  for i in [0:(names.size + batch - 1) / batch] do
-    let chunk := names.extract (i * batch) ((i + 1) * batch)
-    liftCoreM <| withTheReader Core.Context (fun ctx => { ctx with maxHeartbeats := 0 }) <|
-      compileDecls chunk
+  compileKernels names
   -- group by field and operation, in first-appearance order
   let mut groups : Array (Field × KOp × Array (Spec × Name)) := #[]
   for (s, nm) in assigned do
