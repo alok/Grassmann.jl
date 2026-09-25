@@ -66,18 +66,6 @@ abbrev USQGroup := Group usqBasis
 /-- An exact physical constant (Julia `Group{:Constants}`). -/
 abbrev Consts := Group constantsBasis
 
-/-- How a generator is evaluated numerically in `product`. -/
-inductive GenValue where
-  /-- a `FieldConstants.Constant{x}` (Float payload) -/
-  | const (x : Float)
-  /-- an `Irrational` evaluated by `power_by_squaring` (`φ`, `γ`) -/
-  | irrational (x : Float)
-  /-- `ℯ`: `ℯ^x = exp(x)` -/
-  | euler
-  /-- an integer (evaluated as `float(p)^e`) -/
-  | prime (p : Nat)
-  deriving Inhabited
-
 /-- Numeric values of the 44 generators, in basis order. -/
 def genValues : Array GenValue :=
   let m (x : Measured) : GenValue := .const x.value.toFloat
@@ -87,56 +75,20 @@ def genValues : Array GenValue :=
     .irrational 1.618033988749895, .irrational 0.5772156649015329, .euler, .const 6.283185307179586,
     .prime 2, .prime 3, .prime 5, .prime 7, .prime 11, .prime 19, .prime 43]
 
-/-- `value^e` with Julia's semantics for the generator kind and exponent type
-(`Float64^Int` is `pow_body`, `Float64^Rational` is `x^(p/q)`, `φ^n` is
-`power_by_squaring` (a `DomainError` for `n < 0`, here `NaN`), `ℯ^x = exp(x)`). -/
-def GenValue.pow (g : GenValue) (e : Expo) : Float :=
-  match g, e.makeint with
-  | .const x, .int n => JuliaBase.F64.powInt x n
-  | .const x, e => JuliaBase.F64.pow x e.toFloat
-  | .prime p, .int n => JuliaBase.F64.powInt (Float.ofNat p) n
-  | .prime p, e => JuliaBase.F64.pow (Float.ofNat p) e.toFloat
-  | .irrational x, .int n => if n < 0 then JuliaBase.F64.nan else JuliaBase.F64.powerBySquaring x n.toNat
-  | .irrational x, e => JuliaBase.F64.pow x e.toFloat
-  | .euler, e => JuliaBase.F64.exp e.toFloat
-
 namespace Consts
 
 /-- The `i`-th generator (0-based). -/
 def gen (i : Nat) (h : i < 44 := by decide) : Consts := Group.gen ⟨i, h⟩
 
 /-- Julia `product(g)` for the constants group (`FieldAlgebra.jl:717-734`):
-`((kB^e₁·NA^e₂)·…·τ^e₃₇) · (((2.0^e₃₈·3.0^e₃₉)·…·43.0^e₄₄) · c)`. -/
-def product (g : Consts) : Float :=
-  let es := g.v.toExpos
-  let term (i : Nat) : Float := (genValues[i]!).pow (es[i]!)
-  let nonint := (List.range 37).map term
-  let ints := (List.range' 37 7).map term
-  let foldl1 : List Float → Float
-    | [] => 1.0
-    | x :: xs => xs.foldl (· * ·) x
-  foldl1 nonint * (foldl1 ints * g.c.toFloat)
-
-/-- Julia `factorfind(x, k)` on integers: strip the factor `k`, counting it. -/
-def factorfind (x : Int) (k : Int) : Int × Nat := go x 0 128
-where
-  go (x : Int) (i : Nat) : Nat → Int × Nat
-    | 0 => (x, i)
-    | f + 1 => if x == 0 then (x, 0) else if x.tmod k == 0 then go (x.tdiv k) (i + 1) f else (x, i)
+`((kB^e₁·NA^e₂)·…·τ^e₃₇) · (((2.0^e₃₈·3.0^e₃₉)·…·43.0^e₄₄) · c)`
+(`FieldAlgebra.productWith`: the primes are the integer literals). -/
+def product (g : Consts) : Float := productWith genValues g
 
 /-- Julia `factorize(x::Int, Val(:Constants))`: the primes `2 3 5 7 11 19 43`
 become generators, the remaining cofactor is the coefficient
 (`12 ↦ 2²3`, `-12 ↦ 2²3⋅-1`, `13 ↦ 13`). -/
-def factorize (x : Int) : Consts :=
-  let primes : List (Nat × Int) := [(37, 2), (38, 3), (39, 5), (40, 7), (41, 11), (42, 19), (43, 43)]
-  let (x, exps) := primes.foldl (fun (x, acc) (i, p) =>
-    let (x', e) := factorfind x p
-    (x', acc.push (i, e))) (x, (#[] : Array (Nat × Nat)))
-  let v : Vector Rat 44 := Vector.ofFn fun j =>
-    match exps.find? (·.1 == j.1) with
-    | some (_, e) => (e : Rat)
-    | none => 0
-  Group.mk' (.exact v) (.int x)
+def factorize (x : Int) : Consts := factorizeWith genValues x
 
 /-- Julia `factorize(x::Float64, Val(:Constants))`: integral floats factor as
 integers; otherwise powers of `τ = 2π` are extracted (`4π ↦ τ⋅2`) and the rest

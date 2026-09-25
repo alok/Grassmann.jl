@@ -1,6 +1,7 @@
 import Tests.FieldAlgebra.Harness
 import Tests.FieldAlgebra.FieldConstants
 import Tests.FieldAlgebra.Groups
+import Tests.FieldAlgebra.Rings
 
 /-!
 # FieldAlgebra (and FieldConstants) test aggregator
@@ -16,6 +17,7 @@ def run : IO (Nat × Nat) := do
   IO.println "FieldAlgebra / FieldConstants"
   let (p1, f1) ← (← FieldConstantsTests.run).report
   let (p2, f2) ← (← GroupTests.run).report
-  return (p1 + p2, f1 + f2)
+  let (p3, f3) ← (← RingTests.run).report
+  return (p1 + p2 + p3, f1 + f2 + f3)
 
 end Tests.FieldAlgebra

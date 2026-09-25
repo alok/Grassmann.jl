@@ -96,6 +96,28 @@ def neg : Coef → Coef
   | rat a => rat (-a)
   | float x => float (-x)
 
+/-- Julia `-` with promotion. -/
+def sub : Coef → Coef → Coef
+  | int a, int b => int (a - b)
+  | int a, rat b => rat (a - b)
+  | rat a, int b => rat (a - b)
+  | rat a, rat b => rat (a - b)
+  | a, b => float (a.toFloat - b.toFloat)
+
+/-- Julia `/` with promotion: `Int / Int` is `Float64` (one rounding), rationals
+stay rational. -/
+def div : Coef → Coef → Coef
+  | int a, rat b => rat (a / b)
+  | rat a, int b => rat (a / b)
+  | rat a, rat b => rat (a / b)
+  | a, b => float (a.toFloat / b.toFloat)
+
+/-- Julia `iszero`. -/
+def isZero : Coef → Bool
+  | int a => a == 0
+  | rat a => a == 0
+  | float x => x == 0.0
+
 /-- Julia `inv`: `Int ↦ Float64`, `Rational ↦ Rational`. -/
 def inv : Coef → Coef
   | int a => float (1.0 / Float.ofInt a)
@@ -253,6 +275,8 @@ def mk' (v : Exps B.n) (c : Coef) : Group B := ⟨v, c.normalize⟩
 
 /-- The identity `𝟙` (`one(g)`). -/
 def one : Group B := ⟨.zero, .int 1⟩
+
+instance : Inhabited (Group B) := ⟨one⟩
 
 /-- Generator `bᵢ` (`valueat(i, N, G)`); index `i` is 0-based. -/
 def gen (i : Fin B.n) : Group B := ⟨.unit i, .int 1⟩
