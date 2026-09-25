@@ -81,7 +81,6 @@ namespace Cl
 
 variable {g : Fin n → R}
 
-instance : Zero (Cl g) := ⟨⟨fun _ => 0⟩⟩
 instance : Add (Cl g) := ⟨fun x y => ⟨fun a => x.coeff a + y.coeff a⟩⟩
 instance : Neg (Cl g) := ⟨fun x => ⟨fun a => -x.coeff a⟩⟩
 instance : Sub (Cl g) := ⟨fun x y => ⟨fun a => x.coeff a - y.coeff a⟩⟩
@@ -99,7 +98,17 @@ def gen (i : Fin n) : Cl g := blade (BitVec.twoPow n i)
 /-- The pseudoscalar `e₁ e₂ ⋯ eₙ`. -/
 def pseudoscalar : Cl g := blade (BitVec.allOnes n)
 
-instance : One (Cl g) := ⟨blade 0⟩
+/-- The numeral `k`: `0` is the zero multivector, `1` the unit blade `e_∅`,
+larger numerals are scalars. All numerals of `Cl g` (`0` and `1` included) come
+from this one `OfNat` family, which is also the numeral structure of the ring
+instance `Cl.instRing` (`Grassmann.Spec.Ring`), so `grind` sees one `0` and one
+`1`. -/
+@[reducible] def ofNatCl : Nat → Cl g
+  | 0 => ⟨fun _ => 0⟩
+  | 1 => blade 0
+  | k + 2 => scalar (OfNat.ofNat (k + 2))
+
+instance instOfNat (k : Nat) : OfNat (Cl g) k := ⟨ofNatCl k⟩
 
 /-- **The geometric product**, as an explicit finite sum over blade pairs. -/
 instance : Mul (Cl g) := ⟨fun x y => ⟨twist (coef g) x.coeff y.coeff⟩⟩

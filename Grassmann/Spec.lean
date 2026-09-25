@@ -6,6 +6,7 @@ import Grassmann.Spec.Involution
 import Grassmann.Spec.Hodge
 import Grassmann.Spec.Vector
 import Grassmann.Spec.Contraction
+import Grassmann.Spec.Ring
 
 /-!
 # Grassmann.Spec: a proved specification of the geometric algebra
@@ -34,7 +35,9 @@ data structures, with its laws proved in every dimension (docs/PROOFS.md):
   `uv = B(u,v) + u ∧ v` and `uv + vu = 2B(u,v)`, over every commutative ring
   (characteristic 2 included);
 * `Grassmann.Spec.Contraction`: Julia's contraction `x ⋅ y = ⟨~y x⟩_{p-q}` and
-  the regressive product `∨` (De Morgan dual of `∧`, associative).
+  the regressive product `∨` (De Morgan dual of `∧`, associative);
+* `Grassmann.Spec.Ring`: `Cl g` is a `Lean.Grind.Ring`, so `grind` normalizes
+  multivector expressions as non-commutative polynomials.
 
 `Grassmann.Proofs` links this model to the kernels of the implementation.
 -/
