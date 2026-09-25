@@ -61,27 +61,27 @@ def powi (x : Float) (i : Nat) : Float := x ^ Float.ofNat i
 /-- Checks for one scalar map. -/
 def scalarMap (name : String) (f : Float → Float) (x0 : Float) (j : Json) (libm : Bool) : TestM Unit := do
   let rtol := if libm then 1e-12 else 0
-  limCheck s!"{name}.orbit" (orbit f x0 (d := dist)) (jGet j "orbit") rtol (if libm then 2 else 0)
+  limCheck s!"{name}.orbit" (orbit f x0) (jGet j "orbit") rtol (if libm then 2 else 0)
   for k in [1, 5, 10] do
-    limCheck s!"{name}.orbit{k}" (orbitN f x0 k dist) (jGet (jGet j "orbitN") (toString k)) rtol
+    limCheck s!"{name}.orbit{k}" (orbitN f x0 k) (jGet (jGet j "orbitN") (toString k)) rtol
   limCheck s!"{name}.fixedcycle10" ((FixedCycle.mk 10 f dist).run x0) (jGet j "fixedcycle10") rtol
-  let (_, errs) := orbitError f x0 (d := dist)
+  let (_, errs) := orbitError f x0
   let exp := jFloats (jGet j "orbiterror")
   if libm then
     check s!"{name}.orbiterror.len" (((errs.size : Int) - exp.size).natAbs ≤ 2)
   else
     check s!"{name}.orbiterror" (GoldenVal.close errs (jGet j "orbiterror") 0)
-  check s!"{name}.collect5" (GoldenVal.close (⟨(orbitN f x0 5 dist).collect⟩ : FloatArray) (jGet j "collect5") rtol)
+  check s!"{name}.collect5" (GoldenVal.close (⟨(orbitN f x0 5).collect⟩ : FloatArray) (jGet j "collect5") rtol)
 
 /-- Checks for one vector map. -/
 def vectorMap (name : String) (f : FloatArray → FloatArray) (x0 : FloatArray) (j : Json) : TestM Unit := do
-  limCheck s!"{name}.orbit" (orbit f x0 (d := dist)) (jGet j "orbit")
+  limCheck s!"{name}.orbit" (orbit f x0) (jGet j "orbit")
   for k in [1, 5, 10] do
-    limCheck s!"{name}.orbit{k}" (orbitN f x0 k dist) (jGet (jGet j "orbitN") (toString k))
+    limCheck s!"{name}.orbit{k}" (orbitN f x0 k) (jGet (jGet j "orbitN") (toString k))
   limCheck s!"{name}.fixedcycle10" ((FixedCycle.mk 10 f dist).run x0) (jGet j "fixedcycle10")
-  let (_, errs) := orbitError f x0 (d := dist)
+  let (_, errs) := orbitError f x0
   check s!"{name}.orbiterror" (GoldenVal.close errs (jGet j "orbiterror") 0)
-  let col := (orbitN f x0 5 dist).collect
+  let col := (orbitN f x0 5).collect
   let exp := jArr (jGet j "collect5")
   check s!"{name}.collect5" (col.size == exp.size && (List.range exp.size).all fun i =>
     GoldenVal.close col[i]! exp[i]! 0)
@@ -135,7 +135,7 @@ def suite : TestM Unit := do
     | "contraction" => vectorMap name contraction ⟨#[1.0, 2.0]⟩ m
     | "halve_vec" => vectorMap name halve ⟨#[1.0, 2.0]⟩ m
     | other => check s!"unknown map {other}" false
-  limCheck "orbithold" (orbitHold (fun x y => (y + x / y) / 2) 2.0 6 dist) (jGet j "orbithold")
+  limCheck "orbithold" (orbitHold (fun x y => (y + x / y) / 2) 2.0 6) (jGet j "orbithold")
   for c in jArr (jGet j "countable") do
     let name := jStr (jGet c "name")
     match name with

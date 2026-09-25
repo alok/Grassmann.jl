@@ -329,37 +329,44 @@ def SequenceArray.limit {σ S : Type} [LastDimStorage σ S] (x : SequenceArray �
     value := Indexed.val
     dist := d }
 
-/-! ## Orbits (src/metric.jl:298-340) -/
+/-! ## Orbits (src/metric.jl:298-340)
 
-/-- Julia `orbit(f, x, ϵ = 5eps(), Val(false), d)`: iterate until
+Julia's metric argument defaults to `supnorm`, the `Metric` of the state type here: when `d` is
+omitted it is found by instance resolution at the call site (`orbit Float.cos 1.0`), and states
+without a `Metric` instance (Cartan's tensor fields) pass their own `d`. -/
+
+/-- Julia `orbit(f, x, ϵ = 5eps(), Val(false), d = supnorm)`: iterate until
 `d(x_{k+1}, x_k) ≤ ϵ`. -/
 def orbit {S : Type} (f : S → S) (x : S) (ϵ : Float := 5 * 2.220446049250313e-16)
-    (d : S → S → Float) : Limit S S :=
+    (d : S → S → Float := by exact AbstractAnalysis.Metric.dist) : Limit S S :=
   let (_, xn, n, change, _) := Limit.untilConverged f id d ϵ false x x 1 (5 * ϵ) {} Limit.maxIter
   ⟨x, xn, n, change, f, id, d⟩
 
-/-- Julia `orbiterror(f, x, ϵ)`: the orbit plus its residual trace. -/
+/-- Julia `orbiterror(f, x, ϵ, d = supnorm)`: the orbit plus its residual trace. -/
 def orbitError {S : Type} (f : S → S) (x : S) (ϵ : Float := 5 * 2.220446049250313e-16)
-    (d : S → S → Float) : Limit S S × FloatArray :=
+    (d : S → S → Float := by exact AbstractAnalysis.Metric.dist) : Limit S S × FloatArray :=
   let (_, xn, n, change, out) := Limit.untilConverged f id d ϵ true x x 1 (5 * ϵ) {} Limit.maxIter
   (⟨x, xn, n, change, f, id, d⟩, out)
 
-/-- Julia `orbit(f, x, k::Int)`: exactly `k` steps, length `k + 1`. -/
-def orbitN {S : Type} (f : S → S) (x : S) (k : Nat) (d : S → S → Float) : Limit S S :=
+/-- Julia `orbit(f, x, k::Int, d = supnorm)`: exactly `k` steps, length `k + 1`. -/
+def orbitN {S : Type} (f : S → S) (x : S) (k : Nat)
+    (d : S → S → Float := by exact AbstractAnalysis.Metric.dist) : Limit S S :=
   let (x0, xn) := Limit.iterPair f x x k
   ⟨x, xn, k + 1, d xn x0, f, id, d⟩
 
-/-- Julia `orbit(f, x, k, Val(true))`: `k` steps with the residual of each. -/
-def orbitNTrace {S : Type} (f : S → S) (x : S) (k : Nat) (d : S → S → Float) : Limit S S × FloatArray :=
+/-- Julia `orbit(f, x, k, Val(true), d = supnorm)`: `k` steps with the residual of each. -/
+def orbitNTrace {S : Type} (f : S → S) (x : S) (k : Nat)
+    (d : S → S → Float := by exact AbstractAnalysis.Metric.dist) : Limit S S × FloatArray :=
   let rec go (x0 xn : S) (out : FloatArray) : Nat → S × S × FloatArray
     | 0 => (x0, xn, out)
     | j + 1 => let xn' := f xn; go xn xn' (out.push (d xn' xn)) j
   let (x0, xn, out) := go x x (FloatArray.emptyWithCapacity k) k
   (⟨x, xn, k + 1, d xn x0, f, id, d⟩, out)
 
-/-- Julia `orbithold(f, x, n)`: iterate `xₙ ↦ f(x, xₙ)` with `x` held fixed. The
-step stored in the result is `f x`. -/
-def orbitHold {S : Type} (f : S → S → S) (x : S) (k : Nat) (d : S → S → Float) : Limit S S :=
+/-- Julia `orbithold(f, x, n, d = supnorm)`: iterate `xₙ ↦ f(x, xₙ)` with `x` held fixed.
+The step stored in the result is `f x`. -/
+def orbitHold {S : Type} (f : S → S → S) (x : S) (k : Nat)
+    (d : S → S → Float := by exact AbstractAnalysis.Metric.dist) : Limit S S :=
   let (x0, xn) := Limit.iterPair (f x) x x k
   ⟨x, xn, k + 1, d xn x0, f x, id, d⟩
 
