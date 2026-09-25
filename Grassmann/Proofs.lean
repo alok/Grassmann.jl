@@ -1,4 +1,5 @@
 import Grassmann.Proofs.Link
+import Grassmann.Proofs.Signature
 import Grassmann.Proofs.Tables
 import Grassmann.Proofs.Conformal
 import Grassmann.Proofs.Regressive
@@ -15,6 +16,10 @@ proved in general, what is checked by kernel evaluation and what is tested):
   on all multivectors (`implMul_eq_mul`); the signature-space sign
   `TensorBundle.mulSign` is the spec coefficient for every width `≤ 64`
   (`mulSign_eq_coef`, general).
+* `Grassmann.Proofs.Signature`: in every plain signature space (`Signature` or
+  `Int` metric, no conformal pair, no tangent variables) of dimension `≤ 64`,
+  DirectSum's geometric product is the spec product on all multivectors
+  (`implMul_eq_mul_of_signature`, general).
 * `Grassmann.Proofs.Tables`: `decide +kernel` checks of the geometric and
   exterior products, reversion, involution, complement and Hodge tables, and of
   the reference plans, in `ℝ2`, `ℝ3`, `STA`, `PGA2`, `PGA3` and `D!"1,2,-3"`;

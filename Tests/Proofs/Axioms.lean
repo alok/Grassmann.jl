@@ -53,3 +53,6 @@ import Grassmann.Proofs
 
 /-- info: 'Grassmann.Spec.Cl.vee_assoc' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Grassmann.Spec.Cl.vee_assoc
+
+/-- info: 'Grassmann.Proofs.implMul_eq_mul_of_signature' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.implMul_eq_mul_of_signature

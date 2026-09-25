@@ -142,6 +142,8 @@ multiply-accumulate plans (`Grassmann.Kernel.build`, DESIGN.md §5.1).
 | `bilin_eq_twist` | the bilinear extension of any blade rule `e_a ⋆ e_b = k(a,b) e_{a⊕b}` is the twisted convolution with `k` |
 | `implMul_eq_mul`, `implWedge_eq_wedge`, `implContract_eq_contract` | so a geometric (exterior, contraction) table that agrees with the spec on basis blades gives the spec product on **all** multivectors |
 | `mulSign_eq_coef` | for every space and every `n ≤ 64`, `(-1)^{TensorBundle.mulSign a b}` is the spec coefficient of the signature metric `V.sigBits`, on every pair of blades |
+| `IsSignatureSpace.terms_mul` | in every plain signature space (`Signature` or `Int` metric, no conformal pair, no tangent variables), `terms₂ .mul a b` is the single term `(-1)^{parityjoin} e_{a⊕b}` for all 64-bit masks; `metricProduct` is a product of `±1`s, so its absolute value is `1` whatever its loop visits |
+| `implMul_eq_mul_of_signature` | hence **the implementation's geometric product is the spec product on all multivectors of every plain signature space of dimension `≤ 64`** (`R7_mul`, `S33_mul` instantiate it) |
 
 **Checked** by the kernel (`Grassmann.Proofs.Tables`), on every basis blade
 (pair), in `ℝ2`, `ℝ3`, `STA = S!"-+++"`, `PGA2 = D!"0,1,1"`,
@@ -209,9 +211,13 @@ generated kernels) are exercised; they are not proved.
   check and test above, and the general statements for `parityjoin`/`mulSign` do
   not depend on them. `popcount` is not 𝔽₂-linear, so the linearity method of
   §1 does not apply.
-* `DiagonalForm` products in general dimension go through `metricProduct`, so
-  they are checked (`PGA*`, `D!"1,2,-3"`) and tested (`PGA4`, `D5`), not
-  proved; signature spaces are proved through `mulSign_eq_coef`.
+* `DiagonalForm` products in general dimension go through `metricProduct`, whose
+  loop visits the set bits with `ctz`, so they are checked (`PGA*`,
+  `D!"1,2,-3"`) and tested (`PGA4`, `D5`), not proved; plain signature spaces
+  are proved in every dimension (`implMul_eq_mul_of_signature`).
+* The exterior product, involutions and complements are linked per space
+  (checked, `n ≤ 4`) and tested (`n ≤ 7`), not in general: their blade rules
+  read the grade through `Bits.popcount`.
 * The other contractions (`⨼`, `<<`, `>>`), `cross`, `veedot`, `antidot` and the
   sandwiches have no spec yet; `Tests/Grassmann/Props.lean` tests their
   algebraic laws. The regressive product is linked blade by blade, not yet
