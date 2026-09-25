@@ -104,12 +104,12 @@ where
     | [] => []
     | a :: as => alg f a :: go as
 
-/-- Julia `log(abs(literal))` as `Float64` (Julia's `log(::Int)` works in
-`Float64`, `log(::Float32)` in `Float32`). -/
+/-- Julia `log(abs(literal))` as `Float64`, with Julia's own `log` kernels
+(`log(::Int)` works in `Float64`, `log(::Float32)` in `Float32`). -/
 def logAbs : Lit → Float
-  | .int v => (Float.ofInt v.natAbs).log
-  | .f64 v => v.abs.log
-  | .f32 v => v.abs.log.toFloat
+  | .int v => JuliaMath.log (Float.ofInt v.natAbs)
+  | .f64 v => JuliaMath.log v.abs
+  | .f32 v => (JuliaMath.log32 v.abs).toFloat
   | .big v => (BigFloat.log v.abs).toFloat
 
 /-- Julia `expravg(expr) = (cs, avg, cp, pavg)` (src/exprval.jl:9-38): the number

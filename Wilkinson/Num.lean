@@ -1,5 +1,6 @@
 import Wilkinson.Expr
 import Wilkinson.Range
+import Wilkinson.JuliaMath
 
 /-!
 # Julia's numeric promotion, for evaluating expressions
@@ -149,12 +150,12 @@ def pow (x y : JNum) : JNum :=
     | _ => powLit x k.toInt
   | _ => .f64 (powF64 x.toF64 y.toF64)
 
-/-- Julia `log` by type (`Float64`/`Float32` via the C library, `BigFloat` in
-`BigFloat`). -/
+/-- Julia `log` by type: Julia's own `Float64`/`Float32` kernels, `BigFloat` in
+`BigFloat`; integers and rationals convert to `Float64` first. -/
 def log : JNum → JNum
-  | .f32 v => .f32 v.log
+  | .f32 v => .f32 (JuliaMath.log32 v)
   | .big v => .big v.log
-  | x => .f64 x.toF64.log
+  | x => .f64 (JuliaMath.log x.toF64)
 
 /-- Is the value `+Inf`? (Julia `p[k] == Inf`.) -/
 def isPosInf : JNum → Bool

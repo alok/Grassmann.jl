@@ -15,8 +15,9 @@ Dekker `TwicePrecision` arithmetic of `base/twiceprecision.jl` is
 * `sum(::Vector{Float64})`, whose pairwise blocking and SIMD accumulator
   layout fix the rounding of `simpson`'s sums.
 
-`two_mul` is a true `fma` (Julia calls `fma` explicitly), while `muladd`
-inside `pow_body` is unfused, both as measured on the machine the goldens come
+`two_mul` is a true `fma` (Julia calls `fma` explicitly). Of the three
+`muladd`s in `pow_body`, LLVM fuses the two that accumulate the low-order error
+and leaves the final one unfused, as measured on the machine the goldens come
 from (Apple aarch64, Julia 1.13).
 -/
 
@@ -28,10 +29,12 @@ exactly (barring overflow). -/
   let xy := x * y
   (xy, Float.fma x y (-xy))
 
-/-- Julia `muladd(x, y, z)` as compiled inside `pow_body`: LLVM leaves it
-**unfused** there (`x*y + z`, two roundings). Measured against Julia 1.13 on
-20000 random `(x, n)`: the unfused final `muladd` reproduces every result, the
-fused one misses 22%. -/
+/-- The final `muladd(x, y, err)` of `pow_body`, which LLVM leaves **unfused**
+(`x*y + err`, two roundings); the error-accumulating `muladd(y, xnlo, x*ynlo)`
+is fused (`powBody` calls `Float.fma`). Measured against Julia 1.13 on 200000
+random `(x, n)`, `n ∈ [-300, 600]`: this combination reproduces every result
+(signed zeros of underflowing powers included); unfusing the error `muladd`
+misses 101 signed zeros, fusing the final one misses 4%. -/
 @[inline] def muladd (x y z : Float) : Float := x * y + z
 
 /-- Julia `^(x::Float64, n::Integer)`'s compensated power by squaring,
@@ -54,7 +57,7 @@ where
       if n > 1 then
         let (y, ynlo) :=
           if n % 2 = 1 then
-            let err := muladd y xnlo (x * ynlo)
+            let err := Float.fma y xnlo (x * ynlo)
             let (y', ynlo') := twoMul x y
             (y', ynlo' + err)
           else (y, ynlo)
@@ -62,7 +65,7 @@ where
         let (x', xnlo') := twoMul x x
         loop x' (xnlo' + err) y ynlo (n / 2) fuel
       else
-        let err := muladd y xnlo (x * ynlo)
+        let err := Float.fma y xnlo (x * ynlo)
         if x.isFinite && err.isFinite then muladd x y err else x * y
 
 /-- Julia `x ^ n` for `x::Float64`, `n::Integer` (base/special/pow.jl:58-75).

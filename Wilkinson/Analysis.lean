@@ -37,9 +37,9 @@ def FloatSet.num (s : FloatSet) (i : Nat) : JNum :=
 
 /-- Julia `exp` in the element type. -/
 def JNum.exp : JNum → JNum
-  | .f32 v => .f32 v.exp
-  | .big v => .f64 v.toFloat.exp
-  | x => .f64 x.toF64.exp
+  | .f32 v => .f32 (JuliaMath.exp32 v)
+  | .big v => .f64 (JuliaMath.exp v.toFloat)
+  | x => .f64 (JuliaMath.exp x.toF64)
 
 /-- Julia `floatset(Float64, N; scale) = scale(eps):(scale(floatmax) - scale(eps))/(N-1):scale(floatmax)`
 (src/Wilkinson.jl:17-21). -/
@@ -57,8 +57,8 @@ def floatset32 (N : Nat) (scale : Float32 → Float32 := id) : FloatSet :=
 /-- The standard grid: `floatset(T, 3000; scale = log)`. -/
 def logset (T : NumType) (N : Nat := 3000) : FloatSet :=
   match T with
-  | .f32 => floatset32 N Float32.log
-  | _ => floatset N Float.log
+  | .f32 => floatset32 N JuliaMath.log32
+  | _ => floatset N JuliaMath.log
 
 /-- Julia `geonorm(x) = 1/(1-x)`. -/
 def geonorm (x : Float) : Float := 1 / (1 - x)
@@ -105,8 +105,11 @@ Quirk #27: `p[1]` carries weight 5 and the normalisation is `3n·range`. -/
 def simpson (set : FloatSet) (p : FloatArray) (n : Nat := Ω p) : Float :=
   let s : Float := (4 : Float) * stridedSum p 1 2 (n - 1) + (2 : Float) * stridedSum p 2 2 (n - 1) +
     (p[0]! + p[n - 1]!)
-  let r := set.get n - set.get 1
-  s / (Float.ofNat (3 * n) * r)
+  -- `r = set[n] - set[1]` and `3n*r` are computed in the grid's element type
+  let d : Float := match set with
+    | .f64 g => Float.ofNat (3 * n) * (g.get n - g.get 1)
+    | .f32 g => (Float32.ofNat (3 * n) * (g.get n - g.get 1)).toFloat
+  s / d
 
 /-- Julia `exacterr(set, exprs, T, …)` (src/Wilkinson.jl:76-88): for each form
 after the first, `log|f_big(x) - f_T(x)| - log x`, where `f_big` is the first

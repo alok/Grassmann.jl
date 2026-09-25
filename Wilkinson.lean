@@ -1,6 +1,7 @@
 import Wilkinson.BigFloat
 import Wilkinson.Expr
 import Wilkinson.FloatOps
+import Wilkinson.JuliaMath
 import Wilkinson.Range
 import Wilkinson.Num
 import Wilkinson.SyntaxTree
@@ -23,6 +24,7 @@ parts of `SyntaxTree.jl` (1.0.1) it relies on (`exprval`, `callcount`, `sub`,
 | `Wilkinson.Expr` | Julia `Expr` | `JExpr`, `jl⟪ … ⟫` quotation, `string(::Expr)` |
 | `Wilkinson.BigFloat` | MPFR `BigFloat` | `BigFloat p`, correctly rounded `+ - * /`, `^n`, `log` |
 | `Wilkinson.FloatOps` | `base/special/pow.jl`, `base/reduce.jl` | `pow_body`, `literal_pow`, `sum` |
+| `Wilkinson.JuliaMath` | `base/special/exp.jl`, `log.jl` | Julia's own `exp`/`log` (`Float64`, `Float32`) |
 | `Wilkinson.Range` | `base/twiceprecision.jl` | `Float32` colon, `FloatSet` grids |
 | `Wilkinson.Num` | Julia promotion | `JNum`: Int64/Rational/Float32/Float64/BigFloat |
 | `Wilkinson.SyntaxTree` | `SyntaxTree.jl` | `callcount`, `sub`, `abs`, `alg`, `exprval`, `eval` |
