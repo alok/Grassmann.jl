@@ -2,6 +2,7 @@ import Bench.Harness
 import Bench.Harness.Optional
 import Bench.Math
 import Bench.JuliaBase
+import Bench.StaticVectors
 import Bench.MeshTopology
 import Bench.Fatou
 import Bench.Geophysics
