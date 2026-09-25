@@ -12,7 +12,7 @@ occur in practice (`Float64`, `ComplexF64`, `Chain`, `Spinor`, `Multivector`, `V
 
 * `FlatFiber F`: `width`, `read` (decode at an offset), `push` (append), and the size law that
   lets field combinators prove their output sizes.
-* `LinearFiber F`: a marker that `+`, `-`, negation and scaling by a `Float` act componentwise
+* `LinearFiber F`: `+`, `-`, negation and scaling by a `Float` act componentwise
   on the encoding (true for all the instances here), so fields of `F` add and scale their raw
   arrays in one loop.
 * `ShowFiber F`: Julia's `show` of a fiber value, non-compact (`1.0v₁ + 2.0v₂`) and compact
@@ -56,9 +56,13 @@ attribute [simp] FlatFiber.size_push
     (a.push x).size = a.size + 1 := by
   cases a; simp [FloatArray.push, FloatArray.size]
 
-/-- Marker: `+`, `-`, negation and scaling by a `Float` act componentwise on the flat encoding
-of `F`, so fields of `F` may add and scale their raw arrays. -/
-class LinearFiber (F : Type) [FlatFiber F] : Prop where
+/-- `+`, `-`, negation and scaling by a `Float` act componentwise on the flat encoding of `F`, so
+fields of `F` may add and scale their raw arrays. `recipDiv` records how Julia divides by a real
+`s`: Grassmann elements as `x * (1/s)` (Grassmann `src/algebra.jl:704`, `a/b = a*(1/b)` for
+`TensorGraded`/`TensorMixed`), numbers componentwise `x / s`; the two differ in the last bit. -/
+class LinearFiber (F : Type) [FlatFiber F] where
+  /-- Julia's `x / s` is `x * (1/s)` for this fiber type. -/
+  recipDiv : Bool := false
 
 /-! ## Building flat arrays -/
 
@@ -89,7 +93,7 @@ instance instFlatFiberFloat : FlatFiber Float where
   push a x := a.push x
   size_push a x := by simp
 
-instance : LinearFiber Float := ⟨⟩
+instance : LinearFiber Float := ⟨false⟩
 
 /-- `ComplexF64` fibers: `(re, im)`, as Julia stores `Complex{Float64}`. -/
 instance : FlatFiber (Complex Float) where
@@ -98,7 +102,7 @@ instance : FlatFiber (Complex Float) where
   push a z := (a.push z.re).push z.im
   size_push a z := by simp
 
-instance : LinearFiber (Complex Float) := ⟨⟩
+instance : LinearFiber (Complex Float) := ⟨false⟩
 
 /-! ## Static vectors of flat elements -/
 
@@ -129,7 +133,7 @@ instance {α : Type} [Packed α] [Inhabited α] [FlatFiber α] {n : Nat} : FlatF
   size_push a v := size_pushValues v n 0 a
 
 instance {α : Type} [Packed α] [Inhabited α] [FlatFiber α] [LinearFiber α] {n : Nat} :
-    LinearFiber (Values α n) := ⟨⟩
+    LinearFiber (Values α n) := ⟨false⟩
 
 /-! ## Grassmann elements -/
 
@@ -144,7 +148,7 @@ instance : FlatFiber (Chain V G α) where
   push a c := pushValues c.v _ 0 a
   size_push a c := size_pushValues c.v _ 0 a
 
-instance [LinearFiber α] : LinearFiber (Chain V G α) := ⟨⟩
+instance [LinearFiber α] : LinearFiber (Chain V G α) := ⟨true⟩
 
 /-- `Spinor`/`CoSpinor` fibers (`Half V p α`): the half-algebra coefficients. -/
 instance : FlatFiber (Half V p α) where
@@ -153,7 +157,7 @@ instance : FlatFiber (Half V p α) where
   push a h := pushValues h.v _ 0 a
   size_push a h := size_pushValues h.v _ 0 a
 
-instance [LinearFiber α] : LinearFiber (Half V p α) := ⟨⟩
+instance [LinearFiber α] : LinearFiber (Half V p α) := ⟨true⟩
 
 /-- `Multivector` fibers: all `2^n` coefficients. -/
 instance : FlatFiber (Multivector V α) where
@@ -162,7 +166,7 @@ instance : FlatFiber (Multivector V α) where
   push a m := pushValues m.v _ 0 a
   size_push a m := size_pushValues m.v _ 0 a
 
-instance [LinearFiber α] : LinearFiber (Multivector V α) := ⟨⟩
+instance [LinearFiber α] : LinearFiber (Multivector V α) := ⟨true⟩
 
 end Grassmann
 

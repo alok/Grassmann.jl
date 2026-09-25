@@ -122,13 +122,20 @@ b = (x -> 1 + x[1] * x[2]).(g2)
 v = (x -> Chain(x[1], x[2], 1.0)).(g2)
 w = (x -> Chain(1.0, -x[2], x[1])).(g2)
 q = v * w
+# Integer powers with runtime exponents: a literal `b^-3` lowers to `literal_pow` (`inv(b)^3`), a
+# different rounding; the Lean `powInt` is Julia's `^(x, n::Int)`.
+const M2 = parse(Int, "2")
+const M3 = parse(Int, "-3")
+# "q*v": Cartan's field `*` goes through `Grassmann.wedgedot_metric`, which returns the wrong sign
+# for a quaternion times a vector (defect `cartan-wedgedot-metric-spinor-vector`); the golden is
+# the geometric product of the fibers, and "q*v julia" records upstream.
 ops = Dict{String,Any}()
 for (nm, f) in (
         "g2" => () -> g2, "a" => () -> a, "b" => () -> b, "v" => () -> v, "w" => () -> w,
         "a+b" => () -> a + b, "a-b" => () -> a - b, "a*b" => () -> a * b, "a/b" => () -> a / b,
         "2a" => () -> 2a, "a/3" => () -> a / 3, "-a" => () -> -a, "a+1" => () -> a + 1, "1-a" => () -> 1 - a,
         "sin(a)" => () -> sin(a), "cos(a)" => () -> cos(a), "exp(a)" => () -> exp(a), "log(b)" => () -> log(b),
-        "sqrt(b)" => () -> sqrt(b), "b^0.5" => () -> b^0.5, "b^2" => () -> b^2, "b^-3" => () -> b^(-3),
+        "sqrt(b)" => () -> sqrt(b), "b^0.5" => () -> b^0.5, "b^2" => () -> b^M2, "b^-3" => () -> b^M3,
         "cbrt(b)" => () -> cbrt(b), "tanh(a)" => () -> tanh(a), "atan(a)" => () -> atan(a),
         "inv(b)" => () -> inv(b), "abs(a-1)" => () -> abs(a - 1), "sign(a-1)" => () -> sign(a - 1),
         "max(a,1)" => () -> max(a, 1), "min(a,1)" => () -> min(a, 1), "mod(a,0.75)" => () -> mod(a, 0.75),
@@ -140,7 +147,8 @@ for (nm, f) in (
         "a*v" => () -> a * v, "v*a" => () -> v * a, "v/b" => () -> v / b, "norm(v)" => () -> norm(v),
         "abs(v)" => () -> abs(v), "abs2(v)" => () -> abs2(v), "inv(v)" => () -> inv(v), "unit(v)" => () -> unit(v),
         "scalar(q)" => () -> scalar(q), "bivector(q)" => () -> bivector(q), "v<w" => () -> v < w,
-        "q*q" => () -> q * q, "q+q" => () -> q + q, "v*q" => () -> v * q, "q*v" => () -> q * v,
+        "q*q" => () -> q * q, "q+q" => () -> q + q, "v*q" => () -> v * q,
+        "q*v" => () -> TensorField(base(q), fiber(q) .* fiber(v)), "q*v julia" => () -> q * v,
         "v∧w∧v" => () -> (v ∧ w) ∧ v, "⋆(v∧w)" => () -> ⋆(v ∧ w), "(v∧w)⋅v" => () -> (v ∧ w) ⋅ v,
         "v⊘q" => () -> v ⊘ q, "clifford(q)" => () -> clifford(q),
         "v+q" => () -> v + q)

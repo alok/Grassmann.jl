@@ -44,22 +44,42 @@ def fmt (x : Float) : String := s!"{F64.showString x}"
 /-- `true` when the golden value records a Julia exception. -/
 def isErr (j : Json) : Bool := (j.getObjVal? "E").isOk
 
-/-- Compare two float arrays: equal length, and every pair within `ulps` (0 = bit-exact up to
-the NaN payload). -/
-def checkFloats (label : String) (got want : FloatArray) (ulps : Nat := 0) : TestM Unit := do
+/-- How closely a result must match: `ulps` = 0 is bit-exact (up to the NaN payload); `zeros`
+also accepts `0.0` for `-0.0` and back. The Grassmann port's product kernels accumulate from
+`+0.0` where Julia's generated code starts from the first product, so products of fibers with
+signed zeros can differ in the sign of a zero (`zeros := true` for those). -/
+structure Tol where
+  /-- Allowed distance in units in the last place. -/
+  ulps : Nat := 0
+  /-- Accept `±0.0` for each other. -/
+  zeros : Bool := false
+
+/-- Bit-exact. -/
+def exact : Tol := {}
+/-- `libm` results (2 ulps). -/
+def libm : Tol := { ulps := 2 }
+/-- Grassmann products (signed zeros may differ). -/
+def prods : Tol := { zeros := true }
+
+/-- Whether `x` matches `y` within `tol`. -/
+def near (tol : Tol) (x y : Float) : Bool :=
+  F64.ulpDist x y ≤ tol.ulps || (tol.zeros && x == 0 && y == 0)
+
+/-- Compare two float arrays: equal length, and every pair within `tol`. -/
+def checkFloats (label : String) (got want : FloatArray) (tol : Tol := {}) : TestM Unit := do
   if got.size != want.size then
     check label false fun _ => s!"length {got.size}, expected {want.size}"
     return
-  let bad := (List.range got.size).find? fun i => F64.ulpDist got[i]! want[i]! > ulps
+  let bad := (List.range got.size).find? fun i => !near tol got[i]! want[i]!
   match bad with
   | none => check label true
   | some i => check label false fun _ =>
       s!"[{i}] got {fmt got[i]!}, expected {fmt want[i]!} ({F64.ulpDist got[i]! want[i]!} ulps)"
 
 /-- Compare a float with a golden float. -/
-def checkFloat (label : String) (got : Float) (want : Json) (ulps : Nat := 0) : TestM Unit := do
+def checkFloat (label : String) (got : Float) (want : Json) (tol : Tol := {}) : TestM Unit := do
   let w ← gFloat want
-  check label (F64.ulpDist got w ≤ ulps) fun _ => s!"got {fmt got}, expected {fmt w}"
+  check label (near tol got w) fun _ => s!"got {fmt got}, expected {fmt w}"
 
 /-! ## Field outputs -/
 
@@ -79,14 +99,14 @@ def out {M P G F : Type} [FrameBundle M] [Coordinates M P G] [FlatFiber P] [Flat
     {m : M} (t : TensorField m F) : FieldOut :=
   ⟨BaseShape.shape m, t.data, FrameBundle.pointsFlat m, t.range?.isSome⟩
 
-/-- Compare a field with a golden field (fibers within `ulps`; points, size and the lazy-range
+/-- Compare a field with a golden field (fibers within `tol`; points, size and the lazy-range
 flag exactly). Julia errors are skipped. -/
-def checkField (label : String) (got : FieldOut) (want : Json) (ulps : Nat := 0)
+def checkField (label : String) (got : FieldOut) (want : Json) (tol : Tol := {})
     (checkRange : Bool := true) : TestM Unit := do
   if isErr want then return
   let size ← (← jArr (← jField want "size")).mapM jNat
   check s!"{label} size" (got.size == size.toList) fun _ => s!"got {got.size}, expected {size}"
-  checkFloats s!"{label} fiber" got.fiber (← gFloats (← jField want "fiber")) ulps
+  checkFloats s!"{label} fiber" got.fiber (← gFloats (← jField want "fiber")) tol
   checkFloats s!"{label} points" got.points (← gFloats (← jField want "points"))
   if checkRange then
     let r ← jBool (← jField want "isrange")

@@ -105,8 +105,43 @@ instance : Neg (TensorField m F) := ⟨mapFlat (- ·)⟩
 instance : HMul Float (TensorField m F) (TensorField m F) := ⟨fun x t => mapFlat (x * ·) t⟩
 /-- Julia `t * x`. -/
 instance : HMul (TensorField m F) Float (TensorField m F) := ⟨fun t x => mapFlat (· * x) t⟩
-/-- Julia `t / x`. -/
-instance : HDiv (TensorField m F) Float (TensorField m F) := ⟨fun t x => mapFlat (· / x) t⟩
+/-- Julia `t / x`: componentwise for numbers, `t * (1/x)` for Grassmann fibers
+(`LinearFiber.recipDiv`, Grassmann `src/algebra.jl:704`). -/
+@[inline] def divScalar (t : TensorField m F) (x : Float) : TensorField m F :=
+  if LinearFiber.recipDiv F then
+    let r := (1 : Float) / x
+    mapFlat (· * r) t
+  else mapFlat (· / x) t
+
+instance : HDiv (TensorField m F) Float (TensorField m F) := ⟨divScalar⟩
+
+/-- `out[k] = f a[k] s[k / w]`: each point's `w` floats combined with that point's scalar. -/
+@[specialize] def zipScalarLoop (f : Float → Float → Float) (a s : FloatArray) (w : Nat) :
+    (k i : Nat) → FloatArray → FloatArray
+  | 0, _, acc => acc
+  | k + 1, i, acc => zipScalarLoop f a s w k (i + 1) (acc.push (f a[i]! s[i / w]!))
+
+theorem size_zipScalarLoop (f : Float → Float → Float) (a s : FloatArray) (w : Nat) :
+    ∀ (k i : Nat) (acc : FloatArray), (zipScalarLoop f a s w k i acc).size = acc.size + k
+  | 0, _, _ => rfl
+  | k + 1, i, acc => by
+    rw [zipScalarLoop, size_zipScalarLoop f a s w k (i + 1), FloatArray.size_push']; omega
+
+/-- Combine every component of `t` with the scalar field `s` at its point. -/
+@[inline] def zipScalar (f : Float → Float → Float) (t : TensorField m F) (s : TensorField m Float) :
+    TensorField m F :=
+  let n := FlatFiber.width F * card m
+  ⟨zipScalarLoop f t.data s.data (FlatFiber.width F) n 0 (FloatArray.emptyWithCapacity n),
+    by rw [size_zipScalarLoop]; exact Nat.zero_add n, none⟩
+
+/-- Julia `a / b` with a scalar field `b` (`./(fiber(a), fiber(b))`, `Cartan.jl:371`): each fiber
+divided by the scalar at its point, as `a * (1/b)` for Grassmann fibers. -/
+@[inline] def divField (t : TensorField m F) (s : TensorField m Float) : TensorField m F :=
+  if LinearFiber.recipDiv F then zipScalar (fun x y => x * ((1 : Float) / y)) t s
+  else zipScalar (· / ·) t s
+
+instance (priority := default + 1) : HDiv (TensorField m F) (TensorField m Float) (TensorField m F) :=
+  ⟨divField⟩
 
 end Linear
 
@@ -267,9 +302,10 @@ the arguments swapped, not a comparison. -/
 scalar for a `Chain` fiber; the value is the same). -/
 @[inline] def abs [FiberNorm F] (t : TensorField m F) : TensorField m Float := t.map fnorm
 
-/-- Julia `unit(t) = t / abs(t)` (group D). -/
-@[inline] def unit [FiberNorm F] [HDiv F Float F] (t : TensorField m F) : TensorField m F :=
-  t.map fun x => x / fnorm x
+/-- Julia `unit(t) = t / abs(t)` (group D): each fiber divided by its norm (as `x * (1/|x|)` for
+Grassmann fibers, whose `abs` is a scalar `Single`). -/
+@[inline] def unit [FiberNorm F] [LinearFiber F] (t : TensorField m F) : TensorField m F :=
+  divField t t.norm
 
 /-- Julia `abs2(t)` of a scalar field. -/
 @[inline] def abs2F (t : TensorField m Float) : TensorField m Float := t.map fun x => x * x
@@ -277,6 +313,15 @@ scalar for a `Chain` fiber; the value is the same). -/
 /-- Julia `abs2(t)` of a `Chain` field: the grade-0 chain `t ⋅ ~t` (Grassmann `abs2`). -/
 @[inline] def abs2Chain {V : TensorBundle} {G : Nat} (t : TensorField m (Chain V G Float)) :
     TensorField m (Chain V 0 Float) := t.map Chain.abs2
+
+/-- Julia `inv(a::Chain)` (Grassmann `src/algebra.jl:482-485`): `~a / value(scalar(abs2(a)))`,
+which Grassmann evaluates as `~a * (1/abs2)`. -/
+@[inline] def invChain {V : TensorBundle} {G : Nat} (c : Chain V G Float) : Chain V G Float :=
+  c.reverse * ((1 : Float) / getD (Chain.abs2 c).v 0)
+
+/-- Julia `inv(t)` of a `Chain` field (group D). -/
+instance (priority := default + 1) {V : TensorBundle} {G : Nat} :
+    Inv (TensorField m (Chain V G Float)) := ⟨map invChain⟩
 
 /-- Julia `supnorm(t) = maximum(norm, fiber(t))` (`Cartan.jl:513`). -/
 def supnorm [FiberNorm F] (t : TensorField m F) : Float :=

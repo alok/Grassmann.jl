@@ -60,7 +60,7 @@ instance : FlatFiber (AffinePoint N) where
   push a p := FlatFiber.push a p.coords
   size_push a p := FlatFiber.size_push a p.coords
 
-instance : LinearFiber (AffinePoint N) := ⟨⟩
+instance : LinearFiber (AffinePoint N) := ⟨true⟩
 
 /-- The display label of coordinate `j` (0-based): `v₂`, `v₃`, … (the affine manifold's basis
 indices `2 … N+1`). -/
