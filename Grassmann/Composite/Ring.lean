@@ -394,4 +394,146 @@ def coabs2 (c : Chain V G Float) : Chain V (V.n - 0) Float :=
 
 end Chain
 
+/-! ## Inverse hyperbolic functions of spinors, real powers -/
+
+namespace Half
+
+variable [Kernels V]
+
+/-- AbstractTensors `asinh(s) = log(s + sqrt(1 + s⟑s))` (`AT:421`) of a spinor (any
+dimension: the formula never leaves the even subalgebra). -/
+def asinh (s : Half V false Float) : Half V false Float :=
+  log (s + sqrt (addScalar f1 (smul' s s)))
+
+/-- AbstractTensors `acosh(s) = log(s + sqrt(s⟑s - 1))` (`AT:422`) of a spinor. -/
+def acosh (s : Half V false Float) : Half V false Float :=
+  log (s + sqrt (addScalar (-f1) (smul' s s)))
+
+/-- AbstractTensors `atanh(s) = (log(1 + s) - log(1 - s))/2` (`AT:423`) of a spinor. -/
+def atanh (s : Half V false Float) : Half V false Float :=
+  sdiv (log (addScalar f1 s) - log (addScalar f1 (-s))) f2
+
+/-- AbstractTensors `acoth(s) = (log(s + 1) - log(s - 1))/2` (`AT:424`) of a spinor. -/
+def acoth (s : Half V false Float) : Half V false Float :=
+  sdiv (log (addScalar f1 s) - log (addScalar (-f1) s)) f2
+
+/-- A real power `s ^ x = exp(x·log(s))` (the principal branch; Julia defines no
+`TensorAlgebra ^ Real`, only `Real ^ TensorAlgebra`, `rpow`). -/
+def powf (s : Half V false Float) (x : Float) : Half V false Float := exp ⟨s.log.v.map (x * ·)⟩
+
+end Half
+
+namespace Multivector
+
+variable [Kernels V]
+
+/-- A real power `t ^ x = exp(x·log(t))` (the principal branch; Julia defines no
+`TensorAlgebra ^ Real`). -/
+def powf (t : Multivector V Float) (x : Float) : Multivector V Float := exp (x * t.log)
+
+end Multivector
+
+namespace Couple
+
+/-- AbstractTensors `exph(z) = cosh(z) + sinh(z)` (Grassmann `C:572`). -/
+def exph (z : Couple V Float) : Couple V Float :=
+  let c := z.cosh
+  let s := z.sinh
+  ⟨z.bits, c.re + s.re, c.im + s.im⟩
+
+/-- AbstractTensors `log2(z) = log2(ℯ)·log(z)` (`AT:383`). -/
+def log2 (z : Couple V Float) : Couple V Float := let l := z.log; ⟨l.bits, F64.log2e * l.re, F64.log2e * l.im⟩
+/-- AbstractTensors `log10(z) = log10(ℯ)·log(z)` (`AT:383`). -/
+def log10 (z : Couple V Float) : Couple V Float := let l := z.log; ⟨l.bits, F64.log10e * l.re, F64.log10e * l.im⟩
+/-- AbstractTensors `exp2(z) = exp(log(2)·z)` (`AT:384`). -/
+def exp2 (z : Couple V Float) : Couple V Float := exp ⟨z.bits, F64.ln2 * z.re, F64.ln2 * z.im⟩
+/-- AbstractTensors `exp10(z) = exp(log(10)·z)` (`AT:384`). -/
+def exp10 (z : Couple V Float) : Couple V Float := exp ⟨z.bits, F64.ln10 * z.re, F64.ln10 * z.im⟩
+
+end Couple
+
+/-! ## `log_fast`, `logh_fast` (`src/composite.jl:574-587`) -/
+
+namespace Composite
+
+/-- The iteration cap of `log_fast`/`logh_fast` (Julia loops forever where the iteration
+does not converge, port-notes/grassmann-composite.md §8.3 item 9). -/
+def logFastCap : Nat := 200
+
+/-- Julia's `log_fast` iteration from `term = 0` (`src/composite.jl:574-587`):
+`term -= 2(e - t)/(e + t)` with `e = expf(term)` (right division `div`), stopping when two
+consecutive iterates have `≈` norms; `none` when a division is undefined or after
+`logFastCap` steps. -/
+@[specialize] def logFastLoop {X : Type} (sub : X → X → X) (add : X → X → X) (smul2 : X → X)
+    (div? : X → X → Option X) (norm : X → Float) (expf : X → X) (t term : X) (n2 : Float) :
+    Nat → Option X
+  | 0 => none
+  | fuel + 1 =>
+    let e := expf term
+    match div? (smul2 (sub e t)) (add e t) with
+    | none => none
+    | some d =>
+      let term := sub term d
+      let n := norm term
+      if approx n2 n then some term
+      else logFastLoop sub add smul2 div? norm expf t term n fuel
+
+end Composite
+
+namespace Multivector
+
+variable [Kernels V]
+
+/-- The shared iteration of `log_fast`/`logh_fast` on multivectors. -/
+@[inline] def logFastWith (expf : Multivector V Float → Multivector V Float) (t : Multivector V Float) :
+    Option (Multivector V Float) :=
+  logFastLoop (· - ·) (· + ·) (fun m => (2 : Float) * m) (fun a b => b.inv?.map (a * ·)) fnorm expf t
+    Multivector.zero f0 logFastCap
+
+/-- Julia `log_fast(t)` (`src/composite.jl:574-587`): Halley's iteration for `exp(y) = t`;
+`none` where it breaks down or does not converge (Julia hangs). -/
+def logFast (t : Multivector V Float) : Option (Multivector V Float) := logFastWith exp t
+
+/-- Julia `logh_fast(t)`: the same iteration on `exph = cosh + sinh` (whose generated
+series Julia cannot run, port-notes §4.3.3). -/
+def loghFast (t : Multivector V Float) : Option (Multivector V Float) := logFastWith exph t
+
+end Multivector
+
+namespace Half
+
+variable [Kernels V]
+
+/-- The shared iteration of `log_fast`/`logh_fast` on spinors. -/
+@[inline] def logFastWith (expf : Half V false Float → Half V false Float) (t : Half V false Float) :
+    Option (Half V false Float) :=
+  logFastLoop (· - ·) (· + ·) (fun m => ⟨m.v.map ((2 : Float) * ·)⟩) (fun a b => b.inv?.map (smul' a ·))
+    fnorm expf t Half.zero f0 logFastCap
+
+/-- Julia `log_fast(t)` of a spinor (`src/composite.jl:574-587`), `none` where it fails. -/
+def logFast (t : Half V false Float) : Option (Half V false Float) := logFastWith exp t
+
+/-- Julia `logh_fast(t)` of a spinor. -/
+def loghFast (t : Half V false Float) : Option (Half V false Float) := logFastWith exph t
+
+end Half
+
+namespace Couple
+
+/-- The shared iteration of `log_fast`/`logh_fast` on a couple (its blade algebra). -/
+@[inline] def logFastWith (expf : Couple V Float → Couple V Float) (z : Couple V Float) : Option (Couple V Float) :=
+  logFastLoop (fun a b => ⟨a.bits, a.re - b.re, a.im - b.im⟩) (fun a b => ⟨a.bits, a.re + b.re, a.im + b.im⟩)
+    (fun a => ⟨a.bits, (2 : Float) * a.re, (2 : Float) * a.im⟩)
+    (fun a b => let q := divSame a b; if q.re.isNaN || q.im.isNaN then none else some q)
+    (fun a => Float.sqrt (a.re * a.re + a.im * a.im)) expf z ⟨z.bits, f0, f0⟩ f0 logFastCap
+
+/-- Julia `log_fast(z)` of a couple (`src/composite.jl:574-587`): Halley's iteration on the
+closed-form `exp`; `none` where Julia hangs (hyperbolic couples outside the light cone). -/
+def logFast (z : Couple V Float) : Option (Couple V Float) := logFastWith exp z
+
+/-- Julia `logh_fast(z)` of a couple, on `exph = cosh + sinh`. -/
+def loghFast (z : Couple V Float) : Option (Couple V Float) := logFastWith exph z
+
+end Couple
+
 end Grassmann

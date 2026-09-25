@@ -377,6 +377,29 @@ def identities (t : Tally) : Tally := Id.run do
   -- Julia's log(b, t) = log(t)/log(b) (bug B1 fixed)
   let l := (Multivector.addScalar 1.0 (toMultivector (⟨3, 0.5⟩ : Single E3 2 Float)))
   t := expect t "logBase 2 = log2" (l.logBase 2.0) l.log2.v.toList 1e-15
+  -- log_fast / logh_fast (Julia values: port-notes §4.3.3)
+  let r := Couple.exp (⟨3, 0.0, 0.5⟩ : Couple E3 Float)
+  match r.logFast, r.loghFast with
+  | some a, some b =>
+    t := expect t "log_fast(exp(0.5v12))" a.toMultivector [-1.3515494402519288e-16, 0, 0, 0, 0.5, 0, 0, 0] 1e-13 1e-15
+    t := expect t "logh_fast(exp(0.5v12))" b.toMultivector [-1.11102447327775e-17, 0, 0, 0, 0.5, 0, 0, 0] 1e-13 1e-15
+  | _, _ => t := t.check false fun _ => "log_fast(exp(0.5v12)) did not converge"
+  let mm := mv E3 [0.1, 0, 0, 0, 0.2, 0, 0.1, 0]
+  match mm.exp.logFast with
+  | some a => t := expectM t "log_fast(exp(m))" a mm 1e-12 1e-15
+  | none => t := t.check false fun _ => "log_fast(exp(m)) did not converge"
+  t := t.check ((⟨1, -0.034, -0.454⟩ : Couple E3 Float).logFast.isNone) fun _ =>
+    "log_fast of a couple outside the light cone must fail (Julia hangs)"
+  match q.logFast with
+  | some a => t := expectM t "log_fast(q) = log(q)" (toMultivector a) (toMultivector q.log) 1e-12
+  | none => t := t.check false fun _ => "log_fast(q) did not converge"
+  -- spinor inverse hyperbolic functions and real powers
+  t := expectM t "sinh(asinh(q))" (toMultivector q.asinh.sinh) (toMultivector q) 1e-7
+  t := expectM t "tanh(atanh(q/2))" (toMultivector (Half.sdiv q 2.0).atanh.tanh) (toMultivector (Half.sdiv q 2.0)) 1e-7
+  t := expectM t "(q^0.5)^2 = q" (toMultivector ((q.powf 0.5).pow 2)) (toMultivector q) 1e-13
+  t := expectM t "q^0.5 = sqrt(q)" (toMultivector (q.powf 0.5)) (toMultivector q.sqrt) 1e-13
+  t := expectM t "Couple exp2 = 2^z" (Couple.exp2 (⟨3, 0.3, 0.7⟩ : Couple E3 Float)).toMultivector
+    (Couple.rpow 2.0 (⟨3, 0.3, 0.7⟩ : Couple E3 Float)).toMultivector 1e-15
   -- phasor round trips
   let z : Couple E3 Float := ⟨3, 1.2, -0.7⟩
   t := expectM t "complexify(polarize z)" z.polarize.complexify.toMultivector z.toMultivector 1e-15
