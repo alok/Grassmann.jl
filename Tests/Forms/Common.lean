@@ -129,6 +129,21 @@ def nums (t : Tally) (m : Mode) (got : List Num) (want : Json) (what : Unit → 
       let ((g, w), i) := bad.head!
       s!"{what ()}[{i}]: got {g.show}, want {w.compress} (all: {got.map Num.show})"
 
+/-- Compare a list of scalars with a golden array as multisets (greedy matching
+within the tolerance): eigenvalues whose order is decided by rounding noise, e.g.
+real parts `±1e-17` of a skew-symmetric matrix sorted by `(re, im)`. -/
+def numsSet (t : Tally) (m : Mode) (got : List Num) (want : Json) (what : Unit → String) : Tally :=
+  if (jerr? want).isSome then t.skip else
+  let ws := (arr want).toList.filterMap jnum
+  if ws.length != got.length then
+    t.ok false fun _ => s!"{what ()}: length {got.length} vs {ws.length}"
+  else
+    let rest := ws.foldl (fun (acc : Option (List Num)) w => acc.bind fun gs =>
+      match gs.findIdx? (numEq m · w) with
+      | some i => some (gs.eraseIdx i)
+      | none => none) (some got)
+    t.ok rest.isSome fun _ => s!"{what ()}: {got.map Num.show} vs {ws.map Num.show} (as multisets)"
+
 /-- Compare a matrix (rows) with a golden row list. -/
 def mat (t : Tally) (m : Mode) (got : List (List Num)) (want : Json) (what : Unit → String) : Tally :=
   if (jerr? want).isSome then t.skip else

@@ -133,7 +133,8 @@ function floatcase(A, b)
     d["det"] = @safe value(det(T))[1]
     d["inv"] = @safe inv(T)
     d["invdet"] = @safe value(Grassmann.invdet(T)[2])[1]
-    d["solve"] = @safe T \ chain(V, b)
+    d["solve"] = @safe T \ chain(V, b)          # AbstractTensors: inv(T) * b
+    d["cramer"] = @safe value(T) \ chain(V, b)   # composite.jl: Cramer's rule
     d["characteristic"] = @safe characteristic(T)
     d["eigpolys"] = @safe eigpolys(T)
     d["scalar"] = @safe scalar(T)

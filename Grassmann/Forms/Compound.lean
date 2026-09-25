@@ -209,12 +209,13 @@ def cramerDet (T : Simplex V W α) : α :=
 /-- The inverse of a square grade-1 operator by Cramer's rule (Julia `inv`,
 `composite.jl:761-772`): the adjugate times `1/dt`, Julia's `dt = t₁ ∧ yₙ₋₁`
 (Julia computes `!(valᵢ / dt)`, and a tensor divided by a number is multiplied
-by its reciprocal, `algebra.jl:704-706`). For one column, `c / c²` (Julia
+by its reciprocal, `algebra.jl:704-706`). For one column, `c · (1/c²)` (Julia
 `inv(t[1]) = ~t/abs2(t)` as a row). -/
 def invSquare [Div α] (T : Simplex V W α) : Simplex W V α :=
   if V.n = 1 then
     let c := T.entry 0 0
-    TensorOperator.ofFn fun _ _ => c / (c * c)
+    let r := Coeff.one / (c * c)
+    TensorOperator.ofFn fun _ _ => c * r
   else
     let r := Coeff.one / T.cramerDet
     T.adjugate.map (· * r)
@@ -286,7 +287,12 @@ the determinant as Julia's `!(t₁ ∧ yₙ₋₁)`. -/
 @[inline] def invdet [Div α] (T : Simplex V W α) : Simplex W V α × α :=
   (T.inv, if V.n = W.n then T.cramerDet else T.det)
 
-/-- Julia `T \ v` (`composite.jl:722-732`): solve `T c = v` by Cramer's rule
+/-- Julia `T \ v` on a `TensorOperator` (AbstractTensors' generic
+`\(a, b) = inv(a) * b`, `AbstractTensors.jl:323`): the inverse applied to `v`. -/
+@[inline] def ldiv [Div α] (T : Simplex V W α) (v : Chain W 1 α) : Chain V 1 α :=
+  ⟨T.inv.applyValues v.v⟩
+
+/-- Julia `value(T) \ v` (`composite.jl:722-732`): solve `T c = v` by Cramer's rule
 (numerators `x_{i-1} ∧ v ∧ y_{n-i}` over `det`) for a square operator; the
 least-norm / least-squares solution `pinv(T) v` otherwise. -/
 def solve [Div α] (T : Simplex V W α) (v : Chain W 1 α) : Chain V 1 α :=
