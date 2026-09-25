@@ -10,6 +10,12 @@ import DirectSum.Parse
 
 namespace DirectSum
 
+/-- Julia `ℝ = Signature(1)` (`DirectSum.jl src/DirectSum.jl:442`), printed `⟨+⟩`:
+the README writes `ℝ'⊕ℝ^3`, `ℝ⊕ℝ'`, `ℝ ∩ ℝ'`. The literal `ℝ^n` is one token
+(`ℝ^`), so `ℝ^3` stays the literal while `ℝ ^ 3` is the power `ℝ⊕ℝ⊕ℝ` (the same
+space). In files that import Mathlib, `ℝ` is Mathlib's notation for the reals. -/
+abbrev ℝ : TensorBundle := S!"+"
+
 /-- Julia `ℝ0 = Submanifold(0)`. -/
 abbrev ℝ0 : TensorBundle := V!"0"
 /-- Julia `ℝ1 = Submanifold(1)`. -/
