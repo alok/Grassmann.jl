@@ -153,7 +153,7 @@ structure Define where
 def twoPi : Float := 2 * pi
 
 /-- Julia `n^p` for `Float64` arguments (`0^0 = 1`). -/
-@[inline] def powF (n p : Float) : Float := if p == 0 then 1 else n.pow p
+@[inline] def powF (n p : Float) : Float := if p == f64! 0.0 then f64! 1.0 else F64.pow n p
 
 /-- Julia's default escape criterion `Q = :(abs2(z))`. -/
 @[inline] def abs2Q (z _c : C64) : Float := z.abs2
@@ -163,7 +163,7 @@ values in `(-0.5, 0.5]` when `p = 0`. -/
 @[inline] def angleColor (z : C64) (n p : Float) : Float := (z.angle / twoPi) * powF n p
 
 /-- Julia's default colouring for `mandelbrot`, `C = :(exp(-abs(z))*n^p)`, in `(0, 1]`. -/
-@[inline] def mandelColor (z : C64) (n p : Float) : Float := (-z.abs).exp * powF n p
+@[inline] def mandelColor (z : C64) (n p : Float) : Float := F64.exp (-z.abs) * powF n p
 
 /-- The generalized Newton map `z ↦ z - m·f(z)/f'(z)` (Julia builds it symbolically with
 REDUCE, `src/internals.jl:9-12`, and then factors it; this is the unfactored form). A real

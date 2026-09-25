@@ -180,7 +180,7 @@ instance : HDiv Float C64 C64 := ⟨realDiv⟩
 @[inline] def abs (z : C64) : Float := F64.hypot z.re z.im
 
 /-- Julia `angle(z)` = `atan(imag(z), real(z))` (complex.jl:641), in `[-π, π]`. -/
-@[inline] def angle (z : C64) : Float := Float.atan2 z.im z.re
+@[inline] def angle (z : C64) : Float := F64.atan2 z.im z.re
 
 /-- Julia `conj(z)`. -/
 @[inline] def conj (z : C64) : C64 := ⟨z.re, -z.im⟩

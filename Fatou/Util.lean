@@ -39,14 +39,15 @@ theorem floatArrayOfFn.size_go (f : Nat → Float) (k i : Nat) (acc : FloatArray
     (floatArrayOfFn n f).size = n := by
   simp [floatArrayOfFn, floatArrayOfFn.size_go]
 
-/-- Append `src[i:]` to `dst`, one element at a time (Lean core has no `FloatArray.append`). -/
+/-- Append `src[i:]` to `dst`, one element at a time (Lean core has no `FloatArray.append`).
+Reads with the inline `get!` (`src[i]!` compiles to an out-of-line bounds-check closure). -/
 def appendFloats (dst src : FloatArray) : FloatArray :=
   go src.size 0 dst
 where
   /-- push `src[i], src[i+1], …` (`k` of them) -/
   go : Nat → Nat → FloatArray → FloatArray
     | 0, _, acc => acc
-    | k + 1, i, acc => go k (i + 1) (acc.push src[i]!)
+    | k + 1, i, acc => go k (i + 1) (acc.push (src.get! i))
 
 /-- The copy loop of `appendFloats` pushes exactly `k` elements. -/
 theorem appendFloats.size_go (src : FloatArray) (k i : Nat) (acc : FloatArray) :
@@ -59,6 +60,65 @@ theorem appendFloats.size_go (src : FloatArray) (k i : Nat) (acc : FloatArray) :
 @[simp] theorem size_appendFloats (dst src : FloatArray) :
     (appendFloats dst src).size = dst.size + src.size := by
   simp [appendFloats, appendFloats.size_go]
+
+/-- `set!` keeps the size of a `FloatArray`. -/
+@[simp] theorem FloatArray.size_set! (a : FloatArray) (i : Nat) (x : Float) :
+    (a.set! i x).size = a.size := by
+  cases a; simp [FloatArray.set!, FloatArray.size]
+
+/-- `n` zeros, as a `FloatArray` to be overwritten in place. -/
+def zerosF (n : Nat) : FloatArray :=
+  go n (FloatArray.emptyWithCapacity n)
+where
+  /-- push `k` zeros -/
+  go : Nat → FloatArray → FloatArray
+    | 0, acc => acc
+    | k + 1, acc => go k (acc.push 0)
+
+theorem zerosF.size_go (k : Nat) (acc : FloatArray) : (zerosF.go k acc).size = acc.size + k := by
+  induction k generalizing acc with
+  | zero => rfl
+  | succ k ih => simp [zerosF.go, ih, FloatArray.size_push]; omega
+
+@[simp] theorem size_zerosF (n : Nat) : (zerosF n).size = n := by
+  simp [zerosF, zerosF.size_go]
+
+/-- `n` zero bytes: one byte, doubled by `++` (a `memcpy` each) and cut to size. -/
+def zerosB (n : Nat) : ByteArray :=
+  (go n (ByteArray.mk #[0])).extract 0 n
+where
+  /-- double `acc` until it holds at least `n` bytes (`fuel` doublings at most) -/
+  go : Nat → ByteArray → ByteArray
+    | 0, acc => acc
+    | fuel + 1, acc => if acc.size ≥ n then acc else go fuel (acc ++ acc)
+
+theorem zerosB.size_go (n fuel : Nat) (acc : ByteArray) (h : 0 < acc.size) (hf : n ≤ acc.size * 2 ^ fuel) :
+    n ≤ (zerosB.go n fuel acc).size := by
+  induction fuel generalizing acc with
+  | zero => simpa [zerosB.go] using hf
+  | succ fuel ih =>
+    simp only [zerosB.go]
+    split
+    · omega
+    · apply ih
+      · simp [ByteArray.size_append]; omega
+      · simp only [ByteArray.size_append, Nat.pow_succ] at hf ⊢
+        rw [← Nat.mul_assoc, Nat.mul_two] at hf; rw [Nat.add_mul]; exact hf
+
+@[simp] theorem size_zerosB (n : Nat) : (zerosB n).size = n := by
+  have h : n ≤ (zerosB.go n n (ByteArray.mk #[0])).size :=
+    zerosB.size_go n n _ (by decide) (by
+      have : ({ data := #[0] } : ByteArray).size = 1 := rfl
+      rw [this, Nat.one_mul]; exact Nat.le_of_lt Nat.lt_two_pow_self)
+  simp only [zerosB, ByteArray.size_extract]
+  omega
+
+/-- Write a `UInt16` in little-endian byte order at element index `i` (bytes `2i`, `2i+1`). -/
+@[inline] def setU16 (a : ByteArray) (i : Nat) (v : UInt16) : ByteArray :=
+  (a.set! (2 * i) v.toUInt8).set! (2 * i + 1) (v >>> 8).toUInt8
+
+@[simp] theorem size_setU16 (a : ByteArray) (i : Nat) (v : UInt16) : (setU16 a i v).size = a.size := by
+  simp [setU16]
 
 /-- Append a `UInt16` in little-endian byte order. -/
 @[inline] def pushU16 (a : ByteArray) (v : UInt16) : ByteArray :=

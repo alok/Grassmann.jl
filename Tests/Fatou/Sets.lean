@@ -4,9 +4,10 @@ import Tests.Fatou.Catalog
 Rasters, titles and the per-pixel kernel against the oracle (port-notes/fatou.md G5, G6, G9):
 
 * `sets.json` + `<name>.{iter.u16,mix.f64,zre.f64,zim.f64}`: every catalog set at reduced
-  resolution. Exact tier (rational maps): iteration counts and final iterates bit for bit,
-  `mix` within a few ulps (it goes through `atan2`/`exp`). Transcendental tier (libm inside
-  the map): at most a small fraction of pixels may differ in their count.
+  resolution. Exact tier (rational maps): iteration counts, final iterates and `mix` bit for
+  bit (the colourings use Julia's own `atan`/`exp`/`^` from `JuliaBase`). Transcendental tier
+  (libm inside the map): at most a small fraction of pixels may differ in their count, and
+  `mix` is compared within a few ulps.
 * the full-resolution README rasters (1501×1001, 800², 800², 500²) and the 176² defaults:
   iteration histograms and the FNV-1a hash of the counts, recomputed here.
 * titles (`String(K)`, the PyPlot LaTeX title and y-label), `typeplot`, `basin`.
@@ -18,7 +19,8 @@ namespace Tests.Fatou.Sets
 
 open _root_.Fatou Tests.Fatou Tests.Fatou.Catalog
 
-/-- Ulp budget for `mix` (Julia's own `atan`/`exp` against libm's). -/
+/-- Ulp budget for `mix` in the transcendental tier (the final iterates carry libm
+rounding); the exact tier compares `mix` bit for bit. -/
 def mixUlps : Nat := 4
 
 /-- Iteration-count histogram and summary of a set (as `stats` in `gen.jl`). -/
@@ -73,9 +75,11 @@ def checkRaster {r c : Nat} (name : String) (Z : FilledSet r c) (exact : Bool) :
       if !(if exact then sameC zg ze else closeC zg ze 64 1e-9) then zBad := zBad + 1
       let d := ulps Z.mix[i]! mix[i]!
       if d < 1000000 then mixWorst := max mixWorst d
-      -- exact tier: `mix` differs only by the libm `atan2`/`exp` ulps; transcendental tier:
-      -- the final iterates carry libm rounding amplified by the orbit
-      if !(d ≤ mixUlps || closeF Z.mix[i]! mix[i]! 64 (if exact then 1e-14 else 1e-9)) then
+      -- exact tier: `mix` bit for bit; transcendental tier: the final iterates carry libm
+      -- rounding amplified by the orbit
+      if exact then
+        if !sameF Z.mix[i]! mix[i]! then mixBad := mixBad + 1
+      else if !(d ≤ mixUlps || closeF Z.mix[i]! mix[i]! 64 1e-9) then
         mixBad := mixBad + 1
   if exact then
     check s!"{name} iteration counts" (iterBad == 0) fun _ => s!"{iterBad} of {total} pixels differ"
@@ -182,8 +186,8 @@ def runPoints : TestM Unit := do
       let en ← gNat p "n"
       let ez ← gC p "z"
       let emix ← gF p "mix"
-      let ok := n == en && (if exact then sameC z ez else closeC z ez 64 1e-9) &&
-        closeF (K.mixOf n z) emix mixUlps (if exact then 1e-14 else 1e-9)
+      let ok := n == en && (if exact then sameC z ez && sameF (K.mixOf n z) emix
+        else closeC z ez 64 1e-9 && closeF (K.mixOf n z) emix mixUlps 1e-9)
       if !ok then
         bad := bad + 1
         if exact then
