@@ -585,33 +585,35 @@ def atan2 (y x : Float) : Float :=
   else if y != y then y
   else if x == f64! 1.0 then atan y
   else
-    -- `m = 2*signbit(x) + signbit(y)`
-    let sx := signbit x
-    let sy := signbit y
+    -- `m = 2*signbit(x) + signbit(y)`; outside `y == ±0` both signs are comparisons
+    -- (`y ≠ 0`; `x = ±0` only matters through `y`)
     let piLo := f64! 1.2246467991473531772E-16
     if y == f64! 0.0 then
-      if !sx then y else if !sy then pi else -pi
-    else if x == f64! 0.0 then (if sy then f64! -1.5707963267948966 else f64! 1.5707963267948966)
-    else if x.abs == inf then
-      if y.abs == inf then
-        let v := if sx then f64! 2.356194490192345 else f64! 0.7853981633974483
-        if sy then -v else v
-      else
-        let v := if sx then pi else f64! 0.0
-        if sy then -v else v
-    else if y.abs == inf then (if sy then f64! -1.5707963267948966 else f64! 1.5707963267948966)
+      if !signbit x then y else if !signbit y then pi else -pi
     else
-      -- `k = reinterpret(Int32, ypw - xpw) >> 20`: the exponent difference of `y/x`
-      let k : Int32 := (poshighword y - poshighword x).toInt32 >>> 20
-      if k > 60 then
-        -- `|y/x| > 2^60`: `m &= 1`
-        let z := f64! 1.5707963267948966 + f64! 0.5 * piLo
-        if sy then -z else z
+      let sx := x < f64! 0.0
+      let sy := y < f64! 0.0
+      if x == f64! 0.0 then (if sy then f64! -1.5707963267948966 else f64! 1.5707963267948966)
+      else if x.abs == inf then
+        if y.abs == inf then
+          let v := if sx then f64! 2.356194490192345 else f64! 0.7853981633974483
+          if sy then -v else v
+        else
+          let v := if sx then pi else f64! 0.0
+          if sy then -v else v
+      else if y.abs == inf then (if sy then f64! -1.5707963267948966 else f64! 1.5707963267948966)
       else
-        let z := if x < f64! 0.0 && k < -60 then f64! 0.0 else atan (y / x).abs
-        if !sx then (if sy then -z else z)
-        else if !sy then pi - (z - piLo)
-        else (z - piLo) - pi
+        -- `k = reinterpret(Int32, ypw - xpw) >> 20`: the exponent difference of `y/x`
+        let k : Int32 := (poshighword y - poshighword x).toInt32 >>> 20
+        if k > 60 then
+          -- `|y/x| > 2^60`: `m &= 1`
+          let z := f64! 1.5707963267948966 + f64! 0.5 * piLo
+          if sy then -z else z
+        else
+          let z := if x < f64! 0.0 && k < -60 then f64! 0.0 else atan (y / x).abs
+          if !sx then (if sy then -z else z)
+          else if !sy then pi - (z - piLo)
+          else (z - piLo) - pi
 
 /-- Julia `sinpi(x::Float64)` (trig.jl:796-819): `sin(πx)`, exact at integers; `NaN` for
 infinite `x`. -/
@@ -791,31 +793,33 @@ def atan2 (y x : Float32) : Float32 :=
   else if y != y then y
   else if x == f32! 1.0 then atan y
   else
-    let sx := signbit x
-    let sy := signbit y
     let piLo := f32! -8.7422776573e-08
     if y == f32! 0.0 then
-      if !sx then y else if !sy then pi32 else -pi32
-    else if x == f32! 0.0 then (if sy then -halfPi32 else halfPi32)
-    else if x.abs == inf then
-      if y.abs == inf then
-        let v := if sx then Float32.ofBits 0x4016cbe4 else Float32.ofBits 0x3f490fdb
-        if sy then -v else v
-      else
-        let v := if sx then pi32 else f32! 0.0
-        if sy then -v else v
-    else if y.abs == inf then (if sy then -halfPi32 else halfPi32)
+      if !signbit x then y else if !signbit y then pi32 else -pi32
     else
-      let pw (v : Float32) : UInt32 := v.toBits &&& 0x7fffffff
-      let k : Int32 := (pw y - pw x).toInt32 >>> 23
-      if k > 26 then
-        let z := halfPi32 + f32! 0.5 * piLo
-        if sy then -z else z
+      -- `y ≠ 0`, and `x = ±0` only matters through `y`: the signs are comparisons
+      let sx := x < f32! 0.0
+      let sy := y < f32! 0.0
+      if x == f32! 0.0 then (if sy then -halfPi32 else halfPi32)
+      else if x.abs == inf then
+        if y.abs == inf then
+          let v := if sx then Float32.ofBits 0x4016cbe4 else Float32.ofBits 0x3f490fdb
+          if sy then -v else v
+        else
+          let v := if sx then pi32 else f32! 0.0
+          if sy then -v else v
+      else if y.abs == inf then (if sy then -halfPi32 else halfPi32)
       else
-        let z := if x < f32! 0.0 && k < -26 then f32! 0.0 else atan (y / x).abs
-        if !sx then (if sy then -z else z)
-        else if !sy then pi32 - (z - piLo)
-        else (z - piLo) - pi32
+        let pw (v : Float32) : UInt32 := v.toBits &&& 0x7fffffff
+        let k : Int32 := (pw y - pw x).toInt32 >>> 23
+        if k > 26 then
+          let z := halfPi32 + f32! 0.5 * piLo
+          if sy then -z else z
+        else
+          let z := if x < f32! 0.0 && k < -26 then f32! 0.0 else atan (y / x).abs
+          if !sx then (if sy then -z else z)
+          else if !sy then pi32 - (z - piLo)
+          else (z - piLo) - pi32
 
 /-- Julia `sinpi(x::Float32)` (trig.jl:796-819). -/
 def sinpi (x0 : Float32) : Float32 :=
