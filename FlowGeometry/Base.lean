@@ -24,8 +24,18 @@ namespace FlowGeometry
 
 open JuliaBase Cartan
 
+/-- `range(0, 1, length = n)` for `n ≥ 2`, built directly: Julia's `_linspace(Float64, 0, 1, n, 1)`
+(`twiceprecision.jl:716`) has the reference `0` at offset `1` and the step
+`twiceprecision(TwicePrecision(1)/Float64(n-1), nbitslen(n, 1))`. The general `Axis.range` reaches
+the same fields through `rat` and several `Int` conversions (about 1 µs);
+`Tests/FlowGeometry/Meshes.lean` checks the two agree for `n = 2 … 3000`. -/
+def unitRange (n : Nat) : StepRangeLen :=
+  let d := (n - 1).toUInt64.toFloat
+  ⟨⟨0, 0⟩, TwicePrecision.twiceprecision (TwicePrecision.div ⟨1, 0⟩ ⟨d, 0⟩) (StepRangeLen.nbitslen n 1), n, 1⟩
+
 /-- Julia `interval(p::Int, c = 1, x0 = 0) = range(x0, c, length = p)` (`profiles.jl:42`). -/
-def interval (p : Nat) (c : Float := 1) (x0 : Float := 0) : Axis := Axis.range x0 c p
+def interval (p : Nat) (c : Float := 1) (x0 : Float := 0) : Axis :=
+  if c == 1 && x0.toBits == 0 && p ≥ 2 then .stepLen (unitRange p) else Axis.range x0 c p
 
 /-- Julia `chord(p) = range(0, 0, length = p)` (`airfoils.jl:44`): `p` zeros. -/
 def chord (p : Nat) : Axis := Axis.range 0 0 p
@@ -35,6 +45,20 @@ continued to twice its width (`2n-1` points), the base of a closed outline. Juli
 for an explicit vector (the interval of an `UpperArc`-based airfoil); the port reflects the
 points about the last one. -/
 def doubleinterval (a : Axis) : Axis :=
+  match a with
+  | .stepLen r =>
+    -- the unit interval `range(0, 1, length = n)`: `0:1/(n-1):2` is `floatrange(0, 1, 2n-1, n-1)`
+    -- (`twiceprecision.jl:376`), built directly (checked against `Axis.colon` in the tests)
+    let n := r.len
+    let d := (n - 1).toUInt64.toFloat
+    if n ≥ 2 && r.first.toBits == 0 && r.last == 1 && (1 : Float) / d == r.stepValue then
+      .stepLen ⟨⟨0, 0⟩, TwicePrecision.twiceprecision (TwicePrecision.div ⟨1, 0⟩ ⟨d, 0⟩)
+        (StepRangeLen.nbitslen (2 * n - 1) 1), 2 * n - 1, 1⟩
+    else doubleintervalGeneric a
+  | _ => doubleintervalGeneric a
+where
+  /-- the general case -/
+  doubleintervalGeneric (a : Axis) : Axis :=
   match a.step? with
   | some s => Axis.colon a.first s (a.first + 2 * (a.last - a.first))
   | none =>
@@ -86,6 +110,22 @@ def gradient1 (xs ys : FloatArray) : FloatArray :=
   let l := ys.size
   if l < 4 then floatsOfFn l fun _ => F64.nan
   else floatsOfFn l fun i => stencil ys l i / stencil xs l i
+
+/-- The elements `r[i+1] … r[i+k]` of a `TwicePrecision` range appended to `acc`, with the
+index offset `u = i + 1 - offset` kept as a running `Float` (exact for any realistic length), so
+the loop does no `Int` arithmetic; bit-identical to `StepRangeLen.get`
+(`base/twiceprecision.jl:477-483`). -/
+def rangeFill (r : StepRangeLen) (u : Float) : Nat → FloatArray → FloatArray
+  | 0, acc => acc
+  | k + 1, acc =>
+    let x := TwicePrecision.add12 r.ref.hi (u * r.step.hi)
+    rangeFill r (u + f64! 1.0) k (acc.push (x.hi + (x.lo + (u * r.step.lo + r.ref.lo))))
+
+/-- Julia `collect(r)` of a coordinate vector, with the fast loop for `TwicePrecision` ranges. -/
+def axisValues (a : Axis) : FloatArray :=
+  match a with
+  | .stepLen r => rangeFill r (Axis.intToFloat (1 - r.offset)) r.len (FloatArray.emptyWithCapacity r.len)
+  | _ => a.toFloatArray
 
 /-- A field with the given flat fibers (no copy when the length is right, which the callers
 guarantee; otherwise the fibers are read with zero padding). -/

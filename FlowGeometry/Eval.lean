@@ -27,8 +27,16 @@ open JuliaBase
 
 /-! ## Coefficient fits (Julia `@pure` helpers) -/
 
-/-- Julia `x^4` (`Base.literal_pow`: the compensated `pow_body`). -/
-@[inline] def pow4 (x : Float) : Float := F64.literalPow x 4
+/-- Julia `x^4` (`Base.literal_pow` → `pow_body(x, 4)`, `pow.jl:120-146`): the compensated power
+by squaring, unrolled for `n = 4` as Julia's constant propagation does (bit-identical to
+`F64.literalPow x 4`). -/
+@[inline] def pow4 (x : Float) : Float :=
+  let h1 := x * x
+  let l1 := Float.fma x x (-h1) + x * f64! 2.0 * f64! -0.0
+  let h2 := h1 * h1
+  let l2 := Float.fma h1 h1 (-h2) + h1 * f64! 2.0 * l1
+  let err := Float.fma f64! 1.0 l2 (h2 * f64! 0.0)
+  if F64.isfinite h2 && F64.isfinite err then h2 * f64! 1.0 + err else h2 * f64! 1.0
 
 /-- Julia `approx(x, y::Values{N}) = poly(x, Val(N))⋅y` (`profiles.jl:15-18`): `Σ yᵢ xⁱ` with the
 powers `1, x, x*x, x*x*x, x^4` summed left to right. -/
@@ -227,7 +235,7 @@ inductive Eval where
   deriving Inhabited
 
 /-- `true` outside Julia's evaluation range `0 ≤ x ≤ 1` (`x<0 || x>1`, so `NaN` is inside). -/
-@[inline] def outside (x : Float) : Bool := x < 0 || x > 1
+@[inline] def outside (x : Float) : Bool := x < f64! 0.0 || x > f64! 1.0
 
 /-- Julia `thickness(x, a, t)` (`profiles.jl:115-117`). -/
 @[inline] def poly5Value (t5 a0 a1 a2 a3 a4 x : Float) : Float :=
@@ -269,6 +277,54 @@ inductive Eval where
     else 0
   mk1 * (-(p * p * p) + inner)
 
+/-- The `ParabolicArc` value (`profiles.jl:76`). -/
+@[inline] def parabolicValue (k x : Float) : Float := if outside x then 0 else k * x * (1 - x)
+
+/-- The `ParabolicArc` slope (`profiles.jl:77`, Julia's `t/400`). -/
+@[inline] def parabolicSlope (t x : Float) : Float := if outside x then 0 else (1 - 2 * x) * t / 400
+
+/-- The `CircularArc` value (`profiles.jl:87-93`). -/
+@[inline] def circularValue (t r x : Float) : Float :=
+  if outside x then 0 else r * (F64.sin (F64.acos ((x - f64! 0.5) / r)) - 1) + t
+
+/-- The `CircularArc` slope (`profiles.jl:94-100`). -/
+@[inline] def circularSlope (t x : Float) : Float :=
+  if outside x then 0
+  else
+    let t4 := 4 * t
+    let xc := t4 * (2 * x - 1)
+    let q := 1 + t * t4
+    Float.neg xc / (q * q - xc * xc).sqrt
+
+/-- The `Modified` value (`profiles.jl:178-181`). -/
+@[inline] def modifiedValue (t5 p a0 a1 a2 a3 d0 d1 d2 d3 x : Float) : Float :=
+  if outside x then 0
+  else if x < p then t5 * (((x.sqrt * a0 + x * a1) + (x * x) * a2) + (x * x * x) * a3)
+  else
+    let x1 := 1 - x
+    t5 * (((f64! 1.0 * d0 + x1 * d1) + (x1 * x1) * d2) + (x1 * x1 * x1) * d3)
+
+/-- The `Modified` slope (`profiles.jl:182-185`). -/
+@[inline] def modifiedSlope (t5 p a0 a1 a2 a3 d0 d1 d2 d3 x : Float) : Float :=
+  if outside x then 0
+  else if x < p then
+    t5 * ((((f64! 0.5 / x.sqrt) * a0 + f64! 1.0 * a1) + (2 * x) * a2) + (3 * (x * x)) * a3)
+  else
+    let x1 := x - 1
+    t5 * (((f64! 0.0 * d0 + f64! -1.0 * d1) + (2 * x1) * d2) + (-3 * (x1 * x1)) * d3)
+
+/-- The `NACA4` value (`profiles.jl:210-214`). -/
+@[inline] def naca4Value (p f0 f1 f2 r0 r1 r2 x : Float) : Float :=
+  if outside x then 0
+  else if x < p then (f64! 1.0 * f0 + x * f1) + (x * x) * f2
+  else (f64! 1.0 * r0 + x * r1) + (x * x) * r2
+
+/-- The `NACA4` slope (`profiles.jl:215-219`). -/
+@[inline] def naca4Slope (p f0 f1 f2 r0 r1 r2 x : Float) : Float :=
+  if outside x then 0
+  else if x < p then (f64! 0.0 * f0 + f64! 1.0 * f1) + (2 * x) * f2
+  else (f64! 0.0 * r0 + f64! 1.0 * r1) + (2 * x) * r2
+
 /-- `0.87437`, the end of the `NACA6A` curved part. -/
 def naca6AEnd : Float := f64! 0.87437
 
@@ -278,21 +334,11 @@ namespace Eval
 def value (e : Eval) (x : Float) : Float :=
   match e with
   | zero => 0
-  | parabolic k _ => if outside x then 0 else k * x * (1 - x)
-  | circular t r =>
-    if outside x then 0 else r * (F64.sin (F64.acos ((x - f64! 0.5) / r)) - 1) + t
+  | parabolic k _ => parabolicValue k x
+  | circular t r => circularValue t r x
   | poly5 t5 a0 a1 a2 a3 a4 => poly5Value t5 a0 a1 a2 a3 a4 x
-  | modified t5 p a0 a1 a2 a3 d0 d1 d2 d3 =>
-    if outside x then 0
-    else if x < p then
-      t5 * (((x.sqrt * a0 + x * a1) + (x * x) * a2) + (x * x * x) * a3)
-    else
-      let x1 := 1 - x
-      t5 * (((f64! 1.0 * d0 + x1 * d1) + (x1 * x1) * d2) + (x1 * x1 * x1) * d3)
-  | naca4 p f0 f1 f2 r0 r1 r2 =>
-    if outside x then 0
-    else if x < p then (f64! 1.0 * f0 + x * f1) + (x * x) * f2
-    else (f64! 1.0 * r0 + x * r1) + (x * x) * r2
+  | modified t5 p a0 a1 a2 a3 d0 d1 d2 d3 => modifiedValue t5 p a0 a1 a2 a3 d0 d1 d2 d3 x
+  | naca4 p f0 f1 f2 r0 r1 r2 => naca4Value p f0 f1 f2 r0 r1 r2 x
   | naca5 mk1 r k => naca5Value mk1 r k x
   | naca6 cla a h g =>
     if x < f64! 1e-7 || x > f64! 1.0 - f64! 1e-7 then 0
@@ -310,26 +356,11 @@ def value (e : Eval) (x : Float) : Float :=
 def slope (e : Eval) (x : Float) : Float :=
   match e with
   | zero => 0
-  | parabolic _ t => if outside x then 0 else (1 - 2 * x) * t / 400
-  | circular t _ =>
-    if outside x then 0
-    else
-      let t4 := 4 * t
-      let xc := t4 * (2 * x - 1)
-      let q := 1 + t * t4
-      Float.neg xc / (q * q - xc * xc).sqrt
+  | parabolic _ t => parabolicSlope t x
+  | circular t _ => circularSlope t x
   | poly5 t5 a0 a1 a2 a3 a4 => poly5Slope t5 a0 a1 a2 a3 a4 x
-  | modified t5 p a0 a1 a2 a3 d0 d1 d2 d3 =>
-    if outside x then 0
-    else if x < p then
-      t5 * ((((f64! 0.5 / x.sqrt) * a0 + f64! 1.0 * a1) + (2 * x) * a2) + (3 * (x * x)) * a3)
-    else
-      let x1 := x - 1
-      t5 * (((f64! 0.0 * d0 + f64! -1.0 * d1) + (2 * x1) * d2) + (-3 * (x1 * x1)) * d3)
-  | naca4 p f0 f1 f2 r0 r1 r2 =>
-    if outside x then 0
-    else if x < p then (f64! 0.0 * f0 + f64! 1.0 * f1) + (2 * x) * f2
-    else (f64! 0.0 * r0 + f64! 1.0 * r1) + (2 * x) * r2
+  | modified t5 p a0 a1 a2 a3 d0 d1 d2 d3 => modifiedSlope t5 p a0 a1 a2 a3 d0 d1 d2 d3 x
+  | naca4 p f0 f1 f2 r0 r1 r2 => naca4Slope p f0 f1 f2 r0 r1 r2 x
   | naca5 mk1 r k => naca5Slope mk1 r k x
   | naca6 cla a h _ =>
     if x < f64! 1e-7 || x > f64! 1.0 - f64! 1e-7 then 0
@@ -346,6 +377,43 @@ end Eval
 
 /-- Julia `36π` = `Float64(36) * Float64(π)`. -/
 def thirtySixPi : Float := 36 * f64! 3.141592653589793
+
+/-- The loop of `mapFloats` (top level and `@[specialize]`, so that `f` is inlined into it). -/
+@[specialize] def mapFloatsLoop (f : Float → Float) : Nat → Nat → FloatArray → FloatArray
+  | 0, _, acc => acc
+  | k + 1, i, acc => mapFloatsLoop f k (i + 1) (acc.set! i (f (acc.get! i)))
+
+/-- `f` applied to every entry (a tail-recursive loop, specialized at each call site). The result
+is written in place into a copy of `xs` (one `memcpy`, then no allocation per entry: a
+`FloatArray.push` is an out-of-line runtime call, docs/PERF.md). -/
+@[inline] def mapFloats (xs : FloatArray) (f : Float → Float) : FloatArray :=
+  mapFloatsLoop f xs.size 0 xs
+
+namespace Eval
+
+/-- The values at every point of `xs` (Julia `p.(xs)`): one match on the family, then a loop
+specialized to it. -/
+def valuesOn (e : Eval) (xs : FloatArray) : FloatArray :=
+  match e with
+  | poly5 t5 a0 a1 a2 a3 a4 => mapFloats xs (poly5Value t5 a0 a1 a2 a3 a4)
+  | naca5 mk1 r k => mapFloats xs (naca5Value mk1 r k)
+  | naca4 p f0 f1 f2 r0 r1 r2 => mapFloats xs (naca4Value p f0 f1 f2 r0 r1 r2)
+  | modified t5 p a0 a1 a2 a3 d0 d1 d2 d3 => mapFloats xs (modifiedValue t5 p a0 a1 a2 a3 d0 d1 d2 d3)
+  | circular t r => mapFloats xs (circularValue t r)
+  | parabolic k _ => mapFloats xs (parabolicValue k)
+  | e => mapFloats xs e.value
+
+/-- The slopes at every point of `xs` (Julia `profileslope.(Ref(p), xs)`). -/
+def slopesOn (e : Eval) (xs : FloatArray) : FloatArray :=
+  match e with
+  | poly5 t5 a0 a1 a2 a3 a4 => mapFloats xs (poly5Slope t5 a0 a1 a2 a3 a4)
+  | naca5 mk1 r k => mapFloats xs (naca5Slope mk1 r k)
+  | naca4 p f0 f1 f2 r0 r1 r2 => mapFloats xs (naca4Slope p f0 f1 f2 r0 r1 r2)
+  | modified t5 p a0 a1 a2 a3 d0 d1 d2 d3 => mapFloats xs (modifiedSlope t5 p a0 a1 a2 a3 d0 d1 d2 d3)
+  | circular t _ => mapFloats xs (circularSlope t)
+  | e => mapFloats xs e.slope
+
+end Eval
 
 /-- Precompute a profile's coefficients (Julia's `@pure`/`@generated` folding). `UpperArc` and
 `LowerArc` are not callable in Julia: `Eval.none`. -/

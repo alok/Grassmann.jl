@@ -66,13 +66,15 @@ def rem10 : Num → Num
 
 end Num
 
-/-- `f 0, …, f (n-1)` packed (tail-recursive fill). -/
-@[specialize] def floatsOfFn (n : Nat) (f : Nat → Float) : FloatArray :=
-  go n 0 (FloatArray.emptyWithCapacity n)
-where
-  /-- the fill loop -/
-  go : Nat → Nat → FloatArray → FloatArray
-    | 0, _, acc => acc
-    | k + 1, i, acc => go k (i + 1) (acc.push (f i))
+/-- The fill loop of `floatsOfFn`: `f i, …, f (i+k-1)` appended (a top-level `@[specialize]`
+function, so that call sites get a loop with `f` inlined: a `where` helper is not specialized and
+would box every `Float` through a closure). -/
+@[specialize] def floatsOfFnLoop (f : Nat → Float) : Nat → Nat → FloatArray → FloatArray
+  | 0, _, acc => acc
+  | k + 1, i, acc => floatsOfFnLoop f k (i + 1) (acc.push (f i))
+
+/-- `f 0, …, f (n-1)` packed. -/
+@[inline] def floatsOfFn (n : Nat) (f : Nat → Float) : FloatArray :=
+  floatsOfFnLoop f n 0 (FloatArray.emptyWithCapacity n)
 
 end FlowGeometry
