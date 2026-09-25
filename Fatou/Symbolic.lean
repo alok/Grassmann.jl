@@ -405,7 +405,9 @@ def expNode : Node → Node
 def powNode (a b : Node) : Except String Node :=
   match a, b with
   | .cx l, .const (.int n) => .ok (.cx (.op (.powInt n) [l]))
-  | .cx l, e => .ok (.cx (.op .powCC [l, e.low]))
+  | .cx l, .const v => let w := v.toC64; .ok (.cx (.op .powCC [l, .cconst w.re w.im]))
+  | .cx l, .cx e => .ok (.cx (.op .powCC [l, e]))
+  | .cx l, .re e => .ok (.cx (.op .powCC [l, .op .addRC [e, .cconst 0 0]]))
   | .const v, .cx e => .ok (.cx (.op .powCC [constLow v, e]))
   | .const v, .const w =>
     if v.isReal && w.isReal then .ok (.const (.float (F64.pow v.toFloat w.toFloat)))
@@ -557,8 +559,17 @@ def ofString (src : String) (newt : Bool := false) (m : String := "") (map : Opt
 @[inline] def juliafill (S : Symbolic) (o : Options := {}) (Q : C64 → C64 → Float := abs2Q)
     (C : C64 → Float → Float → Float := angleColor) (real : Option (Float → Float) := none) :
     Define :=
-  let d := Fatou.juliafill S.F { o with label := S.src, latex := some (o.latex.getD S.latex) } Q C real
-  { d with expr := some S.src }
+  if S.newt then
+    -- Julia `juliafill(E; newt = true, m)`: Newton mode with juliafill's defaults (`ϵ = 4`)
+    let F := S.F
+    let f := S.f
+    { spec := { o with m := some S.m }.toSpec true false 4 0, label := S.src,
+      latex := o.latex.getD S.latex, F, Q := fun z c => (f z c).abs, C,
+      real := real.getD fun x => (F ⟨x, 0⟩ ⟨0, 0⟩).re, expr := some S.src }
+  else
+    let d := Fatou.juliafill S.F { o with label := S.src, latex := some (o.latex.getD S.latex) }
+      Q C real
+    { d with expr := some S.src }
 
 /-- Julia `mandelbrot(E; …)` (`src/Fatou.jl:250-271`): Newton mode (with the multiplicity of
 `S`) when `S` was built as a Newton map (`m ≠ 0`). -/
@@ -703,8 +714,10 @@ def symbolicExpr (src : String) (newt : Bool) (m : Option String) (map : Option 
     #[toExpr E.toJulia, f, F, toExpr Fe.toJulia, toExpr newt, ← numberExpr mv, toExpr latex]
 
 /-- `juliafill! "z^2 + c" opts`: Julia `juliafill(:(z^2 + c); opts…)`, the map compiled at
-elaboration time. -/
-syntax (name := juliafillBang) "juliafill! " str (ppSpace term:max)? : term
+elaboration time; `juliafill! "z^3 - 1" (m := "1") opts` is Julia's `juliafill(E; newt = true,
+m)` (Newton mode with juliafill's `ϵ = 4`). -/
+syntax (name := juliafillBang) "juliafill! " str (" (" ident " := " str ")")* (ppSpace term:max)? :
+  term
 /-- `mandelbrot! "z^2 + c" opts`, or `mandelbrot! "z^3 - 1" (m := "1") opts` for Julia's Newton
 switch (`m ≠ 0`). -/
 syntax (name := mandelbrotBang) "mandelbrot! " str (" (" ident " := " str ")")* (ppSpace term:max)? :
@@ -739,8 +752,10 @@ def optsTerm (s : Syntax) : TermElabM Term := do
   | none => `(({} : Fatou.Options))
 
 @[term_elab juliafillBang] def elabJuliafill : TermElab := fun stx ty => do
-  let S ← exprToSyntax (← symbolicExpr stx[1].isStrLit?.get! false none none)
-  elabTerm (← `(Fatou.Symbolic.juliafill $S $(← optsTerm stx[2]))) ty
+  checkKeys stx[2] ["m"]
+  let m := groupStr? stx[2] "m"
+  let S ← exprToSyntax (← symbolicExpr stx[1].isStrLit?.get! m.isSome m none)
+  elabTerm (← `(Fatou.Symbolic.juliafill $S $(← optsTerm stx[3]))) ty
 
 @[term_elab mandelbrotBang] def elabMandelbrot : TermElab := fun stx ty => do
   checkKeys stx[2] ["m"]

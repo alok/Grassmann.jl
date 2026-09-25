@@ -268,6 +268,14 @@ instance : NatPow C64 := ⟨natPow⟩
 /-- `z ^ n` with an integer exponent means Julia's literal power `z^n`. -/
 instance : HPow C64 Int C64 := ⟨literalPow⟩
 
+/-- Julia `z ^ p` for a complex exponent: `_cpow` (complex.jl:782, 864), e.g. the wiki map
+`z^(4.0+3.0im) - 1`. -/
+instance : HPow C64 C64 C64 := ⟨JuliaBase.ComplexF64.pow⟩
+
+/-- Julia `z ^ p` for a real exponent that is not an integer literal (complex.jl:865, 878:
+`_cpow(z, Float64(p))`). Natural-number literals keep the literal power (`NatPow`). -/
+instance : HPow C64 Float C64 := ⟨fun z p => JuliaBase.ComplexF64.pow z ⟨p, 0⟩⟩
+
 /-! ## Elementary functions (complex.jl) -/
 
 /-- Julia `exp(z::Complex)` (complex.jl:694-714). -/

@@ -167,6 +167,17 @@ def runMaps : TestM Unit := do
   checkEq "newton! title" (Catalog.readmeNewton 41).title "f : z ↦ z ^ 3 - 1, m = 1, iter."
   checkEq "mandelbrot! title" (Catalog.readmeMandelbrot 41).title "f : z ↦ z ^ 2 + c, limit"
   checkEq "mandelbrot! LaTeX" (Catalog.readmeMandelbrot 41).latexTitle "$f:z\\mapsto c+z^{2},\\,$limit"
+  -- non-integer powers (wiki nf16) written directly with `C64` and read from Julia text
+  let cp : C64 := ⟨4, 3⟩
+  let direct := fun (z : C64) => z ^ cp - (1 : Float)
+  let sym := symbolic! "z^(4.0 + 3.0im) - 1"
+  check "z ^ (4.0 + 3.0im) = _cpow" (points.all fun z => sameC (direct z) (sym.f z z))
+  let half := symbolic! "z^2.5"
+  check "z ^ 2.5 = _cpow" (points.all fun z => sameC (z ^ (2.5 : Float)) (half.f z z))
+  check "z ^ 3 stays the literal power" (points.all fun z => sameC (z ^ 3) (C64.natPow z 3))
+  -- `juliafill(E; newt = true, m)`: Newton mode with juliafill's `ϵ = 4`
+  let jn := juliafill! "z^3 - 1" (m := "1") { n := 41 }
+  check "juliafill! with m is Newton mode" (jn.spec.newt && !jn.spec.mandel && jn.spec.ϵ == 4)
   -- `mandelbrot(E; m ≠ 0)` switches to Newton mode (`src/Fatou.jl:269`)
   let mn := mandelbrot! "z^3 - 1" (m := "1") { n := 41 }
   check "mandelbrot! with m is Newton mode" (mn.spec.newt && mn.spec.mandel)
