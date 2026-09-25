@@ -53,10 +53,38 @@ Port of Grassmann.jl `src/forms.jl` (and the determinant/simplex part of
   `detsimplex`, `volume`, `∈`, barycentric `gradient`, `gradienthat`, `area`,
   `findfirst`/`findlast`/`findall`.
 
+## Fidelity
+
+The goldens of `oracle/forms/gen.jl` (Grassmann 0.8.46) agree **bit for bit** for the
+integer and floating-point operator algebra (the Cramer inverse, `\`, `det`, compounds,
+characteristic polynomials, `eigpolys`, Grassmann's Padé `exp`, the display strings and
+Julia's `summary` types), and to rounding for iterative numerics (LAPACK eigenvalues,
+matrix `log`, the Viète roots through `acos`/`cos`). Julia defects that are fixed here
+rather than replicated are listed in the module docs (`transpose` of non-grade-1
+operators, `T ⋅ D`, `D ⋅ CoSpinor`, `diag` of a `CoSpinor` operator, the non-square
+outermorphism's sign on grades ≥ 2, `==`, the 1×1 adjugate, `det(::SpectralOperator)`,
+`P[i,j]`, subspace projection with `lowerbits`, the 2-D spinor eigenvalues).
+
 ## Performance
 
-Operators store their entries in one column-major `FloatArray` (at `Float`); the
-application, composition and row-application loops are tail-recursive strided dots
-specialised at the coefficient type. The determinant family runs the reference
-wedge kernels in the Euclidean space of the codomain's dimension.
+Operators store their entries in one column-major `FloatArray` at `Float` (no boxing);
+the application, composition and row-application loops are tail-recursive strided dots
+specialised at the coefficient type, unrolled for `2 × 2` to `4 × 4`. The determinant
+family runs DirectSum's wedge plans (cached per dimension, Julia's accumulation order),
+with straight-line forms of the plans in 2-4 dimensions.
+
+Measured (Apple M4 Max, compiled, `Float`, ns per call; Julia 1.13 with Grassmann
+0.8.46, whose isbits tuples are stack-allocated and fully unrolled):
+
+| operation | `n = 3` Lean | Julia | `n = 4` Lean | Julia | `n = 6` Lean | Julia |
+|---|---|---|---|---|---|---|
+| `T * x` | 20 | 0.7 | 24 | 1.9 | 75 | 3.1 |
+| `T * U` | 26 | 2.7 | 37 | 2.8 | 350 | 24 |
+| `det` | 42 | 1.7 | 44 | 5.2 | 920 | 19 |
+| `inv` | 110 | 6.3 | 215 | 13 | 2180 | 151 |
+| `exp` | 1050 | 59 | 1650 | 158 | 7900 | 412 |
+| `O * M` (outermorphism on a multivector) | 290 | 2.7 | 400 | 2.0 | 1550 | 89 |
+| `outermorphism(T)` | 2600 | 410 | 6900 | 1400 | 52000 | 34500 |
+
+Every result allocates a fresh `FloatArray` (about 10 ns of each small-size figure).
 -/
