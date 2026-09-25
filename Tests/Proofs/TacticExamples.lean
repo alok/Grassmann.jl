@@ -4,9 +4,9 @@ proofs suite. Each is an identity in a concrete space with coefficients in an
 arbitrary commutative ring `R`; symbolic scalars are variables of `R`,
 symbolic multivectors are variables of `Cl g`.
 
-Timings (elaboration + kernel check, measured with `trace.profiler`) are in
-docs/TACTICS.md; every example here takes well under a second except the
-fully opaque Jacobi identity (about 0.8 s).
+Timings (elaboration and kernel check, `trace.profiler`) are in
+docs/TACTICS.md: under 0.8 s for every example with explicit elements (median
+0.05 s), 2 to 4 s for the identities between opaque multivectors.
 -/
 import Grassmann.Tactic
 

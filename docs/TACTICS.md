@@ -128,13 +128,17 @@ example (u₁ u₂ u₃ w₁ w₂ w₃ : R) :
 | `~(x y) = ỹ x̃` for opaque `x y` | ℝ⁵ |
 | `1 + e₁₂₃₄` sandwiches `e₅` to `2 e₅ + 2 I` (grade preservation stops at `n = 4`) | ℝ⁵ |
 
-**Timing** (`trace.profiler`): every example elaborates in under 0.8 s (most
-under 0.15 s: explicit elements fold to a handful of terms per coordinate), and
-the kernel re-checks each in under 1.3 s; the whole file takes about 10 s.
-Costs grow with the number of symbolic coordinates: associativity of three
-opaque multivectors takes 0.2 s in ℝ³ but about 2 s of elaboration and 25 s of
-kernel checking in STA (16 coordinates, each a 256-term polynomial identity
-for `grind`'s certificate).
+**Timing** (`trace.profiler`, elaboration and kernel check together, one
+example at a time): the median example takes 0.05 s; every example whose
+elements are explicit (scalar coefficients may be symbolic) takes under 0.8 s,
+because explicit elements fold to a handful of terms per coordinate. Opaque
+multivectors cost more, since each of their coordinates is an atom: the
+Jacobi identity for three opaque elements of ℝ³ takes 2.3 s, `~(x y) = ỹ x̃`
+in ℝ⁵ 3.5 s, and associativity of three opaque elements 1.4 s in ℝ³ and 15 s
+in STA (16 coordinates, each a 256-term polynomial identity whose `grind`
+certificate the kernel re-checks). The whole examples file takes about 5 s.
+`grobner` instead of `grind` as the closer makes no measurable difference: the
+kernel check of the certificates dominates.
 
 ### Limits
 
