@@ -127,10 +127,21 @@ instance {α : Type u} {β : Type v} [Checksum α] [Checksum β] : Checksum (α 
   ⟨fun (a, b) => Checksum.check a + Checksum.check b⟩
 instance {α : Type u} [Checksum α] : Checksum (Option α) := ⟨fun o => o.elim 0 Checksum.check⟩
 
-/-- An opaque identity. The compiler cannot see through it, so a computation on its result
-depends on the salt (the iteration index) and cannot be hoisted out of the timing loop or
-shared between iterations. -/
-@[noinline] def blackBox {α : Type u} (_salt : Nat) (x : α) : α := x
+/-- Implementation of `blackBox`: the result depends on `salt` through a branch the compiler
+cannot decide (`ptrAddrUnsafe` is an external call; a `Nat` is never at address 0, so the
+first branch is never taken). -/
+@[noinline] unsafe def blackBoxImpl {α : Type u} (salt : Nat) (x : α) : α :=
+  if ptrAddrUnsafe salt == 0 then unsafeCast salt else x
+
+/-- An opaque identity whose result depends on the salt (the iteration index), so a computation
+on it can neither be extracted as a closed term, hoisted out of the timing loop, nor shared
+between iterations.
+
+A plain `@[noinline] def blackBox (_salt : Nat) (x : α) := x` does **not** work: the compiler's
+arity reduction drops the unused salt (`blackBox._redArg x`), after which `f (blackBox s 10)`
+is a closed term computed once at initialization, and a body `fun s => …` that no longer uses
+`s` is itself extracted. -/
+@[implemented_by blackBoxImpl] def blackBox {α : Type u} (_salt : Nat) (x : α) : α := x
 
 /-- The global sink: every batch's checksum lands here. -/
 initialize sinkRef : IO.Ref Float ← IO.mkRef 0

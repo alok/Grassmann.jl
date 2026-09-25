@@ -6,7 +6,7 @@
 #
 # Algorithm (see the Lean module docstring):
 #   1. warm-up: one call (compiles), then a second timed call whose checksum is the reported check
-#      (the second call is skipped when the first took longer than the case cap);
+#      (skipped when the first call, compilation excluded, took longer than the case cap);
 #   2. calibration: k grows ×4 until a batch of k calls takes ≥ sample_ns/10, then k is scaled so
 #      that a batch lasts about sample_ns (default 20 ms);
 #   3. `samples` batches (default 7, fewer when a single call is slow: the case is capped near
@@ -139,8 +139,11 @@ function measure!(ctx::Ctx, name, param, ops, body::F) where {F}
     cfg = ctx.cfg
     ops = max(ops, 1)
     GC.gc()
-    t1, _ = timebatch(body, 1, 0)        # compiles
-    tw, check = t1 > cfg.case_ns ? (t1, checkval(body(0))) : timebatch(body, 1, 0)
+    # first call compiles; a second (timed) call follows unless the first call's run time,
+    # compilation excluded, already exceeds the case cap
+    st = @timed body(0)
+    t1 = round(Int, (st.time - st.compile_time) * 1e9)
+    tw, check = t1 > cfg.case_ns ? (t1, checkval(st.value)) : timebatch(body, 1, 0)
     k = 1; t = tw; i = 1
     if tw < cfg.sample_ns ÷ 10
         for _ in 1:40
