@@ -227,6 +227,23 @@ def hypotBig : Float := (floatmax / 2).sqrt
 /-- `sqrt(floatmin(Float64))` = `2^-511`, the underflow threshold in `_hypot`. -/
 def hypotSmall : Float := floatmin.sqrt
 
+/-- The rescaled core of `_hypot` (math.jl:785-800): `sqrt(muladd(ax, ax, ay*ay))` plus one
+FMA-based correction step, times `scale`. -/
+@[inline] def hypotCore (ax ay scale : Float) : Float :=
+  let h := (Float.fma ax ax (ay * ay)).sqrt
+  let hsquared := h * h
+  let axsquared := ax * ax
+  let h := h - (Float.fma (-ay) ay (hsquared - axsquared) + Float.fma h h (-hsquared)
+    - Float.fma ax ax (-axsquared)) / (2 * h)
+  h * scale
+
+/-- `_hypot` after ordering, `ax ≥ ay` (math.jl:766-785). -/
+@[inline] def hypotOrdered (ax ay : Float) : Float :=
+  if ay ≤ ax * hypotWide then ax
+  else if ax > hypotBig then hypotCore (ax * hypotScale) (ay * hypotScale) (1 / hypotScale)
+  else if ay < hypotSmall then hypotCore (ax / hypotScale) (ay / hypotScale) hypotScale
+  else hypotCore ax ay 1
+
 /-- Julia `hypot(x::Float64, y::Float64)` (math.jl:748-801), the FMA branch taken on
 machines with native FMA (the oracle's). `muladd` is fused there too. Correctly rounded;
 `Inf` wins over NaN. -/
@@ -234,20 +251,8 @@ def hypot (x y : Float) : Float :=
   let ax := x.abs
   let ay := y.abs
   if ax.isInf || ay.isInf then inf
-  else
-    let (ax, ay) := if ay > ax then (ay, ax) else (ax, ay)
-    if ay ≤ ax * hypotWide then ax
-    else
-      let (ax, ay, scale) :=
-        if ax > hypotBig then (ax * hypotScale, ay * hypotScale, 1 / hypotScale)
-        else if ay < hypotSmall then (ax / hypotScale, ay / hypotScale, hypotScale)
-        else (ax, ay, (1 : Float))
-      let h := (Float.fma ax ax (ay * ay)).sqrt
-      let hsquared := h * h
-      let axsquared := ax * ax
-      let h := h - (Float.fma (-ay) ay (hsquared - axsquared) + Float.fma h h (-hsquared)
-        - Float.fma ax ax (-axsquared)) / (2 * h)
-      h * scale
+  else if ay > ax then hypotOrdered ay ax
+  else hypotOrdered ax ay
 
 /-- Julia `highword(x::Float64)`: the upper 32 bits of the representation. -/
 @[inline] def highword (x : Float) : UInt32 := (x.toBits >>> 32).toUInt32
