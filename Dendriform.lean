@@ -4,7 +4,6 @@ import Dendriform.TotalGrove
 import Dendriform.Arith
 import Dendriform.Axioms
 import Dendriform.Grove
-import Dendriform.Float16
 import Dendriform.Poset
 import Dendriform.Display
 import Dendriform.Compose
@@ -18,4 +17,4 @@ import Dendriform.Compose
   `+`, `*` (`Grove (a*b)`), `∪`; `Dendriform.Julia` for Julia's degenerate conventions.
 * `Dendriform.Axioms`: the dendriform axioms and associativity, proven for all trees.
 * Tree integers, total groves, grove indices, `GroveBin` and Julia-exact display
-  (including a `Float16` emulation), the Tamari poset and grove compositions. -/
+  (with `JuliaBase.Float16` for `GroveBin.ppos`), the Tamari poset and grove compositions. -/

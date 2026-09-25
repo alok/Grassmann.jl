@@ -4,6 +4,7 @@ import JuliaBase.Math
 import JuliaBase.Round
 import JuliaBase.Parse
 import JuliaBase.Sum
+import JuliaBase.Float16
 import JuliaBase.Ryu
 import JuliaBase.Float
 import JuliaBase.Complex
@@ -38,6 +39,8 @@ verified bit for bit against the Julia 1.13 oracle (`Tests/JuliaBase/`).
   rounded through `IEEEFloat.ofDecimal`.
 * `JuliaBase.Sum`: `sum(::Vector{Float64})` (`F64.sum`) with the pairwise blocking and the
   aarch64 SIMD accumulator layout (bit-exact against aarch64 Julia only).
+* `JuliaBase.Float16`: nonnegative IEEE binary16 values, the correctly rounded
+  `Float16(::Rational)` and Julia's `string(::Float16)` (Ryu shortest in exact arithmetic).
 * `JuliaBase.Ryu`: Ryu shortest round-trip digits (`reduce_shortest`) for `Float64` and
   `Float32`, including the compact 6-significant-digit reduction.
 * `JuliaBase.Float`: `writeShortest` (Julia `Ryu.writeshortest` with all its keyword options),

@@ -14,6 +14,8 @@ Julia's own numerics against the oracle (`Tests/JuliaBase/math.json`, written by
 * `parse`: `tryparse(Float64, s)` (`F64.parse?`);
 * `sum`/`sumgen`: `sum(::Vector{Float64})` (`F64.sum`) of explicit and generated vectors;
 * `colon32`: `collect(a:st:b)` for `Float32` endpoints (`colon32`);
+* `f16` and `float16`: the correctly rounded `Float16(p//q)` (`Float16.ofRat`) and
+  `string(::Float16)` of every nonnegative finite `Float16`;
 * `eps64`/`eps32`, `exponent64`/`exponent32`, `rat64`/`rat32`: `F64.epsOf`, `F32.epsOf`,
   `IEEEFloat.exponent`, and the correctly rounded `IEEEFloat.ofFraction`/`ofRat` of big
   rationals.
@@ -75,7 +77,7 @@ def sumVec (n seed : Nat) : FloatArray :=
     let e : Int := ((i * seed + 7) % 61 : Nat)
     acc.push (Float.scaleB (Float.ofInt (h - 2 ^ 31)) (e - 91))) (FloatArray.emptyWithCapacity n)
 
-/-- Check one `math.json` row (rows of kinds this module does not know are skipped). -/
+/-- Check one `math.json` row (an unknown row kind is a failure). -/
 def checkRow (t : Tally) : List String → Tally
   | ["u64", name, hx, hr] =>
     match unary64 name with
@@ -151,6 +153,10 @@ def checkRow (t : Tally) : List String → Tally
     let got := (List.range r.len).map fun (i : Nat) => r.get ((i : Int) + 1)
     t.check (got.length == want.length && (got.zip want).all fun (x, y) => sameF32 x y) fun _ =>
       s!"{F32.showString (f32 ha)}:{F32.showString (f32 hs)}:{F32.showString (f32 hb)}: got {got.length} elements {got.take 4 |>.map F32.showString}, want {want.length} {want.take 4 |>.map F32.showString}"
+  | ["f16", p, q, hbits, str] =>
+    let x := Float16.ofRat (int p).toNat (int q).toNat
+    t.check (x.e * 1024 + x.m == ((parseHex hbits).getD 0) && toString x == str) fun _ =>
+      s!"Float16({p}//{q}): got {x.e * 1024 + x.m} = {x}, want 0x{hbits} = {str}"
   | ["parse", str, want] =>
     match F64.parse? str, want with
     | none, "ERR" => t.check true fun _ => ""
@@ -181,7 +187,7 @@ def checkRow (t : Tally) : List String → Tally
     let got := IEEEFloat.ofFraction Float32 (int p) (int q).toNat
     t.check (sameF32 got (f32 hr)) fun _ =>
       s!"Float32({p}/{q}): got {F32.showString got}, want {F32.showString (f32 hr)}"
-  | _ => t
+  | r => t.check false fun _ => s!"unknown math row {r.take 2}"
 
 /-- A random finite `Float` from random bits. -/
 def randFinite (g : Tests.Rng) : Float × Tests.Rng :=
@@ -232,6 +238,12 @@ def golden : IO (Nat × Nat) := do
   let j ← loadGolden "math.json"
   let mut t : Tally := props
   for row in jArr j "cases" do t := checkRow t (jRow row)
+  -- `string(x)` of every nonnegative finite `Float16`, in bit order
+  let strs := jArr j "float16"
+  t := t.check (strs.size == 0x7c00) fun _ => s!"float16 table has {strs.size} entries"
+  for h : i in [0:strs.size] do
+    let x : Float16 := ⟨i / 1024, i % 1024⟩
+    t := t.check (toString x == jStr strs[i]) fun _ => s!"string(Float16 0x{i}): got {x}, want {jStr strs[i]}"
   t.report "math golden"
 
 /-- The TSV fuzz file `PREFIX_math.tsv`. -/

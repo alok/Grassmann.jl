@@ -204,10 +204,10 @@ def float16 : TestM Unit := do
   for c in ← gArr j "rationals" do
     let n ← gNat c "num"
     let d ← gNat c "den"
-    checkEq s!"Float16({n}//{d})" (toString (Float16.ofRat n d)) (← gStr c "str")
+    checkEq s!"Float16({n}//{d})" (toString (JuliaBase.Float16.ofRat n d)) (← gStr c "str")
   let bits ← (← gArr j "bits").mapM jStr
   for h : b in [0:bits.size] do
-    let x : Float16 := ⟨b / 1024, b % 1024⟩
+    let x : JuliaBase.Float16 := ⟨b / 1024, b % 1024⟩
     checkEq s!"Float16 bits {b}" (toString x) bits[b]
 
 def intervalTools : TestM Unit := do
