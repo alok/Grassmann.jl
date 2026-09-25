@@ -1,0 +1,177 @@
+# Documented defects of MeshTopology.jl 0.1.0 (port-notes/meshtopology.md §8.6).
+#
+# `fixed` entries are patched in `Fixed.MeshTopology` by oracle/meshtopology/load.jl (one textual
+# fix each); the Lean port implements the fixed semantics and the goldens record the upstream
+# value next to it as {"fixed": …, "julia": …}. `replicated` entries are kept for parity (the
+# Lean docstrings say so). Ids Q1-Q30 are the port notes' Q-list; Q31-Q32 were found while
+# writing the oracle.
+
+[Q1]
+status = "fixed"
+where = "LG:21; EL:53,90,109,127,147,152; QT:382,389"
+what = "Grassmann, Leibniz, Submanifold and ∂ are used but not imported: every Lagrange constructor, edges/adjacency for N ≥ 3, faces, facets, skeleton, facetsinterior, _facetsindices and compact resample throw UndefVarError. Both oracle modules add the import."
+
+[Q2]
+status = "fixed"
+where = "QT:185-186"
+what = "iscompact(::CompactTopology) is a MethodError; intended O == 2N."
+
+[Q3]
+status = "fixed"
+where = "GR:163"
+what = "1-D elementfuns compares a Values with an Int (MethodError); intended linear index of m[i]."
+
+[Q4]
+status = "fixed"
+where = "GR:52"
+what = "1-D linearelements broadcasts over values instead of cells (MethodError)."
+
+[Q5]
+status = "fixed"
+where = "GR:55"
+what = "4-D linearelements uses s[3]-1 for the w range."
+
+[Q6]
+status = "replicated"
+where = "GR:162"
+what = "getlinear is the identity for N ≥ 3, so only collapse flags identify nodes; Lean adds elementfunsClosed."
+
+[Q7]
+status = "replicated"
+where = "GR:164-198"
+what = "The 2-D min rule is one step and not transitive: Möbius/Hopf corners are merged wrongly, Klein and even-length half-turns leave duplicate nodes; Lean adds elementfunsClosed (union-find)."
+
+[Q8]
+status = "fixed"
+where = "QT:174,176"
+what = "BallTopology() and SphereTopology() build TubeTopology."
+
+[Q9]
+status = "fixed"
+where = "QT:79"
+what = "Typo PRoductTopology in BallTopology(Values{5})."
+
+[Q10]
+status = "replicated"
+where = "QT:82-84"
+what = "Sphere(3..5) carry no collapse flags while Sphere(2) does."
+
+[Q11]
+status = "fixed"
+where = "QT:557"
+what = "The 5-D upper face of axis 5 uses n4 as its source size (Lean: ghost ... (q11 := true) reproduces it)."
+
+[Q12]
+status = "fixed"
+where = "QT:214-221"
+what = "Int × Q does not shift the target faces by one axis."
+
+[Q13]
+status = "replicated"
+where = "QT:223-283"
+what = "Q × Q rebuilds the transversal maps as identities and drops collapse flags."
+
+[Q14]
+status = "fixed"
+where = "QT:391"
+what = "General-O resample takes the transversal sizes of axis ceil(slot/2) instead of the slot's face axis."
+
+[Q15]
+status = "fixed"
+where = "MT:45"
+what = "resample(m, (i,)) of a 1-D ProductTopology or QuotientTopology is ambiguous with resample(::AbstractVector, (i,)); the vector method is restricted to DenseVector."
+
+[Q16]
+status = "fixed"
+where = "QT:369"
+what = "resize compares slot numbers against the slots of the last-axis faces instead of the slots' faces."
+
+[Q17]
+status = "fixed"
+where = "MT:506-515"
+what = "DiscontinuousTopology of a non-full topology gets i = nothing (the else branch evaluates to a for loop)."
+
+[Q18a]
+status = "fixed"
+where = "LG:344,351,365"
+what = "Typos _getelemeent and getelment3."
+
+[Q18b]
+status = "fixed"
+where = "LG:371-402"
+what = "subimmersion(::Lagrange*) leaves M unbound; the tetrahedral OneTo branch builds LagrangeTriangles."
+
+[Q18c]
+status = "replicated"
+where = "LG:192-212,268-273"
+what = "Tetrahedral edge and facet nodes ignore orientation (nonconforming unless element tuples are sorted); Lean adds LagrangeTetrahedra.getConforming."
+
+[Q18d]
+status = "fixed"
+where = "LG:266,272"
+what = "Element center nodes use the subspace element index instead of the full one."
+
+[Q18e]
+status = "fixed"
+where = "LG:146-148"
+what = "LagrangeTetrahedra counts triangle centers in its vertex list and calls lagrangevertices4 with the wrong arguments."
+
+[Q18f]
+status = "fixed"
+where = "LG:156"
+what = "LagrangeEdges keeps a Vector as its element→edge table, so totalnodes and getindex fail."
+
+[Q19]
+status = "fixed"
+where = "EL:339"
+what = "interior(e) passes its arguments in the wrong order."
+
+[Q20]
+status = "fixed"
+where = "EL:301-302,329"
+what = "degrees(t,B) multiplies by a vector of length totalnodes (intended size(B,2)); interp(t,B) is ambiguous."
+
+[Q21]
+status = "fixed"
+where = "EL:345"
+what = "edgesindices sizes its lookup matrix by nodes instead of totalnodes (fails for non-contiguous ids and subsets)."
+
+[Q22]
+status = "fixed"
+where = "EL:407"
+what = "The fifth local facet of a 4-simplex has five vertices; fixed to (i4,i3,i2,i1)."
+
+[Q23]
+status = "fixed"
+where = "GR:204"
+what = "BilinearTopology has no size method (Lean only: BilinearTopology.size = number of cells; not in the goldens)."
+
+[Q25]
+status = "replicated"
+where = "QT:595-618"
+what = "One-colon slices hard-code p = (2,) and MirrorTopology(n) (dropping the collapse flags)."
+
+[Q27]
+status = "replicated"
+where = "EL:397"
+what = "Boundary facets get facet sign +1."
+
+[Q28]
+status = "replicated"
+where = "MT:404"
+what = "Subsets inherit istotal from the parent."
+
+[Q29]
+status = "fixed"
+where = "QT:47-48"
+what = "QuotientTopology(::ProductTopology) routes to Cartan's ProductSpace; fixed to the open grid of its size."
+
+[Q31]
+status = "fixed"
+where = "QT:363-393"
+what = "resize and resample rebuild the topology without its collapse flags."
+
+[Q32]
+status = "fixed"
+where = "QT:309-314"
+what = "cross_sector(Q1, Q4) passes 8 of the 10 face slots (MethodError)."
