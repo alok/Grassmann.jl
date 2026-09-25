@@ -316,6 +316,32 @@ def mul (x y : SomeGrove) : Except String SomeGrove :=
 zero grove `Υ(0)`. -/
 def total (d : Nat) : SomeGrove := if d == 0 then zero else ⟨d, Grove.total d⟩
 
+/-! On non-degenerate groves (positive degree, at least one row) Julia's conventions are
+inert: the Julia operations are exactly the typed ones. -/
+
+section Agreement
+variable {a b : Nat} (x : Grove a) (y : Grove b)
+
+theorem add_eq (ha : 0 < a) (hb : 0 < b) (hx : x.rows ≠ []) (hy : y.rows ≠ []) :
+    add ⟨a, x⟩ ⟨b, y⟩ = ⟨a + b, x + y⟩ := by
+  simp [add, isEmpty, Nat.pos_iff_ne_zero.mp ha, Nat.pos_iff_ne_zero.mp hb, hx, hy]
+
+theorem dashv_eq (ha : 0 < a) (hb : 0 < b) (hx : x.rows ≠ []) (hy : y.rows ≠ []) :
+    dashv ⟨a, x⟩ ⟨b, y⟩ = .ok ⟨a + b, x.dashv y⟩ := by
+  simp [dashv, Nat.pos_iff_ne_zero.mp ha, Nat.pos_iff_ne_zero.mp hb, hx, hy]
+
+theorem vdash_eq (ha : 0 < a) (hb : 0 < b) (hx : x.rows ≠ []) (hy : y.rows ≠ []) :
+    vdash ⟨a, x⟩ ⟨b, y⟩ = .ok ⟨a + b, x.vdash y⟩ := by
+  simp [vdash, Nat.pos_iff_ne_zero.mp ha, Nat.pos_iff_ne_zero.mp hb, hx, hy]
+
+theorem mul_eq (ha : 1 < a) (hb : 0 < b) (hx : x.rows ≠ []) (hy : y.rows ≠ []) :
+    mul ⟨a, x⟩ ⟨b, y⟩ = .ok ⟨a * b, x * y⟩ := by
+  have h0 : a ≠ 0 := by omega
+  have h1 : a ≠ 1 := by omega
+  simp [mul, h0, h1, Nat.pos_iff_ne_zero.mp hb, hx, hy]
+
+end Agreement
+
 /-- Julia `Grove == Grove` (DF/Dendriform.jl:147): same degree, same size, same sorted rows
 (Julia sorts both operands in place; this is pure). -/
 def eq (x y : SomeGrove) : Bool :=

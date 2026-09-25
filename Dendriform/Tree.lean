@@ -150,6 +150,65 @@ def ofName? (ys : List Nat) : Option Tree :=
   | some t => if t.name == ys then some t else none
   | none => none
 
+/-- Every label of a Loday name is at most the degree (the root label is the maximum). -/
+theorem le_deg_of_mem_name : ∀ {t : Tree} {x : Nat}, x ∈ t.name → x ≤ t.deg
+  | leaf, _, h => by simp [name] at h
+  | node l r, x, h => by
+    simp only [name, List.mem_append, List.mem_singleton] at h
+    rcases h with (h | h) | h
+    · have := le_deg_of_mem_name h; simp; omega
+    · simp [h]
+    · have := le_deg_of_mem_name h; simp; omega
+
+private theorem idxOf?_append_cons {a : Nat} {l₁ l₂ : List Nat} (h : a ∉ l₁) :
+    (l₁ ++ a :: l₂).idxOf? a = some l₁.length := by
+  induction l₁ with
+  | nil => simp [List.idxOf?_cons]
+  | cons x xs ih =>
+    have hx : x ≠ a := fun e => h (e ▸ List.mem_cons_self)
+    have ih := ih fun m => h (List.mem_cons_of_mem _ m)
+    simp [List.idxOf?_cons, hx, ih]
+
+/-- The parser inverts `name` given enough fuel. -/
+theorem parseName_name : ∀ (t : Tree) (fuel : Nat), t.deg ≤ fuel → parseName fuel t.name = some t
+  | leaf, fuel, _ => by cases fuel <;> rfl
+  | node l r, fuel, h => by
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at h; omega⟩
+    have hl : l.deg + r.deg + 1 ∉ l.name := fun m => by have := le_deg_of_mem_name m; omega
+    have hys : (node l r).name = l.name ++ (l.deg + r.deg + 1) :: r.name := by simp [name]
+    have hne : (node l r).name ≠ [] := by simp [hys]
+    rw [parseName.eq_3 _ _ hne, length_name, deg_node, hys, idxOf?_append_cons hl]
+    simp only [length_name, Option.bind_eq_bind]
+    have ht : List.take l.deg (l.name ++ (l.deg + r.deg + 1) :: r.name) = l.name := by
+      rw [← length_name l]; exact List.take_left
+    have hd : List.drop (l.deg + 1) (l.name ++ (l.deg + r.deg + 1) :: r.name) = r.name := by
+      rw [show l.deg + 1 = (l.name ++ [l.deg + r.deg + 1]).length by simp,
+        show l.name ++ (l.deg + r.deg + 1) :: r.name = (l.name ++ [l.deg + r.deg + 1]) ++ r.name by
+          simp, List.drop_left]
+    rw [ht, hd, parseName_name l f (by simp at h; omega), parseName_name r f (by simp at h; omega)]
+    rfl
+
+/-- `ofName?` inverts `name`: Loday names encode trees faithfully. -/
+@[simp] theorem ofName?_name (t : Tree) : ofName? t.name = some t := by
+  unfold ofName?
+  rw [parseName_name t _ (by simp)]
+  simp
+
+/-- `ofName?` only accepts words that are names, and returns their tree. -/
+theorem name_of_ofName? {ys : List Nat} {t : Tree} (h : ofName? ys = some t) : t.name = ys := by
+  unfold ofName? at h
+  split at h
+  · split at h
+    · cases h; rename_i hb; exact beq_iff_eq.mp hb
+    · cases h
+  · cases h
+
+/-- A tree is determined by its Loday name. -/
+theorem name_injective {s t : Tree} (h : s.name = t.name) : s = t := by
+  have := ofName?_name s
+  rw [h, ofName?_name] at this
+  exact (Option.some.inj this).symm
+
 /-- Julia `show(Int.(Y))`: `[1, 2, 3]`. -/
 def nameString (t : Tree) : String :=
   "[" ++ ", ".intercalate (t.name.map toString) ++ "]"
