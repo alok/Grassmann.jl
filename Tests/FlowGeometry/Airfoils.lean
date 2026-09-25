@@ -96,6 +96,17 @@ def run : TestM Unit := do
     match NACA.parse? s with
     | .ok a => checkAirfoil a d
     | .error e => check s!"airfoil {s}" false fun _ => e
+  -- plot data: the outline series is the golden outline split into coordinates
+  let d2412 := (← jArr (← jField j "airfoils")).find? fun d => (d.getObjValAs? String "name").toOption == some "2412"
+  if let some d := d2412 then
+    let z ← gFloats (← jField d "complex")
+    let sr := (NACA.parse! "2412").outlineSeries
+    checkFloats "outlineSeries 2412 x" sr.xs (reParts z)
+    checkFloats "outlineSeries 2412 y" sr.ys (imParts z)
+    let dbl := (Airfoil.double (.circularArc 6 9) (.parabolicArc 4 9)).doubleArcSeries
+    let (u, l) := (Airfoil.double (.circularArc 6 9) (.parabolicArc 4 9)).surfaces 1 0
+    check "doubleArcSeries mean line" (dbl.size == 3 && (List.range 9).all fun i =>
+      dbl[1]!.ys[i]! == ((imParts u)[i]! + (imParts l)[i]!) / 2)
   let sm ← load "small"
   let recs ← jArr (← jField sm "airfoils")
   check "small: count" (recs.size == small.length)

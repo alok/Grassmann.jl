@@ -84,6 +84,8 @@ def runGrid (m : Json) : TestM Unit := do
   checkFs "initrakich points" pt.cloud.points (← jField ir "points")
   checkNats "initrakich triangles" (els pt.top.topology) (← jField ir "tris")
   checkNats "initrakich bounds" (els pe.top.topology) (← jField ir "bounds")
+  check "initrakich segments" ((Mesh.edgeSegments pt).size == 4 * 3 * (2 * 100 * 50) &&
+    (Mesh.edgeSegments pe).size == 4 * (2 * 100 + 2 * 50))
   check "initrakich nodes" (Cartan.card pt == (← gNat ir "nodes_tris") && Cartan.card pe == (← gNat ir "nodes_bounds"))
     fun _ => s!"{Cartan.card pt} {Cartan.card pe}"
 
