@@ -37,6 +37,13 @@ def supChar (c : Char) : Char :=
     | '₅' => '⁵' | '₆' => '⁶' | '₇' => '⁷' | '₈' => '⁸' | '₉' => '⁹'
     | c => c
 
+/-- Julia `Float64(n)` for an `Int`: a machine conversion when `n` fits in 64 bits
+(`Float.ofInt` goes through `OfScientific` and `Nat.log2`, ~100 ns). -/
+@[inline] def intToFloat (n : Int) : Float :=
+  match n with
+  | .ofNat k => if k < 18446744073709551616 then k.toUInt64.toFloat else Float.ofNat k
+  | .negSucc k => if k < 18446744073709551615 then -((k.toUInt64 + 1).toFloat) else Float.ofInt n
+
 /-- A Julia exponent: `Int`, `Rational{Int}` or `Float64` (the element type of
 a `Group`'s exponent vector). -/
 inductive Expo where
@@ -52,7 +59,7 @@ namespace Expo
 
 /-- Numeric value as a `Float64`. -/
 def toFloat : Expo → Float
-  | int n => Float.ofInt n
+  | int n => intToFloat n
   | rat q => JuliaBase.IEEEFloat.ofRat Float q
   | float x => x
 
@@ -83,11 +90,11 @@ def makeint (x : Float) : JNum :=
   else
     let ax := x.abs
     let rem := (JuliaBase.F64.rem x 1.0).abs
-    let ne := (2.220446049250313e-16 * ax).sqrt
+    let ne := (f64! 2.220446049250313e-16 * ax).sqrt
     if ne < 1.0 then
       let t := (if x < 0 then -((-x).floor) else x.floor)   -- `x ÷ 1`
-      if JuliaBase.F64.log10 ax - JuliaBase.F64.log rem / JuliaBase.F64.log 1.7 > 20.0 then .int (Int64.ofInt t.toInt64.toInt)
-      else if JuliaBase.F64.log10 ax - JuliaBase.F64.log10 (1.0 - rem) > 17.0 then .int (Int64.ofInt t.toInt64.toInt + 1)
+      if JuliaBase.F64.log10 ax - JuliaBase.F64.log rem / JuliaBase.F64.log (f64! 1.7) > f64! 20.0 then .int (Int64.ofInt t.toInt64.toInt)
+      else if JuliaBase.F64.log10 ax - JuliaBase.F64.log10 (f64! 1.0 - rem) > f64! 17.0 then .int (Int64.ofInt t.toInt64.toInt + 1)
       else .float x
     else .float x
 

@@ -15,9 +15,9 @@ open Lean Tests.Units FieldConstants FieldAlgebra UnitSystems Similitude
 
 /-- Exact equality of exponent vectors including the element type. -/
 def expsSame : Exps 11 → Exps 11 → Bool
-  | .exact u, .exact v => u == v
   | .float u, .float v => (List.finRange 11).all fun i => sameBits (u.get i) (v.get i)
-  | _, _ => false
+  | .float _, _ | _, .float _ => false
+  | a, b => a.toRats? == b.toRats?
 
 /-- The USQ group of a named quantity. -/
 def convGroup (q : Conv) : USQGroup := q.dim.toGroup

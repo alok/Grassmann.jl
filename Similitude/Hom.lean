@@ -52,7 +52,8 @@ def applyFloat (m : LinMap) (d : Fin 11 → Float) : FVec 11 :=
 
 /-- Apply the map to a USQ exponent vector, keeping Julia's element type. -/
 def apply (m : LinMap) : Exps 11 → Exps 11
-  | .exact v => .exact (m.applyRat fun i => v[i])
+  | .int v => Exps.ofRats (m.applyRat fun i => (v[i] : Rat))
+  | .exact v => Exps.ofRats (m.applyRat fun i => v[i])
   | .float v => .float (m.applyFloat v.get)
 
 /-- Apply the map to a USQ group; the image has coefficient `1` (Julia builds it
@@ -178,11 +179,11 @@ theorem usqMap_eq_usqToConst :
 
 /-- The USQ exponents of a type-level dimension as a group element. -/
 def _root_.UnitSystems.Dim.toGroup (d : Dim) : USQGroup :=
-  Group.mk' (.exact (Vector.ofFn fun i => d.toRats.getD i.1 0)) (.int 1)
+  Group.mk' (Exps.ofRats (Vector.ofFn fun i => d.toRats.getD i.1 0)) (.int 1)
 
 /-- The exponents of a doubled `HalfDim` (UnitSystems' exponent model) as an
 exact USQ vector. -/
 def _root_.UnitSystems.HalfDim.toExps (h : HalfDim) : Exps 11 :=
-  .exact (Vector.ofFn fun i => mkRat (h.toList.getD i.1 0) 2)
+  Exps.ofRats (Vector.ofFn fun i => mkRat (h.toList.getD i.1 0) 2)
 
 end Similitude

@@ -146,7 +146,9 @@ def coefIdent : Coef → Coef → Bool
 element type) and identical coefficients. -/
 def Consts.ident (a b : Consts) : Bool :=
   coefIdent a.c b.c && match a.v, b.v with
+    | .int u, .int v => u == v
     | .exact u, .exact v => u == v
+    | .int _, .exact _ | .exact _, .int _ => a.v.toRats? == b.v.toRats?
     | .float u, .float v => (List.finRange 44).all fun i => (u.get i).toBits == (v.get i).toBits
     | _, _ => false
 

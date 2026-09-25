@@ -95,6 +95,7 @@ dimensions whose own ratio between `U` and `S` is exactly one (for display);
 def convertDim (ones : Array Bool) (d : Exps 11) : Exps 11 :=
   let keep (i : Fin 11) : Bool := !(ones[i.1]?.getD false)
   match d with
+  | .int v => .int (Vector.ofFn fun i => if keep i then v[i] else 0)
   | .exact v => .exact (Vector.ofFn fun i => if keep i then v[i] else 0)
   | .float v => .float (FVec.ofFn fun i => if keep i then v.get i else 0.0)
 

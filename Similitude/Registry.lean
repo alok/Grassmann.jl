@@ -37,6 +37,7 @@ def unitLatex : Registry := parseRegistry unitLatexData
 
 /-- Doubled integer exponents of an exact vector, if every exponent is a multiple of `½`. -/
 def doubledKey? : Exps 11 → Option (Array Int)
+  | .int v => some (v.toArray.map (2 * ·))
   | .exact v => (v.toArray.mapM fun q => let t := 2 * q; if t.den == 1 then some t.num else none)
   | .float _ => none
 
