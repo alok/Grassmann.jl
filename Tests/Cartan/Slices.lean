@@ -110,5 +110,19 @@ def run : TestM Unit := do
     check s!"slices {name} r" (o.r == r) fun _ => s!"got {o.r}, expected {r}"
     check s!"slices {name} c" (o.c == cc) fun _ => s!"got {o.c}, expected {cc}"
     checkField s!"slices {name} field" o.field (← jField w "field")
+  -- fields of leaves (`element/variation.json`): Variation, alteration, modification
+  let gv ← load "element/variation"
+  let av : TensorField gaa Float := .tabulatePoint gaa fun x =>
+    x.get! 0 + 10 * x.get! 1 + x.get! 0 * x.get! 1
+  for (name, ls) in [("variation", av.variation), ("alteration", av.alteration),
+      ("modification", av.modification)] do
+    let j ← jField gv name
+    checkFloats s!"{name} base" ⟨ls.map (·.base)⟩ (← gFloats (← jField j "base"))
+    let jl ← jArr (← jField j "leaves")
+    check s!"{name} leaves" (jl.size == ls.size)
+    for (l, k) in ls.toList.zipIdx do
+      let w := jl[k]!
+      checkFloats s!"{name} leaf {k} base" l.fiber.base.space.coords[0] (← gFloats (← jField w "base"))
+      checkFloats s!"{name} leaf {k} fiber" l.fiber.field.data (← gFloats (← jField w "fiber"))
 
 end Tests.CartanTests.Slices
