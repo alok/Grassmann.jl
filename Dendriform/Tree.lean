@@ -97,6 +97,11 @@ def under : Tree → Tree → Tree
 @[simp] theorem deg_under (x y : Tree) : (under x y).deg = x.deg + y.deg := by
   induction x <;> simp [under, *]; omega
 
+/-- Julia `x / y = over(x, y)` (DF/poset.jl:192). -/
+instance : Div Tree := ⟨over⟩
+/-- Julia `x \ y = under(x, y)` (DF/poset.jl:207). -/
+instance : SDiff Tree := ⟨under⟩
+
 /-- `σ` exchanges over and under: `σ(x / y) = σ(y) \ σ(x)` (DF test/runtests.jl:57). -/
 theorem σ_over (x y : Tree) : (over x y).σ = under y.σ x.σ := by
   induction y <;> simp [over, under, *]
@@ -176,6 +181,12 @@ def over {a b : Nat} (x : PBTree a) (y : PBTree b) : PBTree (a + b) :=
 /-- `under` adds degrees (DF/poset.jl:199). -/
 def under {a b : Nat} (x : PBTree a) (y : PBTree b) : PBTree (a + b) :=
   ⟨Tree.under x.1 y.1, by simp [x.2, y.2]⟩
+
+/-- `x / y : PBTree (a + b)` (Julia `over`). -/
+instance {a b : Nat} : HDiv (PBTree a) (PBTree b) (PBTree (a + b)) := ⟨over⟩
+
+/-- `x ∨ y : PBTree (a + b + 1)` (Julia graft, extending `AbstractLattices.vee`). -/
+instance {a b : Nat} : HVee (PBTree a) (PBTree b) (PBTree (a + b + 1)) := ⟨graft⟩
 
 /-- Split a tree of positive degree into its root's subtrees, with the degree bookkeeping
 `k + (n - k) = n` recorded in the result type. -/
