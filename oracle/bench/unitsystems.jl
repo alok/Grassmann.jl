@@ -2,7 +2,9 @@
 # between runtime-selected systems and Similitude dimension-group products.
 isdefined(Main, :BenchHarness) || include(joinpath(@__DIR__, "harness.jl"))
 using .BenchHarness
-using UnitSystems, Similitude
+using UnitSystems, Similitude, MeasureSystems
+const us_MS = MeasureSystems
+const us_M = MeasureSystems.Measurements
 const us_US = UnitSystems
 const us_FC = UnitSystems.FieldConstants
 
@@ -33,6 +35,24 @@ function us_ratioall(ds::Vector{Any}, ps::Vector{Any})
     acc = 0.0
     for d in ds, (U, S) in ps
         acc += Float64(float(Similitude.ratio(d, U, S)))
+    end
+    acc
+end
+# Measurements arithmetic with correlated error propagation.
+function us_measarith(as::Vector, bs::Vector)
+    acc = 0.0
+    for (a, b) in zip(as, bs)
+        c = a * b + a / b - a * a
+        acc += us_M.value(c) + us_M.uncertainty(c)
+    end
+    acc
+end
+# MeasureSystems' measured conversion factors.
+function us_measratio(ds::Vector{Any}, ps::Vector{Any})
+    acc = 0.0
+    for d in ds, (U, S) in ps
+        y = us_MS.FieldAlgebra.product(us_MS.ratio(d, U, S))
+        acc += y isa us_M.Measurement ? us_M.value(y) + us_M.uncertainty(y) : Float64(y)
     end
     acc
 end
@@ -80,6 +100,14 @@ function suite_unitsystems(ctx)
            ops = length(ds)^2, param = "$(length(ds))²")
     bench!(i -> us_ratioall(blackbox(i, ds), ps), ctx, "ratio_runtime";
            ops = length(ds) * length(ps), param = "$(length(ds))×$(length(ps))")
+    m = sized(ctx, 1000, 20)
+    as = [us_M.measurement(1.0 + i / m, 0.01 * (1 + i % 7)) for i in 0:m-1]
+    bs = [us_M.measurement(2.0 + i / m, 0.02) for i in 0:m-1]
+    bench!(i -> us_measarith(blackbox(i, as), bs), ctx, "measurement_arith"; ops = m, param = "n=$m")
+    mps = Any[(us_MS.Metric, us_MS.English), (us_MS.English, us_MS.Metric), (us_MS.SI2019, us_MS.Gauss),
+              (us_MS.Planck, us_MS.Metric), (us_MS.Hartree, us_MS.SI2019), (us_MS.IAU, us_MS.Metric)]
+    bench!(i -> us_measratio(blackbox(i, ds), mps), ctx, "measured_ratio";
+           ops = length(ds) * length(mps), param = "$(length(ds))×$(length(mps))")
 end
 
 register!("unitsystems", suite_unitsystems)

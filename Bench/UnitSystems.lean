@@ -1,5 +1,6 @@
 import Bench.Harness
 import Similitude
+import MeasureSystems
 
 /-!
 # `unitsystems`: conversion factors and dimension arithmetic
@@ -25,6 +26,10 @@ Julia twin: `oracle/bench/unitsystems.jl` (UnitSystems 0.3 / Similitude).
 * `ratio_runtime`: Similitude's exact conversion factor `ratio(d, U, S)` of every quantity's
   dimension for the six pairs of `convert_pairs`, evaluated at run time (Lean caches the eleven
   constant ratios per pair of systems; Julia recomputes them).
+* `measurement_arith`: Measurements.jl arithmetic with linear, correlated error propagation:
+  `a*b + a/b - a*a` over `10³` pairs of independent measurements (MeasureSystems' `Measurement`).
+* `measured_ratio`: MeasureSystems' measured conversion factors (`product` of the exact ratio with
+  the 13 measured generators' uncertainties) for the 131 dimensions and the six pairs.
 
 Checks are sums of the factors (resp. of the length exponents), equal when bit-exact.
 -/
@@ -78,6 +83,16 @@ quantity's dimension and pair. -/
 def ratioAll (ds : Array USQGroup) (ps : Array (Sys × Sys)) : Float :=
   ds.foldl (fun acc d => ps.foldl (fun acc (U, S) => acc + (Similitude.ratio d.v U S).toFloat) acc) 0
 
+/-- `∑ (value + uncertainty)` of `a*b + a/b - a*a` over pairs of measurements. -/
+def measurementArith (as bs : Array MeasureSystems.Measurement) : Float :=
+  (as.zip bs).foldl (fun acc (a, b) => let c := a * b + a / b - a * a; acc + (c.val + c.err)) 0
+
+/-- `∑ (value + uncertainty)` of MeasureSystems' measured ratios. -/
+def measuredRatioAll (ds : Array USQGroup) (ps : Array (Sys × Sys)) : Float :=
+  ds.foldl (fun acc d => ps.foldl (fun acc (U, S) =>
+    let m := (MeasureSystems.MValue.exact (Similitude.ratio d.v U S)).toMNum
+    acc + (m.val + m.err)) acc) 0
+
 /-- `∑ L-exponent (a * b)` over all pairs. -/
 def dimProducts (ds : Array USQGroup) : Float :=
   ds.foldl (fun acc a => ds.foldl (fun acc b => acc + (a * b).v.getFloat ⟨2, by decide⟩) acc) 0
@@ -114,6 +129,17 @@ def suite : Suite := ⟨"unitsystems", do
   bench "dim_products" (ops := ds.size * ds.size) (param := s!"{ds.size}²") fun s =>
     dimProducts (blackBox s ds)
   bench "ratio_runtime" (ops := ds.size * pss.size) (param := s!"{ds.size}×{pss.size}") fun s =>
-    ratioAll (blackBox s ds) pss⟩
+    ratioAll (blackBox s ds) pss
+  let m ← size 1000 20
+  -- independent measurements `1 + i/m ± 0.01(1 + i mod 7)` and `2 + i/m ± 0.02`
+  let as := (Array.range m).map fun i =>
+    MeasureSystems.Measurement.indep (1.0 + i.toUInt64.toFloat / m.toUInt64.toFloat)
+      (0.01 * (1 + i % 7).toUInt64.toFloat) (2 * i + 1)
+  let bs := (Array.range m).map fun i =>
+    MeasureSystems.Measurement.indep (2.0 + i.toUInt64.toFloat / m.toUInt64.toFloat) 0.02 (2 * i + 2)
+  bench "measurement_arith" (ops := m) (param := s!"n={m}") fun s =>
+    measurementArith (blackBox s as) bs
+  bench "measured_ratio" (ops := ds.size * pss.size) (param := s!"{ds.size}×{pss.size}") fun s =>
+    measuredRatioAll (blackBox s ds) pss⟩
 
 end Bench.UnitSystems

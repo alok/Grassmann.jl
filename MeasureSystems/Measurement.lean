@@ -26,13 +26,49 @@ namespace MeasureSystems
 
 open FieldConstants
 
-/-- The identity of an independent measurement: `(value, uncertainty, tag)`. -/
-abbrev MTag := Float × Float × Nat
+/-- The identity of an independent measurement: `(value, uncertainty, tag)` (a
+structure with unboxed floats). -/
+structure MTag where
+  /-- nominal value of the independent measurement -/
+  val : Float
+  /-- its uncertainty -/
+  err : Float
+  /-- its tag -/
+  tag : Nat
+  deriving Inhabited
 
 /-- Julia `isequal` on tags: bitwise-equal floats (NaNs equal) and equal tags. -/
 @[inline] def MTag.same (a b : MTag) : Bool :=
-  a.2.2 == b.2.2 && (a.1 == b.1 || (a.1.isNaN && b.1.isNaN)) &&
-    (a.2.1 == b.2.1 || (a.2.1.isNaN && b.2.1.isNaN))
+  a.tag == b.tag && (a.val == b.val || (JuliaBase.F64.isnan a.val && JuliaBase.F64.isnan b.val)) &&
+    (a.err == b.err || (JuliaBase.F64.isnan a.err && JuliaBase.F64.isnan b.err))
+
+/-- Partial derivatives with respect to independent measurements, newest first
+(Julia's `Derivatives` linked list); each entry keeps its derivative unboxed. -/
+inductive Ders where
+  /-- no derivatives -/
+  | nil
+  /-- `∂/∂t = d`, then the older entries -/
+  | cons (t : MTag) (d : Float) (rest : Ders)
+  deriving Inhabited
+
+namespace Ders
+
+/-- `get(ders, t, 0)`. -/
+def get (t : MTag) : Ders → Float
+  | nil => 0.0
+  | cons u d r => if u.same t then d else get t r
+
+/-- Does `t` occur? -/
+def contains (t : MTag) : Ders → Bool
+  | nil => false
+  | cons u _ r => u.same t || contains t r
+
+/-- The entries as a list, newest first. -/
+def toList : Ders → List (MTag × Float)
+  | nil => []
+  | cons t d r => (t, d) :: r.toList
+
+end Ders
 
 /-- Julia `Measurement{Float64}`. -/
 structure Measurement where
@@ -43,30 +79,32 @@ structure Measurement where
   /-- tag of an independent measurement, `0` for derived ones -/
   tag : Nat := 0
   /-- `∂self/∂x` for each independent `x` (newest first, as Julia's `Derivatives`) -/
-  der : List (MTag × Float) := []
+  der : Ders := .nil
   deriving Inhabited
 
 namespace Measurement
 
 /-- An exact number (`measurement(x)`, zero uncertainty, no derivatives). -/
-@[inline] def ofFloat (x : Float) : Measurement := ⟨x, 0.0, 0, []⟩
+@[inline] def ofFloat (x : Float) : Measurement := ⟨x, 0.0, 0, .nil⟩
 
 /-- Julia `measurement(val, err)` with an explicit tag `id > 0` for the new
 independent variable (a zero uncertainty gives an exact number). -/
 def indep (val err : Float) (id : Nat) : Measurement :=
-  if err == 0.0 then ⟨val, err, 0, []⟩ else ⟨val, err, id, [((val, err, id), 1.0)]⟩
+  if err == 0.0 then ⟨val, err, 0, .nil⟩ else ⟨val, err, id, .cons ⟨val, err, id⟩ 1.0 .nil⟩
 
 /-- `get(x.der, tag, 0)`. -/
-def derivative (x : Measurement) (t : MTag) : Float :=
-  match x.der.find? (·.1.same t) with
-  | some (_, d) => d
-  | none => 0.0
+@[inline] def derivative (x : Measurement) (t : MTag) : Float := x.der.get t
+
+/-- The derivative list of `result1`: `der·d` for every entry with a nonzero
+uncertainty, in reverse order (Julia's fold into a fresh list). -/
+def scaleDers (der : Float) : Ders → Ders → Ders
+  | .nil, acc => acc
+  | .cons t d r, acc => scaleDers der r (if t.err == 0.0 then acc else .cons t (der * d) acc)
 
 /-- Julia's one-argument `result(val, der, a)` (`math.jl:41-54`). -/
 def result1 (val der : Float) (a : Measurement) : Measurement :=
-  let newder := a.der.foldl (fun acc (t, d) => if t.2.1 == 0.0 then acc else (t, der * d) :: acc) []
   let σ := if a.err == 0.0 then a.err else (der * a.err).abs
-  ⟨val, σ, 0, newder⟩
+  ⟨val, σ, 0, scaleDers der a.der .nil⟩
 
 /-- Julia's many-argument `result(val, ders, args)` (`math.jl:80-118`): the
 derivative of the result with respect to each independent variable, and the
@@ -75,26 +113,46 @@ def resultN (val : Float) (ders : List Float) (args : List Measurement) : Measur
   -- `∂G/∂x = Σᵢ ∂G/∂aᵢ · ∂aᵢ/∂x`, skipping zero partials, in argument order
   let dGdx (t : MTag) : Float :=
     (ders.zip args).foldl (fun acc (d, x) => let dax := x.derivative t; if dax != 0.0 then acc + d * dax else acc) 0.0
-  let step (acc : Float × List (MTag × Float)) (t : MTag) : Float × List (MTag × Float) :=
+  let step (acc : Float × Ders) (t : MTag) : Float × Ders :=
     let (err, newder) := acc
-    if newder.any (·.1.same t) || t.2.1 == 0.0 then acc
+    if newder.contains t || t.err == 0.0 then acc
     else
       let dG := dGdx t
       if dG == 0.0 then acc
-      else let e := t.2.1 * dG; (err + e * e, (t, dG) :: newder)
-  let (err, newder) := args.foldl (fun acc y => y.der.foldl (fun acc (t, _) => step acc t) acc) (0.0, [])
+      else let e := t.err * dG; (err + e * e, .cons t dG newder)
+  let (err, newder) := args.foldl (fun acc y => y.der.toList.foldl (fun acc (t, _) => step acc t) acc) (0.0, .nil)
   ⟨val, err.sqrt, 0, newder⟩
 
+/-- The walk of `result2` over `a`'s derivative list and then `rest` (`b`'s):
+`err` and `newder` accumulate as in `resultN`. -/
+partial def walk2 (val da db : Float) (a b : Measurement) : Ders → Ders → Float → Ders → Measurement
+  | .nil, .nil, err, newder => ⟨val, err.sqrt, 0, newder⟩
+  | .nil, rest, err, newder => walk2 val da db a b rest .nil err newder
+  | .cons t _ r, rest, err, newder =>
+    if newder.contains t || t.err == 0.0 then walk2 val da db a b r rest err newder
+    else
+      let x := a.derivative t
+      let acc := if x != 0.0 then 0.0 + da * x else 0.0
+      let y := b.derivative t
+      let dG := if y != 0.0 then acc + db * y else acc
+      if dG == 0.0 then walk2 val da db a b r rest err newder
+      else let e := t.err * dG; walk2 val da db a b r rest (err + e * e) (.cons t dG newder)
+
+/-- `resultN val [da, db] [a, b]`, without the argument lists (the same operations
+in the same order, so the same bits). -/
+@[inline] def result2 (val da db : Float) (a b : Measurement) : Measurement :=
+  walk2 val da db a b a.der b.der 0.0 .nil
+
 /-- `a + b` -/
-def add (a b : Measurement) : Measurement := resultN (a.val + b.val) [1.0, 1.0] [a, b]
+def add (a b : Measurement) : Measurement := result2 (a.val + b.val) 1.0 1.0 a b
 /-- `a - b` -/
-def sub (a b : Measurement) : Measurement := resultN (a.val - b.val) [1.0, -1.0] [a, b]
+def sub (a b : Measurement) : Measurement := result2 (a.val - b.val) 1.0 (-1.0) a b
 /-- `a * b` -/
-def mul (a b : Measurement) : Measurement := resultN (a.val * b.val) [b.val, a.val] [a, b]
+def mul (a b : Measurement) : Measurement := result2 (a.val * b.val) b.val a.val a b
 /-- `a / b` -/
 def div (a b : Measurement) : Measurement :=
   let oneovery := 1.0 / b.val
-  resultN (a.val / b.val) [oneovery, -a.val * (oneovery * oneovery)] [a, b]
+  result2 (a.val / b.val) oneovery (-a.val * (oneovery * oneovery)) a b
 /-- `-a` -/
 def neg (a : Measurement) : Measurement := result1 (-a.val) (-1.0) a
 /-- `inv(a)` -/
