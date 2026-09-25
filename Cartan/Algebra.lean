@@ -534,13 +534,15 @@ where
 with `step s (i+1)` (tail recursive). -/
 @[specialize] def scanLoop (step : F → Nat → F) : (k i : Nat) → FloatArray → F → FloatArray
   | 0, _, acc, _ => acc
-  | k + 1, i, acc, s => scanLoop step k (i + 1) (FlatFiber.push acc s) (step s (i + 1))
+  | 1, _, acc, s => FlatFiber.push acc s
+  | k + 2, i, acc, s => scanLoop step (k + 1) (i + 1) (FlatFiber.push acc s) (step s (i + 1))
 
 theorem size_scanLoop (step : F → Nat → F) : ∀ (k i : Nat) (acc : FloatArray) (s : F),
     (scanLoop step k i acc s).size = acc.size + k * FlatFiber.width F
   | 0, _, _, _ => by simp [scanLoop]
-  | k + 1, i, acc, s => by
-    rw [scanLoop, size_scanLoop step k, FlatFiber.size_push, Nat.succ_mul]; omega
+  | 1, _, _, _ => by simp [scanLoop]
+  | k + 2, i, acc, s => by
+    rw [scanLoop, size_scanLoop step (k + 1), FlatFiber.size_push, Nat.succ_mul (k + 1)]; omega
 
 /-- The field of running values `s₀ = t[0]`, `sᵢ = step sᵢ₋₁ i`. -/
 @[inline] def scan (t : TensorField m F) (step : F → Nat → F) : TensorField m F :=

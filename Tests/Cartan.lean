@@ -1,5 +1,6 @@
 import Tests.Cartan.Ranges
 import Tests.Cartan.Field2d
+import Tests.Cartan.Field1d
 
 /-!
 Cartan test aggregator.
@@ -16,5 +17,6 @@ namespace Tests.Cartan
 def run : IO (Nat × Nat) := runSuite "Cartan" do
   Tests.CartanTests.Ranges.run
   Tests.CartanTests.Field2d.run
+  Tests.CartanTests.Field1d.run
 
 end Tests.Cartan

@@ -180,9 +180,9 @@ end
 ops1["findroot(t-1.1)"] = Dict("base" => hx(point(base(findroot(t - 1.1)))), "fiber" => hx(fiber(findroot(t - 1.1))))
 ops1["sum(t)"] = hx(sum(t)); ops1["prod(t+1)"] = hx(prod(t + 1))
 # pairwise reductions beyond 16 and 1024 elements
-big = sin(TensorField(0:0.01:20))
+big = TensorField(0:0.01:20, x -> x * x / 7 - x / 3)
 ops1["sum(big)"] = hx(sum(big)); ops1["prod(1+big/100)"] = hx(prod(1 + big / 100))
-mid = sin(TensorField(0:0.37:13))
+mid = TensorField(0:0.37:13, x -> x * x / 7 - x / 3)
 ops1["sum(mid)"] = hx(sum(mid)); ops1["prod(1+mid/10)"] = hx(prod(1 + mid / 10))
 ops1["mid"] = encfield(mid)
 g5 = TensorField(ProductSpace(0:0.25:1, 0:0.25:1))
