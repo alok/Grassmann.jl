@@ -20,30 +20,27 @@ structure Pending where
   /-- the blocking port -/
   needs : String
 
-/-- The figures of `docs/port-notes/plot-inventory.md` §6 that need Cartan, Adapode or other
-unported packages. -/
+/-- The figures of `docs/port-notes/plot-inventory.md` §6 that need Cartan's differential geometry,
+Adapode or other unported packages, or that LeanPlot or Cartan.jl cannot draw. -/
 def pending : List Pending := [
-  ⟨"C1", "plane curve with unit frames, arclength/speed/curvature (Cartan `fiber.md:442-451`)", "Cartan (TensorField, frames, `scaledarrows`)"⟩,
-  ⟨"C2", "plane curves from curvature, `planecurve` (`fiber.md:452-457`)", "Cartan (`planecurve`, cumulative integrals)"⟩,
-  ⟨"C3", "Lorenz vector-field 3D streamplot (`fiber.md:460-468`)", "Cartan (TensorField over ProductSpace)"⟩,
+  ⟨"C1", "plane curve with unit frames, arclength/speed/curvature (Cartan `fiber.md:442-451`)", "Cartan differential geometry (`unitframe`, `arclength`, `curvature`); the `scaledarrows` recipe itself is `cartan-scaledarrows-*`"⟩,
+  ⟨"C2", "plane curves from curvature, `planecurve` (`fiber.md:452-457`)", "Cartan differential geometry (`planecurve`, cumulative integrals)"⟩,
+  ⟨"C3", "Lorenz vector-field 3D streamplot (`fiber.md:460-468`)", "a 401³ grid field (64 M points, 1.5 GB in Julia); GrassmannPlot's grid streamplot is ready"⟩,
   ⟨"C4 / A1", "Lorenz, Rössler, dynamo attractors (`fiber.md:470-474`, Adapode `examples/chaos.jl`)", "Adapode (`odesolve`, RK4/ABM4 on Chains)"⟩,
-  ⟨"C5", "Riemann-sphere curves as TensorFields (`fiber.md:477-493`)", "Cartan (same curves as `grassmann-torus` etc. over `TensorField`)"⟩,
-  ⟨"C6", "bivector streamplots over 31×31 grid fields (`fiber.md:495-509`)", "Cartan (grid interpolation of `tensorfield`)"⟩,
-  ⟨"C7", "conformal 3D streamplots over grids (`fiber.md:511-523`)", "Cartan"⟩,
-  ⟨"C8", "Lie bracket streamplots on the torus (`fiber.md:552-563`)", "Cartan (`gradient`, `Lie`)"⟩,
-  ⟨"C9", "circle and sphere wireframe (`fiber.md:602-613`)", "Cartan (`SphereParameter`, `surfacearea`)"⟩,
-  ⟨"C10", "link curves and linkmap meshes (`fiber.md:649-656`)", "Cartan (`linkmap`, `linknumber`)"⟩,
-  ⟨"C11 / C12", "torus and wiggle coloured by curvature (`fiber.md:669-695`)", "Cartan (shape operator, `meancurvature`, `gaussintrinsic`)"⟩,
+  ⟨"C8", "Lie bracket streamplots on the torus (`fiber.md:552-563`)", "Cartan differential geometry (`gradient`, `Lie`)"⟩,
+  ⟨"C10", "link curves and linkmap meshes (`fiber.md:649-656`)", "Cartan differential geometry (`linkmap`, `linknumber`)"⟩,
+  ⟨"C11 / C12", "torus and wiggle coloured by curvature (`fiber.md:669-695`)", "Cartan differential geometry (shape operator, `meancurvature`, `gaussintrinsic`)"⟩,
   ⟨"C13 / C14 / C15", "torus, Klein-bottle and half-plane geodesics (`fiber.md:709-763`)", "Cartan + Adapode (`geodesic`, `geosolve`)"⟩,
-  ⟨"C16", "Hopf fibration wireframes (`fiber.md:765-775`)", "Cartan (`HopfParameter`, `alteration!`)"⟩,
-  ⟨"C17", "tangent-space streamplots on sphere and torus (`fiber.md:778-797`)", "Cartan (streamplot transform hook over TensorFields)"⟩,
+  ⟨"C17 (sphere)", "tangent-space streamplot of a gradient on the sphere (`fiber.md:778-797`)", "Cartan differential geometry (`gradient`); the torus half is `cartan-torus-tangent-stream`"⟩,
   ⟨"C18", "da Rios vortex filament (`fiber.md:800-811`)", "Adapode (`odesolve` on curve fields; upstream bug P9)"⟩,
-  ⟨"C19", "Bishop frame (`fiber.md:813-820`)", "Cartan (`bishopunitframe`)"⟩,
+  ⟨"C19", "Bishop frame (`fiber.md:813-820`)", "Cartan differential geometry (`bishopunitframe`)"⟩,
   ⟨"C20 / A11", "disk eigenmodes (`fiber.md:823-834`)", "Adapode (FEM assembly, generalized eigensolver; MATLAB mesh upstream)"⟩,
   ⟨"C21 / A12", "heat flow around a NACA airfoil (`fiber.md:874-895`)", "Adapode + FlowGeometry + a 2D mesher"⟩,
   ⟨"C22 / A13", "Poisson on a sphere-in-cube tetrahedral mesh (`fiber.md:898-910`)", "Adapode + TetGen-like mesher"⟩,
-  ⟨"C23", "Stokes theorem on a paraboloid (`fiber.md:932-962`)", "Cartan (`graph`, `unitnormal`, `curl`)"⟩,
-  ⟨"M-*", "the 32 Makie-gallery ports of Cartan `docs/src/plot.md`", "Cartan (TensorField plot recipes)"⟩,
+  ⟨"C23", "Stokes theorem on a paraboloid (`fiber.md:932-962`)", "Cartan differential geometry (`graph`, `unitnormal`, `curl`)"⟩,
+  ⟨"M-contour_himmelblau, M-heatmap_logscale", "labelled isolines with a `ReversibleScale`; an `asinh` axis scale (`plot.md:66-76, 202-214`)", "LeanPlot contour labels and custom scales"⟩,
+  ⟨"M-contour_curvilinear, M-contourf", "curvilinear mesh + contour; contourf over a TensorField (`plot.md:77-98, 159-170`)", "broken upstream (`Mesh(::GridBundle{PointMatrix})`, `FieldError`): no Julia render"⟩,
+  ⟨"M-volume*, M-contour_volume*, M-voxels_cube_with_holes", "volume renderings and 3D contours of volumes (`plot.md:127-153, 350-388`)", "a LeanPlot `volume` mark (blank in CairoMakie anyway); a 100³ voxel chunk"⟩,
   ⟨"A2–A9", "leapfrog, wave, heat and rest-wave PDE surfaces and isosurfaces (Adapode `README.md:151-231`)", "Adapode (spectral solvers, FFT)"⟩,
   ⟨"A10", "L2 projector (Adapode `README.md:235-240`)", "Adapode (1D FEM)"⟩,
   ⟨"W1–W4", "NACA airfoils, double arc, wing surface, Rakich C-mesh (FlowGeometry)", "FlowGeometry port"⟩,
@@ -73,6 +70,11 @@ def render (root : System.FilePath) (rows : Array (Entry × Array Check × Strin
     "cd gallery && lake test                 # the data checks alone\n```\n\n" ++
     "`gallery/` is a Lake package of its own (it requires the root package and LeanPlot " ++
     "`f141f59`); both sides render at one pixel per unit of the same figure size.\n\n" ++
+    "The Cartan figures are drawn with `GrassmannPlot` (`gallery/GrassmannPlot/`), the port of " ++
+    "Cartan's Makie extension (`ext/MakieExt.jl`): `lines(t)`, `streamplot(t)`, `mesh(M, f)`, " ++
+    "`scaledarrows(M, t)`, … dispatch on the field's base and fiber types as in Julia. The Julia " ++
+    "originals are drawn by Cartan's own methods; where CairoMakie needs an `Axis3` for comparable " ++
+    "framing (Julia's automatic `LScene`), the scripts pass it.\n\n" ++
     "The data column compares the numbers behind each plot with the Julia dump " ++
     "(`oracle/gallery/data/<name>.json`): iteration counts of the fractals, curve samples, " ++
     "streamlines, graph edges and error curves. Images are compared by eye (DESIGN.md §0: " ++
@@ -90,7 +92,7 @@ def render (root : System.FilePath) (rows : Array (Entry × Array Check × Strin
       s := s ++ s!"| {fig} | <img src=\"lean/{e.name}.png\" width=\"340\" alt=\"{e.name} (Lean)\"> | " ++
         s!"<img src=\"julia/{e.name}.png\" width=\"340\" alt=\"{e.name} (Julia)\"> | {agreement cs}<br><sub>pixels: {cell img}</sub> |\n"
     s := s ++ "\n"
-  s := s ++ "## Pending (need Cartan, Adapode or other unported packages)\n\n" ++
+  s := s ++ "## Pending\n\n" ++
     "From the ranked inventory in `docs/port-notes/plot-inventory.md` §6-§7.\n\n" ++
     "| id | figure | waits for |\n|---|---|---|\n"
   for p in pending do
@@ -101,7 +103,11 @@ def render (root : System.FilePath) (rows : Array (Entry × Array Check × Strin
     "(`Tests/Fatou/Catalog.lean`); maps with `exp`/`log`/complex powers need REDUCE's Newton forms " ++
     "written out.\n" ++
     "* The `raster` point-set rasterization of ColorTypesExt (`plot-inventory.md` §4.10) has no " ++
-    "documented figure.\n"
+    "documented figure.\n" ++
+    "* `planes`, `spaces`, `planesbundle`, `spacesbundle` of frames are in `GrassmannPlot.Arrows`, but " ++
+    "Cartan 0.4.16's `planes`/`scaledplanes` return `nothing` after drawing every parallelogram in a " ++
+    "figure of its own, and `planesbundle` reads an undefined `M` (B4), so there is no Julia render " ++
+    "to compare with.\n"
   s := s ++ "\nVideos (21 YouTube talks) and LaTeX formula images (Fatou basins, Dendriform) are " ++
     "out of scope (`plot-inventory.md` §1).\n"
   return s
