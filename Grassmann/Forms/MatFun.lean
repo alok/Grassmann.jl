@@ -285,4 +285,63 @@ def log (T : Endomorphism V (.chain 1) Float) : Except String (Endomorphism V (.
 
 end TensorOperator
 
+/-! ## Outermorphisms, dyadics and projectors (Julia `forms.jl:401-458, 774-776`) -/
+
+namespace Outermorphism
+
+variable {V : TensorBundle}
+
+/-- Julia `exp(t::Outermorphism) = Outermorphism(exp(t[1]))` (`forms.jl:774-776`): the
+compounds of the grade-1 map's exponential. -/
+def exp (O : Outermorphism V V Float) : Outermorphism V V Float := ofSimplex O.base.exp
+
+/-- Julia `expm1(t::Outermorphism) = Outermorphism(expm1(t[1]))` (`forms.jl:774-776`). -/
+def expm1 (O : Outermorphism V V Float) : Outermorphism V V Float := ofSimplex O.base.expm1
+
+/-- Julia `log(t::Outermorphism) = Outermorphism(log(t[1]))` (`forms.jl:774-776`), where the
+real logarithm of the grade-1 map exists. -/
+def log (O : Outermorphism V V Float) : Except String (Outermorphism V V Float) :=
+  O.base.log.map ofSimplex
+
+end Outermorphism
+
+namespace Dyadic
+
+variable {V : TensorBundle} {G : Nat}
+
+/-- Julia `exp(P::Dyadic) = exp(Endomorphism(P))` (`forms.jl:457`). -/
+def exp (D : Dyadic V G V G Float) : Endomorphism V (.chain G) Float := D.toOperator.exp
+
+/-- Julia `expm1(P::Dyadic) = expm1(Endomorphism(P))` (`forms.jl:456`). -/
+def expm1 (D : Dyadic V G V G Float) : Endomorphism V (.chain G) Float := D.toOperator.expm1
+
+/-- Julia `log(P::Dyadic) = log(Endomorphism(P))` (`forms.jl:458`), grade 1. -/
+def log (D : Dyadic V 1 V 1 Float) : Except String (Endomorphism V (.chain 1) Float) := D.toOperator.log
+
+end Dyadic
+
+namespace Projector
+
+variable {V : TensorBundle} {G : Nat}
+
+/-- The first column `out` of an operator as Julia's `Proj{V}(out/√out[1])` (`forms.jl:401-408`:
+the raw constructor, no renormalisation, `λ = 1`). -/
+@[inline] def ofFirstColumn (M : Endomorphism V (.chain G) Float) : Projector V G Float :=
+  let n := (Layout.chain G).size V.n
+  let out : Values Float ((Layout.chain G).size V.n) := Values.ofFn fun i => M.entry i.1 0
+  let s := Float.sqrt (M.entry 0 0)
+  if n = 0 then ⟨⟨out⟩, 1⟩ else ⟨⟨out.map (· / s)⟩, 1⟩
+
+/-- Julia `exp(P::Proj) = (out = exp(Chain(P))[1]; Proj{V}(out/√out[1]))` (`forms.jl:401-404`):
+the first column of the exponential of `λ v ⊗ v`, scaled by the square root of its first
+entry (Julia's heuristic; `λ = 1`). -/
+def exp (P : Projector V G Float) : Projector V G Float := ofFirstColumn P.toOperator.exp
+
+/-- Julia `log(P::Proj) = (out = log(Endomorphism(P))[1]; Proj{V}(out/√out[1]))`
+(`forms.jl:405-408`), grade 1, where the real logarithm exists. -/
+def log (P : Projector V 1 Float) : Except String (Projector V 1 Float) :=
+  P.toOperator.log.map ofFirstColumn
+
+end Projector
+
 end Grassmann
