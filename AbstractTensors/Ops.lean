@@ -321,20 +321,22 @@ instance {α : Type u} : ComplementRight (UniformScaling α) α := ⟨UniformSca
 Reals are their own scalar, even part and involution; their odd part is `0`
 (Julia returns the `Int` `0` whatever the input type, bug B3; here it is `0`
 in the input type). Julia defines none of these for `Complex`; the port
-extends them to complex numbers in the same way. -/
+extends them to complex numbers in the same way. They are stated for every
+`Coeff` type at low priority, so tensor types that later become coefficients
+(DESIGN §4.1) keep their own, more specific instances. -/
 
 section ScalarInstances
 
 variable {α : Type}
 
-instance [Coeff α] : GradeProj α 0 α := ⟨id⟩
-instance [Coeff α] : Even α α := ⟨id⟩
-instance [Coeff α] : Odd α α := ⟨fun _ => Coeff.zero⟩
-instance [Coeff α] : Involute α := ⟨id⟩
+instance (priority := low) [Coeff α] : GradeProj α 0 α := ⟨id⟩
+instance (priority := low) [Coeff α] : Even α α := ⟨id⟩
+instance (priority := low) [Coeff α] : Odd α α := ⟨fun _ => Coeff.zero⟩
+instance (priority := low) [Coeff α] : Involute α := ⟨id⟩
 /-- Julia `wedgedot(a, b) = a*b` on scalars (AT:350). -/
-instance [Coeff α] : WedgeDot α α α := ⟨(· * ·)⟩
+instance (priority := low) [Coeff α] : WedgeDot α α α := ⟨(· * ·)⟩
 /-- Julia `contraction(a, b) = dot(a, b) = conj(a)*b` on scalars (AT:351). -/
-instance [Coeff α] [Conj α] : Contraction α α α := ⟨fun a b => conj a * b⟩
+instance (priority := low) [Coeff α] [Conj α] : Contraction α α α := ⟨fun a b => conj a * b⟩
 
 end ScalarInstances
 

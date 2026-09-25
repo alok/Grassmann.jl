@@ -34,8 +34,11 @@ class Packed (α : Type u) where
   push : Arr → α → Arr
   /-- Checked write. -/
   set : (a : Arr) → Fin (size a) → α → Arr
+  /-- A fresh array is empty. -/
   size_mkEmpty (n : Nat) : size (mkEmpty n) = 0
+  /-- Pushing adds one element. -/
   size_push (a : Arr) (x : α) : size (push a x) = size a + 1
+  /-- Writing keeps the size. -/
   size_set (a : Arr) (i : Fin (size a)) (x : α) : size (set a i x) = size a
   /-- Pushing keeps the old elements. -/
   get_push_lt (a : Arr) (x : α) (i : Nat) (h : i < size a) :
