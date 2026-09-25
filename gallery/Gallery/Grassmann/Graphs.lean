@@ -138,6 +138,7 @@ def showEdges (E : Array (Nat × Nat)) : String := ", ".intercalate (E.toList.ma
 def entries : List Entry :=
   let mk (name title expr source : String) (n : Nat) (terms : Array (UInt64 × Float)) : Entry :=
     { name, title, group := "Grassmann paper graphs", source := s!"`{expr}` (Grassmann.jl {source})"
+      upstream := s!"https://raw.githubusercontent.com/chakravala/Grassmann.jl/master/paper/img/{(name.drop 10).toString}.png"
       build := fun j? => do
         let E := digraph terms
         let checks := match j? with

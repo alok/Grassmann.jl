@@ -54,13 +54,13 @@ def pending : List Pending := [
 /-- Escape `|` for a Markdown table cell. -/
 def cell (s : String) : String := s.replace "|" "\\|"
 
-/-- The agreement column of a figure. -/
+/-- The agreement column of a figure: a pass count that unfolds into the individual checks. -/
 def agreement (cs : Array Check) : String :=
   if cs.isEmpty then "no data dump" else
   let bad := cs.filter (!·.ok)
   let head := if bad.isEmpty then s!"✅ {cs.size}/{cs.size} checks" else s!"❌ {cs.size - bad.size}/{cs.size} checks"
-  head ++ "<br>" ++ "<br>".intercalate (cs.toList.map fun c =>
-    s!"{if c.ok then "" else "**FAIL** "}{cell c.label}: {cell c.detail}")
+  s!"<details><summary>{head}</summary>" ++ "<br>".intercalate (cs.toList.map fun c =>
+    s!"{if c.ok then "" else "**FAIL** "}{cell c.label}: {cell c.detail}") ++ "</details>"
 
 /-- Render the page. `extra` is the per-figure note of `docs/gallery/notes/<name>.md` if any. -/
 def render (root : System.FilePath) (rows : Array (Entry × Array Check × String)) : IO String := do
@@ -81,9 +81,11 @@ def render (root : System.FilePath) (rows : Array (Entry × Array Check × Strin
       if e.group != g then continue
       let notePath := root / "docs" / "gallery" / "notes" / s!"{e.name}.md"
       let note ← if ← notePath.pathExists then pure ((← IO.FS.readFile notePath).trimAscii.toString) else pure ""
-      let fig := s!"**{e.name}**<br>{cell e.title}<br><sub>{cell e.source}</sub>" ++
+      let up := if e.upstream.isEmpty then "" else s!" ([original]({e.upstream}))"
+      let fig := s!"**{e.name}**{up}<br>{cell e.title}<br><sub>{cell e.source}</sub>" ++
         (if note.isEmpty then "" else s!"<br><sub>{cell (note.replace "\n" " ")}</sub>")
-      s := s ++ s!"| {fig} | ![{e.name} (Lean)](lean/{e.name}.png) | ![{e.name} (Julia)](julia/{e.name}.png) | {agreement cs}<br><sub>pixels: {cell img}</sub> |\n"
+      s := s ++ s!"| {fig} | <img src=\"lean/{e.name}.png\" width=\"340\" alt=\"{e.name} (Lean)\"> | " ++
+        s!"<img src=\"julia/{e.name}.png\" width=\"340\" alt=\"{e.name} (Julia)\"> | {agreement cs}<br><sub>pixels: {cell img}</sub> |\n"
     s := s ++ "\n"
   s := s ++ "## Pending (need Cartan, Adapode or other unported packages)\n\n" ++
     "From the ranked inventory in `docs/port-notes/plot-inventory.md` §6-§7.\n\n" ++

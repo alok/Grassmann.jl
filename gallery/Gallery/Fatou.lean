@@ -181,29 +181,33 @@ def orbitChecks (o : RealOrbit) (j : Lean.Json) : Array Check :=
 
 /-! ## Entries -/
 
+/-- The URL of a Fatou.jl README image. -/
+def fatouImg (stem : String) : String :=
+  s!"https://raw.githubusercontent.com/chakravala/Fatou.jl/master/img/{stem}.png"
+
 /-- The five Fatou README figures. -/
 def entries : List Entry := [
-  { name := "fatou-orbit", group := "Fatou"
+  { name := "fatou-orbit", group := "Fatou", upstream := fatouImg "orbit"
     title := "Cobweb orbit of x ↦ x² − 0.67"
     source := "`juliafill(:(z^2-0.67),∂=[-1.25,1.5],x0=1.25,orbit=17,depth=3,n=147) |> orbit` (Fatou.jl `README.md:58-64`)"
     build := fun j? => do
       let o := orbitSet.realOrbit
       return { fig := orbitFigure orbitSet o (640, 480)
                checks := match j? with | some j => orbitChecks o j | none => #[] } },
-  { name := "fatou-filled-julia", group := "Fatou"
+  { name := "fatou-filled-julia", group := "Fatou", upstream := fatouImg "filled-julia"
     title := "Filled Julia set of z² − 0.06 + 0.67i (iteration counts, gnuplot)"
     source := "`plot(fatou(juliafill(:(z^2+$c),∂=[-1.5,1.5,-1,1],N=80,n=1501,cmap=\"gnuplot\",iter=true)), bare=true)` (`README.md:66-74`)"
     build := fun j? => pure (rasterEntry (fatou filledJulia) (640, 440) true true "" j?) },
-  { name := "fatou-mandelbrot", group := "Fatou"
+  { name := "fatou-mandelbrot", group := "Fatou", upstream := fatouImg "mandelbrot"
     title := "Mandelbrot set, limit colouring exp(−|z₂₀|) (gist_earth)"
     source := "`mandelbrot(:(z^2+c),n=800,N=20,∂=[-1.91,0.51,-1.21,1.21],cmap=\"gist_earth\") |> fatou |> plot` (`README.md:76-82`)"
     build := fun j? => pure (rasterEntry (fatou mandel) (600, 500) false true "" j?) },
-  { name := "fatou-newton", group := "Fatou"
+  { name := "fatou-newton", group := "Fatou", upstream := fatouImg "newton"
     title := "Newton fractal of z³ − 1 (iteration counts, jet)"
     source := "`newton(:(z^3-1),n=800,ϵ=0.1,N=25,iter=true,cmap=\"jet\") |> fatou |> plot` (`README.md:96-104`)"
     build := fun j? => pure (rasterEntry (fatou newtonSet) (620, 500) false true
       (newtonSet.yLabel.getD "") j?) },
-  { name := "fatou-generalized-newton", group := "Fatou"
+  { name := "fatou-generalized-newton", group := "Fatou", upstream := fatouImg "generalized-newton"
     title := "Generalized Newton fractal of sin z − 1, m = 1 − i (cubehelix)"
     source := "`newton(:(sin(z)-1),m=1-1im,∂=[-2π/3,-π/3,-π/6,π/6],n=500,N=33,iter=true,ϵ=0.05,cmap=\"cubehelix\") |> fatou |> plot` (`README.md:106-116`)"
     build := fun j? => pure (rasterEntry (fatou genNewton) (620, 500) false false

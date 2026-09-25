@@ -1,0 +1,1 @@
+The paper figure came from `GraphPlot.gplot` via Compose (not installable, and `Grassmann.graph` was removed upstream); both sides draw GraphPlot's circular layout (vertex k at angle 2π(k-1)/n, y down) with the same data-space disks and arrowheads, from the `ext/LightGraphsExt.jl` edge rule. Edges between the tetrahedron's vertices run both ways (double arrows).

@@ -1,0 +1,1 @@
+The README's `gridsize=(10,10)` is padded to `(10,10,10)` (Makie `to_ndim`; Makie 0.24 wants the 3-tuple). CairoMakie draws the arrowheads as shaded cones, LeanPlot as flat projected triangles (its documented 3D approximation); both use `Axis3` instead of the README's `LScene`.

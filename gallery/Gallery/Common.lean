@@ -46,6 +46,8 @@ structure Entry where
   source : String
   /-- package group for the index (`Fatou`, `Grassmann`, `Wilkinson`) -/
   group : String
+  /-- the upstream image (README/paper PNG) this figure reproduces, if any -/
+  upstream : String := ""
   /-- build the figure; the argument is the parsed Julia dump if present -/
   build : Option Json → IO Outcome
 

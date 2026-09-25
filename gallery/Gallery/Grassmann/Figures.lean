@@ -98,9 +98,13 @@ def planeVersorText : Nat → String
   | 1 => "exp(π*v12/2)" | 2 => "exp((π/2)*v12/2)" | 3 => "exp((π/4)*v12/2)"
   | 4 => "v1*exp((π/4)*v12/2)" | 5 => "exp((π/8)*v12/2)" | _ => "v1*exp((π/4)*v12/2)"
 
+/-- The URL of a Grassmann.jl paper image (`paper/img/<stem>.png`). -/
+def paperImg (stem : String) : String :=
+  s!"https://raw.githubusercontent.com/chakravala/Grassmann.jl/master/paper/img/{stem}.png"
+
 /-- The plane entries. -/
 def planeEntry (k : Nat) : Entry :=
-  { name := s!"grassmann-plane-{k}", group := "Grassmann"
+  { name := s!"grassmann-plane-{k}", group := "Grassmann", upstream := paperImg s!"plane-{k}"
     title := s!"Versor field of {planeVersorText k} on the {if k ≤ 4 then "Euclidean" else "hyperbolic"} plane"
     source := s!"`{if k ≤ 4 then "basis\"2\"" else "@basis S\"+-\""}; streamplot(vectorfield({planeVersorText k}),-1.5..1.5,-1.5..1.5)` (Grassmann.jl `README.md:271-285`)"
     build := fun j? => do
@@ -128,7 +132,7 @@ def curveFigure (xs ys zs : FloatArray) : Figure :=
 
 /-- A curve entry from its sampled coordinates. -/
 def curveEntry (name title source : String) (sample : Unit → FloatArray × FloatArray × FloatArray) : Entry :=
-  { name, title, source, group := "Grassmann"
+  { name, title, source, group := "Grassmann", upstream := paperImg (name.drop 10).toString
     build := fun j? => do
       let (xs, ys, zs) := sample ()
       return { fig := curveFigure xs ys zs, checks := match j? with | some j => curveChecks xs ys zs j | none => #[] } }
@@ -149,7 +153,7 @@ def streamFigure3 (r : Stream.Result) : Figure :=
 
 /-- A 3D stream entry. -/
 def streamEntry3 (name title source : String) (w₁ w₂ w₃ : Nat) : Entry :=
-  { name, title, source, group := "Grassmann"
+  { name, title, source, group := "Grassmann", upstream := paperImg (name.drop 10).toString
     build := fun j? => do
       let r := sphereStream w₁ w₂ w₃
       return { fig := streamFigure3 r, checks := match j? with | some j => streamChecks r j | none => #[] } }
