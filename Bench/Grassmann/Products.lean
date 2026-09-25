@@ -1,4 +1,5 @@
 import Bench.Grassmann.Common
+import Grassmann.Fuse
 
 /-!
 # Typed operations of the generated kernels (DESIGN.md §5.2, docs/PERF.md)
@@ -42,6 +43,9 @@ structure CaseSet where
   unary : Bool := true
   /-- The harness floors. -/
   floors : Bool := true
+  /-- Fused expressions (`fused%`, `Grassmann.Fuse`), each keyed `<op> [fused]` next to its
+  unfused case; the Julia twin times the same expression. -/
+  fused : Bool := true
 
 /-- `space_cases% "label" V seed cs`: the cases of one space as a `BenchM Unit` program, written at
 the concrete space `V` (a macro, so every operation is elaborated at concrete types as in user
@@ -130,6 +134,31 @@ macro_rules
         case1 (k "complementright Multivector") (fun (a : Multivector $V Float) =>
           total (complementRight a : Multivector $V Float).v) M p
         case1 (k "grade 2 of Multivector") (fun (a : Multivector $V Float) => total (gradePart a 2).v) M p
-        case1 (k "even Multivector") (fun (a : Multivector $V Float) => total (even a : Spinor $V Float).v) M p)
+        case1 (k "even Multivector") (fun (a : Multivector $V Float) => total (even a : Spinor $V Float).v) M p
+      -- the same expressions through `fused%` (one kernel, one result allocation)
+      if ($cs : CaseSet).fused then
+        case2 (k "R*v*~R [fused]") (fun (R : Spinor $V Float) (v : Chain $V 1 Float) =>
+          total (fused% (R * v * ~R : CoSpinor $V Float)).v) S U p
+        case2 (k "Chain1×Chain1 [fused]") (fun (a b : Chain $V 1 Float) =>
+          total (fused% (a × b : Chain $V (n - (1 + 1)) Float)).v) U W p
+        case2 (k "Multivector⊛Multivector [fused]") (fun (a b : Multivector $V Float) =>
+          total (fused% (a ⊛ b : Chain $V 0 Float)).v) M N p
+        case1 (k "abs2 Multivector [fused]") (fun (a : Multivector $V Float) => total (fused% a.abs2).v) M p
+        case2 (k "Spinor-Spinor [fused]") (fun (s t : Spinor $V Float) => total (fused% (s - t)).v) S T p
+        case1 (k "2.5*Multivector [fused]") (fun (a : Multivector $V Float) => total (fused% (c25 * a)).v) M p
+        case2 (k "2.5*Chain1+1.5*Chain1 [fused]") (fun (a b : Chain $V 1 Float) =>
+          total (fused% (c25 * a + c15 * b)).v) U W p
+        case2 (k "Chain1+Multivector [fused]") (fun (u : Chain $V 1 Float) (b : Multivector $V Float) =>
+          total (fused% (u + b : Multivector $V Float)).v) U N p
+        case2 (k "Chain1+Chain2 [fused]") (fun (u : Chain $V 1 Float) (c : Chain $V 2 Float) =>
+          total (fused% (u + c : Multivector $V Float)).v) U C p
+        case1 (k "grade 2 of Multivector [fused]") (fun (a : Multivector $V Float) =>
+          total (fused% (gradePart a 2)).v) M p
+        case1 (k "even Multivector [fused]") (fun (a : Multivector $V Float) =>
+          total (fused% (even a : Spinor $V Float)).v) M p
+        if ($cs : CaseSet).inverses then
+          case1 (k "inv Chain1 [fused]") (fun (u : Chain $V 1 Float) => total (fused% u⁻¹).v) U p
+          case2 (k "Chain1/Chain1 [fused]") (fun (a b : Chain $V 1 Float) =>
+            total (fused% (a / b : Spinor $V Float)).v) U W p)
 
 end Bench.Grassmann

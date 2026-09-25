@@ -62,6 +62,7 @@ Base.@kwdef struct GCaseSet
     linear::Bool = true
     unary::Bool = true
     floors::Bool = true
+    fused::Bool = true
 end
 
 function gspace(ctx, label, V, seed, cs::GCaseSet = GCaseSet())
@@ -135,6 +136,24 @@ function gspace(ctx, label, V, seed, cs::GCaseSet = GCaseSet())
         gcase1(ctx, k("complementright Multivector"), complementright, M)
         gcase1(ctx, k("grade 2 of Multivector"), a -> a(2), M)
         gcase1(ctx, k("even Multivector"), even, M)
+    end
+    # the Lean `fused%` versions of these expressions; Julia evaluates the same expressions
+    if cs.fused
+        gcase2(ctx, k("R*v*~R [fused]"), (R, v) -> R * v * ~R, S, U)
+        gcase2(ctx, k("Chain1×Chain1 [fused]"), ×, U, W)
+        gcase2(ctx, k("Multivector⊛Multivector [fused]"), ⊛, M, N)
+        gcase1(ctx, k("abs2 Multivector [fused]"), abs2, M)
+        gcase2(ctx, k("Spinor-Spinor [fused]"), -, S, T)
+        gcase1(ctx, k("2.5*Multivector [fused]"), a -> 2.5 * a, M)
+        gcase2(ctx, k("2.5*Chain1+1.5*Chain1 [fused]"), (a, b) -> 2.5 * a + 1.5 * b, U, W)
+        gcase2(ctx, k("Chain1+Multivector [fused]"), +, U, N)
+        gcase2(ctx, k("Chain1+Chain2 [fused]"), +, U, C)
+        gcase1(ctx, k("grade 2 of Multivector [fused]"), a -> a(2), M)
+        gcase1(ctx, k("even Multivector [fused]"), even, M)
+        if cs.inverses
+            gcase1(ctx, k("inv Chain1 [fused]"), inv, U)
+            gcase2(ctx, k("Chain1/Chain1 [fused]"), /, U, W)
+        end
     end
     nothing
 end
