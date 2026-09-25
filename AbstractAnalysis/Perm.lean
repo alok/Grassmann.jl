@@ -64,6 +64,22 @@ def mul (a b : Perm N) : Perm N :=
   ⟨Vector.ofFn fun i => a.fwd.get (b.fwd.get i), Vector.ofFn fun i => b.bwd.get (a.bwd.get i),
    by intro i; simp [a.bwd_fwd, b.bwd_fwd], by intro i; simp [a.fwd_bwd, b.fwd_bwd]⟩
 
+/-- `Vector.map` of a lookup is the `Vector.ofFn` composition. -/
+theorem map_get_eq_ofFn (a b : Vector (Fin N) N) :
+    b.map a.get = Vector.ofFn fun i => a.get (b.get i) := by
+  apply Vector.ext; intro i hi; simp [Vector.get]
+
+/-- The compiled form of `mul`: two `Vector.map`s over the stored images (no closure call per
+entry through `Vector.ofFn`). -/
+def mulFast (a b : Perm N) : Perm N :=
+  ⟨b.fwd.map a.fwd.get, a.bwd.map b.bwd.get,
+   by rw [map_get_eq_ofFn, map_get_eq_ofFn]; exact (mul a b).bwd_fwd,
+   by rw [map_get_eq_ofFn, map_get_eq_ofFn]; exact (mul a b).fwd_bwd⟩
+
+@[csimp] theorem mul_eq_mulFast : @mul = @mulFast := by
+  funext N a b
+  exact Perm.ext (map_get_eq_ofFn a.fwd b.fwd).symm
+
 /-- Julia `inv(p)` (`sortperm`): here just the stored inverse. -/
 def inv (a : Perm N) : Perm N := ⟨a.bwd, a.fwd, a.fwd_bwd, a.bwd_fwd⟩
 
@@ -189,6 +205,9 @@ instance : JuliaRepr (Perm N) :=
 instance : ApproxEq (Perm N) := ⟨(· == ·)⟩
 
 instance : HasParity (Perm N) := ⟨isEven⟩
+
+/-- A hash of the image vector (for `Semimagma.magmaHashed`/`groupHashed`). -/
+instance : Hashable (Perm N) := ⟨fun p => p.fwd.toArray.foldl (fun h i => mixHash h (hash i.1)) 7⟩
 
 /-- The permutation group law (`*`, `inv`). -/
 abbrev law (N : Nat) : Law (Perm N) := ⟨(· * ·), Perm.inv⟩

@@ -31,6 +31,7 @@ def subgroupCase (N : Nat) (i : Nat) (r : Json) : TestM Unit := do
   checkEq s!"{tag}.issubgroup" (Semimagma.isSubgroup H G) (jBool (jGet r "issubgroup"))
   checkEq s!"{tag}.isabelian" (Semimagma.isAbelian H) (jBool (jGet r "isabelian"))
   checkEq s!"{tag}.isgroup" (Semimagma.isGroup H) (jBool (jGet r "isgroup"))
+  checkEq s!"{tag}.isGroupHashed" (Semimagma.isGroupHashed H) (jBool (jGet r "isgroup"))
   checkEq s!"{tag}.commutator" (lists (Semimagma.commutator H H)) (jPermLists (jGet r "commutator"))
   checkEq s!"{tag}.leftcosets(Julia)" ((Julia.leftCosets H G).toList.map lists)
     ((jArr (jGet r "leftcosets")).toList.map jPermLists)
@@ -83,11 +84,15 @@ def suite : TestM Unit := do
   for e in jArr (jGet j "cyclic") do
     let p : Perm 4 := jPerm 4 (jGet e "p")
     checkEq s!"group([{p.toList}])" (lists (Semimagma.group (L := Perm.law 4) #[p])) (jPermLists (jGet e "group"))
+    checkEq s!"groupHashed([{p.toList}])" (lists (Semimagma.groupHashed (L := Perm.law 4) #[p]))
+      (jPermLists (jGet e "group"))
   for e in jArr (jGet j "magma2") do
     let p : Perm 4 := jPerm 4 (jGet e "p")
     let q : Perm 4 := jPerm 4 (jGet e "q")
     checkEq s!"magma([{p.toList},{q.toList}])" (lists (Semimagma.magma (L := Perm.law 4) ⟨#[p, q]⟩))
       (jPermLists (jGet e "magma"))
+    checkEq s!"magmaHashed([{p.toList},{q.toList}])"
+      (lists (Semimagma.magmaHashed (L := Perm.law 4) ⟨#[p, q]⟩)) (jPermLists (jGet e "magma"))
   let mut i := 0
   for r in jArr (jGet j "subgroups") do
     i := i + 1
@@ -104,6 +109,9 @@ def suite : TestM Unit := do
     let g := jInt (jGet e "g")
     let G := Semimagma.group (L := ⟨fun a b => (a + b) % n, fun a => (-a) % n⟩) #[g]
     checkEq s!"group([{g}], +mod {n})" G.v.toList (jInts (jGet e "group")).toList
+    checkEq s!"groupHashed([{g}], +mod {n})"
+      (Semimagma.groupHashed (L := ⟨fun a b => (a + b) % n, fun a => (-a) % n⟩) #[g]).v.toList
+      (jInts (jGet e "group")).toList
     checkEq s!"iscyclic Z{n}⟨{g}⟩" (Julia.isCyclic G) (jBool (jGet e "iscyclic"))
   -- Gaussian units
   let gj := jGet j "gaussian"
@@ -219,6 +227,26 @@ def suite : TestM Unit := do
   checkEq "Z12⟨8⟩ group" (Semimagma.isGroup z12) true
   checkEq "invMod 7 3" (invMod 7 3) 5
   checkEq "invMod 12 5" (invMod 12 5) 5
+  -- the hash index on a large closure: S₆ from a transposition and a 6-cycle (720 elements)
+  let t6 : Perm 6 := (Cycle.ofList [1, 2] : Cycle 6).toPerm
+  let r6 : Perm 6 := (Cycle.ofList [1, 2, 3, 4, 5, 6] : Cycle 6).toPerm
+  let s6 := Semimagma.magmaHashed (L := Perm.law 6) ⟨#[t6, r6]⟩
+  checkEq "magmaHashed(S6).order" s6.order 720
+  checkEq "isGroupHashed(S5)" (Semimagma.isGroupHashed (SymmetricGroup 5)) true
+  checkEq "isGroupHashed(odd4)" (Semimagma.isGroupHashed odd4) false
+  checkEq "isGroupHashed(Z12⟨8⟩ ∪ {1})" (Semimagma.isGroupHashed
+    (⟨#[0, 4, 8, 1]⟩ : Semimagma Int ⟨fun a b => (a + b) % 12, fun a => (-a) % 12⟩)) false
+  -- a closed, inverse-complete but non-associative table: x∘y = x - y (mod 3), inverse = id
+  let sub3 : Semimagma Int ⟨fun a b => (a - b) % 3, id⟩ := ⟨#[0, 1, 2]⟩
+  checkEq "isGroupHashed(Z3, -)" (Semimagma.isGroupHashed sub3) (Semimagma.isGroup sub3)
+  checkEq "isGroup(Z3, -) = false" (Semimagma.isGroup sub3) false
+  checkEq "magmaHashed(S6) = SymmetricGroup 6 (as sets)"
+    ((Semimagma.subset s6 (SymmetricGroup 6)) && (Semimagma.subset (SymmetricGroup 6) s6)) true
+  let s5 := Semimagma.magma (L := Perm.law 5) ⟨#[(Cycle.ofList [1, 2] : Cycle 5).toPerm,
+    (Cycle.ofList [1, 2, 3, 4, 5] : Cycle 5).toPerm]⟩
+  checkEq "magmaHashed(S5) = magma(S5) (same order)" (lists (Semimagma.magmaHashed (L := Perm.law 5)
+    ⟨#[(Cycle.ofList [1, 2] : Cycle 5).toPerm, (Cycle.ofList [1, 2, 3, 4, 5] : Cycle 5).toPerm]⟩))
+    (lists s5)
   checkEq "invMod units of 30" ((List.range 30).filter (Nat.gcd · 30 == 1) |>.all fun a => a * invMod 30 a % 30 == 1) true
 
 end Tests.AbstractAnalysis.Groups
