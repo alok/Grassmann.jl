@@ -50,22 +50,24 @@ structure RemPio2 where
   lo : Float
 
 /-- Zero the low 32 bits (Julia `reinterpret(Float64, (reinterpret(UInt64, x) >> 32) << 32)`). -/
-@[inline] def truncLow (x : Float) : Float := Float.ofBits ((x.toBits >>> 32) <<< 32)
+@[inline] def truncLow (x : Float) : Float := Bits.ofBits (((Bits.toBits x) >>> 32) <<< 32)
 
 /-- Julia `poshighword(x::Float64)`: the upper 32 bits without the sign. -/
-@[inline] def poshighword (x : Float) : UInt32 := ((x.toBits >>> 32) &&& 0x7FFFFFFF).toUInt32
+@[inline] def poshighword (x : Float) : UInt32 := (((Bits.toBits x) >>> 32) &&& 0x7FFFFFFF).toUInt32
 
-/-- Julia `cody_waite_2c_pio2(x, fn, n)` (rem_pio2.jl:40-47): `x - fn·π/2` with two constants. -/
+/-- Julia `cody_waite_2c_pio2(x, fn, n)` (rem_pio2.jl:40-47): `x - fn·π/2` with two constants.
+`muladd(-fn, c, x)` is written `fma(fn, -c, x)` (the same exact product): negating a literal
+`fn` would be a closed term, read through an atomic once-cell (`docs/PERF.md`). -/
 @[inline] def codyWaite2c (x fn : Float) (n : Int64) : RemPio2 :=
-  let z := Float.fma (-fn) f64! 1.57079632673412561417e+00 x
-  let y1 := Float.fma (-fn) f64! 6.07710050650619224932e-11 z
-  let y2 := Float.fma (-fn) f64! 6.07710050650619224932e-11 (z - y1)
+  let z := Float.fma fn f64! -1.57079632673412561417e+00 x
+  let y1 := Float.fma fn f64! -6.07710050650619224932e-11 z
+  let y2 := Float.fma fn f64! -6.07710050650619224932e-11 (z - y1)
   ⟨n, y1, y2⟩
 
 /-- Julia `cody_waite_ext_pio2(x, xhp)` (rem_pio2.jl:49-87): up to three Cody–Waite steps. -/
 @[inline] def codyWaiteExt (x : Float) (xhp : UInt32) : RemPio2 :=
   let fn := F64.round (x * f64! 0.6366197723675814)
-  let r := Float.fma (-fn) f64! 1.57079632673412561417e+00 x
+  let r := Float.fma fn f64! -1.57079632673412561417e+00 x
   let w := fn * f64! 6.07710050650619224932e-11
   let j := xhp >>> 20
   let y1 := r - w
@@ -84,9 +86,9 @@ structure RemPio2 where
       let r := t - w
       let w := Float.fma fn f64! 8.47842766036889956997e-32 (-((t - r) - w))
       let y1 := r - w
-      ⟨fn.toInt64, y1, (r - y1) - w⟩
-    else ⟨fn.toInt64, y1, (r - y1) - w⟩
-  else ⟨fn.toInt64, y1, (r - y1) - w⟩
+      ⟨Bits.toInt64Small fn, y1, (r - y1) - w⟩
+    else ⟨Bits.toInt64Small fn, y1, (r - y1) - w⟩
+  else ⟨Bits.toInt64Small fn, y1, (r - y1) - w⟩
 
 /-- Julia `INV_2PI` (rem_pio2.jl:26-38): the bits of `1/(2π)` in 64-bit words. -/
 def inv2pi : Array UInt64 := #[
@@ -152,7 +154,7 @@ for the magnitude `|f| = (xh, xl)` and the sign `neg`. -/
     -- `m1 = ((x >> (n1-26)) % UInt64) << 27` (a left shift when `n1 < 26`)
     let top := if n1 ≥ 26 then shr128lo xh xl (n1 - 26) else xl <<< (26 - n1)
     let m1 := top <<< 27
-    let z1 := Float.ofBits (s ||| (((n1 + 893) <<< 52) + m1))  -- `d1 = (n1-128+1021) << 52`
+    let z1 := Bits.ofBits (s ||| (((n1 + 893) <<< 52) + m1))  -- `d1 = (n1-128+1021) << 52`
     -- `x2 = x - (UInt128(m1) << (n1-53))` (a right shift when `n1 < 53`)
     let (ph, pl) := if n1 ≥ 53 then shl128 m1 (n1 - 53) else (0, m1 >>> (53 - n1))
     let x2l := xl - pl
@@ -161,7 +163,7 @@ for the magnitude `|f| = (xh, xl)` and the sign `neg`. -/
     else
       let n2 := topSetBit128 x2h x2l
       let m2 := if n2 ≥ 53 then shr128lo x2h x2l (n2 - 53) else x2l <<< (53 - n2)
-      (z1, Float.ofBits (s ||| (((n2 + 893) <<< 52) + m2)))
+      (z1, Bits.ofBits (s ||| (((n2 + 893) <<< 52) + m2)))
 
 /-- Word `i` of the bits of `1/(2π)` (`0` for a negative index), an inline read. -/
 @[inline] def inv2piWord (i : Int64) : UInt64 :=
@@ -170,7 +172,7 @@ for the magnitude `|f| = (xh, xl)` and the sign `neg`. -/
 /-- Julia `paynehanek(x::Float64)` (rem_pio2.jl:124-196): reduction of a huge argument
 (`|x| ≥ 2^20·π/2`) modulo `π/2` against the bits of `1/(2π)`, in 128-bit integer arithmetic. -/
 def paynehanek (x : Float) : RemPio2 :=
-  let u := x.toBits
+  let u := Bits.toBits x
   let bigX := (u &&& 0x000FFFFFFFFFFFFF) ||| 0x0010000000000000
   let k : Int64 := ((u &&& 0x7FF0000000000000) >>> 52).toInt64 - i64! 1075
   let idx : Int64 := k >>> i64! 6  -- arithmetic shift, as Julia's `>>`
@@ -225,7 +227,7 @@ Cody–Waite step with an `fma` below `2^28·π/2`, Payne–Hanek beyond. The re
   if x.abs < Float32.ofBits 0x4dc90fdb then  -- `Float32(pi*0x1p27)`
     let fn := F64.round (xd * f64! 0.6366197723675814)
     let r := Float.fma fn (f64! -1.5707963267948966) xd
-    ⟨fn.toInt64, Float.fma fn (f64! -6.123233995736766e-17) r, f64! 0.0⟩
+    ⟨Bits.toInt64Small fn, Float.fma fn (f64! -6.123233995736766e-17) r, f64! 0.0⟩
   else
     let r := paynehanek xd
     ⟨r.n, r.hi, f64! 0.0⟩
@@ -627,7 +629,7 @@ def sinpi (x0 : Float) : Float :=
   else
     let n := round (f64! 2.0 * x)
     let rx := Float.fma (f64! -0.5) n x
-    let res := match n.toInt64.toUInt64 &&& 3 with
+    let res := match n.toUInt64 &&& 3 with  -- `0 ≤ n < 2^54`: an inline conversion
       | 0 => sinpiKernel rx
       | 1 => cospiKernel rx
       | 2 => f64! 0.0 - sinpiKernel rx
@@ -643,7 +645,7 @@ def cospi (x0 : Float) : Float :=
   else
     let n := round (f64! 2.0 * x)
     let rx := Float.fma (f64! -0.5) n x
-    match n.toInt64.toUInt64 &&& 3 with
+    match n.toUInt64 &&& 3 with  -- `0 ≤ n < 2^54`: an inline conversion
     | 0 => cospiKernel rx
     | 1 => f64! 0.0 - sinpiKernel rx
     | 2 => f64! 0.0 - cospiKernel rx
@@ -660,7 +662,7 @@ def sincospi (x0 : Float) : Float × Float :=
     let si := sinpiKernel rx
     let co := cospiKernel rx
     let sgn (s : Float) : Float := if x0 < f64! 0.0 then -s else if x0 == f64! 0.0 then x0 else s
-    match n.toInt64.toUInt64 &&& 3 with
+    match n.toUInt64 &&& 3 with  -- `0 ≤ n < 2^54`: an inline conversion
     | 0 => (sgn si, co)
     | 1 => (sgn co, f64! 0.0 - si)
     | 2 => (sgn (f64! 0.0 - si), f64! 0.0 - co)
@@ -765,7 +767,7 @@ def acos (x : Float32) : Float32 :=
     if x < f32! 0.0 then
       f32! 3.1415925026 - f32! 2.0 * (s + (zRz * s - f32! 7.5497894159e-08))
     else
-      let df := Float32.ofBits (s.toBits &&& 0xfffff000)
+      let df := Bits.ofBits32 ((Bits.toBits32 s) &&& 0xfffff000)
       let c := (z - df * df) / (s + df)
       f32! 2.0 * (df + (zRz * s + c))
 
@@ -813,7 +815,7 @@ def atan2 (y x : Float32) : Float32 :=
           if sy then -v else v
       else if y.abs == inf then (if sy then -halfPi32 else halfPi32)
       else
-        let pw (v : Float32) : UInt32 := v.toBits &&& 0x7fffffff
+        let pw (v : Float32) : UInt32 := (Bits.toBits32 v) &&& 0x7fffffff
         let k : Int32 := (pw y - pw x).toInt32 >>> i32! 23
         if k > i32! 26 then
           let z := halfPi32 + f32! 0.5 * piLo
@@ -832,7 +834,7 @@ def sinpi (x0 : Float32) : Float32 :=
   else
     let n := Math.round32 (f32! 2.0 * x)
     let rx := Float32.fma (f32! -0.5) n x
-    let res := match n.toFloat.toInt64.toUInt64 &&& 3 with
+    let res := match n.toUInt64 &&& 3 with
       | 0 => sinpiKernel32 rx
       | 1 => cospiKernel32 rx
       | 2 => f32! 0.0 - sinpiKernel32 rx
@@ -847,7 +849,7 @@ def cospi (x0 : Float32) : Float32 :=
   else
     let n := Math.round32 (f32! 2.0 * x)
     let rx := Float32.fma (f32! -0.5) n x
-    match n.toFloat.toInt64.toUInt64 &&& 3 with
+    match n.toUInt64 &&& 3 with
     | 0 => cospiKernel32 rx
     | 1 => f32! 0.0 - sinpiKernel32 rx
     | 2 => f32! 0.0 - cospiKernel32 rx

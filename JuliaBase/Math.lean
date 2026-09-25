@@ -57,10 +57,10 @@ namespace Math
 /-- Julia `reinterpret(Float64, (k << 52) + bits)`: add `k` to the biased exponent of `x`
 through the bit pattern (wrapping `Int64` arithmetic, as in Julia). -/
 @[inline] def addExponentBits (k : Int64) (x : Float) : Float :=
-  Float.ofBits ((k.toUInt64 <<< 52) + x.toBits)
+  Bits.ofBits ((k.toUInt64 <<< 52) + (Bits.toBits x))
 
 /-- `2^k` from its bits, `reinterpret(Float64, (1023 + k) << 52)`. -/
-@[inline] def twoPow (k : Int64) : Float := Float.ofBits ((i64! 1023 + k).toUInt64 <<< 52)
+@[inline] def twoPow (k : Int64) : Float := Bits.ofBits ((i64! 1023 + k).toUInt64 <<< 52)
 
 /-- The bases of Julia's `exp_impl` and `_log`: `Val(2)`, `Val(:ℯ)`, `Val(10)`. -/
 inductive Radix where
@@ -155,40 +155,41 @@ end Radix
 
 /-! ## Unpacked tables
 
-The kernels read the tables as unboxed `FloatArray`s, decoded once when the module is
-initialized: a `Float.ofBits` is an out-of-line runtime call in compiled Lean, too costly to
-repeat per lookup. -/
-
-/-- Decode a table of bit patterns into a packed `FloatArray`. -/
-def floatsOfBits (f : UInt64 → UInt64) (t : Array UInt64) : FloatArray :=
-  t.foldl (fun a b => a.push (Float.ofBits (f b))) (FloatArray.emptyWithCapacity t.size)
+The kernels read the tables as unboxed `FTable`s (sized `FloatArray`s), decoded once when the
+module is initialized. -/
 
 /-- `jU` of `table_unpack`: `2^(j/256)` rounded down to 52 bits. -/
-def jTableU : FloatArray :=
-  floatsOfBits (fun j => (0x3FF0000000000000 : UInt64) ||| (j &&& 0x000FFFFFFFFFFFFF)) jTable
+def jTableU : FTable 256 :=
+  .ofBits jTable (fun j => (0x3FF0000000000000 : UInt64) ||| (j &&& 0x000FFFFFFFFFFFFF)) (by decide)
 
 /-- `jL` of `table_unpack`: the 8 extra bits of the correction. -/
-def jTableL : FloatArray := floatsOfBits (fun j => (0x3C00000000000000 : UInt64) ||| (j >>> 8)) jTable
+def jTableL : FTable 256 := .ofBits jTable (fun j => (0x3C00000000000000 : UInt64) ||| (j >>> 8)) (by decide)
 
 /-- `t_log_Float64` high parts. -/
-def logTable64Hi : FloatArray := floatsOfBits id (logTable64.map (·.1))
+def logTable64Hi : FTable 129 := .ofBits logTable64 (·.1) (by decide)
 
 /-- `t_log_Float64` low parts. -/
-def logTable64Lo : FloatArray := floatsOfBits id (logTable64.map (·.2))
+def logTable64Lo : FTable 129 := .ofBits logTable64 (·.2) (by decide)
 
 /-- `t_log_Float32` as `Float64` values. -/
-def logTable32F : FloatArray := floatsOfBits id logTable32
+def logTable32F : FTable 129 := .ofBits logTable32 id (by decide)
 
 /-- `logctail` of `t_log_table_compact`. -/
-def logTableTailF : FloatArray := floatsOfBits id logTableTail
+def logTableTailF : FTable 128 := .ofBits logTableTail id (by decide)
+
+/-- `invc` of `t_log_table_compact` (`_log_ext`, log.jl:571):
+`reinterpret(Float64, ((t & 0xff) | 0x1ff00) << 45)`. -/
+def logExtInvc : FTable 128 := .ofBits logTableT (fun t => ((t &&& 0xff) ||| 0x1ff00) <<< 45) (by decide)
+
+/-- `logc` of `t_log_table_compact` (`_log_ext`, log.jl:572): `reinterpret(Float64, t & ~0xff)`. -/
+def logExtLogc : FTable 128 := .ofBits logTableT (fun t => t &&& (~~~ (0xff : UInt64))) (by decide)
 
 /-- `2^k` for `k = -1022 … 1023` at index `k + 1022`, decoded once: scaling by a table read
-instead of two out-of-line bit casts (`reinterpret(Float64, (k << 52) + bits)`). -/
-def pow2Table : FloatArray :=
-  floatsOfBits (fun i => (i + 1) <<< 52) ((List.range 2046).toArray.map (·.toUInt64))
+instead of bit arithmetic (`reinterpret(Float64, (k << 52) + bits)`). -/
+def pow2Table : FTable 2046 := .ofBits (Array.range 2046) (fun i => (i.toUInt64 + 1) <<< 52) (by simp)
 
 /-- `2^k` for a normal exponent `-1022 ≤ k ≤ 1023` (a table read). -/
-@[inline] def pow2 (k : Int64) : Float := pow2Table.get! (k + i64! 1022).toUInt64.toNat
+@[inline] def pow2 (k : Int64) : Float := pow2Table.get (k + i64! 1022).toUInt64.toUSize
 
 /-- `twoPow k` (`reinterpret(Float64, (1023 + k) << 52)`, wrapping outside the normal range as
 Julia does), from the table when `k` is a normal exponent. -/
@@ -203,8 +204,8 @@ def magic : Float := f64! 6.755399441055744e15
 /-- Julia `table_unpack(N)`: `2^(j/256) ≈ jU + jL` for `j = N mod 256`, the table storing 52
 high bits of the value and 8 extra bits of the correction. -/
 @[inline] def tableUnpack (n : Int64) : Float × Float :=
-  let j := (n.toUInt64 &&& 255).toNat
-  (jTableU.get! j, jTableL.get! j)
+  let j := (n.toUInt64 &&& 255).toUSize
+  (jTableU.get j, jTableL.get j)
 
 /-- The argument reduction shared by the `exp_impl` methods: `N` (the low 32 bits of the
 rounded `x·256/log_b(2)`, signed) and `r = x - N·log_b(2)/256` in two steps. -/
@@ -270,7 +271,7 @@ last step of `^(::Float64, ::Float64)`. -/
 /-- Julia `exp_impl(x::Float32, base)` (exp.jl:276-295). -/
 @[inline] def expImpl32 (x : Float32) (b : Radix) : Float32 :=
   let nf := round32 (x * b.inv32)
-  let n : Int64 := nf.toFloat.toInt64
+  let n : Int64 := Bits.toInt64Small nf.toFloat  -- `|n| ≤ 150` wherever it is used
   let r := Float32.fma nf b.lnU32 x
   let r := Float32.fma nf b.lnL32 r
   let small := b.kernel32 r
@@ -280,7 +281,7 @@ last step of `^(::Float64, ::Float64)`. -/
     let (power, small) := if x ≤ -b.subnormExp32 then (n + 127 + 24, small * f32! 5.9604645e-8)
       else (n + 127, small)
     let (power, small) := if n == 128 then (power - 1, small * f32! 2.0) else (power, small)
-    small * Float32.ofBits (power.toInt32.toUInt32 <<< 23)
+    small * Bits.ofBits32 (power.toInt32.toUInt32 <<< 23)
 
 /-! ## `expm1` (exp.jl:412-472) -/
 
@@ -346,7 +347,7 @@ def expm1F32 (x : Float32) : Float32 :=
   else
     let x := x.toFloat
     let nf := F64.round (x * f64! 1.4426950408889634)
-    let n := nf.toInt64
+    let n := Bits.toInt64Small nf  -- `|n| ≤ 128`
     let r := Float.fma nf (f64! -0.6931471805599453) x
     let hi := Float.fma r (Float.fma r (Float.fma r (Float.fma r (Float.fma r (Float.fma r
       f64! 0.0002004037059220124 f64! 0.0013966479175977883) f64! 0.008332997481506921) f64! 0.041666183019487026)
@@ -361,9 +362,9 @@ def expm1F32 (x : Float32) : Float32 :=
 case, `jp = 128F - 127` indexing `t_log_Float64`. -/
 @[inline] def logProc1 (y mf bigF f : Float) (b : Radix) : Float :=
   -- `jp = trunc(128F) - 127`, 1-based into `t_log_Float64`
-  let jp := ((f64! 128.0 * bigF).toUInt64 - 128).toNat
-  let lHi := mf * f64! 0.6931471805601177 + logTable64Hi.get! jp
-  let lLo := mf * (f64! -1.7239444525614835e-13) + logTable64Lo.get! jp
+  let jp := ((f64! 128.0 * bigF).toUInt64 - 128).toUSize
+  let lHi := mf * f64! 0.6931471805601177 + logTable64Hi.get jp
+  let lLo := mf * (f64! -1.7239444525614835e-13) + logTable64Lo.get jp
   let u := (f64! 2.0 * f) / (y + bigF)
   let v := u * u
   let q := u * v * Float.fma v f64! 0.012500053168098584 f64! 0.08333333333303913
@@ -384,14 +385,14 @@ case, `jp = 128F - 127` indexing `t_log_Float64`. -/
     if x == F64.inf then x
     else if f64! 0.9394130628134757 < x && x < f64! 1.0644944589178595 then logProc2 (x - f64! 1.0) b
     else
-      let xu := x.toBits
+      let xu := Bits.toBits x
       let m := ((xu >>> 52) &&& 0x7FF).toInt64
       let (xu, m) : UInt64 × Int64 :=
         if m == i64! 0 then
-          let xu' := (x * f64! 1.8014398509481984e16).toBits
+          let xu' := Bits.toBits (x * f64! 1.8014398509481984e16)
           (xu', ((xu' >>> 52) &&& 0x7FF).toInt64 - i64! 54)
         else (xu, m)
-      let y := Float.ofBits ((xu &&& 0x000FFFFFFFFFFFFF) ||| 0x3FF0000000000000)
+      let y := Bits.ofBits ((xu &&& 0x000FFFFFFFFFFFFF) ||| 0x3FF0000000000000)
       let mf := (m - i64! 1023).toFloat
       let bigF := (y + f64! 3.5184372088832e13) - f64! 3.5184372088832e13
       logProc1 y mf bigF (y - bigF) b
@@ -400,7 +401,7 @@ case, `jp = 128F - 127` indexing `t_log_Float64`. -/
 
 /-- Julia `log_proc1` for `Float32` (log.jl:216-236): the table sum in `Float64`, rounded once. -/
 @[inline] def logProc1F32 (y mf bigF f : Float32) (b : Radix) : Float32 :=
-  let l := mf.toFloat * f64! 0.6931471805599453 + logTable32F.get! ((f32! 128.0 * bigF).toUInt32 - 128).toNat
+  let l := mf.toFloat * f64! 0.6931471805599453 + logTable32F.get ((f32! 128.0 * bigF).toUInt32 - 128).toUSize
   let u := (f32! 2.0 * f) / (y + bigF)
   let v := u * u
   let q := u * v * f32! 0.08333351
@@ -420,14 +421,14 @@ case, `jp = 128F - 127` indexing `t_log_Float64`. -/
     if F32.isinf x then x
     else if f32! 0.939413 < x && x < f32! 1.0644945 then logProc2F32 (x - f32! 1.0) b
     else
-      let xu := x.toBits
+      let xu := Bits.toBits32 x
       let m := ((xu >>> 23) &&& 0xFF).toUInt64.toInt64
       let (xu, m) : UInt32 × Int64 :=
         if m == 0 then
-          let xu' := (x * f32! 3.3554432e7).toBits
+          let xu' := Bits.toBits32 (x * f32! 3.3554432e7)
           (xu', ((xu' >>> 23) &&& 0xFF).toUInt64.toInt64 - 25)
         else (xu, m)
-      let y := Float32.ofBits ((xu &&& 0x007FFFFF) ||| 0x3F800000)
+      let y := Bits.ofBits32 ((xu &&& 0x007FFFFF) ||| 0x3F800000)
       let mf := (m - 127).toFloat32
       let bigF := (y + f32! 65536.0) - f32! 65536.0
       logProc1F32 y mf bigF (y - bigF) b
@@ -442,11 +443,11 @@ def log1p (x : Float) : Float :=
     else if f64! -0.06058693718652422 < x && x < f64! 0.06449445891785943 then logProc2 x .e
     else
       let z := f64! 1.0 + x
-      let zu := z.toBits
-      let s := Float.ofBits (0x7FE0000000000000 - (zu &&& 0xFFF0000000000000))
+      let zu := Bits.toBits z
+      let s := Bits.ofBits (0x7FE0000000000000 - (zu &&& 0xFFF0000000000000))
       let m : Int64 := ((zu >>> 52) &&& 0x7FF).toInt64 - 1023
       let c := if m > 0 then f64! 1.0 - (z - x) else x - (z - f64! 1.0)
-      let y := Float.ofBits ((zu &&& 0x000FFFFFFFFFFFFF) ||| 0x3FF0000000000000)
+      let y := Bits.ofBits ((zu &&& 0x000FFFFFFFFFFFFF) ||| 0x3FF0000000000000)
       let bigF := (y + f64! 3.5184372088832e13) - f64! 3.5184372088832e13
       logProc1 y m.toFloat bigF ((y - bigF) + c * s) .e
   else if x == f64! -1.0 then -F64.inf
@@ -460,11 +461,11 @@ def log1pF32 (x : Float32) : Float32 :=
     else if f32! -0.06058694 < x && x < f32! 0.06449446 then logProc2F32 x .e
     else
       let z := f32! 1.0 + x
-      let zu := z.toBits
-      let s := Float32.ofBits (0x7F000000 - (zu &&& 0xFF800000))
+      let zu := Bits.toBits32 z
+      let s := Bits.ofBits32 (0x7F000000 - (zu &&& 0xFF800000))
       let m : Int64 := ((zu >>> 23) &&& 0xFF).toUInt64.toInt64 - 127
       let c := if m > 0 then f32! 1.0 - (z - x) else x - (z - f32! 1.0)
-      let y := Float32.ofBits ((zu &&& 0x007FFFFF) ||| 0x3F800000)
+      let y := Bits.ofBits32 ((zu &&& 0x007FFFFF) ||| 0x3F800000)
       let bigF := (y + f32! 65536.0) - f32! 65536.0
       logProc1F32 y m.toFloat32 bigF ((y - bigF) + s * c) .e
   else if x == f32! -1.0 then Float32.ofBits 0xFF800000
@@ -475,13 +476,12 @@ sum `hi + lo` with about 68 bits, for `^(::Float64, ::Float64)`. -/
 @[inline] def logExt (xu : UInt64) : Float × Float :=
   let tmpU := xu - 0x3fe6955500000000
   let tmp : Int64 := tmpU.toInt64
-  let z := Float.ofBits (xu - (tmpU &&& 0xfff0000000000000))
+  let z := Bits.ofBits (xu - (tmpU &&& 0xfff0000000000000))
   let k := (tmp >>> 52).toFloat
-  let idx := ((tmp >>> 45).toUInt64 &&& 127).toNat
-  let t := logTableT[idx]!
-  let logctail := logTableTailF.get! idx
-  let invc := Float.ofBits (((t &&& 0xff) ||| 0x1ff00) <<< 45)
-  let logc := Float.ofBits (t &&& (~~~ (0xff : UInt64)))
+  let idx := ((tmp >>> 45).toUInt64 &&& 127).toUSize
+  let logctail := logTableTailF.get idx
+  let invc := logExtInvc.get idx
+  let logc := logExtLogc.get idx
   let r := Float.fma z invc (f64! -1.0)
   let t1 := Float.fma k f64! 0.6931471805598903 logc
   let t2 := t1 + r
@@ -536,10 +536,10 @@ def powBody (x : Float) (n : Int) : Float :=
 /-- Julia `pow_body(x::Float64, y::Float64)` for positive `x` (pow.jl:91-104):
 `exp(y·log(x))` through the 68-bit `_log_ext` and the two-part `exp_impl`. -/
 def powBodyFloat (x y : Float) : Float :=
-  let xu : UInt64 := x.toBits
+  let xu : UInt64 := Bits.toBits x
   let xu : UInt64 :=
     if xu < 0x0010000000000000 then
-      ((x * f64! 4.503599627370496e15).toBits &&& (0x7FFFFFFFFFFFFFFF : UInt64)) - ((52 : UInt64) <<< 52)
+      ((Bits.toBits (x * f64! 4.503599627370496e15)) &&& (0x7FFFFFFFFFFFFFFF : UInt64)) - ((52 : UInt64) <<< 52)
     else xu
   let (logxhi, logxlo) := logExt xu
   let (xyhi, xylo) := twoMul logxhi y
@@ -614,7 +614,7 @@ def powInt (x : Float) (n : Int) : Float :=
 /-- Julia `^(x::Float64, y::Float64)` (pow.jl:7-30). A negative base with a non-integer
 exponent (Julia `DomainError`) gives `NaN`. -/
 def pow (x y : Float) : Float :=
-  if x.toBits == (f64! 1.0 : Float).toBits then f64! 1.0
+  if (Bits.toBits x) == 0x3FF0000000000000 then f64! 1.0
   else
     let y := if !(y.abs < f64! 6.917529027641082e18) then
         (if F64.isnan y then y else if y > 0 then f64! 6.917529027641082e18 else f64! -6.917529027641082e18)

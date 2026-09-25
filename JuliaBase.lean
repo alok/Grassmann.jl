@@ -1,3 +1,4 @@
+import JuliaBase.Bits
 import JuliaBase.Num
 import JuliaBase.IEEE
 import JuliaBase.FloatLit
@@ -28,6 +29,10 @@ verified bit for bit against the Julia 1.13 oracle (`Tests/JuliaBase/`).
   `isodd`, `power_by_squaring`, and the oracle comparator `F64.ulpDist`. This is the one
   home of Julia's scalar semantics: every other package builds on it rather than keeping
   copies.
+* `JuliaBase.Bits`: inline bit casts (`Bits.toBits`/`ofBits`, `toBits32`/`ofBits32`: the core
+  functions' semantics, but pasted into the caller's C instead of calling the out-of-line
+  runtime; interpretable through the runtime's own boxed wrappers) and `FTable n`, lookup tables
+  whose size is a `USize` literal in their type. Every kernel below is built on them.
 * `JuliaBase.IEEE`: the exact, format-generic IEEE-754 toolkit (`IEEEFloat` over `Float` and
   `Float32`): exact decoding (`decode`, `toRat?`), correctly rounded conversion from dyadic,
   rational and decimal values (`ofDyadic`, `ofFraction`, `ofRat`, `ofDecimal`), the constants

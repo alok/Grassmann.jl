@@ -1,4 +1,5 @@
 import JuliaBase.FloatLit
+import JuliaBase.Bits
 
 /-
 Julia `Base` numeric semantics for `Float` (Julia `Float64`), `Float32` and `Int`.
@@ -28,11 +29,11 @@ def signMask : UInt64 := 0x8000000000000000
 def fracMask : UInt64 := 0x000FFFFFFFFFFFFF
 
 /-- Julia `signbit(x::Float64)`: the IEEE sign bit (true for `-0.0` and negative NaNs). -/
-@[inline] def signbit (x : Float) : Bool := x.toBits &&& signMask != 0
+@[inline] def signbit (x : Float) : Bool := Bits.toBits x &&& signMask != 0
 
 /-- Julia `copysign(x, y)` (floatfuncs.jl:5): magnitude of `x`, sign bit of `y`. -/
 @[inline] def copysign (x y : Float) : Float :=
-  Float.ofBits ((x.toBits &&& ~~~signMask) ||| (y.toBits &&& signMask))
+  Bits.ofBits ((Bits.toBits x &&& ~~~signMask) ||| (Bits.toBits y &&& signMask))
 
 /-- Julia `flipsign(x, y)` (number.jl:249): `signbit(y) ? -x : x`. -/
 @[inline] def flipsign (x y : Float) : Float :=
@@ -71,19 +72,19 @@ def inf : Float := Float.ofBits 0x7FF0000000000000
 /-- Julia `nextfloat(x::Float64)` (float.jl): the next representable value toward `+Inf`.
 `NaN` and `Inf` map to themselves; `-0.0` and `0.0` both go to `5.0e-324`. -/
 def nextfloat (x : Float) : Float :=
-  if x.isNaN || x == inf then x
+  if isnan x || x == inf then x
   else
-    let b := x.toBits
-    if x == 0 then Float.ofBits 1
-    else if signbit x then Float.ofBits (b - 1) else Float.ofBits (b + 1)
+    let b := Bits.toBits x
+    if x == 0 then Bits.ofBits 1
+    else if signbit x then Bits.ofBits (b - 1) else Bits.ofBits (b + 1)
 
 /-- Julia `prevfloat(x::Float64)`: the next representable value toward `-Inf`. -/
 def prevfloat (x : Float) : Float :=
-  if x.isNaN || x == -inf then x
+  if isnan x || x == -inf then x
   else
-    let b := x.toBits
-    if x == 0 then Float.ofBits (signMask ||| 1)
-    else if signbit x then Float.ofBits (b + 1) else Float.ofBits (b - 1)
+    let b := Bits.toBits x
+    if x == 0 then Bits.ofBits (signMask ||| 1)
+    else if signbit x then Bits.ofBits (b + 1) else Bits.ofBits (b - 1)
 
 /-- `2^52`: every `Float64` of at least this magnitude is an integer. -/
 def two52 : Float := Float.ofBits 0x4330000000000000
@@ -102,19 +103,19 @@ on the argument reduction of `sin`/`cos`). -/
 
 /-- Julia `trunc(x)` (round toward zero). -/
 def trunc (x : Float) : Float :=
-  if x.isNaN || x.isInf then x
+  if isnan x || isinf x then x
   else copysign (if x < 0 then (-x).floor else x.floor) x
 
 /-- Julia `isinteger(x::Float64)`: finite with no fractional part. -/
-@[inline] def isinteger (x : Float) : Bool := x.isFinite && x.floor == x
+@[inline] def isinteger (x : Float) : Bool := isfinite x && x.floor == x
 
 /-- Exact integer value of a finite float with no fractional part; the fractional part of a
 non-integer argument is truncated toward zero. Non-finite inputs give `0`. This is the
 exact conversion Julia performs in `trunc(Int, x)` / `Int(x)` when no `InexactError` fires. -/
 def toIntTrunc (x : Float) : Int :=
-  if !x.isFinite then 0
+  if !isfinite x then 0
   else
-    let b := x.toBits
+    let b := Bits.toBits x
     let e := ((b >>> 52) &&& 0x7FF).toNat
     let m : Nat := if e == 0 then (b &&& fracMask).toNat else ((b &&& fracMask) ||| 0x0010000000000000).toNat
     let ee : Int := (if e == 0 then 1 else (e : Int)) - 1075
@@ -152,8 +153,8 @@ def remShift (y : UInt64) : Nat → UInt64 → Nat → UInt64
 finite, positive, nonzero `x` and `y`. The result is exactly representable, so any exact
 algorithm agrees bit-for-bit with Julia's; this one stays inside `UInt64`. -/
 def remInternal (x y : Float) : Float :=
-  let xb := x.toBits
-  let yb := y.toBits
+  let xb := Bits.toBits x
+  let yb := Bits.toBits y
   if xb < yb then x
   else if xb == yb then 0
   else
@@ -171,14 +172,14 @@ def remInternal (x y : Float) : Float :=
 /-- Julia `rem(x::Float64, y::Float64)` (float.jl:596): truncated remainder, sign of `x`,
 exact. `rem(x, 0) = NaN`, `rem(±Inf, y) = NaN`, `rem(x, ±Inf) = x` for finite `x`. -/
 def rem (x y : Float) : Float :=
-  if x.isFinite && !iszero x && y.isFinite && !iszero y then
+  if isfinite x && !iszero x && isfinite y && !iszero y then
     copysign (remInternal x.abs y.abs) x
-  else if x.isInf || y.isNaN || iszero y then nan
+  else if isinf x || isnan y || iszero y then nan
   else x
 
 /-- Julia `mod(x::Float64, y::Float64)` (float.jl:606): floored remainder with the sign of `y`. -/
 def mod (x y : Float) : Float :=
-  if y.isInf && x.isFinite then x
+  if isinf y && isfinite x then x
   else
     let r := rem x y
     if r == 0 then copysign r y
@@ -198,16 +199,16 @@ def mod (x y : Float) : Float :=
 /-- Julia `max(x::Float64, y::Float64)` (math.jl:856, `max_float`): NaN-propagating and
 `-0.0 < 0.0`. Lean's `max` is `if x ≤ y then y else x`, which differs on both counts. -/
 @[inline] def max (x y : Float) : Float :=
-  if x.isNaN then x
-  else if y.isNaN then y
+  if isnan x then x
+  else if isnan y then y
   else if x == y then (if signbit x then y else x)
   else if x < y then y else x
 
 /-- Julia `min(x::Float64, y::Float64)` (math.jl:852, `min_float`): NaN-propagating and
 `-0.0 < 0.0`. -/
 @[inline] def min (x y : Float) : Float :=
-  if x.isNaN then x
-  else if y.isNaN then y
+  if isnan x then x
+  else if isnan y then y
   else if x == y then (if signbit x then x else y)
   else if x < y then x else y
 
@@ -218,27 +219,27 @@ def mod (x y : Float) : Float :=
 integer trick): negative floats map below positive ones, `-0.0 ↦ -1` and `0.0 ↦ 0` are
 adjacent, and consecutive floats map to consecutive integers. -/
 def orderedBits (x : Float) : Int :=
-  let b := x.toBits
+  let b := Bits.toBits x
   if signbit x then -((b &&& ~~~signMask).toNat : Int) - 1 else (b.toNat : Int)
 
 /-- Julia `isless(a::Float64, b::Float64)` (float.jl): the total order used by `sort`,
 with `-0.0 < 0.0` and every NaN after `Inf`. -/
 def isless (a b : Float) : Bool :=
-  if a.isNaN || b.isNaN then !a.isNaN
+  if isnan a || isnan b then !isnan a
   else orderedBits a < orderedBits b
 
 /-- Julia `isequal(a::Float64, b::Float64)`: like `==` but all NaNs are equal and
 `-0.0 ≠ 0.0`. This is also the comparator of the oracle's bit-exact suites (bitwise
 equality up to the NaN payload). -/
 @[inline] def isequal (a b : Float) : Bool :=
-  (a.isNaN && b.isNaN) || a.toBits == b.toBits
+  (isnan a && isnan b) || Bits.toBits a == Bits.toBits b
 
 /-- Distance in units in the last place, `|orderedBits x - orderedBits y|` (not a Julia
 function; the comparator of the oracle suites for `libm`-backed results). NaNs are at
 distance 0 from each other and `2^64` from everything else. -/
 def ulpDist (x y : Float) : Nat :=
-  if x.isNaN && y.isNaN then 0
-  else if x.isNaN || y.isNaN then 2 ^ 64
+  if isnan x && isnan y then 0
+  else if isnan x || isnan y then 2 ^ 64
   else (orderedBits x - orderedBits y).natAbs
 
 /-- Julia `sign(x::Float64)` (number.jl:206): `-1.0`, `1.0`, or `x` itself for `±0.0` and NaN. -/
@@ -255,8 +256,8 @@ With the default tolerances, `isapprox(x, 0)` holds only for `x == 0`. -/
 def isapprox (x y : Float) (atol : Float := 0) (rtol : Float := if atol > 0 then 0 else rtoldefault)
     (nans : Bool := false) : Bool :=
   x == y ||
-    (x.isFinite && y.isFinite && (x - y).abs ≤ max atol (rtol * max x.abs y.abs)) ||
-    (nans && x.isNaN && y.isNaN)
+    (isfinite x && isfinite y && (x - y).abs ≤ max atol (rtol * max x.abs y.abs)) ||
+    (nans && isnan x && isnan y)
 
 /-- `sqrt(eps(Float64)/2)`, the "widely varying operands" threshold in `_hypot`. -/
 def hypotWide : Float := (eps / 2).sqrt
@@ -293,15 +294,15 @@ machines with native FMA (the oracle's). `muladd` is fused there too. Correctly 
 def hypot (x y : Float) : Float :=
   let ax := x.abs
   let ay := y.abs
-  if ax.isInf || ay.isInf then inf
+  if isinf ax || isinf ay then inf
   else if ay > ax then hypotOrdered ay ax
   else hypotOrdered ax ay
 
 /-- Julia `highword(x::Float64)`: the upper 32 bits of the representation. -/
-@[inline] def highword (x : Float) : UInt32 := (x.toBits >>> 32).toUInt32
+@[inline] def highword (x : Float) : UInt32 := (Bits.toBits x >>> 32).toUInt32
 
 /-- Julia `fromhighword(Float64, u)`: a float whose upper 32 bits are `u` (lower bits zero). -/
-@[inline] def fromhighword (u : UInt32) : Float := Float.ofBits (u.toUInt64 <<< 32)
+@[inline] def fromhighword (u : UInt32) : Float := Bits.ofBits (u.toUInt64 <<< 32)
 
 /-- Julia `_approx_cbrt(x::Float64)` (special/cbrt.jl): a 5-bit first guess from integer
 division of the exponent bits. Assumes `x` finite and nonzero. -/
@@ -326,8 +327,8 @@ def improveCbrt (x t : Float) : Float :=
   let p1 := Float.fma r (Float.fma r 1.621429720105354466140 (-1.88497979543377169875)) 1.87595182427177009643
   let p2 := Float.fma r 0.145996192886612446982 (-0.758397934778766047437)
   let t := t * (p1 + ((r * r) * r) * p2)
-  let u := t.toBits
-  let t := Float.ofBits ((u + 0x80000000) &&& 0xffffffffc0000000)
+  let u := Bits.toBits t
+  let t := Bits.ofBits ((u + 0x80000000) &&& 0xffffffffc0000000)
   let s := t * t
   let r := x / s
   let w := t + t
@@ -337,7 +338,7 @@ def improveCbrt (x t : Float) : Float :=
 /-- Julia `cbrt(x::Float64)` (special/cbrt.jl): the real cube root, Julia's own algorithm
 (not the platform libm, which Lean's `Float.cbrt` calls). -/
 def cbrt (x : Float) : Float :=
-  if !x.isFinite || iszero x then x
+  if !isfinite x || iszero x then x
   else improveCbrt x (approxCbrt x)
 
 /-- Julia `Float64(x::Rational)` (rational.jl:162): `Float64(num) / Float64(den)`, one
@@ -386,11 +387,11 @@ abbrev juliaMin := F64.min
 namespace F32
 
 /-- Julia `signbit(x::Float32)`. -/
-@[inline] def signbit (x : Float32) : Bool := x.toBits &&& 0x80000000 != 0
+@[inline] def signbit (x : Float32) : Bool := Bits.toBits32 x &&& 0x80000000 != 0
 
 /-- Julia `copysign(x::Float32, y::Float32)`. -/
 @[inline] def copysign (x y : Float32) : Float32 :=
-  Float32.ofBits ((x.toBits &&& 0x7FFFFFFF) ||| (y.toBits &&& 0x80000000))
+  Bits.ofBits32 ((Bits.toBits32 x &&& 0x7FFFFFFF) ||| (Bits.toBits32 y &&& 0x80000000))
 
 /-- Julia `eps(Float32)` = `2^-23`. -/
 def eps : Float32 := Float32.ofBits 0x34000000
@@ -422,31 +423,31 @@ def inf : Float32 := Float32.ofBits 0x7F800000
 /-- Julia `nextfloat(x::Float32)`: the next representable value toward `+Inf` (`NaN` and
 `Inf32` map to themselves, both zeros go to `1.0f-45`). -/
 def nextfloat (x : Float32) : Float32 :=
-  if x.isNaN || x == inf then x
+  if isnan x || x == inf then x
   else
-    let b := x.toBits
-    if x == 0 then Float32.ofBits 1
-    else if signbit x then Float32.ofBits (b - 1) else Float32.ofBits (b + 1)
+    let b := Bits.toBits32 x
+    if x == 0 then Bits.ofBits32 1
+    else if signbit x then Bits.ofBits32 (b - 1) else Bits.ofBits32 (b + 1)
 
 /-- Julia `prevfloat(x::Float32)`: the next representable value toward `-Inf`. -/
 def prevfloat (x : Float32) : Float32 :=
-  if x.isNaN || x == -inf then x
+  if isnan x || x == -inf then x
   else
-    let b := x.toBits
-    if x == 0 then Float32.ofBits 0x80000001
-    else if signbit x then Float32.ofBits (b + 1) else Float32.ofBits (b - 1)
+    let b := Bits.toBits32 x
+    if x == 0 then Bits.ofBits32 0x80000001
+    else if signbit x then Bits.ofBits32 (b + 1) else Bits.ofBits32 (b - 1)
 
 /-- Julia `max(x::Float32, y::Float32)`: NaN-propagating, `-0f0 < 0f0`. -/
 @[inline] def max (x y : Float32) : Float32 :=
-  if x.isNaN then x
-  else if y.isNaN then y
+  if isnan x then x
+  else if isnan y then y
   else if x == y then (if signbit x then y else x)
   else if x < y then y else x
 
 /-- Julia `min(x::Float32, y::Float32)`: NaN-propagating, `-0f0 < 0f0`. -/
 @[inline] def min (x y : Float32) : Float32 :=
-  if x.isNaN then x
-  else if y.isNaN then y
+  if isnan x then x
+  else if isnan y then y
   else if x == y then (if signbit x then x else y)
   else if x < y then x else y
 
@@ -461,13 +462,13 @@ def rtoldefault : Float32 := (Float32.ofBits 0x34000000).sqrt
 def isapprox (x y : Float32) (atol : Float32 := 0)
     (rtol : Float32 := if atol > 0 then 0 else rtoldefault) (nans : Bool := false) : Bool :=
   x == y ||
-    (x.isFinite && y.isFinite && (x - y).abs ≤ max atol (rtol * max x.abs y.abs)) ||
-    (nans && x.isNaN && y.isNaN)
+    (isfinite x && isfinite y && (x - y).abs ≤ max atol (rtol * max x.abs y.abs)) ||
+    (nans && isnan x && isnan y)
 
 /-- Julia `hypot(x::Float32, y::Float32)` (math.jl:803): widen to `Float64`,
 `sqrt(muladd(x, x, y*y))` (fused), round back. -/
 def hypot (x y : Float32) : Float32 :=
-  if x.isInf || y.isInf then Float32.ofBits 0x7F800000
+  if isinf x || isinf y then Bits.ofBits32 0x7F800000
   else
     let x' := x.toFloat
     let y' := y.toFloat
@@ -477,12 +478,12 @@ def hypot (x y : Float32) : Float32 :=
 `u ÷ 3 + ⌊adj·2^23⌋` with `adj = 127·2/3 - 0.03306235651` (`709958130`), rescaling subnormals
 by `maxintfloat(Float32) = 2^24` (`adj - 8`: `642849266`). Assumes `x` finite and nonzero. -/
 def approxCbrt (x : Float32) : Float32 :=
-  let u := x.toBits &&& 0x7FFFFFFF
-  if u ≥ 0x00800000 then copysign (Float32.ofBits (u / 3 + 709958130)) x
+  let u := Bits.toBits32 x &&& 0x7FFFFFFF
+  if u ≥ 0x00800000 then copysign (Bits.ofBits32 (u / 3 + 709958130)) x
   else
-    let x' := x * Float32.ofBits 0x4B800000
-    let u := x'.toBits &&& 0x7FFFFFFF
-    copysign (Float32.ofBits (u / 3 + 642849266)) x'
+    let x' := x * Bits.ofBits32 0x4B800000
+    let u := Bits.toBits32 x' &&& 0x7FFFFFFF
+    copysign (Bits.ofBits32 (u / 3 + 642849266)) x'
 
 /-- Julia `_improve_cbrt(x::Float32, t)` (special/cbrt.jl:79): two Newton steps
 `t ← t·(t³ + 2x)/(2t³ + x)` in `Float64`, rounded once. -/
@@ -498,7 +499,7 @@ def improveCbrt (x t : Float32) : Float32 :=
 /-- Julia `cbrt(x::Float32)` (special/cbrt.jl:142), Julia's own algorithm (not the platform
 libm that `Float32.cbrt` calls). -/
 def cbrt (x : Float32) : Float32 :=
-  if !x.isFinite || x == 0 then x else improveCbrt x (approxCbrt x)
+  if !isfinite x || x == 0 then x else improveCbrt x (approxCbrt x)
 
 end F32
 
