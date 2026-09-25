@@ -94,8 +94,8 @@ def report (t : Tally) : IO (Nat × Nat) := do
 end Tally
 
 /-- Decode a golden float array (non-floats become `NaN`). -/
-def floats (j : Json) : Array Float :=
-  (arr j).map fun x => match gold x with | .val v => v | _ => JMath.nan
+def floats (j : Json) : FloatArray :=
+  (arr j).foldl (fun acc x => acc.push (match gold x with | .val v => v | _ => JMath.nan)) .empty
 
 /-- A golden float (`NaN` if it is not one). -/
 def float1 (j : Json) : Float := match gold j with | .val v => v | _ => JMath.nan

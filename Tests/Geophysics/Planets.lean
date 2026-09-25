@@ -13,12 +13,12 @@ namespace Tests.GeophysicsTests
 open Lean Tests.Units Geophysics UnitSystems
 
 /-- Compare `f θ` over a golden latitude grid. -/
-def Tally.grid (t : Tally) (xs : Array Float) (f : Float → Float) (want : Json)
+def Tally.grid (t : Tally) (xs : FloatArray) (f : Float → Float) (want : Json)
     (what : String) : Tally :=
   t.fs (xs.toList.map f) want fun _ => what
 
 /-- Compare `f h θ` over a golden altitude × latitude grid. -/
-def Tally.grid2 (t : Tally) (hs θs : Array Float) (f : Float → Float → Float) (want : Json)
+def Tally.grid2 (t : Tally) (hs θs : FloatArray) (f : Float → Float → Float) (want : Json)
     (what : String) : Tally :=
   (hs.toList.zip (arr want).toList).zipIdx.foldl (fun t ((h, row), i) =>
     t.fs (θs.toList.map (f h)) row fun _ => s!"{what} h[{i}]") t
