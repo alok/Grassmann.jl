@@ -1,4 +1,5 @@
 import Tests.Golden.GrassmannDynamic
+import Tests.Golden.Docs
 
 /-!
 # Golden evaluators of the dynamic layer
@@ -47,18 +48,6 @@ def DynOperand.neg : DynOperand V → DynOperand V
   | .num (.int k) => .num (.int (-k))
   | .num (.float f) => .num (.float (-f))
   | .num (.rat q) => .num (.rat (-q))
-
-/-- A term (`Zero`, `One`, a blade or a `Single`). -/
-def AnyTA.isTerm (x : AnyTA V) : Bool :=
-  match x.encode.kind with
-  | .zero | .one | .submanifold | .single => true
-  | _ => false
-
-/-- A dense container result (`Chain`, `Spinor`, `CoSpinor`, `Multivector`). -/
-def AnyTA.isContainer (x : AnyTA V) : Bool :=
-  match x.encode.kind with
-  | .chain | .spinor | .cospinor | .multivector => true
-  | _ => false
 
 /-- Promote an operand's coefficients to `T`. -/
 def DynOperand.promoteTo (T : CoeffType) : DynOperand V → Option (DynOperand V)
@@ -163,28 +152,6 @@ def AnyTA.adjoint (x : AnyTA V) : Option GoldenElem := do
     | .float x => encodeTA <$> x.retarget W id
     | _ => none
   pure { e with V := some W.showHandle }
-
-/-- Julia `abs2(x)` (`TA.abs2`) for the coefficient types with a Julia `abs2`/`norm`. -/
-def AnyTA.abs2 : AnyTA V → Option (AnyTA V)
-  | .int t => some (.int (TA.abs2 t))
-  | .rat t => some (.rat (TA.abs2 t))
-  | .float t => some (.float (TA.abs2 t))
-  | .cfloat t => some (.cfloat (TA.abs2 t))
-  | _ => none
-
-/-- Julia `norm(x)` (`TA.norm`), a `Float64`; integer and rational complex coefficients
-are converted to `Complex{Float64}` first (exact for the oracle's small entries). -/
-def AnyTA.norm (x : AnyTA V) : Option Float :=
-  let direct : AnyTA V → Option Float := fun
-    | .int t => some t.norm
-    | .rat t => some t.norm
-    | .float t => some t.norm
-    | .cfloat t => some t.norm
-    | _ => none
-  match x with
-  | .bool _ => (x.promoteTo .int64).bind direct
-  | .cint _ | .crat _ => (x.promoteTo (.complex .float64)).bind direct
-  | _ => direct x
 
 /-- A `Float64` Number result (`str` is Julia's `show`). -/
 def floatNumber (x : Float) : GoldenElem :=

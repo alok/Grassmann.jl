@@ -78,8 +78,7 @@ variable [JNorm α]
 /-- Julia's inverse of a `Spinor`, `CoSpinor` or `Multivector` (`src/algebra.jl:486-532`):
 `d = (~m)⟑m`; `~m / scalar(d)` when `norm(scalar(d)) ≈ norm(d)`, else `~m / d(k)` for the
 first grade `k` (even `k ≥ 2` for halves) with `norm(d(k)) ≈ norm(d)`; `none` otherwise. -/
-def invContainer? (m : TA V α) : Option (TA V α) :=
-  let rm := reverse m
+def invContainer? (m : TA V α) (rm : TA V α := reverse m) : Option (TA V α) :=
   let d := mul rm m
   let fd := norm d
   let sd := scalar d
@@ -101,9 +100,10 @@ def invContainer? (m : TA V α) : Option (TA V α) :=
         | _ => none
       else none
 
-/-- Julia `inv(t)` with Julia's result kinds (module docstring), `none` where Julia's
-algorithm finds no inverse. -/
-def inv? (t : TA V α) : Option (TA V α) :=
+/-- Julia `inv(t)` with the reverse `rt = ~t` supplied: Julia computes `~t` in the element's
+own coefficient type before any division promotes it (`inv(A)` of an `Int64` chain reverses
+in `Int64`, so a zero entry stays `+0.0`), which a caller that promotes first passes here. -/
+def invWith? (t rt : TA V α) : Option (TA V α) :=
   match t with
   | zero => some infinity
   | infinity => some zero
@@ -113,19 +113,20 @@ def inv? (t : TA V α) : Option (TA V α) :=
   | chain g c =>
     -- `~t / value(scalar(abs2(t)))`, entrywise
     let s := getD (contraction (chain g c) (chain g c)).toDense.v 0
-    some (divScalar (reverse t) s)
+    some (divScalar rt s)
   | couple b re im => some (invCouple b re im)
   | pseudo .. =>
     -- `(~t) / abs2(t)`: `abs2` is a scalar term or a sum of terms
-    let a := abs2Plain t
+    let a := mul rt t
     match a with
-    | single 0 x => some (divScalar (reverse t) x)
-    | _ => (invContainer? (toMultiTA a)).map (mul (reverse t))
-  | spinor _ | cospinor _ | multi _ => invContainer? t
+    | single 0 x => some (divScalar rt x)
+    | _ => (invContainer? (toMultiTA a)).map (mul rt)
+  | spinor _ | cospinor _ | multi _ => invContainer? t rt
   | phasor amp θ => some (phasor (Coeff.one / amp) (neg θ))
-where
-  /-- `abs2` of a pseudo-couple without the `Conj` requirement (real coefficients). -/
-  abs2Plain (t : TA V α) : TA V α := mul (reverse t) t
+
+/-- Julia `inv(t)` with Julia's result kinds (module docstring), `none` where Julia's
+algorithm finds no inverse. -/
+def inv? (t : TA V α) : Option (TA V α) := invWith? t (reverse t)
 
 /-- Julia `inv(t)`; panics with Julia's message where the inverse is undefined. -/
 def inv (t : TA V α) : TA V α :=
@@ -150,6 +151,13 @@ def div (a b : TA V α) : TA V α :=
   match div? a b with
   | some x => x
   | none => panic! "inv(m) is undefined (Grassmann.jl src/algebra.jl:486-532)"
+
+/-- `a / b` with `rb = ~b` supplied (see `invWith?`). -/
+def divWith? (a b rb : TA V α) : Option (TA V α) :=
+  match a, b with
+  | couple B re im, single 0 y => some (couple B (re / y) (im / y))
+  | couple B re im, one => some (couple B re im)
+  | _, _ => (invWith? b rb).map (mul a)
 
 /-- Julia `a \ b = inv(a) ⟑ b` (left division); `none` where `inv(a)` is undefined. -/
 def ldiv? (a b : TA V α) : Option (TA V α) := (inv? a).map (mul · b)
@@ -220,6 +228,7 @@ def powTerm (b : UInt64) (x : α) (unit : Bool) (i : Nat) : TA V α :=
       | 1 => mul e e
       | 2 => mul (mul e e) e
       | _ => mul (mul (mul e e) e) e
+    else if sq == 0 then zero  -- a null blade: `e² = 𝟎` (Julia's kind), every power vanishes
     else
       let c : α := cpow (Coeff.ofRat sq) (i / 2)
       if i % 2 == 0 then single 0 c else smul c e
