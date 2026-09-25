@@ -1,0 +1,2825 @@
+[
+ {
+  "pkg": "AbstractLattices",
+  "symbol": "\u2227 / \u2228 (shared generic wedge/vee across AbstractTensors\u2192Grassmann, DeMorgan, Dendriform)",
+  "status": "PARTIAL",
+  "fix": "Make AbstractTensors import AbstractLattices and turn `AbstractTensors.Wedge`/`Vee` (AbstractTensors/Ops.lean:110,115) into the AbstractLattices classes, e.g. `export AbstractLattices (HWedge HVee)` plus `abbrev Wedge := AbstractLattices.HWedge` / `abbrev Vee := AbstractLattices.HVee`, keeping the method names `wedge`/`vee`. If an abbrev class is awkward for instance indexing, add low-priority bridge instances `[AbstractLattices.HWedge \u03b1 \u03b2 \u03b3] \u2192 Wedge \u03b1 \u03b2 \u03b3` instead. Then Grassmann's scoped `\u2227`/`\u2228` (Grassmann/Notation.lean:65-67) reach the Bool, TruthValues, TruthTable, Tree and PBTree instances, as in Julia where every package extends one function. Add a scoped `AbstractLattices` notation (overloading And/Or the way Grassmann does) so DeMorgan and Dendriform users get `\u2227`/`\u2228` without opening Grassmann. Fix the AbstractLattices module doc, which currently claims Grassmann's `\u2227` maps to `HWedge` (false). Add tests: README table 2 written with `\u2227`, and `graft` written with `\u2228`.",
+  "effort": "M",
+  "priority": "P0",
+  "files": [
+   "AbstractTensors/Ops.lean",
+   "AbstractTensors.lean",
+   "AbstractLattices/Basic.lean",
+   "AbstractLattices.lean",
+   "Grassmann/Notation.lean",
+   "DeMorgan/TruthValues.lean",
+   "DeMorgan/TruthTable.lean",
+   "Dendriform/Tree.lean",
+   "Tests/DeMorgan.lean",
+   "Tests/Dendriform/Static.lean"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "Fatou",
+  "symbol": "newton / mandelbrot(m\u22600) symbolic Newton map (newton_raphson, REDUCE df + factor)",
+  "status": "PARTIAL",
+  "fix": "Add a symbolic front-end in a new Fatou/Expr.lean that reuses Wilkinson's `JExpr`/`jl\u27ea\u2026\u27eb`/`JExpr.parse`: (1) a complex evaluator compiled by macro into a `C64 \u2192 C64 \u2192 C64` lambda, so the kernel still specializes; (2) symbolic d/dz over + - * / ^ exp log sin cos sinh cosh tan sqrt; (3) Julia's `newton_raphson(E,m) = factor(z - m*E/dE)`. For polynomial and rational E, normalize to a single rational function over \u211a[z] (or \u211a(i)[z] for complex m) using Wilkinson/Poly.lean, and print or emit it in REDUCE's factored shape so rasters are bit-exact with Julia. For transcendental E, emit REDUCE's shape for the observed cases (sin, exp, cos, log), falling back to the unfactored form. Then `newton jl\u27eaz^3-1\u27eb {\u2026}` needs no hand-written df, map or label. Move the hard-coded maps in Tests/Fatou/Catalog.lean onto this path, and oracle-check the generated F strings against the `F` field of sets.json.",
+  "effort": "L",
+  "priority": "P0",
+  "files": [
+   "Fatou/Expr.lean",
+   "Fatou/Define.lean",
+   "Fatou.lean",
+   "Wilkinson/Poly.lean",
+   "Wilkinson/Reduce.lean",
+   "Wilkinson/Expr.lean",
+   "Tests/Fatou/Catalog.lean",
+   "Tests/Fatou/Sets.lean",
+   "oracle/fatou/gen.jl"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "Fatou",
+  "symbol": "basin(K, j) LaTeX body (recomp, nL, jL, rdpm, nrset, jset)",
+  "status": "PARTIAL",
+  "fix": "On top of Fatou/Expr.lean: implement `recomp E x j` (substitute z := recomp(E, x, j-1) and c := 0), simplify, and write a REDUCE `rlfi`-style LaTeX printer (frac, powers, \\left(\\right)). Then have `basin (K : Define) j` compute the body from `K`'s stored expression, so README `basin(nf,3)` runs. Add goldens from Julia (`basin(newton(:(z^3-1)),1..3)`, `basin(juliafill(:(z^3-1)),1)`) to oracle/fatou/gen.jl. `basin` currently takes the body as a string argument.",
+  "effort": "M",
+  "priority": "P0",
+  "files": [
+   "Fatou/Expr.lean",
+   "Fatou/Define.lean",
+   "oracle/fatou/gen.jl",
+   "Tests/Fatou.lean"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "Fatou",
+  "symbol": "Define / juliafill / mandelbrot expression input (label and F from one Expr)",
+  "status": "PARTIAL",
+  "fix": "Add expression overloads `juliafill (E : JExpr)`, `mandelbrot (E : JExpr)` and `newton (E : JExpr)` (macro form `fatou\u27ea\u2026\u27eb` elaborating to a Lean lambda). They set `label := E.toJulia`, whose string rules match Julia's `string(E)`, and the LaTeX title from the new printer, so the user no longer types `label` by hand and titles are guaranteed to match `String(K)`. Keep the closure API for speed-critical custom maps.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "Fatou/Define.lean",
+   "Fatou/Expr.lean",
+   "Tests/Fatou.lean"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "Dendriform",
+  "symbol": "Tamari order notation: < > \u2264 \u2265 \u22d6 \u22d7 \u22b4 on trees",
+  "status": "PARTIAL",
+  "fix": "Add `instance : LT Tree := \u27e8fun a b => tamariLt a b = true\u27e9` and a `LE` instance with `Decidable` instances (and the same for `PBTree n`). Add scoped infix `\u22d6` (covers), `\u22d7` (coveredBy) and `\u22b4` (between, returning a Grove) in namespace Dendriform (Dendriform/Poset.lean). Add a `SDiff (PBTree a) (PBTree b)` instance for `under`, to match the `HDiv` one. Add `#guard`/`decide` checks for README `[2,1,7,4,1,3,1] < [2,1,7,4,3,2,1]`. The functions already exist and are oracle-tested; only the notation is missing.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Dendriform/Poset.lean",
+   "Dendriform/Tree.lean",
+   "Tests/Dendriform/Static.lean"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "AbstractAnalysis",
+  "symbol": "orbit / orbiterror / orbitN default metric (d = supnorm)",
+  "status": "PARTIAL",
+  "fix": "Give `orbit`, `orbitError`, `orbitN`, `orbitNTrace`, `orbitHold` and `FixedCycle` a default metric, either `(d : S \u2192 S \u2192 Float := Metric.dist)` with `[Metric S]` or overloads, so Julia's `orbit(cos, 1.0)` is written `orbit Float.cos 1.0`. Keep the explicit-`d` form for Cartan TensorField states. Update Tests/AbstractAnalysis/Limits.lean to use the default on the Float cases.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "AbstractAnalysis/Limit.lean",
+   "AbstractAnalysis/Metric.lean",
+   "Tests/AbstractAnalysis/Limits.lean"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "AbstractAnalysis",
+  "symbol": "SequenceMatrix / SlabArray multi-dim storage (Cartan dependency, untested)",
+  "status": "PARTIAL",
+  "fix": "Add `abbrev SequenceMatrix := SequenceArray SlabArray FloatArray`. Add property tests for `SlabArray` (pushSlab/slice/count round trips, SequenceArray.resize/get/take over slabs, and `residuals`/`Limit.collectSeq` with a 2-D state), because the in-flight Cartan Diffgeo/Grid port relies on this storage for TensorField orbits.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "AbstractAnalysis/Sequence.lean",
+   "Tests/AbstractAnalysis/Props.lean"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "DeMorgan",
+  "symbol": "\u27c2 / \u22a5 / \u22a4 notation and @truthtable as a command",
+  "status": "PARTIAL",
+  "fix": "Add scoped notation `\u22a5`/`\u27c2` for `TruthValues.bot` and `\u22a4` for `TruthValues.top` in namespace DeMorgan, checking for clashes with any `Bot`/`Top` notation in scope. Add a command `truthtable p q r` that declares `def p : TruthTable 3 := proj 3 0 \"p\"` and so on, mirroring the README REPL session; keep the existing `truthtable \u2026 in e` term form. Add `#guard`s for README table 1 using the command form.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "DeMorgan/TruthValues.lean",
+   "DeMorgan/TruthTable.lean",
+   "Tests/DeMorgan.lean"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "Dendriform",
+  "symbol": "vector-as-tree literals ([1,2]\u222a[2,1], promote rules)",
+  "status": "PARTIAL",
+  "fix": "Add term macros `tree![1,2,5,1,2]` and `grove![[1,2],[2,1]]` that elaborate through `Tree.ofName?`/`Grove.ofNames?` and discharge validity with `decide` (an elaboration error on an invalid Loday name). Then README `Grove(3,7) \u22a3 [1,2]\u222a[2,1]` becomes `Grove.ofIndex 3 7 \u22a3 (grove![[1,2]] \u222a grove![[2,1]])` without Option plumbing. Also add `ToString Tree` via `Tree.print`.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "Dendriform/Tree.lean",
+   "Dendriform/Grove.lean",
+   "Dendriform/Display.lean",
+   "Tests/Dendriform/Static.lean"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "AbstractAnalysis",
+  "symbol": "orders(G), iseven/isodd(G), Perm.isOdd, iscategory/issemicategory/isgroupoid",
+  "status": "MISSING",
+  "fix": "In Magma.lean add `Semimagma.orders G = G.v.map fun g => (cyclic g).order`, `Semimagma.isEven/isOdd` (all elements even/odd; needs a parity class or a Perm-specialized version), `Perm.isOdd`, and aliases `isGroupoid := isGroup`, `isSemicategory := isSemigroup`, `isCategory G e := isMonoid G e`. Oracle: `orders(magma(Complex(0,1))) = [4,2,4,1]` is already in port-notes \u00a76.5; extend oracle/abstractanalysis/generate.jl with orders/iseven for S3/S4 and Z_n.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "AbstractAnalysis/Magma.lean",
+   "AbstractAnalysis/Perm.lean",
+   "Tests/AbstractAnalysis/Groups.lean",
+   "oracle/abstractanalysis/generate.jl"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "AbstractAnalysis",
+  "symbol": "CycleProduct type, decompose, Transposition, isabelian(::Cycle,::Cycle), commutator(::Perm,::Perm)",
+  "status": "PARTIAL",
+  "fix": "In Perm.lean add `structure CycleProduct (N) where cycles : List (Cycle N)` with `toPerm` (= cycleProduct), `transpositionCount` (sum) and `JuliaRepr` (`[[1, 2], [3, 4]]`). Add `decompose : Perm N \u2192 Cycle N \u2295 CycleProduct N`, returning a single Cycle when there is exactly one nontrivial cycle as Julia does, and an elementwise `decompose` on Semimagma. Add `abbrev Transposition N := {c : Cycle N // c.v.length = 2}` or a smart constructor, `Cycle.isAbelian a b := a.isDisjoint b || a.toPerm == b.toPerm`, and `Perm.commutator g h := g\u207b\u00b9 * h\u207b\u00b9 * g * h` (Julia's version is broken; this is the intended one). Check against the \u00a76.5 goldens (`decompose(S3)`, `decompose(Permutation(2,1,4,3))`).",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "AbstractAnalysis/Perm.lean",
+   "Tests/AbstractAnalysis/Groups.lean"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "AbstractAnalysis",
+  "symbol": "arithmetic completeness: Limit ^ and L/L, Number^Countable, FunctionVector - / ^, CountableArray / ^, Semimagma scalar HMul/HAdd, log(::Product), limsup/liminf on countables",
+  "status": "PARTIAL",
+  "fix": "Add the missing \u2299 \u2208 {+ - * / ^} instances Julia defines. Limit: `HPow V (Limit S V)`, `HPow (Limit S V) V`, and `HDiv`/`HPow` between Limits via `op\u2082`. Countable: `HPow \u03b1 (CountableVector \u03b1)`, and `Div`/`HPow` on CountableArray. FunctionVector: `Sub`/`Div`/`HPow`. Semimagma: `HMul T (Semimagma T L)` and `HAdd`, using composeLeft/Right with `*`/`+` as Julia does. Also add `Product.log p = (p.family.map Float.log).series` and `CountableVector.limsup/liminf x m n d = (x.supseq m).limit n d` plus the 3-arg Array form `(x,m,n)`. Oracle: extend limits.json with `L^2`, `2^L`, `L/L`.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "AbstractAnalysis/Limit.lean",
+   "AbstractAnalysis/Countable.lean",
+   "AbstractAnalysis/Magma.lean",
+   "AbstractAnalysis/Metric.lean",
+   "Tests/AbstractAnalysis/Limits.lean",
+   "oracle/abstractanalysis/generate.jl"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "AbstractAnalysis",
+  "symbol": "FunctionMatrix / N-d FunctionArray, CountableArray(n...) grid of any rank",
+  "status": "PARTIAL",
+  "fix": "Generalize `FunctionVector \u03b2 \u03b1` to `FunctionArray \u03b2 \u03b1 N` (`f : \u03b2 \u2192 Vector Nat N \u2192 \u03b1`, size `Vector Nat N`), keeping `FunctionVector` as the rank-1 abbrev. Add `FunctionMatrix`, and `CountableArray.grid : Vector Nat N \u2192 CountableArray (Vector Nat N) N` for any rank. Julia's `FunctionMatrix{T}(f,n,m)` size bug (quirk #24) is not reproduced.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "AbstractAnalysis/Countable.lean",
+   "Tests/AbstractAnalysis/Props.lean"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "AbstractAnalysis",
+  "symbol": "ModsExt (gequal / isinvertible for AbstractMod)",
+  "status": "MISSING",
+  "fix": "Add `instance : ApproxEq (Fin n) := \u27e8(\u00b7 == \u00b7)\u27e9` and modular laws `Law.addMod n` (inverse `n - a`) and `Law.mulMod n` (inverse via `Nat.gcdA`, defined on units), so `group([1,2], +mod 5, -mod 5)` and `magma(3, *mod 7)` from the goldens can use `Fin n` directly.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "AbstractAnalysis/Magma.lean",
+   "Tests/AbstractAnalysis/Groups.lean"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "AbstractAnalysis",
+  "symbol": "Semimagma membership performance (magma closure)",
+  "status": "PARTIAL",
+  "fix": "For types with `BEq`+`Hashable` exact equality (Int, Nat, Rat, Complex Int/Rat, Perm N), keep a `Std.HashSet` alongside `v` in `closeArray`/`groupOf`/`cyclic`/`pushNew`, as port-notes \u00a78.6 planned, so membership is O(1) and insertion order is unchanged. Julia takes 2.5 s to close 2 generators of S6 (720 elements) because its `\u2208` is O(n). Keep the `ApproxEq` path for floats. Benchmark via Bench/Harness.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "AbstractAnalysis/Magma.lean",
+   "AbstractAnalysis/Perm.lean"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "Wilkinson",
+  "symbol": "factor (full factorization over \u2124; 'factor rounded' numeric form 'r' in PolynomialComparison)",
+  "status": "PARTIAL",
+  "fix": "(1) Replace the bounded Kronecker search in Wilkinson/Poly.lean with Zassenhaus (Berlekamp or Cantor\u2013Zassenhaus mod p, Hensel lifting, recombination), so every factor REDUCE finds is found. (2) Add `factorRounded`: numeric roots (Aberth or Durand\u2013Kerner in `ComplexF64`, polished with Newton) printed in REDUCE's `on rounded` shape (real linear factors `(x - 2.0)`, and complex pairs as REDUCE prints them), and set `rxtra` in `PolynomialComparison.ofReduce` when it differs from `factor`. Add goldens from the `reduce_forms` corpus (`factor(j, rounded)` column).",
+  "effort": "M",
+  "priority": "P2",
+  "files": [
+   "Wilkinson/Poly.lean",
+   "Wilkinson/Reduce.lean",
+   "Wilkinson/Analysis.lean",
+   "Tests/Wilkinson/Reduce.lean",
+   "oracle/wilkinson/gen.jl"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "Wilkinson",
+  "symbol": "polyfactors / polyexpand / polyhorner Reduce.Algebra shapes",
+  "status": "PARTIAL",
+  "fix": "Reproduce the `Reduce.Algebra.+/*` step-by-step simplification shapes (for example `polyhorner(:x,[1,2,3])` \u2192 `(3x + 2) * x + 1`, `polyfactors(:x,[0.5,2.25])` \u2192 `((4x - 9) * (2x - 1)) / 8`) instead of routing through the canonical expand/horner printers, and oracle-check against the probe outputs listed in port-notes \u00a76.6.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "Wilkinson/Reduce.lean",
+   "Tests/Wilkinson/Reduce.lean"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "Fatou",
+  "symbol": "UnicodePlotsExt orbit (braille text cobweb) and ImageInTerminalExt show(io, K; c, bare)",
+  "status": "MISSING",
+  "fix": "Add Fatou/Text.lean with (a) a braille-canvas line plot of `RealOrbit` (y=x, \u03d5^k, cobweb, orbit series) following UnicodePlots' 40\u00d715 default and axis-label rounding; dump text goldens with `:color=>false` from oracle/fatou/gen.jl. Add (b) an ANSI 24-bit half-block renderer (`\u2580`) of `FilledSet.colorScheme` output as the terminal `show` (with a `bare` option). Both have no dependencies, so they stay in the root package.",
+  "effort": "M",
+  "priority": "P2",
+  "files": [
+   "Fatou/Text.lean",
+   "Fatou/Raster.lean",
+   "Fatou.lean",
+   "Tests/Fatou/Orbit.lean",
+   "oracle/fatou/gen.jl"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "Fatou",
+  "symbol": "z^p with non-integer / complex p in maps (C64 HPow instances)",
+  "status": "PARTIAL",
+  "fix": "Add `instance : HPow C64 C64 C64 := \u27e8JuliaBase.ComplexF64.pow\u27e9` and `HPow C64 Float C64` (Julia's real-exponent `_cpow` path), taking care not to shadow the fast `NatPow`/`HPow C64 Int` literal paths. Then wiki nf16 `z^(4.0+3.0im) - 1` can be written directly; add its derivative to the Newton front-end.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "Fatou/Complex.lean",
+   "Tests/Fatou/Complex.lean"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "Fatou",
+  "symbol": "GrassmannExt Couple{V,B} maps (B option) and juliafill(E; newt=true, m)",
+  "status": "PARTIAL",
+  "fix": "Add `Options.B : Int := -1` (B\u00b2 = s) and have the front-ends pick `Couple.sq`/`Couple.abs2`, or better, accept a Lean `Grassmann` `Couple` blade and read `s` from its metric (bridge in a module that imports Grassmann, to keep Fatou light). Add `newt`/`m` to `juliafill` with its Julia defaults (\u03f5=4, m=0). Property-test the hyperbolic Mandelbrot set against the split-complex identities; no oracle is possible because Julia's extension is broken.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "Fatou/Couple.lean",
+   "Fatou/Define.lean",
+   "Tests/Fatou/Complex.lean"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "Clifford",
+  "symbol": "SparseChain{V,G,T}, MultiGrade{V,G}, chainvalues densify rule, \u00b1, scalar *, involutions, complements, scalar/vector/volume/isscalar/isvector/terms/value/valuetype/adjoint, show, ==",
+  "status": "MISSING",
+  "fix": "New Grassmann/Sparse.lean implementing the intended semantics of applied-misc.md \u00a74.3. `SparseChain V G \u03b1` stores sorted `(bladeIndex, value)` arrays over `indexbasis(N,G)`. `chainvalues` keeps dense `Chain` storage when fewer than 50% of entries are zero (`fill_limit`) and always for G \u2208 {0,N}. `MultiGrade V` carries a grade mask `UInt64` and ascending-grade terms (dense or sparse). Provide: two-pointer \u00b1 with the correct signs (fixing the Julia sign-loss bugs); scalar `*`; termwise `reverse`/`involute`/`conj`/neg that keep MultiGrade; complements mapping grade g \u21a6 N\u2212g with the mask bit-reversed over N+1 bits; accessors; `adjoint` over `dual V`; scatter into a dense `Multivector` at `binomsum(N,G)+i`; and a `show` with `\" + \"`/`\" - \"|v|` terms. Optionally add `SparseChain`/`MultiGrade` kinds to `Grassmann.TA`. Test the toDense homomorphism (add/neg/smul/involutions/complements agree with the dense kernels) by property tests; no Julia oracle is possible because the Julia code never loads.",
+  "effort": "M",
+  "priority": "P2",
+  "files": [
+   "Grassmann/Sparse.lean",
+   "Grassmann.lean",
+   "Tests/Grassmann/Sparse.lean",
+   "Tests/Main.lean"
+  ],
+  "key": "misc"
+ },
+ {
+  "pkg": "DirectSum",
+  "symbol": "\u222a, \u2229, \u2286, \u2287 (spaces, subspaces, blades; n-ary folds)",
+  "status": "MISSING",
+  "priority": "P0",
+  "effort": "M",
+  "fix": "Port DS/operations.jl:91-168. Space rules: identical metric but different tangent \u2192 max/min of (n, \u03bd, \u03bc); V \u222a V' = V\u2295V' (dual half first when a is dual); a dyadic space contains its halves; everything else errors. Subspace rules on masks: A|||B, A&&&B, popcount(A&&&B)==rank. Blade \u2286 blade: a.bits &&& b.bits == a.bits; blade/subspace \u2286 space. Add a Bool/Decidable \u2286 (HasSubset with a Decidable instance, or scoped notation), n-ary folds, and exports. Add a setops section to gen_spaces.jl and the README goldens: \u211d\u2295\u211d' \u2287 \u211d, \u211d\u2229\u211d' == V0, \u211d\u222a\u211d' == \u211d\u2295\u211d', v1 \u2286 v12, v12 \u2286 V, (\u211d^3)(1,2)\u222a(\u211d^3)(2,3) = \u27e8+++\u27e9, (\u211d^2)'\u222a\u211d^2 = \u27e8++--\u27e9*.",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/DirectSum/SpaceOps.lean",
+   "/Users/alokbeniwal/Grassmann/DirectSum/Show.lean",
+   "/Users/alokbeniwal/Grassmann/DirectSum/Blade.lean",
+   "/Users/alokbeniwal/Grassmann/DirectSum.lean",
+   "/Users/alokbeniwal/Grassmann/Grassmann/Notation.lean",
+   "/Users/alokbeniwal/Grassmann/Tests/DirectSum/golden/gen_spaces.jl",
+   "/Users/alokbeniwal/Grassmann/Tests/DirectSum/Spaces.lean",
+   "/Users/alokbeniwal/Grassmann/Tests/DirectSum/Literals.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "DirectSum",
+  "symbol": "\u039b / Basis / SparseBasis / ExtendedBasis container, @\u039b_str",
+  "status": "PARTIAL",
+  "priority": "P0",
+  "effort": "M",
+  "fix": "The functions exist: lookup (oracle-tested), showBasis, labels, basisAt. The missing part is the value and its syntax. Add structure Basis (V) with \u039b V, \u039b n (Int space) and \u039b(n,d,o,s); GetElem via Leibniz.basisAt (\u039b(3)[5] = v\u2081\u2082); ToString = showBasis; \u2032 and \u2295 through the TensorBundle ops. Add a term elaborator \u039b(V).name that runs TensorBundle.lookup at elaboration time and returns a typed Submanifold V G, or a Single when a sign or metric factor appears (\u039b(3).v21 = -1v\u2081\u2082). Add \u039b!\"\u2026\" for @\u039b_str. Goldens: indices(\u039b(3).v12), \u039b(62).v32a87Ng == -1\u039b(62).v2378agN, \u039b(\u211d^14) \u2295 \u039b(\u211d^14)'.",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/DirectSum/Names.lean",
+   "/Users/alokbeniwal/Grassmann/DirectSum/Show.lean",
+   "/Users/alokbeniwal/Grassmann/DirectSum.lean",
+   "/Users/alokbeniwal/Grassmann/Grassmann/Basis.lean",
+   "/Users/alokbeniwal/Grassmann/Grassmann/Notation.lean",
+   "/Users/alokbeniwal/Grassmann/Tests/DirectSum/Literals.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "DirectSum",
+  "symbol": "\u211d (= Signature(1))",
+  "status": "MISSING",
+  "priority": "P0",
+  "effort": "S",
+  "fix": "Add abbrev \u211d : TensorBundle := S!\"+\" and export it from Grassmann. Check that the \u211d^ token still wins by longest match and that \u211d\u2032 and \u211d \u2295 \u211d\u2032 parse. Add README goldens \u211d'\u2295\u211d^3 = \u27e8-+++\u27e9 and \u211d\u2295\u211d'.",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/DirectSum/Common.lean",
+   "/Users/alokbeniwal/Grassmann/Grassmann/Notation.lean",
+   "/Users/alokbeniwal/Grassmann/Tests/DirectSum/Literals.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "DirectSum",
+  "symbol": "+ (space direct-sum alias), V^i",
+  "status": "MISSING",
+  "priority": "P0",
+  "effort": "S",
+  "fix": "Add instance HAdd TensorBundle TensorBundle TensorBundle := \u27e8oplus!\u27e9 (README V+V' = T\u00b9\u27e8+++---\u2081\u00b9\u27e9*). Add instance HPow TensorBundle Nat TensorBundle wrapping TensorBundle.pow (it panics with Julia's message on error), so that (\u211d^2)^2 = \u27e8++++\u27e9. Keep the \u211d^n literal macro unchanged.",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/DirectSum/SpaceOps.lean",
+   "/Users/alokbeniwal/Grassmann/Tests/DirectSum/Literals.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "DirectSum",
+  "symbol": "Submanifold (subspace role): \u2295, V[i], mdims/diffvars, collect(V(1,4))",
+  "status": "PARTIAL",
+  "priority": "P1",
+  "effort": "S",
+  "fix": "Add SubSpace.oplus ((\u211d^3)(2,3) \u2295 (\u211d^3)(1) = \u27e8_+++__\u27e9, per DS/operations.jl:69-74), SubSpace.metricAt (the i-th included generator), SubSpace.mdims and diffvars (Julia's diffvars(::Submanifold)), a subspace showBasis (collect(V(1,4)) = DirectSum.Basis{\u27e81__1\u27e9,4}(v, v\u2081, v\u2084, v\u2081\u2084)), and index calls on a subspace (M(i\u2026) goes through the supermanifold).",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/DirectSum/Show.lean",
+   "/Users/alokbeniwal/Grassmann/DirectSum/SpaceOps.lean",
+   "/Users/alokbeniwal/Grassmann/Tests/DirectSum/Spaces.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "DirectSum",
+  "symbol": "== / equal on spaces (Julia a\u2286b && a\u2287b)",
+  "status": "PARTIAL",
+  "priority": "P1",
+  "effort": "S",
+  "fix": "The derived structural DecidableEq gives \u211d3 == \u211d^3 = false; Julia gives true. After the set ops land, add TensorBundle.equal a b := subset a b && subset b a (Int n vs Signature n, handles vs bundles). Expose it as the documented Julia ==, either as a BEq instance separate from DecidableEq or as a named equal plus scoped notation, and state which one instance keying uses.",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/DirectSum/SpaceOps.lean",
+   "/Users/alokbeniwal/Grassmann/Tests/DirectSum/Literals.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "Leibniz",
+  "symbol": "Derivation, Nabla, Laplacian, \u2207/nabla, \u0394/laplacian",
+  "status": "MISSING",
+  "priority": "P1",
+  "effort": "M",
+  "fix": "New Leibniz/Derivation.lean. Define structure Derivation (R) (O : Nat) with coeff : R (a sign type instead of Bool fixes quirk Q7), abbrev Nabla := Derivation Sign 1, Laplacian := Derivation Sign 2, \u2207, and \u0394 := \u2207^2. Add a pow with order O*n, same-order + - *, scalar * / \\, and negation. ToString must give Julia's \u2202\u2096v\u2096, \u2202\u2096\u00b2v and \u2202\u2096\u00b3v\u2096 (superscript order, v\u2096 present only for odd O, \u2202\u2096\u2205v for O = 0). Check against scratchpad/oracle/leibniz/golden/derivation.json and \u2207^2 == \u0394. Notation: notation \"\u2207\"; \u0394 is a legal identifier.",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/Leibniz/Derivation.lean",
+   "/Users/alokbeniwal/Grassmann/Leibniz.lean",
+   "/Users/alokbeniwal/Grassmann/Grassmann/Notation.lean",
+   "/Users/alokbeniwal/Grassmann/Tests/DirectSum/Literals.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "Leibniz",
+  "symbol": "differential/d, codifferential/\u03b4, boundary/\u2202 and the V(\u2207) functor",
+  "status": "MISSING",
+  "priority": "P1",
+  "effort": "M",
+  "fix": "Declare classes HasDifferential, HasCodifferential and HasBoundary in Leibniz, with prefix \u2202 and namespaced d and \u03b4. In Grassmann, implement V(\u2207^O) from Grassmann.jl:88-106: \u03a3 \u2202\u2096v\u2096 over the tangent generators; O \u2265 2 uses (\u2207\u22c5\u2207)^\u230aO/2\u230b, and a non-tangent space gives \u03bb\u00b7ones. Then d \u03c9 = V(\u2207) \u2227 \u03c9, \u2202 \u03c9 = \u03c9 \u22c5 V(\u2207), \u03b4 \u03c9 = -\u2202 \u03c9. Goldens are in leibniz.md \u00a76.1: tangent(\u211d^3,4,3)(\u2207), \u211d3(\u2207), tangent(\u211d^2,2,2)(\u2207^2), plus the Grassmann docs example \u2202(\u039b(tangent(\u211d^4,2,4)).v1234).",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/Leibniz/Derivation.lean",
+   "/Users/alokbeniwal/Grassmann/Grassmann/Algebra/Derivation.lean",
+   "/Users/alokbeniwal/Grassmann/Grassmann.lean",
+   "/Users/alokbeniwal/Grassmann/Tests/Grassmann/Types.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "Leibniz",
+  "symbol": "\u03c7, count_gdims",
+  "status": "MISSING",
+  "priority": "P1",
+  "effort": "S",
+  "fix": "New Leibniz/Euler.lean. Add a class CountGdims X returning Array Nat of length n+1 (nonzero components per Grassmann grade). Define eulerChar with Julia's sign -\u03a3_p (-1)^p b_p (quirk Q10: opposite of the docstring), \u03c7(V,b,t) = iszero ? 0 : (odd grade ? 1 : -1) for terms, and notation \u03c7. Add Grassmann instances for Single, Chain, Multivector and TA. Goldens: \u03c7(\u039b(3).v12) = -1, count_gdims(\u039b(3).v12) = [0,0,1,0], euler.json.",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/Leibniz/Euler.lean",
+   "/Users/alokbeniwal/Grassmann/Leibniz.lean",
+   "/Users/alokbeniwal/Grassmann/Grassmann/Algebra/Norms.lean",
+   "/Users/alokbeniwal/Grassmann/Grassmann/Dynamic/Norms.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "AbstractTensors",
+  "symbol": "interop, interform",
+  "status": "MISSING",
+  "priority": "P1",
+  "effort": "M",
+  "fix": "This depends on DirectSum \u222a landing first. Add a class Embed X V W (Chain.embed and Multivector.embed already exist in Grassmann/Forms/Eval.lean; add Single and Submanifold). Define interop op a b := op (embed a (V \u222a W)) (embed b (V \u222a W)) and interform a b := (embed a M) (embed b M). Where Julia auto-promotes, add cross-space HAdd/HMul instances whose result space is a type-level V.union W. Port ATtest:1-40: Manifold(op(a,b)) == \u211d\u2295\u211d', Manifold(op(a,a)) == \u211d, b(a).",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/AbstractTensors/Ops.lean",
+   "/Users/alokbeniwal/Grassmann/Grassmann/Forms/Eval.lean",
+   "/Users/alokbeniwal/Grassmann/Grassmann/Algebra/Arith.lean",
+   "/Users/alokbeniwal/Grassmann/Tests/AbstractTensors/Notation.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "AbstractTensors",
+  "symbol": "UniformScaling (I) as the universal pseudoscalar",
+  "status": "PARTIAL",
+  "priority": "P1",
+  "effort": "M",
+  "fix": "Only the struct and the complement instances exist today. Add V(\u03bbI) = \u03bb\u00b7(unit pseudoscalar of the non-tangent generators) as a Single. Add instances lifting op(a, \u03bbI) = op(a, V(\u03bbI)) and op(\u03bbI, a) for + - * \u27d1 \u2227 \u2228 \u22c5 \u2a3d \u2a3c \u2298 \u229b \u2217 \u27c7 / on Chain, Multivector, Half and Single (AT:287-292). Test with ATtest Manifold(a+I) == \u211d and !I == 1.",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/AbstractTensors/Ops.lean",
+   "/Users/alokbeniwal/Grassmann/DirectSum/Blade.lean",
+   "/Users/alokbeniwal/Grassmann/Grassmann/Algebra/Arith.lean",
+   "/Users/alokbeniwal/Grassmann/Grassmann/Algebra/Products.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "DirectSum",
+  "symbol": "@basis custom names, @dualbasis(_str), @mixedbasis(_str), nameindex registry",
+  "status": "PARTIAL",
+  "priority": "P1",
+  "effort": "M",
+  "fix": "basis! (V)\u2032 already works, but the space is always bound as V and prefixes cannot be chosen. Extend basis! with optional (sig := S) (vec := \"b\") (cov := \"w\") (duo := \"\u2202\") (dif := \"\u03f5\"). Add dualbasis! (binds VV, cov prefix) and mixedbasis! (binds W := V \u2295 V\u2032, VV := V\u2032 and V, as Julia does). Turn Leibniz.nameScheme into an open table so TensorBundle.name > 2 prints custom prefixes, as Julia's namelist does.",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/Grassmann/Basis.lean",
+   "/Users/alokbeniwal/Grassmann/Leibniz/Indices.lean",
+   "/Users/alokbeniwal/Grassmann/DirectSum/Space.lean",
+   "/Users/alokbeniwal/Grassmann/Tests/Grassmann/Types.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "DirectSum",
+  "symbol": "(W::Submanifold)(b) blade restriction/embedding, evaluate1/eval_shift, (V)(\u03bbI), mixed/combine",
+  "status": "PARTIAL",
+  "priority": "P1",
+  "effort": "M",
+  "fix": "Element-level project and embed exist (Forms/Eval.lean:61-97). Add the blade-level rules from DS/operations.jl:191-238 for Submanifold, Single and Zero: W \u2286 V uses pext and returns Zero when a bit is outside, V \u2286 W uses pdep, and embedding into V\u2295V\u2032 uses Leibniz mixed (and combine). Add covector evaluation w\u00b9(v\u2081) = V[i]\u00b71 on dyadic spaces (evaluate1). Take goldens from a gen_spaces.jl eval section.",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/DirectSum/SpaceOps.lean",
+   "/Users/alokbeniwal/Grassmann/Leibniz/Generic.lean",
+   "/Users/alokbeniwal/Grassmann/Grassmann/Forms/Eval.lean",
+   "/Users/alokbeniwal/Grassmann/Tests/DirectSum/golden/gen_spaces.jl"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "AbstractTensors",
+  "symbol": "metric (g-argument) family: wedgedot_metric, contraction_metric, log_metric, f(t,g), abs(t,g), unit(t,g), /(a,b,g)",
+  "status": "PARTIAL",
+  "priority": "P1",
+  "effort": "M",
+  "fix": "metricRing is referenced in Generic.lean:23 but not defined. Build a TensorRing instance parameterised by a runtime diagonal metric g, whose product and contraction use DirectSum's mulSkeleton and contractionSkeleton (static signs, g\u1d62 supplied at run time). All of Generic.* then gives the Julia f(t,g) family. Add scalar pass-throughs (AT:387-404). This overlaps the in-flight Cartan diffgeo work, which needs it for Riemannian fibers.",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/AbstractTensors/Generic.lean",
+   "/Users/alokbeniwal/Grassmann/Grassmann/Composite/Ring.lean",
+   "/Users/alokbeniwal/Grassmann/DirectSum/BladeAlgebra.lean",
+   "/Users/alokbeniwal/Grassmann/Tests/AbstractTensors/GenericTests.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "StaticVectors",
+  "symbol": "show/print/repr of Values",
+  "status": "PARTIAL",
+  "priority": "P1",
+  "effort": "S",
+  "fix": "ToString uses the element's Lean toString (0.500000); Julia prints 0.5. Add instance [JuliaShow \u03b1] : JuliaShow (Values \u03b1 n) for the compact form [e1, e2]. Elements use JuliaShow compact. Add Julia's eltype prefix for non-Int64/Float64 types (Float32[\u2026], Bool[\u2026], ComplexF64[\u2026]) and the text/plain display 'N-element Values{N, T} with indices SOneTo(N):' with Base column alignment. Use port-notes \u00a75 goldens.",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/StaticVectors/Values.lean",
+   "/Users/alokbeniwal/Grassmann/JuliaBase/Show.lean",
+   "/Users/alokbeniwal/Grassmann/Tests/AbstractTensors/StaticVectorsTests.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "StaticVectors",
+  "symbol": "Values(x...) / TV[...] literal",
+  "status": "PARTIAL",
+  "priority": "P1",
+  "effort": "S",
+  "fix": "Add a length-inferring literal, for example syntax vals![a, b, c] elaborating to Values.ofFn with n from the list length (or Values.ofList! with a decide proof), so the README quick start Values(1, 2, 3) has a direct spelling. Also add ones.",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/StaticVectors/Values.lean",
+   "/Users/alokbeniwal/Grassmann/Tests/AbstractTensors/StaticVectorsTests.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "StaticVectors",
+  "symbol": "perf: Values reductions (foldl, mapReduce, sum, dot, norm, normSqr)",
+  "status": "PARTIAL",
+  "priority": "P1",
+  "effort": "M",
+  "fix": "PERF.md measures about 2 ns per coefficient for Values.foldl (structural Nat-indexed loop); Julia unrolls and SIMDs. norm is called inside every series stopping rule. Add a fold method to Packed, or @[implemented_by] versions of foldlLoop and foldl\u2082Loop, that runs a USize/uget FloatArray loop at Float, with unrolled small-n variants. Route sum, dot, norm, normSqr and mapReduce through it. Measure with Bench against oracle/bench.",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/StaticVectors/Packed.lean",
+   "/Users/alokbeniwal/Grassmann/StaticVectors/Values.lean",
+   "/Users/alokbeniwal/Grassmann/StaticVectors/Reduce.lean",
+   "/Users/alokbeniwal/Grassmann/StaticVectors/LinAlg.lean",
+   "/Users/alokbeniwal/Grassmann/docs/PERF.md"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "Leibniz",
+  "symbol": "\u2245 (sameKind)",
+  "status": "MISSING",
+  "priority": "P2",
+  "effort": "S",
+  "fix": "Add sameKind a b := grade a == grade b && order a == order b && diffmode a == diffmode b over TensorBundle, blades and elements, plus scoped infix \u2245. Golden: \u039b(tangent(\u211d^2)).\u22021 \u2245 \u039b(tangent(\u211d^2)).v1 = false.",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/Leibniz/Generic.lean",
+   "/Users/alokbeniwal/Grassmann/AbstractTensors/Ops.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "DirectSum",
+  "symbol": "order",
+  "status": "MISSING",
+  "priority": "P2",
+  "effort": "S",
+  "fix": "Add TensorBundle.orderOf b := popcount (b &&& V.diffmask). Define order for Submanifold and Single (order(basis) + order(value)) and order(V) = diffvars. The logic already exists inline in nestTangent.",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/DirectSum/Space.lean",
+   "/Users/alokbeniwal/Grassmann/DirectSum/BladeAlgebra.lean",
+   "/Users/alokbeniwal/Grassmann/Grassmann/Types/Single.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "DirectSum",
+  "symbol": "isorigin, isinf(::Submanifold)",
+  "status": "MISSING",
+  "priority": "P2",
+  "effort": "S",
+  "fix": "isinf e := bladeHasInf e && popcount e == 1. isorigin e := V.hasorigin && popcount e == 1 && originBit e (Julia: isorigin(\u039b(S\"\u221e\u2205+\").v\u2205) = true).",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/DirectSum/Parity.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "DirectSum",
+  "symbol": "pseudograde(t,G) projection, subtangent",
+  "status": "PARTIAL",
+  "priority": "P2",
+  "effort": "S",
+  "fix": "Add pseudograde projection := GradeProj.proj (G := V.grade - G). Add TensorBundle.subtangent := sub [grade+1 .. n] (Julia: T\u00b9\u27e8___\u2081\u27e9).",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/AbstractTensors/Ops.lean",
+   "/Users/alokbeniwal/Grassmann/DirectSum/SpaceOps.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "Leibniz",
+  "symbol": "gdimseven, gdimsodd",
+  "status": "MISSING",
+  "priority": "P2",
+  "effort": "S",
+  "fix": "gdimseven n = [C(n,0), C(n,2), \u2026] and gdimsodd n = [C(n,1), C(n,3), \u2026], total for n = 0. Add decide examples: gdimseven 5 = #[1,10,5], gdimsodd 5 = #[5,10,1].",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/Leibniz/Combinatorics.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "Leibniz",
+  "symbol": "indexsplit, symmetricsplit, mixed, combine",
+  "status": "MISSING",
+  "priority": "P2",
+  "effort": "S",
+  "fix": "indexsplit b = single-bit masks of b. symmetricsplit V a = (a &&& dm\u2081, a &&& dm\u2082) for dyadic V. mixed V b embeds a V or V\u2032 mask into V\u2295V\u2032 (Leibniz generic.jl:109-117; return Option for dyadic tangent, quirk Q12). combine v w a b is the direct-sum embedding (generic.jl:119-130). The blade W(b) embedding needs mixed.",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/Leibniz/Generic.lean",
+   "/Users/alokbeniwal/Grassmann/DirectSum/Parity.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "AbstractTensors",
+  "symbol": "antiabs, antiabs2, antimetric (binary), pseudometric, pseudosandwich, antisandwich",
+  "status": "MISSING",
+  "priority": "P2",
+  "effort": "S",
+  "fix": "Add abbrevs: antiabs := coabs, antiabs2 := coabs2, antimetric a b := cometric a b, pseudometric := cometric, pseudosandwich := cosandwich. Add antisandwich R x := complementLeft ((!R) >>> (!x)) via HShiftRight (AT:568).",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/AbstractTensors/Generic.lean",
+   "/Users/alokbeniwal/Grassmann/AbstractTensors/Ops.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "AbstractTensors",
+  "symbol": "Scalar, GradedVector, Bivector, Trivector",
+  "status": "MISSING",
+  "priority": "P2",
+  "effort": "S",
+  "fix": "Add abbrev Scalar X M V T := TensorGraded X M V 0 T, and the same for grades 1, 2 and 3.",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/AbstractTensors/Ops.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "AbstractTensors",
+  "symbol": "isscalar/isvector/isbivector/istrivector/isvolume, isone, norm(a,b), isfinite, isnull",
+  "status": "MISSING",
+  "priority": "P2",
+  "effort": "S",
+  "fix": "Add generic predicates on typed elements: rank == k || isZero (AT:183-206), isone t := approx (norm t) (value (scalar t)) && \u2248 1, norm2 a b := norm (a - b), isfinite for terms. Today only the dynamic isscalar exists (Grassmann/Dynamic/Norms.lean:46).",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/AbstractTensors/Generic.lean",
+   "/Users/alokbeniwal/Grassmann/Grassmann/Algebra/Norms.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "AbstractTensors",
+  "symbol": "<< and >> contraction notation",
+  "status": "PARTIAL",
+  "priority": "P2",
+  "effort": "S",
+  "fix": "shiftLeftContraction and shiftRightContraction exist without notation. Add scoped infixl \" << \" and \" >> \" (precedence 75, Julia 14) in AbstractTensors and Grassmann notation. Check for token clashes with >>> and >>=.",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/AbstractTensors/Ops.lean",
+   "/Users/alokbeniwal/Grassmann/Grassmann/Notation.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "AbstractTensors",
+  "symbol": "\u2297 scalar lift",
+  "status": "PARTIAL",
+  "priority": "P2",
+  "effort": "S",
+  "fix": "Add low-priority instances TensorProd X \u03b1 X and TensorProd \u03b1 X X equal to scalar multiplication (AT:333-336).",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/AbstractTensors/Ops.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "DirectSum",
+  "symbol": "Signature(::DiagonalForm), DiagonalForm(::Signature) conversions",
+  "status": "PARTIAL",
+  "priority": "P2",
+  "effort": "S",
+  "fix": "TensorBundle.toSignature takes the sign bits of diagValues. TensorBundle.toDiagonal maps each signature bit to \u00b11 and keeps options (DS/DirectSum.jl:389-390). Forms.restrict already covers Submanifold \u2192 bundle.",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/DirectSum/SpaceOps.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "DirectSum",
+  "symbol": "Base methods on Single/Zero/Infinity (div rem mod round \u2026, Real/Float64/Complex conversions, isless/<= on scalar terms)",
+  "status": "PARTIAL",
+  "priority": "P2",
+  "effort": "S",
+  "fix": "Add named coefficient-wise wrappers over Single.map. Add conversions following DS/DirectSum.jl:495-508: Complex of a grade>0 Single puts the value in the imaginary part; Infinity maps to Inf. Add an Ord/LT instance on grade-0 terms comparing values (Leibniz generic.jl:157-162).",
+  "files": [
+   "/Users/alokbeniwal/Grassmann/Grassmann/Types/Single.lean",
+   "/Users/alokbeniwal/Grassmann/Grassmann/Dynamic/Basic.lean"
+  ],
+  "key": "foundations"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "operators on the dynamic TA layer (\u2227 \u2228 \u22c5 \u2a3c \u2298 >>> \u00d7 \u22c6 ! ~ \u208a \u208b) + Coe Submanifold\u2192TA",
+  "status": "PARTIAL",
+  "fix": "The Julia-exact layer TA only has + - * and scalar actions. Add Wedge/Vee/Contraction/Sandwich/HShiftRight/Hodge/ComplementRight/ComplementLeft/Reverse/Involute/Clifford/Even/Odd/Cross/VeeDot/Expansion/GradeProj instances for TA V \u03b1 that delegate to TA.wedge/vee/contraction/sandwich/tsandwich/hodge/..., add `Coe (Submanifold V G) (TA V \u03b1)`, `OfNat`/scalar coercion, and have basis! (optionally) expose TA-typed blade aliases. After this, Julia doc code such as `v1\u2227v2`, `~R*v1*R` or `1+v12` gives Julia's result kinds and printed strings in Lean.",
+  "effort": "M",
+  "priority": "P0",
+  "files": [
+   "Grassmann/Dynamic/Products.lean",
+   "Grassmann/Dynamic/Unary.lean",
+   "Grassmann/Dynamic/Basic.lean",
+   "Grassmann/Notation.lean",
+   "Grassmann/Basis.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "^ (integer and real powers)",
+  "status": "PARTIAL",
+  "fix": "Add HPow instances: element ^ Int for typed containers and TA over any Coeff. Use Julia's literal_pow: x^2 = x*x, repeated or binary multiplication via powJulia, the contraction shortcut for n \u2264 3, and negative exponents through inv. Also add Float ^ element (rpow, e.g. 2^v12). Today only Float-only .pow methods exist, so (v1+v2)^3, v12^2, i^2 and v12^-1 (README/docs 16, 17, 54) cannot be written.",
+  "effort": "M",
+  "priority": "P0",
+  "files": [
+   "Grassmann/Algebra/Norms.lean",
+   "Grassmann/Composite/Series.lean",
+   "Grassmann/Composite/Chain.lean",
+   "Grassmann/Dynamic/Norms.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "inv, / and \\ between elements on TA; \\ on typed elements",
+  "status": "PARTIAL",
+  "fix": "Implement TA.inv with Julia's algorithm and result kinds: ~t/abs2 for terms and chains, Couple inverse, and d=(~m)\u27d1m for mixed elements, with an Option/rejection where Julia throws. Add TA / and \\ (right: a\u27d1inv b, left: inv a\u27d1b). Add a left-division notation for typed elements (Lean SDiff \\ or a dedicated infix). This covers docs 30, 31 and 45 (-n*a/n, n\\a*n, a/a, inv(1+v12)).",
+  "effort": "S",
+  "priority": "P0",
+  "files": [
+   "Grassmann/Dynamic/Norms.lean",
+   "Grassmann/Dynamic/Arith.lean",
+   "Grassmann/Algebra/Norms.lean",
+   "Grassmann/Notation.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "exp/expm1/log/log1p/sqrt/cbrt/sin/cos/tan/sinh/cosh/tanh with Julia result kinds (dynamic layer)",
+  "status": "PARTIAL",
+  "fix": "Composite functions exist only on the typed layer, only at Float coefficients, and Chain.exp/log return a Multivector where Julia returns a Couple or Spinor (the composite suite compares values only). Add Grassmann/Dynamic/Composite.lean. It should dispatch TA kinds to the typed Composite functions and re-wrap per Julia's multispin: exp(v12) gives a Couple, exp(2v12+v13) a Spinor. Enable the kind check in Tests/Golden/Composite.lean.",
+  "effort": "M",
+  "priority": "P0",
+  "files": [
+   "Grassmann/Dynamic/Composite.lean (new)",
+   "Grassmann/Composite/Chain.lean",
+   "Grassmann/Composite/Dense.lean",
+   "Tests/Golden/Composite.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "literal constructors Chain{V,1}(4,5,6), Multivector{V}(1..8), Spinor{V}(\u2026), Chain(1,2,3)",
+  "status": "PARTIAL",
+  "fix": "Add length-checked constructors. Either a term macro (e.g. `chain! V 1 [4,5,6]`, `mv! V [...]`) or `Chain.ofList (l) (h : l.length = binomial V.n G := by decide)` alongside ofList?. Update the README/Grassmann.lean example, which today needs `(Chain.ofList? [...]).get!`.",
+  "effort": "S",
+  "priority": "P0",
+  "files": [
+   "Grassmann/Types/Chain.lean",
+   "Grassmann/Types/Half.lean",
+   "Grassmann/Types/Multivector.lean",
+   "StaticVectors/Values.lean",
+   "README.md"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "documented behaviour: docs goldens (501 statements, 416 unimplemented)",
+  "status": "PARTIAL",
+  "fix": "Only grassmann/composite-docs evaluates docs statements: 51 pass, 416 are unimplemented, 29 are defect-skipped. Add a Tests/Golden/Docs.lean evaluator in the style of CompositeDocs.byInput. It should map the expressible statements (products, complements, grade selection, norms, cayley display, forms, simplex ops, conformal products, dual basis, display edge cases) onto TA and Forms, compare kind and string, and register it in Tests.lean. Track the rest against the missing APIs listed here.",
+  "effort": "L",
+  "priority": "P0",
+  "files": [
+   "Tests/Golden/Docs.lean (new)",
+   "Tests/Golden/CompositeDocs.lean",
+   "Tests.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "\u2191/project, \u2193/reject",
+  "status": "PARTIAL",
+  "fix": "Move gallery/Gallery/Versor.lean upRiemann/downRiemann/upConformal/downConformal into the library as generic project/reject, for TA and for typed Chain/Multivector. Choose v\u221e/v\u2205 automatically from V.hasinf/V.hasorigin. Add project(\u03c9,b), project(\u03c9,p,m), reject(\u03c9,b), reject(\u03c9,\u221e,\u2205), the Submanifold (subspace) forms, and \u2191/\u2193 notation. Test against docs 41.",
+  "effort": "M",
+  "priority": "P0",
+  "files": [
+   "Grassmann/Composite/Project.lean (new)",
+   "gallery/Gallery/Versor.lean",
+   "Grassmann/Notation.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "points, vectorfield/pointfield, chainfield(t,V,W)",
+  "status": "PARTIAL",
+  "fix": "The README streamplot and line plots rely on gallery-local helpers. Add library points(f, r) and chainfield(t, V, W) = p \u21a6 V(vector(\u2193(\u2191(p) \u2298 t))) (vectorfield/pointfield as aliases returning coordinate arrays), and make gallery/Gallery/Grassmann/Fields.lean use them. Test against docs 42/43.",
+  "effort": "S",
+  "priority": "P0",
+  "files": [
+   "Grassmann/Fields.lean (new)",
+   "gallery/Gallery/Grassmann/Fields.lean",
+   "gallery/Gallery/Versor.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "roots, rootsreal, rootscomplex; monicroots* for n \u2265 5",
+  "status": "MISSING",
+  "fix": "Add non-monic wrappers roots*(a) = monicroots*(a[0..N-2] / a[N-1]), with the scalar special cases. Make monicroots?/monicrootsreal?/monicrootscomplex? fall back to eigvals(companion(a)) (Forms.Eigen) for n \u2265 5 instead of returning none. Add Complex-coefficient quadratics. Extend roots.json.",
+  "effort": "S",
+  "priority": "P0",
+  "files": [
+   "Grassmann/Forms/Roots.lean",
+   "Grassmann/Forms/Spectral.lean",
+   "oracle/forms/gen.jl"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "eigvecsreal (and real-typed eigvecs)",
+  "status": "MISSING",
+  "fix": "Add TensorOperator.eigvecsreal: Except of the real eigenvector operator from Eigen.Decomposition when all eigenvalues are real. Make eigvecs return a real-typed result when the spectrum is real, as Julia does. Both are listed in the README API overview.",
+  "effort": "S",
+  "priority": "P0",
+  "files": [
+   "Grassmann/Forms/Spectral.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "istensor, isgraded, isterm, isvector, isbivector, istrivector, isvolume",
+  "status": "MISSING",
+  "fix": "Add class-level predicates in AbstractTensors (istensor true for TensorAlgebra; isgraded/isterm from TensorGraded/TensorTerm instances; isvector etc. as rank == k || isZero). Make TA.isGraded/isTerm public and add the TA versions. istensor, isgraded and isterm are listed in the README API overview.",
+  "effort": "S",
+  "priority": "P0",
+  "files": [
+   "AbstractTensors/Ops.lean",
+   "Grassmann/Dynamic/Norms.lean",
+   "Grassmann/Dynamic/Products.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "abs, unit (and unitize/unitnorm/geomabs) per element kind",
+  "status": "PARTIAL",
+  "fix": "Julia returns elements, e.g. abs(a) = 3.74v (a scalar Single) and abs(1+v12) = Single. Lean Chain.abs returns a Float, and unit/unitize/unitnorm/geomabs exist only for Multivector. Add Chain/Single/Couple/Spinor/TA versions with Julia kinds, generic over Analytic \u03b1.",
+  "effort": "S",
+  "priority": "P0",
+  "files": [
+   "Grassmann/Composite/Ring.lean",
+   "Grassmann/Dynamic/Composite.lean (new)"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl (Leibniz re-exports)",
+  "symbol": "\u2207/nabla/Nabla, \u0394/Laplacian, \u2202/boundary, d/differential, \u03b4/codifferential, grad(::TensorAlgebra), divergence, curl",
+  "status": "MISSING",
+  "fix": "Add Grassmann/Calculus.lean. In plain spaces V(\u2207) is the all-ones grade-1 chain, so \u2202\u03c9 = \u03c9\u22c5V(\u2207), d\u03c9 = V(\u2207)\u2227\u03c9, \u03b4 = \u2212\u2202, gradient = d, divergence = \u2202, curl = V(\u2207)\u00d7m (effort S). Add \u2202 for Simplex chains (\u2227(\u03c9)\u22c5\u039b(W).v1). Tangent spaces need a Leibniz Derivation type and V(\u2207) = \u03a3 \u2202\u2096v\u2096 plus (\u2207\u22c5\u2207)^k for \u0394 (effort M). Test against docs 20-22, 27, 39.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "Grassmann/Calculus.lean (new)",
+   "Leibniz/Generic.lean",
+   "Grassmann/Forms/Simplex.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "skeleton, \ud835\udcab, subcomplex, collapse, chain, path, betti, \u03c7",
+  "status": "MISSING",
+  "fix": "Add Grassmann/Simplicial.lean: absym, skeleton (TensorTerm/Chain/Multivector with the Val flag), collapse(a,b) = a\u22c5absym(\u2202b), chain/path (the 2-chain of a boundary cycle), count_gdims, boundary_rank/null, betti and \u03c7. Implement the intended \ud835\udcab/subcomplex, which are broken in Julia (defect laplacian-not-callable). Test against docs 39.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "Grassmann/Simplicial.lean (new)",
+   "Grassmann/Calculus.lean (new)"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "hyperplanes, \ud835\udd5a, \ud835\udd5b, \ud835\udd5c",
+  "status": "MISSING",
+  "fix": "Add hyperplanes V = [I \u27d1 v_k | k < V.grade] as Single values (a TA list) and \ud835\udd5a \ud835\udd5b \ud835\udd5c := hyperplanes \u211d3 = (v\u2082\u2083, \u2212v\u2081\u2083, v\u2081\u2082). Test against docs 16/37/38.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Grassmann/Basis.lean",
+   "Grassmann/Composite/Spinor.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl (DirectSum re-exports)",
+  "symbol": "@basis naming args, @dualbasis, @mixedbasis",
+  "status": "PARTIAL",
+  "fix": "Extend basis! syntax with optional names (`basis! V (space := E) (prefix := e)`, and the sig/vec/cov/duo/dif slots). Add dualbasis!/mixedbasis! aliases for basis! V\u2032 and basis! (V \u2295 V\u2032). Add tests for the dual and mixed label sets (w\u00b9, v\u2081w\u00b9).",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Grassmann/Basis.lean",
+   "Tests/Grassmann/Types.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "coefficient types: promotion, Float32/Complex composite, BigFloat",
+  "status": "PARTIAL",
+  "fix": "Add a promotion class (Int\u2192Rat\u2192Float\u2192Complex) and HAdd/HMul instances that promote mixed-coefficient operands (today Int\u00b7v1 + 2.5\u00b7v2 is a type error; the harness promotes outside the library). Generalise the Float-only Composite functions over [Analytic \u03b1] (Float32, Complex Float).",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "AbstractTensors/Coeff.lean",
+   "Grassmann/Algebra/Arith.lean",
+   "Grassmann/Dynamic/Arith.lean",
+   "Grassmann/Composite/Chain.lean",
+   "Grassmann/Composite/Couple.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "metric-argument method family f(t, g) (wedgedot_metric, contraction_metric, log_metric, abs/exp/inv/hodge/sandwich/radius/complexify with g)",
+  "status": "MISSING",
+  "fix": "Add runtime-metric (Gram operator) variants of the products and derived maps. The kernel plans already carry metric coefficients, so thread a runtime Gram through Kernel.Plan or build the plans per g. Cartan diffgeo with non-induced metrics needs this.",
+  "effort": "L",
+  "priority": "P1",
+  "files": [
+   "Grassmann/Algebra/Metric.lean (new)",
+   "Grassmann/Kernel/Plan.lean",
+   "Grassmann/Kernel/Reference.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "call syntax A(g), t(y\u2026), W(x), z(t); \u2208 for simplices; T:T; m.v12",
+  "status": "PARTIAL",
+  "fix": "Add CoeFun instances: Multivector/Half with Nat gives gradePart; Chain/Multivector with a list of vectors gives eval; Phasor with Float gives Phasor.eval. Add a Membership instance from Simplex.contains, a notation for TensorOperator.frobenius, and a name-lookup coefficient accessor. Covers docs 31, 32, 33, 37 and 56.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Grassmann/Types/Multivector.lean",
+   "Grassmann/Forms/Eval.lean",
+   "Grassmann/Forms/Simplex.lean",
+   "Grassmann/Forms/Operator.lean",
+   "Grassmann/Composite/Couple.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "@TensorOperator, @Endomorphism, @Outermorphism, @SpectralOperator",
+  "status": "PARTIAL",
+  "fix": "Add matrix-literal term syntax (e.g. `op![[1,2],[3,4]]`) that elaborates to a TensorOperator with the dimension checked at elaboration time (not an Option), plus the Outermorphism/SpectralOperator wrappers. Covers docs 18.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Grassmann/Forms/Operator.lean",
+   "Grassmann/Forms/Outermorphism.lean",
+   "Grassmann/Forms/Dyadic.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "tangent/dual/mixed-space products (\u22021*\u22021v1 = \u2202\u2081\u2297\u2202\u2081v\u2081)",
+  "status": "PARTIAL",
+  "fix": "TA cannot hold derivation-valued coefficients, and the products goldens have no TAN/DUAL/DYAD shards. Add those shards to oracle/suites/products.jl. Extend TA (or add a coefficient sum type) for Leibniz tensor-valued Singles, or document and reject them.",
+  "effort": "L",
+  "priority": "P1",
+  "files": [
+   "Grassmann/Dynamic/Basic.lean",
+   "Grassmann/Dynamic/Products.lean",
+   "oracle/suites/products.jl"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "performance: dynamic TA products",
+  "status": "PARTIAL",
+  "fix": "TA products run through interpreted cached plans (Dynamic/Loops.lean), never the generated kernels, and have never been benchmarked against Julia. Route container\u00d7container TA products to Kernels/SandwichKernels when V has generated kernels, keeping bit-exact summation order where the goldens need it. Add TA rows to Bench/Grassmann and PERF.md (with the in-flight Bench/Harness).",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "Grassmann/Dynamic/Products.lean",
+   "Grassmann/Dynamic/Loops.lean",
+   "Bench/Grassmann/Products.lean",
+   "docs/PERF.md"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "performance: spaces without basis!/grassmann_kernels",
+  "status": "PARTIAL",
+  "fix": "Runtime-built spaces fall back to reference plans, about 10\u00d7 slower than generated kernels (PERF.md 'ref' rows), whereas Julia generates on first use. Speed up the plan interpreter (unrolled blocks, USize loops over FloatArray) and document or automate grassmann_kernels for user spaces.",
+  "effort": "M",
+  "priority": "P2",
+  "files": [
+   "Grassmann/Kernel/Plan.lean",
+   "Grassmann/Kernel/Reference.lean",
+   "Grassmann/Kernel/Codegen.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "Phasor/\u2220 API and complex-like accessors (amplitude, phase, unitangle, realvalue, imagvalue, imaginary, radius, angle, complexify, vectorize, polarize)",
+  "status": "PARTIAL",
+  "fix": "Add a \u2220 notation. Add amplitude/phase/unitangle and realvalue/imagvalue named functions, and radius/angle for Chain/Multivector/Single. vectorize should return a Chain over _subspace(V,B), not raw Values. Add polarize for Spinor/Single, the non-simple phasor complexify (amp \u2298 exp(angle/2)), the 2-arg phasor call, and TA phasor arithmetic.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Grassmann/Composite/Couple.lean",
+   "Grassmann/Composite/Spinor.lean",
+   "Grassmann/Types/Couple.lean",
+   "Grassmann/Notation.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "composite per-kind completeness (cot/sec/csc/coth/sech/csch, inverse trig/hyperbolic on Chain/CoSpinor/PseudoCouple, PseudoCouple sqrt/cbrt, Phasor trig, pseudo* on Chain/Single/Couple) and untested exph/volumes/vandermonde*",
+  "status": "PARTIAL",
+  "fix": "These are Multivector-only (via Generic) or missing for some kinds. Add per-kind wrappers (or route through multispin) and the pseudo* aliases for Chain. Add oracle cases for exph, volumes, vandermonde/vandermondereal/vandermondecomplex, LieDerivative and cosandwich. Add the vandermonde(x,y,V) least-squares fit.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Grassmann/Composite/Ring.lean",
+   "Grassmann/Composite/Spinor.lean",
+   "AbstractTensors/Generic.lean",
+   "Grassmann/Forms/Spectral.lean",
+   "Tests/Composite/Unit.lean",
+   "oracle/forms/gen.jl"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "I (UniformScaling constant)",
+  "status": "PARTIAL",
+  "fix": "Export `I : UniformScaling Int := \u27e81\u27e9` (or Bool-valued) under Grassmann, with the existing ComplementRight/Hodge interop, so the README's universal pseudoscalar I is expressible.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "AbstractTensors/Ops.lean",
+   "Grassmann/Notation.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "aliases: codot, pseudosandwich, pseudoreverse, cometric/pseudometric (unary), antiabs/antiabs2, quatvalues, discriminantreal/disc/discreal/disccomplex, Proj, Quaternion/Scalar/GradedVector/Bivector/Trivector abbrevs, element pseudograde/antigrade, indices of terms, <</>> and \ud835\udcdb[\u2026] notation",
+  "status": "PARTIAL",
+  "fix": "Add one-line abbrevs and notations (antigrade t = V.grade - grade t on TA and typed; indices via basis bits). Export them under Grassmann.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "AbstractTensors/Ops.lean",
+   "AbstractTensors/Generic.lean",
+   "Grassmann/Notation.lean",
+   "Grassmann/Forms/Spectral.lean",
+   "Grassmann/Forms/Dyadic.lean",
+   "Grassmann/Forms/Lie.lean",
+   "Grassmann/Types/Half.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "antisandwich",
+  "status": "MISSING",
+  "fix": "Add antisandwich R x = complementLeft (complementRight R >>> complementRight x) next to cosandwich.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "AbstractTensors/Ops.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "\u2299, \u22a0 (symmetric/antisymmetric products), \u2225",
+  "status": "MISSING",
+  "fix": "Notation is declared without instances. Implement the intended \u03a3\u03c3\u220f\u03c9/K! symmetrization and antisymmetrization (Julia is broken: defect symmetrize-permutations) and \u2225 = isZero(a\u2227b).",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "Grassmann/Algebra/Products.lean",
+   "Grassmann/Dynamic/Products.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "\u2297 beyond Chain\u2297Chain",
+  "status": "PARTIAL",
+  "fix": "Add TensorProd instances: scalar\u2297graded = *, Single/Submanifold \u2297 graded as a Dyadic of chains, and TA operands.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "Grassmann/Forms/Dyadic.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "adjoint ', complementrightanti/leftanti on TA, TA.isapprox, isone, isfinite",
+  "status": "PARTIAL",
+  "fix": "Promote the harness-only adjoint (V.adjoint + TA.retarget) to a library TA.adjoint and typed Chain.adjoint. Add the anti complements to TA with unary goldens, and add TA.isapprox/isone/isfinite.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "Grassmann/Dynamic/Unary.lean",
+   "Grassmann/Dynamic/Equal.lean",
+   "Tests/Golden/GrassmannEval.lean",
+   "oracle/suites/unary.jl"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "elementwise Base utilities (div rem mod mod1 fld fld1 cld ldexp mod2pi rem2pi rad2deg deg2rad round rationalize rand iseven isodd signbit)",
+  "status": "PARTIAL",
+  "fix": "Only map exists. Add named elementwise wrappers over map for Float/Int, iseven/isodd (grade parity), and rand samplers in the library (reuse Tests' SplitMix64).",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "Grassmann/Types/Chain.lean",
+   "Grassmann/Types/Half.lean",
+   "Grassmann/Types/Multivector.lean",
+   "Grassmann/Types/Couple.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "column, columns; means, centroids, barycenters, curls",
+  "status": "PARTIAL",
+  "fix": "Julia column(t,i) is the i-th coordinate across a point list (an operator row), but Lean TensorOperator.column is an operator column. Add column/columns with Julia semantics for point arrays and Simplex, and the index-mapped mesh helpers op.(getindex.(Ref(p), m)).",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "Grassmann/Forms/Simplex.lean",
+   "Grassmann/Forms/Operator.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "Outermorphism/Dyadic/Projector exp, expm1, log",
+  "status": "PARTIAL",
+  "fix": "Add them via Endomorphism/MatFun (Outermorphism: recompute the compounds from the grade-1 result; Dyadic via toOperator), plus the Proj exp/log heuristic.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "Grassmann/Forms/Outermorphism.lean",
+   "Grassmann/Forms/Dyadic.lean",
+   "Grassmann/Forms/MatFun.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "scalarfield, chainfield(t,\u03d5), rectanglefield",
+  "status": "MISSING",
+  "fix": "Add the mesh barycentric interpolation samplers: find the simplex Pi containing P, return (Pi\\P)\u22c5\u03d5[ti]. rectanglefield samples chainfield over rectangle(points(t)). They belong with the new Fields module and use Simplex.contains/ldiv.",
+  "effort": "M",
+  "priority": "P2",
+  "files": [
+   "Grassmann/Fields.lean (new)",
+   "Grassmann/Forms/Simplex.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "Multiplex / nested (element-valued) coefficients",
+  "status": "MISSING",
+  "fix": "Add a Coeff instance for Chain/Multivector (recursive coefficients) or document that Forms' Mat-based operators replace Julia's nested Chain{V,G,Chain{W}} for all uses.",
+  "effort": "M",
+  "priority": "P2",
+  "files": [
+   "AbstractTensors/Coeff.lean",
+   "Grassmann/Types/Chain.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "cross-space interop (\u039b(\u211d^2).v1 \u2227 \u039b(\u211d^3).v3)",
+  "status": "PARTIAL",
+  "fix": "Add a union-space promotion (embed both operands into V\u222aW via Chain.embed/Multivector.embed) for TA binary ops over different bundles. Covers docs 36.",
+  "effort": "M",
+  "priority": "P2",
+  "files": [
+   "Grassmann/Forms/Eval.lean",
+   "Grassmann/Dynamic/Products.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "AbstractFFTs methods on arrays of elements",
+  "status": "MISSING",
+  "fix": "After the in-flight Cartan Spectral FFT lands, add fft/ifft/... over FloatArray SoA of Couples, using complexify for Chains/Phasors and Real for scalars.",
+  "effort": "M",
+  "priority": "P2",
+  "files": [
+   "Grassmann/Composite/Couple.lean",
+   "Cartan (Spectral, in flight)"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl ext",
+  "symbol": "SpecialFunctionsExt / EllipticFunctionsExt / FewSpecialFunctionsExt",
+  "status": "MISSING",
+  "fix": "Add complex gamma/erf/bessel/elliptic functions to JuliaBase (with oracle goldens), then lift them to Couple/Single/Chain via complexify/vectorize as the ext does.",
+  "effort": "L",
+  "priority": "P2",
+  "files": [
+   "JuliaBase/Complex.lean",
+   "Grassmann/Composite/Couple.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl (DirectSum re-exports)",
+  "symbol": "\u211d constant, \u039b(V) glue (lookup \u2192 element, \u039b(V).b, \u039b(V)[i])",
+  "status": "PARTIAL",
+  "fix": "Add a Grassmann-level `blade? V \"v21\" : Option (TA V Int)` via TA.ofBladeResult, plus basis lists and indexing. Provide \u211d^1 docs guidance or a non-clashing \u211d\u2081 constant.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "DirectSum/Names.lean",
+   "Grassmann/Dynamic/Products.lean",
+   "Grassmann/Basis.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Grassmann.jl",
+  "symbol": "Complex(m::Imaginary), Couple(m::Imaginary), reim; operator isdiag",
+  "status": "PARTIAL",
+  "fix": "Add Spinor-on-n=1-plane \u2194 Complex/Couple conversions and TensorOperator.isdiag.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "Grassmann/Composite/Couple.lean",
+   "Grassmann/Forms/Operator.lean"
+  ],
+  "key": "grassmann-core"
+ },
+ {
+  "pkg": "Cartan (plot ext)",
+  "symbol": "Makie methods on TensorFields: lines, linesegments, scatter, text, mesh, wireframe, surface, contour, contourf, contour3d, heatmap, streamplot, arrows/arrows2d/arrows3d (+ Components/Limit/LocalTensor forms); docs/src/plot.md 32 examples",
+  "status": "MISSING",
+  "fix": "Build a Cartan->LeanPlot bridge as its own Lake package, because the root package must stay dependency-free. It converts fields to LeanPlot data: 1-D curves become Pts2/Pts3 colored by `speed`; `GridBundle 2` fields become `Grid2` plus `Surface.quadsToTriMesh`/`gridMesh` with normals; `SimplexBundle` becomes `TriMesh`; heatmap centers become edges via `Algo.Heatmap.edges`; streamplot passes `TensorField.eval2/eval3` (Cartan/Interp.lean) as the vector function to `Algo.Streamplot` and uses `Result.mapPoints` for the tangent-space `makietransform`. Write one dispatch function per Makie method, mirroring the table in cartan-element-spectral-plot.md \u00a75.2. Then port the 32 plot.md figures into the gallery with oracle/gallery data dumps, and bump the gallery's LeanPlot pin from f141f59 to leanplot-next.",
+  "effort": "L",
+  "priority": "P0",
+  "files": [
+   "plot/lakefile.toml (new) or gallery/lakefile.toml",
+   "plot/CartanPlot/Convert.lean (new)",
+   "plot/CartanPlot/Makie.lean (new)",
+   "gallery/Gallery/Cartan/PlotMd.lean (new)",
+   "gallery/Gallery/Index.lean",
+   "gallery/Gallery/Main.lean",
+   "oracle/gallery/cartan_plotmd.jl (new)"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "Cartan",
+  "symbol": "EndomorphismField, DiagonalField, OutermorphismField, PhasorField, ComplexMap (Couple/Phasor fibers); det, polarize, complexify, vectorize, metrictensorfield, metricextensorfield, fullmetricextensor",
+  "status": "MISSING",
+  "fix": "Add `FlatFiber`/`LinearFiber`/`ShowFiber`/`FiberNorm` instances with `LawfulFlatFiber` proofs for `TensorOperator` (column-major rows\u00d7cols floats), `DiagonalOperator`, `Outermorphism` (grade blocks), `Couple`, `PseudoCouple`, `Phasor` and `Single`. Then lift det/tr/eigen*/polarize/complexify/vectorize as `TensorField.map`s and add metrictensorfield/metricextensorfield over `MetricStore`. Add operator-field probes to oracle/cartan/gen.jl. This unblocks the diffgeo frames, jacobian and first-form results (the README surface methods), so coordinate with the in-flight Diffgeo worker.",
+  "effort": "M",
+  "priority": "P0",
+  "files": [
+   "Cartan/Fiber.lean",
+   "Cartan/Props.lean",
+   "Cartan/Algebra.lean",
+   "Cartan/Misc.lean",
+   "Cartan/Show.lean",
+   "oracle/cartan/gen.jl",
+   "Tests/Cartan/Unit.lean",
+   "Tests/Cartan/Misc.lean"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "Infrastructure (Adapode/Cartan)",
+  "symbol": "sparse assembly + A\\b direct solve, dense LU `\\`, generalized sparse eigensolver (geneigsolve)",
+  "status": "MISSING",
+  "fix": "Add: (1) a CSC sparse matrix built from triplets, summing duplicates as Julia `sparse` does; (2) a sparse LU, or Cholesky for SPD stiffness/mass, with fill-reducing ordering; (3) dense LU with partial pivoting in LAPACK getrf order, for Chebyshev operators; (4) shift-invert Lanczos for the smallest generalized eigenpairs. Compare solutions using ulps or relative tolerances. Today only MeshTopology/Sparse.lean exists (triplets, transpose, row sums), with no factorization.",
+  "effort": "L",
+  "priority": "P0",
+  "files": [
+   "JuliaBase/LinAlg/Sparse.lean (new)",
+   "JuliaBase/LinAlg/Dense.lean (new)",
+   "JuliaBase/LinAlg/Eigen.lean (new)",
+   "MeshTopology/Sparse.lean",
+   "Tests/JuliaBase/*"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "Adapode",
+  "symbol": "FEM (element.jl, 44 symbols): assemble, assembleglobal, assemblestiffness, assemblemass, assemblemassload, assemblemassincidence, assemblerobin, assembleconvection, assembleSD, assembledivergence, assemblestokes, assemblemaxwell, assembleelastic, assembleDIPG, assemblemassPN, assemblestiffnessPN, solvepoisson, solvedirichlet, solveheat, solvewave, solvetransport, solvetransportdiffusion, adaptpoisson, solvestokes, solvenavierstokes, solvemaxwell, solveelastic, solvenonlinearpoisson, solvebistable(_newton), solvepoissonDIPG, jumps, nedelec, nedelecmean, shapeP1/P2, gradientP1/P2, isoparametric, volumePN, volumesPN, gradientCR, trilength, trinormals",
+  "status": "MISSING",
+  "fix": "Port adapode.md \u00a72.6 and \u00a74.7-4.8 on top of Cartan Element (volumes, gradienthat, assembleload): local P1 mass/stiffness/convection/SD kernels as unrolled Values code, a global scatter into the sparse layer, Robin/Dirichlet handling, and the solvers. Fix upstream bugs B11, B13, B15 and the broken 2-D `jumps` branch rather than copying them. Take goldens from adapode.md \u00a76.1 (assemblemassload solves, backward-Euler heat, the adaptpoisson node sequence) via a new oracle/adapode/gen_fem.jl. Adapode.lean on master is a one-line stub, and FEM is not in the in-flight list.",
+  "effort": "L",
+  "priority": "P0",
+  "files": [
+   "Adapode.lean",
+   "Adapode/Element/Local.lean (new)",
+   "Adapode/Element/Assemble.lean (new)",
+   "Adapode/Element/Solve.lean (new)",
+   "Adapode/Element/Stokes.lean (new)",
+   "Adapode/Element/Maxwell.lean (new)",
+   "Adapode/Element/Elastic.lean (new)",
+   "Adapode/Element/DG.lean (new)",
+   "Adapode/Element/P2.lean (new)",
+   "oracle/adapode/gen_fem.jl (new)",
+   "Tests/Adapode/Fem.lean (new)"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "Adapode",
+  "symbol": "grid/spectral PDE solvers (34 symbols): dirichlet!, reshapedirichlet, reshapepolardirichlet, solvepolardirichlet, solveiteration, helmholtz, solvehelmholtz, solvenonlinearhelmholtz, polarlaplacian, biharmonic, orrsommerfeld, heat/restwave/biharmonic/riesz x periodic/neumann/dirichlet, wave/fullwave periodic/neumann, wavedirichlet, schrodingerperiodic, *multiplier",
+  "status": "MISSING",
+  "fix": "Implement adapode.md \u00a72.7 and \u00a74.9-4.10 over Cartan Spectral (rfft/irfft, DCT-II/III, DST via r2r) and the dense LU. The multiplier functions are closed forms; the periodic, neumann and dirichlet solvers are ifft(fft(u0) .* mult.(k,t)). Time-series overloads stack results along a new last axis, which needs assign!/pushAxis. Fix the B17 sign bugs and B19 (the biharmonic scalar forms and the missing fullwaveneumann import). Use the README R8-R12 sums and probe values from adapode.md \u00a76.2 as goldens.",
+  "effort": "M",
+  "priority": "P0",
+  "files": [
+   "Adapode/Grid/Dirichlet.lean (new)",
+   "Adapode/Grid/Chebyshev.lean (new)",
+   "Adapode/Grid/Multipliers.lean (new)",
+   "Adapode/Grid/Spectral.lean (new)",
+   "oracle/adapode/gen_grid.jl (new)",
+   "Tests/Adapode/Grid.lean (new)"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "Cartan (plot ext)",
+  "symbol": "scaledarrows, scaledarrows! (fiber.md C1, the first interactive example)",
+  "status": "MISSING",
+  "fix": "In the bridge package: scaledarrows M t = arrows2d/3d with lengthscale = spacing M / (sum|t|/n) / 3, using Cartan.spacing (Cartan/Misc.lean, done). Add the operator-column form once TensorOperator fibers exist. The gridsize/arcgridsize keywords go through TensorField.resample (done).",
+  "effort": "S",
+  "priority": "P0",
+  "files": [
+   "plot/CartanPlot/Recipes.lean (new)"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "Cartan (plot ext)",
+  "symbol": "linegraph(!), tangentbundle(!), normalbundle(!), planesbundle(!), arrowsbundle(!), spacesbundle(!), scaledbundle(!), scaledfield(!), scaledplanes(!), scaledspaces(!), planes(!), spaces(!), graylines(!), variation!, alteration!, modification!",
+  "status": "MISSING",
+  "fix": "Port the MakieExt.jl:227-797 recipes into the bridge. linegraph uses TensorField.leaf/leafAt (done), colored by speed. The bundles, planes and spaces are LeanPlot arrows plus mesh quads from _orientedplane/_unorientedplane (fixing upstream B2/B4). graylines is linesColored (grays) plus a dashed black line. The `!` animation drivers become Figure frame sequences via LeanPlot.Figure.saveFrames.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "plot/CartanPlot/Recipes.lean (new)",
+   "plot/CartanPlot/Animate.lean (new)"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "Cartan",
+  "symbol": "OpenParameter, MirrorParameter, ClampedParameter, TorusParameter, BallParameter/PolarParameter, SphereParameter, CylinderParameter, MobiusParameter, WingParameter, KleinParameter, ConeParameter, TubeParameter/RevolvedParameter, HopfParameter, GeographicParameter (explicit-axes forms)",
+  "status": "PARTIAL",
+  "fix": "The size forms are done and oracle-tested (Cartan/Parameters.lean). Add explicit-axes overloads Parameter.x (ps : ProductSpace N) / (axes : Vector Axis N) = TensorField.identity ((GridBundle.ofSpace ps).x), plus the 1-D Axis forms, so plot.md's OpenParameter(xs, ys) and OpenParameter(-5:2:5, ...) read directly. Add parameters.json probes for them.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Cartan/Parameters.lean",
+   "oracle/cartan/gen.jl",
+   "Tests/Cartan/Grids.lean"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "Cartan",
+  "symbol": "tensorfield",
+  "status": "MISSING",
+  "fix": "Add tensorfield (t : versor) : AffinePoint N -> Chain = down(up((V u M)(p)) sandwich t), using Grassmann's sandwich and conformal lift/drop. Add the mesh-interpolant form tensorfield(t, phi) on a SimplexBundle, with point location from Element sinterp. Add probes for the fiber.md C6/C7 streamplots.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Cartan/Misc.lean",
+   "oracle/cartan/gen.jl",
+   "Tests/Cartan/Misc.lean"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "Cartan",
+  "symbol": "TensorField constructors (C2 non-product point arrays, integer-valued points, C6 reparametrize untested), Variation (field of fields), Limit/orbit/orbithold/orbiterror over fields, assign!",
+  "status": "PARTIAL",
+  "fix": "Add a PointGrid N base (explicit per-point coordinates on a QuotientTopology) for curvilinear grids. Add a FlatFiber for nested fields, or a Variation wrapper over Array (TensorField ..). Lift AbstractAnalysis orbit/orbitError to fields, returning Limit. Add assign! as TensorField.setSlice on the last axis (the Adapode time series need it). Oracle-test reparametrize.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "Cartan/Bundle.lean",
+   "Cartan/Field.lean",
+   "Cartan/Slice.lean",
+   "Cartan/Interp.lean",
+   "Tests/Cartan/Field1d.lean",
+   "Tests/Cartan/Slices.lean"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "Cartan",
+  "symbol": "DiscontinuousBundle",
+  "status": "MISSING",
+  "fix": "Model a SimplexBundle over a DiscontinuousTopology, with points gathered through discontinuousVertices, instead of only the disconnected copy. Element interpCR(pt, dt, ed, m) and Adapode assembleDIPG need it.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "Cartan/Bundle.lean",
+   "Cartan/Misc.lean",
+   "Tests/Cartan/Mesh.lean"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "LeanPlot",
+  "symbol": "volume (mip/absorption rendering), volumeslices",
+  "status": "MISSING",
+  "fix": "Add a volume mark: CairoMakie's draw_atomic(::Volume) ray march in the raster backend, with SVG embedding the raster. Add a volumeslices recipe (three axis-aligned heatmaps in an Axis3, using Isosurface.slice). Check both against CairoMakie goldens like the other Algo recipes. Today only the :iso algorithm exists (Algo.Isosurface) and voxels (Algo.Voxels).",
+  "effort": "L",
+  "priority": "P1",
+  "files": [
+   "/Users/alokbeniwal/leanplot-next/LeanPlot/Scene/Mark.lean",
+   "/Users/alokbeniwal/leanplot-next/LeanPlot/Recipes/Algo/Volume.lean (new)",
+   "/Users/alokbeniwal/leanplot-next/LeanPlot/Recipes/Basic/Axis3.lean",
+   "/Users/alokbeniwal/leanplot-next/LeanPlot/Backend/Raster/Render.lean"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "Cartan (ext meshers)",
+  "symbol": "TriangulateExt (triangulate/initmesh), DelaunayExt/MiniQhullExt (delaunay), TetGenExt (tetrahedralize), QHullExt (chull); FlowGeometry cubesphere/spheresurf/spheremesh/cubemesh",
+  "status": "MISSING",
+  "fix": "Port a constrained 2-D Delaunay mesher with area/angle refinement (Ruppert/Shewchuk) that produces a SimplexBundle plus a boundary SimplexBundle; this replaces MATLAB initmesh for the disk eigenmodes and the airfoil domain. Also port an N-D Bowyer-Watson Delaunay for point clouds, a convex hull and, later, a tetrahedral mesher. The exact orientation predicates can be proved.",
+  "effort": "L",
+  "priority": "P1",
+  "files": [
+   "Cartan/Mesh/Delaunay.lean (new)",
+   "Cartan/Mesh/Triangulate.lean (new)",
+   "Cartan/Mesh/Hull.lean (new)",
+   "Cartan/Mesh/TetGen.lean (new)",
+   "FlowGeometry/Mesh.lean (new)"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "MeshTopology (perf)",
+  "symbol": "degrees (21x slower), elementfuns (Torus 5.4x, Mobius 5.2x, Hopf 15x), lagrange3 node lists (3.8x), edgesindices (3.3x), incidence (2.2x), BilinearTopology (2.0x), ghost lookup (Torus 4.5x, Mobius 3.3x)",
+  "status": "PARTIAL",
+  "fix": "Replace boxed Array Nat counters and per-point Vector allocations with flat buffers (ByteArray / UInt32-packed) and tail-recursive loops, following the PERF.md rules: (1) degrees in one counting pass into a packed array; (2) elementfuns without an intermediate Vector Int N per point, reusing the NeighborTable/resolveAt fast path for face points; (3) edgesIndices and incidence via counting sort into flat CSR; (4) Lagrange node lists via getVec into one flat buffer; (5) stencil users routed through NeighborTable (1.0 ns, faster than Julia). The ratios come from the bench harness files lean_mt.json and jl_mt.json.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "MeshTopology/Element.lean",
+   "MeshTopology/Grid.lean",
+   "MeshTopology/Quotient.lean",
+   "MeshTopology/Lagrange.lean",
+   "docs/PERF.md"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "Cartan (perf)",
+  "symbol": "TensorField kernels (tabulate, scalar maps, flat linear ops, Grassmann products, reductions, evaluation) vs Julia",
+  "status": "PARTIAL",
+  "fix": "Tests/Cartan/Bench.lean exists but is not wired anywhere: master Bench/Main.lean runs only math, MeshTopology and Fatou, and the in-flight harness has no cartan suite. Add it as a cartan suite that emits JSON like lean_mt.json and compares against oracle/cartan/bench.jl. Record the lean/julia ratios in docs/PERF.md; today no Cartan performance number is recorded anywhere.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Bench/Main.lean",
+   "Bench/Cartan.lean (new)",
+   "oracle/cartan/bench.jl",
+   "docs/PERF.md"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "Cartan (ext)",
+  "symbol": "UnicodePlots methods (lineplot, scatterplot, polarplot, densityplot, contourplot, surfaceplot, isosurface, histogram, boxplot, spy, heatmap) and the Base.display override",
+  "status": "MISSING",
+  "fix": "Either add a small braille/ASCII canvas backend to LeanPlot (lines, scatter, heatmap, spy) with a ToString for 1-D/2-D fields, or document the infoview widget (#plot/#figure) as the Lean analog and mark SKIP. These cover the plot.md:417-534 examples.",
+  "effort": "M",
+  "priority": "P2",
+  "files": [
+   "/Users/alokbeniwal/leanplot-next/LeanPlot/Backend/Text.lean (new)",
+   "plot/CartanPlot/Terminal.lean (new)"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "Cartan (ext)",
+  "symbol": "ColorTypesExt raster; SpecialFunctions/Elliptic/JacobiElliptic field lifts",
+  "status": "MISSING",
+  "fix": "raster is a 100x100 count of norm(P wedge g) < delta; put it in the bridge and display it with the LeanPlot image mark. The special-function lifts are just TensorField.map once Bessel, Airy, gamma, elliptic K/E and Jacobi elliptic kernels exist in JuliaBase (port the SpecialFunctions.jl/Elliptic.jl algorithms).",
+  "effort": "L",
+  "priority": "P2",
+  "files": [
+   "plot/CartanPlot/Raster.lean (new)",
+   "JuliaBase/Special/*.lean (new)"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "Cartan",
+  "symbol": "MultilinearBundle, VolumeBundle, HomotopyBundle, FiberProduct, ComplexSpace",
+  "status": "MISSING",
+  "fix": "Port fiber.jl:748-810: MultilinearBundle and VolumeBundle over BilinearTopology, with points = fullpoints[verticesinv] and quad/tri centroids. Port fiber.jl:357-361 and 874-885 (FiberProduct, HomotopyBundle). Grids with complex-valued points become GridBundle N (Complex Float) points.",
+  "effort": "M",
+  "priority": "P2",
+  "files": [
+   "Cartan/Bundle.lean",
+   "Cartan/Product.lean",
+   "Tests/Cartan/Grids.lean"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "Cartan / Adapode",
+  "symbol": "TensorField kind aliases (ScalarField, VectorField, BivectorField, TrivectorField, GradedField, CliffordField, SpinorField, QuaternionField, RealFunction, IntervalMap, PlaneCurve, SpaceCurve, AbstractCurve, SurfaceGrid, VolumeGrid, ScalarGrid, RectangleMap, HyperrectangleMap, ParametricMap, SimplexMap, FaceMap, ElementMap, ScalarMap), domain, codomain, reverse maps-to, isextrinsic, affinemanifold; Adapode re-export namespace",
+  "status": "PARTIAL",
+  "fix": "Add Cartan/Aliases.lean with abbrevs such as ScalarField m := TensorField m Float, VectorField m V := TensorField m (Chain V 1 Float) and RealFunction (a : Axis) := TensorField (GridBundle.ofAxis a) Float. Add domain := base, codomain := fiberArray, a scoped reverse maps-to notation, isextrinsic := false and affinemanifold N : Submanifold. Re-export all of them from Adapode.lean.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "Cartan/Aliases.lean (new)",
+   "Cartan.lean",
+   "Adapode.lean"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "Cartan",
+  "symbol": "variation, alteration, modification (implemented, untested)",
+  "status": "PARTIAL",
+  "fix": "Dump the Variation(t), alteration(t) and modification(t) leaves for 2-D/3-D grids in oracle/cartan/gen.jl (slices.json) and compare them in Tests/Cartan/Slices.lean.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "oracle/cartan/gen.jl",
+   "oracle/golden/cartan/slices.json",
+   "Tests/Cartan/Slices.lean"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "Adapode (ext)",
+  "symbol": "Makie.lines / Cartan.graylines on (X, xi::Vector{Chain}, t), (X, c::AbstractCurve, n), (X, c::Components, n)",
+  "status": "MISSING",
+  "fix": "Once the in-flight ODE port lands, add the flow-line and advected-curve figures to the bridge: FlowIntegral trajectories (RK4, h=2^-11), and phi_t = phi(phi_t) applied n times with Flow(X, 0.2).",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "plot/CartanPlot/Adapode.lean (new)"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "FlowGeometry (ext)",
+  "symbol": "Makie.lines(N::Profile / Airfoil / DoubleArc); UnicodePlots lineplot/display",
+  "status": "MISSING",
+  "fix": "After the in-flight FlowGeometry port: lines(profile N) as a RealFunction colored by speed; lines(complex N) as the closed outline (fixing FG-B1, the TorusTopology shim); DoubleArc as upper, mean and lower lines. These are gallery W1/W2.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "plot/CartanPlot/FlowGeometry.lean (new)",
+   "gallery/Gallery/FlowGeometry.lean (new)"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "MeshTopology",
+  "symbol": "topology-level graph laplacian (D - A) and boundary complex d(t) (README utility list)",
+  "status": "PARTIAL",
+  "fix": "Julia defines both in Cartan element.jl. Add SimplexTopology.laplacian from degrees/adjacency (SparseInt), and boundary from facetsWith (oriented, dropping interior facets), so the MeshTopology README list is complete. Oracle them via element probes.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "MeshTopology/Element.lean",
+   "oracle/meshtopology/gen_simplex.jl",
+   "Tests/MeshTopology/Simplex.lean"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "Cartan docs",
+  "symbol": "fiber.md interactive sessions C1-C23 (curves with frames, attractors, streamplots, curvature-colored surfaces, geodesics, Hopf, Stokes) as gallery figures",
+  "status": "MISSING",
+  "fix": "After diffgeo and ODE land, build each figure in the gallery with the bridge, with oracle/gallery data dumps (curve samples, frames, curvatures, geodesic endpoints), and move it out of Gallery.Index.pending.",
+  "effort": "L",
+  "priority": "P1",
+  "files": [
+   "gallery/Gallery/Cartan/Fiber.lean (new)",
+   "gallery/Gallery/Index.lean",
+   "oracle/gallery/cartan_fiber.jl (new)"
+  ],
+  "key": "geometry"
+ },
+ {
+  "pkg": "UnitSystems",
+  "symbol": "q(v,U,S) / q(U,S) hot path (Conv.convert, Conv.factor)",
+  "status": "PARTIAL",
+  "fix": "Performance gap. Measured with compiled code: 7,286 ns per call in Lean vs 0.58 ns in Julia for energy(v,English,Metric). Julia folds the factor into a constant; Lean recomputes the conversion chain (unit snaps plus an 11-slot ident test) on every call. Fix: mark Conv.convert @[inline] and route the factor through a @[noinline] Conv.factorOf q U S. With literal (q,U,S) that becomes a closed term the compiler hoists; Similitude's Quantity.factor already does this and costs 1.24 ns. Add a lazily filled (Conv x Sys x Sys) -> Thunk Num table, a Float fast path Conv.convertSys, and a bench row.",
+  "effort": "S",
+  "priority": "P0",
+  "files": [
+   "UnitSystems/Convert.lean",
+   "UnitSystems/Systems.lean",
+   "Bench/"
+  ],
+  "key": "units-applied"
+ },
+ {
+  "pkg": "FieldAlgebra",
+  "symbol": "@ring, Ring",
+  "status": "MISSING",
+  "fix": "Add FieldAlgebra/Ring.lean: sorted monomials over Group B with Julia's merge rules (ring.jl:89-228). Needs Group+Group -> Ring, Ring +/- Ring, Ring*Group, distributive Ring*Ring, division by a Group, evaluation, and show ('x + y\u00b2', 'x\u00b2 + y\u00b2\u22c5-1'). Add a ring command that shares the @group elaborator. Put the README cases and random rings into oracle/similitude/fieldalgebra.jl. The README example x+y^2 cannot be written in Lean today.",
+  "effort": "M",
+  "priority": "P0",
+  "files": [
+   "FieldAlgebra/Ring.lean",
+   "FieldAlgebra.lean",
+   "oracle/similitude/fieldalgebra.jl",
+   "Tests/FieldAlgebra/Groups.lean"
+  ],
+  "key": "units-applied"
+ },
+ {
+  "pkg": "FieldAlgebra",
+  "symbol": "@group, @group2, @constgroup",
+  "status": "PARTIAL",
+  "fix": "Add a group/group2 command elaborator: 'group XYZ x y z' emits def XYZ : Basis plus def x : Group XYZ := Group.gen \u27e80,_\u27e9 and so on. The 'begin a = v ... end' form should also emit a numeric GroupValues instance, generalising Similitude.GenValue and Consts.product, to drive product, float, the ' = value' display and factorize. Today users build a Basis by hand, and GroupProduct only produces a display string.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "FieldAlgebra/Command.lean",
+   "FieldAlgebra/Group.lean"
+  ],
+  "key": "units-applied"
+ },
+ {
+  "pkg": "Similitude",
+  "symbol": "Quantity (also MeasureSystems)",
+  "status": "PARTIAL",
+  "fix": "Add: Quantity.zpow for negative Int powers and Quantity.qpow for Rat powers, with a Dim.HasRoot side condition; HMul (Quantity U d \u03b1) (ConvertUnit U S d); Quantity U A / Quantity V B giving a ConvertUnit; dimensionless q \u00b1 x through Quantity U USQ.one \u03b1. For user-built unit systems, add a Sys.custom index (or a SysLike class) that carries a UnitSystem Scalar and uses Metric's homomorphism, which is Julia's default. Today U ranges only over the 48 named systems.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "Similitude/Quantity.lean",
+   "Similitude/Ratio.lean",
+   "UnitSystems/Systems.lean"
+  ],
+  "key": "units-applied"
+ },
+ {
+  "pkg": "Similitude",
+  "symbol": "neper, bel, decibel, logdb/expdb/dB on Quantity (also MeasureSystems)",
+  "status": "MISSING",
+  "fix": "Add a log-dimension quantity: either LogQuantity U (b : LogBase) d \u03b1 or a log flag in Dim, with Quantity.log, log10 and logdb. Then define neper U := U.qty (log \ud835\udfd9) 1, and bel and decibel the same way. Registry display should print log(\ud835\udfd9) and dB(\ud835\udfd9). Remove the skip in Tests/Similitude/Derived.lean. The README lists these units.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "Similitude/Quantity.lean",
+   "Similitude/Derived.lean",
+   "Similitude/Registry.lean",
+   "Tests/Similitude/Derived.lean"
+  ],
+  "key": "units-applied"
+ },
+ {
+  "pkg": "Similitude",
+  "symbol": "dimensions, Dimension (also MeasureSystems)",
+  "status": "MISSING",
+  "fix": "Add def Quantity.dimensions (_ : Quantity U d \u03b1) : USQGroup := d.toGroup, a matching ConvertUnit.dimensions, and a Dimension alias.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Similitude/Quantity.lean",
+   "Similitude/Ratio.lean"
+  ],
+  "key": "units-applied"
+ },
+ {
+  "pkg": "Similitude",
+  "symbol": "runtime ratio(D,U,S)",
+  "status": "PARTIAL",
+  "fix": "Performance gap. Measured with compiled code: 269,784 ns per call in Lean vs 2,617 ns in Julia. Memoise per (Conv,U,S) in a lazy Thunk table like pairTable, and use a HashMap cache for arbitrary Dim keys. Store exact exponents as twelfths (Vector Int) instead of Vector Rat 44 in Group.mul/zpow, which avoids a gcd on every operation.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "Similitude/Ratio.lean",
+   "FieldAlgebra/Group.lean"
+  ],
+  "key": "units-applied"
+ },
+ {
+  "pkg": "MeasureSystems",
+  "symbol": "lunarmass, siderealmonth, synodicmonth, siderealyear, jovianyear, RH",
+  "status": "PARTIAL",
+  "fix": "Make \u03bcE\u263e = measurement(\"81.300568(3)\") a measured value, and let a group carry a measured coefficient (an MValue.grpM g c constructor or a Coef.meas case). Evaluate the affected Similitude formulas over that scalar. In this audit's probe, Lean drops the uncertainty: lunarmass prints 3.6943034122(74)e-8 vs Julia 3.69430341(14)e-8, and synodicmonth prints no \u00b1. The other 194 of 199 measured derived-unit displays match Julia exactly. Add a measured derived-unit golden.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "MeasureSystems/Measures.lean",
+   "MeasureSystems/Measurement.lean",
+   "oracle/measuresystems/gen.jl",
+   "Tests/MeasureSystems/Goldens.lean"
+  ],
+  "key": "units-applied"
+ },
+ {
+  "pkg": "Geophysics",
+  "symbol": "gravity(\u03d5,P); temperature/pressure/density at altitude",
+  "status": "PARTIAL",
+  "fix": "Performance gap. Lean gravity(\u03d5, Earth) takes 19.2 ns vs Julia 2.8 ns because the Somigliana constants (\u03b3e, \u03b3p, k, e\u00b2) are recomputed per call. Cache them per planet in Planet.of, as Column.build does for columns. temperature, pressure and density are 1.6 to 2.3 times slower (8.2/24.3/24.3 ns vs 3.6/14.7/15.2 ns); specialise Column.eval per Op so the hot ops skip the match. sonicspeed, viscosity and kinematic are already 2.4 to 3.4 times faster. Record the Lean numbers in docs/PERF.md.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Geophysics/Planet.lean",
+   "Geophysics/Atmosphere.lean",
+   "docs/PERF.md"
+  ],
+  "key": "units-applied"
+ },
+ {
+  "pkg": "UnitSystems",
+  "symbol": "q(U,S) with runtime-chosen UnitSystem",
+  "status": "PARTIAL",
+  "fix": "Performance gap. Measured 6,057 ns per call in Lean vs 74 ns in Julia. Beyond the P0 table, add an unboxed Float evaluation path (UnitAlg Float or a NumF scalar) for arbitrary systems, and keep Num only for bit-exact goldens.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "UnitSystems/Alg.lean",
+   "UnitSystems/Convert.lean"
+  ],
+  "key": "units-applied"
+ },
+ {
+  "pkg": "UnitSystems",
+  "symbol": "system aliases SI, CGS, CGSm, CGSe (P1); MKS, ME, GM, HLU, EE, EnglishEngineering, BG, BritishGravitational, EnglishUS, AE, AbsoluteEnglish (P2); same in Similitude/MeasureSystems",
+  "status": "PARTIAL",
+  "fix": "Today these resolve only by string through Sys.ofName?. Add abbrev SI (\u03b1) [UnitAlg \u03b1] := SI2019 \u03b1 and the rest in Systems.lean, plus @[match_pattern] abbrev Sys.SI : Sys := .SI2019, so both spellings work as values.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "UnitSystems/Systems.lean"
+  ],
+  "key": "units-applied"
+ },
+ {
+  "pkg": "UnitSystems",
+  "symbol": "ASCII aliases (Mu Ru SB hh cc m0 e0 ke me mp mu m\u1d64 ee FF Z0 G0 Eh a0 re g0 lP aL \u03f5\u2080 mpe meu mpu ainv aG), BTUftlb, atomicmass, intensity, temp, universal, US, units, GG (also MeasureSystems)",
+  "status": "PARTIAL",
+  "fix": "Add alias keys to moduleConstants and abbrevs: abbrev atomicmass := dalton, abbrev universal := molargas, abbrev temp := Convert.temperature, abbrev Convert.intensity := Convert.irradiance, abbrev US := UnitSystem, BTUftlb = thermalunit British, and so on.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "UnitSystems/Registry.lean",
+   "UnitSystems/System.lean",
+   "UnitSystems/Convert.lean",
+   "UnitSystems/Derived.lean"
+  ],
+  "key": "units-applied"
+ },
+ {
+  "pkg": "UnitSystems",
+  "symbol": "cal\u1d62\u209c, cal\u209c\u2095, kcal\u1d62\u209c, kcal\u209c\u2095, eulergamma, golden, \u03c6; MeasureSystems \u03b4\u03bc\u2080",
+  "status": "MISSING",
+  "fix": "Add plain Num constants: .p (.int 4184), .p (.float 4186.8), and the cal values as kcal/1e3. Add Float values for the irrationals. Define \u03b4\u03bc\u2080 = productM \u03bc\u2080 - 4\u03c0\u00b71e-7 as a Measurement (Julia prints 6.9e-16 \u00b1 1.9e-16). Add golden rows.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "UnitSystems/Registry.lean",
+   "MeasureSystems/Measures.lean",
+   "oracle/unitsystems/systems.jl"
+  ],
+  "key": "units-applied"
+ },
+ {
+  "pkg": "UnitSystems",
+  "symbol": "callable rescale (U)(JK,Js,ms,Hm,kg); show/unitname of an arbitrary system",
+  "status": "MISSING",
+  "fix": "Add UnitSystem.rescale following UnitSystems.jl:205-221 (\u03b1L/ms unless \u03b1L is one). Add Sys.ofSystem? : UnitSystem Num \u2192 Option Sys by ident, and a show that prints the system name or 'Unknown'. The documented example Metric(1.0,1.0,1.0,1.0,1.0) needs both.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "UnitSystems/System.lean",
+   "UnitSystems/Show.lean"
+  ],
+  "key": "units-applied"
+ },
+ {
+  "pkg": "UnitSystems",
+  "symbol": "kilograms, slugs, feet, meters, moles, molecules (untested); docstring example corpus; text.jl name tables",
+  "status": "PARTIAL",
+  "fix": "Add oracle rows for the helper functions (port notes \u00a76.4) to oracle/unitsystems/extras.jl; this audit's probe already matches Julia on all of them. Replay the 1658 docstring examples (doc_goldens.json) as a test. Generate textconstants, textderived and textquantities into UnitSystems/Text.lean.",
+  "effort": "M",
+  "priority": "P2",
+  "files": [
+   "oracle/unitsystems/extras.jl",
+   "Tests/UnitSystems/Extras.lean",
+   "UnitSystems/Text.lean"
+  ],
+  "key": "units-applied"
+ },
+ {
+  "pkg": "FieldConstants",
+  "symbol": "Constant (method gaps)",
+  "status": "PARTIAL",
+  "fix": "Add a Rational payload or document it as a non-goal. Add exp2, log(b,x), closed x^Constant, Constant^Rational, Int(::Constant) returning a Constant, and default-tolerance isapprox. Extend constant_ops in floats.json.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "FieldConstants/JNum.lean",
+   "FieldConstants/Num.lean",
+   "oracle/unitsystems/floats.jl"
+  ],
+  "key": "units-applied"
+ },
+ {
+  "pkg": "FieldAlgebra",
+  "symbol": "LogGroup/ExpGroup inverses, isonezero, Field, Composite, Polynomial",
+  "status": "MISSING",
+  "fix": "Add LogGroup.exp for any base (as an ExpGroup), ExpGroup.log/log2/log10/logb, b^LogGroup, and isonezero. Port field.jl and polynomial.jl last; they are experimental and undocumented.",
+  "effort": "L",
+  "priority": "P2",
+  "files": [
+   "FieldAlgebra/LogExp.lean",
+   "FieldAlgebra/Field.lean"
+  ],
+  "key": "units-applied"
+ },
+ {
+  "pkg": "Similitude",
+  "symbol": "Quantities, Unified as a system, ConvertUnit composition/log, d(v,U,S) for any Dim, morphism, display(::UnitSystem) with Quantity slots, LaTeX/markdown helpers (latexquotient, latexquantity, ...), @unitdim, @unitgroup",
+  "status": "MISSING",
+  "fix": "Add: a QScalar instance for Values n Float; Sys.Unified with hom = usqMap; ConvertUnit.mul/div; Dim.convert v U S; Sys.morphism; a printer for UnitSystem Scalar; a new Similitude/Latex.lean. For @unitdim and @unitgroup, add a runtime registry extension through an IO.Ref.",
+  "effort": "M",
+  "priority": "P2",
+  "files": [
+   "Similitude/Quantity.lean",
+   "Similitude/Ratio.lean",
+   "Similitude/Registry.lean",
+   "Similitude/Latex.lean"
+  ],
+  "key": "units-applied"
+ },
+ {
+  "pkg": "MeasureSystems",
+  "symbol": "named measured constants (eV \u03ba \u03c3 \u03bcB \u03b5\u2080 k\u2091 m\u209a Da \ud835\udd09 \u03a6\u2080 Z\u2080 G\u2080 E\u2095 a\u2080 r\u2091 Ry BTUJ BTUftlb kcal cal), sackurtetrode, derived-unit golden",
+  "status": "PARTIAL",
+  "fix": "Add MeasureSystems/Constants.lean with typed defs, for example def eV := measured Units.electronvolt. Add sackurtetrode over MValue, which needs Measurement.log. Turn this audit's 199-row probe into a repo golden.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "MeasureSystems/Constants.lean",
+   "MeasureSystems/Measurement.lean",
+   "Tests/MeasureSystems/Goldens.lean"
+  ],
+  "key": "units-applied"
+ },
+ {
+  "pkg": "Geophysics",
+  "symbol": "20 named *ratio functions, N\u2082 O\u2082 CO\u2082 CH\u2084 H\u2082 aliases, user-built unit systems",
+  "status": "PARTIAL",
+  "fix": "Generate Weather.temperatureratio h U := W.ratio .temperature h U and the other 19 wrappers. Add abbrev N\u2082 := N2 and the other Unicode names. For custom systems, thread a Units record built from any UnitSystem Num instead of a Sys.",
+  "effort": "M",
+  "priority": "P2",
+  "files": [
+   "Geophysics/Atmosphere.lean",
+   "Geophysics/Data.lean",
+   "Geophysics/Units.lean"
+  ],
+  "key": "units-applied"
+ },
+ {
+  "pkg": "Grassmann",
+  "symbol": "grassmann/{\u211d3,STA,PGA3,CGA3}/{Spinor*Spinor, Chain1\u2227Chain1, Chain2*Chain1, v \u2298 R, R >>> v, reverse Multivector, hodge Multivector, hodge Chain1}, \u211d3 Multivector*Multivector",
+  "status": "SLOW",
+  "fix": "Every result is a fresh FloatArray: 10.9\u201315.6 ns to allocate, fill and free, where Julia keeps isbits tuples in registers. Rerun today: \u211d3 \u2227 11.6 vs 0.69 ns (17\u00d7), ~m 16\u00d7, \u22c6Chain1 16\u201318\u00d7, Spinor*Spinor 1.2\u20135.6\u00d7, \u2298/>>> 1.35\u20134.5\u00d7, \u211d3 MV*MV 1.85\u00d7 (15.2 vs 8.2 ns). Fix: (1) destination-passing kernel variants, and binary kernels that reuse an exclusive operand whose layout matches the output, as unary `m := ~m` already does; (2) land Grassmann/Fuse so an expression tree runs as one kernel with one allocation; (3) Grassmann/Batch SoA for bulk work; (4) for layouts of \u22644 floats (\u211d3 Chain1/Chain2/Spinor), emit an unboxed-struct register form with @[inline] kernels so the ctor and projections cancel in inlined consumers. Dense products in STA/PGA3/CGA3 are already at parity (0.91\u20130.96\u00d7).",
+  "effort": "L",
+  "priority": "P0",
+  "files": [
+   "Grassmann/Kernel/Codegen/Emit.lean",
+   "Grassmann/Kernel/Class.lean",
+   "Grassmann/Algebra/Products.lean",
+   "Grassmann/Algebra/Unary.lean",
+   "Grassmann/Types/Chain.lean",
+   "Grassmann/Types/Half.lean",
+   "Grassmann/Types/Multivector.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann",
+  "symbol": "grassmann/{\u211d3,STA,PGA3,CGA3}/R*v*~R",
+  "status": "SLOW",
+  "fix": "Three typed products mean three allocations: \u211d3 29.8 vs 4.51 ns (6.6\u00d7), STA 2.8\u00d7, PGA3 2.4\u00d7, CGA3 1.47\u00d7. Fuse the `R * v * ~R` pattern into the existing SandwichKernels (the same kernel as `R >>> v`) through Grassmann/Fuse or a dedicated rewrite. PERF.md's Julia numbers for STA/PGA3 (27.5/42.5 ns) no longer reproduce (11.6/12.9 ns today), so its 'within 1.5\u00d7' claim is stale.",
+  "effort": "M",
+  "priority": "P0",
+  "files": [
+   "Grassmann/Algebra/Products.lean",
+   "Grassmann/Kernel/Codegen/Emit.lean",
+   "docs/PERF.md"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann",
+  "symbol": "grassmann/*/reverse in place (m := ~m)",
+  "status": "SLOW",
+  "fix": "3.5\u20135.8 ns vs Julia 0.5\u20131.3 ns (3.1\u20136.8\u00d7): an exclusivity check, RC traffic and a memory round trip on every call. The register-struct form for small layouts, or fused expression kernels, removes it.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "Grassmann/Kernel/Codegen/Emit.lean",
+   "Grassmann/Algebra/Unary.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann",
+  "symbol": "grassmann/\u211d5/Multivector*Multivector (spike)",
+  "status": "SLOW",
+  "fix": "The only n=5 number is 250 vs 152 ns (1.64\u00d7), from the 2026-09-24 spike, which predates the current codegen. Re-measure with `basis!` kernels at n=5; if it is still slow, check the unrolled kernel's register spills and the output allocation.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Bench/Grassmann/Products.lean",
+   "oracle/bench/grassmann_bench.jl"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann (Dynamic)",
+  "symbol": "dynamic/\u211d3/{TA multi*multi, chain1*chain1, chain1\u2227chain1, single*single, multi+multi, reverse multi}",
+  "status": "SLOW",
+  "fix": "Probe today against Julia with Vector{Any} dispatch: 326 vs 36.6 ns (8.9\u00d7), 294 vs 30 (9.8\u00d7), 216 vs 30 (7.1\u00d7), 351 vs 40 (8.8\u00d7), 109 vs 34 (3.2\u00d7), reverse 2.05 \u00b5s vs 32.5 ns (63\u00d7). Against concretely typed Julia the gaps are 40\u20132700\u00d7. The cause is run-time interpretation: products replay Dynamic.Loops, and the unary maps compute per entry `fullBlade`, `sourceBlade`, a Rat `unCoeff` converted to Float, and `Leibniz.basisRank` (binomsum recomputed). Fix: dispatch TA kinds to the static generated kernels at Float, keeping the Julia-order loops only where their summation order differs; precompute per-(V, op) Float sign/permutation tables; add a fast path for equal-kind `+`.",
+  "effort": "L",
+  "priority": "P0",
+  "files": [
+   "Grassmann/Dynamic/Products.lean",
+   "Grassmann/Dynamic/Loops.lean",
+   "Grassmann/Dynamic/Unary.lean",
+   "Grassmann/Dynamic/Arith.lean",
+   "Leibniz/Combinatorics.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann (Composite)",
+  "symbol": "composite/\u211d3/{Chain.expEven, Chain.exp, Half.exp}",
+  "status": "SLOW",
+  "fix": "Bivector exp takes 215/160 ns vs Julia 8.0 ns (27\u00d7/20\u00d7) and quaternion exp 302 vs 15.5 ns (19.5\u00d7): several kernel products and Values allocations per call. Emit straight-line closed forms per space (cos|B| + sin|B|/|B|\u00b7B) that write one output array. The measurement came from the orphan Tests/Composite/Bench.lean against a new Julia twin that needs `const` basis globals (with `@basis` globals Julia is 100\u00d7 slower).",
+  "effort": "M",
+  "priority": "P0",
+  "files": [
+   "Grassmann/Composite/Chain.lean",
+   "Grassmann/Composite/Spinor.lean",
+   "Grassmann/Composite/Dense.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann (Composite)",
+  "symbol": "composite/\u211d3/{Couple.log, Couple.sqrt}",
+  "status": "SLOW",
+  "fix": "49.7/45.5 ns vs 10.0/7.2 ns (5.0\u00d7/6.3\u00d7). Both go through ComplexF64.log/sqrt, which box their results (polymorphic Complex \u03b1) and return a boxed `Float \u00d7 Int` from `ssqs`. Use the monomorphic C64 fix (see juliabase/complex_*).",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "Grassmann/Composite/Couple.lean",
+   "JuliaBase/Complex.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann (Composite)",
+  "symbol": "composite/\u211d3/{Couple.cosh, Chain.cos}",
+  "status": "SLOW",
+  "fix": "Both use a power series: 133 vs 17.5 ns (7.6\u00d7) and 2.0 \u00b5s vs 30 ns (67\u00d7). Use closed forms: cosh(a+bB) = cosh a\u00b7cosh b + sinh a\u00b7sinh b\u00b7B when B\u00b2 = +1, and trig closed forms for blades squaring to a scalar.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Grassmann/Composite/Couple.lean",
+   "Grassmann/Composite/Chain.lean",
+   "Grassmann/Composite/Series.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann (Composite)",
+  "symbol": "composite/\u211d3/{Half.log, Half.sqrt, input: quat x}",
+  "status": "SLOW",
+  "fix": "192/280 ns vs 23.7/76.7 ns (8.1\u00d7/3.7\u00d7). Building the input quaternion alone costs 117 ns vs 0.65 ns: Half.addScalar after a Values.map adds about 100 ns over the chain baseline, with closed terms read through once-cells visible in the generated C. Profile Values.modify and the Half wrappers, and compute the polar forms without intermediate Values.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "Grassmann/Composite/Spinor.lean",
+   "Grassmann/Composite/Dense.lean",
+   "StaticVectors/Values.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann (Composite)",
+  "symbol": "composite/\u211d3/Multivector.exp (dense, series)",
+  "status": "SLOW",
+  "fix": "5.1 \u00b5s vs 175 ns (29\u00d7): every series term allocates a product. Accumulate in place (`m := m * n`) on the generated kernels and use scaling and squaring.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "Grassmann/Composite/Series.lean",
+   "Grassmann/Composite/Dense.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann (Composite)",
+  "symbol": "composite/\u211d3/{Couple.exp, Single.exp}",
+  "status": "SLOW",
+  "fix": "7.9/7.7 ns vs 4.6/5.9 ns (1.7\u00d7/1.3\u00d7), limited by JuliaBase sincos/exp (see math/*). The Grassmann/Composite.lean doc claim 'Couple.exp 8 ns vs Julia 13 ns' is stale.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "JuliaBase/Trig.lean",
+   "JuliaBase/Math.lean",
+   "Grassmann/Composite.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann (Forms)",
+  "symbol": "forms/n={3,4,6}/{T*x, T*U, det, inv, exp, O*M, outermorphism(T)}",
+  "status": "SLOW",
+  "fix": "From the Forms.lean module doc: 1.5\u2013200\u00d7 slower. At n=3: T*x 20 vs 0.7 ns, det 42 vs 1.7, inv 110 vs 6.3, exp 1050 vs 59, O*M 290 vs 2.7. Causes: a fresh FloatArray per result, Nat-strided loops, and wedge plans interpreted above 3-D. Fix: generated straight-line kernels for n \u2264 4 (as for products), destination-passing results, compound matrices cached per operator. Commit a Lean bench and a Julia twin, because these numbers cannot be reproduced today.",
+  "effort": "L",
+  "priority": "P1",
+  "files": [
+   "Grassmann/Forms/Operator.lean",
+   "Grassmann/Forms/Mat.lean",
+   "Grassmann/Forms/Compound.lean",
+   "Grassmann/Forms/MatFun.lean",
+   "Grassmann/Forms/Outermorphism.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Cartan",
+  "symbol": "cartan/{s * 2, 2v (Chain), a * v, s * t}",
+  "status": "SLOW",
+  "fix": "1.37 ms vs 145 \u00b5s (9.5\u00d7), 4.0 ms vs 600 \u00b5s (6.7\u00d7), 4.9 ms vs 745 \u00b5s (6.6\u00d7), 1.62 ms vs 649 \u00b5s (2.5\u00d7) on 10\u2076 points. mapFlat/zipFlat copy the shared operand through a COW `set!` and then run a bounds-checked Nat loop; zipScalarLoop divides `i / w` in Nat per component. Fix: allocate the output once, run a USize `uset` loop that clang can vectorize (nested point/component loops), and reuse the operand when it is exclusive.",
+  "effort": "S",
+  "priority": "P0",
+  "files": [
+   "Cartan/Algebra.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Cartan",
+  "symbol": "cartan/{tabulate Chain \u211d3, tabulate w, tabulate scalar, tabulate2 Chain, torus.(TorusParameter)}",
+  "status": "SLOW",
+  "fix": "39/36.7/16.5 ms vs 3.9/2.9/2.8 ms (5.9\u201312.7\u00d7); tabulate2 Chain 21 ms (5.5\u00d7); torus 43 vs 14.7 ms (2.95\u00d7). Each grid point allocates a point Vector and a fiber Chain. Write fiber components straight into the flat buffer (destination-passing FlatFiber.write) and route tabulatePoint on product grids through the coordinate form; tabulate2 for scalars already runs at 0.82\u00d7.",
+  "effort": "M",
+  "priority": "P0",
+  "files": [
+   "Cartan/Field.lean",
+   "Cartan/Fiber.lean",
+   "Cartan/Parameters.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Cartan",
+  "symbol": "cartan/{v \u22c5 w, \u22c6v, v * w, v \u2227 w}",
+  "status": "SLOW",
+  "fix": "3.37 ms vs 715 \u00b5s (4.7\u00d7), 4.68 ms vs 524 \u00b5s (8.9\u00d7), 6.46 vs 3.3 ms (1.96\u00d7), 5.42 vs 4.3 ms (1.26\u00d7). The generated kernel is called per point with Nat offsets, which prevents vectorization. Emit whole-field generated loops with USize offsets into a preallocated output; the Hodge of a vector field is one signed-permutation loop, and the dot product a straight loop.",
+  "effort": "M",
+  "priority": "P0",
+  "files": [
+   "Cartan/Kernel.lean",
+   "Cartan/Generated.lean",
+   "Cartan/Codegen.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Cartan",
+  "symbol": "cartan/{norm(v), supnorm(v)}",
+  "status": "SLOW",
+  "fix": "4.74 ms vs 307 \u00b5s (15\u00d7) and 6.41 ms vs 349 \u00b5s (18\u00d7). `ofFn m t.flatNormAt` runs a Nat-recursive bounds-checked loop per point, and supnorm first materializes the norm field. Use one USize pass unrolled for width 3, with supnorm fused into it.",
+  "effort": "S",
+  "priority": "P0",
+  "files": [
+   "Cartan/Algebra.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Cartan",
+  "symbol": "cartan/resample(a, (500,500))",
+  "status": "SLOW",
+  "fix": "31 ms vs 5.5 ms (5.6\u00d7). Use separable tensor-product interpolation with per-axis index/weight arrays precomputed in FloatArray, and USize loops.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "Cartan/Interp.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Cartan",
+  "symbol": "cartan/identity field of range(10^6)",
+  "status": "SLOW",
+  "fix": "12.3 ms vs 0.4 \u00b5s: Julia keeps the range-valued field lazy (O(1)), while Lean materializes it through Axis.get, paying a Float.ofInt (about 40 ns) per element. Keep `range?` lazy until data is needed, and give Axis.get an Int64 fast path.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "Cartan/Field.lean",
+   "Cartan/Axis.lean",
+   "JuliaBase/Range.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "StaticVectors",
+  "symbol": "staticvectors/{add,dot,norm,normalize,scale}{3,16}, cross3",
+  "status": "SLOW",
+  "fix": "2.4\u201384\u00d7 slower (e.g. dot3 10.4 vs 0.60 ns, add3 10.2 vs 0.56, scale16 39.8 vs 0.47). The generated C for Values.dot at n=3 shows a non-unrolled loop doing lean_nat_sub/add/dec_eq on every step. Arrays of vectors are arrays of heap FloatArrays, and vector results allocate. Fix: USize loops for foldlLoop/foldl\u2082Loop/zipLoop/mapLoop, unrolled variants for n \u2264 4, a straight-line cross, and an SoA batch type for arrays of vectors.",
+  "effort": "M",
+  "priority": "P0",
+  "files": [
+   "StaticVectors/Values.lean",
+   "StaticVectors/Packed.lean",
+   "StaticVectors/Reduce.lean",
+   "StaticVectors/LinAlg.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "JuliaBase",
+  "symbol": "math/{exp, log, expm1, log1p, pow_int7, sin, cos, tan, asin, atan2, sinh, tanh, sinpi, sin_1e10}",
+  "status": "SLOW",
+  "fix": "1.6\u20133.1\u00d7 slower (exp 6.3 vs 2.48 ns, log 6.8 vs 2.85, expm1 10.6 vs 3.43, tan 10.4 vs 4.9, atan2 10.8 vs 5.5); Payne\u2013Hanek 60 vs 9.6 ns. This propagates to Cartan sin/exp (1.4\u20131.7\u00d7), Geophysics and Composite. Causes: lean_float_to_bits/of_bits/scaleb/isnan are out-of-line LEAN_EXPORT calls in the 4.35 lean.h, and Int32/Int64 literals are closed terms read through atomic once-cells. Fix: upstream `static inline` bit casts in lean.h (experiment in ~/lean4); meanwhile avoid bit casts on fast paths, add i64!/u64! module-global literal macros, and a mulhi helper for Payne\u2013Hanek.",
+  "effort": "M",
+  "priority": "P0",
+  "files": [
+   "JuliaBase/Math.lean",
+   "JuliaBase/Trig.lean",
+   "JuliaBase/Hyperbolic.lean",
+   "JuliaBase/IEEE.lean",
+   "JuliaBase/FloatLit.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "JuliaBase",
+  "symbol": "juliabase/{complex_div, complex_sqrt, complex_exp, complex_log}; math/ComplexF64_{exp,sin}",
+  "status": "SLOW",
+  "fix": "Division in an array loop is 14.9 vs 3.2 ns (4.6\u00d7); sqrt 47.7 vs 12.4, exp 43 vs 7.7, log 97 vs 16 ns (3.8\u20136\u00d7). The generated C shows `lean_box_float` \u00d72 in every branch of ComplexF64.div at its join point, and each call to ComplexF64.sqrt allocates a ctor holding two boxed floats. `ssqs` returns a boxed `Float \u00d7 Int`, and `log` calls Float.ofInt (40 ns). Fix: a monomorphic `structure C64 where re im : Float`, CPS `ssqs`, and an Int64 exponent.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "JuliaBase/Complex.lean",
+   "Fatou/Complex.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "JuliaBase",
+  "symbol": "juliabase/{range_collect, colon_collect, range_getindex}",
+  "status": "SLOW",
+  "fix": "About 40 ns per element vs 0.55 ns (65\u201373\u00d7). StepRangeLen.get calls `Float.ofInt (i - offset)`, which goes through OfScientific and measured 40 ns today. Add F64.ofInt via Int64.toFloat (the inline lean_int64_to_float) with a bignum fallback, and give toFloatArray a running counter and a preallocated array. Cartan axes inherit this cost.",
+  "effort": "S",
+  "priority": "P0",
+  "files": [
+   "JuliaBase/Range.lean",
+   "JuliaBase/Num.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "JuliaBase",
+  "symbol": "juliabase/parse_float",
+  "status": "SLOW",
+  "fix": "2.1 \u00b5s vs 29 ns (72\u00d7): the parser scans `String.toList` with Nat accumulators and always does an exact bignum decimal conversion. Scan bytes instead, keep the mantissa in UInt64, add the Clinger fast path (\u226415 digits, |e| \u2264 22) and Eisel\u2013Lemire, and keep IEEEFloat.ofDecimal as the fallback.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "JuliaBase/Parse.lean",
+   "JuliaBase/IEEE.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "JuliaBase",
+  "symbol": "juliabase/{show_float, show_float_compact}",
+  "status": "SLOW",
+  "fix": "146 vs 40 ns (3.7\u00d7) and 161 vs 81 ns (2.0\u00d7); every Grassmann `show` pays this. Generate Ryu digits with UInt64 arithmetic into a byte buffer instead of String concatenation.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "JuliaBase/Ryu.lean",
+   "JuliaBase/Show.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "JuliaBase",
+  "symbol": "juliabase/sum_f64 (and cartan/sum(s))",
+  "status": "SLOW",
+  "fix": "0.55 vs 0.084 ns per element (6.6\u00d7); Cartan sum(s) 559 vs 89 \u00b5s (6.3\u00d7). sumBlock reads with `a[b]!`, an out-of-line bounds-check lambda (PERF.md), and uses Nat offsets. Switch to uget/get! with USize indices and keep the 2\u00d74 accumulator layout for bit-exactness.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "JuliaBase/Sum.lean",
+   "Cartan/Algebra.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "JuliaBase",
+  "symbol": "juliabase/round_digits",
+  "status": "SLOW",
+  "fix": "21.4 vs 3.5 ns (6.2\u00d7). Hoist the power-of-ten constants and avoid Float.ofInt and bit casts on the fast path.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "JuliaBase/Round.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Leibniz",
+  "symbol": "directsum/basis_index_n10",
+  "status": "SLOW",
+  "fix": "102 vs 2.5 ns (40\u00d7). basisRank = binomsum n (popcount b) + bladeRank, and binomsum recomputes a sum of `choose` on every call. Add an @[implemented_by] full-layout rank table, as bladeRankImpl already has; the dynamic layer and show both use this.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Leibniz/Combinatorics.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "DirectSum",
+  "symbol": "directsum/blade_show_R10",
+  "status": "SLOW",
+  "fix": "288 vs 10 ns per label (29\u00d7). Precompute a label table per (V, n \u2264 12) and encode subscripts at the byte level.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "DirectSum/Show.lean",
+   "DirectSum/Names.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "DirectSum",
+  "symbol": "directsum/blade_mul_CGA3",
+  "status": "SLOW",
+  "fix": "1.69 \u00b5s vs 223 ns per 32\u00b2 sweep entry (7.6\u00d7): the conformal Gram/Chevalley path builds BladeResult.sum arrays on every call. Memoize per (V, a, b) for n \u2264 6 behind @[implemented_by], as Julia caches.",
+  "effort": "M",
+  "priority": "P2",
+  "files": [
+   "DirectSum/BladeAlgebra.lean",
+   "DirectSum/Blade.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "DirectSum",
+  "symbol": "directsum/{plan_mul_R5, index_tables_n10}",
+  "status": "SLOW",
+  "fix": "1.29\u00d7 and 1.36\u00d7, both one-shot plan and table builds. Switch to USize/UInt64 arithmetic; low value.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "DirectSum/Ops.lean",
+   "Leibniz/Combinatorics.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "UnitSystems",
+  "symbol": "unitsystems/natural_systems",
+  "status": "SLOW",
+  "fix": "358 vs 192 ns (1.86\u00d7); convert_pairs is at parity (1.01\u00d7). Precompute the natural-unit factor table at elaboration time; Julia folds these per method.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "UnitSystems/Convert.lean",
+   "UnitSystems/Systems.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Similitude/FieldAlgebra",
+  "symbol": "unitsystems/dim_products",
+  "status": "SLOW",
+  "fix": "1.45 \u00b5s vs 125 ns per Group product (11.6\u00d7). Group.mul is `mk' (v.add w) (c.mul c')` with Exps over Int/Rat and a Coef.normalize on every product. Add an Int64-packed exponent fast path and skip normalization when both coefficients are `.int 1`.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "FieldAlgebra/Group.lean",
+   "Similitude/Constants.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Geophysics",
+  "symbol": "geophysics/{temperature, pressure, density}",
+  "status": "SLOW",
+  "fix": "5.8/19.3/19.5 ns vs 3.5/12.6/12.6 ns (1.53\u20131.66\u00d7). The cost is dominated by F64.exp/pow/log (the math/* fix); also hoist the per-layer constants. sonicspeed, viscosity and kinematic are already 2.3\u20133.6\u00d7 faster than Julia.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Geophysics/Atmosphere.lean",
+   "Geophysics/Layer.lean",
+   "JuliaBase/Math.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Geophysics",
+  "symbol": "geophysics/gravity",
+  "status": "SLOW",
+  "fix": "6.4 vs 2.8 ns (2.3\u00d7): Julia constant-folds Earth's eccentricities and J2. Specialize Planet.gravity on literal planets, using module-level f64! constants and an @[inline] Somigliana formula with constant arguments.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Geophysics/Planet.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "DeMorgan",
+  "symbol": "demorgan/tv_formula_N6",
+  "status": "SLOW",
+  "fix": "677 vs 0.39 ns (1757\u00d7). TruthValues stores `BitVec (2^N)`, which is Nat-backed, so for N=6 every value \u2265 2^63 is a GMP bignum and each \u2227/\u2228/\u00ac allocates. Store UInt64 for N \u2264 6: Lean's UInt64 wraps BitVec 64, so the proofs transfer via UInt64.toBitVec; use @[implemented_by] for the ops.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "DeMorgan/TruthValues.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "DeMorgan",
+  "symbol": "demorgan/truthtable_N4",
+  "status": "SLOW",
+  "fix": "39.8 vs 15.2 \u00b5s (2.6\u00d7). Build the expression name lazily, as a small tree printed on demand, instead of concatenating strings on every operation.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "DeMorgan/TruthTable.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "MeshTopology",
+  "symbol": "meshtopology/ghost_{torus,mobius}",
+  "status": "SLOW",
+  "fix": "7.8/7.1 vs 1.9/2.1 ns (4.2\u00d7/3.4\u00d7): `ghost` returns a heap Vector Int N where Julia returns an NTuple; ghostLinear is no faster (14 ns). Stencils should read NeighborTable (1.05 ns, faster than Julia). Add an Int64-coordinate fast path for N \u2264 3.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "MeshTopology/Quotient.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "MeshTopology",
+  "symbol": "meshtopology/elementfuns_{torus,mobius,hopf}",
+  "status": "SLOW",
+  "fix": "48/44/132 \u00b5s vs 8.8/8.6/9.0 \u00b5s (5.2\u201314.7\u00d7). The cost comes from an Array.range plus map copy, a Vector Int per boundary point, Int arithmetic, and a separate collapse pass. Compute the canonical indices in one pass into a preallocated array with Int64 coordinates.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "MeshTopology/Grid.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "MeshTopology",
+  "symbol": "meshtopology/degrees",
+  "status": "SLOW",
+  "fix": "1.66 ms vs 90 \u00b5s (18.5\u00d7): each vertex slot does a Nat `q / N`, `q % N` and bounds-checked reads. Loop over elements \u00d7 slots with USize indices and uget.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "MeshTopology/Element.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "MeshTopology",
+  "symbol": "meshtopology/{incidence, edgesindices, lagrange3_nodes, bilinear_sphere}",
+  "status": "SLOW",
+  "fix": "2.2\u00d7, 3.3\u00d7, 3.9\u00d7 and 2.0\u00d7 slower, from per-element Vector Nat k lists and Nat-pair keys. Keep flat stride-N connectivity end to end, use UInt64-packed edge keys, and build the CSC arrays by counting sort into preallocated outputs.",
+  "effort": "M",
+  "priority": "P2",
+  "files": [
+   "MeshTopology/Element.lean",
+   "MeshTopology/Sparse.lean",
+   "MeshTopology/Lagrange.lean",
+   "MeshTopology/Product.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Fatou",
+  "symbol": "fatou/{filled_julia_seq, filled_julia_par, newton_par}",
+  "status": "SLOW",
+  "fix": "97 vs 76 ms (1.28\u00d7), 16.8 vs 8.75 ms at 16 threads (1.92\u00d7), 10.5 vs 8.7 ms (1.21\u00d7); Mandelbrot is at 1.18\u00d7. Per-pixel colouring goes through F64.atan2 (10.8 vs 5.5 ns), there are four out-of-line FloatArray.push calls per pixel, chunk outputs are concatenated without a bulk copy (about 3 ns/float), and row chunks are static across P and E cores. Fix: preallocate chunk outputs and write them with uset, add a FloatArray bulk copy (memcpy extern, or ByteArray.copySlice storage), speed up atan2, and chunk dynamically.",
+  "effort": "M",
+  "priority": "P0",
+  "files": [
+   "Fatou/Kernel.lean",
+   "Fatou/Raster.lean",
+   "JuliaBase/Trig.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Bench infra",
+  "symbol": "docs/perf-claims (README 'at Julia speed', PERF.md, Composite.lean)",
+  "status": "SLOW",
+  "fix": "The README says the generated kernels run 'at Julia speed', but that holds only for dense STA/PGA3/CGA3 products; small products and unary maps are 3\u201318\u00d7 slower. PERF.md's STA/PGA3 R*v*~R Julia numbers are stale, and the Composite doc's claim that Couple.exp beats Julia is stale. Qualify the README claim and refresh PERF.md from the harness, recording the load average.",
+  "effort": "S",
+  "priority": "P0",
+  "files": [
+   "README.md",
+   "docs/PERF.md",
+   "Grassmann/Composite.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Bench infra",
+  "symbol": "bench/orphans (grassmann products, cartan, composite, geophysics)",
+  "status": "UNMEASURED",
+  "fix": "On master, Bench/Grassmann/Products.lean, Tests/Cartan/Bench.lean, Tests/Composite/Bench.lean and Tests/Geophysics/Bench.lean are imported by no root, so they are never built, and `lake exe bench grassmann` (cited in PERF.md) does nothing. Bench/Main.lean registers only math, MeshTopology and Fatou. Register all four as suites; the in-flight harness already covers Grassmann and Geophysics, but not Cartan or Composite.",
+  "effort": "S",
+  "priority": "P0",
+  "files": [
+   "Bench.lean",
+   "Bench/Main.lean",
+   "Tests/Cartan/Bench.lean",
+   "Tests/Composite/Bench.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Bench infra",
+  "symbol": "bench/missing-julia-twins (composite, forms, dynamic, math trig)",
+  "status": "UNMEASURED",
+  "fix": "There is no committed Julia twin for Composite (only a docstring loop), Forms (numbers only in the module doc), the dynamic layer, or the trig/hyperbolic/ComplexF64 cases of `math`. Commit oracle/bench/composite.jl (the audit's composite_bench.jl, which uses `const` basis globals), plus forms.jl, dynamic.jl and the trig cases in math.jl.",
+  "effort": "S",
+  "priority": "P0",
+  "files": [
+   "oracle/bench/composite.jl",
+   "oracle/bench/forms.jl",
+   "oracle/bench/dynamic.jl",
+   "oracle/bench/math.jl"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann",
+  "symbol": "grassmann/inner-products (\u22c5, \u2a3c, \u2a3d, \u2228 meet, \u00d7, \u229b)",
+  "status": "UNMEASURED",
+  "fix": "No benchmark exists for contractions or the regressive product in \u211d3/STA/PGA3/CGA3; PGA meet and join are core workloads. Add them to both sides of the products bench.",
+  "effort": "S",
+  "priority": "P0",
+  "files": [
+   "Bench/Grassmann/Products.lean",
+   "oracle/bench/grassmann_bench.jl"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann",
+  "symbol": "grassmann/norms-inverses (abs, abs2, norm, unit, inv, /, \\)",
+  "status": "UNMEASURED",
+  "fix": "These are on every rotor normalization and inverse path. Add them to the products bench and its Julia twin.",
+  "effort": "S",
+  "priority": "P0",
+  "files": [
+   "Bench/Grassmann/Products.lean",
+   "oracle/bench/grassmann_bench.jl",
+   "Grassmann/Algebra/Norms.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann",
+  "symbol": "grassmann/linear-combinations (+, -, scalar *, mixed-kind promotion)",
+  "status": "UNMEASURED",
+  "fix": "Every README expression such as `v1 + 2v12` goes through these. Add cases for Chain+Multivector, Single+Chain and scalar multiples on both sides.",
+  "effort": "S",
+  "priority": "P0",
+  "files": [
+   "Bench/Grassmann/Products.lean",
+   "oracle/bench/grassmann_bench.jl",
+   "Grassmann/Algebra/Arith.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann",
+  "symbol": "grassmann/doc-target-cramer-solve (A\\b, 5\u00d75 dyadic)",
+  "status": "UNMEASURED",
+  "fix": "This is the only performance number the Julia docs publish (dyadic-tensors.md:54-75): A\\b in 72 ns, and a 10k bundle in 0.81 ms against SMatrix's 151 ns and 2.59 ms. Add it as a Forms bench on both sides.",
+  "effort": "S",
+  "priority": "P0",
+  "files": [
+   "Bench/Grassmann/Forms.lean",
+   "oracle/bench/forms.jl",
+   "Grassmann/Forms/Compound.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann",
+  "symbol": "grassmann/unary-maps (involute, clifford, complements, metric, grade projection)",
+  "status": "UNMEASURED",
+  "fix": "Add cases to the products bench and its twin.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Bench/Grassmann/Products.lean",
+   "oracle/bench/grassmann_bench.jl"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann",
+  "symbol": "grassmann/other-spaces (\u211d2, \u211d4, PGA2, CGA2, \u211d5/\u211d6 via basis!)",
+  "status": "UNMEASURED",
+  "fix": "Extend the space list (GRASSMANN_BENCH_SPACES) on both sides; the only n=5 number is the 1.64\u00d7 spike.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Bench/Grassmann/Products.lean",
+   "oracle/bench/grassmann_bench.jl"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann",
+  "symbol": "grassmann/display (show of Multivector/Chain/Spinor)",
+  "status": "UNMEASURED",
+  "fix": "Add show cases on both sides. The result depends on the Ryu fix (show_float is 3.7\u00d7 slower) and on the blade-label table.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Grassmann/Types/Show.lean",
+   "Grassmann/Dynamic/Show.lean",
+   "Bench/Grassmann/Products.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann",
+  "symbol": "grassmann/compile-time (kernel generation vs Julia TTFX)",
+  "status": "UNMEASURED",
+  "fix": "Record Julia's load and first-call latency for the same spaces next to the build-cost table in PERF.md (52 s CPU to elaborate the pre-generated modules; n=6 basis! takes 20 s).",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "docs/PERF.md"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann (Composite)",
+  "symbol": "composite/untested-functions (MV log/sqrt/^/trig, Phasor, PGA/CGA exp, log_fast)",
+  "status": "UNMEASURED",
+  "fix": "Add these cases to Tests/Composite/Bench.lean and the new composite.jl twin.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Tests/Composite/Bench.lean",
+   "oracle/bench/composite.jl"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Grassmann (Forms)",
+  "symbol": "forms/spectral-and-simplex (eigen, charpoly, roots, companion, vandermonde, cayley, compound, adjugate, simplex utilities)",
+  "status": "UNMEASURED",
+  "fix": "Add a Forms suite on both sides; the documented table has no committed bench either.",
+  "effort": "M",
+  "priority": "P1",
+  "files": [
+   "Bench/Grassmann/Forms.lean",
+   "oracle/bench/forms.jl"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "StaticVectors",
+  "symbol": "staticvectors/other-ops (construction, slicing, mapreduce, sort, Variables, small linear algebra)",
+  "status": "UNMEASURED",
+  "fix": "Extend the harness staticvectors suite and its Julia twin.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Bench/StaticVectors.lean",
+   "oracle/bench/staticvectors.jl"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Cartan",
+  "symbol": "cartan/evaluation-integration (t(x), interpolation at points, integral, simplex/face bundle fields)",
+  "status": "UNMEASURED",
+  "fix": "Add these cases. Commit bfe99224 timed evaluation but recorded no numbers.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Tests/Cartan/Bench.lean",
+   "oracle/cartan/bench.jl"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "MeshTopology",
+  "symbol": "meshtopology/sparse-and-refine (SparseInt mat-vec, subtopology, refine/resample, LagrangeTetrahedra)",
+  "status": "UNMEASURED",
+  "fix": "Add these cases (SparseInt mat-vec drives FEM assembly).",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Tests/MeshTopology/Bench.lean",
+   "oracle/meshtopology/bench.jl"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "MeasureSystems",
+  "symbol": "measuresystems/measurement-arith",
+  "status": "UNMEASURED",
+  "fix": "Add a suite for Measurement arithmetic with uncertainty propagation, and for conversions.",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "Bench/MeasureSystems.lean",
+   "oracle/bench/measuresystems.jl"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "JuliaBase",
+  "symbol": "math/trig-twin",
+  "status": "UNMEASURED",
+  "fix": "The harness Julia json has only exp/log/expm1/log1p/pow; the trig ratios come from PERF.md. Add the trig/hyperbolic/ComplexF64 cases to oracle/bench/math.jl so all ratios come from one harness, and reconcile pow_2.5 (harness 0.75\u00d7 vs PERF sweep 1.5\u00d7).",
+  "effort": "S",
+  "priority": "P1",
+  "files": [
+   "oracle/bench/math.jl",
+   "Bench/Math.lean"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Leibniz",
+  "symbol": "leibniz/derivations",
+  "status": "UNMEASURED",
+  "fix": "Add a suite for Derivation/Monomial algebra and \u2202/\u2207 applied to fields.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "Bench/Leibniz.lean",
+   "oracle/bench/leibniz.jl"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "AbstractTensors",
+  "symbol": "abstracttensors/generic",
+  "status": "UNMEASURED",
+  "fix": "Add cases for the TensorRing series fallbacks (Generic.exp/log, tanh, asinh, \u2026) that the composite functions use.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "AbstractTensors/Generic.lean",
+   "Bench"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Similitude/FieldConstants",
+  "symbol": "similitude/quantities",
+  "status": "UNMEASURED",
+  "fix": "Add cases for dimensioned quantity arithmetic and FieldConstants evaluation to the unitsystems suite.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "Bench/UnitSystems.lean",
+   "oracle/bench/unitsystems.jl"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "AbstractAnalysis/AbstractLattices/PrimitiveBits",
+  "symbol": "abstractanalysis/all, abstractlattices/all, primitivebits/all",
+  "status": "UNMEASURED",
+  "fix": "Add small suites for float printing helpers and limits, lattice \u2227/\u2228/dist, and bit operations.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "Bench",
+   "oracle/bench"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "JuliaBase",
+  "symbol": "juliabase/float32-float16",
+  "status": "UNMEASURED",
+  "fix": "Add cases for the Float32/Float16 kernels, hypot, rem2pi and prod.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "Bench/Math.lean",
+   "oracle/bench/math.jl"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "DirectSum",
+  "symbol": "directsum/plan_mul_CGA3",
+  "status": "UNMEASURED",
+  "fix": "The Lean case exists (1.88 \u00b5s) but has no Julia twin; add one.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "oracle/bench/directsum.jl"
+  ],
+  "key": "performance"
+ },
+ {
+  "pkg": "Gallery",
+  "symbol": "gallery/render",
+  "status": "UNMEASURED",
+  "fix": "Optional: time figure rendering against CairoMakie.",
+  "effort": "S",
+  "priority": "P2",
+  "files": [
+   "gallery/Gallery/Main.lean"
+  ],
+  "key": "performance"
+ }
+]
