@@ -9,6 +9,7 @@ import Cartan.Algebra
 import Cartan.Parameters
 import Cartan.Slice
 import Cartan.Show
+import Cartan.Misc
 import Cartan.Interp
 import Cartan.Props
 
