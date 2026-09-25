@@ -365,6 +365,33 @@ def sinterp (m : SimplexBundle n (HPoint V) G) (u : FloatArray) (P : HPoint V) :
     let T := m.simplexAt (j - 1)
     T.interpolate (Values.ofFn fun i => u.get! (vs[i.1]! - 1)) P
 
+/-- `sinterp` for vertex values of any linear fiber: `Σ λᵢ(P) ϕᵢ` component by component (the
+flat encoding, as Julia's `Chain{V}(ϕ[i]) ⋅ λ` combines them), the zero fiber outside the mesh.
+`ϕ` is indexed by full vertex id (`ϕ[v - 1]`). -/
+def sinterpWith {F : Type} [FlatFiber F] [LinearFiber F] (m : SimplexBundle n (HPoint V) G)
+    (ϕ : Array F) (P : HPoint V) : F :=
+  let w := FlatFiber.width F
+  let j := m.findfirst P
+  if j == 0 then FlatFiber.read (Flat.zeros w) 0 else
+    let vs := m.top.get j
+    let T := m.simplexAt (j - 1)
+    let flat := vs.toArray.map fun v =>
+      match ϕ[v - 1]? with
+      | some x => buildFlat (F := F) 1 fun _ => x
+      | none => Flat.zeros w
+    FlatFiber.read (buildFlat (F := Float) w fun c =>
+      T.interpolate (Values.ofFn fun i => (flat[i.1]!).get! c) P) 0
+
+/-- Julia `tensorfield(t, ϕ)` (`Cartan.jl:862-875`): the map sending an affine point `p` to the
+barycentric interpolation `Σ λᵢ(p) ϕ[vᵢ]` of the vertex values `ϕ` on the first element of `m`
+containing `(1, p)` (a vector field for streamplots when `ϕ` holds vectors), zero outside. In
+Julia 0.4.16 it takes the old `ChainBundle` meshes (`Manifold(t)` has no `SimplexBundle` method);
+this is the intended map on a simplex bundle. The versor form `tensorfield(t, V, W)` needs
+Grassmann's conformal `↑`/`↓`, which the Grassmann port does not have. -/
+def tensorfield {F : Type} [FlatFiber F] [LinearFiber F] (m : SimplexBundle n (HPoint V) G)
+    (ϕ : Array F) (p : Array Float) : F :=
+  m.sinterpWith ϕ (Chain.ofFn fun c => if c.1 = 0 then 1 else p[c.1 - 1]!)
+
 end SimplexBundle
 
 /-! ## 1-D meshes (§4.5) -/

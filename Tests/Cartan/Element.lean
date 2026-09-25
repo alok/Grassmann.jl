@@ -185,6 +185,25 @@ def runLagrange : TestM Unit := do
         ok && b.cloud.points.get! ((v - 1) * 2 + 1) == exp && b.cloud.points.get! ((v - 1) * 2) == 1) ok) true
     check s!"lagrange edges{M} layout" want
 
+/-- `tensorfield(t, ϕ)` (Julia's is broken on simplex bundles): scalar values agree with
+`sinterp`, vector values component by component, and the map is zero outside the mesh. -/
+def runTensorfield : TestM Unit := do
+  let m := gridMesh 3 2
+  let np := m.totalNodes
+  let u : Array Float := (Array.range np).map fun k => Float.sin (Float.ofNat k) + 0.5
+  let v : Array (Chain ℝ2 1 Float) := (Array.range np).map fun k =>
+    Chain.ofFn fun c => if c.1 = 0 then Float.cos (Float.ofNat k) else Float.ofNat k / 3
+  let v0 : FloatArray := ⟨v.map (·.v.get! 0)⟩
+  let v1 : FloatArray := ⟨v.map (·.v.get! 1)⟩
+  let pts : List (Float × Float) := [(0.1, 0.1), (0.5, 0.25), (0.9, 0.8), (1 / 3, 0.5), (0.7, 0.99)]
+  for (x, y) in pts do
+    let P : HPoint ℝ3 := Chain.ofFn fun c => if c.1 = 0 then 1 else if c.1 = 1 then x else y
+    checkEq s!"tensorfield scalar ({x}, {y})" (m.tensorfield u #[x, y]).toBits (m.sinterp ⟨u⟩ P).toBits
+    let t := m.tensorfield v #[x, y]
+    checkEq s!"tensorfield vector ({x}, {y})" (t.v.toList.map Float.toBits)
+      [(m.sinterp v0 P).toBits, (m.sinterp v1 P).toBits]
+  checkEq "tensorfield outside" (m.tensorfield v #[1.5, 0.5]).v.toList [0, 0]
+
 /-- The checks of one mesh. -/
 def runCase (n : Nat) (V : TensorBundle) (name : String) (c : Json) (flipB3 : Bool := false) :
     TestM Unit := do
@@ -257,6 +276,7 @@ def run : TestM Unit := do
   runMeshData
   runDiscontinuous
   runLagrange
+  runTensorfield
   let g ← load "element/fem"
   runCase 3 ℝ3 "two" (← jField g "two")
   runCase 3 ℝ3 "grid" (← jField g "grid")
