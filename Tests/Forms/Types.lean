@@ -110,6 +110,18 @@ def suite : IO Tally := do
     t := t.ok (toString (⟨S.inv.vals⟩ : Chain (En 2) 1 Float) == "1.0v₁ + 0.333333v₂") fun _ => "inv(S)"
     t := t.ok (toString (⟨S.exp.vals⟩ : Chain (En 2) 1 Float) == "2.71828v₁ + 20.0855v₂") fun _ => "exp(S)"
   | .complex _ => t := t.ok false fun _ => "eigen([2 1; 1 2]) is real"
+  -- Julia `Proj(Chain(x,y))` with x = (1,2), y = (3,4) in ℝ²: `P ⋅ x = 2.32v₁ + 3.76v₂`,
+  -- with λ = (2, 3): `P ⋅ x = 5.96v₁ + 9.28v₂`, `Chain(P) = (1.48v₁+2.24v₂)v₁ + (2.24v₁+3.52v₂)v₂`
+  let XY : Endomorphism (En 2) (.chain 1) Float := endo (En 2) [[1, 3], [2, 4]]
+  let x2 : Chain (En 2) 1 Float := chainOf (En 2) 1 [1, 2]
+  let P1 := SpectralOperator.ofVectors XY (Values.replicate 1)
+  let P2 := SpectralOperator.ofVectors XY (Values.ofFn fun i => #[2.0, 3.0][i.1]!)
+  t := t.ok (toString (P1 * x2) == "2.32v₁ + 3.76v₂") fun _ => s!"Proj(x,y)⋅x = {P1 * x2}"
+  t := t.ok (toString (P2 * x2) == "5.96v₁ + 9.28v₂") fun _ => s!"Proj(x,y;λ)⋅x = {P2 * x2}"
+  t := t.ok (toString P2.toOperator == "(1.48v₁+2.24v₂)v₁ + (2.24v₁+3.52v₂)v₂") fun _ => s!"Chain(P) = {P2.toOperator}"
+  -- the shoelace area of the unit square (homogeneous points): Julia `area` = 1.0
+  let sq : List (Chain ℝ3 1 Float) := [cf [1, 0, 0], cf [1, 1, 0], cf [1, 1, 1], cf [1, 0, 1]]
+  t := t.ok ((TensorOperator.area sq - 1).abs < 1e-12) fun _ => s!"area = {TensorOperator.area sq}"
   -- the outermorphism on a couple: `O(1 + 2v₁₂) = 1 + 2 Λ²T[:, v₁₂]`
   let z : Couple ℝ3 Int := ⟨3, 1, 2⟩
   t := t.ok (toString (O.applyCouple z) == "1 - 6v₁₂ - 12v₁₃ - 6v₂₃") fun _ => s!"O(1+2v₁₂) = {O.applyCouple z}"

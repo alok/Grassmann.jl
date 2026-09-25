@@ -176,6 +176,14 @@ namespace SpectralOperator
 
 variable {V : TensorBundle} {α : Type} [Coeff α]
 
+/-- Julia `Proj(v::Chain{W,1,<:Chain{V}}, λ)` (`forms.jl:387`): the vectors normalised by
+their metric norms `vₖ/|vₖ|` (the columns of `vecs`), with eigenvalues `vals`. -/
+@[specialize] def ofVectors [Kernels V] [Div α] [Analytic α] (vecs : Endomorphism V (.chain 1) α)
+    (vals : Values α ((Layout.chain 1).size V.n)) : SpectralOperator V α :=
+  ⟨TensorOperator.ofColumns fun j =>
+    let v : Chain V 1 α := vecs.column j
+    (v / Analytic.sqrt (Forms.cdot v v) : Chain V 1 α), vals⟩
+
 /-- The number of rank-one terms. -/
 @[inline] def size (_ : SpectralOperator V α) : Nat := (Layout.chain 1).size V.n
 

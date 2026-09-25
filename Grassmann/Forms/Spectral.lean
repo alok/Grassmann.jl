@@ -243,6 +243,11 @@ def eigmults (X : Endomorphism V (.chain 1) Float) : Values Int ((Layout.chain 1
     Endomorphism (TensorBundle.euclidean ((Layout.chain 1).size V.n)) (.chain 1) (Complex Float) :=
   Forms.vandermonde X.eigvalscomplex
 
+/-- Julia `vandermondereal(X) = vandermonde(eigvalsreal(X))` (`forms.jl:1531`). -/
+@[inline] def vandermondereal (X : Endomorphism V (.chain 1) Float) :
+    Except String (Endomorphism (TensorBundle.euclidean ((Layout.chain 1).size V.n)) (.chain 1) Float) :=
+  X.eigvalsreal.map Forms.vandermonde
+
 /-- Julia `discriminant(X)` (`forms.jl:1534-1536`): `tr² − 4 det` for `n = 2`,
 else `det(vandermonde(eigvals X))²`, real for a real matrix. -/
 def discriminant (X : Endomorphism V (.chain 1) Float) : Float :=
