@@ -25,6 +25,7 @@ carry `z ≠ 0` and every other term has `z = 0`.
 -/
 import DirectSum.Derived
 import DirectSum.Blade
+import DirectSum.Names
 import AbstractTensors.Ops
 
 namespace DirectSum
@@ -316,6 +317,11 @@ instance {V : TensorBundle} {G : Nat} : AbstractTensors.TensorTerm (Submanifold 
 namespace Submanifold
 
 variable {V : TensorBundle} {G H : Nat}
+
+/-- The blade with label-mode name `s` (`labels(V)`: `v12`, `∂1v2`, `v∞∅1`, …;
+Julia `Λ(V).v12`) if it has grade `G`. Names that need a sign or a metric
+factor (`v21`, `v11`) are not blades; use `TensorBundle.lookup` for those. -/
+def ofLabel? (s : String) : Option (Submanifold V G) := (V.labelBlade? s).bind ofBits?
 
 /-- `op a b` on typed blades (Julia's result kind). -/
 @[inline] def apply₂ (op : BinOp) (a : Submanifold V G) (b : Submanifold V H) : Except String BladeResult :=

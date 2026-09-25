@@ -121,6 +121,9 @@ def run : IO Tally := do
 
 example : AbstractTensors.rank (⟨3⟩ : Submanifold ℝ3 2) = 2 := rfl
 example : AbstractTensors.mdims (⟨3⟩ : Submanifold (ℝ^5) 2) = 5 := rfl
+#guard ((Submanifold.ofLabel? "v13" : Option (Submanifold ℝ3 2)).map (·.bits)) == some 5
+#guard ((Submanifold.ofLabel? "v13" : Option (Submanifold ℝ3 1)).map (·.bits)) == none
+#guard ((Submanifold.ofLabel? "v∞∅1" : Option (Submanifold CGA3 3)).map (·.bits)) == some 7
 example : Layout.size 4 .even = 8 ∧ Layout.size 5 .odd = 16 ∧ Layout.size 4 (.chain 2) = 6 := by decide
 
 end DirectSumTests.Plans
