@@ -6,5 +6,8 @@ import Grassmann.Types.Multivector
 import Grassmann.Types.Couple
 import Grassmann.Types.Convert
 import Grassmann.Types.Show
+import Grassmann.Kernel.Plan
+import Grassmann.Kernel.Reference
+import Grassmann.Kernel.Class
 
 /-! Grassmann: ⟨Grassmann-Clifford-Hodge⟩ differential geometric algebra (Julia Grassmann.jl). -/
