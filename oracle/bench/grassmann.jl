@@ -158,16 +158,54 @@ function gspace(ctx, label, V, seed, cs::GCaseSet = GCaseSet())
     nothing
 end
 
+"The case groups of the spaces other than ℝ3, STA, PGA3, CGA3 (Lean `coreCases`)."
+const GCORE = GCaseSet(inner = false, norms = false, linear = false, unary = false, fused = false, floors = false)
+
+"Checksum of a result vector: the coefficient sums of its first and last elements (Lean `Batch.check`)."
+gbc(o) = gtotal(o[1]) + gtotal(o[end])
+
+"The batch cases of one space (Lean `batch_cases%`): `map` and `map!` over element vectors."
+function gbatch(ctx, label, V, seed)
+    n = mdims(V)
+    k(s) = "$label/batch $s"
+    sd(j) = seed * 16 + j
+    M = gring(v -> Multivector{V}(v), 2^n, sd(1))
+    N = gring(v -> Multivector{V}(v), 2^n, sd(2))
+    S = gring(v -> Spinor{V}(v), 2^(n-1), sd(3))
+    T = gring(v -> Spinor{V}(v), 2^(n-1), sd(4))
+    U = gring(v -> Chain{V,1}(v), n, sd(5))
+    W = gring(v -> Chain{V,1}(v), n, sd(6))
+    p = "K=$GK"
+    rvr = (R, v) -> R * v * ~R
+    bench!(i -> gbc(map(*, blackbox(i, S), T)), ctx, k("Spinor*Spinor"); ops = GK, param = p)
+    bench!(i -> gbc(map(∧, blackbox(i, U), W)), ctx, k("Chain1∧Chain1"); ops = GK, param = p)
+    bench!(i -> gbc(map(rvr, blackbox(i, S), U)), ctx, k("R*v*~R"); ops = GK, param = p)
+    bench!(i -> gbc(map((R, v) -> v ⊘ R, blackbox(i, S), U)), ctx, k("v ⊘ R"); ops = GK, param = p)
+    bench!(i -> gbc(map(*, blackbox(i, M), N)), ctx, k("Multivector*Multivector"); ops = GK, param = p)
+    o1 = map(*, S, T)
+    bench!(i -> (map!(*, o1, blackbox(i, S), T); gbc(o1)), ctx, k("Spinor*Spinor (into)"); ops = GK, param = p)
+    o2 = map(rvr, S, U)
+    bench!(i -> (map!(rvr, o2, blackbox(i, S), U); gbc(o2)), ctx, k("R*v*~R (into)"); ops = GK, param = p)
+    # the Lean `[soa]` cases run the same operations on component-major arrays; Julia's twin is `map`
+    bench!(i -> gbc(map(*, blackbox(i, S), T)), ctx, k("Spinor*Spinor [soa]"); ops = GK, param = p)
+    bench!(i -> gbc(map(rvr, blackbox(i, S), U)), ctx, k("R*v*~R [soa]"); ops = GK, param = p)
+    bench!(i -> gbc(map(*, blackbox(i, M), N)), ctx, k("Multivector*Multivector [soa]"); ops = GK, param = p)
+    nothing
+end
+
 function suite_grassmann(ctx)
-    gspace(ctx, "ℝ2", S"++", 1, GCaseSet(inverses = true, spinorInverses = true))
+    gspace(ctx, "ℝ2", S"++", 1, GCORE)
     gspace(ctx, "ℝ3", S"+++", 2, GCaseSet(inverses = true, spinorInverses = true))
-    gspace(ctx, "ℝ4", S"++++", 3, GCaseSet(inverses = true))
+    gspace(ctx, "ℝ4", S"++++", 3, GCORE)
     gspace(ctx, "STA", S"-+++", 4)
-    gspace(ctx, "PGA2", D"0,1,1", 5, GCaseSet(inverses = true))
+    gspace(ctx, "PGA2", D"0,1,1", 5, GCORE)
     gspace(ctx, "PGA3", D"0,1,1,1", 6, GCaseSet(inverses = true))
-    gspace(ctx, "CGA2", S"∞∅++", 7)
+    gspace(ctx, "CGA2", S"∞∅++", 7, GCORE)
     gspace(ctx, "CGA3", S"∞∅+++", 8)
-    gspace(ctx, "ℝ5", S"+++++", 9, GCaseSet(inverses = true))
+    gbatch(ctx, "ℝ3", S"+++", 2)
+    gbatch(ctx, "STA", S"-+++", 4)
+    gbatch(ctx, "PGA3", D"0,1,1,1", 6)
+    gbatch(ctx, "CGA3", S"∞∅+++", 8)
 end
 
 register!("grassmann", suite_grassmann)
