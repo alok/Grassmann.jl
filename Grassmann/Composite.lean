@@ -7,6 +7,7 @@ import Grassmann.Composite.Spinor
 import Grassmann.Composite.Ring
 import Grassmann.Composite.Norm
 import Grassmann.Composite.Project
+import Grassmann.Composite.Pow
 
 /-!
 # Grassmann.Composite: transcendental functions of the typed elements

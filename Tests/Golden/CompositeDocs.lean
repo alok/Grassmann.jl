@@ -37,6 +37,9 @@ variable {V : TensorBundle}
 def e (V : TensorBundle) (b : UInt64) : Multivector V Float :=
   ⟨Values.ofFn fun i => if (Leibniz.indexBasisAll V.n)[i.1]! == b then 1.0 else 0.0⟩
 
+/-- The term `v12`. -/
+def v12 (V : TensorBundle) : Single V 2 Float := ⟨3, 1.0⟩
+
 /-- `c·e_b` as a multivector. -/
 def ce (V : TensorBundle) (c : Float) (b : UInt64) : Multivector V Float :=
   ⟨Values.ofFn fun i => if (Leibniz.indexBasisAll V.n)[i.1]! == b then c else 0.0⟩
@@ -108,11 +111,11 @@ def byInput : List (String × String × DocFn) := [
     toMultivector (Single.inv (⟨1, 3.0⟩ : Single V 1 Float)) * e V 2 * ce V 3.0 1),
   ("54-sandwich-scaling", "exp(π/8*v12)", fun V => expB V 3 (π / 8)),
   ("54-sandwich-scaling", "exp(π/8*v12)^2", fun V =>
-    ((Single.exp (⟨3, π / 8⟩ : Single V 2 Float)).pow 2).toMultivector),
-  ("54-sandwich-scaling", "2^v12", fun V => (Single.rpow 2.0 (⟨3, 1.0⟩ : Single V 2 Float)).toMultivector),
-  ("54-sandwich-scaling", "v12^2", fun V => ((⟨3, 1.0⟩ : Single V 2 Float).pow 2).toMultivector),
-  ("54-sandwich-scaling", "(v1+v2)^3", fun V => (ch V 1 [1, 1, 0]).pow 3),
-  ("54-sandwich-scaling", "v12^-1", fun V => ((⟨3, 1.0⟩ : Single V 2 Float).pow (-1)).toMultivector),
+    (Single.exp (⟨3, π / 8⟩ : Single V 2 Float) ^ 2 : Couple V Float).toMultivector),
+  ("54-sandwich-scaling", "2^v12", fun V => ((2 : Nat) ^ v12 V : Couple V Float).toMultivector),
+  ("54-sandwich-scaling", "v12^2", fun V => (v12 V ^ 2 : Couple V Float).toMultivector),
+  ("54-sandwich-scaling", "(v1+v2)^3", fun V => ch V 1 [1, 1, 0] ^ 3),
+  ("54-sandwich-scaling", "v12^-1", fun V => (v12 V ^ (-1 : Int) : Couple V Float).toMultivector),
   ("58-dims", "complexify(Phasor(2.0, π/3))", fun V =>
     (Phasor.complexify (⟨2.0, ⟨0, π / 3, 0.0⟩⟩ : Phasor V Float)).toMultivector)
 ]

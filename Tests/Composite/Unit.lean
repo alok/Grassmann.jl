@@ -431,9 +431,45 @@ def identities (t : Tally) : Tally := Id.run do
   t := expectM t "complexify(polarize z)" z.polarize.complexify.toMultivector z.toMultivector 1e-15
   return t
 
+/-- `^` on every kind (`Grassmann.Composite.Pow`): the notation reaches the kind's `pow`,
+`powf` and `rpow` (bit for bit), and Julia's values of `v12^2 = -1`, `v12^-1 = -v12`,
+`(v1+v2)^3 = 2v1 + 2v2`, `(v1+v2+v3)^4 = 9`, `q^-1 = inv(q)`, `2^v12 = cos(log 2) + sin(log 2)v12`. -/
+def powers (t : Tally) : Tally := Id.run do
+  let mut t := t
+  let b : Single E3 2 Float := ⟨3, 1.0⟩
+  let c : Chain E3 1 Float := ch E3 1 [1, 1, 0]
+  let q : Half E3 false Float := sp E3 [0.3, 0.5, -0.2, 0.7]
+  let m : Multivector E3 Float := mv E3 [0.2, 0.1, -0.3, 0.4, 0.5, -0.1, 0.2, 0.3]
+  let z : Couple E3 Float := ⟨3, 1.2, -0.7⟩
+  let ph : Phasor E3 Float := z.polarize
+  let same' := fun {V : TensorBundle} (a b : Multivector V Float) => (a.v.toArray.zip b.v.toArray).all fun (x, y) => same x y
+  t := t.check (same' (b ^ 2 : Couple E3 Float).toMultivector (b.pow 2).toMultivector) fun _ => "v12 ^ 2"
+  t := t.check (same' (b ^ (-1 : Int) : Couple E3 Float).toMultivector (b.pow (-1)).toMultivector) fun _ => "v12 ^ -1"
+  t := t.check (same' (c ^ 3 : Multivector E3 Float) (c.pow 3)) fun _ => "(v1+v2) ^ 3"
+  t := t.check (same' (Half.toMultivector (q ^ 5)) (Half.toMultivector (q.pow 5))) fun _ => "q ^ 5"
+  t := t.check (same' (Half.toMultivector (q ^ (0.5 : Float))) (Half.toMultivector (q.powf 0.5))) fun _ => "q ^ 0.5"
+  t := t.check (same' (m ^ 9) (m.pow 9)) fun _ => "m ^ 9"
+  t := t.check (same' (m ^ (-2 : Int)) (m.pow (-2))) fun _ => "m ^ -2"
+  t := t.check (same' (m ^ (0.5 : Float)) (m.powf 0.5)) fun _ => "m ^ 0.5"
+  t := t.check (same' (z ^ 3).toMultivector (z.pow 3).toMultivector) fun _ => "z ^ 3"
+  t := t.check (same' (z ^ (0.25 : Float)).toMultivector (z.powf 0.25).toMultivector) fun _ => "z ^ 0.25"
+  t := t.check (same' (ph ^ 3).complexify.toMultivector (ph.pow 3).complexify.toMultivector) fun _ => "phasor ^ 3"
+  t := t.check (same' ((2 : Nat) ^ b : Couple E3 Float).toMultivector (Single.rpow 2.0 b).toMultivector) fun _ => "2 ^ v12"
+  t := t.check (same' ((2.0 : Float) ^ m) (m.rpow 2.0)) fun _ => "2.0 ^ m"
+  t := t.check (same' ((3 : Nat) ^ c : Multivector E3 Float) (Chain.rpow 3.0 c)) fun _ => "3 ^ (v1+v2)"
+  -- Julia's values
+  t := expect t "v12^2" (b ^ 2 : Couple E3 Float).toMultivector [-1, 0, 0, 0, 0, 0, 0, 0]
+  t := expect t "v12^-1" (b ^ (-1 : Int) : Couple E3 Float).toMultivector [0, 0, 0, 0, -1, 0, 0, 0]
+  t := expect t "(v1+v2)^3" (c ^ 3 : Multivector E3 Float) [0, 2, 2, 0, 0, 0, 0, 0]
+  t := expect t "(v1+v2+v3)^4" (ch E3 1 [1, 1, 1] ^ 4 : Multivector E3 Float) [9, 0, 0, 0, 0, 0, 0, 0]
+  t := expectM t "q^-1 = inv(q)" (Half.toMultivector (q ^ (-1 : Int))) (Half.toMultivector q.invD)
+  let l2 := Float.log 2.0
+  t := expect t "2^v12" ((2 : Nat) ^ b : Couple E3 Float).toMultivector [Float.cos l2, 0, 0, 0, Float.sin l2, 0, 0, 0] 1e-15
+  return t
+
 /-- Run the unit tests; returns `(passed, failed)`. -/
 def run : IO (Nat × Nat) := do
-  let t := identities (fixes (atanh2Tests (spaces (e3 {}))))
+  let t := powers (identities (fixes (atanh2Tests (spaces (e3 {})))))
   IO.println s!"[composite/unit] pass={t.pass} fail={t.fail}"
   for m in t.msgs do IO.eprintln s!"[composite/unit]   FAIL {m}"
   return (t.pass, t.fail)
