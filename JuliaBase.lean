@@ -2,6 +2,8 @@ import JuliaBase.Num
 import JuliaBase.IEEE
 import JuliaBase.FloatLit
 import JuliaBase.Math
+import JuliaBase.Trig
+import JuliaBase.Hyperbolic
 import JuliaBase.Round
 import JuliaBase.Parse
 import JuliaBase.Sum
@@ -31,12 +33,19 @@ verified bit for bit against the Julia 1.13 oracle (`Tests/JuliaBase/`).
   rational and decimal values (`ofDyadic`, `ofFraction`, `ofRat`, `ofDecimal`), the constants
   and neighbours of either format, Julia `exponent`, `eps(x)` (`F64.epsOf`, `F32.epsOf`) and
   `ulpDistance`.
-* `JuliaBase.FloatLit`: `f64! x` / `f32! x`, float literals decoded at elaboration time into
-  free bit casts (plain literals can be parsed through bignums at run time; `docs/PERF.md`).
+* `JuliaBase.FloatLit`: `f64! x` / `f32! x` (decimal or natural literals), float literals decoded
+  at elaboration time into free bit casts (plain literals can be parsed through bignums at run
+  time; `docs/PERF.md`). The port's one literal macro: every hot path writes constants with it.
 * `JuliaBase.Math` (tables in `JuliaBase.MathTables`): Julia's own pure-Julia kernels, bit for
   bit (Julia does not call `libm` for these): `exp`/`exp2`/`exp10`, `expm1`,
   `log`/`log2`/`log10`, `log1p`, `^(x, y)` and `^(x, n::Integer)` (`pow_body`), `literal_pow`
   and `power_by_squaring`, for `Float64` (`F64.exp`, …) and `Float32` (`F32.exp`, …).
+* `JuliaBase.Trig`: Julia's own trigonometric functions (ports of openlibm with Julia's
+  Cody–Waite/Payne–Hanek reduction `rem_pio2`), bit for bit: `sin`, `cos`, `tan`, `sincos`,
+  `asin`, `acos`, `atan`, `atan(y, x)` (`atan2`), `sinpi`, `cospi`, `sincospi` for `Float64`
+  (`F64.sin`, …) and `Float32` (`F32.sin`, …).
+* `JuliaBase.Hyperbolic`: Julia's own `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh` for
+  `Float64` and `Float32`, bit for bit.
 * `JuliaBase.Round`: `round(x; digits)`, `round(x; sigdigits)` and `Base.hidigit`.
 * `JuliaBase.Parse`: `parse(Float64, s)` / `tryparse` (`F64.parse?`, `F32.parse?`), correctly
   rounded through `IEEEFloat.ofDecimal`.
@@ -51,8 +60,9 @@ verified bit for bit against the Julia 1.13 oracle (`Tests/JuliaBase/`).
 * `JuliaBase.Complex`: Julia `Complex{T}`, the port's only complex type (the `Coeff`
   and `Analytic` instances are in `AbstractTensors`, the `Conj`/`JNorm`/`JApprox` ones in
   `StaticVectors`), with Julia's operation order and mixed real/complex rules, and
-  `ComplexF64`'s robust division and inverse, `abs`, `isapprox`, `sqrt`, `exp`, `log`,
-  the trigonometric and hyperbolic functions and `^`.
+  `ComplexF64`'s robust division and inverse (`@[inline]`), `abs`, `isapprox`, `sqrt`, `exp`,
+  `log`, `cis`, the trigonometric and hyperbolic functions and `^`, all bit for bit (every real
+  function they call is Julia's own, never `libm`).
 * `JuliaBase.Show`: the `JuliaShow` class (`show`/`print`, compact or not, plus the
   Leibniz `showvalue` and Grassmann `showterm` coefficient hooks) with instances for `Int`,
   `Nat`, `Bool`, `Float`, `Float32`, `Rat`, unsigned integers and `Complex α`.
