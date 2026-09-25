@@ -139,15 +139,16 @@ instance {α : Type} [Coeff α] : Coeff (Complex α) where
 
 /-! ## `Analytic` instances -/
 
-/-- `Float` via the C `libm` (Julia uses its own `libm`; results agree to an
-ulp or two), with `expm1`/`log1p` from `JuliaBase` and Julia's own bit-exact `cbrt`
-(`JuliaBase.F64.cbrt`). -/
+/-- `Float` with Julia's own bit-exact kernels where `JuliaBase` has them (`exp`, `expm1`,
+`log`, `log1p`, `^` from `JuliaBase.Math`, `cbrt` from `JuliaBase.F64.cbrt`) and the C
+`libm` for the trigonometric and hyperbolic functions (Julia ports openlibm for those;
+results agree to an ulp or two). -/
 instance : Analytic Float where
   sqrt := Float.sqrt
   cbrt := F64.cbrt
-  exp := Float.exp
+  exp := F64.exp
   expm1 := F64.expm1
-  log := Float.log
+  log := F64.log
   log1p := F64.log1p
   sin := Float.sin
   cos := Float.cos
@@ -162,15 +163,15 @@ instance : Analytic Float where
   asinh := Float.asinh
   acosh := Float.acosh
   atanh := Float.atanh
-  pow := Float.pow
+  pow := F64.pow
   abs := Float.abs
 
 instance : Analytic Float32 where
   sqrt := Float32.sqrt
   cbrt := Float32.cbrt
-  exp := Float32.exp
+  exp := F32.exp
   expm1 := F32.expm1
-  log := Float32.log
+  log := F32.log
   log1p := F32.log1p
   sin := Float32.sin
   cos := Float32.cos
@@ -185,7 +186,7 @@ instance : Analytic Float32 where
   asinh := Float32.asinh
   acosh := Float32.acosh
   atanh := Float32.atanh
-  pow := Float32.pow
+  pow := F32.pow
   abs := Float32.abs
 
 /-- The principal cube root `z^(1/3)` of a `ComplexF64` (Julia has no complex `cbrt`,

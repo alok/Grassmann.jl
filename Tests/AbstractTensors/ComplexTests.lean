@@ -2,9 +2,10 @@
 Oracle tests for `JuliaBase.ComplexF64` (Julia `Base` on `ComplexF64`) and
 the scalar helpers `F64.expm1`, `F64.log1p`, `F64.hypot`.
 
-Pure arithmetic (`*`, `/`, `inv`, `abs = hypot`, `sqrt`) must agree bitwise;
-functions that call `libm` (Julia uses its own) are compared to a few ulps,
-measured on each component against the magnitude of the result.
+Pure arithmetic (`*`, `/`, `inv`, `abs = hypot`, `sqrt`), the real `expm1`/`log1p` and the
+real part of the complex `log` (Julia's own kernels, `JuliaBase.Math`) must agree bitwise;
+functions that call the trigonometric `libm` (Julia uses its own port) are compared to a few
+ulps, measured on each component against the magnitude of the result.
 -/
 import AbstractTensors
 import Tests.AbstractTensors.Harness
@@ -63,6 +64,9 @@ def suite : TestM Unit := do
       let ok := if exactUnary.contains name then same got.re want.re && same got.im want.im
         else cclose 8 got want
       check ok fun _ => s!"complex {name}({showC z}): got {showC got}, want {showC want}"
+      -- `log(z)`'s real part is `log1p`/`log` of the modulus only: Julia's kernels, bitwise
+      if name == "log" then
+        check (same got.re want.re) fun _ => s!"complex log({showC z}).re: got {showF got.re}, want {showF want.re}"
   for (name, are, aim, bre, bim, rre, rim) in Golden.complexBaseBin do
     let a : Complex Float := ⟨fb are, fb aim⟩
     let b : Complex Float := ⟨fb bre, fb bim⟩
@@ -74,7 +78,7 @@ def suite : TestM Unit := do
     check ok fun _ => s!"complex {name}({showC a}, {showC b}): got {showC got}, want {showC want}"
   for (name, x, r) in Golden.floatBase do
     let got := if name == "expm1" then F64.expm1 (fb x) else F64.log1p (fb x)
-    check (ulpClose 2 got (fb r)) fun _ =>
+    check (same got (fb r)) fun _ =>
       s!"float {name}({showF (fb x)}): got {showF got}, want {showF (fb r)}, ulps {F64.ulpDist got (fb r)}"
   for (x, y, r) in Golden.hypotCases do
     let got := F64.hypot (fb x) (fb y)

@@ -54,9 +54,10 @@ def suite : TestM Unit := do
     let name := jStr (jGet r "name")
     let f : Float → Float := match name with
       | "sin" => Float.sin
-      | "exp" => Float.exp
+      | "exp" => JuliaBase.F64.exp
       | _ => fun x => x * x * x
-    let rtol := if jBool (jGet r "libm") then 1e-9 else 0
+    -- Julia's own `exp` is `JuliaBase.F64.exp`, bit for bit; `sin` is still the C `libm`
+    let rtol := if jBool (jGet r "libm") && name != "exp" then 1e-9 else 0
     let xs := jFloats (jGet r "x")
     let d1 := jFloats (jGet r "d1")
     let d2 := jFloats (jGet r "d2")

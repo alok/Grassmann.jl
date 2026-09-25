@@ -247,11 +247,11 @@ variable {X : Type} [TensorRing X]
 @[inline] def ldiv (a b : X) : X := SeriesRing.inv a * b
 
 /-- Julia `b ^ t = exp(t ⟑ log(b))` for a real base `b > 0` (AT:326). -/
-@[inline] def rpow (b : Float) (t : X) : X := TensorRing.exp (smul (Float.log b) t)
+@[inline] def rpow (b : Float) (t : X) : X := TensorRing.exp (smul (F64.log b) t)
 
 /-- Julia `log(b, t) = log(t)/log(b)` (AT:330), with bug B1 **fixed** (Julia's
 metric pass-through at AT:401 shadows it and returns `log(b)`). -/
-@[inline] def logBase (b : Float) (t : X) : X := sdiv (TensorRing.log t) (Float.log b)
+@[inline] def logBase (b : Float) (t : X) : X := sdiv (TensorRing.log t) (F64.log b)
 
 /-- Julia `log2(t) = log2(ℯ)·log(t)` (AT:383). -/
 @[inline] def log2 (t : X) : X := smul F64.log2e (TensorRing.log t)

@@ -62,14 +62,14 @@ overflow scaling. -/
 with Julia's `max`, `p = 1` gives `∑ |aᵢ|`, `p = 2` gives `norm(a)`, `p = 0`
 counts the nonzero entries (broken in StaticVectors, B9), and otherwise
 `(∑ |aᵢ|^p)^(1/p)`. `|x|` is `norm(x::Number) = abs(float(x))`. The general
-case uses the C `pow`, which may differ from Julia's `^` by an ulp. -/
+case uses Julia's own `^` (`JuliaBase.F64.pow`). -/
 def normP [JNorm α] (a : Values α n) (p : Float) : Float :=
   if p == Float.inf then a.mapReduce JNorm.norm F64.max 0
   else if p == 1 then a.mapReduce JNorm.norm (· + ·) 0
   else if p == 2 then a.norm
   else if p == 0 then a.mapReduce (fun x => if JNorm.norm x == 0 then 0 else 1) (· + ·) 0
   else if n == 0 then 0
-  else Float.pow (a.mapReduce (fun x => Float.pow (JNorm.norm x) p) (· + ·) 0) (1 / p)
+  else F64.pow (a.mapReduce (fun x => F64.pow (JNorm.norm x) p) (· + ·) 0) (1 / p)
 
 /-- Julia `normalize(a)` (`SV/linalg.jl:146`): `inv(norm(a)) * a`, multiplying
 each entry by the reciprocal (so `normalize(Values(3.0,4.0)) = [0.6000000000000001, 0.8]`). -/

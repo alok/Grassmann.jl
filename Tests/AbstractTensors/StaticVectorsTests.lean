@@ -1,6 +1,6 @@
 /-
-Tests for `StaticVectors`: oracle goldens on `Values{N,Float64}` (bitwise,
-except `norm(a, 3)` which goes through `pow`), the StaticVectors README and
+Tests for `StaticVectors`: oracle goldens on `Values{N,Float64}` (bitwise, `norm(a, 3)`
+included now that it goes through Julia's own `^`), the StaticVectors README and
 port-notes §6.4 facts, and compile-time checks on exact entries.
 -/
 import StaticVectors
@@ -94,8 +94,7 @@ def suite : TestM Unit := do
     match withValues a (unary name) with
     | none => check false fun _ => s!"sv {name}: not applicable to length {a.size}"
     | some got =>
-      let k := if name == "norm3" then 2 else 0
-      check (listClose k got want) fun _ => s!"sv {name}({a.toList.map fb}): got {got}, want {want}"
+      check (listClose 0 got want) fun _ => s!"sv {name}({a.toList.map fb}): got {got}, want {want}"
   for (name, a, b, r) in Golden.svBinary do
     let want := r.toList.map fb
     let got : Option (List Float) :=
