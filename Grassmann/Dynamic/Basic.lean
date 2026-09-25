@@ -263,15 +263,18 @@ half built from the coefficient function (zeros elsewhere). -/
 /-- Julia `multispin(t)` (`src/multivectors.jl:999-1014`): the smallest
 spinor-family container of a graded element (`Spinor`/`CoSpinor` by the parity of
 its grade), a couple (`Spinor` for an even blade, else `Multivector`) or a
-pseudo-couple (`Spinor`/`CoSpinor` when the blade has the parity of `grade(V)`,
-else `Multivector`); halves and multivectors are returned as they are. -/
+pseudo-couple (`Spinor`/`CoSpinor` when the blade has the parity of the pseudoscalar,
+else `Multivector`); halves and multivectors are returned as they are. Julia tests
+the parity of `grade(V)`; that is `n` except in tangent spaces, where Julia never
+forms a `PseudoCouple` and the pseudoscalar `I` has `n` generators, so `n` is the
+parity that keeps the value. -/
 def multispin (x : TA V α) : TA V α :=
   match x with
   | spinor _ | cospinor _ | multi _ => x
   | couple b .. => if popcount b % 2 == 0 then toHalfTA false x else toMultiTA x
   | pseudo b .. =>
-    if V.grade % 2 == 0 && popcount b % 2 == 0 then toHalfTA false x
-    else if V.grade % 2 == 1 && popcount b % 2 == 1 then toHalfTA true x
+    if V.n % 2 == 0 && popcount b % 2 == 0 then toHalfTA false x
+    else if V.n % 2 == 1 && popcount b % 2 == 1 then toHalfTA true x
     else toMultiTA x
   | chain g _ => toHalfTA (g % 2 == 1) x
   | one | blade _ | single .. => match x.grade? with
