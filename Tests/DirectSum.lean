@@ -12,7 +12,8 @@ DirectSum / Leibniz test suites:
   (`Tests/DirectSum/golden/derived.jsonl`);
 * `plans`: the `DirectSum.Ops` kernel interface (plans, result containers);
 * `setops`: `∪ ∩ ⊆ ==` and `⊕` of spaces, subspaces and blades, `+`, `^`
-  (`Tests/DirectSum/golden/setops.json`).
+  (`Tests/DirectSum/golden/setops.json`);
+* `basis`: the `Λ(V)` container and its syntax (`Tests/DirectSum/golden/basis.json`).
 
 Goldens are read relative to the repository root. Julia defects documented in
 the port notes are skipped with a reason and counted.
@@ -26,6 +27,7 @@ import Tests.DirectSum.Props
 import Tests.DirectSum.Derived
 import Tests.DirectSum.Plans
 import Tests.DirectSum.SetOps
+import Tests.DirectSum.Basis
 
 open DirectSumTests
 
@@ -39,7 +41,8 @@ def Tests.DirectSum.run : IO (Nat × Nat) := do
       ("directsum/props", Props.run),
       ("directsum/derived", Derived.run),
       ("directsum/plans", Plans.run),
-      ("directsum/setops", SetOps.run) ]
+      ("directsum/setops", SetOps.run),
+      ("directsum/basis", BasisSuite.run) ]
   let mut pass := 0
   let mut fail := 0
   for (name, suite) in suites do
