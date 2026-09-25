@@ -144,7 +144,7 @@ def inv2pi : Array UInt64 := #[
 
 /-- Julia `fromfraction(f::Int128)` (rem_pio2.jl:96-122): `(z1, z2)` with `z1 + z2 = f/2^128`,
 for the magnitude `|f| = (xh, xl)` and the sign `neg`. -/
-def fromFraction (neg : Bool) (xh xl : UInt64) : Float × Float :=
+@[inline] def fromFraction (neg : Bool) (xh xl : UInt64) : Float × Float :=
   if xh == 0 && xl == 0 then (f64! 0.0, f64! 0.0)
   else
     let s : UInt64 := if neg then 0x8000000000000000 else 0
@@ -163,6 +163,10 @@ def fromFraction (neg : Bool) (xh xl : UInt64) : Float × Float :=
       let m2 := if n2 ≥ 53 then shr128lo x2h x2l (n2 - 53) else x2l <<< (53 - n2)
       (z1, Float.ofBits (s ||| (((n2 + 893) <<< 52) + m2)))
 
+/-- Word `i` of the bits of `1/(2π)` (`0` for a negative index), an inline read. -/
+@[inline] def inv2piWord (i : Int64) : UInt64 :=
+  if i < i64! 0 then 0 else inv2pi[i.toNatClampNeg]?.getD 0
+
 /-- Julia `paynehanek(x::Float64)` (rem_pio2.jl:124-196): reduction of a huge argument
 (`|x| ≥ 2^20·π/2`) modulo `π/2` against the bits of `1/(2π)`, in 128-bit integer arithmetic. -/
 def paynehanek (x : Float) : RemPio2 :=
@@ -171,13 +175,12 @@ def paynehanek (x : Float) : RemPio2 :=
   let k : Int64 := ((u &&& 0x7FF0000000000000) >>> 52).toInt64 - i64! 1075
   let idx : Int64 := k >>> i64! 6  -- arithmetic shift, as Julia's `>>`
   let shift : UInt64 := (k - (idx <<< i64! 6)).toUInt64
-  let word (i : Int64) : UInt64 := if i < i64! 0 then 0 else inv2pi[i.toNatClampNeg]!
   let (a1, a2, a3) : UInt64 × UInt64 × UInt64 :=
-    if shift == 0 then (word idx, word (idx + i64! 1), word (idx + i64! 2))
+    if shift == 0 then (inv2piWord idx, inv2piWord (idx + i64! 1), inv2piWord (idx + i64! 2))
     else
-      ((word idx <<< shift) ||| (word (idx + i64! 1) >>> (64 - shift)),
-       (word (idx + i64! 1) <<< shift) ||| (word (idx + i64! 2) >>> (64 - shift)),
-       (word (idx + i64! 2) <<< shift) ||| (word (idx + i64! 3) >>> (64 - shift)))
+      ((inv2piWord idx <<< shift) ||| (inv2piWord (idx + i64! 1) >>> (64 - shift)),
+       (inv2piWord (idx + i64! 1) <<< shift) ||| (inv2piWord (idx + i64! 2) >>> (64 - shift)),
+       (inv2piWord (idx + i64! 2) <<< shift) ||| (inv2piWord (idx + i64! 3) >>> (64 - shift)))
   -- `w = UInt128(X*a1) << 64 + widemul(X, a2) + widemul(X, a3) >> 64` (mod 2^128)
   let (w2h, w2l) := mul64 bigX a2
   let (w3h, _) := mul64 bigX a3
