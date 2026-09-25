@@ -6,6 +6,8 @@ import Fatou.Kernel
 import Fatou.Orbit
 import Fatou.Raster
 import Fatou.Couple
+import Fatou.CAS
+import Fatou.Symbolic
 
 /-!
 # Fatou

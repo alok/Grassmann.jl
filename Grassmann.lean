@@ -18,6 +18,11 @@ import Grassmann.Basis
 import Grassmann.Dynamic
 import Grassmann.Composite
 import Grassmann.Forms
+import Grassmann.Calculus
+import Grassmann.Calculus.Simplicial
+import Grassmann.Fields
+import Grassmann.Fuse
+import Grassmann.Batch
 import Grassmann.Spec
 
 /-!
@@ -46,6 +51,17 @@ types, the coefficient classes and the operator notation
   geometric/exterior/regressive products, contractions, sandwiches, complements,
   involutions and grade projections with the static result types of DESIGN.md
   §4.2; norms, `abs2`, `inv`.
+* **Dynamic** (`Grassmann.Dynamic`): `TA V α`, the Julia-exact layer with Julia's
+  result kinds and printing.
+* **Composite, Forms, Calculus, Fields** (`Grassmann.Composite`, `Grassmann.Forms`,
+  `Grassmann.Calculus`, `Grassmann.Fields`): `exp`/`log`/powers and the other
+  composite functions, `TensorOperator`s and their spectral functions, `∇`/`d`/`∂`
+  and the simplicial helpers, and `points`/`chainfield`/`vectorfield`.
+* **Fusion and batches** (`Grassmann.Fuse`, `Grassmann.Batch`): `fused% e` compiles a
+  whole typed expression into one straight-line kernel with one allocation;
+  `batch%`/`batchInto%` run it over structure-of-arrays batches.
+* **Spec** (`Grassmann.Spec`): the model `Cl g` and the theorems that the
+  implementation agrees with it; `Grassmann.Tactic` (opt-in) adds `clifford`.
 
 ## Example
 

@@ -13,6 +13,11 @@ import Cartan.Product
 import Cartan.Show
 import Cartan.Misc
 import Cartan.Props
+import Cartan.Operator
+import Cartan.Solve
+import Cartan.Element
+import Cartan.Spectral
+import Cartan.Aliases
 
 /-!
 # Cartan: tensor fields over discretized manifolds
