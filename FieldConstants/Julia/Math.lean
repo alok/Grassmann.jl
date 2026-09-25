@@ -352,24 +352,12 @@ when the scaled value is not finite. -/
 def roundDigits (x : Float) (d : Int) : Float :=
   if d ≥ 0 then
     let inv := powInt 10.0 d
-    let y := roundEven (x * inv) / inv
+    let y := JuliaBase.F64.round (x * inv) / inv
     if y.isFinite then y else x
   else
     let step := powInt 10.0 (-d)
-    let y := roundEven (x / step) * step
+    let y := JuliaBase.F64.round (x / step) * step
     if y.isFinite then y else x
-where
-  /-- IEEE round-half-to-even (`round(x, RoundNearest)`). -/
-  roundEven (x : Float) : Float :=
-    if !x.isFinite then x
-    else
-      let f := x.floor
-      let diff := x - f
-      let r := if diff < 0.5 then f
-        else if diff > 0.5 then f + 1.0
-        else if (f / 2.0).floor * 2.0 == f then f else f + 1.0
-      -- `rint` keeps the sign of zero: `round(-0.4) == -0.0`
-      if r == 0.0 && x < 0.0 then -0.0 else r
 
 /-- Julia `Base.hidigit(x::AbstractFloat, 10) = 1 + floor(Int, log10(abs(x)))`
 (`base/floatfuncs.jl:129`), using Julia's own `log10`; `0` for `x = 0`. -/

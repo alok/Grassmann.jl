@@ -30,7 +30,7 @@ def gnum (j : Json) : GNum :=
 /-- Printable form of a golden number. -/
 def GNum.show : GNum → String
   | .int n => s!"{n}"
-  | .float x => Julia.showFloat x
+  | .float x => JuliaBase.F64.showString x
   | .err m => s!"ERROR({m})"
 
 /-- Relative tolerance for float goldens. -/
@@ -45,7 +45,7 @@ def exactMatch (x : Num) : GNum → Bool
 /-- Kind agreement and relative closeness. -/
 def closeMatch (x : Num) : GNum → Bool
   | .int n => match x.v with | .int m => m.toInt == n | .float y => y == Float.ofInt n
-  | .float f => Julia.closeRel x.toFloat f rtol
+  | .float f => sameBits x.toFloat f || JuliaBase.F64.isapprox x.toFloat f (rtol := rtol)
   | .err _ => false
 
 /-- Record a numeric comparison in two suites: `s` (tolerance) and `e` (bit-exact). -/

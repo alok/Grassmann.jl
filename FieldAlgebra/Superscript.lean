@@ -72,7 +72,7 @@ def isOne : Expo → Bool
 def print : Expo → String
   | int n => toString n
   | rat q => s!"{q.num}//{q.den}"
-  | float x => showFloat x
+  | float x => JuliaBase.F64.showString x
 
 end Expo
 
@@ -82,7 +82,7 @@ def makeint (x : Float) : JNum :=
   if x == 0.0 then .int 0
   else
     let ax := x.abs
-    let rem := (fmod x 1.0).abs
+    let rem := (JuliaBase.F64.rem x 1.0).abs
     let ne := (2.220446049250313e-16 * ax).sqrt
     if ne < 1.0 then
       let t := (if x < 0 then -((-x).floor) else x.floor)   -- `x ÷ 1`
@@ -90,11 +90,6 @@ def makeint (x : Float) : JNum :=
       else if log10 ax - log10 (1.0 - rem) > 17.0 then .int (Int64.ofInt t.toInt64.toInt + 1)
       else .float x
     else .float x
-where
-  /-- exact `rem(x, 1.0)` (C `fmod` with divisor 1) -/
-  fmod (x _y : Float) : Float :=
-    let t := if x < 0 then -((-x).floor) else x.floor
-    x - t
 
 /-- `makeint` lifted to exponents: identity on `Int` and `Rational`. -/
 def Expo.makeint : Expo → Expo
@@ -130,7 +125,7 @@ def printExpoRat (x : Rat) : String :=
 through the `chars` table. -/
 def printExpoFloat (x : Float) : String :=
   if x == 1.0 then ""
-  else (if x < 0 then "⁻" else "") ++ String.ofList ((showFloat x.abs).toList.map supChar)
+  else (if x < 0 then "⁻" else "") ++ String.ofList ((JuliaBase.F64.showString x.abs).toList.map supChar)
 
 /-- Julia `printexpo(io, x)` for any exponent kind. -/
 def printExpo : Expo → String
@@ -174,7 +169,7 @@ partial def printExpoBased (d : String) : Expo → String
         match makeint (1.0 / x) with
         | .int m => printExpoBased d (.rat (Rat.divInt 1 m.toInt))
         | .float _ =>
-          if isTen && (showFloat x.abs).length > 5 then
+          if isTen && (JuliaBase.F64.showString x.abs).length > 5 then
             (if x < 0 then "/" else "") ++ (makeint (powFloat10 x.abs)).toString ++
               (if x < 0 then "" else "⋅")
           else d ++ printExpoFloat x
@@ -190,12 +185,12 @@ partial def printExpoBased (d : String) : Expo → String
               let net := ten.toInt / (10 ^ pow : Nat)
               pre ++ (if net != 1 then toString net ++ (if x < 0 then "/" else "⋅") else "") ++
                 d ++ printExpoInt pow
-            else if (showFloat x.abs).length > 5 then
+            else if (JuliaBase.F64.showString x.abs).length > 5 then
               pre ++ toString ten.toInt ++ (if x < 0 then "" else "⋅")
             else pre ++ printExpoBased d (.rat (rationalize x))
           | .float t =>
-            if (showFloat x.abs).length > 5 then
-              pre ++ showFloat t ++ (if x < 0 then "" else "⋅")
+            if (JuliaBase.F64.showString x.abs).length > 5 then
+              pre ++ JuliaBase.F64.showString t ++ (if x < 0 then "" else "⋅")
             else pre ++ printExpoBased d (.rat (rationalize x))
       else match ix with
         | .int n => printExpoBased d (.int n.toInt)
@@ -216,7 +211,7 @@ def sciParts (sf : String) : Option (String × String) :=
 notation rendered as `m×10ⁿ`. Faithful to Julia, the sign of a negative number
 in scientific notation is dropped by the regex. -/
 def printSpecialFloat (f : Float) : String :=
-  let sf := showFloat f
+  let sf := JuliaBase.F64.showString f
   match sciParts sf with
   | some (m, e) => m ++ "×10" ++ printExpoInt (e.toInt?.getD 0)
   | none => sf
@@ -224,7 +219,7 @@ def printSpecialFloat (f : Float) : String :=
 /-- Julia `special_print(io, f::Float64)` (`FieldAlgebra.jl:234-243`): LaTeX
 scientific notation `m \times 10^{n}`. -/
 def specialPrintFloat (f : Float) : String :=
-  let sf := showFloat f
+  let sf := JuliaBase.F64.showString f
   match sciParts sf with
   | some (m, e) => m ++ " \\times 10^{" ++ e ++ "}"
   | none => sf
@@ -239,7 +234,7 @@ def latexpoRat (x : Rat) : String :=
   if x == 1 then "" else "^{" ++ toString x.num ++ (if x.den != 1 then "/" ++ toString x.den else "") ++ "}"
 
 /-- Julia `latexpo(io, x::AbstractFloat)`. -/
-def latexpoFloat (x : Float) : String := if x == 1.0 then "" else "^{" ++ showFloat x ++ "}"
+def latexpoFloat (x : Float) : String := if x == 1.0 then "" else "^{" ++ JuliaBase.F64.showString x ++ "}"
 
 /-- Julia `latexpo(io, x)`. -/
 def latexpo : Expo → String
@@ -260,7 +255,7 @@ partial def latexpoBased (d : String) : Expo → String
         match makeint (1.0 / x) with
         | .int m => latexpoBased d (.rat (Rat.divInt 1 m.toInt))
         | .float _ =>
-          if isTen && (showFloat x.abs).length > 5 then
+          if isTen && (JuliaBase.F64.showString x.abs).length > 5 then
             (if x < 0 then "/" else "") ++ (makeint (pow 10.0 x.abs)).toString ++
               (if x < 0 then "" else "\\cdot ")
           else d ++ latexpoFloat x

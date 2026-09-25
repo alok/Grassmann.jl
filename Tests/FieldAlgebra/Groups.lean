@@ -125,7 +125,7 @@ def run : IO Suite := do
     | "makeint" =>
       let x := (expoOf (idx r 1)).toFloat
       let got : Expo := match makeint x with | .int n => .int n.toInt | .float y => .float y
-      s := s.check (expoSame got (expoOf (idx r 2))) fun _ => s!"makeint {showFloat x}: got {got.print}"
+      s := s.check (expoSame got (expoOf (idx r 2))) fun _ => s!"makeint {JuliaBase.F64.showString x}: got {got.print}"
     | "findpower" =>
       let got := findpower (int (idx r 1)).toNat
       s := s.check (got == (int (idx r 2)).toNat) fun _ => s!"findpower {int (idx r 1)}: got {got}"

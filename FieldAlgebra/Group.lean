@@ -121,8 +121,8 @@ def fpow (c : Coef) (y : Float) : Coef := float (pow c.toFloat y)
 
 /-- Julia `sqrt` (always `Float64`). -/
 def sqrt (c : Coef) : Coef := float c.toFloat.sqrt
-/-- Julia `cbrt` (always `Float64`). -/
-def cbrt (c : Coef) : Coef := float c.toFloat.cbrt
+/-- Julia `cbrt` (always `Float64`; Julia's own `cbrt`, not libm's). -/
+def cbrt (c : Coef) : Coef := float (JuliaBase.F64.cbrt c.toFloat)
 
 /-- Julia `isone`. -/
 def isOne : Coef → Bool

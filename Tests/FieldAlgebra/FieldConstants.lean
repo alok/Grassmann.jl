@@ -33,7 +33,7 @@ def run : IO Suite := do
   for r in arr (fld j "show") do
     let x := hexFloat (idx r 0)
     let want := str (idx r 1)
-    let got := showFloat x
+    let got := JuliaBase.F64.showString x
     s := s.check (got == want) fun _ => s!"show {hexOf x}: got {got}, want {want}"
     -- shortest repr must round-trip through the parser
     if x.isFinite then
@@ -54,7 +54,7 @@ def run : IO Suite := do
     let n := int (idx r 1)
     let want := hexFloat (idx r 2)
     let got := powInt x n
-    s := s.check (sameBits got want) fun _ => s!"{showFloat x}^{n}: got {showFloat got}, want {showFloat want}"
+    s := s.check (sameBits got want) fun _ => s!"{JuliaBase.F64.showString x}^{n}: got {JuliaBase.F64.showString got}, want {JuliaBase.F64.showString want}"
   -- Float^Float
   for r in arr (fld j "powf") do
     let x := hexFloat (idx r 0)
@@ -62,7 +62,7 @@ def run : IO Suite := do
     let want := hexFloat (idx r 2)
     let got := pow x y
     s := s.check (sameBits got want) fun _ =>
-      s!"{showFloat x}^{showFloat y}: got {showFloat got}, want {showFloat want}"
+      s!"{JuliaBase.F64.showString x}^{JuliaBase.F64.showString y}: got {JuliaBase.F64.showString got}, want {JuliaBase.F64.showString want}"
   -- exp/log family
   let funs := fld j "funs"
   for (nm, f) in [("exp", Julia.exp), ("exp2", Julia.exp2), ("exp10", Julia.exp10),
@@ -72,7 +72,7 @@ def run : IO Suite := do
       let want := hexFloat (idx r 1)
       let got := f x
       s := s.check (sameBits got want) fun _ =>
-        s!"{nm}({showFloat x}): got {showFloat got}, want {showFloat want}"
+        s!"{nm}({JuliaBase.F64.showString x}): got {JuliaBase.F64.showString got}, want {JuliaBase.F64.showString want}"
   -- rounding
   for r in arr (fld j "round") do
     let x := hexFloat (idx r 0)
@@ -82,10 +82,10 @@ def run : IO Suite := do
     let ws := hexFloat (idx r 4)
     let wh := int (idx r 5)
     s := s.check (sameBits (roundDigits x d) wd) fun _ =>
-      s!"round({showFloat x}, digits={d}): got {showFloat (roundDigits x d)}, want {showFloat wd}"
+      s!"round({JuliaBase.F64.showString x}, digits={d}): got {JuliaBase.F64.showString (roundDigits x d)}, want {JuliaBase.F64.showString wd}"
     s := s.check (sameBits (roundSigdigits x n) ws) fun _ =>
-      s!"round({showFloat x}, sigdigits={n}): got {showFloat (roundSigdigits x n)}, want {showFloat ws}"
-    s := s.check (hidigit x == wh) fun _ => s!"hidigit({showFloat x}) = {hidigit x}, want {wh}"
+      s!"round({JuliaBase.F64.showString x}, sigdigits={n}): got {JuliaBase.F64.showString (roundSigdigits x n)}, want {JuliaBase.F64.showString ws}"
+    s := s.check (hidigit x == wh) fun _ => s!"hidigit({JuliaBase.F64.showString x}) = {hidigit x}, want {wh}"
   -- power_by_squaring on irrational bases
   for r in arr (fld j "pbs") do
     let nm := str (idx r 0)
@@ -95,7 +95,7 @@ def run : IO Suite := do
       | "φ" => powerBySquaring 1.618033988749895 p
       | "γ" => powerBySquaring 0.5772156649015329 p
       | _ => Julia.exp (Float.ofNat p)
-    s := s.check (sameBits got want) fun _ => s!"{nm}^{p}: got {showFloat got}, want {showFloat want}"
+    s := s.check (sameBits got want) fun _ => s!"{nm}^{p}: got {JuliaBase.F64.showString got}, want {JuliaBase.F64.showString want}"
   -- Constant operator table
   for r in arr (fld j "constant_ops") do
     let op := str (idx r 0)

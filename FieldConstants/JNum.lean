@@ -168,7 +168,7 @@ def lt : JNum → JNum → Bool
 /-- Julia `show`/`print`: `Int64` in decimal, `Float64` in shortest repr. -/
 protected def toString : JNum → String
   | int a => toString a.toInt
-  | float x => showFloat x
+  | float x => JuliaBase.F64.showString x
 
 instance : ToString JNum := ⟨JNum.toString⟩
 instance : Repr JNum := ⟨fun x _ => JNum.toString x⟩

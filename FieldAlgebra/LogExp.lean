@@ -137,7 +137,7 @@ def isZero (x : LogGroup B) : Bool := x.v.isOne
 /-- Julia `show`: `log(…)`, then ` = value` for bases with products. -/
 def print (x : LogGroup B) (product? : Option Float := none) : String :=
   x.showFun ++ x.v.showPre ++ ")" ++ match product? with
-    | some p => " = " ++ showFloat (x.productOf p)
+    | some p => " = " ++ JuliaBase.F64.showString (x.productOf p)
     | none => ""
 
 end LogGroup
@@ -176,7 +176,7 @@ def productOf (x : ExpGroup B) (p : Float) : Float :=
 /-- Julia `show`. -/
 def print (x : ExpGroup B) (product? : Option Float := none) : String :=
   x.showFun ++ x.v.showPre ++ ")" ++ match product? with
-    | some p => " = " ++ showFloat (x.productOf p)
+    | some p => " = " ++ JuliaBase.F64.showString (x.productOf p)
     | none => ""
 
 end ExpGroup
