@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "16-algebra.md-1031",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/algebra.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"algebra.md:1031","input":"i,j,k = hyperplanes(ℝ^3)","display":"3-element Vector{Single{⟨+++⟩, 2, B, Int64} where B}:\n  1v₂₃\n -1v₁₃\n  1v₁₂","out":{"kind":"Other","type":"Vector{Single{⟨+++⟩, 2, B, Int64} where B}","str":"Single{⟨+++⟩, 2, B, Int64} where B[1v₂₃, -1v₁₃, 1v₁₂]","compact_str":"Single{⟨+++⟩, 2, B, Int64} where B[1v₂₃, -1v₁₃, 1v₁₂]"}},
+    {"block":"algebra.md:1031","input":"i^2, j^2, k^2, i*j*k","display":"(-1v, -1v, -1v, 1v)","out":{"kind":"Other","type":"NTuple{4, Single{⟨+++⟩, 0, v, Int64}}","str":"(-1v, -1v, -1v, 1v)","compact_str":"(-1v, -1v, -1v, 1v)"}},
+    {"block":"algebra.md:1031","input":"-(j+k) * (j+k)","display":"2 + 0v₁₂ + 0v₁₃ + 0v₂₃","out":{"kind":"Spinor","T":"Int64","V":"⟨+++⟩","dense":["2","0","0","0","0","0","0","0"],"str":"2 + 0v₁₂ + 0v₁₃ + 0v₂₃","compact_str":"2+0v₁₂+0v₁₃+0v₂₃"}},
+    {"block":"algebra.md:1031","input":"-(j+k) * i","display":"0 - 1v₁₂ - 1v₁₃ + 0v₂₃","out":{"kind":"Spinor","T":"Int64","V":"⟨+++⟩","dense":["0","0","0","0","-1","-1","0","0"],"str":"0 - 1v₁₂ - 1v₁₃ + 0v₂₃","compact_str":"0-1v₁₂-1v₁₃+0v₂₃"}}
+  ],
+  "stats": {
+    "cases": 4,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

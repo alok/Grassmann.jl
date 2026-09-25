@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "09-algebra.md-436",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/algebra.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"algebra.md:436","input":"complexify(1+im)","display":"1 + 1im","out":{"kind":"Number","T":"Complex{Int64}","value":["1","1"],"str":"1 + 1im","compact_str":"1+1im"}},
+    {"block":"algebra.md:436","input":"complexify(Chain(1,2))","display":"1 + 2v₁₂","out":{"kind":"Couple","T":"Int64","V":"⟨11⟩","bits":3,"dense":["1","0","0","2"],"str":"1 + 2v₁₂","compact_str":"1+2v₁₂"}},
+    {"block":"algebra.md:436","input":"vectorize(1+2im)","display":"1v₁ + 2v₂","out":{"kind":"Chain","T":"Int64","V":"⟨11⟩","grade":1,"dense":["0","1","2","0"],"str":"1v₁ + 2v₂","compact_str":"1v₁+2v₂"}},
+    {"block":"algebra.md:436","input":"vectorize(Couple(1,2))","display":"1v₁ + 2v₂","out":{"kind":"Chain","T":"Int64","V":"⟨11⟩","grade":1,"dense":["0","1","2","0"],"str":"1v₁ + 2v₂","compact_str":"1v₁+2v₂"}}
+  ],
+  "stats": {
+    "cases": 4,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

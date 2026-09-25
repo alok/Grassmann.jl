@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "arith",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/arith.jl"
+  },
+  "totals": {
+    "cases": 20647,
+    "errors": 474,
+    "ref_mismatch": 492,
+    "unexplained": 0,
+    "defects": {"chain-minus-term-swap":392,"infinity-method-gaps":220,"pseudocouple-addsub":74,"subamnifold-typo":201,"tangent-parity-grade":20,"zero-method-gaps":77}
+  },
+  "shards": [
+    {"shard":"E2","file":"arith/E2.json","cases":1257,"bytes":169520,"errors":30,"ref_mismatch":28,"unexplained":0,"space":"E2"},
+    {"shard":"E3","file":"arith/E3.json","cases":1817,"bytes":298429,"errors":43,"ref_mismatch":49,"unexplained":0,"space":"E3"},
+    {"shard":"E4","file":"arith/E4.json","cases":2069,"bytes":461030,"errors":45,"ref_mismatch":55,"unexplained":0,"space":"E4"},
+    {"shard":"M4","file":"arith/M4.json","cases":2069,"bytes":447237,"errors":45,"ref_mismatch":57,"unexplained":0,"space":"M4"},
+    {"shard":"D3","file":"arith/D3.json","cases":1817,"bytes":300037,"errors":43,"ref_mismatch":53,"unexplained":0,"space":"D3"},
+    {"shard":"PGA3","file":"arith/PGA3.json","cases":2069,"bytes":461666,"errors":45,"ref_mismatch":57,"unexplained":0,"space":"PGA3"},
+    {"shard":"INF3","file":"arith/INF3.json","cases":2069,"bytes":463389,"errors":45,"ref_mismatch":57,"unexplained":0,"space":"INF3"},
+    {"shard":"CGA2","file":"arith/CGA2.json","cases":2069,"bytes":457326,"errors":45,"ref_mismatch":29,"unexplained":0,"space":"CGA2"},
+    {"shard":"CGA3","file":"arith/CGA3.json","cases":2337,"bytes":815664,"errors":47,"ref_mismatch":31,"unexplained":0,"space":"CGA3"},
+    {"shard":"DUAL3","file":"arith/DUAL3.json","cases":1817,"bytes":291564,"errors":43,"ref_mismatch":53,"unexplained":0,"space":"DUAL3"},
+    {"shard":"TAN2","file":"arith/TAN2.json","cases":1257,"bytes":213147,"errors":43,"ref_mismatch":23,"unexplained":0,"space":"TAN2"}
+  ]
+}

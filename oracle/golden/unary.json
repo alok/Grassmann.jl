@@ -1,0 +1,33 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "unary",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/unary.jl"
+  },
+  "totals": {
+    "cases": 10509,
+    "errors": 220,
+    "ref_mismatch": 189,
+    "unexplained": 0,
+    "defects": {"antimetric-couple-scalar":73,"antireverse-couple":44,"conformal-antimetric":52,"conformal-blade-complement":135,"grade-projection-above-n":3,"infinity-method-gaps":90,"multivector-of-zero":15,"projective-blade-metric":52,"trivector-couple":4,"volume-scalar-chain":15,"zero-method-gaps":75}
+  },
+  "shards": [
+    {"shard":"E2","file":"unary/E2.json","cases":513,"bytes":67564,"errors":14,"ref_mismatch":8,"unexplained":0,"space":"E2"},
+    {"shard":"E3","file":"unary/E3.json","cases":644,"bytes":98047,"errors":12,"ref_mismatch":10,"unexplained":0,"space":"E3"},
+    {"shard":"E4","file":"unary/E4.json","cases":725,"bytes":139982,"errors":11,"ref_mismatch":6,"unexplained":0,"space":"E4"},
+    {"shard":"E5","file":"unary/E5.json","cases":810,"bytes":223165,"errors":11,"ref_mismatch":6,"unexplained":0,"space":"E5"},
+    {"shard":"I4","file":"unary/I4.json","cases":725,"bytes":139958,"errors":11,"ref_mismatch":6,"unexplained":0,"space":"I4"},
+    {"shard":"M4","file":"unary/M4.json","cases":725,"bytes":139993,"errors":11,"ref_mismatch":9,"unexplained":0,"space":"M4"},
+    {"shard":"S4","file":"unary/S4.json","cases":725,"bytes":139369,"errors":11,"ref_mismatch":6,"unexplained":0,"space":"S4"},
+    {"shard":"D3","file":"unary/D3.json","cases":644,"bytes":98509,"errors":12,"ref_mismatch":13,"unexplained":0,"space":"D3"},
+    {"shard":"PGA2","file":"unary/PGA2.json","cases":644,"bytes":97953,"errors":12,"ref_mismatch":13,"unexplained":0,"space":"PGA2"},
+    {"shard":"PGA3","file":"unary/PGA3.json","cases":725,"bytes":140119,"errors":11,"ref_mismatch":9,"unexplained":0,"space":"PGA3"},
+    {"shard":"INF3","file":"unary/INF3.json","cases":725,"bytes":143583,"errors":11,"ref_mismatch":28,"unexplained":0,"space":"INF3"},
+    {"shard":"ORG3","file":"unary/ORG3.json","cases":725,"bytes":143108,"errors":11,"ref_mismatch":28,"unexplained":0,"space":"ORG3"},
+    {"shard":"CGA2","file":"unary/CGA2.json","cases":725,"bytes":144433,"errors":34,"ref_mismatch":17,"unexplained":0,"space":"CGA2"},
+    {"shard":"CGA3","file":"unary/CGA3.json","cases":810,"bytes":227240,"errors":36,"ref_mismatch":17,"unexplained":0,"space":"CGA3"},
+    {"shard":"DUAL3","file":"unary/DUAL3.json","cases":644,"bytes":96791,"errors":12,"ref_mismatch":13,"unexplained":0,"space":"DUAL3"}
+  ]
+}

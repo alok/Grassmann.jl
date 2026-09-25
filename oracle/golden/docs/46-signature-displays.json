@@ -1,0 +1,40 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "46-signature-displays",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/probe2.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"signature displays","input":"S\"∞∅+++\"","display":"⟨∞∅+++⟩","out":{"kind":"Other","type":"Signature{5, 3, 0x0000000000000002, 0, 0, 1}","str":"⟨∞∅+++⟩","compact_str":"⟨∞∅+++⟩"}},
+    {"block":"signature displays","input":"Submanifold(S\"∞∅+++\")","display":"⟨∞∅111⟩","out":{"kind":"Space","type":"Submanifold{⟨∞∅+++⟩, 5, 0x000000000000001f}","str":"⟨∞∅111⟩","compact_str":"⟨∞∅111⟩"}},
+    {"block":"signature displays","input":"S\"∞+++\"","display":"⟨∞+++⟩","out":{"kind":"Other","type":"Signature{4, 1, 0x0000000000000000, 0, 0, 1}","str":"⟨∞+++⟩","compact_str":"⟨∞+++⟩"}},
+    {"block":"signature displays","input":"Submanifold(S\"∞+++\")","display":"⟨∞+++⟩","out":{"kind":"Space","type":"Submanifold{⟨∞+++⟩, 4, 0x000000000000000f}","str":"⟨∞+++⟩","compact_str":"⟨∞+++⟩"}},
+    {"block":"signature displays","input":"S\"+++\"","display":"⟨+++⟩","out":{"kind":"Other","type":"Signature{3, 0, 0x0000000000000000, 0, 0, 1}","str":"⟨+++⟩","compact_str":"⟨+++⟩"}},
+    {"block":"signature displays","input":"Submanifold(S\"+++\")","display":"⟨+++⟩","out":{"kind":"Space","type":"Submanifold{⟨+++⟩, 3, 0x0000000000000007}","str":"⟨+++⟩","compact_str":"⟨+++⟩"}},
+    {"block":"signature displays","input":"V\"+++\"","display":"⟨+++⟩","out":{"kind":"Other","type":"Signature{3, 0, 0x0000000000000000, 0, 0, 1}","str":"⟨+++⟩","compact_str":"⟨+++⟩"}},
+    {"block":"signature displays","input":"Submanifold(3)","display":"⟨111⟩","out":{"kind":"Space","type":"Submanifold{3, 3, 0x0000000000000007}","str":"⟨111⟩","compact_str":"⟨111⟩"}},
+    {"block":"signature displays","input":"ℝ^3","display":"⟨+++⟩","out":{"kind":"Other","type":"Signature{3, 0, 0x0000000000000000, 0, 0, 1}","str":"⟨+++⟩","compact_str":"⟨+++⟩"}},
+    {"block":"signature displays","input":"ℝ3","display":"⟨111⟩","out":{"kind":"Space","type":"Submanifold{3, 3, 0x0000000000000007}","str":"⟨111⟩","compact_str":"⟨111⟩"}},
+    {"block":"signature displays","input":"D\"1,1,1,0\"","display":"⟨1,1,1,0⟩","out":{"kind":"Other","type":"DiagonalForm{4, 0, 1, 0, 0, 1}","str":"⟨1,1,1,0⟩","compact_str":"⟨1,1,1,0⟩"}},
+    {"block":"signature displays","input":"D\"0.3,2.4,1\"","display":"⟨0.3,2.4,1.0⟩","out":{"kind":"Other","type":"DiagonalForm{3, 0, 2, 0, 0, 1}","str":"⟨0.3,2.4,1.0⟩","compact_str":"⟨0.3,2.4,1.0⟩"}},
+    {"block":"signature displays","input":"S\"∅+++\"","display":"⟨∅+++⟩","out":{"kind":"Other","type":"Signature{4, 2, 0x0000000000000001, 0, 0, 1}","str":"⟨∅+++⟩","compact_str":"⟨∅+++⟩"}},
+    {"block":"signature displays","input":"S\"-+++\"","display":"⟨-+++⟩","out":{"kind":"Other","type":"Signature{4, 0, 0x0000000000000001, 0, 0, 1}","str":"⟨-+++⟩","compact_str":"⟨-+++⟩"}},
+    {"block":"signature displays","input":"tangent(ℝ^3)","display":"T¹⟨+++₁⟩","out":{"kind":"Other","type":"Signature{4, 0, 0x0000000000000000, 1, 1, 1}","str":"T¹⟨+++₁⟩","compact_str":"T¹⟨+++₁⟩"}},
+    {"block":"signature displays","input":"tangent(ℝ^3,2,3)","display":"T²⟨+++₁₂₃⟩","out":{"kind":"Other","type":"Signature{6, 0, 0x0000000000000000, 3, 2, 1}","str":"T²⟨+++₁₂₃⟩","compact_str":"T²⟨+++₁₂₃⟩"}},
+    {"block":"signature displays","input":"(ℝ^3)'","display":"⟨---⟩'","out":{"kind":"Other","type":"Signature{3, 4, 0x0000000000000007, 0, 0, 1}","str":"⟨---⟩'","compact_str":"⟨---⟩'"}},
+    {"block":"signature displays","input":"ℝ^3⊕(ℝ^3)'","display":"⟨+++---⟩*","out":{"kind":"Other","type":"Signature{6, 8, 0x0000000000000038, 0, 0, 1}","str":"⟨+++---⟩*","compact_str":"⟨+++---⟩*"}},
+    {"block":"signature displays","input":"Submanifold(ℝ^3⊕(ℝ^3)')","display":"⟨+++---⟩*","out":{"kind":"Space","type":"Submanifold{⟨+++---⟩*, 6, 0x000000000000003f}","str":"⟨+++---⟩*","compact_str":"⟨+++---⟩*"}}
+  ],
+  "stats": {
+    "cases": 19,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

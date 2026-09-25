@@ -1,0 +1,31 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "58-dims",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/probe4.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"dims","input":"basis\"3\"","display":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","out":{"kind":"Other","type":"Tuple{Submanifold{3, 3, 0x0000000000000007}, One{⟨111⟩}, Submanifold{⟨111⟩, 1, 0x0000000000000001}, Submanifold{⟨111⟩, 1, 0x0000000000000002}, Submanifold{⟨111⟩, 1, 0x0000000000000004}, Submanifold{⟨111⟩, 2, 0x0000000000000003}, Submanifold{⟨111⟩, 2, 0x0000000000000005}, Submanifold{⟨111⟩, 2, 0x0000000000000006}, Submanifold{⟨111⟩, 3, 0x0000000000000007}}","str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","compact_str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)"}},
+    {"block":"dims","input":"A = Multivector{V}(1,2,3,4,5,6,7,8)","display":"1 + 2v₁ + 3v₂ + 4v₃ + 5v₁₂ + 6v₁₃ + 7v₂₃ + 8v₁₂₃","out":{"kind":"Multivector","T":"Int64","V":"⟨111⟩","dense":["1","2","3","4","5","6","7","8"],"str":"1 + 2v₁ + 3v₂ + 4v₃ + 5v₁₂ + 6v₁₃ + 7v₂₃ + 8v₁₂₃","compact_str":"1+2v₁+3v₂+4v₃+5v₁₂+6v₁₃+7v₂₃+8v₁₂₃"}},
+    {"block":"dims","input":"mdims(A)","display":"3","out":{"kind":"Number","T":"Int64","value":"3","str":"3","compact_str":"3"}},
+    {"block":"dims","input":"gdims(A,2)","out":{"kind":"Error","error":"MethodError","msg":"MethodError: Multivector{⟨111⟩, Int64, 8}(::Multivector{⟨111⟩, Int64, 8}) is ambiguous."},"defects":["gdims-multivector"]},
+    {"block":"dims","input":"tdims(A)","display":"8","out":{"kind":"Number","T":"Int64","value":"8","str":"8","compact_str":"8"}},
+    {"block":"dims","input":"gdims(3,2)","display":"3","out":{"kind":"Number","T":"Int64","value":"3","str":"3","compact_str":"3"}},
+    {"block":"dims","input":"tdims(V)","display":"8","out":{"kind":"Number","T":"Int64","value":"8","str":"8","compact_str":"8"}},
+    {"block":"dims","input":"Phasor(2.0, π/3)","display":"2.0 ∠ 1.0471975511965976","out":{"kind":"Phasor","T":"Float64","V":"⟨11⟩","amp":{"kind":"Number","T":"Float64","value":"2.0","str":"2.0"},"angle":{"kind":"Number","T":"Float64","value":"1.0471975511965976","str":"1.0471975511965976"},"str":"2.0 ∠ 1.0471975511965976","compact_str":"2.0∠1.0472"}},
+    {"block":"dims","input":"∠(1.0,v12)","display":"1.0 ∠ v₁₂","out":{"kind":"Phasor","T":"Float64","V":"⟨111⟩","amp":{"kind":"Number","T":"Float64","value":"1.0","str":"1.0"},"angle":{"kind":"Submanifold","T":"Int64","grade":2,"bits":3,"dense":["0","0","0","0","1","0","0","0"],"str":"v₁₂"},"str":"1.0 ∠ v₁₂","compact_str":"1.0∠v₁₂"}},
+    {"block":"dims","input":"complexify(Phasor(2.0,π/3))","display":"5.699307816452722","out":{"kind":"Number","T":"Float64","value":"5.699307816452722","str":"5.699307816452722","compact_str":"5.69931"}}
+  ],
+  "stats": {
+    "cases": 10,
+    "errors": 1,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {"gdims-multivector":1}
+  }
+}

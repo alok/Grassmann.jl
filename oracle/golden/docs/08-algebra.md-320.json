@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "08-algebra.md-320",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/algebra.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"algebra.md:320","input":"@basis 3","display":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","out":{"kind":"Other","type":"Tuple{Submanifold{3, 3, 0x0000000000000007}, One{⟨111⟩}, Submanifold{⟨111⟩, 1, 0x0000000000000001}, Submanifold{⟨111⟩, 1, 0x0000000000000002}, Submanifold{⟨111⟩, 1, 0x0000000000000004}, Submanifold{⟨111⟩, 2, 0x0000000000000003}, Submanifold{⟨111⟩, 2, 0x0000000000000005}, Submanifold{⟨111⟩, 2, 0x0000000000000006}, Submanifold{⟨111⟩, 3, 0x0000000000000007}}","str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","compact_str":"(⟨111⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)"}},
+    {"block":"algebra.md:320","input":"dump(v)","display":null,"stdout":"One{⟨111⟩} v\n"},
+    {"block":"algebra.md:320","input":"1 + v12 - v13","display":"1 + 1v₁₂ - 1v₁₃ + 0v₂₃","out":{"kind":"Spinor","T":"Int64","V":"⟨111⟩","dense":["1","0","0","0","1","-1","0","0"],"str":"1 + 1v₁₂ - 1v₁₃ + 0v₂₃","compact_str":"1+1v₁₂-1v₁₃+0v₂₃"}},
+    {"block":"algebra.md:320","input":"typeof(ans)","display":"Quaternion{⟨111⟩, Int64} (alias for Spinor{⟨111⟩, Int64, 4})","out":{"kind":"Other","type":"DataType","str":"Quaternion{⟨111⟩, Int64}","compact_str":"Quaternion{⟨111⟩, Int64}"}},
+    {"block":"algebra.md:335","input":"Chain{V,1}(Values(4,5,6))","display":"4v₁ + 5v₂ + 6v₃","out":{"kind":"Chain","T":"Int64","V":"⟨111⟩","grade":1,"dense":["0","4","5","6","0","0","0","0"],"str":"4v₁ + 5v₂ + 6v₃","compact_str":"4v₁+5v₂+6v₃"}},
+    {"block":"algebra.md:335","input":"Chain{V,1}(4,5,6)","display":"4v₁ + 5v₂ + 6v₃","out":{"kind":"Chain","T":"Int64","V":"⟨111⟩","grade":1,"dense":["0","4","5","6","0","0","0","0"],"str":"4v₁ + 5v₂ + 6v₃","compact_str":"4v₁+5v₂+6v₃"}},
+    {"block":"algebra.md:335","input":"value(Chain(4,5,6))","display":"3-element Values{3, Int64} with indices SOneTo(3):\n 4\n 5\n 6","out":{"kind":"Other","type":"Values{3, Int64}","str":"[4, 5, 6]","compact_str":"[4, 5, 6]"}},
+    {"block":"algebra.md:335","input":"wedge(Chain(1,2,3),Chain(4,5,6))","display":"-3v₁₂ - 6v₁₃ - 3v₂₃","out":{"kind":"Chain","T":"Int64","V":"⟨111⟩","grade":2,"dense":["0","0","0","0","-3","-6","-3","0"],"str":"-3v₁₂ - 6v₁₃ - 3v₂₃","compact_str":"-3v₁₂-6v₁₃-3v₂₃"}},
+    {"block":"algebra.md:335","input":"Spinor{V}(1,2,3,4)","display":"1 + 2v₁₂ + 3v₁₃ + 4v₂₃","out":{"kind":"Spinor","T":"Int64","V":"⟨111⟩","dense":["1","0","0","0","2","3","4","0"],"str":"1 + 2v₁₂ + 3v₁₃ + 4v₂₃","compact_str":"1+2v₁₂+3v₁₃+4v₂₃"}}
+  ],
+  "stats": {
+    "cases": 9,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

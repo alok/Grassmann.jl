@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "10-algebra.md-475",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/algebra.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"algebra.md:475","input":"complementright(Multivector(1,2,3,4,5,6,7,8))","display":"8 + 7v₁ - 6v₂ + 5v₃ + 4v₁₂ - 3v₁₃ + 2v₂₃ + 1v₁₂₃","out":{"kind":"Multivector","T":"Int64","V":"⟨111⟩","dense":["8","7","-6","5","4","-3","2","1"],"str":"8 + 7v₁ - 6v₂ + 5v₃ + 4v₁₂ - 3v₁₃ + 2v₂₃ + 1v₁₂₃","compact_str":"8+7v₁-6v₂+5v₃+4v₁₂-3v₁₃+2v₂₃+1v₁₂₃"}},
+    {"block":"algebra.md:475","input":"complementleft(Multivector(1,2,3,4,5,6,7,8))","display":"8 + 7v₁ - 6v₂ + 5v₃ + 4v₁₂ - 3v₁₃ + 2v₂₃ + 1v₁₂₃","out":{"kind":"Multivector","T":"Int64","V":"⟨111⟩","dense":["8","7","-6","5","4","-3","2","1"],"str":"8 + 7v₁ - 6v₂ + 5v₃ + 4v₁₂ - 3v₁₃ + 2v₂₃ + 1v₁₂₃","compact_str":"8+7v₁-6v₂+5v₃+4v₁₂-3v₁₃+2v₂₃+1v₁₂₃"}},
+    {"block":"algebra.md:475","input":"complementrighthodge(Multivector(1,2,3,4,5,6,7,8))","display":"8 + 7v₁ - 6v₂ + 5v₃ + 4v₁₂ - 3v₁₃ + 2v₂₃ + 1v₁₂₃","out":{"kind":"Multivector","T":"Int64","V":"⟨111⟩","dense":["8","7","-6","5","4","-3","2","1"],"str":"8 + 7v₁ - 6v₂ + 5v₃ + 4v₁₂ - 3v₁₃ + 2v₂₃ + 1v₁₂₃","compact_str":"8+7v₁-6v₂+5v₃+4v₁₂-3v₁₃+2v₂₃+1v₁₂₃"}},
+    {"block":"algebra.md:475","input":"complementlefthodge(Multivector(1,2,3,4,5,6,7,8))","display":"8 + 7v₁ - 6v₂ + 5v₃ + 4v₁₂ - 3v₁₃ + 2v₂₃ + 1v₁₂₃","out":{"kind":"Multivector","T":"Int64","V":"⟨111⟩","dense":["8","7","-6","5","4","-3","2","1"],"str":"8 + 7v₁ - 6v₂ + 5v₃ + 4v₁₂ - 3v₁₃ + 2v₂₃ + 1v₁₂₃","compact_str":"8+7v₁-6v₂+5v₃+4v₁₂-3v₁₃+2v₂₃+1v₁₂₃"}}
+  ],
+  "stats": {
+    "cases": 4,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

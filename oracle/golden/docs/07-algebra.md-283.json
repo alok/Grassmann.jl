@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "07-algebra.md-283",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/algebra.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"algebra.md:283","input":"V = Submanifold(4)","display":"⟨1111⟩","out":{"kind":"Space","type":"Submanifold{4, 4, 0x000000000000000f}","str":"⟨1111⟩","compact_str":"⟨1111⟩"}},
+    {"block":"algebra.md:283","input":"dump(V)","display":null,"stdout":"Submanifold{4, 4, 0x000000000000000f} ⟨1111⟩\n"},
+    {"block":"algebra.md:283","input":"G4 = collect(V)","display":"DirectSum.Basis{⟨1111⟩,16}(v, v₁, v₂, v₃, v₄, v₁₂, v₁₃, v₁₄, v₂₃, v₂₄, v₃₄, v₁₂₃, v₁₂₄, v₁₃₄, v₂₃₄, v₁₂₃₄)","out":{"kind":"Other","type":"DirectSum.Basis{⟨1111⟩, 16}","str":"DirectSum.Basis{⟨1111⟩,16}(v, v₁, v₂, v₃, v₄, v₁₂, v₁₃, v₁₄, v₂₃, v₂₄, v₃₄, v₁₂₃, v₁₂₄, v₁₃₄, v₂₃₄, v₁₂₃₄)","compact_str":"DirectSum.Basis{⟨1111⟩,16}(v, v₁, v₂, v₃, v₄, v₁₂, v₁₃, v₁₄, v₂₃, v₂₄, v₃₄, v₁₂₃, v₁₂₄, v₁₃₄, v₂₃₄, v₁₂₃₄)"}},
+    {"block":"algebra.md:283","input":"dump(G4.v12)","display":null,"stdout":"Submanifold{⟨1111⟩, 2, 0x0000000000000003} v₁₂\n"},
+    {"block":"algebra.md:283","input":"G4.v12 + 2G4.v14","display":"1v₁₂ + 0v₁₃ + 2v₁₄ + 0v₂₃ + 0v₂₄ + 0v₃₄","out":{"kind":"Chain","T":"Int64","V":"⟨1111⟩","grade":2,"dense":["0","0","0","0","0","1","0","2","0","0","0","0","0","0","0","0"],"str":"1v₁₂ + 0v₁₃ + 2v₁₄ + 0v₂₃ + 0v₂₄ + 0v₃₄","compact_str":"1v₁₂+0v₁₃+2v₁₄+0v₂₃+0v₂₄+0v₃₄"}},
+    {"block":"algebra.md:283","input":"typeof(G4.v12 + G4.v14)","display":"Chain{⟨1111⟩, 2, Int64, 6}","out":{"kind":"Other","type":"DataType","str":"Chain{⟨1111⟩, 2, Int64, 6}","compact_str":"Chain{⟨1111⟩, 2, Int64, 6}"}},
+    {"block":"algebra.md:309","input":"G42 = collect(V(1,4))","display":"DirectSum.Basis{⟨1__1⟩,4}(v, v₁, v₄, v₁₄)","out":{"kind":"Other","type":"DirectSum.Basis{⟨1__1⟩, 4}","str":"DirectSum.Basis{⟨1__1⟩,4}(v, v₁, v₄, v₁₄)","compact_str":"DirectSum.Basis{⟨1__1⟩,4}(v, v₁, v₄, v₁₄)"}},
+    {"block":"algebra.md:309","input":"sqrt(2) + G42.v14","display":"1.4142135623730951 + 1.0v₁₄","out":{"kind":"Couple","T":"Float64","V":"⟨1__1⟩","bits":3,"dense":["1.4142135623730951","0.0","0.0","1.0"],"str":"1.4142135623730951 + 1.0v₁₄","compact_str":"1.41421+1.0v₁₄"}},
+    {"block":"algebra.md:309","input":"typeof(ans)","display":"Couple{⟨1__1⟩, v₁₄, Float64}","out":{"kind":"Other","type":"DataType","str":"Couple{⟨1__1⟩, v₁₄, Float64}","compact_str":"Couple{⟨1__1⟩, v₁₄, Float64}"}}
+  ],
+  "stats": {
+    "cases": 9,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

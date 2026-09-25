@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "40-Leech-variant",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/probe1.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"Leech variant","input":"generator = [8 0 0 0; 4 4 0 0; 4 0 4 0; 2 2 2 2];","display":null,"out":{"kind":"Other","type":"Matrix{Int64}","str":"[8 0 0 0; 4 4 0 0; 4 0 4 0; 2 2 2 2]","compact_str":"[8 0 0 0; 4 4 0 0; 4 0 4 0; 2 2 2 2]"}},
+    {"block":"Leech variant","input":"W4 = ℝ^4⊕(ℝ^4)'","display":"⟨++++----⟩*","out":{"kind":"Other","type":"Signature{8, 8, 0x00000000000000f0, 0, 0, 1}","str":"⟨++++----⟩*","compact_str":"⟨++++----⟩*"}},
+    {"block":"Leech variant","input":"L = Chain{Submanifold(W4),2}(generator./sqrt(8))","out":{"kind":"Error","error":"MethodError","msg":"MethodError: Cannot `convert` an object of type Matrix{Float64} to an object of type Values{28, Chain{⟨1111⟩, 2}}"},"defects":["docs-dyadic-chain-ctor"]}
+  ],
+  "stats": {
+    "cases": 3,
+    "errors": 1,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {"docs-dyadic-chain-ctor":1}
+  }
+}

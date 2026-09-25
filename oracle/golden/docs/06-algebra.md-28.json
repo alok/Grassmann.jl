@@ -1,0 +1,26 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "06-algebra.md-28",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/algebra.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"algebra.md:28","input":"Values(1,2,3) + Values(2,3,4)","display":"3-element Values{3, Int64} with indices SOneTo(3):\n 3\n 5\n 7","out":{"kind":"Other","type":"Values{3, Int64}","str":"[3, 5, 7]","compact_str":"[3, 5, 7]"}},
+    {"block":"algebra.md:151","input":"Λ(ℝ^3)","display":"DirectSum.Basis{⟨+++⟩,8}(v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","out":{"kind":"Other","type":"DirectSum.Basis{⟨+++⟩, 8}","str":"DirectSum.Basis{⟨+++⟩,8}(v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","compact_str":"DirectSum.Basis{⟨+++⟩,8}(v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)"}},
+    {"block":"algebra.md:151","input":"Λ(tangent(ℝ^2))","display":"DirectSum.Basis{T¹⟨++₁⟩,8}(v, v₁, v₂, ∂₁, v₁₂, ∂₁v₁, ∂₁v₂, ∂₁v₁₂)","out":{"kind":"Other","type":"DirectSum.Basis{T¹⟨++₁⟩, 8}","str":"DirectSum.Basis{T¹⟨++₁⟩,8}(v, v₁, v₂, ∂₁, v₁₂, ∂₁v₁, ∂₁v₂, ∂₁v₁₂)","compact_str":"DirectSum.Basis{T¹⟨++₁⟩,8}(v, v₁, v₂, ∂₁, v₁₂, ∂₁v₁, ∂₁v₂, ∂₁v₁₂)"}},
+    {"block":"algebra.md:151","input":"Λ(tangent((ℝ^0)',3,3))","display":"DirectSum.Basis{T³⟨¹²³⟩',8}(w, ϵ₁, ϵ₂, ϵ₃, ϵ₁₂, ϵ₁₃, ϵ₂₃, ϵ₁₂₃)","out":{"kind":"Other","type":"DirectSum.Basis{T³⟨¹²³⟩', 8}","str":"DirectSum.Basis{T³⟨¹²³⟩',8}(w, ϵ₁, ϵ₂, ϵ₃, ϵ₁₂, ϵ₁₃, ϵ₂₃, ϵ₁₂₃)","compact_str":"DirectSum.Basis{T³⟨¹²³⟩',8}(w, ϵ₁, ϵ₂, ϵ₃, ϵ₁₂, ϵ₁₃, ϵ₂₃, ϵ₁₂₃)"}},
+    {"block":"algebra.md:170","input":"indices(Λ(3).v12)","display":"2-element Vector{Int64}:\n 1\n 2","out":{"kind":"Other","type":"Vector{Int64}","str":"[1, 2]","compact_str":"[1, 2]"}}
+  ],
+  "stats": {
+    "cases": 5,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

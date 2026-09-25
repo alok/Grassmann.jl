@@ -1,0 +1,28 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "products",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/products.jl"
+  },
+  "totals": {
+    "cases": 74536,
+    "errors": 1792,
+    "ref_mismatch": 2815,
+    "unexplained": 0,
+    "defects": {"chain0-times-mixed":408,"conformal-blade-complement":3456,"conformal-generated-sandwich":540,"contractn-typo":324,"pseudocouple-mul-diffB":2341,"subamnifold-typo":92,"tsandwich-mixed-parity-swap":392,"tsandwich-submanifold-chain-sign":72,"vee-pseudoscalar-couple":5036,"vee-scalar-couple-B-unbound":116,"zero-method-gaps":312}
+  },
+  "shards": [
+    {"shard":"E2","file":"products/E2.json","cases":4536,"bytes":621070,"errors":116,"ref_mismatch":153,"unexplained":0,"space":"E2"},
+    {"shard":"E3","file":"products/E3.json","cases":6776,"bytes":1117928,"errors":176,"ref_mismatch":245,"unexplained":0,"space":"E3"},
+    {"shard":"E4","file":"products/E4.json","cases":8064,"bytes":1764875,"errors":192,"ref_mismatch":250,"unexplained":0,"space":"E4"},
+    {"shard":"E5","file":"products/E5.json","cases":8064,"bytes":2441970,"errors":190,"ref_mismatch":275,"unexplained":0,"space":"E5"},
+    {"shard":"M4","file":"products/M4.json","cases":8064,"bytes":1747541,"errors":192,"ref_mismatch":250,"unexplained":0,"space":"M4"},
+    {"shard":"D3","file":"products/D3.json","cases":6776,"bytes":1121492,"errors":176,"ref_mismatch":245,"unexplained":0,"space":"D3"},
+    {"shard":"PGA3","file":"products/PGA3.json","cases":8064,"bytes":1724370,"errors":192,"ref_mismatch":232,"unexplained":0,"space":"PGA3"},
+    {"shard":"INF3","file":"products/INF3.json","cases":8064,"bytes":1763154,"errors":192,"ref_mismatch":250,"unexplained":0,"space":"INF3"},
+    {"shard":"CGA2","file":"products/CGA2.json","cases":8064,"bytes":1867696,"errors":182,"ref_mismatch":446,"unexplained":0,"space":"CGA2"},
+    {"shard":"CGA3","file":"products/CGA3.json","cases":8064,"bytes":2569483,"errors":184,"ref_mismatch":469,"unexplained":0,"space":"CGA3"}
+  ]
+}

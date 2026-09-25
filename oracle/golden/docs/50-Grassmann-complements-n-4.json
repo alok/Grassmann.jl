@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "50-Grassmann-complements-n-4",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/probe2.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"Grassmann complements n=4","input":"basis\"4\"","display":"(⟨1111⟩, v, v₁, v₂, v₃, v₄, v₁₂, v₁₃, v₁₄, v₂₃, v₂₄, v₃₄, v₁₂₃, v₁₂₄, v₁₃₄, v₂₃₄, v₁₂₃₄)","out":{"kind":"Other","type":"Tuple{Submanifold{4, 4, 0x000000000000000f}, One{⟨1111⟩}, Submanifold{⟨1111⟩, 1, 0x0000000000000001}, Submanifold{⟨1111⟩, 1, 0x0000000000000002}, Submanifold{⟨1111⟩, 1, 0x0000000000000004}, Submanifold{⟨1111⟩, 1, 0x0000000000000008}, Submanifold{⟨1111⟩, 2, 0x0000000000000003}, Submanifold{⟨1111⟩, 2, 0x0000000000000005}, Submanifold{⟨1111⟩, 2, 0x0000000000000009}, Submanifold{⟨1111⟩, 2, 0x0000000000000006}, Submanifold{⟨1111⟩, 2, 0x000000000000000a}, Submanifold{⟨1111⟩, 2, 0x000000000000000c}, Submanifold{⟨1111⟩, 3, 0x0000000000000007}, Submanifold{⟨1111⟩, 3, 0x000000000000000b}, Submanifold{⟨1111⟩, 3, 0x000000000000000d}, Submanifold{⟨1111⟩, 3, 0x000000000000000e}, Submanifold{⟨1111⟩, 4, 0x000000000000000f}}","str":"(⟨1111⟩, v, v₁, v₂, v₃, v₄, v₁₂, v₁₃, v₁₄, v₂₃, v₂₄, v₃₄, v₁₂₃, v₁₂₄, v₁₃₄, v₂₃₄, v₁₂₃₄)","compact_str":"(⟨1111⟩, v, v₁, v₂, v₃, v₄, v₁₂, v₁₃, v₁₄, v₂₃, v₂₄, v₃₄, v₁₂₃, v₁₂₄, v₁₃₄, v₂₃₄, v₁₂₃₄)"}},
+    {"block":"Grassmann complements n=4","input":"[!b for b in Λ(4).b]","display":"16-element FixedVector{16, Single{⟨1111⟩, _A, _B, Int64} where {_A, _B}, Vector{Single{⟨1111⟩, _A, _B, Int64} where {_A, _B}}} with indices SOneTo(16):\n 1v₁₂₃₄\n  1v₂₃₄\n -1v₁₃₄\n  1v₁₂₄\n -1v₁₂₃\n   1v₃₄\n  -1v₂₄\n   1v₂₃\n   1v₁₄\n  -1v₁₃\n   1v₁₂\n    1v₄\n   -1v₃\n    1v₂\n   -1v₁\n     1v","out":{"kind":"Other","type":"FixedVector{16, Single{⟨1111⟩, _A, _B, Int64} where {_A, _B}, Vector{Single{⟨1111⟩, _A, _B, Int64} where {_A, _B}}}","str":"Single{⟨1111⟩, _A, _B, Int64} where {_A, _B}[1v₁₂₃₄, 1v₂₃₄, -1v₁₃₄, 1v₁₂₄, -1v₁₂₃, 1v₃₄, -1v₂₄, 1v₂₃, 1v₁₄, -1v₁₃, 1v₁₂, 1v₄, -1v₃, 1v₂, -1v₁, 1v]","compact_str":"Single{⟨1111⟩, _A, _B, Int64} where {_A, _B}[1v₁₂₃₄, 1v₂₃₄, -1v₁₃₄, 1v₁₂₄, -1v₁₂₃, 1v₃₄, -1v₂₄, 1v₂₃, 1v₁₄, -1v₁₃, 1v₁₂, 1v₄, -1v₃, 1v₂, -1v₁, 1v]"}},
+    {"block":"Grassmann complements n=4","input":"[⋆b for b in Λ(4).b]","display":"16-element FixedVector{16, Single{⟨1111⟩, _A, _B, Int64} where {_A, _B}, Vector{Single{⟨1111⟩, _A, _B, Int64} where {_A, _B}}} with indices SOneTo(16):\n 1v₁₂₃₄\n  1v₂₃₄\n -1v₁₃₄\n  1v₁₂₄\n -1v₁₂₃\n   1v₃₄\n  -1v₂₄\n   1v₂₃\n   1v₁₄\n  -1v₁₃\n   1v₁₂\n    1v₄\n   -1v₃\n    1v₂\n   -1v₁\n     1v","out":{"kind":"Other","type":"FixedVector{16, Single{⟨1111⟩, _A, _B, Int64} where {_A, _B}, Vector{Single{⟨1111⟩, _A, _B, Int64} where {_A, _B}}}","str":"Single{⟨1111⟩, _A, _B, Int64} where {_A, _B}[1v₁₂₃₄, 1v₂₃₄, -1v₁₃₄, 1v₁₂₄, -1v₁₂₃, 1v₃₄, -1v₂₄, 1v₂₃, 1v₁₄, -1v₁₃, 1v₁₂, 1v₄, -1v₃, 1v₂, -1v₁, 1v]","compact_str":"Single{⟨1111⟩, _A, _B, Int64} where {_A, _B}[1v₁₂₃₄, 1v₂₃₄, -1v₁₃₄, 1v₁₂₄, -1v₁₂₃, 1v₃₄, -1v₂₄, 1v₂₃, 1v₁₄, -1v₁₃, 1v₁₂, 1v₄, -1v₃, 1v₂, -1v₁, 1v]"}},
+    {"block":"Grassmann complements n=4","input":"[complementleft(b) for b in Λ(4).b]","display":"16-element FixedVector{16, Single{⟨1111⟩, _A, _B, Int64} where {_A, _B}, Vector{Single{⟨1111⟩, _A, _B, Int64} where {_A, _B}}} with indices SOneTo(16):\n 1v₁₂₃₄\n -1v₂₃₄\n  1v₁₃₄\n -1v₁₂₄\n  1v₁₂₃\n   1v₃₄\n  -1v₂₄\n   1v₂₃\n   1v₁₄\n  -1v₁₃\n   1v₁₂\n   -1v₄\n    1v₃\n   -1v₂\n    1v₁\n     1v","out":{"kind":"Other","type":"FixedVector{16, Single{⟨1111⟩, _A, _B, Int64} where {_A, _B}, Vector{Single{⟨1111⟩, _A, _B, Int64} where {_A, _B}}}","str":"Single{⟨1111⟩, _A, _B, Int64} where {_A, _B}[1v₁₂₃₄, -1v₂₃₄, 1v₁₃₄, -1v₁₂₄, 1v₁₂₃, 1v₃₄, -1v₂₄, 1v₂₃, 1v₁₄, -1v₁₃, 1v₁₂, -1v₄, 1v₃, -1v₂, 1v₁, 1v]","compact_str":"Single{⟨1111⟩, _A, _B, Int64} where {_A, _B}[1v₁₂₃₄, -1v₂₃₄, 1v₁₃₄, -1v₁₂₄, 1v₁₂₃, 1v₃₄, -1v₂₄, 1v₂₃, 1v₁₄, -1v₁₃, 1v₁₂, -1v₄, 1v₃, -1v₂, 1v₁, 1v]"}}
+  ],
+  "stats": {
+    "cases": 4,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

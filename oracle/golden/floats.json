@@ -1,0 +1,19 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "floats",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/floats.jl"
+  },
+  "totals": {
+    "cases": 20394,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  },
+  "shards": [
+    {"shard":"all","file":"floats/all.json","cases":20394,"bytes":1987203,"errors":0,"ref_mismatch":0,"unexplained":0}
+  ]
+}

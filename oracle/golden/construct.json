@@ -1,0 +1,36 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "construct",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/construct.jl"
+  },
+  "totals": {
+    "cases": 1222,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  },
+  "shards": [
+    {"shard":"E2","file":"construct/E2.json","cases":42,"bytes":11590,"errors":0,"ref_mismatch":0,"unexplained":0,"space":"E2"},
+    {"shard":"E3","file":"construct/E3.json","cases":94,"bytes":31871,"errors":0,"ref_mismatch":0,"unexplained":0,"space":"E3"},
+    {"shard":"E4","file":"construct/E4.json","cases":63,"bytes":24118,"errors":0,"ref_mismatch":0,"unexplained":0,"space":"E4"},
+    {"shard":"E5","file":"construct/E5.json","cases":82,"bytes":41144,"errors":0,"ref_mismatch":0,"unexplained":0,"space":"E5"},
+    {"shard":"I4","file":"construct/I4.json","cases":63,"bytes":24010,"errors":0,"ref_mismatch":0,"unexplained":0,"space":"I4"},
+    {"shard":"M4","file":"construct/M4.json","cases":105,"bytes":44266,"errors":0,"ref_mismatch":0,"unexplained":0,"space":"M4"},
+    {"shard":"S4","file":"construct/S4.json","cases":63,"bytes":24104,"errors":0,"ref_mismatch":0,"unexplained":0,"space":"S4"},
+    {"shard":"D3","file":"construct/D3.json","cases":52,"bytes":16409,"errors":0,"ref_mismatch":0,"unexplained":0,"space":"D3"},
+    {"shard":"PGA2","file":"construct/PGA2.json","cases":52,"bytes":16373,"errors":0,"ref_mismatch":0,"unexplained":0,"space":"PGA2"},
+    {"shard":"PGA3","file":"construct/PGA3.json","cases":63,"bytes":24358,"errors":0,"ref_mismatch":0,"unexplained":0,"space":"PGA3"},
+    {"shard":"INF3","file":"construct/INF3.json","cases":63,"bytes":24199,"errors":0,"ref_mismatch":0,"unexplained":0,"space":"INF3"},
+    {"shard":"ORG3","file":"construct/ORG3.json","cases":63,"bytes":24249,"errors":0,"ref_mismatch":0,"unexplained":0,"space":"ORG3"},
+    {"shard":"CGA2","file":"construct/CGA2.json","cases":105,"bytes":44552,"errors":0,"ref_mismatch":0,"unexplained":0,"space":"CGA2"},
+    {"shard":"CGA3","file":"construct/CGA3.json","cases":82,"bytes":41603,"errors":0,"ref_mismatch":0,"unexplained":0,"space":"CGA3"},
+    {"shard":"DUAL3","file":"construct/DUAL3.json","cases":52,"bytes":15966,"errors":0,"ref_mismatch":0,"unexplained":0,"space":"DUAL3"},
+    {"shard":"DYAD2","file":"construct/DYAD2.json","cases":63,"bytes":24028,"errors":0,"ref_mismatch":0,"unexplained":0,"space":"DYAD2"},
+    {"shard":"TAN2","file":"construct/TAN2.json","cases":52,"bytes":16855,"errors":0,"ref_mismatch":0,"unexplained":0,"space":"TAN2"},
+    {"shard":"TAN22","file":"construct/TAN22.json","cases":63,"bytes":25271,"errors":0,"ref_mismatch":0,"unexplained":0,"space":"TAN22"}
+  ]
+}

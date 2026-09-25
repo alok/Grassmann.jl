@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "38-hyperplanes-2D-4D",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/probe1.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"hyperplanes 2D/4D","input":"hyperplanes(ℝ^2)","display":"2-element Vector{Single{⟨++⟩, 1, B, Int64} where B}:\n -1v₂\n  1v₁","out":{"kind":"Other","type":"Vector{Single{⟨++⟩, 1, B, Int64} where B}","str":"Single{⟨++⟩, 1, B, Int64} where B[-1v₂, 1v₁]","compact_str":"Single{⟨++⟩, 1, B, Int64} where B[-1v₂, 1v₁]"}},
+    {"block":"hyperplanes 2D/4D","input":"hyperplanes(ℝ^4)","display":"4-element Vector{Single{⟨++++⟩, 3, B, Int64} where B}:\n -1v₂₃₄\n  1v₁₃₄\n -1v₁₂₄\n  1v₁₂₃","out":{"kind":"Other","type":"Vector{Single{⟨++++⟩, 3, B, Int64} where B}","str":"Single{⟨++++⟩, 3, B, Int64} where B[-1v₂₃₄, 1v₁₃₄, -1v₁₂₄, 1v₁₂₃]","compact_str":"Single{⟨++++⟩, 3, B, Int64} where B[-1v₂₃₄, 1v₁₃₄, -1v₁₂₄, 1v₁₂₃]"}}
+  ],
+  "stats": {
+    "cases": 2,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

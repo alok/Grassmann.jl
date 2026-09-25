@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "13-algebra.md-535",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/algebra.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"algebra.md:535","input":"Chain(1,2,3)*Chain(4,5,6)","display":"32 - 3v₁₂ - 6v₁₃ - 3v₂₃","out":{"kind":"Spinor","T":"Int64","V":"⟨111⟩","dense":["32","0","0","0","-3","-6","-3","0"],"str":"32 - 3v₁₂ - 6v₁₃ - 3v₂₃","compact_str":"32-3v₁₂-6v₁₃-3v₂₃"}}
+  ],
+  "stats": {
+    "cases": 1,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

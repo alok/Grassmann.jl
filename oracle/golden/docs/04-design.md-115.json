@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "04-design.md-115",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/readme_design.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"design.md:115","input":"Λ(7) ⊕ Λ(7)'","display":"DirectSum.SparseBasis{⟨+++++++-------⟩*,16384}(v, ..., v₁₂₃₄₅₆₇w¹²³⁴⁵⁶⁷)","out":{"kind":"Other","type":"DirectSum.SparseBasis{⟨+++++++-------⟩*}","str":"DirectSum.SparseBasis{⟨+++++++-------⟩*,16384}(v, ..., v₁₂₃₄₅₆₇w¹²³⁴⁵⁶⁷)","compact_str":"DirectSum.SparseBasis{⟨+++++++-------⟩*,16384}(v, ..., v₁₂₃₄₅₆₇w¹²³⁴⁵⁶⁷)"}},
+    {"block":"design.md:125","input":"Λ(62)","display":"DirectSum.ExtendedBasis{⟨11111111111111111111111111111111111111111111111111111111111111⟩,4611686018427387904}(v, ..., v₁₂₃₄₅₆₇₈₉₀abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ)","out":{"kind":"Other","type":"DirectSum.ExtendedBasis{⟨11111111111111111111111111111111111111111111111111111111111111⟩}","str":"DirectSum.ExtendedBasis{⟨11111111111111111111111111111111111111111111111111111111111111⟩,4611686018427387904}(v, ..., v₁₂₃₄₅₆₇₈₉₀abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ)","compact_str":"DirectSum.ExtendedBasis{⟨11111111111111111111111111111111111111111111111111111111111111⟩,4611686018427387904}(v, ..., v₁₂₃₄₅₆₇₈₉₀abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ)"}},
+    {"block":"design.md:125","input":"Λ(62).v32a87Ng","display":"-1v₂₃₇₈agN","out":{"kind":"Single","T":"Int64","V":"⟨11111111111111111111111111111111111111111111111111111111111111⟩","grade":7,"bits":562949953488070,"terms":[[562949953488070,"-1"]],"str":"-1v₂₃₇₈agN","compact_str":"-1v₂₃₇₈agN"}},
+    {"block":"design.md:131","input":"DirectSum.printindices(stdout,DirectSum.indices(UInt(2^62-1)))","display":null,"stdout":"v₁₂₃₄₅₆₇₈₉₀abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"}
+  ],
+  "stats": {
+    "cases": 4,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

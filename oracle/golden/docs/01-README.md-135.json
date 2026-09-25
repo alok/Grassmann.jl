@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "01-README.md-135",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/readme_design.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"README.md:135","input":"@basis S\"-++\"","display":"(⟨-++⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","out":{"kind":"Other","type":"Tuple{Submanifold{⟨-++⟩, 3, 0x0000000000000007}, One{⟨-++⟩}, Submanifold{⟨-++⟩, 1, 0x0000000000000001}, Submanifold{⟨-++⟩, 1, 0x0000000000000002}, Submanifold{⟨-++⟩, 1, 0x0000000000000004}, Submanifold{⟨-++⟩, 2, 0x0000000000000003}, Submanifold{⟨-++⟩, 2, 0x0000000000000005}, Submanifold{⟨-++⟩, 2, 0x0000000000000006}, Submanifold{⟨-++⟩, 3, 0x0000000000000007}}","str":"(⟨-++⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","compact_str":"(⟨-++⟩, v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)"}},
+    {"block":"README.md:147","input":"DirectSum.Basis(V)","display":"DirectSum.Basis{⟨-++⟩,8}(v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","out":{"kind":"Other","type":"DirectSum.Basis{⟨-++⟩, 8}","str":"DirectSum.Basis{⟨-++⟩,8}(v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)","compact_str":"DirectSum.Basis{⟨-++⟩,8}(v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃)"}}
+  ],
+  "stats": {
+    "cases": 2,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

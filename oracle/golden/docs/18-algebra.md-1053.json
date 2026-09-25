@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "18-algebra.md-1053",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/algebra.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"algebra.md:1053","input":"[1 2; 3 4]\\[5,6]","display":"2-element Vector{Float64}:\n -3.9999999999999987\n  4.499999999999999","out":{"kind":"Other","type":"Vector{Float64}","str":"[-3.9999999999999987, 4.499999999999999]","compact_str":"[-4.0, 4.5]"}},
+    {"block":"algebra.md:1053","input":"@TensorOperator([1 2; 3 4])\\Chain(5,6)","display":"-4.0v₁ + 4.5v₂","out":{"kind":"Chain","T":"Float64","V":"⟨11⟩","grade":1,"dense":["0.0","-4.0","4.5","0.0"],"str":"-4.0v₁ + 4.5v₂","compact_str":"-4.0v₁+4.5v₂"}}
+  ],
+  "stats": {
+    "cases": 2,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "26-algebra.md-1397-Reduce-free-variant",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/algebra.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"algebra.md:1397 (Reduce-free variant)","input":"@mixedbasis tangent(ℝ^1)","display":"(T¹⟨+-₁²⟩*, v, v₁, w¹, ∂₁, ϵ₁, v₁w¹, ∂₁v₁, ϵ¹v₁, ∂₁w¹, ϵ₁w₁, ∂₁ϵ¹, ∂₁v₁w¹, ϵ¹v₁w¹, ∂₁ϵ¹v₁, ∂₁ϵ¹w¹, ∂₁ϵ¹v₁w¹)","out":{"kind":"Other","type":"Tuple{Submanifold{T¹⟨+-₁¹⟩*, 4, 0x000000000000000f}, One{T¹⟨+₁⟩}, Submanifold{T¹⟨+₁⟩, 1, 0x0000000000000001}, Submanifold{T¹⟨-¹⟩', 1, 0x0000000000000001}, Submanifold{T¹⟨+₁⟩, 1, 0x0000000000000002}, Submanifold{T¹⟨-¹⟩', 1, 0x0000000000000002}, Submanifold{T¹⟨+-₁²⟩*, 2, 0x0000000000000003}, Submanifold{T¹⟨+₁⟩, 2, 0x0000000000000003}, Submanifold{T¹⟨+-₁²⟩*, 2, 0x0000000000000009}, Submanifold{T¹⟨+-₁²⟩*, 2, 0x0000000000000006}, Submanifold{T¹⟨-¹⟩', 2, 0x0000000000000003}, Submanifold{T¹⟨+-₁²⟩*, 2, 0x000000000000000c}, Submanifold{T¹⟨+-₁²⟩*, 3, 0x0000000000000007}, Submanifold{T¹⟨+-₁²⟩*, 3, 0x000000000000000b}, Submanifold{T¹⟨+-₁²⟩*, 3, 0x000000000000000d}, Submanifold{T¹⟨+-₁²⟩*, 3, 0x000000000000000e}, Submanifold{T¹⟨+-₁²⟩*, 4, 0x000000000000000f}}","str":"(T¹⟨+-₁²⟩*, v, v₁, w¹, ∂₁, ϵ₁, v₁w¹, ∂₁v₁, ϵ¹v₁, ∂₁w¹, ϵ₁w₁, ∂₁ϵ¹, ∂₁v₁w¹, ϵ¹v₁w¹, ∂₁ϵ¹v₁, ∂₁ϵ¹w¹, ∂₁ϵ¹v₁w¹)","compact_str":"(T¹⟨+-₁²⟩*, v, v₁, w¹, ∂₁, ϵ₁, v₁w¹, ∂₁v₁, ϵ¹v₁, ∂₁w¹, ϵ₁w₁, ∂₁ϵ¹, ∂₁v₁w¹, ϵ¹v₁w¹, ∂₁ϵ¹v₁, ∂₁ϵ¹w¹, ∂₁ϵ¹v₁w¹)"}}
+  ],
+  "stats": {
+    "cases": 1,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

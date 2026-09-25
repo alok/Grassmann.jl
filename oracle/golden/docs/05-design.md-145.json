@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "05-design.md-145",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/readme_design.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"design.md:145","input":"V = ℝ^22","display":"⟨++++++++++++++++++++++⟩","out":{"kind":"Other","type":"Signature{22, 0, 0x0000000000000000, 0, 0, 1}","str":"⟨++++++++++++++++++++++⟩","compact_str":"⟨++++++++++++++++++++++⟩"}},
+    {"block":"design.md:145","input":"Λ(V+V')","display":"DirectSum.ExtendedBasis{⟨++++++++++++++++++++++----------------------⟩*,17592186044416}(v, ..., v₁₂₃₄₅₆₇₈₉₀abcdefghijklw¹²³⁴⁵⁶⁷⁸⁹⁰ABCDEFGHIJKL)","out":{"kind":"Other","type":"DirectSum.ExtendedBasis{⟨++++++++++++++++++++++----------------------⟩*}","str":"DirectSum.ExtendedBasis{⟨++++++++++++++++++++++----------------------⟩*,17592186044416}(v, ..., v₁₂₃₄₅₆₇₈₉₀abcdefghijklw¹²³⁴⁵⁶⁷⁸⁹⁰ABCDEFGHIJKL)","compact_str":"DirectSum.ExtendedBasis{⟨++++++++++++++++++++++----------------------⟩*,17592186044416}(v, ..., v₁₂₃₄₅₆₇₈₉₀abcdefghijklw¹²³⁴⁵⁶⁷⁸⁹⁰ABCDEFGHIJKL)"}},
+    {"block":"extra: design.md:137 (Λ(22) heavy)","input":"Λ(22)","display":"DirectSum.SparseBasis{⟨1111111111111111111111⟩,4194304}(v, ..., v₁₂₃₄₅₆₇₈₉₀abcdefghijkl)","out":{"kind":"Other","type":"DirectSum.SparseBasis{⟨1111111111111111111111⟩}","str":"DirectSum.SparseBasis{⟨1111111111111111111111⟩,4194304}(v, ..., v₁₂₃₄₅₆₇₈₉₀abcdefghijkl)","compact_str":"DirectSum.SparseBasis{⟨1111111111111111111111⟩,4194304}(v, ..., v₁₂₃₄₅₆₇₈₉₀abcdefghijkl)"}}
+  ],
+  "stats": {
+    "cases": 3,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

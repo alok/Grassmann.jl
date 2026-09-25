@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "44-generictests-basis",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/probe1.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"generictests basis","input":"Λ(S\"∞+\").b","display":"4-element Values{4, Submanifold{⟨∞+⟩}} with indices SOneTo(4):\n   v\n  v∞\n  v₁\n v∞₁","out":{"kind":"Other","type":"Values{4, Submanifold{⟨∞+⟩}}","str":"Submanifold{⟨∞+⟩}[v, v∞, v₁, v∞₁]","compact_str":"Submanifold{⟨∞+⟩}[v, v∞, v₁, v∞₁]"}},
+    {"block":"generictests basis","input":"Λ(S\"∞∅+\").b","display":"8-element Values{8, Submanifold{⟨∞∅1⟩}} with indices SOneTo(8):\n    v\n   v∞\n   v∅\n   v₁\n  v∞∅\n  v∞₁\n  v∅₁\n v∞∅₁","out":{"kind":"Other","type":"Values{8, Submanifold{⟨∞∅1⟩}}","str":"Submanifold{⟨∞∅1⟩}[v, v∞, v∅, v₁, v∞∅, v∞₁, v∅₁, v∞∅₁]","compact_str":"Submanifold{⟨∞∅1⟩}[v, v∞, v∅, v₁, v∞∅, v∞₁, v∅₁, v∞∅₁]"}},
+    {"block":"generictests basis","input":"mdims(S\"∞∅+\")","display":"3","out":{"kind":"Number","T":"Int64","value":"3","str":"3","compact_str":"3"}}
+  ],
+  "stats": {
+    "cases": 3,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

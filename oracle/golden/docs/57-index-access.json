@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "57-index-access",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/probe3.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"Λ index access","input":"Λ(3).v21, Λ(3).v32, Λ(3).v13, Λ(3).v321","display":"(-1v₁₂, -1v₂₃, v₁₃, -1v₁₂₃)","out":{"kind":"Other","type":"Tuple{Single{⟨111⟩, 2, v₁₂, Int64}, Single{⟨111⟩, 2, v₂₃, Int64}, Submanifold{⟨111⟩, 2, 0x0000000000000005}, Single{⟨111⟩, 3, v₁₂₃, Int64}}","str":"(-1v₁₂, -1v₂₃, v₁₃, -1v₁₂₃)","compact_str":"(-1v₁₂, -1v₂₃, v₁₃, -1v₁₂₃)"}},
+    {"block":"Λ index access","input":"Λ(4).v4321","display":"v₁₂₃₄","out":{"kind":"Submanifold","T":"Int64","V":"⟨1111⟩","grade":4,"bits":15,"dense":["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","1"],"str":"v₁₂₃₄","compact_str":"v₁₂₃₄"}},
+    {"block":"Λ index access","input":"Λ(3).b","display":"8-element Values{8, Submanifold{⟨111⟩}} with indices SOneTo(8):\n    v\n   v₁\n   v₂\n   v₃\n  v₁₂\n  v₁₃\n  v₂₃\n v₁₂₃","out":{"kind":"Other","type":"Values{8, Submanifold{⟨111⟩}}","str":"Submanifold{⟨111⟩}[v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃]","compact_str":"Submanifold{⟨111⟩}[v, v₁, v₂, v₃, v₁₂, v₁₃, v₂₃, v₁₂₃]"}},
+    {"block":"Λ index access","input":"Λ(3)[3]","display":"v₂","out":{"kind":"Submanifold","T":"Int64","V":"⟨111⟩","grade":1,"bits":2,"dense":["0","0","1","0","0","0","0","0"],"str":"v₂","compact_str":"v₂"}}
+  ],
+  "stats": {
+    "cases": 4,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "43-orb",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/probe1.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"orb","input":"@basis S\"∞+++\"","display":"(⟨∞+++⟩, v, v∞, v₁, v₂, v₃, v∞₁, v∞₂, v∞₃, v₁₂, v₁₃, v₂₃, v∞₁₂, v∞₁₃, v∞₂₃, v₁₂₃, v∞₁₂₃)","out":{"kind":"Other","type":"Tuple{Submanifold{⟨∞+++⟩, 4, 0x000000000000000f}, One{⟨∞+++⟩}, Submanifold{⟨∞+++⟩, 1, 0x0000000000000001}, Submanifold{⟨∞+++⟩, 1, 0x0000000000000002}, Submanifold{⟨∞+++⟩, 1, 0x0000000000000004}, Submanifold{⟨∞+++⟩, 1, 0x0000000000000008}, Submanifold{⟨∞+++⟩, 2, 0x0000000000000003}, Submanifold{⟨∞+++⟩, 2, 0x0000000000000005}, Submanifold{⟨∞+++⟩, 2, 0x0000000000000009}, Submanifold{⟨∞+++⟩, 2, 0x0000000000000006}, Submanifold{⟨∞+++⟩, 2, 0x000000000000000a}, Submanifold{⟨∞+++⟩, 2, 0x000000000000000c}, Submanifold{⟨∞+++⟩, 3, 0x0000000000000007}, Submanifold{⟨∞+++⟩, 3, 0x000000000000000b}, Submanifold{⟨∞+++⟩, 3, 0x000000000000000d}, Submanifold{⟨∞+++⟩, 3, 0x000000000000000e}, Submanifold{⟨∞+++⟩, 4, 0x000000000000000f}}","str":"(⟨∞+++⟩, v, v∞, v₁, v₂, v₃, v∞₁, v∞₂, v∞₃, v₁₂, v₁₃, v₂₃, v∞₁₂, v∞₁₃, v∞₂₃, v₁₂₃, v∞₁₂₃)","compact_str":"(⟨∞+++⟩, v, v∞, v₁, v₂, v₃, v∞₁, v∞₂, v∞₃, v₁₂, v₁₃, v₂₃, v∞₁₂, v∞₁₃, v∞₂₃, v₁₂₃, v∞₁₂₃)"}},
+    {"block":"orb","input":"t = exp((π/4)*(v12+v∞3))","display":"0.5 + 0.0v∞₁ + 0.0v∞₂ + 0.5v∞₃ + 0.5v₁₂ + 0.0v₁₃ + 0.0v₂₃ + 0.5v∞₁₂₃","out":{"kind":"Spinor","T":"Float64","V":"⟨∞+++⟩","dense":["0.4999999999674333","0.0","0.0","0.0","0.0","0.0","0.0","0.5000000003313901","0.5000000003313901","0.0","0.0","0.0","0.0","0.0","0.0","0.5000000000325667"],"str":"0.5 + 0.0v∞₁ + 0.0v∞₂ + 0.5v∞₃ + 0.5v₁₂ + 0.0v₁₃ + 0.0v₂₃ + 0.5v∞₁₂₃","compact_str":"0.5+0.0v∞₁+0.0v∞₂+0.5v∞₃+0.5v₁₂+0.0v₁₃+0.0v₂₃+0.5v∞₁₂₃"}},
+    {"block":"orb","input":"K = chainfield(t, V(2,3,4))","display":"#chainfield##0 (generic function with 1 method)","out":{"kind":"Other","type":"Grassmann.var\"#chainfield##0#chainfield##1\"{Spinor{⟨∞+++⟩, Float64, 8}, Submanifold{⟨∞+++⟩, 3, 0x000000000000000e}}","str":"Grassmann.var\"#chainfield##0#chainfield##1\"{Spinor{⟨∞+++⟩, Float64, 8}, Submanifold{⟨∞+++⟩, 3, 0x000000000000000e}}(0.5 + 0.0v∞₁ + 0.0v∞₂ + 0.5v∞₃ + 0.5v₁₂ + 0.0v₁₃ + 0.0v₂₃ + 0.5v∞₁₂₃, ⟨_+++⟩)","compact_str":"#chainfield##0"}},
+    {"block":"orb","input":"K(Chain{V(2,3,4),1}(0.5,0.5,0.5))","display":"-0.363636v₁ + 0.363636v₂ - 0.0909091v₃","out":{"kind":"Chain","T":"Float64","V":"⟨_+++⟩","grade":1,"dense":["0.0","-0.3636363638155723","0.3636363637682026","-0.09090909097165675","0.0","0.0","0.0","0.0"],"str":"-0.363636v₁ + 0.363636v₂ - 0.0909091v₃","compact_str":"-0.363636v₁+0.363636v₂-0.0909091v₃"}}
+  ],
+  "stats": {
+    "cases": 4,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

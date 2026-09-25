@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "21-algebra.md-1116",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/algebra.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"algebra.md:1116","input":"@basis tangent(ℝ^3,2,3); ⋆d(v1+v2+v3)","display":"0 - 1∂₂v₁ + 1∂₃v₁ + 1∂₁v₂ - 1∂₃v₂ - 1∂₁v₃ + 1∂₂v₃","out":{"kind":"Multivector","T":"Any","V":"T²⟨+++₁₂₃⟩","dense":["0","0","0","0","0","0","0","0","0","0","-1","1","0","1","0","-1","-1","1","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],"str":"0 - 1∂₂v₁ + 1∂₃v₁ + 1∂₁v₂ - 1∂₃v₂ - 1∂₁v₃ + 1∂₂v₃","compact_str":"0-1∂₂v₁+1∂₃v₁+1∂₁v₂-1∂₃v₂-1∂₁v₃+1∂₂v₃"}}
+  ],
+  "stats": {
+    "cases": 1,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}

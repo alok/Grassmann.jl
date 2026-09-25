@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "schema": 1,
+    "suite": "docs",
+    "shard": "42-chainfield-vectorfield-without-GeometryBasics",
+    "julia": "1.13.0",
+    "packages": {"Grassmann":"0.8.46","AbstractTensors":"0.8.11","DirectSum":"0.8.21","Leibniz":"0.3.0","StaticVectors":"1.0.9"},
+    "generator": "oracle/suites/docs.jl",
+    "source": "oracle/docs/probe1.txt"
+  },
+  "sandbox": "using Grassmann; import DirectSum, LinearAlgebra",
+  "cases": [
+    {"block":"chainfield (vectorfield without GeometryBasics)","input":"basis\"2\"","display":"(⟨11⟩, v, v₁, v₂, v₁₂)","out":{"kind":"Other","type":"Tuple{Submanifold{2, 2, 0x0000000000000003}, One{⟨11⟩}, Submanifold{⟨11⟩, 1, 0x0000000000000001}, Submanifold{⟨11⟩, 1, 0x0000000000000002}, Submanifold{⟨11⟩, 2, 0x0000000000000003}}","str":"(⟨11⟩, v, v₁, v₂, v₁₂)","compact_str":"(⟨11⟩, v, v₁, v₂, v₁₂)"}},
+    {"block":"chainfield (vectorfield without GeometryBasics)","input":"F = chainfield(exp(π*v12/2))","display":"#chainfield##0 (generic function with 1 method)","out":{"kind":"Other","type":"Grassmann.var\"#chainfield##0#chainfield##1\"{Couple{⟨11⟩, v₁₂, Float64}, Submanifold{2, 2, 0x0000000000000003}}","str":"Grassmann.var\"#chainfield##0#chainfield##1\"{Couple{⟨11⟩, v₁₂, Float64}, Submanifold{2, 2, 0x0000000000000003}}(6.123233995736766e-17 + 1.0v₁₂, ⟨11⟩)","compact_str":"#chainfield##0"}},
+    {"block":"chainfield (vectorfield without GeometryBasics)","input":"F(Chain{V,1}(1.0,0.0))","display":"-1.0v₁ + 1.22465e-16v₂","out":{"kind":"Chain","T":"Float64","V":"⟨11⟩","grade":1,"dense":["0.0","-1.0","1.2246467991473532e-16","0.0"],"str":"-1.0v₁ + 1.22465e-16v₂","compact_str":"-1.0v₁+1.22465e-16v₂"}},
+    {"block":"chainfield (vectorfield without GeometryBasics)","input":"F(Chain{V,1}(0.5,-0.25))","display":"-0.5v₁ + 0.25v₂","out":{"kind":"Chain","T":"Float64","V":"⟨11⟩","grade":1,"dense":["0.0","-0.5","0.2500000000000001","0.0"],"str":"-0.5v₁ + 0.25v₂","compact_str":"-0.5v₁+0.25v₂"}},
+    {"block":"chainfield (vectorfield without GeometryBasics)","input":"G = chainfield(exp((π/4)*v12/2))","display":"#chainfield##0 (generic function with 1 method)","out":{"kind":"Other","type":"Grassmann.var\"#chainfield##0#chainfield##1\"{Couple{⟨11⟩, v₁₂, Float64}, Submanifold{2, 2, 0x0000000000000003}}","str":"Grassmann.var\"#chainfield##0#chainfield##1\"{Couple{⟨11⟩, v₁₂, Float64}, Submanifold{2, 2, 0x0000000000000003}}(0.9238795325112867 + 0.3826834323650898v₁₂, ⟨11⟩)","compact_str":"#chainfield##0"}},
+    {"block":"chainfield (vectorfield without GeometryBasics)","input":"G(Chain{V,1}(1.0,0.0))","display":"0.707107v₁ + 0.707107v₂","out":{"kind":"Chain","T":"Float64","V":"⟨11⟩","grade":1,"dense":["0.0","0.7071067811865475","0.7071067811865476","0.0"],"str":"0.707107v₁ + 0.707107v₂","compact_str":"0.707107v₁+0.707107v₂"}},
+    {"block":"chainfield (vectorfield without GeometryBasics)","input":"@basis S\"+-\"","display":"(⟨+-⟩, v, v₁, v₂, v₁₂)","out":{"kind":"Other","type":"Tuple{Submanifold{⟨+-⟩, 2, 0x0000000000000003}, One{⟨+-⟩}, Submanifold{⟨+-⟩, 1, 0x0000000000000001}, Submanifold{⟨+-⟩, 1, 0x0000000000000002}, Submanifold{⟨+-⟩, 2, 0x0000000000000003}}","str":"(⟨+-⟩, v, v₁, v₂, v₁₂)","compact_str":"(⟨+-⟩, v, v₁, v₂, v₁₂)"}},
+    {"block":"chainfield (vectorfield without GeometryBasics)","input":"H = chainfield(exp((π/8)*v12/2))","display":"#chainfield##0 (generic function with 1 method)","out":{"kind":"Other","type":"Grassmann.var\"#chainfield##0#chainfield##1\"{Couple{⟨+-⟩, v₁₂, Float64}, Submanifold{⟨+-⟩, 2, 0x0000000000000003}}","str":"Grassmann.var\"#chainfield##0#chainfield##1\"{Couple{⟨+-⟩, v₁₂, Float64}, Submanifold{⟨+-⟩, 2, 0x0000000000000003}}(1.0193385817707588 + 0.19761362373688154v₁₂, ⟨+-⟩)","compact_str":"#chainfield##0"}},
+    {"block":"chainfield (vectorfield without GeometryBasics)","input":"H(Chain{V,1}(1.0,0.5))","display":"1.27954v₁ + 0.941922v₂","out":{"kind":"Chain","T":"Float64","V":"⟨+-⟩","grade":1,"dense":["0.0","1.279537479531377","0.9419215262034881","0.0"],"str":"1.27954v₁ + 0.941922v₂","compact_str":"1.27954v₁+0.941922v₂"}}
+  ],
+  "stats": {
+    "cases": 9,
+    "errors": 0,
+    "ref_mismatch": 0,
+    "unexplained": 0,
+    "defects": {}
+  }
+}
