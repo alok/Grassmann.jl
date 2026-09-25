@@ -100,8 +100,9 @@ def run (smoke : Bool := false) : IO Unit := do
   report "⋆v" ns (checksum r)
   let (ns, r) ← timeBest reps fun k => (blackBox k v).norm
   report "norm(v)" ns (checksum r)
-  let (ns, x) ← timeBest reps fun k => ((blackBox k a).eval2 0.3 0.7)
-  report "a(0.3, 0.7) (one evaluation)" ns x
+  let m := n / 2
+  let (ns, r) ← timeBest reps fun k => ((blackBox k a).resample #v[m, m])
+  report s!"resample(a, ({m},{m})) (interpolation)" ns (checksum r)
   -- reductions
   let (ns, x) ← timeBest reps fun k => (blackBox k s).sumF
   report "sum(s)" ns x

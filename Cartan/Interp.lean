@@ -75,58 +75,62 @@ flat encoding (Grassmann fibers divide as `* (1/(x₂ - x₁))`). -/
 
 /-- Component `c` of the multilinear combination of the corners of the cell at `idx` (0-based
 lower corner) over the axes `0 … a-1`, the last of them outermost (Julia's `linterp`/`bilinterp`/
-`trilinterp` nesting). `lin` is the linear index of the corner reached so far. -/
-def cellComp {b : GridBundle N P G} (t : TensorField b F) (x : Vector Float N) (idx : Vector Nat N)
+`trilinterp` nesting). `lin` is the linear index of the corner reached so far; `st` the axis
+strides. -/
+def cellComp {b : GridBundle N P G} (t : TensorField b F) (x : Vector Float N) (idx st : Vector Nat N)
     (c : Nat) : (a lin : Nat) → Float
   | 0, lin => t.data.get! (lin * FlatFiber.width F + c)
   | a + 1, lin =>
     if h : a < N then
       let ax := b.space.coords[a]
       let i := idx[a]
-      let st := MeshTopology.axisStride b.size a
-      let f1 := cellComp t x idx c a (lin + i * st)
-      let f2 := cellComp t x idx c a (lin + (i + 1) * st)
+      let s := st[a]
+      let f1 := cellComp t x idx st c a (lin + i * s)
+      let f2 := cellComp t x idx st c a (lin + (i + 1) * s)
       linterpComp (F := F) x[a] (ax.get! i) (ax.get! (i + 1)) f1 f2
     else 0
+
+/-- The fiber whose flat encoding is `w` copies of `x` (the zero and `NaN` fibers). -/
+@[inline] def fill (x : Float) : F := FlatFiber.read (buildFlat (F := Float) (FlatFiber.width F) fun _ => x) 0
 
 /-- Julia `t(x)` for a grid field (`linterp`, `bilinterp`, `trilinterp`, `quadlinterp`,
 `quintlinterp`; `grid.jl:108-456`), for coordinates `x` (axis 1 first): multilinear interpolation
 of the fibers, zero outside an open face, repositioned through glued faces. -/
 def eval {b : GridBundle N P G} (t : TensorField b F) (x : Vector Float N) : F :=
-  go (N + 64) x
+  let st : Vector Nat N := Vector.ofFn fun a => MeshTopology.axisStride b.size a.1
+  go st (N + 64) x
 where
   /-- One evaluation; `fuel` bounds the repositionings (one per period or reflection). -/
-  go : Nat → Vector Float N → F
-    | 0, _ => FlatFiber.read (buildFlat (F := Float) (FlatFiber.width F) fun _ => 0) 0
+  go (st : Vector Nat N) : Nat → Vector Float N → F
+    | 0, _ => fill 0
     | fuel + 1, x =>
-      let w := FlatFiber.width F
-      let zero : F := FlatFiber.read (buildFlat (F := Float) w fun _ => 0) 0
-      if (List.finRange N).any fun a => x[a].isNaN then
-        FlatFiber.read (buildFlat (F := Float) w fun _ => (0 : Float) / 0) 0
+      if x.any Float.isNaN then fill ((0 : Float) / 0)
       else
-        -- per axis: Julia's `(i, below)` and `above`
-        let br : Vector (Nat × Bool) N := Vector.ofFn fun a => Interp.searchpoints (b.space.coords[a]) x[a]
-        let low (a : Fin N) := br[a].2
-        let high (a : Fin N) := br[a].1 == (b.space.coords[a]).size
-        let out := (List.finRange N).filter fun a => low a || high a
-        if out.isEmpty then
-          let idx : Vector Nat N := br.map fun (i, _) => i - 1
-          FlatFiber.read (buildFlat (F := Float) w fun c => cellComp t x idx c N 0) 0
+        -- per axis: the bracket (Julia `searchpoints`) and whether the coordinate is below (1),
+        -- above (2) or inside (0) the axis
+        let br : Vector Nat N := Vector.ofFn fun a => (Interp.searchpoints (b.space.coords[a]) x[a]).1
+        let status : Vector Nat N := Vector.ofFn fun a =>
+          let i := br[a]
+          if i == 0 then 1 else if i == (b.space.coords[a]).size then 2 else 0
+        if status.all (· == 0) then
+          let idx : Vector Nat N := br.map (· - 1)
+          FlatFiber.read (buildFlat (F := Float) (FlatFiber.width F) fun c => cellComp t x idx st c N 0) 0
         else
           -- an out-of-range axis through an open face gives zero; otherwise reposition
           let glued (a : Fin N) : Option (Glue N) :=
-            if low a then b.top.glue[QuotientTopology.lowFace a] else b.top.glue[QuotientTopology.highFace a]
-          if out.any fun a => (glued a).isNone then zero
+            if status[a] == 1 then b.top.glue[QuotientTopology.lowFace a]
+            else b.top.glue[QuotientTopology.highFace a]
+          if (List.finRange N).any fun a => status[a] != 0 && (glued a).isNone then fill 0
           else
             let x' : Vector Float N := Vector.ofFn fun a =>
-              match glued a with
-              | none => x[a]
-              | some g =>
-                let partnerHigh := g.target.1 % 2 == 1
-                if low a then Interp.repositionLow partnerHigh (b.space.coords[a]) x[a]
-                else if high a then Interp.repositionHigh (!partnerHigh) (b.space.coords[a]) x[a]
-                else x[a]
-            go fuel x'
+              if status[a] == 0 then x[a]
+              else match glued a with
+                | none => x[a]
+                | some g =>
+                  let partnerHigh := g.target.1 % 2 == 1
+                  if status[a] == 1 then Interp.repositionLow partnerHigh (b.space.coords[a]) x[a]
+                  else Interp.repositionHigh (!partnerHigh) (b.space.coords[a]) x[a]
+            go st fuel x'
 
 /-- Julia `t(x)` for a 1-D field. -/
 @[inline] def eval1 {b : GridBundle 1 P G} (t : TensorField b F) (x : Float) : F := t.eval #v[x]
@@ -145,7 +149,22 @@ evaluation at the new points. -/
 def resample [Inhabited G] {b : GridBundle N P G} (t : TensorField b F) (n : Vector Nat N) :
     TensorField (b.resample n) F :=
   let s := (b.resample n).space
-  ofFn _ fun k => t.eval (Vector.ofFn fun a => (s.point k).get! a)
+  let st : Vector Nat N := Vector.ofFn fun a => MeshTopology.axisStride b.size a.1
+  -- the new points form a product: bracket every new coordinate once per axis (`0` = outside)
+  let brk : Vector (Array Nat) N := Vector.ofFn fun a =>
+    let old := b.space.coords[a]
+    (s.coords[a]).foldl (fun acc y =>
+      let i := (Interp.searchpoints old y).1
+      acc.push (if i == 0 || i == old.size then 0 else i)) #[]
+  let ns := s.size
+  ofFn _ fun k =>
+    let j : Vector Nat N := Vector.ofFn fun a => k / MeshTopology.axisStride ns a.1 % ns[a]
+    let x : Vector Float N := Vector.ofFn fun a => (s.coords[a]).get! j[a]
+    let i : Vector Nat N := Vector.ofFn fun a => brk[a][j[a]]!
+    if i.all (· != 0) then
+      let idx := i.map (· - 1)
+      FlatFiber.read (buildFlat (F := Float) (FlatFiber.width F) fun c => cellComp t x idx st c N 0) 0
+    else t.eval x
 
 /-- Julia `leaf(m::RectangleMap, t::AbstractFloat, j = 2)` (`grid.jl:149-157`; `m(t)`): the leaf at
 the coordinate `x` of axis `j` (0-based, default the last), interpolated linearly between the two
