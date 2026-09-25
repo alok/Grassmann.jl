@@ -17,7 +17,7 @@ The schema invariants of §7/§7.1 (field presence per kind, dense length `2ⁿ`
 support of each kind, `native` = gather of `dense`) are checked by `validate`.
 -/
 
-namespace Tests.Golden
+namespace Tests.ElementOracle
 
 open Lean
 
@@ -415,4 +415,4 @@ partial def GoldenElem.validate (e : GoldenElem) (n : Option Nat) (strict : Bool
 #guard supportIndices 3 .pseudoCouple 0 3 == some #[4, 7]
 #guard supportIndices 4 .chain 2 0 == some #[5, 6, 7, 8, 9, 10]
 
-end Tests.Golden
+end Tests.ElementOracle

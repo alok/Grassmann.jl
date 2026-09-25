@@ -28,7 +28,7 @@ Comparison rules are those of schema §11 (`Tests.Golden.Compare`).
 
 ```
 import Tests.Golden.Registry
-open Tests.Golden in
+open Tests.ElementOracle in
 initialize register
   { name := "grassmann/arith", suite := "arith", op := "add|sub|neg",
     eval := fun ctx args => … }
@@ -54,7 +54,7 @@ precedence over earlier ones (and over the built-in evaluators); the first regis
 evaluator returns `some` decides the case. `runWith` takes an explicit list instead.
 -/
 
-namespace Tests.Golden
+namespace Tests.ElementOracle
 
 open Lean
 
@@ -172,4 +172,4 @@ def evaluate (regs : Array (Registration × Evaluator)) (ctx : EvalCtx) (args : 
     Option (Registration × GoldenElem) :=
   regs.findSome? fun (r, ev) => (ev ctx args).map (r, ·)
 
-end Tests.Golden
+end Tests.ElementOracle

@@ -14,7 +14,7 @@ import Tests.Golden.Registry
 Each comparison yields `none` (agreement) or the reasons for disagreement.
 -/
 
-namespace Tests.Golden
+namespace Tests.ElementOracle
 
 /-- The expected value of a case after the defect policy (schema §10, §11). -/
 inductive Expect where
@@ -96,4 +96,4 @@ def compareExpect (asp : Aspects) (mode : ValueMode) (composite : Bool) (got : G
   | .out e => compareWithOut asp mode composite got e
   | .ref v => compareWithRef mode got v
 
-end Tests.Golden
+end Tests.ElementOracle

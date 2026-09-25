@@ -11,7 +11,7 @@ Decoding never aborts a shard: a malformed case is kept as a `GoldenCase` with i
 errors recorded, and the harness counts it as a schema failure.
 -/
 
-namespace Tests.Golden
+namespace Tests.ElementOracle
 
 open Lean
 
@@ -389,4 +389,4 @@ def forEachShard {σ : Type} (root : System.FilePath) (m : Manifest) (init : σ)
     st ← f st e r
   return st
 
-end Tests.Golden
+end Tests.ElementOracle

@@ -18,7 +18,7 @@ The semantics follow the generator's `defect_ids` (`oracle/common.jl`), which is
 specified by schema §10.
 -/
 
-namespace Tests.Golden
+namespace Tests.ElementOracle
 
 open Lean
 
@@ -346,4 +346,4 @@ def DefectTable.tags (t : DefectTable) (s : MatchSubject) : Array String :=
 #guard !(KindPat.compile "Chain:0|Chain:n").test 3 { kind := "Chain", grade := some 2 }
 #guard (KindPat.compile "*").test 3 { kind := "Number" }
 
-end Tests.Golden
+end Tests.ElementOracle

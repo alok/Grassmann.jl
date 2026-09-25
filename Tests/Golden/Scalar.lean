@@ -26,7 +26,7 @@ one Julia printed. Re-encoding uses `JuliaBase.F64.showString` (Ryu shortest, Ju
 Vectors of Float coefficients are stored in `FloatArray` (DESIGN.md §2.1).
 -/
 
-namespace Tests.Golden
+namespace Tests.ElementOracle
 
 open Lean
 
@@ -516,4 +516,4 @@ def compareCoeffs (mode : ValueMode) (got want : Coeffs) : Option String :=
 #guard floatToRat 0.75 == some (3/4)
 #guard floatToRat (-2.5e-3) == some (-5764607523034235/2305843009213693952)
 
-end Tests.Golden
+end Tests.ElementOracle

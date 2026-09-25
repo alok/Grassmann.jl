@@ -14,11 +14,11 @@ Evaluators that need nothing beyond the libraries below the Grassmann element la
 | `identity/Multivector` | unary / `Multivector` | `Multivector(a)`: the dense vector is unchanged | kind, values |
 
 The space-printing checks (`show`, `show_bundle`, names, basis order, `Isq`) run per shard in
-`Tests.Golden.Space.checkSpace`; the encode/decode round trips run on every element while
+`Tests.ElementOracle.checkSpace` (module `Tests.Golden.Space`); the encode/decode round trips run on every element while
 loading (`Tests.Golden.Shard`).
 -/
 
-namespace Tests.Golden
+namespace Tests.ElementOracle
 
 open JuliaBase
 
@@ -67,7 +67,7 @@ def unitScalar (T : CoeffType) : Scalar :=
 
 /-- `leibniz/storage`: rebuild the dense vector of a constructed element from its
 constructor data (schema §8.1), scattering `native` through the kind's storage order
-(`Tests.Golden.supportIndices`, i.e. `Leibniz.indexBasis`/`indexEven`/`indexOdd`), and print
+(`Tests.ElementOracle.supportIndices`, i.e. `Leibniz.indexBasis`/`indexEven`/`indexOdd`), and print
 `Zero`, `One` and basis blades with `DirectSum.TensorBundle.bladeLabel`. -/
 def constructDense : Evaluator := fun ctx args => do
   let x ← args[0]?
@@ -123,4 +123,4 @@ def builtinRegistrations : Array Registration := #[
   referenceRegistration
 ]
 
-end Tests.Golden
+end Tests.ElementOracle

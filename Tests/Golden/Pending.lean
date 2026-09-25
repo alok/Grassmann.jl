@@ -13,7 +13,7 @@ of the committed tags and reports them separately; the committed-tag re-derivati
 ignores them.
 -/
 
-namespace Tests.Golden
+namespace Tests.ElementOracle
 
 /-- An optional compiled glob (for writing match tables in Lean). -/
 def glob? (s : String) : Option Glob := some (Glob.compile s)
@@ -31,4 +31,4 @@ def pendingDefects : DefectTable := ⟨#[
                   out := glob? "Number", kinds := some #[KindPat.compile "Couple|PseudoCouple"] }] }
 ]⟩
 
-end Tests.Golden
+end Tests.ElementOracle

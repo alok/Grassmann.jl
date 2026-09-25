@@ -11,7 +11,7 @@ import Tests.Golden.Reference
 import Tests.Golden.Builtin
 
 /-!
-# The element-oracle harness (`Tests.Golden`)
+# The element-oracle harness (modules `Tests.Golden.*`, namespace `Tests.ElementOracle`)
 
 The Lean consumer of the element-level Julia oracle `oracle/golden/**`
 (docs/port-notes/oracle-schema.md, the normative schema; DESIGN.md §7).
@@ -30,12 +30,17 @@ The Lean consumer of the element-level Julia oracle `oracle/golden/**`
 | `Tests.Golden.Reference` | the DirectSum reference evaluator: values of arith, products and linear unary maps from `DirectSum.Ops` |
 | `Tests.Golden.Builtin` | built-in evaluators (JuliaBase scalar display, Leibniz storage orders, identities) |
 
+The declarations live in namespace `Tests.ElementOracle`: the namespace `Tests.Golden` already
+holds the float-golden helpers of the AbstractAnalysis and Wilkinson suites
+(`Tests/AbstractAnalysis/Harness.lean`), so only the entry point `Tests.Golden.run` is defined
+there.
+
 `Tests.Golden.run` loads every suite end to end (about 129k cases), validates every schema
 invariant, re-derives every defect tag, and runs every registered evaluator. Set
 `GOLDEN_SUITES=products,unary` to restrict the suites.
 -/
 
-namespace Tests.Golden
+namespace Tests.ElementOracle
 
 /-- Run the given suites with the built-in evaluators plus `extra` (highest precedence
 last). Returns `(passed, failed)` over schema checks and evaluated cases, and prints a
@@ -60,12 +65,12 @@ def runWith (extra : Array Registration) (suites : List String := elementSuites)
     failed := failed + r.failed
   return (passed, failed)
 
-end Tests.Golden
+end Tests.ElementOracle
 
 /-- Run the element-oracle harness over every suite (or those named in `GOLDEN_SUITES`,
 comma-separated) with the built-in and every registered evaluator. -/
 def Tests.Golden.run : IO (Nat × Nat) := do
   let suites := match (← IO.getEnv "GOLDEN_SUITES") with
     | some s => (s.splitOn ",").filter (· != "")
-    | none => Tests.Golden.elementSuites
-  Tests.Golden.runWith (← Tests.Golden.registered) suites
+    | none => Tests.ElementOracle.elementSuites
+  Tests.ElementOracle.runWith (← Tests.ElementOracle.registered) suites

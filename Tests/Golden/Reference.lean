@@ -26,7 +26,7 @@ Tables are built once per (shard, op) (`Registration.prepare`); the extensions i
 the nonzero operand coefficients only.
 -/
 
-namespace Tests.Golden
+namespace Tests.ElementOracle
 
 open DirectSum
 
@@ -294,4 +294,4 @@ def referenceRegistration : Registration :=
     floatTol := some (0, 0),
     knownIssues := directSumKnownIssues }
 
-end Tests.Golden
+end Tests.ElementOracle

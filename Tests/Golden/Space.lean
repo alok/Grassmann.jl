@@ -21,7 +21,7 @@ against `Leibniz.indexBasisAll`, the blade `names` against `bladeLabel`, and `Is
 scalar part of `I·I`) against DirectSum's blade product.
 -/
 
-namespace Tests.Golden
+namespace Tests.ElementOracle
 
 open Lean DirectSum
 
@@ -398,4 +398,4 @@ def checkSpace (d : SpaceDesc) : Array Check := Id.run do
 #guard pseudoscalarSquare? S!"-+++" == some (-1)
 #guard pseudoscalarSquare? D!"0,1,1,1" == some 0
 
-end Tests.Golden
+end Tests.ElementOracle

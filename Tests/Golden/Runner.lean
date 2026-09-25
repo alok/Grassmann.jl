@@ -20,7 +20,7 @@ The report gives, per suite, the schema check counts, pass/fail/unimplemented/sk
 counts, the per-defect and per-evaluator breakdown and the first failures.
 -/
 
-namespace Tests.Golden
+namespace Tests.ElementOracle
 
 open Lean DirectSum
 
@@ -419,4 +419,4 @@ def runSuite (root : System.FilePath) (defects pending : DefectTable) (regs : Ar
   let t1 ← IO.monoMsNow
   return { r with ms := t1 - t0 }
 
-end Tests.Golden
+end Tests.ElementOracle
