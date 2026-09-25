@@ -8,7 +8,8 @@ import Tests.Forms.Common
 `invSquareGeneric`, `adjugateGeneric`, `solveGeneric`): for random `Float` operators of
 `n = 2 … 6` (including exact zeros, negative zeros and integers), every coefficient of
 `det`, `inv`, `adjugate`, `solve`, `characteristic`, the compounds and of the `5 × 5`, `6 × 6` products
-`A x`, `A B` (`Grassmann.Forms.UnrolledMat`) is compared by its bits (NaNs identified). The Julia
+`A x`, `A B` (`Grassmann.Forms.UnrolledMat`) is compared by its bits (NaNs identified), and so are
+the eigenvalues-only iteration's values and `eigen`'s (`n ≥ 5`). The Julia
 goldens of `forms/exact` and `forms/float` then cover the generated forms too.
 -/
 
@@ -69,6 +70,10 @@ def check (n : Nat) (t : Tally) (seed : UInt64) : Tally := Id.run do
     let U : Endomorphism V (.chain 1) Float := TensorOperator.ofFn fun i j => xs[i.1 * n + j.1]!
     t := t.ok (sameAll (T.mat.mulVec v.v).data (T.mat.mulVecGeneric v.v).data) (w "A x")
     t := t.ok (sameAll (T.mat.mul U.mat).v.data (T.mat.mulGeneric U.mat).v.data) (w "A B")
+    -- the eigenvalues-only iteration (`Eigen.eigenvalues`, EISPACK `hqr`) is the one of `eigen`
+    let (re, im) := Forms.Eigen.eigenvalues T.rowMajor n
+    let d := Forms.Eigen.eigen T.rowMajor n
+    t := t.ok (sameAll re d.re && sameAll im d.im) (w "eigenvalues = eigen's values")
   return t
 
 /-- Run the suite. -/

@@ -36,6 +36,10 @@ open StaticVectors JuliaBase
 /-- `2⁻⁵²`, the relative precision the EISPACK iterations test against. -/
 def epsilon : Float := Float.ofBits 0x3CB0000000000000
 
+/-- `i.toNat` for the loop indices of `hqr2` (small integers): `natAbs` behind a sign test, both
+inline runtime primitives (`Int.toNat` is an out-of-line call, a third of `eigvals`' time). -/
+@[inline] def ix (i : Int) : Nat := if i < 0 then 0 else i.natAbs
+
 /-- Row-major read `A[i][j]` of an `n × n` buffer. -/
 @[inline] def rd (a : FloatArray) (n i j : Nat) : Float := a.get! (i * n + j)
 
@@ -201,8 +205,9 @@ def symmetric (A : FloatArray) (n : Nat) : FloatArray × FloatArray := Id.run do
     ((r * xr + xi) / d, (r * xi - xr) / d)
 
 /-- Reduction to upper Hessenberg form by orthogonal similarity (EISPACK
-`orthes`): returns `(H, V)` with `A = V H Vᵀ`, row-major. -/
-def orthes (A : FloatArray) (n : Nat) : FloatArray × FloatArray := Id.run do
+`orthes`): returns `(H, V)` with `A = V H Vᵀ`, row-major (`V` empty when `wantV` is false:
+the eigenvalues need only `H`). -/
+def orthes (A : FloatArray) (n : Nat) (wantV : Bool := true) : FloatArray × FloatArray := Id.run do
   let mut H := A
   let mut ort : FloatArray := FloatArray.mk (Array.replicate n 0)
   let high := n - 1
@@ -235,6 +240,7 @@ def orthes (A : FloatArray) (n : Nat) : FloatArray × FloatArray := Id.run do
         for j in [m:high + 1] do H := wr H n i j (rd H n i j - f * ort.get! j)
       ort := ort.set! m (scale * ort.get! m)
       H := wr H n m (m - 1) (scale * g)
+  if !wantV then return (H, .empty)
   let mut V : FloatArray := FloatArray.mk (Array.replicate (n * n) 0)
   for i in [0:n] do V := wr V n i i 1
   for m' in [0:high - 1] do
@@ -248,20 +254,86 @@ def orthes (A : FloatArray) (n : Nat) : FloatArray × FloatArray := Id.run do
         for i in [m:high + 1] do V := wr V n i j (rd V n i j + g * ort.get! i)
   return (H, V)
 
+/-- Row update `j ∈ [j, nn)` of the double-shift sweep at `k` (JAMA `hqr2`): with
+`p = H[k,j] + q H[k+1,j] (+ r H[k+2,j])`, `H[k+2,j] -= p z`, `H[k,j] -= p x`, `H[k+1,j] -= p y`. -/
+def sweepRows (H : FloatArray) (N k : Nat) (notlast : Bool) (q r x y z : Float) (j nn : Nat) : FloatArray :=
+  if j < nn then
+    let p0 := rd H N k j + q * rd H N (k + 1) j
+    let p := if notlast then p0 + r * rd H N (k + 2) j else p0
+    let H := if notlast then wr H N (k + 2) j (rd H N (k + 2) j - p * z) else H
+    let H := wr H N k j (rd H N k j - p * x)
+    let H := wr H N (k + 1) j (rd H N (k + 1) j - p * y)
+    sweepRows H N k notlast q r x y z (j + 1) nn
+  else H
+termination_by nn - j
+
+/-- Column update `i ∈ [i, stop]` of the double-shift sweep at `k` (on `H`, or on `V` for the
+accumulated transformations): with `p = x A[i,k] + y A[i,k+1] (+ z A[i,k+2])`,
+`A[i,k+2] -= p r`, `A[i,k] -= p`, `A[i,k+1] -= p q`. -/
+def sweepCols (A : FloatArray) (N k : Nat) (notlast : Bool) (q r x y z : Float) (i stop : Nat) : FloatArray :=
+  if i ≤ stop then
+    let p0 := x * rd A N i k + y * rd A N i (k + 1)
+    let p := if notlast then p0 + z * rd A N i (k + 2) else p0
+    let A := if notlast then wr A N i (k + 2) (rd A N i (k + 2) - p * r) else A
+    let A := wr A N i k (rd A N i k - p)
+    let A := wr A N i (k + 1) (rd A N i (k + 1) - p * q)
+    sweepCols A N k notlast q r x y z (i + 1) stop
+  else A
+termination_by stop + 1 - i
+
+/-- The double-shift QR sweep of JAMA `hqr2` over `k = m … n-1` on the active block ending at
+row `n`, from the shift vector `(p, q, r)` at `k = m` (and `l` the block's first row): a
+Householder reflector per `k` applied to the rows and columns of `H` (and `V` when `wantV`). -/
+def sweep (H V : FloatArray) (N nn k m n l : Nat) (p q r : Float) (wantV : Bool) : FloatArray × FloatArray :=
+  if k < n then
+    let notlast := k != n - 1
+    -- the reflector's vector: the shift vector at `k = m`, the sub-diagonal column after
+    let (p, q, r, x) : Float × Float × Float × Float :=
+      if k != m then
+        let p := rd H N k (k - 1)
+        let q := rd H N (k + 1) (k - 1)
+        let r := if notlast then rd H N (k + 2) (k - 1) else 0
+        (p, q, r, p.abs + q.abs + r.abs)
+      else (p, q, r, 1)
+    if k != m && x == 0 then sweep H V N nn (k + 1) m n l p q r wantV
+    else
+      let (p, q, r) := if k != m then (p / x, q / x, r / x) else (p, q, r)
+      let s0 := Float.sqrt (p * p + q * q + r * r)
+      let s := if p < 0 then -s0 else s0
+      if s != 0 then
+        let H := if k != m then wr H N k (k - 1) (-s * x)
+          else if l != m then wr H N k (k - 1) (-(rd H N k (k - 1))) else H
+        let p := p + s
+        let x := p / s
+        let y := q / s
+        let z := r / s
+        let q := q / p
+        let r := r / p
+        let H := sweepRows H N k notlast q r x y z k nn
+        let H := sweepCols H N k notlast q r x y z 0 (min n (k + 3))
+        let V := if wantV then sweepCols V N k notlast q r x y z 0 (nn - 1) else V
+        sweep H V N nn (k + 1) m n l p q r wantV
+      else sweep H V N nn (k + 1) m n l p q r wantV
+  else (H, V)
+termination_by n - k
+
 /-- The real Schur iteration and eigenvector back-substitution (EISPACK `hqr2`)
 on a Hessenberg `H` with accumulated transformations `V`: the eigenvalues
 `(d, e)` (real and imaginary parts; a complex pair has `e > 0` first) and the
 eigenvectors in real form (a complex pair `a ± bi` at `j, j+1` has the
-eigenvector `V[:,j] ± i V[:,j+1]`). -/
-def hqr2 (H0 V0 : FloatArray) (nn : Nat) : FloatArray × FloatArray × FloatArray := Id.run do
+eigenvector `V[:,j] ± i V[:,j+1]`). With `wantV` false (EISPACK `hqr`'s job) the
+transformations are not accumulated into `V` and there is no back-substitution; `H` goes
+through the same operations, so the eigenvalues are bit-identical to the full run. -/
+def hqr2 (H0 V0 : FloatArray) (nn : Nat) (wantV : Bool := true) :
+    FloatArray × FloatArray × FloatArray := Id.run do
   let mut H := H0
   let mut V := V0
   let mut d : FloatArray := FloatArray.mk (Array.replicate nn 0)
   let mut e : FloatArray := FloatArray.mk (Array.replicate nn 0)
   if nn == 0 then return (d, e, V)
   let N := nn
-  let h := fun (a : FloatArray) (i j : Int) => rd a N i.toNat j.toNat
-  let hs := fun (a : FloatArray) (i j : Int) (x : Float) => wr a N i.toNat j.toNat x
+  let h := fun (a : FloatArray) (i j : Int) => rd a N (ix i) (ix j)
+  let hs := fun (a : FloatArray) (i j : Int) (x : Float) => wr a N (ix i) (ix j) x
   let mut n : Int := nn - 1
   let low : Int := 0
   let high : Int := nn - 1
@@ -291,8 +363,8 @@ def hqr2 (H0 V0 : FloatArray) (nn : Nat) : FloatArray × FloatArray × FloatArra
       l := l - 1
     if l == n then
       H := hs H n n (h H n n + exshift)
-      d := d.set! n.toNat (h H n n)
-      e := e.set! n.toNat 0
+      d := d.set! (ix n) (h H n n)
+      e := e.set! (ix n) 0
       n := n - 1
       iter := 0
     else if l == n - 1 then
@@ -305,11 +377,11 @@ def hqr2 (H0 V0 : FloatArray) (nn : Nat) : FloatArray × FloatArray × FloatArra
       x := h H n n
       if q ≥ 0 then
         z := if p ≥ 0 then p + z else p - z
-        d := d.set! (n - 1).toNat (x + z)
-        d := d.set! n.toNat (d.get! (n - 1).toNat)
-        if z != 0 then d := d.set! n.toNat (x - w / z)
-        e := e.set! (n - 1).toNat 0
-        e := e.set! n.toNat 0
+        d := d.set! (ix (n - 1)) (x + z)
+        d := d.set! (ix n) (d.get! (ix (n - 1)))
+        if z != 0 then d := d.set! (ix n) (x - w / z)
+        e := e.set! (ix (n - 1)) 0
+        e := e.set! (ix n) 0
         x := h H n (n - 1)
         s := x.abs + z.abs
         p := x / s
@@ -317,23 +389,24 @@ def hqr2 (H0 V0 : FloatArray) (nn : Nat) : FloatArray × FloatArray × FloatArra
         r := Float.sqrt (p * p + q * q)
         p := p / r
         q := q / r
-        for j in [(n - 1).toNat:nn] do
+        for j in [(ix (n - 1)):nn] do
           z := h H (n - 1) j
           H := hs H (n - 1) j (q * z + p * h H n j)
           H := hs H n j (q * h H n j - p * z)
-        for i in [0:n.toNat + 1] do
+        for i in [0:(ix n) + 1] do
           z := h H i (n - 1)
           H := hs H i (n - 1) (q * z + p * h H i n)
           H := hs H i n (q * h H i n - p * z)
-        for i in [low.toNat:high.toNat + 1] do
-          z := h V i (n - 1)
-          V := hs V i (n - 1) (q * z + p * h V i n)
-          V := hs V i n (q * h V i n - p * z)
+        if wantV then
+          for i in [(ix low):(ix high) + 1] do
+            z := h V i (n - 1)
+            V := hs V i (n - 1) (q * z + p * h V i n)
+            V := hs V i n (q * h V i n - p * z)
       else
-        d := d.set! (n - 1).toNat (x + p)
-        d := d.set! n.toNat (x + p)
-        e := e.set! (n - 1).toNat z
-        e := e.set! n.toNat (-z)
+        d := d.set! (ix (n - 1)) (x + p)
+        d := d.set! (ix n) (x + p)
+        e := e.set! (ix (n - 1)) z
+        e := e.set! (ix n) (-z)
       n := n - 2
       iter := 0
     else
@@ -345,7 +418,7 @@ def hqr2 (H0 V0 : FloatArray) (nn : Nat) : FloatArray × FloatArray × FloatArra
         w := h H n (n - 1) * h H (n - 1) n
       if iter == 10 then
         exshift := exshift + x
-        for i in [low.toNat:n.toNat + 1] do H := hs H i i (h H i i - x)
+        for i in [(ix low):(ix n) + 1] do H := hs H i i (h H i i - x)
         s := (h H n (n - 1)).abs + (h H (n - 1) (n - 2)).abs
         x := 0.75 * s
         y := x
@@ -357,7 +430,7 @@ def hqr2 (H0 V0 : FloatArray) (nn : Nat) : FloatArray × FloatArray × FloatArra
           s := Float.sqrt s
           if y < x then s := -s
           s := x - w / ((y - x) / 2 + s)
-          for i in [low.toNat:n.toNat + 1] do H := hs H i i (h H i i - s)
+          for i in [(ix low):(ix n) + 1] do H := hs H i i (h H i i - s)
           exshift := exshift + s
           x := 0.964
           y := x
@@ -380,88 +453,47 @@ def hqr2 (H0 V0 : FloatArray) (nn : Nat) : FloatArray × FloatArray × FloatArra
             epsilon * (p.abs * ((h H (m - 1) (m - 1)).abs + z.abs + (h H (m + 1) (m + 1)).abs)) then
           break
         m := m - 1
-      for i in [(m + 2).toNat:n.toNat + 1] do
+      for i in [(ix (m + 2)):(ix n) + 1] do
         H := hs H i (i - 2) 0
         if (i : Int) > m + 2 then H := hs H i (i - 3) 0
-      for k in [m.toNat:n.toNat] do
-        let notlast := (k : Int) != n - 1
-        let mut skip := false
-        if (k : Int) != m then
-          p := h H k (k - 1)
-          q := h H (k + 1) (k - 1)
-          r := if notlast then h H (k + 2) (k - 1) else 0
-          x := p.abs + q.abs + r.abs
-          if x == 0 then skip := true
-          else
-            p := p / x
-            q := q / x
-            r := r / x
-        if !skip then
-          s := Float.sqrt (p * p + q * q + r * r)
-          if p < 0 then s := -s
-          if s != 0 then
-            if (k : Int) != m then H := hs H k (k - 1) (-s * x)
-            else if l != m then H := hs H k (k - 1) (-(h H k (k - 1)))
-            p := p + s
-            x := p / s
-            y := q / s
-            z := r / s
-            q := q / p
-            r := r / p
-            for j in [k:nn] do
-              p := h H k j + q * h H (k + 1) j
-              if notlast then
-                p := p + r * h H (k + 2) j
-                H := hs H (k + 2) j (h H (k + 2) j - p * z)
-              H := hs H k j (h H k j - p * x)
-              H := hs H (k + 1) j (h H (k + 1) j - p * y)
-            for i in [0:(min n.toNat (k + 3)) + 1] do
-              p := x * h H i k + y * h H i (k + 1)
-              if notlast then
-                p := p + z * h H i (k + 2)
-                H := hs H i (k + 2) (h H i (k + 2) - p * r)
-              H := hs H i k (h H i k - p)
-              H := hs H i (k + 1) (h H i (k + 1) - p * q)
-            for i in [low.toNat:high.toNat + 1] do
-              p := x * h V i k + y * h V i (k + 1)
-              if notlast then
-                p := p + z * h V i (k + 2)
-                V := hs V i (k + 2) (h V i (k + 2) - p * r)
-              V := hs V i k (h V i k - p)
-              V := hs V i (k + 1) (h V i (k + 1) - p * q)
+      -- the double-shift sweep over `k = m … n-1` (`sweep`: tail-recursive, unboxed; JAMA's
+      -- scratch `p q r s x y z` are dead after it, every later branch assigns them first)
+      let (H', V') := sweep H V N nn (ix m) (ix m) (ix n) (ix l) p q r wantV
+      H := H'
+      V := V'
   -- back-substitution
-  if norm == 0 then return (d, e, V)
+  if norm == 0 || !wantV then return (d, e, V)
   for n' in [0:nn] do
     let nb : Int := nn - 1 - n'
-    p := d.get! nb.toNat
-    q := e.get! nb.toNat
+    p := d.get! (ix nb)
+    q := e.get! (ix nb)
     if q == 0 then
       let mut l := nb
       H := hs H nb nb 1
-      for i' in [0:nb.toNat] do
+      for i' in [0:(ix nb)] do
         let i : Int := nb - 1 - i'
         w := h H i i - p
         r := 0
-        for j in [l.toNat:nb.toNat + 1] do r := r + h H i j * h H j nb
-        if e.get! i.toNat < 0 then
+        for j in [(ix l):(ix nb) + 1] do r := r + h H i j * h H j nb
+        if e.get! (ix i) < 0 then
           z := w
           s := r
         else
           l := i
-          if e.get! i.toNat == 0 then
+          if e.get! (ix i) == 0 then
             if w != 0 then H := hs H i nb (-r / w)
             else H := hs H i nb (-r / (epsilon * norm))
           else
             x := h H i (i + 1)
             y := h H (i + 1) i
-            q := (d.get! i.toNat - p) * (d.get! i.toNat - p) + e.get! i.toNat * e.get! i.toNat
+            q := (d.get! (ix i) - p) * (d.get! (ix i) - p) + e.get! (ix i) * e.get! (ix i)
             let t := (x * s - z * r) / q
             H := hs H i nb t
             if x.abs > z.abs then H := hs H (i + 1) nb ((-r - w * t) / x)
             else H := hs H (i + 1) nb ((-s - y * t) / z)
           let t := (h H i nb).abs
           if (epsilon * t) * t > 1 then
-            for j in [i.toNat:nb.toNat + 1] do H := hs H j nb (h H j nb / t)
+            for j in [(ix i):(ix nb) + 1] do H := hs H j nb (h H j nb / t)
     else if q < 0 then
       let mut l := nb - 1
       if (h H nb (nb - 1)).abs > (h H (nb - 1) nb).abs then
@@ -473,29 +505,29 @@ def hqr2 (H0 V0 : FloatArray) (nn : Nat) : FloatArray × FloatArray × FloatArra
         H := hs H (nb - 1) nb ci
       H := hs H nb (nb - 1) 0
       H := hs H nb nb 1
-      for i' in [0:(nb - 1).toNat] do
+      for i' in [0:(ix (nb - 1))] do
         let i : Int := nb - 2 - i'
         let mut ra : Float := 0
         let mut sa : Float := 0
-        for j in [l.toNat:nb.toNat + 1] do
+        for j in [(ix l):(ix nb) + 1] do
           ra := ra + h H i j * h H j (nb - 1)
           sa := sa + h H i j * h H j nb
         w := h H i i - p
-        if e.get! i.toNat < 0 then
+        if e.get! (ix i) < 0 then
           z := w
           r := ra
           s := sa
         else
           l := i
-          if e.get! i.toNat == 0 then
+          if e.get! (ix i) == 0 then
             let (cr, ci) := cdiv (-ra) (-sa) w q
             H := hs H i (nb - 1) cr
             H := hs H i nb ci
           else
             x := h H i (i + 1)
             y := h H (i + 1) i
-            let mut vr := (d.get! i.toNat - p) * (d.get! i.toNat - p) + e.get! i.toNat * e.get! i.toNat - q * q
-            let vi := (d.get! i.toNat - p) * 2 * q
+            let mut vr := (d.get! (ix i) - p) * (d.get! (ix i) - p) + e.get! (ix i) * e.get! (ix i) - q * q
+            let vi := (d.get! (ix i) - p) * 2 * q
             if vr == 0 && vi == 0 then
               vr := epsilon * norm * (w.abs + q.abs + x.abs + y.abs + z.abs)
             let (cr, ci) := cdiv (x * r - z * ra + q * sa) (x * s - z * sa - q * ra) vr vi
@@ -510,7 +542,7 @@ def hqr2 (H0 V0 : FloatArray) (nn : Nat) : FloatArray × FloatArray × FloatArra
               H := hs H (i + 1) nb ci
           let t := F64.max (h H i (nb - 1)).abs (h H i nb).abs
           if (epsilon * t) * t > 1 then
-            for j in [i.toNat:nb.toNat + 1] do
+            for j in [(ix i):(ix nb) + 1] do
               H := hs H j (nb - 1) (h H j (nb - 1) / t)
               H := hs H j nb (h H j nb / t)
   -- back transformation
@@ -607,5 +639,27 @@ def eigen (A : FloatArray) (n : Nat) : Decomposition := Id.run do
       sim := wr sim n i k (rd vim n i idx)
   let real := (List.range n).all fun k => e.get! k == 0
   return ⟨n, re, im, sre, sim, real⟩
+
+/-- Julia `eigvals(A)` of a real `n × n` matrix given row-major (LAPACK `geev` without
+eigenvectors): the eigenvalues `(re, im)` of `eigen`, sorted the same way (ascending for a
+symmetric matrix, by `(re, im)` otherwise), without computing the eigenvectors (EISPACK
+`orthes` + `hqr`, the iteration of `eigen` with the same operations on `H`). -/
+def eigenvalues (A : FloatArray) (n : Nat) : FloatArray × FloatArray := Id.run do
+  let zeros := FloatArray.mk (Array.replicate n 0)
+  if isSymmetric A n then
+    let (d, _) := symmetric A n
+    return (d, zeros)
+  let (H, V0) := orthes A n (wantV := false)
+  let (d, e, _) := hqr2 H V0 n (wantV := false)
+  let perm := ((List.range n).toArray.qsort fun a b =>
+      let ra := d.get! a
+      let rb := d.get! b
+      ra < rb || (ra == rb && (e.get! a < e.get! b || (e.get! a == e.get! b && a < b)))).toList
+  let mut re := zeros
+  let mut im := zeros
+  for (k, idx) in perm.zipIdx.map (fun (a, b) => (b, a)) do
+    re := re.set! k (d.get! idx)
+    im := im.set! k (e.get! idx)
+  return (re, im)
 
 end Grassmann.Forms.Eigen

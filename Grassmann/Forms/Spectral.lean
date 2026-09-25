@@ -168,9 +168,9 @@ def eigvals (X : Endomorphism V (.chain 1) Float) : Spectrum ((Layout.chain 1).s
     | some s => s
     | none => .real (Values.replicate 0)
   else
-    let d := Eigen.eigen X.rowMajor n
-    if d.real then .real (Values.ofFn fun i => d.re.get! i.1)
-    else .complex (Values.ofFn fun i => ⟨d.re.get! i.1, d.im.get! i.1⟩)
+    let (re, im) := Eigen.eigenvalues X.rowMajor n
+    if (List.range n).all fun k => im.get! k == 0 then .real (Values.ofFn fun i => re.get! i.1)
+    else .complex (Values.ofFn fun i => ⟨re.get! i.1, im.get! i.1⟩)
 
 /-- Julia `eigvalsreal(X)` (`forms.jl:1384-1393`): real eigenvalues, or Julia's
 `DomainError` (`n < 5`, a complex root) / a complex spectrum (`n ≥ 5`). -/
