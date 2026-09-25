@@ -168,6 +168,13 @@ instance instScaledArrowsPair {b : GridBundle N P G} : MakiePlot .scaledarrows (
       { a with gridsize := none, lengthscale := scaledLengthscale M t }
   dim _ := dimOfWidth (FlatFiber.width E)
 
+/-- Julia `scaledarrows(t::VectorField) = scaledarrows(TensorField(base(t)), t)`
+(`MakieExt.jl:372`): the arrows start at the grid points. -/
+instance instScaledArrowsGrid [GridPoint N P] [FlatFiber P] [LinearFiber P] [FiberNorm P] {b : GridBundle N P G} :
+    MakiePlot .scaledarrows (TensorField b F) where
+  plot c t a := c.plot .scaledarrows (TensorField.identity b, t) a
+  dim _ := dimOfWidth (FlatFiber.width P)
+
 /-- Julia `scaledarrows(M, t::TensorOperator)` (`MakieExt.jl:380-384, 407-413`) with the frame
 given by its columns: `s = spacing(M)/max(Σ|colᵢ|/n)`, one arrow set per column. -/
 instance instScaledArrowsFrame {b : GridBundle N P G} :

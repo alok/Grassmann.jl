@@ -7,6 +7,7 @@ import Gallery.Grassmann.Graphs
 import Gallery.Wilkinson
 import Gallery.Cartan.Fiber
 import Gallery.Cartan.PlotMd
+import Gallery.Cartan.Recipes
 import Gallery.ImageDiff
 import Gallery.Index
 
@@ -33,6 +34,6 @@ namespace Gallery
 /-- Every figure, in page order. -/
 def registry : List Entry :=
   FatouFigs.entries ++ FatouFigs.wikiEntries ++ GrassmannFigs.entries ++ Graphs.entries ++ WilkinsonFigs.entries ++
-    CartanFigs.entries ++ CartanPlotMd.entries
+    CartanFigs.entries ++ CartanPlotMd.entries ++ CartanRecipes.entries
 
 end Gallery
