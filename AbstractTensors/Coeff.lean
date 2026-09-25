@@ -139,10 +139,12 @@ instance {α : Type} [Coeff α] : Coeff (Complex α) where
 
 /-! ## `Analytic` instances -/
 
-/-- `Float` with Julia's own bit-exact kernels where `JuliaBase` has them (`exp`, `expm1`,
-`log`, `log1p`, `^` from `JuliaBase.Math`, `cbrt` from `JuliaBase.F64.cbrt`) and the C
-`libm` for the trigonometric and hyperbolic functions (Julia ports openlibm for those;
-results agree to an ulp or two). The `Float32` instance below follows the same rule. -/
+/-- `Float` with Julia's own bit-exact kernels, never the C `libm`: `exp`, `expm1`, `log`,
+`log1p`, `^` (`JuliaBase.Math`), the trigonometric functions and `atan(y, x)`
+(`JuliaBase.Trig`), the hyperbolic functions (`JuliaBase.Hyperbolic`) and `cbrt`
+(`JuliaBase.F64.cbrt`); `sqrt` is the correctly rounded hardware square root, as in Julia.
+Arguments outside a function's domain give `NaN` where Julia throws a `DomainError`. The
+`Float32` instance below follows the same rule. -/
 instance : Analytic Float where
   sqrt := Float.sqrt
   cbrt := F64.cbrt
@@ -150,22 +152,23 @@ instance : Analytic Float where
   expm1 := F64.expm1
   log := F64.log
   log1p := F64.log1p
-  sin := Float.sin
-  cos := Float.cos
-  tan := Float.tan
-  asin := Float.asin
-  acos := Float.acos
-  atan := Float.atan
-  atan2 := Float.atan2
-  sinh := Float.sinh
-  cosh := Float.cosh
-  tanh := Float.tanh
-  asinh := Float.asinh
-  acosh := Float.acosh
-  atanh := Float.atanh
+  sin := F64.sin
+  cos := F64.cos
+  tan := F64.tan
+  asin := F64.asin
+  acos := F64.acos
+  atan := F64.atan
+  atan2 := F64.atan2
+  sinh := F64.sinh
+  cosh := F64.cosh
+  tanh := F64.tanh
+  asinh := F64.asinh
+  acosh := F64.acosh
+  atanh := F64.atanh
   pow := F64.pow
   abs := Float.abs
 
+/-- `Float32` with Julia's own `Float32` kernels (`JuliaBase.F32.sin`, …), bit for bit. -/
 instance : Analytic Float32 where
   sqrt := Float32.sqrt
   cbrt := F32.cbrt
@@ -173,19 +176,19 @@ instance : Analytic Float32 where
   expm1 := F32.expm1
   log := F32.log
   log1p := F32.log1p
-  sin := Float32.sin
-  cos := Float32.cos
-  tan := Float32.tan
-  asin := Float32.asin
-  acos := Float32.acos
-  atan := Float32.atan
-  atan2 := Float32.atan2
-  sinh := Float32.sinh
-  cosh := Float32.cosh
-  tanh := Float32.tanh
-  asinh := Float32.asinh
-  acosh := Float32.acosh
-  atanh := Float32.atanh
+  sin := F32.sin
+  cos := F32.cos
+  tan := F32.tan
+  asin := F32.asin
+  acos := F32.acos
+  atan := F32.atan
+  atan2 := F32.atan2
+  sinh := F32.sinh
+  cosh := F32.cosh
+  tanh := F32.tanh
+  asinh := F32.asinh
+  acosh := F32.acosh
+  atanh := F32.atanh
   pow := F32.pow
   abs := Float32.abs
 
