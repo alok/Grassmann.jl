@@ -2,7 +2,7 @@ name = "GrassmannGallery"
 version = "0.1.0"
 description = "The chakravala plot gallery reproduced with the Lean port and LeanPlot, side by side with Julia/CairoMakie"
 license = "AGPL-3.0-or-later"
-defaultTargets = ["Gallery", "gallery", "gallerytest"]
+defaultTargets = ["GrassmannPlot", "Gallery", "gallery", "gallerytest"]
 testDriver = "gallerytest"
 
 [leanOptions]
@@ -21,6 +21,9 @@ git = "https://github.com/alok/LeanPlot"
 rev = "f141f5959d542dc2b06eb2af365173218592bb5f"
 
 [[lean_lib]]
+name = "GrassmannPlot"
+
+[[lean_lib]]
 name = "Gallery"
 
 [[lean_exe]]
@@ -30,3 +33,7 @@ root = "Gallery.Main"
 [[lean_exe]]
 name = "gallerytest"
 root = "Gallery.Test"
+
+[[lean_exe]]
+name = "plotbench"
+root = "PlotBench"

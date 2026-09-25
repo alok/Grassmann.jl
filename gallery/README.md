@@ -14,6 +14,35 @@ lake exe gallery --docs          # also copy the PNGs to docs/gallery/lean/ and 
 lake test                        # the data checks alone (Gallery.Check.run)
 ```
 
+The package also holds the library **`GrassmannPlot`** (`GrassmannPlot/`): Cartan's Makie extension
+(`Cartan.jl ext/MakieExt.jl`) on LeanPlot. Each Makie function is a method tag, and
+`MakiePlot m T` instances give the methods for fields over 1-D, 2-D and 3-D grids and simplex
+meshes, pairs `(M, f)` and frames, exactly as Julia dispatches them:
+
+```lean
+open GrassmannPlot in
+#eval (lines curve).figure.save "curve.png"          -- a curve coloured by its speed
+-- streamplot t, mesh (M, f), wireframe M, contour t, heatmap t, surface t, arrows t,
+-- scaledarrows (M, t), arrowsbundle (M, t), linegraph M, voxels t; `c.lines t` is `lines!`
+```
+
+| module | contents |
+|---|---|
+| `GrassmannPlot.Canvas` | `Canvas` (Makie's current axis), `Attrs` (Makie keywords and Cartan's `gridsize`, `lengthscale`, `poly`) |
+| `GrassmannPlot.Convert` | fibers as points, graphs, `speed` (Cartan's five-point central difference), grid meshes and wireframes |
+| `GrassmannPlot.Makie` | the `MakiePlot` dispatch, `Components`/`LocalTensor`/`AnyField` forms, `lines`, `mesh`, … and their `!` forms |
+| `GrassmannPlot.Curves` | `lines`, `linesegments`, `linegraph`, `scatter`, `text` of curves, boundary components and simplex meshes |
+| `GrassmannPlot.Surfaces` | `mesh`, `wireframe`, `surface`, `contour`, `contourf`, `contour3d`, `heatmap`, `linegraph` of grid fields and simplex meshes |
+| `GrassmannPlot.Arrows` | `arrows`/`arrows2d`/`arrows3d`, `scaledarrows`, `arrowsbundle`, `planes`, `spaces` and their scaled and bundle forms, `graylines` |
+| `GrassmannPlot.Stream` | `streamplot` of 2-D and 3-D grid fields (interpolated) and tangent-space streamplots `streamplot(M, m)` |
+| `GrassmannPlot.Volume` | `voxels` of volume grids |
+| `GrassmannPlot.Eval` | prepared 2-D/3-D grid evaluators (bit-identical with `TensorField.eval2/3`, allocation-free) |
+| `GrassmannPlot.Animate` | `variation`/`alteration`/`modification`: leaves overlaid, or one canvas per leaf (animation frames) |
+| `GrassmannPlot.Raster` | `raster` (ColorTypesExt): incidence counts of projective elements |
+
+`lake exe plotbench` times the hot paths against the Julia twin `oracle/gallery/bench.jl`
+(results in [`docs/gallery/perf.md`](../docs/gallery/perf.md)).
+
 The Julia side lives in `oracle/gallery/`: one script per figure renders
 `docs/gallery/julia/<name>.png` and dumps the plotted data to `oracle/gallery/data/<name>.json`
 (`julia --startup-file=no --project=oracle oracle/gallery/run_all.jl [prefix …]`).
@@ -25,6 +54,9 @@ The Julia side lives in `oracle/gallery/`: one script per figure renders
 | `Gallery.Versor` | Julia's `exp` of even elements, Riemann-sphere and conformal `↑`/`↓` |
 | `Gallery.Grassmann.*` | Grassmann.jl README and paper: plane fields, conformal curves, 3D streamplots, graphs |
 | `Gallery.Wilkinson` | Wilkinson.jl `plot(::PolynomialComparison)` |
+| `Gallery.Cartan.Fiber` | Cartan `fiber.md` sessions on the Cartan core: Riemann-sphere curves, bivector and conformal streamplots of grid fields, circle, sphere, torus tangent streamplot, Hopf fibration |
+| `Gallery.Cartan.PlotMd` | Cartan `plot.md`, the Makie gallery on TensorFields (arrows, contours, heatmaps, meshes, scatter, streamplots, surface, wireframe, voxels) |
+| `Gallery.Cartan.Recipes` | Cartan's own recipes: `scaledarrows` (fields and frames), `arrowsbundle`, `linegraph`, simplex meshes, `raster` |
 | `Gallery.ImageDiff` | pixel agreement of the Lean and Julia PNGs |
 | `Gallery.Index` | `docs/gallery/index.md` and the list of figures waiting for Cartan/Adapode |
 | `Gallery.Check`, `Gallery.Test` | the `lake test` driver: every figure's data checks and README spot values |
