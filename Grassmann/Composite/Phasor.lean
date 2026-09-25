@@ -13,6 +13,7 @@ port-notes/grassmann-composite.md §4.17):
 | `Complex(m::Imaginary)`, `Couple(m::Imaginary)` | `Half.toComplex`, `Half.toCouple` (a spinor of a plane: `(⟨m⟩₀, ⟨m⟩₂)` on the pseudoscalar) |
 | `a ∠ θ` | the notation `a ∠ θ` (scoped in `Grassmann`) for a real amplitude and an angle given as a couple or a term |
 | `hyperplanes(V)`, `𝕚`, `𝕛`, `𝕜` | `Composite.hyperplanes` (`I ⟑ v_k`), and the quaternion units of `ℝ3` |
+| `z(t)` | `z t` (`Phasor.eval`) |
 | `isdiag(T)` | `TensorOperator.isdiag` |
 
 Not provided: phasors with a non-real amplitude or a non-blade angle (Julia's `amp ⊘ exp(angle/2)`
@@ -80,6 +81,9 @@ angle)` (`src/multivectors.jl:1069`). -/
   ⟨Values.ofFn fun i => if i.1 = 0 then z.amp else if i.1 = 1 then z.angle.im else Coeff.zero⟩
 
 end Phasor
+
+/-- Julia `(z::Phasor)(t) = Phasor(amplitude, angle·t)` (`src/multivectors.jl:1016`): `z t`. -/
+instance : CoeFun (Phasor V Float) (fun _ => Float → Phasor V Float) := ⟨Phasor.eval⟩
 
 /-- An angle for Julia's `a ∠ θ`: a couple, or a term (read as `0 + θ`). -/
 class PhasorAngle (X : Type) (V : outParam TensorBundle) (α : outParam Type) where

@@ -90,6 +90,16 @@ def suite : IO Tally := do
   t := t.ok ((op![[1, 2, 3], [4, 5, 6]] : TensorOperator (En 3) (.chain 1) (En 2) (.chain 1) Int).toRows ==
     [[1, 2, 3], [4, 5, 6]]) fun _ => "op! rows"
   t := t.ok ((outer![[1, 2], [3, 4]] : Outermorphism (En 2) (En 2) Int).det == -2) fun _ => "outer! det"
+  -- call syntax: `m(g)` grade parts, `m.v12` by name, `v ∈ t` for simplices
+  let mm : Multivector ℝ3 Int := ⟨Values.ofFn fun i => (i.1 : Int) + 1⟩
+  t := t.ok ((mm 2).v.toList == [5, 6, 7] && (mm 0).v.toList == [1] && mm.byName "v12" == some 5 &&
+    mm.byName "v₁₂₃" == some 8 && mm.byName "v4" == none && mm.byName "w1" == none) fun _ => "m(g), m.v12"
+  let sp : Spinor ℝ3 Int := ⟨Values.ofFn fun i => (i.1 : Int) + 1⟩
+  t := t.ok ((sp 2).v.toList == [2, 3, 4]) fun _ => "spinor(g)"
+  let tri : Simplex ℝ3 ℝ3 Float := TensorOperator.ofFn fun i j => if i.1 = 0 then 1 else if i.1 = j.1 then 2 else 0
+  let inside : Chain ℝ3 1 Float := chainOf ℝ3 1 [1, 0.5, 0.5]
+  let outside : Chain ℝ3 1 Float := chainOf ℝ3 1 [1, 3, 3]
+  t := t.ok (decide (inside ∈ tri) && !decide (outside ∈ tri)) fun _ => "∈ simplex"
   t := t.ok (toString (O * (c [1, 1, 1] ∧ c [0, 1, 0]) : Chain ℝ3 2 Int) ==
     toString ((T * c [1, 1, 1] : Chain ℝ3 1 Int) ∧ (T * c [0, 1, 0] : Chain ℝ3 1 Int))) fun _ => "O(x∧y)"
   t := t.ok ((lieBracket [T, U]).toRows == [[4, -10, -2], [10, 0, 18], [6, -16, -4]]) fun _ => "𝓛[T,U]"

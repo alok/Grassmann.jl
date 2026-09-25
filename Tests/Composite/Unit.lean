@@ -504,6 +504,8 @@ def phasorApi (t : Tally) : Tally := Id.run do
       p.phase == 0.0 && p.unitangle.bits == 3 && p.unitangle.val == 1.0) fun _ =>
     s!"2 ∠ (π/3)v12: {p.realvalue} {p.imagvalue} {p.amplitude} {p.phase}"
   t := t.check (p.vectorizeChain.v.toList == [2.0, F64.pi / 3]) fun _ => "vectorize(2 ∠ (π/3)v12)"
+  let pt := p 0.5
+  t := t.check (pt.amp == 2.0 && pt.angle.im == F64.pi / 3 * 0.5) fun _ => "z(t)"
   let q := (⟨3, 1.0⟩ : Single E3 2 Float).polarize
   t := t.check (q.amp == 1.0 && q.angle.bits == 3 && q.angle.re == 0.0 && q.angle.im == 1.0) fun _ => "polarize(v12)"
   let q2 := (⟨3, 2.0⟩ : Single E3 2 Float).polarize

@@ -146,6 +146,36 @@ namespace Multivector
 
 end Multivector
 
+/-! ## Call syntax -/
+
+/-- Julia `A(g)` of a multivector (`src/multivectors.jl:313-318`): the grade-`g` part as a
+chain (`m 2` is `gradePart m 2`). -/
+instance : CoeFun (Multivector V α) (fun _ => (g : Nat) → Chain V g α) := ⟨fun m g => gradePart m g⟩
+
+/-- Julia `A(g)` of a spinor or co-spinor: the grade-`g` part as a chain. -/
+instance {p : Bool} : CoeFun (Half V p α) (fun _ => (g : Nat) → Chain V g α) := ⟨fun h g => gradePart h g⟩
+
+namespace Multivector
+
+/-- The generator indices of a blade name in Julia's `Λ(V)` notation (`"v"`, `"v12"`,
+`"v₁₂"`; `none` for other names), as the blade's mask. -/
+def bladeOfName (n : Nat) (s : String) : Option UInt64 :=
+  match s.toList with
+  | 'v' :: ds =>
+    let digit := fun (c : Char) =>
+      if c.isDigit then some (c.toNat - '0'.toNat)
+      else if '₀' ≤ c && c ≤ '₉' then some (c.toNat - '₀'.toNat) else none
+    ds.foldlM (init := (0 : UInt64)) fun acc c => do
+      let k ← digit c
+      if 1 ≤ k && k ≤ n then pure (acc ||| ((1 : UInt64) <<< (k - 1).toUInt64)) else none
+  | _ => none
+
+/-- Julia `m.v12` (`src/multivectors.jl:630-650`, `getproperty` by blade name): the coefficient
+of the named blade (`none` for a name that is not a blade of `V`; generators `1 … 9`). -/
+def byName (m : Multivector V α) (s : String) : Option α := (bladeOfName V.n s).map m.coeff
+
+end Multivector
+
 /-! ## `vecdot` -/
 
 /-- Julia `vecdot(x, y)` (`forms.jl:838-881`): the coefficient dot

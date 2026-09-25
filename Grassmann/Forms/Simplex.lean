@@ -243,6 +243,13 @@ def pointColumn (T : Simplex V W α) (i : Nat := 1) : Values α ((Layout.chain 1
 
 end TensorOperator
 
+/-- Julia `v ∈ t` (`composite.jl:734-747`): the point lies in the simplex (`contains`). -/
+instance {V W : TensorBundle} {α : Type} [Coeff α] [SignBit α] : Membership (Chain W 1 α) (Simplex V W α) :=
+  ⟨fun T v => T.contains v = true⟩
+
+instance {V W : TensorBundle} {α : Type} [Coeff α] [SignBit α] (v : Chain W 1 α) (T : Simplex V W α) :
+    Decidable (v ∈ T) := inferInstanceAs (Decidable (T.contains v = true))
+
 /-- Julia `findfirst(P, t)` (`composite.jl:917-922`): the first simplex (1-based)
 containing `P`, `0` if none. -/
 def findfirstSimplex {V W : TensorBundle} {α : Type} [Coeff α] [SignBit α]
