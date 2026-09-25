@@ -16,7 +16,7 @@ import Tests.AbstractTensors.Golden
 
 namespace Tests.AbstractTensors.GenericTests
 
-open _root_.AbstractTensors StaticVectors
+open _root_.AbstractTensors StaticVectors JuliaBase
 
 /-! ### The real carrier: `Float`, `I = 1` -/
 
@@ -37,8 +37,8 @@ instance : SeriesRing (Complex Float) where
   addScalar k z := k + z
   smul k z := k * z
   sdiv z k := z / k
-  norm := Complex.abs
-  inv := Complex.inv
+  norm := ComplexF64.abs
+  inv := ComplexF64.inv
 
 /-- The imaginary unit, the carrier's pseudoscalar (Julia `float(im) * true`). -/
 def iC : Complex Float := ⟨0, 1⟩
@@ -46,7 +46,7 @@ def iC : Complex Float := ⟨0, 1⟩
 /-- Julia's scalar carrier `Sc{PS{im}(),ComplexF64}`. -/
 instance complexRing : TensorRing (Complex Float) :=
   TensorRing.ofSeries ⟨0, 0⟩ ⟨1, 0⟩ iC conj (fun _ => false) id (· * iC) (· * iC)
-    Complex.sqrt Complex.cbrt
+    ComplexF64.sqrt complexCbrt
 
 /-- The unary operations under test, by the oracle's names. -/
 def unary {X : Type} [TensorRing X] : String → Option (X → X)
@@ -128,7 +128,7 @@ def suite : TestM Unit := do
     | some f =>
       let got := f (fb x)
       check (same got (fb r)) fun _ =>
-        s!"generic real {name}({fb x}): got {showF got}, want {showF (fb r)}, ulps {JuliaBase.F64.ulpDist got (fb r)}"
+        s!"generic real {name}({fb x}): got {showF got}, want {showF (fb r)}, ulps {F64.ulpDist got (fb r)}"
   for (name, re, im, rre, rim) in Golden.genericComplex do
     match unary (X := Complex Float) name with
     | none => check false fun _ => s!"generic complex: unknown function {name}"

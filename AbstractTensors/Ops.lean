@@ -26,7 +26,7 @@ universe u v w
 
 namespace AbstractTensors
 
-open StaticVectors
+open StaticVectors JuliaBase
 
 /-! ## Kind and parameter classes (port-notes §8.2 item 1)
 

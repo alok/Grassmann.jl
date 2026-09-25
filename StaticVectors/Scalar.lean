@@ -5,10 +5,10 @@ Julia's `Values` functions call generic `Base` functions on their elements:
 `conj` (in `dot`), `abs2`/`norm_sqr` (in `norm`), `norm(x::Number) = abs(float(x))`
 (in `norm(a, p)`), and `max`/`min` (in `maximum`/`minimum`). These classes
 carry exactly those element operations, with instances for the real scalar
-types here and for `Complex` in `AbstractTensors`. The element semantics themselves
-(Julia `max`, `isapprox`, `hypot`, …) are `JuliaBase`'s.
+types and for `JuliaBase.Complex`. The element semantics themselves (Julia `max`,
+`isapprox`, `hypot`, …) are `JuliaBase`'s.
 -/
-import JuliaBase.Num
+import JuliaBase.Complex
 
 universe u
 
@@ -104,5 +104,19 @@ instance : JApprox Rat where
   isapprox x y atol rtol _ :=
     x == y || (F64.ofRat (x - y)).abs ≤
       F64.max atol (rtol * F64.max (F64.ofRat x).abs (F64.ofRat y).abs)
+
+/-! ## Complex instances -/
+
+/-- Julia `conj(z::Complex)` (complex.jl:276). -/
+instance {α : Type u} [Neg α] : Conj (Complex α) := ⟨Complex.conj⟩
+
+/-- Julia `norm_sqr`/`norm` of a complex entry: `abs2 = re² + im²` (no `hypot`) and
+`norm = abs = hypot(re, im)`. -/
+instance : JNorm (Complex Float) := ⟨Complex.abs2, ComplexF64.abs⟩
+
+/-- Julia `isapprox(z::ComplexF64, w::ComplexF64)`: `JuliaBase.ComplexF64.isapprox`. -/
+instance : JApprox (Complex Float) where
+  rtolDefault := F64.rtoldefault
+  isapprox z w atol rtol nans := ComplexF64.isapprox z w atol rtol nans
 
 end StaticVectors

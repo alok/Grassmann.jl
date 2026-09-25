@@ -8,7 +8,10 @@ transcendental functions (Julia `Base.sqrt`, `exp`, `log`, …) used by the
 tensor-level transcendental algorithms and by Grassmann's closed forms.
 
 Instances: `Float`, `Float32`, `Int`, `Rat` and `Complex α` for `Coeff`;
-`Float`, `Float32` and `Complex Float` for `Analytic`.
+`Float`, `Float32` and `Complex Float` for `Analytic`. `Complex` is Julia's
+`Complex{T}` from `JuliaBase` (with the `ComplexF64` algorithms); its
+`StaticVectors` element instances (`Conj`, `JNorm`, `JApprox`) live in
+`StaticVectors.Scalar`.
 
 `Lean.Grind.CommRing` compatibility: `Coeff` deliberately carries no laws
 (`Float` satisfies none of them). Proofs about kernels (DESIGN §8, target 3)
@@ -18,14 +21,15 @@ state such theorems for `Int`/`Rat`, whose `Coeff` instances below reuse the
 core `Add`/`Mul`/`Neg`/`Sub` instances that `Lean.Grind.CommRing Int` is
 built from, so the two structures agree definitionally.
 -/
-import AbstractTensors.Complex
+import JuliaBase.Complex
 import StaticVectors.Packed
+import StaticVectors.Scalar
 
 universe u
 
 namespace AbstractTensors
 
-open StaticVectors
+open StaticVectors JuliaBase
 
 /-- Everything a kernel needs from a coefficient type (DESIGN §4.1), bundled
 so generic kernels take one instance argument and specialize cleanly. -/
@@ -98,14 +102,14 @@ instance : Coeff Float where
   zero := 0
   one := 1
   ofInt := Float.ofInt
-  ofRat := JuliaBase.F64.ofRat
+  ofRat := F64.ofRat
   isZero x := x == 0
 
 instance : Coeff Float32 where
   zero := 0
   one := 1
   ofInt k := (Float.ofInt k).toFloat32
-  ofRat r := (JuliaBase.F64.ofRat r).toFloat32
+  ofRat r := (F64.ofRat r).toFloat32
   isZero x := x == 0
 
 /-- Integer coefficients. `ofRat` truncates toward zero (Julia's `Int(r)` throws
@@ -141,9 +145,9 @@ instance : Analytic Float where
   sqrt := Float.sqrt
   cbrt := Float.cbrt
   exp := Float.exp
-  expm1 := JuliaBase.F64.expm1
+  expm1 := F64.expm1
   log := Float.log
-  log1p := JuliaBase.F64.log1p
+  log1p := F64.log1p
   sin := Float.sin
   cos := Float.cos
   tan := Float.tan
@@ -164,9 +168,9 @@ instance : Analytic Float32 where
   sqrt := Float32.sqrt
   cbrt := Float32.cbrt
   exp := Float32.exp
-  expm1 := JuliaBase.F32.expm1
+  expm1 := F32.expm1
   log := Float32.log
-  log1p := JuliaBase.F32.log1p
+  log1p := F32.log1p
   sin := Float32.sin
   cos := Float32.cos
   tan := Float32.tan
@@ -183,28 +187,40 @@ instance : Analytic Float32 where
   pow := Float32.pow
   abs := Float32.abs
 
-/-- `Complex Float` via Julia's complex algorithms (`base/complex.jl`). -/
+/-- The principal cube root `z^(1/3)` of a `ComplexF64` (Julia has no complex `cbrt`,
+a `MethodError`; port-notes/grassmann-composite.md). -/
+@[inline] def complexCbrt (z : Complex Float) : Complex Float := ComplexF64.pow z ⟨1 / 3, 0⟩
+
+/-- Complex two-argument arctangent, `-i log((x + iy)/√(x² + y²))` (Julia has no complex
+`atan(y, x)`); for real arguments it is `atan(y, x)` up to rounding. -/
+def complexAtan2 (y x : Complex Float) : Complex Float :=
+  let w := x + (⟨0, 1⟩ : Complex Float) * y
+  let l := ComplexF64.log (ComplexF64.div w (ComplexF64.sqrt (x * x + y * y)))
+  ⟨l.im, -l.re⟩
+
+/-- `Complex Float` via Julia's complex algorithms (`JuliaBase.ComplexF64`, Julia
+`base/complex.jl`), plus `complexCbrt` and `complexAtan2` where Julia has no method. -/
 instance : Analytic (Complex Float) where
-  sqrt := Complex.sqrt
-  cbrt := Complex.cbrt
-  exp := Complex.exp
-  expm1 := Complex.expm1
-  log := Complex.log
-  log1p := Complex.log1p
-  sin := Complex.sin
-  cos := Complex.cos
-  tan := Complex.tan
-  asin := Complex.asin
-  acos := Complex.acos
-  atan := Complex.atan
-  atan2 := Complex.atan2
-  sinh := Complex.sinh
-  cosh := Complex.cosh
-  tanh := Complex.tanh
-  asinh := Complex.asinh
-  acosh := Complex.acosh
-  atanh := Complex.atanh
-  pow := Complex.pow
-  abs z := ⟨Complex.abs z, 0⟩
+  sqrt := ComplexF64.sqrt
+  cbrt := complexCbrt
+  exp := ComplexF64.exp
+  expm1 := ComplexF64.expm1
+  log := ComplexF64.log
+  log1p := ComplexF64.log1p
+  sin := ComplexF64.sin
+  cos := ComplexF64.cos
+  tan := ComplexF64.tan
+  asin := ComplexF64.asin
+  acos := ComplexF64.acos
+  atan := ComplexF64.atan
+  atan2 := complexAtan2
+  sinh := ComplexF64.sinh
+  cosh := ComplexF64.cosh
+  tanh := ComplexF64.tanh
+  asinh := ComplexF64.asinh
+  acosh := ComplexF64.acosh
+  atanh := ComplexF64.atanh
+  pow := ComplexF64.pow
+  abs z := ⟨ComplexF64.abs z, 0⟩
 
 end AbstractTensors

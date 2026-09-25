@@ -6,7 +6,7 @@ their core meaning, and the tensor operators resolve on tensor types.
 -/
 import AbstractTensors
 
-open AbstractTensors
+open AbstractTensors JuliaBase
 
 namespace Tests.AbstractTensors.Notation
 
