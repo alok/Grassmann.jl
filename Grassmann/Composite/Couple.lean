@@ -254,6 +254,35 @@ def pow (z : Couple V Float) (k : Int) : Couple V Float :=
     else if k ≥ 0 then ofPair z.bits (powJulia (BPair.mul β) BPair.one z.pair k.toNat)
     else ofPair z.bits (powJulia (BPair.mul β) BPair.one (BPair.inv β z.pair) k.natAbs)
 
+/-- `z ⟑ z` in the couple's blade algebra. -/
+@[inline] def sq (z : Couple V Float) : Couple V Float := ofPair z.bits (BPair.mul z.blSq z.pair z.pair)
+
+/-- `coth z = cosh z / sinh z` (AbstractTensors `AT:420`). -/
+def coth (z : Couple V Float) : Couple V Float := divSame z.cosh z.sinh
+
+/-- AbstractTensors `asinh(z) = log(z + sqrt(1 + z⟑z))` (`AT:421`), in the blade algebra
+(the complex `asinh` formula when `B² = -1`). -/
+def asinh (z : Couple V Float) : Couple V Float :=
+  let s := (⟨z.bits, f1 + z.sq.re, z.sq.im⟩ : Couple V Float).sqrt
+  log ⟨z.bits, z.re + s.re, z.im + s.im⟩
+
+/-- AbstractTensors `acosh(z) = log(z + sqrt(z⟑z - 1))` (`AT:422`). -/
+def acosh (z : Couple V Float) : Couple V Float :=
+  let s := (⟨z.bits, z.sq.re - f1, z.sq.im⟩ : Couple V Float).sqrt
+  log ⟨z.bits, z.re + s.re, z.im + s.im⟩
+
+/-- AbstractTensors `atanh(z) = (log(1 + z) - log(1 - z))/2` (`AT:423`). -/
+def atanh (z : Couple V Float) : Couple V Float :=
+  let a := log (⟨z.bits, f1 + z.re, z.im⟩ : Couple V Float)
+  let b := log (⟨z.bits, f1 - z.re, -z.im⟩ : Couple V Float)
+  ⟨z.bits, (a.re - b.re) / f2, (a.im - b.im) / f2⟩
+
+/-- AbstractTensors `acoth(z) = (log(z + 1) - log(z - 1))/2` (`AT:424`). -/
+def acoth (z : Couple V Float) : Couple V Float :=
+  let a := log (⟨z.bits, z.re + f1, z.im⟩ : Couple V Float)
+  let b := log (⟨z.bits, z.re - f1, z.im⟩ : Couple V Float)
+  ⟨z.bits, (a.re - b.re) / f2, (a.im - b.im) / f2⟩
+
 /-- Julia `b ^ z = exp(z ⟑ log(b))` for a real base `b` (AbstractTensors `AT:326`). -/
 def rpow (b : Float) (z : Couple V Float) : Couple V Float :=
   let l := F64.log b
@@ -404,6 +433,58 @@ def pow (s : Single V G Float) (k : Int) : Couple V Float :=
 /-- Julia `b ^ t = exp(t ⟑ log(b))` for a real base (AbstractTensors `AT:326`). -/
 @[inline] def rpow (b : Float) (s : Single V G Float) : Couple V Float :=
   Couple.expBlade V (if G == 0 then 0 else s.bits) (s.val * F64.log b)
+
+/-- `t ⟑ t` of a term: the scalar `c²·B²`. -/
+@[inline] def sqScalar (s : Single V G Float) : Float :=
+  s.val * s.val * bladeSq V (if G == 0 then 0 else s.bits)
+
+/-- `a + t` as a couple (the scalar `a` and the term `t`). -/
+@[inline] def plusScalar (a : Float) (s : Single V G Float) : Couple V Float :=
+  if G == 0 then ⟨0, a + s.val, f0⟩ else ⟨s.bits, a, s.val⟩
+
+/-- AbstractTensors `asinh(t) = log(t + sqrt(1 + t⟑t))` (`AT:421`) of a term: `t⟑t` is a
+scalar, whose (real) square root is `NaN` where Julia throws `DomainError`. -/
+def asinh (s : Single V G Float) : Couple V Float :=
+  (plusScalar (Float.sqrt (f1 + s.sqScalar)) s).log
+
+/-- AbstractTensors `acosh(t) = log(t + sqrt(t⟑t - 1))` (`AT:422`) of a term. -/
+def acosh (s : Single V G Float) : Couple V Float :=
+  (plusScalar (Float.sqrt (s.sqScalar - f1)) s).log
+
+/-- AbstractTensors `atanh(t) = (log(1 + t) - log(1 - t))/2` (`AT:423`) of a term. -/
+def atanh (s : Single V G Float) : Couple V Float :=
+  Couple.atanh (plusScalar f0 s)
+
+/-- AbstractTensors `acoth(t) = (log(t + 1) - log(t - 1))/2` (`AT:424`) of a term. -/
+def acoth (s : Single V G Float) : Couple V Float :=
+  Couple.acoth (plusScalar f0 s)
+
+/-- `(-I/k) ⟑ (a + b·e_{b'})` for a couple `a + b·e_{b'}` whose blade `b'` is the
+pseudoscalar times the blade of a term: the pseudo-couple on the term's blade
+(`-(b/k)·(I ⟑ e_{b'})`) plus `-(a/k)·I`. -/
+def negPseudoTimes (k : Float) (w : Couple V Float) : PseudoCouple V Float :=
+  let (σ, b'') := bladeMul V (pseudoMask V) w.bits
+  ⟨b'', -(w.im / k) * σ, -(w.re / k)⟩
+
+/-- AbstractTensors `asin(t) = (-I) ⟑ log(I⟑t + sqrt(1 - t⟑t))` (`AT:425`) of a term: `I⟑t` is
+a term, `1 - t⟑t` a scalar, so the logarithm is the closed form of a couple on the blade of
+`I⟑t` and the result a pseudo-couple (`asin(0.5v₁) = 0.5236v₁ + 5.6e-17v₁₂₃` in `ℝ3`). -/
+def asin (s : Single V G Float) : PseudoCouple V Float :=
+  let (σ, b') := bladeMul V (pseudoMask V) (if G == 0 then 0 else s.bits)
+  let r := Float.sqrt (f1 - s.sqScalar)
+  let x : Couple V Float := if b' == 0 then ⟨0, r + σ * s.val, f0⟩ else ⟨b', r, σ * s.val⟩
+  negPseudoTimes f1 x.log
+
+/-- AbstractTensors `atan(t) = ((-I)/2) ⟑ (log(1 + I⟑t) - log(1 - I⟑t))` (`AT:427`) of a term,
+a pseudo-couple (`atan(0.5v₁₂) = 0.5493v₁₂ - 0.0v₁₂₃` in `ℝ3`). -/
+def atan (s : Single V G Float) : PseudoCouple V Float :=
+  let (σ, b') := bladeMul V (pseudoMask V) (if G == 0 then 0 else s.bits)
+  let c := σ * s.val
+  let (p, m) : Couple V Float × Couple V Float :=
+    if b' == 0 then (⟨0, f1 + c, f0⟩, ⟨0, f1 - c, f0⟩) else (⟨b', f1, c⟩, ⟨b', f1, -c⟩)
+  let a := p.log
+  let b := m.log
+  negPseudoTimes f2 ⟨a.bits, a.re - b.re, a.im - b.im⟩
 
 end Single
 
