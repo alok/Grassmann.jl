@@ -1,0 +1,79 @@
+# Julia defects met by the Adapode ODE goldens (oracle/adapode/gen.jl). Numbering follows
+# docs/port-notes/adapode.md §8.6. The Lean port implements the intended semantics; `compat`
+# flags reproduce the deterministic ones where a golden records them.
+
+[adapode-adaptive-times]
+source = "Adapode.jl src/Adapode.jl:433, 446, 456, 467 with Cartan src/Cartan.jl:241-245 (setindex!)"
+behavior = "the adaptive integrators assign t ↦ x into a trajectory whose base is a Vector{Float64}, but setindex! stores only the fiber: the times stay uninitialized and timeloop! stops at random"
+port = "times are stored; load.jl patches setindex! (and initsteps!, B1b) so that the goldens record the intended step sequences"
+notes = "B1, B1b"
+
+[adapode-adaptive-end]
+source = "Adapode.jl src/Adapode.jl:689-692, 699 (timeloop!, truncate!)"
+behavior = "integration stops once tmax - t <= hmax without a last step, then drops the last accepted point when the preallocated array is longer: the result ends in [tmax - 2hmax, tmax - hmax)"
+port = "the last step lands on tmax and every accepted point is kept; ExplicitAdaptor/MultistepAdaptor compat := true reproduces Julia (goldens adaptive, runtests)"
+notes = "B2"
+
+[adapode-multistep-skip0]
+source = "Adapode.jl src/Adapode.jl:533-543, 378-387 (initsteps! on a LocalTensor)"
+behavior = "MultistepIntegrator with skip = 0 computes the RK4 bootstrap history but discards the bootstrapped states: the recursion restarts from x0 with the clock at t0 + (o-1)h (the default Flow(x0) call goes through it)"
+port = "the final state of the skip = 1 recursion; MultistepIntegrator compat := true reproduces Julia (goldens fixed 'ABM4 skip 0 compat', flow default_ASIS)"
+notes = "B3"
+
+[adapode-multistep-skipk]
+source = "Adapode.jl src/Adapode.jl:550-560"
+behavior = "MultistepIntegrator with skip > 1 builds its grid with step h but advances skip steps per point, and never initializes x[2..o]"
+port = "every skip-th state of the skip = 1 recursion (no golden: Julia's output is uninitialized memory)"
+notes = "B4"
+
+[adapode-flow-localtensor]
+source = "Adapode.jl src/Adapode.jl:162"
+behavior = "Flow(t0 ↦ x0) integrates x0 over [0, t0 + T] instead of [t0, t0 + T]"
+port = "Flow.applyLocal integrates over [t0, t0 + T] (golden flow localtensor_ASIS records Julia's value, equal to from0_to_1.5)"
+notes = "B5"
+
+[adapode-flow-iterate]
+source = "Adapode.jl src/Adapode.jl:164-171"
+behavior = "Flow(x0, n, i): the loop variable i shadows the integrator, so the default integrator is always used"
+port = "Flow.iterate uses the given integrator"
+notes = "B6"
+
+[adapode-heun-skip]
+source = "Adapode.jl src/Adapode.jl:483-490"
+behavior = "EulerHeunIntegrator with skip > 1 takes one step of h per stored point of a grid of spacing h*skip; with skip = 0 it throws (round(Inf))"
+port = "skip steps per stored point, and skip = 0 returns the final state; EulerHeunIntegrator compat := true reproduces the single step (golden fixed 'Heun skip 4 compat')"
+notes = "B7"
+
+[adapode-leapfrog-axis]
+source = "Adapode.jl src/Adapode.jl:663-666"
+behavior = "the leapfrog output stores nplots + 1 = round(tmax/tplot) + 1 states over the range t1:dt*gap:t1+tmax, which has one point fewer when the division rounds up (size(s) then disagrees with the data)"
+port = "one time per state: Julia's range when its length is right, else range(t1; step = dt*gap, length = nplots + 1) (golden leapfrog Leap*_0.013_0.7_3)"
+notes = "B8"
+
+[adapode-tableau-typos]
+source = "Adapode.jl src/constants.jl:40 (Fehlberg a63 = +3544/2565), 46 (Cash-Karp a41 = 3/40)"
+behavior = "the advancing Fehlberg weights and both Cash-Karp solutions have order 1 (kernel-checked in Adapode.Constants)"
+port = "CBA reproduces Julia's tables (the goldens' step sequences); ExplicitAdaptor fixed := true uses the published pairs (CBA.fixed)"
+notes = "B10"
+
+[adapode-flowintegral-vector]
+source = "Adapode.jl src/Adapode.jl:88, 195-203, 303, 409, 419"
+behavior = "AbstractIntegrator() throws (its default is a type); FlowIntegral on a Vector of states throws (typoef, undefined n); the FlowApprox multistep paths read an undefined h"
+port = "Integrator.default is ExplicitIntegrator{4}(2^-15); FlowIntegral.applyAll maps over the states; FlowApprox systems receive the step everywhere"
+notes = "B20"
+
+[adapode-chaos-examples]
+source = "Adapode.jl examples/chaos.jl:34-45"
+behavior = "ChemicalKinetics is called with eight arguments but takes seven and reads an undefined k5; Rossler4 reads x[4] of a three-dimensional state"
+port = "k5 is the eighth parameter; Rossler4 is a system on R4 started from (10,10,10,10) (the generator defines the same fixed systems)"
+notes = "B22"
+
+[adapode-trajectory-fields]
+source = "Adapode.jl src/Adapode.jl:337-339 with Cartan 0.4.16 (convert of the output TensorField)"
+behavior = "odesolve with a TensorField state and skip >= 1 throws a MethodError converting the output base(x0) × time field"
+port = "the trajectory is a TensorField over FiberProductBundle(base(x0), time); goldens only for skip = 0 (flow field_flow, field_system)"
+
+[adapode-gauss1-constants]
+source = "Adapode.jl src/constants.jl:25-26, 75-77 (Values(Values(1)), Values(Values(1,1)/3))"
+behavior = "a one-element Values of a Values is the inner Values (copy constructor): CBA[1]'s stage row and Gauss[1]'s point list are not wrapped"
+port = "no effect on values (the port stores rows and points uniformly); the table test reads both shapes"
