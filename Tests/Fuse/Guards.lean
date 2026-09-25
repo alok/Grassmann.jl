@@ -1,12 +1,13 @@
 /-
-Build-time fusion checks (`Grassmann.Fuse`): every `fuse_checks%` group in every standard space
-at `Float`, the exact `Int` checks, a diagonal metric with non-unit coefficients and a space
-with the reference kernels only, each run through the interpreter while this module builds (a
-mismatch fails the build). They add nothing to the `.olean` (straight-line code grows as the
+Build-time fusion checks (`Grassmann.Fuse`, `Grassmann.Batch`): every `fuse_checks%` group in
+every standard space at `Float`, the exact `Int` checks, a diagonal metric with non-unit
+coefficients and a space with the reference kernels only, and the batch kernels, each run
+through the interpreter while this module builds (a mismatch fails the build). They add nothing to the `.olean` (straight-line code grows as the
 square of the storage size, and compiling every group of every space would store hundreds of
 megabytes of generated code); `Tests.Fuse.Run` runs a compiled subset under `lake test`.
 -/
 import Tests.Fuse.Checks
+import Tests.Fuse.Batch
 
 open Grassmann DirectSum StaticVectors
 
@@ -54,5 +55,13 @@ set_option maxHeartbeats 4000000
 #fuse_guard (fuse_checks_dense% "D⟨1,2,-3⟩/Int" Diag.V Int) 43
 #fuse_guard (fuse_checks% "reference ⟨+-++⟩" RefOnly.V Float) 44
 #fuse_guard (fuse_checks_dense% "reference ⟨+-++⟩" RefOnly.V Float) 45
+#fuse_guard (batch_checks% "ℝ2" ℝ2) 61
+#fuse_guard (batch_checks% "ℝ4" ℝ4) 63
+#fuse_guard (batch_checks% "STA" STA) 64
+#fuse_guard (batch_checks% "PGA2" PGA2) 65
+#fuse_guard (batch_checks% "PGA3" PGA3) 66
+#fuse_guard (batch_checks% "CGA2" CGA2) 67
+#fuse_guard (batch_checks% "CGA3" CGA3) 68
+#fuse_guard (batch_checks% "D⟨1,2,-3⟩" Diag.V) 69
 
 end FuseTests

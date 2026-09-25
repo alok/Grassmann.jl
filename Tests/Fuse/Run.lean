@@ -18,7 +18,7 @@ floating-point code generation is part of what is tested). -/
 def compiledChecks : List (Nat → Tally → Tally) :=
   [ fuse_checks% "ℝ3" ℝ3 Float, fuse_checks_dense% "ℝ3" ℝ3 Float, fuse_checks_float% "ℝ3" ℝ3 Float,
     fuse_checks% "PGA3" PGA3 Float, fuse_checks% "ℝ3/Int" ℝ3 Int, fuse_checks% "D⟨1,2,-3⟩" Diag.V Float,
-    fuse_checks_float% "D⟨1,2,-3⟩" Diag.V Float ]
+    fuse_checks_float% "D⟨1,2,-3⟩" Diag.V Float, batch_checks% "ℝ3" ℝ3 ]
 
 /-- Code generic over the space: `fused%` leaves the expression as written (and it still
 computes the typed operations). -/
