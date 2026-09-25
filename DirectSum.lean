@@ -4,3 +4,7 @@ import DirectSum.Show
 import DirectSum.SpaceOps
 import DirectSum.Parse
 import DirectSum.Common
+import DirectSum.Parity
+import DirectSum.BladeAlgebra
+import DirectSum.Compat
+import DirectSum.Blade
