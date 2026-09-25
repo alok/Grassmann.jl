@@ -224,7 +224,7 @@ Cody–Waite step with an `fma` below `2^28·π/2`, Payne–Hanek beyond. The re
 `Float64` `hi` (a `DoubleFloat32`); `lo` is `0`. -/
 @[inline] def remPio2F32 (x : Float32) : RemPio2 :=
   let xd := x.toFloat
-  if x.abs < Float32.ofBits 0x4dc90fdb then  -- `Float32(pi*0x1p27)`
+  if x.abs < f32bits! 0x4dc90fdb then  -- `Float32(pi*0x1p27)`
     let fn := F64.round (xd * f64! 0.6366197723675814)
     let r := Float.fma fn (f64! -1.5707963267948966) xd
     ⟨Bits.toInt64Small fn, Float.fma fn (f64! -6.123233995736766e-17) r, f64! 0.0⟩
@@ -303,12 +303,14 @@ DS6)`, whose outermost `muladd` compiles unfused in Julia's system image. -/
 
 /-- Julia `tan_kernel(y::DoubleFloat64, k)` (trig.jl:239-338): `tan(y)` for `k = 1`, `-1/tan(y)`
 for `k = -1`. -/
-def tanKernel (hi lo k : Float) : Float :=
+@[inline] def tanKernel (hi lo k : Float) : Float :=
   if hi.abs ≥ f64! 0.6744 then
     -- reduce to `π/4 - |y|` (then `ylo = 0`); `|hi| ≥ 0.6744`, so its sign is a comparison
     let neg := hi < f64! 0.0
-    let yhi := (f64! 0.7853981633974483 - (if neg then -hi else hi)) +
-      (f64! 3.06161699786838301793e-17 - (if neg then -lo else lo))
+    -- `c - (-v)` is `c + v` bit for bit (IEEE subtraction adds the negation); written so, the
+    -- negation of a literal `lo` does not become a closed term
+    let yhi := (if neg then f64! 0.7853981633974483 + hi else f64! 0.7853981633974483 - hi) +
+      (if neg then f64! 3.06161699786838301793e-17 + lo else f64! 3.06161699786838301793e-17 - lo)
     let r := tanR yhi (f64! 0.0)
     let px := yhi + r
     (if neg then f64! -1.0 else f64! 1.0) * (k - f64! 2.0 * (yhi - (px * px / (k + px) - r)))
@@ -510,7 +512,8 @@ def sincos (x : Float) : Float × Float := sincosK x fun s c => (s, c)
 def tan (x : Float) : Float :=
   let absx := x.abs
   if absx < f64! 0.7853981633974483 then
-    if absx < f64! 7.450580596923828e-9 then x else tanKernel x (f64! 0.0) (f64! 1.0)
+    -- `lo = x - x = +0.0` (`x` is finite): a literal `0.0` would make `pio4lo - lo` a closed term
+    if absx < f64! 7.450580596923828e-9 then x else tanKernel x (x - x) (f64! 1.0)
   else if x != x then x
   else if absx == inf then nan
   else
@@ -560,8 +563,9 @@ def acos (x : Float) : Float :=
       let c := (z - df * df) / (s + df)
       f64! 2.0 * (df + (zRz * s + c))
 
-/-- Julia `atan(x::Float64)` (trig.jl:504-558). -/
-def atan (x : Float) : Float :=
+/-- Julia `atan(x::Float64)` (trig.jl:504-558), inline (the body of `atan` and `atan2`: a
+kernel that calls another keeps its caller's floats in callee-saved registers). -/
+@[inline] def atanInline (x : Float) : Float :=
   let absx := x.abs
   let neg := x < f64! 0.0
   if absx ≥ f64! 7.378697629483821e19 then  -- `2.0^66`
@@ -583,39 +587,41 @@ def atan (x : Float) : Float :=
     -- also `NaN`, whose (unobservable) sign `copysign` would take
     atanTail f64! 1.57079632679489655800e+00 f64! 6.12323399573676603587e-17 (f64! -1.0 / absx) neg
 
+/-- Julia `atan(x::Float64)` (trig.jl:504-558). -/
+def atan (x : Float) : Float := atanInline x
+
 /-- Julia `atan(y::Float64, x::Float64)` (trig.jl:568-659), the two-argument arctangent (the
 angle of `x + iy`). -/
 def atan2 (y x : Float) : Float :=
   if x != x then x
   else if y != y then y
-  else if x == f64! 1.0 then atan y
+  else if x == f64! 1.0 then atanInline y
   else
     -- `m = 2*signbit(x) + signbit(y)`; outside `y == ±0` both signs are comparisons
     -- (`y ≠ 0`; `x = ±0` only matters through `y`)
     let piLo := f64! 1.2246467991473531772E-16
     if y == f64! 0.0 then
-      if !signbit x then y else if !signbit y then pi else -pi
+      if !signbit x then y else if !signbit y then pi else f64bits! 0xC00921FB54442D18  -- `-π`
     else
       let sx := x < f64! 0.0
       let sy := y < f64! 0.0
       if x == f64! 0.0 then (if sy then f64! -1.5707963267948966 else f64! 1.5707963267948966)
       else if x.abs == inf then
+        -- the signed constants written out (a negated literal is a closed term)
         if y.abs == inf then
-          let v := if sx then f64! 2.356194490192345 else f64! 0.7853981633974483
-          if sy then -v else v
-        else
-          let v := if sx then pi else f64! 0.0
-          if sy then -v else v
+          if sx then (if sy then f64! -2.356194490192345 else f64! 2.356194490192345)
+          else (if sy then f64! -0.7853981633974483 else f64! 0.7853981633974483)
+        else if sx then (if sy then f64bits! 0xC00921FB54442D18 else pi)
+        else (if sy then f64! -0.0 else f64! 0.0)
       else if y.abs == inf then (if sy then f64! -1.5707963267948966 else f64! 1.5707963267948966)
       else
         -- `k = reinterpret(Int32, ypw - xpw) >> 20`: the exponent difference of `y/x`
         let k : Int32 := (poshighword y - poshighword x).toInt32 >>> i32! 20
         if k > i32! 60 then
-          -- `|y/x| > 2^60`: `m &= 1`
-          let z := f64! 1.5707963267948966 + f64! 0.5 * piLo
-          if sy then -z else z
+          -- `|y/x| > 2^60`: `m &= 1`; `π/2 + pi_lo/2` rounds to `π/2`
+          if sy then f64! -1.5707963267948966 else f64! 1.5707963267948966
         else
-          let z := if x < f64! 0.0 && k < i32! -60 then f64! 0.0 else atan (y / x).abs
+          let z := if x < f64! 0.0 && k < i32! -60 then f64! 0.0 else atanInline (y / x).abs
           if !sx then (if sy then -z else z)
           else if !sy then pi - (z - piLo)
           else (z - piLo) - pi
@@ -681,8 +687,8 @@ is set. -/
 /-- Julia `sin(x::Float32)` (trig.jl:29-52): the kernels run in `Float64`. -/
 def sin (x : Float32) : Float32 :=
   let absx := x.abs
-  if absx < Float32.ofBits 0x3f490fdb then  -- `Float32(π)/4`
-    if absx < Float32.ofBits 0x39b504f3 then x else sinKernel32 x.toFloat  -- `sqrt(eps(Float32))`
+  if absx < f32bits! 0x3f490fdb then  -- `Float32(π)/4`
+    if absx < f32bits! 0x39b504f3 then x else sinKernel32 x.toFloat  -- `sqrt(eps(Float32))`
   else if x != x then x
   else if absx == inf then nan
   else
@@ -696,8 +702,8 @@ def sin (x : Float32) : Float32 :=
 /-- Julia `cos(x::Float32)` (trig.jl:98-122). -/
 def cos (x : Float32) : Float32 :=
   let absx := x.abs
-  if absx < Float32.ofBits 0x3f490fdb then
-    if absx < Float32.ofBits 0x39800000 then f32! 1.0 else cosKernel32 x.toFloat  -- `2^-12`
+  if absx < f32bits! 0x3f490fdb then
+    if absx < f32bits! 0x39800000 then f32! 1.0 else cosKernel32 x.toFloat  -- `2^-12`
   else if x != x then x
   else if absx == inf then nan
   else
@@ -711,7 +717,7 @@ def cos (x : Float32) : Float32 :=
 /-- Julia `sincos(x::Float32)` (trig.jl:177-203). -/
 def sincos (x : Float32) : Float32 × Float32 :=
   let absx := x.abs
-  if absx < Float32.ofBits 0x3f490fdb then
+  if absx < f32bits! 0x3f490fdb then
     if x == f32! 0.0 then (x, f32! 1.0) else (sinKernel32 x.toFloat, cosKernel32 x.toFloat)
   else if x != x then (x, x)
   else if absx == inf then (nan, nan)
@@ -728,8 +734,8 @@ def sincos (x : Float32) : Float32 × Float32 :=
 /-- Julia `tan(x::Float32)` (trig.jl:218-236). -/
 def tan (x : Float32) : Float32 :=
   let absx := x.abs
-  if absx < Float32.ofBits 0x3f490fdb then
-    if absx < Float32.ofBits 0x393504f3 then x else tanKernel32 x.toFloat true  -- `sqrt(eps)/2`
+  if absx < f32bits! 0x3f490fdb then
+    if absx < f32bits! 0x393504f3 then x else tanKernel32 x.toFloat true  -- `sqrt(eps)/2`
   else if x != x then x
   else if absx == inf then nan
   else
@@ -740,7 +746,7 @@ def tan (x : Float32) : Float32 :=
 def asin (x : Float32) : Float32 :=
   let absx := x.abs
   if absx ≥ f32! 1.0 then
-    if absx == f32! 1.0 then (if x < f32! 0.0 then -Float32.ofBits 0x3fc90fdb else Float32.ofBits 0x3fc90fdb)
+    if absx == f32! 1.0 then (if x < f32! 0.0 then f32bits! 0xbfc90fdb else f32bits! 0x3fc90fdb)
     else nan  -- `Float32(π)/2`
   else if absx < f32! 0.5 then
     if absx < f32! 0.000244140625 then x else Float32.fma x (arcTRt32 (x * x)) x  -- `2f0^-12`
@@ -756,9 +762,9 @@ def asin (x : Float32) : Float32 :=
 def acos (x : Float32) : Float32 :=
   let absx := x.abs
   if absx ≥ f32! 1.0 then
-    if absx == f32! 1.0 then (if x > f32! 0.0 then f32! 0.0 else Float32.ofBits 0x40490fdb) else nan
+    if absx == f32! 1.0 then (if x > f32! 0.0 then f32! 0.0 else f32bits! 0x40490fdb) else nan
   else if absx < f32! 0.5 then
-    if absx < Float32.ofBits 0x32800000 then Float32.ofBits 0x3fc90fdb  -- `2f0^-26` → `Float32(π)/2`
+    if absx < f32bits! 0x32800000 then f32bits! 0x3fc90fdb  -- `2f0^-26` → `Float32(π)/2`
     else f32! 1.5707962513 - (x - (f32! 7.5497894159e-08 - x * arcTRt32 (x * x)))
   else
     let z := (f32! 1.0 - absx) * f32! 0.5
@@ -771,12 +777,12 @@ def acos (x : Float32) : Float32 :=
       let c := (z - df * df) / (s + df)
       f32! 2.0 * (df + (zRz * s + c))
 
-/-- Julia `atan(x::Float32)` (trig.jl:504-558). -/
-def atan (x : Float32) : Float32 :=
+/-- Julia `atan(x::Float32)` (trig.jl:504-558), inline (see `F64.atanInline`). -/
+@[inline] def atanInline (x : Float32) : Float32 :=
   let absx := x.abs
   let neg := x < f32! 0.0
   if absx ≥ f32! 67108864.0 then  -- `2f0^26`
-    if neg then -Float32.ofBits 0x3fc90fdb else Float32.ofBits 0x3fc90fdb
+    if neg then f32bits! 0xbfc90fdb else f32bits! 0x3fc90fdb
   else if absx < f32! 0.4375 then
     if absx < f32! 0.000244140625 then x  -- `2f0^-12`
     else x - x * atanPQ32 x
@@ -790,38 +796,47 @@ def atan (x : Float32) : Float32 :=
       ((absx - f32! 1.5) / (f32! 1.0 + f32! 1.5 * absx)) neg
   else atanTail32 f32! 1.5707962513e+00 f32! 7.5497894159e-08 (f32! -1.0 / absx) neg
 
-/-- Julia `atan(y::Float32, x::Float32)` (trig.jl:568-659). -/
+/-- Julia `atan(x::Float32)` (trig.jl:504-558). -/
+def atan (x : Float32) : Float32 := atanInline x
+
+/-- `pi/2 + 0.5·pi_lo` of `atan(y::Float32, x)` for `|y/x| > 2^26` (a module constant: the
+same sum, computed once). -/
+def atan2BigZ : Float32 := f32bits! 0x3fc90fdb + f32! 0.5 * f32! -8.7422776573e-08
+
+/-- `-atan2BigZ`. -/
+def atan2BigZNeg : Float32 := -atan2BigZ
+
+/-- Julia `atan(y::Float32, x::Float32)` (trig.jl:568-659). The signed constants are written
+out (a negated literal inside a function is a closed term, an atomic once-cell read). -/
 def atan2 (y x : Float32) : Float32 :=
-  let pi32 := Float32.ofBits 0x40490fdb
-  let halfPi32 := Float32.ofBits 0x3fc90fdb
+  let pi32 := f32bits! 0x40490fdb
+  let halfPi32 := f32bits! 0x3fc90fdb
   if x != x then x
   else if y != y then y
-  else if x == f32! 1.0 then atan y
+  else if x == f32! 1.0 then atanInline y
   else
     let piLo := f32! -8.7422776573e-08
     if y == f32! 0.0 then
-      if !signbit x then y else if !signbit y then pi32 else -pi32
+      if !signbit x then y else if !signbit y then pi32 else f32bits! 0xc0490fdb
     else
       -- `y ≠ 0`, and `x = ±0` only matters through `y`: the signs are comparisons
       let sx := x < f32! 0.0
       let sy := y < f32! 0.0
-      if x == f32! 0.0 then (if sy then -halfPi32 else halfPi32)
+      if x == f32! 0.0 then (if sy then f32bits! 0xbfc90fdb else halfPi32)
       else if x.abs == inf then
         if y.abs == inf then
-          let v := if sx then Float32.ofBits 0x4016cbe4 else Float32.ofBits 0x3f490fdb
-          if sy then -v else v
-        else
-          let v := if sx then pi32 else f32! 0.0
-          if sy then -v else v
-      else if y.abs == inf then (if sy then -halfPi32 else halfPi32)
+          if sx then (if sy then f32bits! 0xc016cbe4 else f32bits! 0x4016cbe4)
+          else (if sy then f32bits! 0xbf490fdb else f32bits! 0x3f490fdb)
+        else if sx then (if sy then f32bits! 0xc0490fdb else pi32)
+        else (if sy then f32! -0.0 else f32! 0.0)
+      else if y.abs == inf then (if sy then f32bits! 0xbfc90fdb else halfPi32)
       else
-        let pw (v : Float32) : UInt32 := (Bits.toBits32 v) &&& 0x7fffffff
-        let k : Int32 := (pw y - pw x).toInt32 >>> i32! 23
+        let k : Int32 :=
+          ((Bits.toBits32 y &&& 0x7fffffff) - (Bits.toBits32 x &&& 0x7fffffff)).toInt32 >>> i32! 23
         if k > i32! 26 then
-          let z := halfPi32 + f32! 0.5 * piLo
-          if sy then -z else z
+          if sy then atan2BigZNeg else atan2BigZ
         else
-          let z := if x < f32! 0.0 && k < i32! -26 then f32! 0.0 else atan (y / x).abs
+          let z := if x < f32! 0.0 && k < i32! -26 then f32! 0.0 else atanInline (y / x).abs
           if !sx then (if sy then -z else z)
           else if !sy then pi32 - (z - piLo)
           else (z - piLo) - pi32

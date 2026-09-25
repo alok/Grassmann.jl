@@ -37,6 +37,15 @@ syntax:max (name := f64Lit) "f64! " "-"? (scientific <|> num) : term
 constant `Float32.ofBits n`. -/
 syntax:max (name := f32Lit) "f32! " "-"? (scientific <|> num) : term
 
+/-- `f64bits! 0x7FF0000000000000`: the `Float` with these IEEE bits, as a module-level constant
+(the same constant as the `f64!` literal of that value). For values without a short decimal
+form, and for `Inf`/`NaN`; `Float.ofBits n` in a function body is a closed term read through an
+atomic once-cell. -/
+syntax:max (name := f64BitsLit) "f64bits! " num : term
+
+/-- `f32bits! 0x3fc90fdb`: the `Float32` with these IEEE bits, as a module-level constant. -/
+syntax:max (name := f32BitsLit) "f32bits! " num : term
+
 /-- `i64! 8` (or `i64! -53`): an `Int64` literal as a module-level constant (a plain global
 load in compiled code). An `Int64`/`Int32` literal inside a function body is otherwise a closed
 term, `Int64.ofNat 8` computed once and read through a once-cell (an atomic load and a branch on
@@ -87,6 +96,24 @@ def litConst (tag : String) (ty ofBits : Name) (bits : Expr) (bitsNat : Nat) : T
     let bits := if stx[1].isNone then bits else bits ^^^ 0x80000000
     litConst "f32" ``Float32 ``Float32.ofBits (toExpr bits) bits.toNat
   | none => throwErrorAt stx[2] "f32!: expected a numeric literal"
+
+/-- Elaborate `f64bits! n`. -/
+@[term_elab f64BitsLit] def elabF64Bits : TermElab := fun stx _ => do
+  match stx[1].isNatLit? with
+  | some n =>
+    unless n < 2 ^ 64 do throwErrorAt stx[1] "f64bits!: more than 64 bits"
+    let bits : UInt64 := n.toUInt64
+    litConst "f64" ``Float ``Float.ofBits (toExpr bits) bits.toNat
+  | none => throwErrorAt stx[1] "f64bits!: expected a natural-number literal"
+
+/-- Elaborate `f32bits! n`. -/
+@[term_elab f32BitsLit] def elabF32Bits : TermElab := fun stx _ => do
+  match stx[1].isNatLit? with
+  | some n =>
+    unless n < 2 ^ 32 do throwErrorAt stx[1] "f32bits!: more than 32 bits"
+    let bits : UInt32 := n.toUInt32
+    litConst "f32" ``Float32 ``Float32.ofBits (toExpr bits) bits.toNat
+  | none => throwErrorAt stx[1] "f32bits!: expected a natural-number literal"
 
 /-- Elaborate `i64! n` / `i64! -n` (two's complement, wrapping as Julia's `Int64`). -/
 @[term_elab i64Lit] def elabI64 : TermElab := fun stx _ => do

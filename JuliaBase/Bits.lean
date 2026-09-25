@@ -74,6 +74,11 @@ subtracted with wrap-around. Outside that range the result is unspecified (but t
 @[inline] def toInt64Small (x : Float) : Int64 :=
   ((x + f64! 6755399441055744.0).toUInt64 - 6755399441055744).toInt64
 
+/-- `trunc(Int64, x)` for `|x| < 2^63` (not NaN), through the inline `Float.toUInt64` of `|x|`
+(`Float.toInt64` calls the out-of-line `lean_float_isnan`); equal to `Float.toInt64` there. -/
+@[inline] def toInt64Trunc (x : Float) : Int64 :=
+  if x ≥ f64! 0.0 then x.toUInt64.toInt64 else -((-x).toUInt64.toInt64)
+
 end Bits
 
 namespace FloatArray'

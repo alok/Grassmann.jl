@@ -11,8 +11,11 @@ multiply-adds (the oracle machine is Apple aarch64) and `two_mul`/`exthorner` ar
 error-free transformations. Arguments outside a function's domain (Julia throws a
 `DomainError`: `acosh(0.5)`, `atanh(2.0)`) return `NaN`.
 
-As in `JuliaBase.Trig`, `copysign(v, x)` is a comparison wherever `x` cannot be `±0` (the bit
-casts are out-of-line calls in compiled Lean), and no hot path builds a tuple of `Float`s.
+As in `JuliaBase.Trig`, `copysign(v, x)` is a comparison wherever `x` cannot be `±0`, and no hot
+path builds a tuple of `Float`s. The `exp`/`log`/`log1p` kernels are inlined (`Math.expImpl`,
+`Math.logImpl`, `Math.log1pInline`), not called: a kernel that calls another keeps the caller's
+floats in callee-saved registers, which it spills and reloads, and in a loop that couples
+successive iterations through memory (`sinh` in a sweep: 6.3 ns called, 2.2 ns inlined).
 -/
 
 namespace JuliaBase
@@ -93,10 +96,10 @@ def sinh (x : Float) : Float :=
     -- `copysign(v, x)` with `|x| > 2.1` and `v > 0` (or `NaN`)
     let v :=
       if absx ≥ f64! 709.7822265633563 then
-        let e := exp (f64! 0.5 * absx)
+        let e := expImpl (f64! 0.5 * absx) .e
         f64! 0.5 * e * e
       else
-        let e := exp absx
+        let e := expImpl absx .e
         f64! 0.5 * (e - f64! 1.0 / e)
     if x < f64! 0.0 then -v else v
 
@@ -105,10 +108,10 @@ def cosh (x : Float) : Float :=
   let absx := x.abs
   if absx ≤ f64! 1.0 then coshKernel (x * x)
   else if absx ≥ f64! 709.7822265633563 then
-    let e := exp (f64! 0.5 * absx)
+    let e := expImpl (f64! 0.5 * absx) .e
     f64! 0.5 * e * e
   else
-    let e := exp absx
+    let e := expImpl absx .e
     f64! 0.5 * (e + f64! 1.0 / e)
 
 /-- Julia `tanh(x::Float64)` (hyperbolic.jl:142-159). -/
@@ -118,7 +121,7 @@ def tanh (x : Float) : Float :=
   else if abs2x ≤ f64! 1.0 then x * tanhKernel (x * x)
   else
     -- `copysign(1 - 2/(k+1), x)`: `x ≠ 0` and the value is positive (or `NaN`)
-    let k := exp abs2x
+    let k := expImpl abs2x .e
     let v := f64! 1.0 - f64! 2.0 / (k + f64! 1.0)
     if x < f64! 0.0 then -v else v
 
@@ -133,10 +136,10 @@ def asinh (x : Float) : Float :=
       let w :=
         if absx < f64! 2.0 then
           let t := x * x
-          log1p (absx + t / (f64! 1.0 + (f64! 1.0 + t).sqrt))
+          log1pInline (absx + t / (f64! 1.0 + (f64! 1.0 + t).sqrt))
         else if absx < f64! 268435456.0 then  -- `2^28`
-          log (f64! 2.0 * absx + f64! 1.0 / ((x * x + f64! 1.0).sqrt + absx))
-        else log absx + f64! 6.93147180559945286227e-01
+          logImpl (f64! 2.0 * absx + f64! 1.0 / ((x * x + f64! 1.0).sqrt + absx)) .e
+        else logImpl absx .e + f64! 6.93147180559945286227e-01
       if x < f64! 0.0 then -w else w
 
 /-- Julia `acosh(x::Float64)` (hyperbolic.jl:200-229); `NaN` for `x < 1`. -/
@@ -146,11 +149,11 @@ def acosh (x : Float) : Float :=
   else if x == f64! 1.0 then f64! 0.0
   else if x < f64! 2.0 then
     let t := x - f64! 1.0
-    log1p (t + (f64! 2.0 * t + t * t).sqrt)
+    log1pInline (t + (f64! 2.0 * t + t * t).sqrt)
   else if x < f64! 268435456.0 then
     let t := x * x
-    log (f64! 2.0 * x - f64! 1.0 / (x + (t - f64! 1.0).sqrt))
-  else log x + f64! 6.93147180559945286227e-01
+    logImpl (f64! 2.0 * x - f64! 1.0 / (x + (t - f64! 1.0).sqrt)) .e
+  else logImpl x .e + f64! 6.93147180559945286227e-01
 
 /-- Julia `atanh(x::Float64)` (hyperbolic.jl:233-266); `NaN` for `|x| > 1`. -/
 def atanh (x : Float) : Float :=
@@ -159,8 +162,8 @@ def atanh (x : Float) : Float :=
     let absx := x.abs
     if absx > f64! 1.0 then nan
     else
-      let t := if absx < f64! 0.5 then log1p (f64! 2.0 * absx / (f64! 1.0 - absx))
-        else log ((f64! 1.0 + absx) / (f64! 1.0 - absx))
+      let t := if absx < f64! 0.5 then log1pInline (f64! 2.0 * absx / (f64! 1.0 - absx))
+        else logImpl ((f64! 1.0 + absx) / (f64! 1.0 - absx)) .e
       -- `copysign(t, x)` with `t ≥ 0`; for `x = ±0`, `t = 0` and the result is `x`
       f64! 0.5 * (if x < f64! 0.0 then -t else if x > f64! 0.0 then t else x)
 
@@ -177,10 +180,10 @@ def sinh (x : Float32) : Float32 :=
   else
     let v :=
       if absx ≥ f32! 88.72283 then
-        let e := exp (f32! 0.5 * absx)
+        let e := expImpl32 (f32! 0.5 * absx) .e
         f32! 0.5 * e * e
       else
-        let e := exp absx
+        let e := expImpl32 absx .e
         f32! 0.5 * (e - f32! 1.0 / e)
     if x < f32! 0.0 then -v else v
 
@@ -189,10 +192,10 @@ def cosh (x : Float32) : Float32 :=
   let absx := x.abs
   if absx ≤ f32! 1.0 then coshKernel32 (x * x)
   else if absx ≥ f32! 88.72283 then
-    let e := exp (f32! 0.5 * absx)
+    let e := expImpl32 (f32! 0.5 * absx) .e
     f32! 0.5 * e * e
   else
-    let e := exp absx
+    let e := expImpl32 absx .e
     f32! 0.5 * (e + f32! 1.0 / e)
 
 /-- Julia `tanh(x::Float32)` (hyperbolic.jl:142-159). -/
@@ -201,7 +204,7 @@ def tanh (x : Float32) : Float32 :=
   if abs2x ≥ f32! 18.0 then (if x < f32! 0.0 then f32! -1.0 else f32! 1.0)
   else if abs2x ≤ f32! 1.3862944 then x * tanhKernel32 (x * x)
   else
-    let k := exp abs2x
+    let k := expImpl32 abs2x .e
     let v := f32! 1.0 - f32! 2.0 / (k + f32! 1.0)
     if x < f32! 0.0 then -v else v
 
@@ -210,15 +213,15 @@ def asinh (x : Float32) : Float32 :=
   if !(x.abs < inf) then x
   else
     let absx := x.abs
-    if absx < Float32.ofBits 0x31800000 then x  -- `2f0^-28`
+    if absx < f32bits! 0x31800000 then x  -- `2f0^-28`
     else
       let w :=
         if absx < f32! 2.0 then
           let t := x * x
-          log1p (absx + t / (f32! 1.0 + (f32! 1.0 + t).sqrt))
-        else if absx < Float32.ofBits 0x4d800000 then  -- `2f0^28`
-          log (f32! 2.0 * absx + f32! 1.0 / ((x * x + f32! 1.0).sqrt + absx))
-        else log absx + f32! 6.9314718246e-01
+          log1pF32Inline (absx + t / (f32! 1.0 + (f32! 1.0 + t).sqrt))
+        else if absx < f32bits! 0x4d800000 then  -- `2f0^28`
+          logImpl32 (f32! 2.0 * absx + f32! 1.0 / ((x * x + f32! 1.0).sqrt + absx)) .e
+        else logImpl32 absx .e + f32! 6.9314718246e-01
       if x < f32! 0.0 then -w else w
 
 /-- Julia `acosh(x::Float32)` (hyperbolic.jl:200-229); `NaN` for `x < 1`. -/
@@ -228,11 +231,11 @@ def acosh (x : Float32) : Float32 :=
   else if x == f32! 1.0 then f32! 0.0
   else if x < f32! 2.0 then
     let t := x - f32! 1.0
-    log1p (t + (f32! 2.0 * t + t * t).sqrt)
-  else if x < Float32.ofBits 0x4d800000 then
+    log1pF32Inline (t + (f32! 2.0 * t + t * t).sqrt)
+  else if x < f32bits! 0x4d800000 then
     let t := x * x
-    log (f32! 2.0 * x - f32! 1.0 / (x + (t - f32! 1.0).sqrt))
-  else log x + f32! 6.9314718246e-01
+    logImpl32 (f32! 2.0 * x - f32! 1.0 / (x + (t - f32! 1.0).sqrt)) .e
+  else logImpl32 x .e + f32! 6.9314718246e-01
 
 /-- Julia `atanh(x::Float32)` (hyperbolic.jl:233-266); `NaN` for `|x| > 1`. -/
 def atanh (x : Float32) : Float32 :=
@@ -241,8 +244,8 @@ def atanh (x : Float32) : Float32 :=
     let absx := x.abs
     if absx > f32! 1.0 then nan
     else
-      let t := if absx < f32! 0.5 then log1p (f32! 2.0 * absx / (f32! 1.0 - absx))
-        else log ((f32! 1.0 + absx) / (f32! 1.0 - absx))
+      let t := if absx < f32! 0.5 then log1pF32Inline (f32! 2.0 * absx / (f32! 1.0 - absx))
+        else logImpl32 ((f32! 1.0 + absx) / (f32! 1.0 - absx)) .e
       f32! 0.5 * (if x < f32! 0.0 then -t else if x > f32! 0.0 then t else x)
 
 end F32

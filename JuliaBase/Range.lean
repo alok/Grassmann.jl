@@ -550,7 +550,7 @@ def linspaceFloat32 (start stop : Float32) (len : Nat) : StepRangeLen32 :=
   if len == 2 && !step.isFinite then
     ⟨start.toFloat, -start.toFloat + stop.toFloat, len, 1⟩
   else
-    let m : Float32 := Float32.ofBits 0x7F7FFFFE  -- prevfloat(floatmax(Float32))
+    let m : Float32 := f32bits! 0x7F7FFFFE  -- prevfloat(floatmax(Float32))
     let k := Float32.ofInt (max (imin - 1) ((len : Int) - imin))
     let lo := F32.max (-(m + ref) / k) ((-m + ref) / k)
     let hi := F32.min ((m - ref) / k) ((m + ref) / k)

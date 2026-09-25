@@ -602,7 +602,7 @@ def div (z w : Complex Float32) : Complex Float32 :=
   if F64.isinf c || F64.isinf d then
     if F32.isfinite z.re && F32.isfinite z.im then
       ⟨f32! 0.0 * F32.sign z.re * F32.sign w.re, (f32! -0.0) * F32.sign z.im * F32.sign w.im⟩
-    else ⟨Float32.ofBits 0x7FC00000, Float32.ofBits 0x7FC00000⟩
+    else ⟨f32bits! 0x7FC00000, f32bits! 0x7FC00000⟩
   else
     let mag := f64! 1.0 / Float.fma c c (d * d)
     ⟨(Float.fma a c (b * d) * mag).toFloat32, (Float.fma b c (-(a * d)) * mag).toFloat32⟩

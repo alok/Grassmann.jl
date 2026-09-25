@@ -58,7 +58,7 @@ def nan : Float := Float.ofBits 0x7FF8000000000000
 def inf : Float := Float.ofBits 0x7FF0000000000000
 
 /-- Julia `iszero(x)`: `x == 0` (true for both signed zeros). -/
-@[inline] def iszero (x : Float) : Bool := x == 0
+@[inline] def iszero (x : Float) : Bool := x == f64! 0.0
 
 /-- Julia `isnan(x)`: `x != x`, inline (Lean's `Float.isNaN` is an out-of-line runtime call). -/
 @[inline] def isnan (x : Float) : Bool := x != x
@@ -75,7 +75,7 @@ def nextfloat (x : Float) : Float :=
   if isnan x || x == inf then x
   else
     let b := Bits.toBits x
-    if x == 0 then Bits.ofBits 1
+    if x == f64! 0.0 then Bits.ofBits 1
     else if signbit x then Bits.ofBits (b - 1) else Bits.ofBits (b + 1)
 
 /-- Julia `prevfloat(x::Float64)`: the next representable value toward `-Inf`. -/
@@ -83,7 +83,7 @@ def prevfloat (x : Float) : Float :=
   if isnan x || x == -inf then x
   else
     let b := Bits.toBits x
-    if x == 0 then Bits.ofBits (signMask ||| 1)
+    if x == f64! 0.0 then Bits.ofBits (signMask ||| 1)
     else if signbit x then Bits.ofBits (b + 1) else Bits.ofBits (b - 1)
 
 /-- `2^52`: every `Float64` of at least this magnitude is an integer. -/
@@ -104,7 +104,7 @@ on the argument reduction of `sin`/`cos`). -/
 /-- Julia `trunc(x)` (round toward zero). -/
 def trunc (x : Float) : Float :=
   if isnan x || isinf x then x
-  else copysign (if x < 0 then (-x).floor else x.floor) x
+  else copysign (if x < f64! 0.0 then (-x).floor else x.floor) x
 
 /-- Julia `isinteger(x::Float64)`: finite with no fractional part. -/
 @[inline] def isinteger (x : Float) : Bool := isfinite x && x.floor == x
@@ -167,7 +167,7 @@ def remInternal (x y : Float) : Float :=
     -- |x| = mx·2^(ex'-1075), |y| = my·2^(ey'-1075), and xb > yb gives ex' ≥ ey'
     let d := ex' - ey'
     let r := remShift my (d + 1) (mx % my) d
-    if r == 0 then 0 else r.toFloat.scaleB ((ey' : Int) - 1075)
+    if r == 0 then f64! 0.0 else r.toFloat.scaleB ((ey' : Int) - 1075)
 
 /-- Julia `rem(x::Float64, y::Float64)` (float.jl:596): truncated remainder, sign of `x`,
 exact. `rem(x, 0) = NaN`, `rem(±Inf, y) = NaN`, `rem(x, ±Inf) = x` for finite `x`. -/
@@ -182,8 +182,8 @@ def mod (x y : Float) : Float :=
   if isinf y && isfinite x then x
   else
     let r := rem x y
-    if r == 0 then copysign r y
-    else if (r > 0) != (y > 0) then r + y
+    if r == f64! 0.0 then copysign r y
+    else if (r > f64! 0.0) != (y > f64! 0.0) then r + y
     else r
 
 /-- Julia `div(x, y)` for floats (div.jl:383 with `RoundToZero`):
@@ -244,7 +244,7 @@ def ulpDist (x y : Float) : Nat :=
 
 /-- Julia `sign(x::Float64)` (number.jl:206): `-1.0`, `1.0`, or `x` itself for `±0.0` and NaN. -/
 @[inline] def sign (x : Float) : Float :=
-  if x < 0 then -1 else if x > 0 then 1 else x
+  if x < f64! 0.0 then f64! -1.0 else if x > f64! 0.0 then f64! 1.0 else x
 
 /-- Julia `rtoldefault(Float64)` = `sqrt(eps(Float64))` = `2^-26` (floatfuncs.jl:264). -/
 def rtoldefault : Float := Float.ofBits 0x3E50000000000000
@@ -426,7 +426,7 @@ def nextfloat (x : Float32) : Float32 :=
   if isnan x || x == inf then x
   else
     let b := Bits.toBits32 x
-    if x == 0 then Bits.ofBits32 1
+    if x == f32! 0.0 then Bits.ofBits32 1
     else if signbit x then Bits.ofBits32 (b - 1) else Bits.ofBits32 (b + 1)
 
 /-- Julia `prevfloat(x::Float32)`: the next representable value toward `-Inf`. -/
@@ -434,7 +434,7 @@ def prevfloat (x : Float32) : Float32 :=
   if isnan x || x == -inf then x
   else
     let b := Bits.toBits32 x
-    if x == 0 then Bits.ofBits32 0x80000001
+    if x == f32! 0.0 then Bits.ofBits32 0x80000001
     else if signbit x then Bits.ofBits32 (b + 1) else Bits.ofBits32 (b - 1)
 
 /-- Julia `max(x::Float32, y::Float32)`: NaN-propagating, `-0f0 < 0f0`. -/
@@ -453,7 +453,7 @@ def prevfloat (x : Float32) : Float32 :=
 
 /-- Julia `sign(x::Float32)`: `-1f0`, `1f0`, or `x` itself for `±0f0` and NaN. -/
 @[inline] def sign (x : Float32) : Float32 :=
-  if x < 0 then -1 else if x > 0 then 1 else x
+  if x < f32! 0.0 then f32! -1.0 else if x > f32! 0.0 then f32! 1.0 else x
 
 /-- Julia `rtoldefault(Float32)` = `sqrt(eps(Float32))` = `2^-11.5`, rounded. -/
 def rtoldefault : Float32 := (Float32.ofBits 0x34000000).sqrt
