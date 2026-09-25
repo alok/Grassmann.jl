@@ -31,10 +31,14 @@ def timeBest {α : Type} (reps : Nat) (f : Nat → α) : IO (Nat × α) := do
     if k == 0 || t1 - t0 < best then best := t1 - t0
   return (best, out)
 
+/-- A non-negative float with one decimal. -/
+def fmt1 (x : Float) : String :=
+  let t := (x * 10).round.toUInt64.toNat
+  s!"{t / 10}.{t % 10}"
+
 /-- Format nanoseconds (one decimal). -/
 def fmt (ns : Float) : String :=
-  let r (x : Float) : String := toString ((x * 10).round / 10)
-  if ns < 10000 then s!"{r ns} ns" else if ns < 1e7 then s!"{r (ns / 1000)} µs" else s!"{r (ns / 1e6)} ms"
+  if ns < 10000 then s!"{fmt1 ns} ns" else if ns < 1e7 then s!"{fmt1 (ns / 1000)} µs" else s!"{fmt1 (ns / 1e6)} ms"
 
 /-- Repeat `f` `n` times (salted), summing a float from each result. -/
 @[specialize] def repeatSum (n salt : Nat) (f : Nat → Float) : Float :=
