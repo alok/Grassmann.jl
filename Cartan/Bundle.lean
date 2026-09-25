@@ -123,7 +123,7 @@ class GridPoint (N : Nat) (P : Type) where
   pointOf : ProductSpace N → Nat → P
 
 /-- 1-D real points: the coordinate vector itself (Julia `PointArray(0, range)`). -/
-instance : GridPoint 1 Float := ⟨fun ps k => (ps.axes[0]).get k⟩
+instance : GridPoint 1 Float := ⟨fun ps k => (ps.coords[0]).get! k⟩
 
 /-- Affine points of a `ProductSpace` (Julia `Chain{affinemanifold(N),1}`). -/
 instance {N : Nat} : GridPoint N (AffinePoint N) := ⟨ProductSpace.point⟩
@@ -166,7 +166,7 @@ def ofSpace (ps : ProductSpace N) : GridBundle N (AffinePoint N) :=
 /-- Julia `GridBundle(PointArray(0, r))` of a 1-D vector: the open interval with real points
 (`TensorField(0:0.1:1)`, `IntervalRange`). -/
 def ofAxis (a : Axis) : GridBundle 1 Float :=
-  ⟨⟨#v[a]⟩, QuotientTopology.openTop (ProductSpace.size ⟨#v[a]⟩), .induced, 0, rfl⟩
+  ⟨.ofAxes #v[a], QuotientTopology.openTop (ProductSpace.ofAxes #v[a]).size, .induced, 0, rfl⟩
 
 /-- A grid with the given topology, or the open grid when the topology's size does not match
 (the construction used by slicing and resampling, whose sizes always agree). -/
@@ -282,7 +282,7 @@ def slice {K : Nat} (m : GridBundle N P G) (ks : Vector (Fin N) K) (fixed : Vect
 (Julia returns the range itself, `topology.jl:125-129`), and its sliced topology. -/
 def sliceLine (m : GridBundle N P G) (a : Fin N) (fixed : Vector Nat N) [Inhabited G] :
     GridBundle 1 Float G :=
-  mkChecked ⟨#v[m.space.axis a]⟩ (m.top.slice #v[a] (fixedValues #v[a] fixed))
+  mkChecked (.ofAxes #v[m.space.axis a]) (m.top.slice #v[a] (fixedValues #v[a] fixed))
     (m.metric.gather (m.sliceIndices #v[a] fixed))
 
 /-- The axes of `Fin (N+1)` other than `a`, ascending. -/

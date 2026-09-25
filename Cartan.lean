@@ -4,6 +4,7 @@ import Cartan.ProductSpace
 import Cartan.Local
 import Cartan.Bundle
 import Cartan.Field
+import Cartan.Kernel
 import Cartan.Algebra
 import Cartan.Parameters
 import Cartan.Slice

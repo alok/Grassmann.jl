@@ -1,4 +1,4 @@
-import Cartan.Field
+import Cartan.Kernel
 
 /-!
 # The lifted algebra of tensor fields
@@ -36,45 +36,47 @@ open Grassmann DirectSum StaticVectors AbstractTensors JuliaBase MeshTopology
 
 /-! ## Flat loops -/
 
-/-- `acc ++ [f a[i] b[i] | i ∈ [i, i+k)]` (tail recursive). -/
+/-- `FloatArray.set!` keeps the size. -/
+@[simp] theorem _root_.FloatArray.size_set!' (a : FloatArray) (i : Nat) (v : Float) :
+    (a.set! i v).size = a.size := by
+  cases a; simp [FloatArray.set!, FloatArray.size]
+
+/-- `out[j] := f a[j] b[j]` for `j ∈ [i, i+k)` (tail recursive; `out` is written in place once
+unshared). -/
 @[specialize] def zipFloatsLoop (f : Float → Float → Float) (a b : FloatArray) :
     (k i : Nat) → FloatArray → FloatArray
-  | 0, _, acc => acc
-  | k + 1, i, acc => zipFloatsLoop f a b k (i + 1) (acc.push (f a[i]! b[i]!))
+  | 0, _, out => out
+  | k + 1, i, out => zipFloatsLoop f a b k (i + 1) (out.set! i (f (a.get! i) (b.get! i)))
 
 theorem size_zipFloatsLoop (f : Float → Float → Float) (a b : FloatArray) :
-    ∀ (k i : Nat) (acc : FloatArray), (zipFloatsLoop f a b k i acc).size = acc.size + k
+    ∀ (k i : Nat) (out : FloatArray), (zipFloatsLoop f a b k i out).size = out.size
   | 0, _, _ => rfl
-  | k + 1, i, acc => by
-    rw [zipFloatsLoop, size_zipFloatsLoop f a b k (i + 1), FloatArray.size_push']; omega
+  | k + 1, i, out => by rw [zipFloatsLoop, size_zipFloatsLoop f a b k (i + 1), FloatArray.size_set!']
 
-/-- `[f a[i] b[i] | i < n]`. -/
-@[inline] def zipFloats (f : Float → Float → Float) (a b : FloatArray) (n : Nat) : FloatArray :=
-  zipFloatsLoop f a b n 0 (FloatArray.emptyWithCapacity n)
+/-- `[f a[i] b[i] | i < a.size]`, written over a copy of `a` (one allocation, no pushes). -/
+@[inline] def zipFloats (f : Float → Float → Float) (a b : FloatArray) : FloatArray :=
+  zipFloatsLoop f a b a.size 0 a
 
-@[simp] theorem size_zipFloats (f : Float → Float → Float) (a b : FloatArray) (n : Nat) :
-    (zipFloats f a b n).size = n := by
-  rw [zipFloats, size_zipFloatsLoop]; exact Nat.zero_add n
+@[simp] theorem size_zipFloats (f : Float → Float → Float) (a b : FloatArray) :
+    (zipFloats f a b).size = a.size := size_zipFloatsLoop f a b _ _ _
 
-/-- `acc ++ [f a[i] | i ∈ [i, i+k)]` (tail recursive). -/
+/-- `out[j] := f a[j]` for `j ∈ [i, i+k)` (tail recursive, in place once unshared). -/
 @[specialize] def mapFloatsLoop (f : Float → Float) (a : FloatArray) :
     (k i : Nat) → FloatArray → FloatArray
-  | 0, _, acc => acc
-  | k + 1, i, acc => mapFloatsLoop f a k (i + 1) (acc.push (f a[i]!))
+  | 0, _, out => out
+  | k + 1, i, out => mapFloatsLoop f a k (i + 1) (out.set! i (f (a.get! i)))
 
 theorem size_mapFloatsLoop (f : Float → Float) (a : FloatArray) :
-    ∀ (k i : Nat) (acc : FloatArray), (mapFloatsLoop f a k i acc).size = acc.size + k
+    ∀ (k i : Nat) (out : FloatArray), (mapFloatsLoop f a k i out).size = out.size
   | 0, _, _ => rfl
-  | k + 1, i, acc => by
-    rw [mapFloatsLoop, size_mapFloatsLoop f a k (i + 1), FloatArray.size_push']; omega
+  | k + 1, i, out => by rw [mapFloatsLoop, size_mapFloatsLoop f a k (i + 1), FloatArray.size_set!']
 
-/-- `[f a[i] | i < n]`. -/
-@[inline] def mapFloats (f : Float → Float) (a : FloatArray) (n : Nat) : FloatArray :=
-  mapFloatsLoop f a n 0 (FloatArray.emptyWithCapacity n)
+/-- `[f a[i] | i < a.size]`, written over a copy of `a`. -/
+@[inline] def mapFloats (f : Float → Float) (a : FloatArray) : FloatArray :=
+  mapFloatsLoop f a a.size 0 a
 
-@[simp] theorem size_mapFloats (f : Float → Float) (a : FloatArray) (n : Nat) :
-    (mapFloats f a n).size = n := by
-  rw [mapFloats, size_mapFloatsLoop]; exact Nat.zero_add n
+@[simp] theorem size_mapFloats (f : Float → Float) (a : FloatArray) :
+    (mapFloats f a).size = a.size := size_mapFloatsLoop f a _ _ _
 
 namespace TensorField
 
@@ -89,11 +91,11 @@ variable [LinearFiber F]
 
 /-- Componentwise combination of the flat arrays (`LinearFiber` operations). -/
 @[inline] def zipFlat (f : Float → Float → Float) (a b : TensorField m F) : TensorField m F :=
-  ⟨zipFloats f a.data b.data (FlatFiber.width F * card m), size_zipFloats _ _ _ _, none⟩
+  ⟨zipFloats f a.data b.data, by rw [size_zipFloats, a.size_data], none⟩
 
 /-- Componentwise map of the flat array (`LinearFiber` operations). -/
 @[inline] def mapFlat (f : Float → Float) (a : TensorField m F) : TensorField m F :=
-  ⟨mapFloats f a.data (FlatFiber.width F * card m), size_mapFloats _ _ _, none⟩
+  ⟨mapFloats f a.data, by rw [size_mapFloats, a.size_data], none⟩
 
 /-- Julia `a + b` (group A, `Cartan.jl:346-354`). -/
 instance : Add (TensorField m F) := ⟨zipFlat (· + ·)⟩
@@ -118,21 +120,20 @@ instance : HDiv (TensorField m F) Float (TensorField m F) := ⟨divScalar⟩
 /-- `out[k] = f a[k] s[k / w]`: each point's `w` floats combined with that point's scalar. -/
 @[specialize] def zipScalarLoop (f : Float → Float → Float) (a s : FloatArray) (w : Nat) :
     (k i : Nat) → FloatArray → FloatArray
-  | 0, _, acc => acc
-  | k + 1, i, acc => zipScalarLoop f a s w k (i + 1) (acc.push (f a[i]! s[i / w]!))
+  | 0, _, out => out
+  | k + 1, i, out => zipScalarLoop f a s w k (i + 1) (out.set! i (f (a.get! i) (s.get! (i / w))))
 
 theorem size_zipScalarLoop (f : Float → Float → Float) (a s : FloatArray) (w : Nat) :
-    ∀ (k i : Nat) (acc : FloatArray), (zipScalarLoop f a s w k i acc).size = acc.size + k
+    ∀ (k i : Nat) (out : FloatArray), (zipScalarLoop f a s w k i out).size = out.size
   | 0, _, _ => rfl
-  | k + 1, i, acc => by
-    rw [zipScalarLoop, size_zipScalarLoop f a s w k (i + 1), FloatArray.size_push']; omega
+  | k + 1, i, out => by
+    rw [zipScalarLoop, size_zipScalarLoop f a s w k (i + 1), FloatArray.size_set!']
 
 /-- Combine every component of `t` with the scalar field `s` at its point. -/
 @[inline] def zipScalar (f : Float → Float → Float) (t : TensorField m F) (s : TensorField m Float) :
     TensorField m F :=
-  let n := FlatFiber.width F * card m
-  ⟨zipScalarLoop f t.data s.data (FlatFiber.width F) n 0 (FloatArray.emptyWithCapacity n),
-    by rw [size_zipScalarLoop]; exact Nat.zero_add n, none⟩
+  ⟨zipScalarLoop f t.data s.data (FlatFiber.width F) t.data.size 0 t.data,
+    by rw [size_zipScalarLoop, t.size_data], none⟩
 
 /-- Julia `a / b` with a scalar field `b` (`./(fiber(a), fiber(b))`, `Cartan.jl:371`): each fiber
 divided by the scalar at its point, as `a * (1/b)` for Grassmann fibers. -/
@@ -142,6 +143,15 @@ divided by the scalar at its point, as `a * (1/b)` for Grassmann fibers. -/
 
 instance (priority := default + 1) : HDiv (TensorField m F) (TensorField m Float) (TensorField m F) :=
   ⟨divField⟩
+
+/-- Julia `a * t` for a scalar field `a` (`fiber(a) .* fiber(t)`, `Cartan.jl:367`): every fiber
+scaled by the scalar at its point (`a * x`, Grassmann's `Real * Chain`). -/
+instance (priority := default + 5) : HMul (TensorField m Float) (TensorField m F) (TensorField m F) :=
+  ⟨fun s t => zipScalar (fun x y => y * x) t s⟩
+
+/-- Julia `t * a` for a scalar field `a` (`Cartan.jl:369`). -/
+instance (priority := default + 5) : HMul (TensorField m F) (TensorField m Float) (TensorField m F) :=
+  ⟨fun t s => zipScalar (· * ·) t s⟩
 
 end Linear
 
@@ -244,9 +254,6 @@ instance [WedgeDot F F' F''] : WedgeDot (TensorField m F) (TensorField m F') (Te
 /-- Julia `veedot(a, b)` = `a ⟇ b` (group B). -/
 instance [VeeDot F F' F''] : VeeDot (TensorField m F) (TensorField m F') (TensorField m F'') :=
   ⟨zipWith veedot⟩
-/-- Julia `a × b = ⋆(a ∧ b)` (`Cartan.jl:373`). -/
-instance [Cross F F' F''] : Cross (TensorField m F) (TensorField m F') (TensorField m F'') :=
-  ⟨zipWith cross⟩
 /-- Julia `a ⊘ b` (group B). -/
 instance [Sandwich F F' F''] : Sandwich (TensorField m F) (TensorField m F') (TensorField m F'') :=
   ⟨zipWith sandwich⟩
@@ -282,25 +289,80 @@ instance [Inv F] : Inv (TensorField m F) := ⟨map Inv.inv⟩
 
 /-- Julia `a < b` for fields = `contraction_metric(b, a)` (`Cartan.jl:383`): a contraction with
 the arguments swapped, not a comparison. -/
-@[inline] def lt [Contraction F' F F''] (a : TensorField m F) (b : TensorField m F') :
-    TensorField m F'' := zipWith (fun x y => contraction y x) a b
+@[inline] def lt [Contraction (TensorField m F') (TensorField m F) (TensorField m F'')]
+    (a : TensorField m F) (b : TensorField m F') : TensorField m F'' := contraction b a
 
 /-- Julia `a << b = contraction(b, ~a)` (`Cartan.jl:357`). -/
-@[inline] def shiftl [Reverse F] [Contraction F' F F''] (a : TensorField m F) (b : TensorField m F') :
-    TensorField m F'' := zipWith (fun x y => contraction y (Reverse.reverse x)) a b
+@[inline] def shiftl [Reverse (TensorField m F)]
+    [Contraction (TensorField m F') (TensorField m F) (TensorField m F'')]
+    (a : TensorField m F) (b : TensorField m F') : TensorField m F'' := contraction b (Reverse.reverse a)
 
 /-- Julia `a >> b = contraction(~a, b)` (`Cartan.jl:358`). -/
-@[inline] def shiftr [Reverse F] [Contraction F F' F''] (a : TensorField m F) (b : TensorField m F') :
-    TensorField m F'' := zipWith (fun x y => contraction (Reverse.reverse x) y) a b
+@[inline] def shiftr [Reverse (TensorField m F)]
+    [Contraction (TensorField m F) (TensorField m F') (TensorField m F'')]
+    (a : TensorField m F) (b : TensorField m F') : TensorField m F'' := contraction (Reverse.reverse a) b
+
+/-! ## Planned Grassmann products (`Cartan.Kernel`)
+
+For fibers with a dense `Float` layout the products and linear maps run the Grassmann plan over
+the whole field (bit-identical to the pointwise lift, which they take precedence over). `×` is
+AbstractTensors' `⋆(a ∧ b)` on the field level, so it is planned too. -/
+
+section Planned
+
+variable {V : TensorBundle} {X Y Z : Type} [FlatFiber X] [FlatFiber Y] [FlatFiber Z]
+  [DenseLayout X V Float] [DenseLayout Y V Float] [DenseLayout Z V Float]
+
+instance (priority := default + 10) [HMul X Y Z] :
+    HMul (TensorField m X) (TensorField m Y) (TensorField m Z) := ⟨planZip .mul (· * ·)⟩
+instance (priority := default + 10) [WedgeDot X Y Z] :
+    WedgeDot (TensorField m X) (TensorField m Y) (TensorField m Z) := ⟨planZip .mul wedgedot⟩
+instance (priority := default + 10) [Wedge X Y Z] :
+    Wedge (TensorField m X) (TensorField m Y) (TensorField m Z) := ⟨planZip .wedge wedge⟩
+instance (priority := default + 10) [Vee X Y Z] :
+    Vee (TensorField m X) (TensorField m Y) (TensorField m Z) := ⟨planZip .vee vee⟩
+instance (priority := default + 10) [Contraction X Y Z] :
+    Contraction (TensorField m X) (TensorField m Y) (TensorField m Z) :=
+  ⟨planZip .contraction contraction⟩
+instance (priority := default + 10) [Hodge X Z] : Hodge (TensorField m X) (TensorField m Z) :=
+  ⟨planMap .complementrighthodge hodge⟩
+instance (priority := default + 10) [ComplementRight X Z] :
+    ComplementRight (TensorField m X) (TensorField m Z) := ⟨planMap .complementright complementRight⟩
+instance (priority := default + 10) [ComplementLeft X Z] :
+    ComplementLeft (TensorField m X) (TensorField m Z) := ⟨planMap .complementleft complementLeft⟩
+instance (priority := default + 10) [Reverse X] : Reverse (TensorField m X) :=
+  ⟨planMap .reverse Reverse.reverse⟩
+instance (priority := default + 10) [Involute X] : Involute (TensorField m X) :=
+  ⟨planMap .involute involute⟩
+instance (priority := default + 10) [Clifford X] : Clifford (TensorField m X) :=
+  ⟨planMap .clifford clifford⟩
+
+end Planned
 
 /-! ## Norms -/
 
-/-- Julia `norm(t)` (`Cartan.jl:450`): the pointwise norm, a scalar field. -/
-@[inline] def norm [FiberNorm F] (t : TensorField m F) : TensorField m Float := t.map fnorm
+/-- The norm `√(x₀² + x₁² + …)` of the flat encoding at point `i` (StaticVectors `norm`: the sum
+of squares left to right from the first). -/
+@[inline] def flatNormAt (t : TensorField m F) (i : Nat) : Float :=
+  let w := FlatFiber.width F
+  let o := i * w
+  if w == 0 then 0 else
+  let x0 := t.data.get! o
+  Float.sqrt (go o w (x0 * x0) 1)
+where
+  /-- Accumulate the squares of components `j, …, w-1`. -/
+  go (o w : Nat) (s : Float) : Nat → Float
+    | j => if j < w then go o w (s + t.data.get! (o + j) * t.data.get! (o + j)) (j + 1) else s
+  termination_by j => w - j
+
+/-- Julia `norm(t)` (`Cartan.jl:450`): the pointwise norm, a scalar field (on the flat arrays for
+Grassmann and point fibers). -/
+@[inline] def norm [FiberNorm F] (t : TensorField m F) : TensorField m Float :=
+  if FiberNorm.flat F then ofFn m t.flatNormAt else t.map fnorm
 
 /-- Julia `abs(t)` (group D): the pointwise absolute value / norm (Julia returns a `Single`
 scalar for a `Chain` fiber; the value is the same). -/
-@[inline] def abs [FiberNorm F] (t : TensorField m F) : TensorField m Float := t.map fnorm
+@[inline] def abs [FiberNorm F] (t : TensorField m F) : TensorField m Float := t.norm
 
 /-- Julia `unit(t) = t / abs(t)` (group D): each fiber divided by its norm (as `x * (1/|x|)` for
 Grassmann fibers, whose `abs` is a scalar `Single`). -/
@@ -325,11 +387,13 @@ instance (priority := default + 1) {V : TensorBundle} {G : Nat} :
 
 /-- Julia `supnorm(t) = maximum(norm, fiber(t))` (`Cartan.jl:513`). -/
 def supnorm [FiberNorm F] (t : TensorField m F) : Float :=
-  (List.range (card m)).foldl (fun acc i => F64.max acc (fnorm (t.get i))) (-(1 : Float) / 0)
+  let nt := t.norm
+  foldRange (fun acc i => F64.max acc (nt.data.get! i)) (card m) 0 (-(1 : Float) / 0)
 
 /-- Julia `infnorm(t) = minimum(norm, fiber(t))` (`Cartan.jl:514`). -/
 def infnorm [FiberNorm F] (t : TensorField m F) : Float :=
-  (List.range (card m)).foldl (fun acc i => F64.min acc (fnorm (t.get i))) ((1 : Float) / 0)
+  let nt := t.norm
+  foldRange (fun acc i => F64.min acc (nt.data.get! i)) (card m) 0 ((1 : Float) / 0)
 
 /-! ## Scalar functions (`Analytic` fibers: `Float`, `Complex`) -/
 
@@ -558,11 +622,11 @@ def cumprod [Mul F] (t : TensorField m F) : TensorField m F := t.scan fun s j =>
 /-- The index of the first maximal (`max = true`) or minimal value of a scalar field (Julia
 `argmax`/`argmin`: the first extremum, NaN counted as larger than everything). -/
 def argExtremum (t : TensorField m Float) (max : Bool) : Nat :=
-  (List.range (card m)).foldl (fun best i =>
+  foldRange (fun best i =>
     let x := t.get i
     let b := t.get best
     let better := if max then F64.isless b x else F64.isless x b
-    if better then i else best) 0
+    if better then i else best) (card m) 0 0
 
 end TensorField
 

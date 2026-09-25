@@ -46,7 +46,7 @@ namespace Parameter
 
 /-- The product space of the `LinRange`s `(lo a, hi a, n a)`. -/
 def linSpace {N : Nat} (lo hi : Fin N → Float) (n : Vector Nat N) : ProductSpace N :=
-  ⟨Vector.ofFn fun a => Axis.linRange (lo a) (hi a) n[a]⟩
+  .ofAxes (Vector.ofFn fun a => Axis.linRange (lo a) (hi a) n[a])
 
 /-- A 1-D parameter base: the `LinRange(lo, hi, n)` interval with real points. -/
 def base1 (lo hi : Float) (n : Nat) : GridBundle 1 Float := GridBundle.ofAxis (Axis.linRange lo hi n)

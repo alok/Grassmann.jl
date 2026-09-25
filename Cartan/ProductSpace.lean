@@ -75,25 +75,30 @@ instance : ShowFiber (AffinePoint N) := ⟨showPoint⟩
 instance : ToString (AffinePoint N) := ⟨showPoint false⟩
 
 /-- Julia `norm(p)`. -/
-instance : FiberNorm (AffinePoint N) := ⟨fun p => p.coords.norm⟩
+instance : FiberNorm (AffinePoint N) := ⟨fun p => p.coords.norm, true⟩
 
 end AffinePoint
 
 /-! ## Product spaces -/
 
 /-- Julia `ProductSpace{V,T,N,N,S}` over `Float64` coordinates (`topology.jl:46-50`): the lazy
-tensor-product grid of `N` coordinate axes. -/
+tensor-product grid of `N` coordinate axes. Julia computes range elements on every access; here
+each axis is materialized once (`coords`, `sum(size)` floats), so decoding a point is `N` array
+reads. Build with `ofAxes`. -/
 structure ProductSpace (N : Nat) where
   /-- The coordinate vectors (Julia `split(p) = p.v`), axis 1 first. -/
   axes : Vector Axis N
-  deriving Inhabited
+  /-- The elements of every axis (`axes[a].toFloatArray`). -/
+  coords : Vector FloatArray N
 
 namespace ProductSpace
 
 variable {N : Nat}
 
 /-- Julia `ProductSpace(a…)` / `a ⊕ b ⊕ …` of 1-D vectors (`topology.jl:101, 109-110`). -/
-def ofAxes (axes : Vector Axis N) : ProductSpace N := ⟨axes⟩
+def ofAxes (axes : Vector Axis N) : ProductSpace N := ⟨axes, axes.map Axis.toFloatArray⟩
+
+instance : Inhabited (ProductSpace N) := ⟨ofAxes (Vector.replicate N default)⟩
 
 /-- Julia `size(p)` (`topology.jl:76`). -/
 def size (p : ProductSpace N) : Vector Nat N := p.axes.map (·.length)
@@ -103,19 +108,19 @@ def length (p : ProductSpace N) : Nat := MeshTopology.gridLength p.size
 
 /-- Coordinate `a` of the point with 0-based column-major linear index `k`. -/
 @[inline] def coord (p : ProductSpace N) (k : Nat) (a : Fin N) : Float :=
-  let ax := p.axes[a]
-  ax.get (k / MeshTopology.axisStride p.size a.1 % ax.length)
+  let c := p.coords[a]
+  c.get! (k / MeshTopology.axisStride p.size a.1 % c.size)
 
 /-- The point with 0-based column-major linear index `k` (Julia `p[k+1]`, `topology.jl:77-94`). -/
 @[inline] def point (p : ProductSpace N) (k : Nat) : AffinePoint N :=
   ⟨Values.ofFnScan (fun (st : Nat) (a : Fin N) =>
-    let ax := p.axes[a]
-    let n := ax.length
-    (st * n, ax.get (k / st % n))) 1⟩
+    let c := p.coords[a]
+    let n := c.size
+    (st * n, c.get! (k / st % n))) 1⟩
 
 /-- The point at the 0-based multi-index `idx` (Julia `p[i₁+1, …, i_N+1]`). -/
 @[inline] def pointAt (p : ProductSpace N) (idx : Vector Nat N) : AffinePoint N :=
-  ⟨Values.ofFn fun a => p.axes[a].get idx[a]⟩
+  ⟨Values.ofFn fun a => p.coords[a].get! idx[a]⟩
 
 /-- Julia `isrange(p)` (`topology.jl:74`): every axis is a range. -/
 def isRange (p : ProductSpace N) : Bool := p.axes.toList.all (·.isRange)
@@ -125,20 +130,20 @@ def widths (p : ProductSpace N) : Vector Float N := p.axes.map (·.width)
 
 /-- Julia `a ⊕ b` of product spaces (`topology.jl:102-104`): the axes concatenated. -/
 def append {M : Nat} (a : ProductSpace M) (b : ProductSpace N) : ProductSpace (M + N) :=
-  ⟨a.axes ++ b.axes⟩
+  ofAxes (a.axes ++ b.axes)
 
 /-- Julia `p ⊕ v` with a 1-D vector (`topology.jl:102`). -/
-def push (p : ProductSpace N) (v : Axis) : ProductSpace (N + 1) := ⟨p.axes.push v⟩
+def push (p : ProductSpace N) (v : Axis) : ProductSpace (N + 1) := ofAxes (p.axes.push v)
 
 /-- Julia `remove(p, Val(J))` (`topology.jl:120-122`): the space without axis `a` (for `N = 2`
 Julia returns the remaining range itself; see `axis`). -/
 def remove (p : ProductSpace (N + 1)) (a : Fin (N + 1)) : ProductSpace N :=
-  ⟨(p.axes.eraseIdx a.1 a.2).cast (by omega)⟩
+  ofAxes ((p.axes.eraseIdx a.1 a.2).cast (by omega))
 
 /-- The axes `ks` (Julia `ProductSpace(p.v[ks])`, the result of slicing with colons at `ks`,
 `topology.jl:175-181`). -/
 def select {K : Nat} (p : ProductSpace N) (ks : Vector (Fin N) K) : ProductSpace K :=
-  ⟨ks.map (p.axes[·])⟩
+  ofAxes (ks.map (p.axes[·]))
 
 /-- Julia `p(…, :, …)` with one colon at `a` (`topology.jl:125-129`): the coordinate vector of
 axis `a` itself. -/
@@ -146,12 +151,12 @@ axis `a` itself. -/
 
 /-- Julia `resample(p, n)` (`topology.jl:185`): every axis resampled. -/
 def resample (p : ProductSpace N) (n : Vector Nat N) : ProductSpace N :=
-  ⟨Vector.ofFn fun a => p.axes[a].resample n[a]⟩
+  ofAxes (Vector.ofFn fun a => p.axes[a].resample n[a])
 
 /-- Julia `extend(p, i)` (`Cartan.jl:560`): the last axis continued to `i` points. -/
 def extend (p : ProductSpace (N + 1)) (i : Nat) : Option (ProductSpace (N + 1)) := do
   let last ← p.axes[N].extend i
-  return ⟨p.axes.set N last⟩
+  return ofAxes (p.axes.set N last)
 
 /-- Julia `==` of product spaces: equal axes. -/
 instance : BEq (ProductSpace N) := ⟨fun a b => a.axes.toList == b.axes.toList⟩

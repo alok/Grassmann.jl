@@ -66,6 +66,11 @@ class LinearFiber (F : Type) [FlatFiber F] where
 
 /-! ## Building flat arrays -/
 
+/-- `f (… (f init i) …) (i+k-1)`: a tail-recursive fold over the indices `i, …, i+k-1`. -/
+@[specialize] def foldRange {β : Type} (f : β → Nat → β) : (k i : Nat) → β → β
+  | 0, _, acc => acc
+  | k + 1, i, acc => foldRange f k (i + 1) (f acc i)
+
 /-- Append `f i, f (i+1), …, f (i+k-1)` (tail recursive, fuelled by `k`). -/
 @[specialize] def buildLoop {F : Type} [FlatFiber F] (f : Nat → F) : (k i : Nat) → FloatArray → FloatArray
   | 0, _, a => a
@@ -230,17 +235,25 @@ end GrassmannShow
 /-! ## Norms of fiber values -/
 
 /-- Julia `norm(x)` of a fiber value, as a `Float` (`LinearAlgebra.norm`; for Grassmann elements
-the Euclidean norm of the coefficients, `src/multivectors.jl`). -/
+the Euclidean norm of the coefficients, `src/multivectors.jl`). `flat` records that the norm is
+`√(x₀² + x₁² + …)` of the flat encoding, summed left to right (StaticVectors `norm`), so fields
+can compute it on their raw arrays. -/
 class FiberNorm (F : Type) where
   /-- Julia `norm(x)`. -/
   fnorm : F → Float
+  /-- `fnorm` is the left-to-right Euclidean norm of the flat encoding. -/
+  flat : Bool := false
 
 export FiberNorm (fnorm)
 
-instance : FiberNorm Float := ⟨Float.abs⟩
-instance : FiberNorm (Complex Float) := ⟨ComplexF64.abs⟩
+instance : FiberNorm Float := ⟨Float.abs, false⟩
+instance : FiberNorm (Complex Float) := ⟨ComplexF64.abs, false⟩
 
 instance {X : Type} {V : TensorBundle} {α : Type} [Coeff α] [JNorm α] [DenseLayout X V α] :
-    FiberNorm X := ⟨fun x => Grassmann.norm x⟩
+    FiberNorm X := ⟨fun x => Grassmann.norm x, false⟩
+
+/-- Grassmann elements over `Float`: `norm` is StaticVectors' `√(Σ xᵢ²)` of the coefficients. -/
+instance (priority := high) {X : Type} {V : TensorBundle} [DenseLayout X V Float] : FiberNorm X :=
+  ⟨fun x => Grassmann.norm x, true⟩
 
 end Cartan

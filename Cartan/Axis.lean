@@ -84,14 +84,35 @@ def length : Axis → Nat
   | ints _ _ n => n
   | explicit xs => xs.size
 
+/-- An integer as a `Float` through `UInt64` (exact for `|i| < 2^53`, the range of indices). The
+same value as `Float.ofInt`, without its slow generic path (docs/PERF.md). -/
+@[inline] def intToFloat (i : Int) : Float :=
+  if 0 ≤ i then i.toNat.toUInt64.toFloat else -((-i).toNat.toUInt64.toFloat)
+
+/-- Julia `unsafe_getindex(r::StepRangeLen{Float64,TwicePrecision,TwicePrecision}, i+1)`
+(`base/twiceprecision.jl:477-483`), as `JuliaBase.StepRangeLen.get` with a fast index
+conversion (bit-identical). -/
+@[inline] def stepLenGet (r : StepRangeLen) (i : Nat) : Float :=
+  let u := intToFloat (Int.ofNat i + 1 - r.offset)
+  let shiftHi := u * r.step.hi
+  let shiftLo := u * r.step.lo
+  let x := TwicePrecision.add12 r.ref.hi shiftHi
+  x.hi + (x.lo + (shiftLo + r.ref.lo))
+
+/-- Julia `unsafe_getindex(r::LinRange, i+1)` = `lerpi(i, lendiv, start, stop)`
+(`base/range.jl:979-985`), as `JuliaBase.LinRange.get` with fast index conversions. -/
+@[inline] def linGet (r : LinRange) (i : Nat) : Float :=
+  let t := i.toUInt64.toFloat / r.lendiv.toUInt64.toFloat
+  (1 - t) * r.start + t * r.stop
+
 /-- Element `i` (0-based; Julia `r[i+1]`, unchecked: out-of-range indices extrapolate the
 range, or read `0.0` from an explicit vector). -/
 @[inline] def get (a : Axis) (i : Nat) : Float :=
   match a with
-  | stepLen r => r.get (Int.ofNat i + 1)
-  | lin r => r.get (Int.ofNat i + 1)
-  | ints s d _ => Float.ofInt (s + d * Int.ofNat i)
-  | explicit xs => xs[i]!
+  | stepLen r => stepLenGet r i
+  | lin r => linGet r i
+  | ints s d _ => intToFloat (s + d * Int.ofNat i)
+  | explicit xs => xs.get! i
 
 /-- Julia `first(r)`. -/
 def first (a : Axis) : Float := a.get 0
