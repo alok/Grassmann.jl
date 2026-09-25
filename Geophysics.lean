@@ -1,6 +1,9 @@
 import Geophysics.JuliaMath
 import Geophysics.Units
 import Geophysics.Planet
+import Geophysics.Gas
+import Geophysics.Atmosphere
+import Geophysics.Data
 
 /-!
 # Geophysics
