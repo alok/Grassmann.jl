@@ -221,10 +221,40 @@ namespace GrassmannTests.Extension
 /-- A space with its own (deliberately wrong) kernels. -/
 abbrev Negated : TensorBundle := S!"+-+"
 
-instance : Kernels Negated where
+scoped instance : Kernels Negated where
   bin op la lb lc x y := -(Grassmann.Kernel.refBin Negated op la lb lc x y)
 
-/-- The custom instance is used for products; unary maps keep the reference. -/
+/-- A space with a hand-written ("generated") full geometric product. -/
+abbrev Hand : TensorBundle := S!"++"
+
+/-- The unrolled `ℝ²` geometric product on `[1, e₁, e₂, e₁₂]`, generic in the
+coefficient type (the shape the code generator emits). -/
+def mulHand {α : Type} [AbstractTensors.Coeff α] (x y : Values α 4) : Values α 4 :=
+  let a := fun i => x.get! i
+  let b := fun i => y.get! i
+  Values.ofFn fun i => match i.1 with
+    | 0 => a 0 * b 0 + a 1 * b 1 + a 2 * b 2 - a 3 * b 3
+    | 1 => a 0 * b 1 + a 1 * b 0 - a 2 * b 3 + a 3 * b 2
+    | 2 => a 0 * b 2 + a 2 * b 0 + a 1 * b 3 - a 3 * b 1
+    | _ => a 0 * b 3 + a 3 * b 0 + a 1 * b 2 - a 2 * b 1
+
+/-- The extension-point pattern of `Grassmann.Kernel.Class`: one shape overridden,
+the rest delegated to the reference kernels. -/
+scoped instance : Kernels Hand where
+  bin op la lb lc x y := match op, la, lb, lc with
+    | .mul, .full, .full, .full => mulHand x y
+    | op, la, lb, lc => Grassmann.Kernel.refBin Hand op la lb lc x y
+
+/-- The same space shape with a marked (negated) override, to observe which
+branch the dispatch takes. -/
+abbrev HandMarked : TensorBundle := D!"1,1"
+
+scoped instance : Kernels HandMarked where
+  bin op la lb lc x y := match op, la, lb, lc with
+    | .mul, .full, .full, .full => -(mulHand x y)
+    | op, la, lb, lc => Grassmann.Kernel.refBin HandMarked op la lb lc x y
+
+/-- The custom instances are used for products; unary maps keep the reference. -/
 def run : IO Tally := do
   let a : Chain Negated 1 Int := (Chain.ofList? [1, 2, 3]).getD Chain.zero
   let b : Chain Negated 1 Int := (Chain.ofList? [4, 5, 6]).getD Chain.zero
@@ -232,6 +262,19 @@ def run : IO Tally := do
   let t : Tally := {}
   let t := t.check ((a * b).v.toList == (-viaRef).toList) "generated-instance dispatch"
   let t := t.check ((~a).v.toList == a.v.toList) "fields left out keep their reference defaults"
+  let p : Multivector Hand Int := (Multivector.ofList? [1, -2, 3, 5]).getD Multivector.zero
+  let q : Multivector Hand Int := (Multivector.ofList? [2, 7, -1, 4]).getD Multivector.zero
+  let want : Values Int 4 := Grassmann.Kernel.refBin Hand .mul .full .full .full p.v q.v
+  let t := t.check ((p * q).v.toList == want.toList) "match-dispatched hand kernel = reference"
+  let t := t.check (((p.grade 1) * (q.grade 1)).v.toList ==
+    (Grassmann.Kernel.refBin Hand .mul (.chain 1) (.chain 1) .even (p.grade 1).v (q.grade 1).v).toList)
+    "other shapes fall through to the reference"
+  let pm : Multivector HandMarked Int := ⟨p.v⟩
+  let qm : Multivector HandMarked Int := ⟨q.v⟩
+  let t := t.check ((pm * qm).v.toList == (-(mulHand p.v q.v)).toList) "the overridden branch is taken"
+  let t := t.check (((pm.grade 1) ∧ (qm.grade 1)).v.toList ==
+    (Grassmann.Kernel.refBin HandMarked .wedge (.chain 1) (.chain 1) (.chain 2) (pm.grade 1).v
+      (qm.grade 1).v).toList) "other operations fall through"
   return t
 
 end GrassmannTests.Extension
