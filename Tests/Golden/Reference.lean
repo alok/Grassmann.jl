@@ -93,7 +93,7 @@ def size : NumVec → Nat
 
 /-- As doubles. -/
 def toFloats : NumVec → FloatArray
-  | .exact v => FloatArray.mk (v.map ratToFloat)
+  | .exact v => floatOfFn v.size fun i => ratToFloat v[i]!
   | .float v => v
 
 /-- The positions of the nonzero coefficients (NaN counts as nonzero). -/
@@ -112,7 +112,7 @@ values (Infinity, Phasor). -/
 def ofElem? (N : Nat) (e : GoldenElem) : Option NumVec :=
   let embed := fun (c : Coeffs) => match c with
     | .exact v => some (NumVec.exact ((Array.replicate N (0 : Rat)).set! 0 (v[0]?.getD 0)))
-    | .float v => some (NumVec.float ((FloatArray.mk (Array.replicate N 0)).set! 0 (v[0]?.getD 0)))
+    | .float v => some (NumVec.float ((floatZeros N).set! 0 (v[0]?.getD 0)))
     | _ => none
   match e.dense, e.value with
   | some (.exact v), _ => if v.size == N then some (.exact v) else none
@@ -124,7 +124,7 @@ def ofElem? (N : Nat) (e : GoldenElem) : Option NumVec :=
 /-- Scale by an exact factor. -/
 def scale (c : Rat) : NumVec → NumVec
   | .exact v => .exact (v.map (c * ·))
-  | .float v => let f := ratToFloat c; .float (FloatArray.mk (v.data.map (f * ·)))
+  | .float v => let f := ratToFloat c; .float (floatOfFn v.size fun i => f * v[i]!)
 
 /-- Componentwise `a + s·b` (floats if either is). -/
 def axpy (s : Rat) (a b : NumVec) : NumVec :=
@@ -134,7 +134,7 @@ def axpy (s : Rat) (a b : NumVec) : NumVec :=
     let x := a.toFloats
     let y := b.toFloats
     let f := ratToFloat s
-    .float (FloatArray.mk ((List.range x.size).toArray.map fun i => x[i]! + f * y[i]!))
+    .float (floatOfFn x.size fun i => x[i]! + f * y[i]!)
 
 /-- Keep only the coefficients of grade `g`. -/
 def project (n g : Nat) (x : NumVec) : NumVec :=
@@ -142,7 +142,7 @@ def project (n g : Nat) (x : NumVec) : NumVec :=
   let keep := fun (i : Nat) => Bits.popcount (basis[i]?.getD 0) == g
   match x with
   | .exact v => .exact ((List.range v.size).toArray.map fun i => if keep i then v[i]! else 0)
-  | .float v => .float (FloatArray.mk ((List.range v.size).toArray.map fun i => if keep i then v[i]! else 0))
+  | .float v => .float (floatOfFn v.size fun i => if keep i then v[i]! else 0)
 
 end NumVec
 
@@ -177,7 +177,7 @@ def applyUnary (N : Nat) (t : UnaryTable) (x : NumVec) : Option NumVec := do
       for (ic, c) in ← t[i]?.join do out := out.modify ic (· + c * v[i]!)
     return .exact out
   | .float v =>
-    let mut out := FloatArray.mk (Array.replicate N 0)
+    let mut out := floatZeros N
     for i in x.support do
       for (ic, c) in ← t[i]?.join do out := out.set! ic (out[ic]! + ratToFloat c * v[i]!)
     return .float out
@@ -196,7 +196,7 @@ def applyBinary (N : Nat) (t : BinaryTable) (x y : NumVec) : Option NumVec := do
   | _, _ =>
     let u := x.toFloats
     let w := y.toFloats
-    let mut out := FloatArray.mk (Array.replicate N 0)
+    let mut out := floatZeros N
     for i in sx do
       for j in sy do
         for (ic, c) in ← (t[i]?.bind (·[j]?)).join do
@@ -263,7 +263,7 @@ def sandwichCore (N : Nat) (t : SandwichTables) (tsandwich : Bool) (x y : NumVec
 def NumVec.single (N : Nat) (pos : Nat) (c : Scalar) : Option NumVec :=
   match c with
   | .exact q => some (.exact ((Array.replicate N 0).set! pos q))
-  | .float f => some (.float ((FloatArray.mk (Array.replicate N 0)).set! pos f))
+  | .float f => some (.float ((floatZeros N).set! pos f))
   | _ => none
 
 /-- Componentwise sum. -/

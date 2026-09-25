@@ -32,7 +32,7 @@ def GoldenElem.values? (e : GoldenElem) : Option Coeffs :=
 
 /-- A one-coefficient vector `s` as the dense vector of `s·One` of length `N`. -/
 def embedScalar (w : Coeffs) (N : Nat) : Coeffs :=
-  let fz := FloatArray.mk (Array.replicate N 0)
+  let fz := floatZeros N
   match w with
   | .exact v => .exact ((Array.replicate N 0).set! 0 (v[0]?.getD 0))
   | .float v => .float (fz.set! 0 (v[0]?.getD 0))

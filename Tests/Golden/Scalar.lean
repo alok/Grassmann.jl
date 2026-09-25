@@ -55,6 +55,25 @@ def natSpan? (s : String) (i j : Nat) : Option Nat :=
   let (v, cnt, k) := scanDigits s i 0 0 (j - i)
   if cnt ≥ 1 && k == j then some v else none
 
+/-! ## Unboxed float vectors -/
+
+/-- `n` zeros as a `FloatArray`, pushed one by one (no intermediate `Array Float`,
+DESIGN.md §2.1). -/
+def floatZeros (n : Nat) : FloatArray := go n (FloatArray.emptyWithCapacity n)
+where
+  /-- Push `k` more zeros. -/
+  go : Nat → FloatArray → FloatArray
+    | 0, acc => acc
+    | k + 1, acc => go k (acc.push 0)
+
+/-- The `FloatArray` of `f i` for `i < n` (tail-recursive, unboxed). -/
+@[inline] def floatOfFn (n : Nat) (f : Nat → Float) : FloatArray := go 0 (FloatArray.emptyWithCapacity n) n
+where
+  /-- Push `f i`, `f (i+1)`, … (`k` more). -/
+  go (i : Nat) (acc : FloatArray) : Nat → FloatArray
+    | 0 => acc
+    | k + 1 => go (i + 1) (acc.push (f i)) k
+
 /-! ## Scalar grammars (schema §6) -/
 
 /-- Julia `Int64` literal: `-?[0-9]+` within `[-2^63, 2^63)`. -/
@@ -313,8 +332,8 @@ def gather (c : Coeffs) (idx : Array Nat) : Coeffs :=
 /-- The zero vector of length `n` in the representation of type `t`. -/
 def zeros (t : CoeffType) (n : Nat) : Coeffs :=
   match t with
-  | .float64 => .float (FloatArray.mk (Array.replicate n 0))
-  | .complex .float64 => .complexFloat (FloatArray.mk (Array.replicate n 0)) (FloatArray.mk (Array.replicate n 0))
+  | .float64 => .float (floatZeros n)
+  | .complex .float64 => .complexFloat (floatZeros n) (floatZeros n)
   | .complex _ => .complexExact (Array.replicate n 0) (Array.replicate n 0)
   | .other _ => .raw (Array.replicate n (.str "0"))
   | _ => .exact (Array.replicate n 0)
@@ -413,16 +432,16 @@ inductive ValueMode where
   | norm2 (rtol atol : Float)
   deriving Inhabited, Repr
 
+/-- A `Rat` as a double (exact for the dyadic and small values that occur). -/
+@[inline] def ratAsFloat (x : Rat) : Float := Float.ofInt x.num / Float.ofNat x.den
+
 /-- The coefficients as doubles (real part and imaginary part; exact values rounded). -/
 def Coeffs.toFloats : Coeffs → FloatArray × FloatArray
-  | .exact v =>
-    (FloatArray.mk (v.map fun x => Float.ofInt x.num / Float.ofNat x.den), FloatArray.mk (Array.replicate v.size 0))
-  | .float v => (v, FloatArray.mk (Array.replicate v.size 0))
-  | .complexExact re im =>
-    (FloatArray.mk (re.map fun x => Float.ofInt x.num / Float.ofNat x.den),
-     FloatArray.mk (im.map fun x => Float.ofInt x.num / Float.ofNat x.den))
+  | .exact v => (floatOfFn v.size fun i => ratAsFloat v[i]!, floatZeros v.size)
+  | .float v => (v, floatZeros v.size)
+  | .complexExact re im => (floatOfFn re.size fun i => ratAsFloat re[i]!, floatOfFn im.size fun i => ratAsFloat im[i]!)
   | .complexFloat re im => (re, im)
-  | .raw v => (FloatArray.mk (Array.replicate v.size 0), FloatArray.mk (Array.replicate v.size 0))
+  | .raw v => (floatZeros v.size, floatZeros v.size)
 
 /-- Sum of squares of `a[i] - b[i]` (or of `a[i]` when `b` is empty), tail-recursive. -/
 def sqDist (a b : FloatArray) (i : Nat) (acc : Float) : Nat → Float
