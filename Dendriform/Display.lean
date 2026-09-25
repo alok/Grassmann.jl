@@ -26,7 +26,38 @@ def print (t : Tree) (display : Bool := false) : String :=
         s!" ↦ {t.muString} ↦ {t.treeIndex}/{catalan t.deg} or {t.treeInteger}"
       else "") ++ "\n"
 
+/-- Julia `string(t)` / `print` (DF/Dendriform.jl:404-425): the Loday name and a newline. -/
+instance : ToString Tree := ⟨(·.print)⟩
+
 end Tree
+
+/-- A degree-typed tree from a Loday name that is known to be valid (Julia `PBTree(::Vector)`,
+DF/Dendriform.jl:107). The degree is the name's length. -/
+def PBTree.ofName (ys : List Nat) (h : (Tree.ofName? ys).isSome = true) : PBTree ys.length :=
+  ⟨(Tree.ofName? ys).get h, by
+    rw [← Tree.length_name, Tree.name_of_ofName? (Option.some_get h).symm]⟩
+
+/-- A grove from Loday names known to be valid and of degree `n` (Julia `Grove(::Matrix)` /
+the vector-as-tree promotions, DF/Dendriform.jl:114, 153-155). -/
+def Grove.ofNames (n : Nat) (names : List (List Nat))
+    (h : (Grove.ofNames? n names).isSome = true) : Grove n :=
+  (Grove.ofNames? n names).get h
+
+/-- `tree![2, 1, 7, 4, 1, 3, 1] : PBTree 7`: Julia's vector-as-tree literal, checked at
+elaboration time (`decide` fails on an invalid Loday name). -/
+syntax "tree![" num,* "]" : term
+/-- `grove![[1, 2], [2, 1]] : Grove 2`: a grove literal from Loday names of one degree (the
+first name's length). -/
+syntax "grove![" ("[" num,* "]"),+ "]" : term
+
+macro_rules
+  | `(tree![$xs,*]) => `(Dendriform.PBTree.ofName [$xs,*] (by decide))
+  | `(grove![$[[$xss,*]],*]) => do
+    let n := (xss[0]?.map (·.getElems.size)).getD 0
+    let rows ← xss.mapM fun xs => do
+      let elems : Array (Lean.TSyntax `term) := xs.getElems.map (⟨·.raw⟩)
+      `([$elems,*])
+    `(Dendriform.Grove.ofNames $(Lean.Syntax.mkNumLit (toString n)) [$rows,*] (by decide))
 
 /-- Julia `GroveBin` (DF/Dendriform.jl:61-66): a grove compressed to its degree, size and
 grove index; the position `ppos` is derived. Equality is Julia's (DF/Dendriform.jl:149):

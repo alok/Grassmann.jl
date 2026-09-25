@@ -46,4 +46,28 @@ example (x : Grove 1) (y : Grove 2) (z : Grove 3) : (x + y) ⊢ z ≅ x ⊢ (y �
   add_vdash x y z (by decide) (by decide)
 example (x : Grove 4) (y : Grove 0) (z : Grove 2) : (x + y) + z ≅ x + (y + z) := add_assoc x y z
 
+/-! Julia's notation (README.md, DF/poset.jl): tree literals, graft `∨`, the Tamari order. -/
+
+example : PBTree 7 := tree![2, 1, 7, 4, 1, 3, 1]
+example : Grove 2 := grove![[1, 2], [2, 1]]
+example : PBTree 3 := tree![1] ∨ tree![1]
+example (x : PBTree 2) (y : PBTree 3) : PBTree 5 := x \ y
+-- README: `[2,1,7,4,1,3,1] < [2,1,7,4,3,2,1]`
+#guard tree![2, 1, 7, 4, 1, 3, 1] < tree![2, 1, 7, 4, 3, 2, 1]
+#guard !(tree![2, 1, 7, 4, 3, 2, 1] < tree![2, 1, 7, 4, 1, 3, 1])
+#guard tree![2, 1, 7, 4, 3, 2, 1] > tree![2, 1, 7, 4, 1, 3, 1]
+#guard tree![1, 2, 3] ≤ tree![1, 2, 3] && tree![1, 2, 3] ≤ tree![3, 2, 1]
+#guard tree![1, 2] ⋖ tree![2, 1] && tree![2, 1] ⋗ tree![1, 2] && !(tree![2, 1] ⋖ tree![1, 2])
+#guard (tree![1, 2, 3] ⊴ tree![3, 2, 1]).size == 5
+#guard (tree![1] ∨ tree![1]).1.name == [1, 3, 1]
+#guard (Tree.leaf ∨ Tree.leaf) == .node .leaf .leaf
+#guard (tree![1] \ tree![1]).1.name == [2, 1] && (tree![1] / tree![1]).1.name == [1, 2]
+#guard toString tree![1, 3, 1].1 == "[1, 3, 1]\n"
+-- README: `Grove(3,7) ⊣ [1,2]∪[2,1]` with literals; groves compare in grove-index order
+#guard (Grove.ofIndex 3 7 ⊣ (grove![[1, 2]] ∪ grove![[2, 1]])).rows ==
+  (Grove.ofIndex 3 7 ⊣ (Grove.ofIndex 2 1 ∪ Grove.ofIndex 2 2)).rows
+#guard Grove.ofIndex 3 7 < Grove.ofIndex 3 8 && Grove.ofIndex 3 7 ≤ Grove.ofIndex 3 7
+-- `∨` on Props is still `Or` under `open Dendriform`
+example : False ∨ True := .inr trivial
+
 end Tests.Dendriform.Static

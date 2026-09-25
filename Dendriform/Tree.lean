@@ -18,7 +18,9 @@ Lean design:
 * `PBTree n := {t : Tree // t.deg = n}` is the degree-indexed facade: `graft` has type
   `PBTree a → PBTree b → PBTree (a + b + 1)`, and the proofs are erased at runtime.
 * Grafting is Julia's `∨`, which extends `AbstractLattices.vee` (DF/arithmetic.jl:5), so
-  `Tree` gets an `HVee` instance.
+  `Tree` gets an `HVee` instance. Within `open Dendriform`, the infix `l ∨ r` grafts (a
+  scoped overload of Lean's `Or`, restricted to trees by the `Graft` class so that it never
+  clashes with DeMorgan's or Grassmann's `∨`).
 -/
 
 namespace Dendriform
@@ -52,6 +54,23 @@ theorem deg_pos_iff {t : Tree} : 0 < t.deg ↔ t ≠ leaf := by
 @[inline] def graft (l r : Tree) : Tree := node l r
 
 instance : HVee Tree Tree Tree := ⟨graft⟩
+
+end Tree
+
+/-- Julia's graft `∨` (DF/arithmetic.jl:5, 38-57) on the types Dendriform defines it for
+(`Tree`, and `PBTree a → PBTree b → PBTree (a + b + 1)`). It is the carrier of the scoped
+infix `∨`; the methods are the AbstractLattices `vee` instances. -/
+class Graft (α β : Type) (γ : outParam Type) where
+  /-- `l ∨ r` -/
+  graft : α → β → γ
+
+/-- Julia `l ∨ r` (graft, DF/arithmetic.jl:38-57); overloads Lean's `Or` (30, right-assoc)
+through a choice node within `open Dendriform`. -/
+scoped infixr:30 " ∨ " => Graft.graft
+
+instance : Graft Tree Tree Tree := ⟨Tree.graft⟩
+
+namespace Tree
 
 /-- Julia `left(t)`: the subtree left of the root (`|` for `|`, DF/arithmetic.jl:66-72). -/
 def left : Tree → Tree
@@ -246,6 +265,7 @@ instance {a b : Nat} : HDiv (PBTree a) (PBTree b) (PBTree (a + b)) := ⟨over⟩
 
 /-- `x ∨ y : PBTree (a + b + 1)` (Julia graft, extending `AbstractLattices.vee`). -/
 instance {a b : Nat} : HVee (PBTree a) (PBTree b) (PBTree (a + b + 1)) := ⟨graft⟩
+instance {a b : Nat} : Graft (PBTree a) (PBTree b) (PBTree (a + b + 1)) := ⟨graft⟩
 
 /-- Split a tree of positive degree into its root's subtrees, with the degree bookkeeping
 `k + (n - k) = n` recorded in the result type. -/

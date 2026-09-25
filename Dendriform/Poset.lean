@@ -210,6 +210,45 @@ def printIntcompBin (d : Nat) : String :=
     if cc[k]! > 0 && !inst.contains ins[k]! then some (binaryString (catalan d) ins[k]! ++ "\n")
     else none)
 
+/-! ## Notation: Julia's order relations on trees (DF/poset.jl) -/
+
+namespace Tree
+
+/-- Julia `a < b` on trees: the Tamari order (DF/poset.jl:93-103). -/
+instance : LT Tree := ⟨fun a b => tamariLt a b = true⟩
+/-- Julia `a ≤ b` on trees (DF/poset.jl:112). -/
+instance : LE Tree := ⟨fun a b => tamariLe a b = true⟩
+instance (a b : Tree) : Decidable (a < b) := inferInstanceAs (Decidable (tamariLt a b = true))
+instance (a b : Tree) : Decidable (a ≤ b) := inferInstanceAs (Decidable (tamariLe a b = true))
+
+end Tree
+
+/-- The Tamari order on degree-`n` trees (Julia `<` on `PBTree`s). -/
+instance {n : Nat} : LT (PBTree n) := ⟨fun a b => a.1 < b.1⟩
+/-- The non-strict Tamari order on degree-`n` trees. -/
+instance {n : Nat} : LE (PBTree n) := ⟨fun a b => a.1 ≤ b.1⟩
+instance {n : Nat} (a b : PBTree n) : Decidable (a < b) := inferInstanceAs (Decidable (a.1 < b.1))
+instance {n : Nat} (a b : PBTree n) : Decidable (a ≤ b) := inferInstanceAs (Decidable (a.1 ≤ b.1))
+
+/-- Julia `a ⋖ b` (DF/poset.jl:44): `b` covers `a` in the Tamari order. -/
+scoped infix:50 " ⋖ " => Tree.covers
+/-- Julia `a ⋗ b` (DF/poset.jl:83): `a` covers `b`. -/
+scoped infix:50 " ⋗ " => Tree.coveredBy
+/-- Julia `a ⊴ b` (DF/poset.jl:173): the Tamari interval `[a, b]` as a grove. -/
+scoped infix:50 " ⊴ " => between
+/-- Julia `x \ y = under(x, y)` on degree-typed trees (DF/poset.jl:207):
+`PBTree a → PBTree b → PBTree (a + b)`. Overloads the `SDiff` token (which `Tree` uses). -/
+scoped infixl:70 " \\ " => PBTree.under
+
+/-- Julia `x < y` on groves: grove-index order (DF/morphism.jl:346). -/
+instance {n : Nat} : LT (Grove n) := ⟨fun x y => Grove.indexLt x y = true⟩
+/-- Julia `x ≤ y` on groves (DF/morphism.jl:348). -/
+instance {n : Nat} : LE (Grove n) := ⟨fun x y => Grove.indexLe x y = true⟩
+instance {n : Nat} (x y : Grove n) : Decidable (x < y) :=
+  inferInstanceAs (Decidable (Grove.indexLt x y = true))
+instance {n : Nat} (x y : Grove n) : Decidable (x ≤ y) :=
+  inferInstanceAs (Decidable (Grove.indexLe x y = true))
+
 -- The Tamari order on small trees, decided by the kernel (port-notes §6.4)
 example : Tree.ltFuel 3 (.node (.node (.node .leaf .leaf) .leaf) .leaf)
     (.node .leaf (.node .leaf (.node .leaf .leaf))) = true := by decide
