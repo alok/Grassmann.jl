@@ -354,7 +354,6 @@ Open gaps (budgets record them with 30% headroom; each is a follow-up):
 | `directsum/basis_index_n10` | 99 ns / 2.6 ns | `bladeRankImpl` computes `2 ^ n` (GMP `mpz_pow_ui`) per call; `binomsum` re-sums binomials | `b >>> n == 0`; read the tables' offsets |
 | `staticvectors/*`, small Grassmann ops | 10–40 ns / 0.5–3 ns | every vector-valued result is a fresh `FloatArray`; reductions are Nat-indexed, bounds-checked loops | unrolled generated kernels for small `n`, or unboxed-field structs for `n ≤ 4` |
 | `unitsystems/dim_products` | 1.5 µs / 139 ns | group products add `Rat` exponent vectors (a `gcd` per entry) | integer exponents in twelfths, as `UnitSystems.Dim` |
-| `directsum/blade_mul_CGA3` | 1.7 µs / 230 ns | Gram product recomputed per call over `Rat` terms | read plan tables (DESIGN §5.3) |
 | `directsum/blade_show_R10` | 310 ns / 10 ns, check ≠ | label strings built by `List`/`String` concatenation; **Lean prints `v₀` for generator 10, Julia `v10`** (label rule for `n ≥ 10`) | fix `Leibniz.printLabel`; build into one buffer |
 | `juliabase/sum_f64` | 0.55 / 0.087 ns per element | bit-exact replay of the SIMD accumulator layout with bounds-checked reads; no vectorization | `USize`/`uget` loop that clang can vectorize |
 | `math/*` (exp, log, expm1, sinh, tan) | 2–3× | Julia's kernels bit for bit; out-of-line `lean_float_to_bits`/`of_bits` calls and `Int` bookkeeping | runtime inline bit casts; `Int64` exponent arithmetic |
@@ -385,6 +384,8 @@ builds, so ±10%) against the Julia twins; every checksum agrees with Julia's. B
 | `directsum/basis_index_n10` | 103 | 5.4 | 2.6 | mask → position table behind `@[implemented_by]` (no `2 ^ n` on `Nat`); the bench loop no longer builds a `List.range` |
 | `directsum/blade_show_R10` | 305 | 55 | 10.4 | glyph tables, labels pushed char by char, plain spaces straight from the mask bits; the twin prints labels (`v10`), which is what Julia's `Λ(V).b` holds, and the checks now agree |
 | `directsum/plan_mul_R5` | 493 | 396 | 404 | (table-driven `basisRank`) |
+| `directsum/blade_mul_CGA3` | 1690 | 55 | 230 | non-diagonal spaces with `n ≤ 6` read a per-space product table (`TensorBundle.mulCached`, a global cache behind `@[implemented_by]`, DESIGN §5.3) instead of the Chevalley product over `Rat` per call |
+| `directsum/plan_mul_CGA3` (Lean only) | 1890 | 125 | – | same table |
 | `staticvectors/add3` | 10.9 | 1.04 | 0.56 | results written into the first operand (`Packed.set`, in place when unshared), `n ≤ 4` unrolled |
 | `staticvectors/dot3`, `norm3`, `sum3` | 9.8, 9.5, – | 1.05, 1.02, 1.02 | 0.62, 0.59, 0.54 | unrolled reductions with literal `Fin` indices (a `(0 : Fin 3)` numeral is a `0 % 3` closed term) |
 | `staticvectors/cross3` | 23.4 | 10.1 | 9.8 | straight-line, written into `a` |

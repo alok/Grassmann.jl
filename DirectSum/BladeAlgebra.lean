@@ -18,6 +18,7 @@ Hot paths for code generation: `mulSign` (signature spaces, allocation-free)
 and `mulDiag` (diagonal spaces).
 -/
 import DirectSum.Parity
+import Std.Data.HashMap
 
 namespace DirectSum
 
@@ -226,10 +227,44 @@ product for every metric (port-notes/grassmann-parity.md §8.2, `truth.py`). -/
 def cliffordProduct (g : Array (Array Rat)) (n : Nat) (a b : UInt64) : Terms :=
   (bladeMul g (popcount a + 1) a #[(b, 1)]).nonzero.sortBasis n
 
+/-- The product table of a non-diagonal space with `n ≤ 6` (Julia's per-algebra caches):
+entry `(a <<< n) ||| b` is `e_a e_b`, built once per space on first use. -/
+def mulTable (V : TensorBundle) : Array BladeResult :=
+  let n := V.n
+  let gram := V.gram
+  (List.range (2 ^ (2 * n))).toArray.map fun ab =>
+    let a := (ab >>> n).toUInt64
+    let b := (ab % 2 ^ n).toUInt64
+    let (a', b', q, _) := V.symmetricmask a b
+    .ofTerms n ((cliffordProduct gram n a' b').map fun (k, c) => (k ||| q, c))
+
+/-- The product tables built so far, per space (DESIGN.md §5.3: a global cache read through
+`unsafeBaseIO`, referentially transparent like Julia's). -/
+initialize mulTableCache : IO.Ref (Std.HashMap TensorBundle (Array BladeResult)) ← IO.mkRef {}
+
+/-- `mul` for a non-diagonal space with `n ≤ 6`: a read of the cached table. -/
+unsafe def mulCachedUnsafe (V : TensorBundle) (a b : UInt64) : BladeResult :=
+  unsafeBaseIO do
+    let tables ← mulTableCache.get
+    let t ← match tables.get? V with
+      | some t => pure t
+      | none => do
+        let t := mulTable V
+        mulTableCache.modify (·.insert V t)
+        pure t
+    return t[((a <<< V.n.toUInt64) ||| b).toNat]?.getD .zero
+
+/-- The exact product of a non-diagonal space (the Chevalley product over `V.gram`). -/
+@[implemented_by mulCachedUnsafe]
+def mulCached (V : TensorBundle) (a b : UInt64) : BladeResult :=
+  let (a', b', q, _) := V.symmetricmask a b
+  .ofTerms V.n ((cliffordProduct V.gram V.n a' b').map fun (k, c) => (k ||| q, c))
+
 /-- Julia `a * b` (geometric product, `src/algebra.jl:43-59`). Diagonal spaces:
 bare blade for disjoint `+` products, `Single(-1)` for `-`, `Single(±g)` whenever
 generators are shared (`v₁*v₁` is `1v`, degenerate `v₃*v₃` is `0v`).
-Non-diagonal spaces: the exact Chevalley product over `V.gram`. -/
+Non-diagonal spaces: the exact Chevalley product over `V.gram`, read from a per-space table for
+`n ≤ 6` (masks inside the space). -/
 def mul (a b : UInt64) : BladeResult :=
   if V.isdiag then
     if V.istangent && V.diffcheck a b then .zero else
@@ -237,6 +272,7 @@ def mul (a b : UInt64) : BladeResult :=
     let (c, d) := V.mulDiag a b
     let inner := if a' &&& b' == 0 then signed (c < 0) d else .single c d
     V.nestTangent z inner
+  else if V.n ≤ 6 && (a ||| b) >>> V.n.toUInt64 == 0 then V.mulCached a b
   else
     let (a', b', q, _) := V.symmetricmask a b
     .ofTerms V.n ((cliffordProduct V.gram V.n a' b').map fun (k, c) => (k ||| q, c))

@@ -44,6 +44,15 @@ def run : IO Tally := do
         for b in blades do
           ok := ok && normTerms (V.mul a b).terms == normTerms (TensorBundle.cliffordProduct V.gram V.n a b)
       t := t.check ok s!"{nm}: diagonal rule ≠ Chevalley product"
+    else
+      -- the cached product table (n ≤ 6) agrees with the Chevalley product computed per call
+      let mut ok := true
+      for a in blades do
+        for b in blades do
+          let (a', b', q, _) := V.symmetricmask a b
+          let direct := (TensorBundle.cliffordProduct V.gram V.n a' b').map fun (k, c) => (k ||| q, c)
+          ok := ok && normTerms (V.mul a b).terms == normTerms direct
+      t := t.check ok s!"{nm}: cached product table ≠ Chevalley product"
     -- associativity on every blade triple
     let mut assoc := true
     for a in blades do

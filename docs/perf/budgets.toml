@@ -134,11 +134,6 @@ ratio = 6.9
 note = "Labels pushed char by char from glyph tables (plain spaces straight from the mask bits); Julia converts cached Symbols."
 
 # Gram/Chevalley product evaluated per call over Rat terms (an allocation per term); kernels should read plan tables (DESIGN 5.3) instead of recomputing blade algebra.
-[[budget]]
-pattern = "directsum/blade_mul_CGA3"
-ratio = 9.5
-note = "Gram/Chevalley product evaluated per call over Rat terms (an allocation per term); kernels should read plan tables (DESIGN 5.3) instead of recomputing blade algebra."
-
 # ghost returns a heap Vector per lookup; the NeighborTable read (neighbortable_sweep_*, ~1 ns) is the fast path for stencils.
 [[budget]]
 pattern = "meshtopology/ghost_mobius"
