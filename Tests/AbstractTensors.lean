@@ -5,6 +5,7 @@ import Tests.AbstractTensors.StaticVectorsTests
 import Tests.AbstractTensors.ComplexTests
 import Tests.AbstractTensors.GenericTests
 import Tests.AbstractTensors.Kinds
+import Tests.AbstractTensors.ValuesShow
 
 /-!
 AbstractTensors and StaticVectors test suites. `Notation` and `Kinds` are compile-time
@@ -16,7 +17,8 @@ def Tests.AbstractTensors.run : IO (Nat × Nat) := do
   let suites : List (String × Tests.AbstractTensors.TestM Unit) := [
     ("abstracttensors.staticvectors", Tests.AbstractTensors.StaticVectorsTests.suite),
     ("abstracttensors.complex", Tests.AbstractTensors.ComplexTests.suite),
-    ("abstracttensors.generic", Tests.AbstractTensors.GenericTests.suite)]
+    ("abstracttensors.generic", Tests.AbstractTensors.GenericTests.suite),
+    ("abstracttensors.valuesshow", Tests.AbstractTensors.ValuesShow.suite)]
   let mut passed := 0
   let mut failed := 0
   for (name, s) in suites do
