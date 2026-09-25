@@ -147,7 +147,7 @@ undefined. -/
 /-- Julia `↑ω` of a general element (`src/Grassmann.jl:164-183`) in the full algebra:
 conformal `(v∞/2)⟑((~ω)⋅ω) + v∅ + ω`, Riemann sphere `b⟑((ω²-1)⟑inv(ω²+1)) + (2inv(ω²+1))⟑ω`
 with `ω² = (~ω)⋅ω`, else `ω`. -/
-def up (ω : Multivector V Float) : Multivector V Float :=
+@[specialize V] def up (ω : Multivector V Float) : Multivector V Float :=
   let ω2 : Multivector V Float := contraction (~ω) ω
   if V.hasinf && V.hasorigin then
     (bladeF (V := V) (infBits V) 0.5 * ω2 : Multivector V Float) + bladeF (originBits V) 1 + ω
@@ -159,7 +159,7 @@ def up (ω : Multivector V Float) : Multivector V Float :=
 
 /-- Julia `↓ω` of a general element (`src/Grassmann.jl:196-205`) in the full algebra:
 conformal `((v∞∅∧ω)⋅inv(~v∞∅)) / (-ω⋅v∞)`, Riemann sphere `(~(ω∧b)⋅b)/(1-b⋅ω)`, else `ω`. -/
-def down (ω : Multivector V Float) : Multivector V Float :=
+@[specialize V] def down (ω : Multivector V Float) : Multivector V Float :=
   if V.hasinf && V.hasorigin then
     let m : Multivector V Float := bladeF (infBits V ||| originBits V) (1 : Float)
     let num : Multivector V Float := contraction (m ∧ ω : Multivector V Float) (Multivector.invD (~m : Multivector V Float))
@@ -201,7 +201,7 @@ namespace Composite
 /-- Julia `↓V` of a space (`src/Grassmann.jl:196-205` on a `Submanifold` that is not a
 basis blade): the subspace without the null generators, `V(2:n)` for a space with `∞` or
 `∅`, `V(3:n)` for conformal space, `V` itself otherwise. -/
-def rejectSpace (V : TensorBundle) : TensorBundle :=
+@[specialize V] def rejectSpace (V : TensorBundle) : TensorBundle :=
   if V.hasinf && V.hasorigin then Forms.restrict V (lowMask V.n &&& ~~~3)
   else if V.hasinf || V.hasorigin then Forms.drop1 V
   else V

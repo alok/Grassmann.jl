@@ -69,21 +69,21 @@ namespace BPair
 def one : BPair := ⟨f1, f0⟩
 
 /-- Grassmann's generic `expm1` series (`C:31-51`) in the algebra of one blade. -/
-def expm1 (β : Float) (t : BPair) : BPair := expm1Generic add (mul β) sdiv norm t
+@[specialize] def expm1 (β : Float) (t : BPair) : BPair := expm1Generic add (mul β) sdiv norm t
 
 /-- Grassmann's generic `cosh` series (`C:458-481`): `1 + τ/2 + τ²/4! + …`, `τ = t⟑t`. -/
-def cosh (β : Float) (t : BPair) : BPair :=
+@[specialize] def cosh (β : Float) (t : BPair) : BPair :=
   let τ := mul β t t
   let S := coshGenericTail add (mul β) sdiv norm τ
   ⟨f1 + S.re, S.im⟩
 
 /-- Grassmann's generic `sinh` series (`C:517-539`): `t + t⟑τ/3! + …`, `τ = t⟑t`. -/
-def sinh (β : Float) (t : BPair) : BPair :=
+@[specialize] def sinh (β : Float) (t : BPair) : BPair :=
   let τ := mul β t t
   sinhGenericWith add sdiv norm (fun x => mul β x τ) (fun d x => mul β x (sdiv τ (natF d))) t
 
 /-- Grassmann's `qlog(w) = 2 atanh w` series (`C:303-321`). -/
-def qlog (β : Float) (w : BPair) : BPair := qlogWith add (mul β) sdiv smul norm w
+@[specialize] def qlog (β : Float) (w : BPair) : BPair := qlogWith add (mul β) sdiv smul norm w
 
 /-- The inverse `(re - im·B)/(re² - im²·β)` (`nan` parts when not invertible). -/
 @[inline] def inv (β : Float) (a : BPair) : BPair :=
@@ -236,13 +236,13 @@ defect `couple-inv-hyperbolic`). The blade of `a` is kept; `b` must share it. -/
   else ofPair a.bits (BPair.mul β a.pair (BPair.inv β b.pair))
 
 /-- `tanh z = sinh z / cosh z` (AbstractTensors `tanh`, AT:419). -/
-def tanh (z : Couple V Float) : Couple V Float := divSame z.sinh z.cosh
+@[specialize V] def tanh (z : Couple V Float) : Couple V Float := divSame z.sinh z.cosh
 
 /-- Julia `z ^ k` for a couple (`src/algebra.jl:440-470`): `z` for `k = 1`; the complex
 power `Complex(z)^k` (`power_by_squaring`, of `inv(z)` for `k < 0`) when `B² = -1`;
 otherwise Julia's repeated/binary multiplication in the blade algebra, and
 `inv(z)^|k|` for `k < 0` (Julia returns `One` there). -/
-def pow (z : Couple V Float) (k : Int) : Couple V Float :=
+@[specialize V] def pow (z : Couple V Float) (k : Int) : Couple V Float :=
   if k == 1 then z
   else
     let β := z.blSq
@@ -257,40 +257,40 @@ def pow (z : Couple V Float) (k : Int) : Couple V Float :=
 @[inline] def sq (z : Couple V Float) : Couple V Float := ofPair z.bits (BPair.mul z.blSq z.pair z.pair)
 
 /-- `coth z = cosh z / sinh z` (AbstractTensors `AT:420`). -/
-def coth (z : Couple V Float) : Couple V Float := divSame z.cosh z.sinh
+@[specialize V] def coth (z : Couple V Float) : Couple V Float := divSame z.cosh z.sinh
 
 /-- AbstractTensors `asinh(z) = log(z + sqrt(1 + z⟑z))` (`AT:421`), in the blade algebra
 (the complex `asinh` formula when `B² = -1`). -/
-def asinh (z : Couple V Float) : Couple V Float :=
+@[specialize V] def asinh (z : Couple V Float) : Couple V Float :=
   let s := (⟨z.bits, f1 + z.sq.re, z.sq.im⟩ : Couple V Float).sqrt
   log ⟨z.bits, z.re + s.re, z.im + s.im⟩
 
 /-- AbstractTensors `acosh(z) = log(z + sqrt(z⟑z - 1))` (`AT:422`). -/
-def acosh (z : Couple V Float) : Couple V Float :=
+@[specialize V] def acosh (z : Couple V Float) : Couple V Float :=
   let s := (⟨z.bits, z.sq.re - f1, z.sq.im⟩ : Couple V Float).sqrt
   log ⟨z.bits, z.re + s.re, z.im + s.im⟩
 
 /-- AbstractTensors `atanh(z) = (log(1 + z) - log(1 - z))/2` (`AT:423`). -/
-def atanh (z : Couple V Float) : Couple V Float :=
+@[specialize V] def atanh (z : Couple V Float) : Couple V Float :=
   let a := log (⟨z.bits, f1 + z.re, z.im⟩ : Couple V Float)
   let b := log (⟨z.bits, f1 - z.re, -z.im⟩ : Couple V Float)
   ⟨z.bits, (a.re - b.re) / f2, (a.im - b.im) / f2⟩
 
 /-- AbstractTensors `acoth(z) = (log(z + 1) - log(z - 1))/2` (`AT:424`). -/
-def acoth (z : Couple V Float) : Couple V Float :=
+@[specialize V] def acoth (z : Couple V Float) : Couple V Float :=
   let a := log (⟨z.bits, z.re + f1, z.im⟩ : Couple V Float)
   let b := log (⟨z.bits, z.re - f1, z.im⟩ : Couple V Float)
   ⟨z.bits, (a.re - b.re) / f2, (a.im - b.im) / f2⟩
 
 /-- Julia `b ^ z = exp(z ⟑ log(b))` for a real base `b` (AbstractTensors `AT:326`). -/
-def rpow (b : Float) (z : Couple V Float) : Couple V Float :=
+@[specialize V] def rpow (b : Float) (z : Couple V Float) : Couple V Float :=
   let l := F64.log b
   exp ⟨z.bits, z.re * l, z.im * l⟩
 
 /-- A real power `z ^ x = exp(x·log z)` (the complex power `Complex(z)^x` when `B² = -1`).
 Julia defines no `Couple ^ Real`; this is the principal branch, consistent with `sqrt`
 (`x = 1/2`) and `cbrt` (`x = 1/3`) up to rounding. -/
-def powf (z : Couple V Float) (x : Float) : Couple V Float :=
+@[specialize V] def powf (z : Couple V Float) (x : Float) : Couple V Float :=
   if z.blSq == -f1 then onBlade z.bits (ComplexF64.pow z.toComplex ⟨x, f0⟩)
   else
     let l := z.log
@@ -332,7 +332,7 @@ negative scalar gets the angle `π` when `I² = -1`). -/
 
 /-- Julia `log1p(t)` of a term: the generic `qlog(t/(t+2))` series (`C:370`; there is no
 term method, so even `log1p(1.0v)` is the series value `0.6931471795482411`). -/
-def log1p (s : Single V G Float) : Couple V Float :=
+@[specialize V] def log1p (s : Single V G Float) : Couple V Float :=
   let b : UInt64 := if G == 0 then 0 else s.bits
   let β := bladeSq V b
   let t := s.pair
@@ -443,32 +443,32 @@ non-unit metric entries and negative `k` it is wrong (defect `term-power-period4
 
 /-- AbstractTensors `asinh(t) = log(t + sqrt(1 + t⟑t))` (`AT:421`) of a term: `t⟑t` is a
 scalar, whose (real) square root is `NaN` where Julia throws `DomainError`. -/
-def asinh (s : Single V G Float) : Couple V Float :=
+@[specialize V] def asinh (s : Single V G Float) : Couple V Float :=
   (plusScalar (Float.sqrt (f1 + s.sqScalar)) s).log
 
 /-- AbstractTensors `acosh(t) = log(t + sqrt(t⟑t - 1))` (`AT:422`) of a term. -/
-def acosh (s : Single V G Float) : Couple V Float :=
+@[specialize V] def acosh (s : Single V G Float) : Couple V Float :=
   (plusScalar (Float.sqrt (s.sqScalar - f1)) s).log
 
 /-- AbstractTensors `atanh(t) = (log(1 + t) - log(1 - t))/2` (`AT:423`) of a term. -/
-def atanh (s : Single V G Float) : Couple V Float :=
+@[specialize V] def atanh (s : Single V G Float) : Couple V Float :=
   Couple.atanh (plusScalar f0 s)
 
 /-- AbstractTensors `acoth(t) = (log(t + 1) - log(t - 1))/2` (`AT:424`) of a term. -/
-def acoth (s : Single V G Float) : Couple V Float :=
+@[specialize V] def acoth (s : Single V G Float) : Couple V Float :=
   Couple.acoth (plusScalar f0 s)
 
 /-- `(-I/k) ⟑ (a + b·e_{b'})` for a couple `a + b·e_{b'}` whose blade `b'` is the
 pseudoscalar times the blade of a term: the pseudo-couple on the term's blade
 (`-(b/k)·(I ⟑ e_{b'})`) plus `-(a/k)·I`. -/
-def negPseudoTimes (k : Float) (w : Couple V Float) : PseudoCouple V Float :=
+@[specialize V] def negPseudoTimes (k : Float) (w : Couple V Float) : PseudoCouple V Float :=
   let (σ, b'') := bladeMul V (pseudoMask V) w.bits
   ⟨b'', -(w.im / k) * σ, -(w.re / k)⟩
 
 /-- AbstractTensors `asin(t) = (-I) ⟑ log(I⟑t + sqrt(1 - t⟑t))` (`AT:425`) of a term: `I⟑t` is
 a term, `1 - t⟑t` a scalar, so the logarithm is the closed form of a couple on the blade of
 `I⟑t` and the result a pseudo-couple (`asin(0.5v₁) = 0.5236v₁ + 5.6e-17v₁₂₃` in `ℝ3`). -/
-def asin (s : Single V G Float) : PseudoCouple V Float :=
+@[specialize V] def asin (s : Single V G Float) : PseudoCouple V Float :=
   let (σ, b') := bladeMul V (pseudoMask V) (if G == 0 then 0 else s.bits)
   let r := Float.sqrt (f1 - s.sqScalar)
   let x : Couple V Float := if b' == 0 then ⟨0, r + σ * s.val, f0⟩ else ⟨b', r, σ * s.val⟩
@@ -476,7 +476,7 @@ def asin (s : Single V G Float) : PseudoCouple V Float :=
 
 /-- AbstractTensors `atan(t) = ((-I)/2) ⟑ (log(1 + I⟑t) - log(1 - I⟑t))` (`AT:427`) of a term,
 a pseudo-couple (`atan(0.5v₁₂) = 0.5493v₁₂ - 0.0v₁₂₃` in `ℝ3`). -/
-def atan (s : Single V G Float) : PseudoCouple V Float :=
+@[specialize V] def atan (s : Single V G Float) : PseudoCouple V Float :=
   let (σ, b') := bladeMul V (pseudoMask V) (if G == 0 then 0 else s.bits)
   let c := σ * s.val
   let (p, m) : Couple V Float × Couple V Float :=
@@ -506,7 +506,7 @@ which is not the exponential (port-notes §8.3 item 11, fixed). -/
 
 /-- `expm1(z) = exp(z) - 1` as a couple (Julia `expm1(t::Phasor) = exp(t) - One(V)`,
 `C:130`, with the fixed `exp`). -/
-def expm1 (z : Phasor V Float) : Couple V Float :=
+@[specialize V] def expm1 (z : Phasor V Float) : Couple V Float :=
   let e := z.exp.complexify
   ⟨e.bits, e.re - f1, e.im⟩
 
@@ -516,7 +516,7 @@ def expm1 (z : Phasor V Float) : Couple V Float :=
 
 /-- Julia `log1p(z::Phasor) = log(One(V) + z)` (`src/composite.jl:364`), where the sum
 complexifies the phasor. -/
-def log1p (z : Phasor V Float) : Couple V Float :=
+@[specialize V] def log1p (z : Phasor V Float) : Couple V Float :=
   let c := z.complexify
   Couple.log ⟨c.bits, f1 + c.re, c.im⟩
 
@@ -538,7 +538,7 @@ def log1p (z : Phasor V Float) : Couple V Float :=
   ⟨F64.powInt z.amp n, ⟨z.angle.bits, k * z.angle.re, k * z.angle.im⟩⟩
 
 /-- Julia `z ^ x = Phasor(amplitude^x, x·angle)` for a real exponent (`src/algebra.jl:422`). -/
-def powf (z : Phasor V Float) (x : Float) : Phasor V Float :=
+@[specialize V] def powf (z : Phasor V Float) (x : Float) : Phasor V Float :=
   ⟨F64.pow z.amp x, ⟨z.angle.bits, x * z.angle.re, x * z.angle.im⟩⟩
 
 /-- Julia `radius(z::Phasor) = radius(amplitude(z)) = |amplitude|` (`src/multivectors.jl:912`). -/

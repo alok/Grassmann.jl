@@ -117,110 +117,110 @@ namespace Multivector
 variable [Kernels V]
 
 /-- AbstractTensors `cos(t) = cosh(I ⟑ t)` (`AT:407`). -/
-def cos (t : Multivector V Float) : Multivector V Float := Generic.cos t
+@[specialize V] def cos (t : Multivector V Float) : Multivector V Float := Generic.cos t
 /-- AbstractTensors `sin(t) = sinh(I ⟑ t)/I` (`AT:408`). -/
-def sin (t : Multivector V Float) : Multivector V Float := Generic.sin t
+@[specialize V] def sin (t : Multivector V Float) : Multivector V Float := Generic.sin t
 /-- AbstractTensors `tan(t) = sin(t)/cos(t)` (`AT:409`). -/
-def tan (t : Multivector V Float) : Multivector V Float := Generic.tan t
+@[specialize V] def tan (t : Multivector V Float) : Multivector V Float := Generic.tan t
 /-- AbstractTensors `cot(t) = cos(t)/sin(t)` (`AT:410`). -/
-def cot (t : Multivector V Float) : Multivector V Float := Generic.cot t
+@[specialize V] def cot (t : Multivector V Float) : Multivector V Float := Generic.cot t
 /-- AbstractTensors `sec(t) = inv(cos(t))` (`AT:411`). -/
-def sec (t : Multivector V Float) : Multivector V Float := Generic.sec t
+@[specialize V] def sec (t : Multivector V Float) : Multivector V Float := Generic.sec t
 /-- AbstractTensors `csc(t) = inv(sin(t))` (`AT:412`). -/
-def csc (t : Multivector V Float) : Multivector V Float := Generic.csc t
+@[specialize V] def csc (t : Multivector V Float) : Multivector V Float := Generic.csc t
 /-- AbstractTensors `tanh(t) = sinh(t)/cosh(t)` (`AT:419`). -/
-def tanh (t : Multivector V Float) : Multivector V Float := Generic.tanh t
+@[specialize V] def tanh (t : Multivector V Float) : Multivector V Float := Generic.tanh t
 /-- AbstractTensors `coth(t) = cosh(t)/sinh(t)` (`AT:420`). -/
-def coth (t : Multivector V Float) : Multivector V Float := Generic.coth t
+@[specialize V] def coth (t : Multivector V Float) : Multivector V Float := Generic.coth t
 /-- AbstractTensors `sech(t) = inv(cosh(t))` (`AT:415`). -/
-def sech (t : Multivector V Float) : Multivector V Float := Generic.sech t
+@[specialize V] def sech (t : Multivector V Float) : Multivector V Float := Generic.sech t
 /-- AbstractTensors `csch(t) = inv(sinh(t))` (`AT:416`). -/
-def csch (t : Multivector V Float) : Multivector V Float := Generic.csch t
+@[specialize V] def csch (t : Multivector V Float) : Multivector V Float := Generic.csch t
 /-- AbstractTensors `asinh(t) = log(t + sqrt(1 + t⟑t))` (`AT:421`). -/
-def asinh (t : Multivector V Float) : Multivector V Float := Generic.asinh t
+@[specialize V] def asinh (t : Multivector V Float) : Multivector V Float := Generic.asinh t
 /-- AbstractTensors `acosh(t) = log(t + sqrt(t⟑t - 1))` (`AT:422`). -/
-def acosh (t : Multivector V Float) : Multivector V Float := Generic.acosh t
+@[specialize V] def acosh (t : Multivector V Float) : Multivector V Float := Generic.acosh t
 /-- AbstractTensors `atanh(t) = (log(1+t) - log(1-t))/2` (`AT:423`). -/
-def atanh (t : Multivector V Float) : Multivector V Float := Generic.atanh t
+@[specialize V] def atanh (t : Multivector V Float) : Multivector V Float := Generic.atanh t
 /-- AbstractTensors `acoth(t) = (log(t+1) - log(t-1))/2` (`AT:424`). -/
-def acoth (t : Multivector V Float) : Multivector V Float := Generic.acoth t
+@[specialize V] def acoth (t : Multivector V Float) : Multivector V Float := Generic.acoth t
 /-- AbstractTensors `asin(t) = (-I) ⟑ log(I⟑t + sqrt(1 - t⟑t))` (`AT:425`). -/
-def asin (t : Multivector V Float) : Multivector V Float := Generic.asin t
+@[specialize V] def asin (t : Multivector V Float) : Multivector V Float := Generic.asin t
 /-- AbstractTensors `acos(t) = (-I) ⟑ log(t + I⟑sqrt(1 - t⟑t))` (`AT:426`). -/
-def acos (t : Multivector V Float) : Multivector V Float := Generic.acos t
+@[specialize V] def acos (t : Multivector V Float) : Multivector V Float := Generic.acos t
 /-- AbstractTensors `atan(t) = ((-I)/2) ⟑ (log(1 + I⟑t) - log(1 - I⟑t))` (`AT:427`). -/
-def atan (t : Multivector V Float) : Multivector V Float := Generic.atan t
+@[specialize V] def atan (t : Multivector V Float) : Multivector V Float := Generic.atan t
 /-- AbstractTensors `acot(t) = ((-I)/2) ⟑ (log(t - I) - log(t + I))` (`AT:428`). -/
-def acot (t : Multivector V Float) : Multivector V Float := Generic.acot t
+@[specialize V] def acot (t : Multivector V Float) : Multivector V Float := Generic.acot t
 /-- AbstractTensors `asec(t) = acos(inv(t))` (`AT:413`). -/
-def asec (t : Multivector V Float) : Multivector V Float := Generic.asec t
+@[specialize V] def asec (t : Multivector V Float) : Multivector V Float := Generic.asec t
 /-- AbstractTensors `acsc(t) = asin(inv(t))` (`AT:414`). -/
-def acsc (t : Multivector V Float) : Multivector V Float := Generic.acsc t
+@[specialize V] def acsc (t : Multivector V Float) : Multivector V Float := Generic.acsc t
 /-- AbstractTensors `asech(t) = acosh(inv(t))` (`AT:417`). -/
-def asech (t : Multivector V Float) : Multivector V Float := Generic.asech t
+@[specialize V] def asech (t : Multivector V Float) : Multivector V Float := Generic.asech t
 /-- AbstractTensors `acsch(t) = asinh(inv(t))` (`AT:418`). -/
-def acsch (t : Multivector V Float) : Multivector V Float := Generic.acsch t
+@[specialize V] def acsch (t : Multivector V Float) : Multivector V Float := Generic.acsch t
 /-- AbstractTensors `sinc(t)` (`AT:429`). -/
-def sinc (t : Multivector V Float) : Multivector V Float := Generic.sinc t
+@[specialize V] def sinc (t : Multivector V Float) : Multivector V Float := Generic.sinc t
 /-- AbstractTensors `cosc(t)` (`AT:430`). -/
-def cosc (t : Multivector V Float) : Multivector V Float := Generic.cosc t
+@[specialize V] def cosc (t : Multivector V Float) : Multivector V Float := Generic.cosc t
 /-- AbstractTensors `exp2(t) = exp(log(2)·t)` (`AT:384`). -/
-def exp2 (t : Multivector V Float) : Multivector V Float := Generic.exp2 t
+@[specialize V] def exp2 (t : Multivector V Float) : Multivector V Float := Generic.exp2 t
 /-- AbstractTensors `exp10(t) = exp(log(10)·t)` (`AT:384`). -/
-def exp10 (t : Multivector V Float) : Multivector V Float := Generic.exp10 t
+@[specialize V] def exp10 (t : Multivector V Float) : Multivector V Float := Generic.exp10 t
 /-- AbstractTensors `log2(t) = log2(ℯ)·log(t)` (`AT:383`). -/
-def log2 (t : Multivector V Float) : Multivector V Float := Generic.log2 t
+@[specialize V] def log2 (t : Multivector V Float) : Multivector V Float := Generic.log2 t
 /-- AbstractTensors `log10(t) = log10(ℯ)·log(t)` (`AT:383`). -/
-def log10 (t : Multivector V Float) : Multivector V Float := Generic.log10 t
+@[specialize V] def log10 (t : Multivector V Float) : Multivector V Float := Generic.log10 t
 /-- AbstractTensors `b ^ t = exp(t ⟑ log(b))` (`AT:326`). -/
-def rpow (b : Float) (t : Multivector V Float) : Multivector V Float := Generic.rpow b t
+@[specialize V] def rpow (b : Float) (t : Multivector V Float) : Multivector V Float := Generic.rpow b t
 /-- `log(t)/log(b)` (AbstractTensors `AT:330`, bug B1 fixed: Julia returns `log(b)`). -/
-def logBase (b : Float) (t : Multivector V Float) : Multivector V Float := Generic.logBase b t
+@[specialize V] def logBase (b : Float) (t : Multivector V Float) : Multivector V Float := Generic.logBase b t
 /-- AbstractTensors `exph(t) = cosh(t) + sinh(t)` (Grassmann `C:572`). -/
-def exph (t : Multivector V Float) : Multivector V Float := t.cosh + t.sinh
+@[specialize V] def exph (t : Multivector V Float) : Multivector V Float := t.cosh + t.sinh
 /-- AbstractTensors `abs(t) = sqrt(abs2(t))` (`AT:435`, `abs2` collapsed to its scalar). -/
-def abs (t : Multivector V Float) : Multivector V Float := Generic.abs t
+@[specialize V] def abs (t : Multivector V Float) : Multivector V Float := Generic.abs t
 /-- AbstractTensors `unit(t) = t/abs(t)` (`AT:462`). -/
-def unit (t : Multivector V Float) : Multivector V Float := Generic.unit t
+@[specialize V] def unit (t : Multivector V Float) : Multivector V Float := Generic.unit t
 /-- AbstractTensors `coabs(t) = complementleft(abs(complementright(t)))` (`AT:532`). -/
-def coabs (t : Multivector V Float) : Multivector V Float := Generic.coabs t
+@[specialize V] def coabs (t : Multivector V Float) : Multivector V Float := Generic.coabs t
 /-- AbstractTensors `coabs2` (`AT:532-548`). -/
-def coabs2 (t : Multivector V Float) : Multivector V Float := Generic.coabs2 t
+@[specialize V] def coabs2 (t : Multivector V Float) : Multivector V Float := Generic.coabs2 t
 /-- AbstractTensors `geomabs(t) = abs(t) + coabs(t)` (`AT:454`). -/
-def geomabs (t : Multivector V Float) : Multivector V Float := Generic.geomabs t
+@[specialize V] def geomabs (t : Multivector V Float) : Multivector V Float := Generic.geomabs t
 /-- AbstractTensors `unitnorm(t) = t/norm(geomabs(t))` (`AT:479`). -/
-def unitnorm (t : Multivector V Float) : Multivector V Float := Generic.unitnorm t
+@[specialize V] def unitnorm (t : Multivector V Float) : Multivector V Float := Generic.unitnorm t
 /-- AbstractTensors `counit(t) = unitize(t) = t/value(coabs(t))` (`AT:476-478`): the
 coefficient of `coabs(t)` on the pseudoscalar, applied as `t ⟑ inv(x)`. -/
-def unitize (t : Multivector V Float) : Multivector V Float :=
+@[specialize V] def unitize (t : Multivector V Float) : Multivector V Float :=
   let c := Generic.coabs t
   t * (f1 / getD c.v (2 ^ V.n - 1))
 /-- AbstractTensors `metric(a, b) = abs(a - b)` (`AT:368`). -/
-def metricDist (a b : Multivector V Float) : Multivector V Float := Generic.metric a b
+@[specialize V] def metricDist (a b : Multivector V Float) : Multivector V Float := Generic.metric a b
 /-- AbstractTensors `cometric(a, b) = coabs(a - b)` (`AT:368`). -/
-def cometric (a b : Multivector V Float) : Multivector V Float := Generic.cometric a b
+@[specialize V] def cometric (a b : Multivector V Float) : Multivector V Float := Generic.cometric a b
 /-- AbstractTensors `coexp` / `pseudoexp` (`AT:532-548`). -/
-def coexp (t : Multivector V Float) : Multivector V Float := Generic.coexp t
+@[specialize V] def coexp (t : Multivector V Float) : Multivector V Float := Generic.coexp t
 /-- AbstractTensors `colog` / `pseudolog`. -/
-def colog (t : Multivector V Float) : Multivector V Float := Generic.colog t
+@[specialize V] def colog (t : Multivector V Float) : Multivector V Float := Generic.colog t
 /-- AbstractTensors `cosqrt` / `pseudosqrt`. -/
-def cosqrt (t : Multivector V Float) : Multivector V Float := Generic.cosqrt t
+@[specialize V] def cosqrt (t : Multivector V Float) : Multivector V Float := Generic.cosqrt t
 /-- AbstractTensors `cocbrt` / `pseudocbrt`. -/
-def cocbrt (t : Multivector V Float) : Multivector V Float := Generic.cocbrt t
+@[specialize V] def cocbrt (t : Multivector V Float) : Multivector V Float := Generic.cocbrt t
 /-- AbstractTensors `coinv` / `pseudoinv`. -/
-def coinv (t : Multivector V Float) : Multivector V Float := Generic.coinv t
+@[specialize V] def coinv (t : Multivector V Float) : Multivector V Float := Generic.coinv t
 /-- AbstractTensors `cosin` / `pseudosin` (complemented `sin`). -/
-def cosin (t : Multivector V Float) : Multivector V Float := Generic.cosin t
+@[specialize V] def cosin (t : Multivector V Float) : Multivector V Float := Generic.cosin t
 /-- AbstractTensors `cocos` / `pseudocos` (complemented `cos`). -/
-def cocos (t : Multivector V Float) : Multivector V Float := Generic.cocos t
+@[specialize V] def cocos (t : Multivector V Float) : Multivector V Float := Generic.cocos t
 /-- AbstractTensors `cotan` / `pseudotan` (complemented `tan`, not the cotangent). -/
-def cotan (t : Multivector V Float) : Multivector V Float := Generic.cotan t
+@[specialize V] def cotan (t : Multivector V Float) : Multivector V Float := Generic.cotan t
 /-- AbstractTensors `cosinh` / `pseudosinh`. -/
-def cosinh (t : Multivector V Float) : Multivector V Float := Generic.cosinh t
+@[specialize V] def cosinh (t : Multivector V Float) : Multivector V Float := Generic.cosinh t
 /-- AbstractTensors `cocosh` / `pseudocosh`. -/
-def cocosh (t : Multivector V Float) : Multivector V Float := Generic.cocosh t
+@[specialize V] def cocosh (t : Multivector V Float) : Multivector V Float := Generic.cocosh t
 /-- AbstractTensors `cotanh` / `pseudotanh`. -/
-def cotanh (t : Multivector V Float) : Multivector V Float := Generic.cotanh t
+@[specialize V] def cotanh (t : Multivector V Float) : Multivector V Float := Generic.cotanh t
 
 end Multivector
 
@@ -233,7 +233,7 @@ variable [Kernels V]
 /-- The generated `cosh` of a half of parity `p` (its coefficients) as a spinor: the spinor
 `cosh` for `p = false`; for an odd `x` Julia's multivector `cosh` (`C:483-513`), whose
 series `1 + τ/2 + …` over `τ = x⟑x` is even. -/
-def coshHalfV : (p : Bool) → Values Float ((halfLayout p).size V.n) → Half V false Float
+@[specialize V] def coshHalfV : (p : Bool) → Values Float ((halfLayout p).size V.n) → Half V false Float
   | false, x => Half.cosh ⟨x⟩
   | true, x =>
     if approx f0 x.norm then Half.scalarF f1
@@ -242,7 +242,7 @@ def coshHalfV : (p : Bool) → Values Float ((halfLayout p).size V.n) → Half V
       Half.addScalar f1 (coshGeneratedTail (· + ·) Half.smul' Half.sdiv Half.fnorm τ)
 
 /-- The generated `sinh` of a half of parity `p` (its coefficients), in the same half. -/
-def sinhHalfV : (p : Bool) → Values Float ((halfLayout p).size V.n) → Values Float ((halfLayout p).size V.n)
+@[specialize V] def sinhHalfV : (p : Bool) → Values Float ((halfLayout p).size V.n) → Values Float ((halfLayout p).size V.n)
   | false, x => (Half.sinh ⟨x⟩).v
   | true, x =>
     if approx f0 x.norm then x
@@ -265,20 +265,20 @@ variable [Kernels V]
 
 /-- AbstractTensors `cos(s) = cosh(I ⟑ s)` (`AT:407`) of a spinor (any dimension; the
 cosine of a spinor is even). -/
-def cos (s : Half V false Float) : Half V false Float :=
+@[specialize V] def cos (s : Half V false Float) : Half V false Float :=
   coshHalfV (pseudoGrade V % 2 == 1) (mulPseudoSpinor s)
 
 /-- AbstractTensors `sin(s) = sinh(I ⟑ s)/I` (`AT:408`) of a spinor. -/
-def sin (s : Half V false Float) : Half V false Float :=
+@[specialize V] def sin (s : Half V false Float) : Half V false Float :=
   let p := pseudoGrade V % 2 == 1
   ⟨divPseudo (halfLayout p) (halfLayout false) (sinhHalfV p (mulPseudoSpinor s))⟩
 
 /-- AbstractTensors `tan(s) = sin(s)/cos(s)` (`AT:409`) of a spinor; `NaN` coefficients where
 the inverse of `cos s` is undefined. -/
-def tan (s : Half V false Float) : Half V false Float := smul' s.sin (invD s.cos)
+@[specialize V] def tan (s : Half V false Float) : Half V false Float := smul' s.sin (invD s.cos)
 
 /-- AbstractTensors `exph(s) = cosh(s) + sinh(s)` (Grassmann `C:572`). -/
-def exph (s : Half V false Float) : Half V false Float := s.cosh + s.sinh
+@[specialize V] def exph (s : Half V false Float) : Half V false Float := s.cosh + s.sinh
 
 end Half
 
@@ -292,14 +292,14 @@ variable [Kernels V]
 pseudoscalar `I ⟑ z = im·I² + re·I` is again a couple on `I` (the complex cosine when
 `I² = -1`); otherwise `I ⟑ z` is a pseudo-couple, whose `cosh` Julia routes to the
 generated multivector series (`UndefVarError` in 0.8.46), computed here on the multivector. -/
-def cos (z : Couple V Float) : Multivector V Float :=
+@[specialize V] def cos (z : Couple V Float) : Multivector V Float :=
   let i := pseudoMask V
   if z.bits == i && i != 0 then
     toMultivector (Couple.cosh (⟨i, z.im * bladeSq V i, z.re⟩ : Couple V Float))
   else Multivector.cos (toMultivector z)
 
 /-- AbstractTensors `sin(z) = sinh(I ⟑ z)/I` (`AT:408`) of a couple (see `cos`). -/
-def sin (z : Couple V Float) : Multivector V Float :=
+@[specialize V] def sin (z : Couple V Float) : Multivector V Float :=
   let i := pseudoMask V
   if z.bits == i && i != 0 then
     let w := Couple.sinh (⟨i, z.im * bladeSq V i, z.re⟩ : Couple V Float)
@@ -308,7 +308,7 @@ def sin (z : Couple V Float) : Multivector V Float :=
   else Multivector.sin (toMultivector z)
 
 /-- AbstractTensors `tan(z) = sin(z)/cos(z)` (`AT:409`) of a couple (see `cos`). -/
-def tan (z : Couple V Float) : Multivector V Float :=
+@[specialize V] def tan (z : Couple V Float) : Multivector V Float :=
   let i := pseudoMask V
   if z.bits == i && i != 0 then
     let w : Couple V Float := ⟨i, z.im * bladeSq V i, z.re⟩
@@ -364,33 +364,33 @@ with multivector values (`AT:500-505`). -/
   Multivector.complementleft (f c.complementright)
 
 /-- `coexp(t) = pseudoexp(t)` of a chain (`pseudoexp(0.5v₃) = 0.4794v₃ + 0.8776v₁₂₃` in `ℝ3`). -/
-def coexp (c : Chain V G Float) : Multivector V Float := coMV Chain.exp c
+@[specialize V] def coexp (c : Chain V G Float) : Multivector V Float := coMV Chain.exp c
 /-- `colog(t) = pseudolog(t)` of a chain. -/
-def colog (c : Chain V G Float) : Multivector V Float := coMV Chain.log c
+@[specialize V] def colog (c : Chain V G Float) : Multivector V Float := coMV Chain.log c
 /-- `cosqrt(t) = pseudosqrt(t)` of a chain. -/
-def cosqrt (c : Chain V G Float) : Multivector V Float := coMV Chain.sqrt c
+@[specialize V] def cosqrt (c : Chain V G Float) : Multivector V Float := coMV Chain.sqrt c
 /-- `cocbrt(t) = pseudocbrt(t)` of a chain. -/
-def cocbrt (c : Chain V G Float) : Multivector V Float := coMV Chain.cbrt c
+@[specialize V] def cocbrt (c : Chain V G Float) : Multivector V Float := coMV Chain.cbrt c
 /-- `cocosh(t) = pseudocosh(t)` of a chain. -/
-def cocosh (c : Chain V G Float) : Multivector V Float := coMV (fun x => Half.toMultivector x.cosh) c
+@[specialize V] def cocosh (c : Chain V G Float) : Multivector V Float := coMV (fun x => Half.toMultivector x.cosh) c
 /-- `cosinh(t) = pseudosinh(t)` of a chain. -/
-def cosinh (c : Chain V G Float) : Multivector V Float := coMV (fun x => Half.toMultivector x.sinh) c
+@[specialize V] def cosinh (c : Chain V G Float) : Multivector V Float := coMV (fun x => Half.toMultivector x.sinh) c
 /-- `cocos(t) = pseudocos(t)` of a chain. -/
-def cocos (c : Chain V G Float) : Multivector V Float := coMV (fun x => Half.toMultivector x.cos) c
+@[specialize V] def cocos (c : Chain V G Float) : Multivector V Float := coMV (fun x => Half.toMultivector x.cos) c
 /-- `cosin(t) = pseudosin(t)` of a chain (`pseudosin(0.5v₃) = 0.5211v₃` in `ℝ3`). -/
-def cosin (c : Chain V G Float) : Multivector V Float := coMV (fun x => Half.toMultivector x.sin) c
+@[specialize V] def cosin (c : Chain V G Float) : Multivector V Float := coMV (fun x => Half.toMultivector x.sin) c
 /-- `cotan(t) = pseudotan(t)` of a chain (complemented `tan`). -/
-def cotan (c : Chain V G Float) : Multivector V Float := coMV (fun x => Half.toMultivector x.tan) c
+@[specialize V] def cotan (c : Chain V G Float) : Multivector V Float := coMV (fun x => Half.toMultivector x.tan) c
 /-- `cotanh(t) = pseudotanh(t)` of a chain. -/
-def cotanh (c : Chain V G Float) : Multivector V Float := coMV (fun x => Half.toMultivector x.tanh) c
+@[specialize V] def cotanh (c : Chain V G Float) : Multivector V Float := coMV (fun x => Half.toMultivector x.tanh) c
 /-- `coinv(t) = pseudoinv(t)` of a chain (`pseudoinv(2v₁₂) = 0.5v₁₂` in `ℝ3`). -/
-def coinv (c : Chain V G Float) : Chain V (V.n - (V.n - G)) Float := c.complementright.inv.complementleft
+@[specialize V] def coinv (c : Chain V G Float) : Chain V (V.n - (V.n - G)) Float := c.complementright.inv.complementleft
 /-- `coabs(t) = pseudoabs(t)` of a chain: `abs` of the complement on the pseudoscalar
 (`pseudoabs(3v₁ + 4v₂) = 5.0v₁₂₃` in `ℝ3`). -/
-def coabs (c : Chain V G Float) : Chain V (V.n - 0) Float :=
+@[specialize V] def coabs (c : Chain V G Float) : Chain V (V.n - 0) Float :=
   (Chain.scalar c.complementright.absF : Chain V 0 Float).complementleft
 /-- `coabs2(t) = pseudoabs2(t)` of a chain. -/
-def coabs2 (c : Chain V G Float) : Chain V (V.n - 0) Float :=
+@[specialize V] def coabs2 (c : Chain V G Float) : Chain V (V.n - 0) Float :=
   c.complementright.abs2.complementleft
 
 end Chain
@@ -403,24 +403,24 @@ variable [Kernels V]
 
 /-- AbstractTensors `asinh(s) = log(s + sqrt(1 + s⟑s))` (`AT:421`) of a spinor (any
 dimension: the formula never leaves the even subalgebra). -/
-def asinh (s : Half V false Float) : Half V false Float :=
+@[specialize V] def asinh (s : Half V false Float) : Half V false Float :=
   log (s + sqrt (addScalar f1 (smul' s s)))
 
 /-- AbstractTensors `acosh(s) = log(s + sqrt(s⟑s - 1))` (`AT:422`) of a spinor. -/
-def acosh (s : Half V false Float) : Half V false Float :=
+@[specialize V] def acosh (s : Half V false Float) : Half V false Float :=
   log (s + sqrt (addScalar (-f1) (smul' s s)))
 
 /-- AbstractTensors `atanh(s) = (log(1 + s) - log(1 - s))/2` (`AT:423`) of a spinor. -/
-def atanh (s : Half V false Float) : Half V false Float :=
+@[specialize V] def atanh (s : Half V false Float) : Half V false Float :=
   sdiv (log (addScalar f1 s) - log (addScalar f1 (-s))) f2
 
 /-- AbstractTensors `acoth(s) = (log(s + 1) - log(s - 1))/2` (`AT:424`) of a spinor. -/
-def acoth (s : Half V false Float) : Half V false Float :=
+@[specialize V] def acoth (s : Half V false Float) : Half V false Float :=
   sdiv (log (addScalar f1 s) - log (addScalar (-f1) s)) f2
 
 /-- A real power `s ^ x = exp(x·log(s))` (the principal branch; Julia defines no
 `TensorAlgebra ^ Real`, only `Real ^ TensorAlgebra`, `rpow`). -/
-def powf (s : Half V false Float) (x : Float) : Half V false Float := exp ⟨s.log.v.map (x * ·)⟩
+@[specialize V] def powf (s : Half V false Float) (x : Float) : Half V false Float := exp ⟨s.log.v.map (x * ·)⟩
 
 end Half
 
@@ -430,26 +430,26 @@ variable [Kernels V]
 
 /-- A real power `t ^ x = exp(x·log(t))` (the principal branch; Julia defines no
 `TensorAlgebra ^ Real`). -/
-def powf (t : Multivector V Float) (x : Float) : Multivector V Float := exp (x * t.log)
+@[specialize V] def powf (t : Multivector V Float) (x : Float) : Multivector V Float := exp (x * t.log)
 
 end Multivector
 
 namespace Couple
 
 /-- AbstractTensors `exph(z) = cosh(z) + sinh(z)` (Grassmann `C:572`). -/
-def exph (z : Couple V Float) : Couple V Float :=
+@[specialize V] def exph (z : Couple V Float) : Couple V Float :=
   let c := z.cosh
   let s := z.sinh
   ⟨z.bits, c.re + s.re, c.im + s.im⟩
 
 /-- AbstractTensors `log2(z) = log2(ℯ)·log(z)` (`AT:383`). -/
-def log2 (z : Couple V Float) : Couple V Float := let l := z.log; ⟨l.bits, F64.log2e * l.re, F64.log2e * l.im⟩
+@[specialize V] def log2 (z : Couple V Float) : Couple V Float := let l := z.log; ⟨l.bits, F64.log2e * l.re, F64.log2e * l.im⟩
 /-- AbstractTensors `log10(z) = log10(ℯ)·log(z)` (`AT:383`). -/
-def log10 (z : Couple V Float) : Couple V Float := let l := z.log; ⟨l.bits, F64.log10e * l.re, F64.log10e * l.im⟩
+@[specialize V] def log10 (z : Couple V Float) : Couple V Float := let l := z.log; ⟨l.bits, F64.log10e * l.re, F64.log10e * l.im⟩
 /-- AbstractTensors `exp2(z) = exp(log(2)·z)` (`AT:384`). -/
-def exp2 (z : Couple V Float) : Couple V Float := exp ⟨z.bits, F64.ln2 * z.re, F64.ln2 * z.im⟩
+@[specialize V] def exp2 (z : Couple V Float) : Couple V Float := exp ⟨z.bits, F64.ln2 * z.re, F64.ln2 * z.im⟩
 /-- AbstractTensors `exp10(z) = exp(log(10)·z)` (`AT:384`). -/
-def exp10 (z : Couple V Float) : Couple V Float := exp ⟨z.bits, F64.ln10 * z.re, F64.ln10 * z.im⟩
+@[specialize V] def exp10 (z : Couple V Float) : Couple V Float := exp ⟨z.bits, F64.ln10 * z.re, F64.ln10 * z.im⟩
 
 end Couple
 
@@ -493,11 +493,11 @@ variable [Kernels V]
 
 /-- Julia `log_fast(t)` (`src/composite.jl:574-587`): Halley's iteration for `exp(y) = t`;
 `none` where it breaks down or does not converge (Julia hangs). -/
-def logFast (t : Multivector V Float) : Option (Multivector V Float) := logFastWith exp t
+@[specialize V] def logFast (t : Multivector V Float) : Option (Multivector V Float) := logFastWith exp t
 
 /-- Julia `logh_fast(t)`: the same iteration on `exph = cosh + sinh` (whose generated
 series Julia cannot run, port-notes §4.3.3). -/
-def loghFast (t : Multivector V Float) : Option (Multivector V Float) := logFastWith exph t
+@[specialize V] def loghFast (t : Multivector V Float) : Option (Multivector V Float) := logFastWith exph t
 
 end Multivector
 
@@ -512,10 +512,10 @@ variable [Kernels V]
     fnorm expf t Half.zero f0 logFastCap
 
 /-- Julia `log_fast(t)` of a spinor (`src/composite.jl:574-587`), `none` where it fails. -/
-def logFast (t : Half V false Float) : Option (Half V false Float) := logFastWith exp t
+@[specialize V] def logFast (t : Half V false Float) : Option (Half V false Float) := logFastWith exp t
 
 /-- Julia `logh_fast(t)` of a spinor. -/
-def loghFast (t : Half V false Float) : Option (Half V false Float) := logFastWith exph t
+@[specialize V] def loghFast (t : Half V false Float) : Option (Half V false Float) := logFastWith exph t
 
 end Half
 
@@ -530,10 +530,10 @@ namespace Couple
 
 /-- Julia `log_fast(z)` of a couple (`src/composite.jl:574-587`): Halley's iteration on the
 closed-form `exp`; `none` where Julia hangs (hyperbolic couples outside the light cone). -/
-def logFast (z : Couple V Float) : Option (Couple V Float) := logFastWith exp z
+@[specialize V] def logFast (z : Couple V Float) : Option (Couple V Float) := logFastWith exp z
 
 /-- Julia `logh_fast(z)` of a couple, on `exph = cosh + sinh`. -/
-def loghFast (z : Couple V Float) : Option (Couple V Float) := logFastWith exph z
+@[specialize V] def loghFast (z : Couple V Float) : Option (Couple V Float) := logFastWith exph z
 
 end Couple
 
