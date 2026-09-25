@@ -141,6 +141,31 @@ theorem terms_hodge (hdiag : V.isdiag = true) {g : Fin n → Rat}
     unfold hodgeCoef; cases sign a (~~~a) <;> simp [signOf] <;> grind
   rw [e]
 
+/-- The reference kernels' container-level Hodge star is the same. -/
+theorem termsC_hodge (hdiag : V.isdiag = true) {g : Fin n → Rat}
+    (hg : ∀ i (h : i < n), V.metricAt (i + 1) = g ⟨i, h⟩) (a : BitVec n) :
+    Grassmann.Kernel.unTermsC V .complementrighthodge (mask a)
+      = .ok (if hodgeCoef g a = 0 then #[] else #[{ bits := mask (~~~a), coef := hodgeCoef g a }]) := by
+  show Grassmann.Kernel.ofTerms <$> V.complementrighthodgeChain (mask a) = _
+  have hb := hV.terms_hodge hVn hn hdiag hg a
+  unfold TensorBundle.terms₁ TensorBundle.apply₁ TensorBundle.complementrighthodge at hb
+  unfold TensorBundle.complementrighthodgeChain
+  rw [hV.notDyadic, hdiag]
+  rw [hdiag, hV.conformal, hV.notDyadic, hV.nulls] at hb
+  simp only [Bool.not_true, Bool.false_and, Bool.false_eq_true, ite_false] at hb
+  simp only [Bool.false_eq_true, ite_false, ite_true]
+  show Except.ok (Grassmann.Kernel.ofTerms #[(Leibniz.complement V.n (mask a) V.diffvars 0,
+    V.parityrighthodge (mask a))]) = _
+  have hb' : (BladeResult.single (V.parityrighthodge (mask a)) (Leibniz.complement V.n (mask a) V.diffvars 0)).bladeTerms
+      = if hodgeCoef g a = 0 then #[] else #[{ bits := mask (~~~a), coef := hodgeCoef g a }] := by
+    have h2 : (Except.ok (BladeResult.single (V.parityrighthodge (mask a))
+        (Leibniz.complement V.n (mask a) V.diffvars 0)).bladeTerms : Except String (Array BladeTerm))
+        = Except.ok (if hodgeCoef g a = 0 then #[] else #[{ bits := mask (~~~a), coef := hodgeCoef g a }]) := hb
+    injection h2
+  rw [← hb']
+  unfold Grassmann.Kernel.ofTerms
+  simp [BladeResult.bladeTerms, BladeResult.terms]
+
 end IsPlainSpace
 
 /-- The linear extension of a blade rule `e_a ↦ k(a) e_ā` (a complement). -/
