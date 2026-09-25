@@ -12,14 +12,14 @@ written by
 
     julia --startup-file=no --project=oracle Tests/JuliaBase/gen_golden.jl fuzz PREFIX 200000 1
 
-(`PREFIX_f64.tsv`, `PREFIX_f32.tsv`, `PREFIX_num.tsv`, `PREFIX_range.tsv`).
+(`PREFIX_f64.tsv`, `PREFIX_f32.tsv`, `PREFIX_opts.tsv`, `PREFIX_num.tsv`, `PREFIX_range.tsv`).
 -/
 
 namespace Tests.JuliaBase
 
-/-- Run the large oracle fuzz files `PREFIX_{f64,f32,num,range}.tsv`. -/
+/-- Run the large oracle fuzz files `PREFIX_{f64,f32,opts,num,range}.tsv`. -/
 def fuzzAll (pre : String) : IO (Nat × Nat) := do
-  let (p1, f1) ← FloatShow.fuzz s!"{pre}_f64.tsv" s!"{pre}_f32.tsv"
+  let (p1, f1) ← FloatShow.fuzz s!"{pre}_f64.tsv" s!"{pre}_f32.tsv" s!"{pre}_opts.tsv"
   let (p2, f2) ← Num.fuzz s!"{pre}_num.tsv"
   let (p3, f3) ← Range.fuzz s!"{pre}_range.tsv"
   return (p1 + p2 + p3, f1 + f2 + f3)

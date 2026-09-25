@@ -36,6 +36,21 @@ def checkF32 (t : Tally) (hex want wantCompact wantPrint : String) : Tally :=
     let t := t.check (c == wantCompact) fun _ => s!"compact32 0x{hex}: got {c}, want {wantCompact}"
     t.check (p == wantPrint) fun _ => s!"print32 0x{hex}: got {p}, want {wantPrint}"
 
+/-- Check one `Ryu.writeshortest` keyword-option row
+`[type, bits, plus, space, hash, precision, expchar, padexp, decchar, typed, compact, result]`. -/
+def checkOpts (t : Tally) : List String → Tally
+  | [ty, hex, plus, space, hash, prec, expchar, padexp, decchar, typed, compact, want] =>
+    let b (s : String) := s == "true"
+    let o : ShortestOpts :=
+      { plus := b plus, space := b space, hash := b hash, precision := prec.toInt!,
+        expchar := expchar.front, padexp := b padexp, decchar := decchar.front,
+        typed := b typed, compact := b compact }
+    let got :=
+      if ty == "f32" then (float32OfHex hex).map (writeShortest32 · o)
+      else (floatOfHex hex).map (writeShortest · o)
+    t.check (got == some want) fun _ => s!"writeshortest {ty} 0x{hex} {repr o}: got {got}, want {want}"
+  | r => t.check false fun _ => s!"malformed opts row {r}"
+
 /-- Run a TSV fuzz file (`f32 = true` for the four-column Float32 format). -/
 def runTsv (path : System.FilePath) (f32 : Bool) : IO Tally := do
   let txt ← IO.FS.readFile path
@@ -48,11 +63,13 @@ def runTsv (path : System.FilePath) (f32 : Bool) : IO Tally := do
     | _, _ => t := t.check false fun _ => s!"malformed line: {line}"
   return t
 
-/-- Oracle fuzz entry point: `fuzz f64.tsv f32.tsv`. -/
-def fuzz (f64 f32 : System.FilePath) : IO (Nat × Nat) := do
+/-- Oracle fuzz entry point: `fuzz f64.tsv f32.tsv opts.tsv`. -/
+def fuzz (f64 f32 opts : System.FilePath) : IO (Nat × Nat) := do
   let a ← runTsv f64 false
   let b ← runTsv f32 true
-  (a.merge b).report "float-show fuzz"
+  let mut c : Tally := {}
+  for row in ← readTsv opts do c := checkOpts c row
+  ((a.merge b).merge c).report "float-show fuzz"
 
 /-- The committed golden `float_show.json`. -/
 def golden : IO (Nat × Nat) := do
@@ -66,6 +83,7 @@ def golden : IO (Nat × Nat) := do
     match jRow row with
     | [h, s, c, p] => t := checkF32 t h s c p
     | r => t := t.check false fun _ => s!"malformed row {r}"
+  for row in jArr j "opts" do t := checkOpts t (jRow row)
   t.report "float-show golden"
 
 /-! Compile-time checks: the oracle table of port-notes/grassmann-types.md §5.5. -/

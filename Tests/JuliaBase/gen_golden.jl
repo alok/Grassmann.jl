@@ -88,6 +88,21 @@ const fixed32 = Float32[0, -0f0, NaN32, Inf32, -Inf32, 1.5f0, 1f-5, 1/3, floatma
 f64rows(xs) = [[hex(x), repr(x), cshow(x)] for x in xs]
 f32rows(xs) = [[hex(x), repr(x), cshow(x), string(x)] for x in xs]
 
+# Ryu.writeshortest with random keyword options (plus, space, hash, precision, expchar, padexp,
+# decchar, typed, compact): row = [hex(x), flags..., result]
+function opts_case(rng)
+    x = rand(rng) < 0.8 ? sample64(rng) : Float64(sample32(rng))
+    f32 = rand(rng) < 0.3
+    plus, space, hash, padexp, typed, compact = rand(rng, Bool, 6)
+    prec = rand(rng) < 0.5 ? -1 : rand(rng, 0:22)
+    expchar = rand(rng, (UInt8('e'), UInt8('E'), UInt8('f')))
+    decchar = rand(rng, (UInt8('.'), UInt8(',')))
+    y = f32 ? Float32(x) : x
+    s = Base.Ryu.writeshortest(y, plus, space, hash, prec, expchar, padexp, decchar, typed, compact)
+    [f32 ? "f32" : "f64", hex(y), string(plus), string(space), string(hash), string(prec), string(Char(expchar)),
+     string(padexp), string(Char(decchar)), string(typed), string(compact), s]
+end
+
 # ---------------------------------------------------------------- numeric ops
 
 const BINOPS = Dict("hypot" => hypot, "rem" => rem, "mod" => mod, "fld" => fld, "cld" => cld,
@@ -237,7 +252,7 @@ function golden(dir)
     f32 = vcat(fixed32, [sample32(rng) for _ in 1:400])
     open(joinpath(dir, "float_show.json"), "w") do io
         JSON.print(io, Dict("meta" => Dict("julia" => string(VERSION), "seed" => 20260924),
-            "f64" => f64rows(f64), "f32" => f32rows(f32)))
+            "f64" => f64rows(f64), "f32" => f32rows(f32), "opts" => [opts_case(rng) for _ in 1:400]))
     end
     binops = Any[]
     for name in sort(collect(keys(BINOPS))), _ in 1:120
@@ -277,6 +292,11 @@ function fuzz(prefix, n, seed)
     open(prefix * "_f32.tsv", "w") do io
         for x in Iterators.flatten((fixed32, (sample32(rng) for _ in 1:(n ÷ 4))))
             println(io, join(f32rows([x])[1], '\t'))
+        end
+    end
+    open(prefix * "_opts.tsv", "w") do io
+        for _ in 1:(n ÷ 4)
+            println(io, join(opts_case(rng), '\t'))
         end
     end
     names = sort(collect(keys(BINOPS)))
