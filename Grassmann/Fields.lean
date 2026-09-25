@@ -15,9 +15,14 @@ and `ext/GeometryBasicsExt.jl:28-33`): the README's `points`, `chainfield`,
 * `vectorfield`/`pointfield` (GeometryBasics extension; `vectorfield = pointfield`): the
   same map on coordinate vectors (Julia's `Point`s), here `Values Float`.
 
-Mesh interpolation (`scalarfield`, `chainfield(t, ϕ)`, `rectanglefield`) is not ported yet.
+* `scalarfield(t, ϕ)`, `chainfield(t, ϕ)` (`src/Grassmann.jl:315-339`): barycentric
+  interpolation on a simplicial mesh (points in homogeneous coordinates, elements as 1-based
+  vertex index lists): at `P`, the first element `Pᵢ` containing it gives `(Pᵢ \ P) ⋅ ϕ[tᵢ]`
+  (`0`, resp. the homogeneous origin, outside the mesh); `rectangle`, `rectanglefield`
+  (`src/Grassmann.jl:341-348`) sample it on the bounding box of the points.
 -/
 import Grassmann.Composite.Project
+import Grassmann.Forms.Simplex
 import JuliaBase.Range
 
 namespace Grassmann
@@ -102,6 +107,73 @@ out). -/
     (S W : SubSpace V) (p : Values Float ((Layout.chain 1).size (Forms.restrict V W.mask).n)) :
     Values Float ((Layout.chain 1).size (Forms.restrict V S.mask).n) :=
   vectorfield t S W p
+
+/-! ## Mesh interpolation -/
+
+section Mesh
+
+variable {W U : TensorBundle}
+
+/-- The simplex of element `idx` (1-based vertex indices into `pts`, Cartan's `affinehull`). -/
+@[inline] def element (pts : Array (Chain W 1 Float)) (idx : Array Nat) :
+    Option (Simplex (TensorBundle.euclidean W.n) W Float) :=
+  affinehull pts idx.toList
+
+/-- The barycentric coordinates `Pᵢ \ P` in the first element containing `P`, with the element's
+vertex indices (Julia's loop over `t`, `src/Grassmann.jl:318-322`). -/
+def locate (pts : Array (Chain W 1 Float)) (elems : Array (Array Nat)) (P : Chain W 1 Float) :
+    Option (Array Nat × Values Float ((Layout.chain 1).size (TensorBundle.euclidean W.n).n)) :=
+  elems.findSome? fun idx =>
+    match element pts idx with
+    | some T => if T.contains P then some (idx, (T.solve P).v) else none
+    | none => none
+
+/-- Julia `scalarfield(t, ϕ)` (`src/Grassmann.jl:315-326`) at `P`: `(Pᵢ \ P) ⋅ ϕ[tᵢ]` in the
+first element `Pᵢ` containing `P` (the barycentric interpolation of the vertex values `ϕ`),
+`0.0` outside the mesh. -/
+def scalarfield (pts : Array (Chain W 1 Float)) (elems : Array (Array Nat)) (ϕ : Array Float)
+    (P : Chain W 1 Float) : Float :=
+  match locate pts elems P with
+  | some (idx, lam) =>
+    let f : Values Float ((Layout.chain 1).size (TensorBundle.euclidean W.n).n) :=
+      Values.ofFn fun k => ϕ[(idx[k.1]?.getD 1) - 1]?.getD 0
+    Forms.Mat.dotPlain lam f
+  | none => 0
+
+/-- Julia `chainfield(t, ϕ)` (`src/Grassmann.jl:327-339`) at `P`: `(Pᵢ \ P) ⋅ ϕ[tᵢ]` with vector
+values `ϕ` (the barycentric combination of the vertex vectors, left to right), the
+homogeneous origin `(1, 0, …)` outside the mesh. -/
+def chainfieldMesh (pts : Array (Chain W 1 Float)) (elems : Array (Array Nat)) (ϕ : Array (Chain U 1 Float))
+    (P : Chain W 1 Float) : Chain U 1 Float :=
+  match locate pts elems P with
+  | some (idx, lam) =>
+    let term := fun (k : Nat) => (ϕ[(idx[k]?.getD 1) - 1]?.getD Chain.zero) * getD lam k
+    match (Layout.chain 1).size (TensorBundle.euclidean W.n).n with
+    | 0 => Chain.zero
+    | m + 1 => (List.range m).foldl (fun acc k => acc + term (k + 1)) (term 0)
+  | none => ⟨Values.ofFn fun i => if i.1 = 0 then 1 else 0⟩
+
+/-- Julia `rectangle(p, nx, ny)` (`src/Grassmann.jl:341-347`): the homogeneous points
+`(1, x, y)` of an `ny × nx` grid over the bounding box of the points' second and third
+coordinates (`range(min, max, length = n)`), row `j` at `y_j`. -/
+def rectangle (pts : Array (Chain W 1 Float)) (nx : Nat := 100) (ny : Nat := nx) :
+    Array (Array (Chain W 1 Float)) :=
+  let px := pts.map fun p => getD p.v 1
+  let py := pts.map fun p => getD p.v 2
+  let lo := fun (a : Array Float) => a.foldl (fun m x => if x < m then x else m) (a[0]?.getD 0)
+  let hi := fun (a : Array Float) => a.foldl (fun m x => if x > m then x else m) (a[0]?.getD 0)
+  let xs := (range (lo px) (hi px) nx).toFloatArray
+  let ys := (range (lo py) (hi py) ny).toFloatArray
+  (Array.range ny).map fun j => (Array.range nx).map fun i =>
+    ⟨Values.ofFn fun k => if k.1 = 0 then 1 else if k.1 = 1 then xs[i]! else if k.1 = 2 then ys[j]! else 0⟩
+
+/-- Julia `rectanglefield(t, ϕ, nx, ny) = chainfield(t, ϕ).(rectangle(points(t), nx, ny))`
+(`src/Grassmann.jl:348`). -/
+def rectanglefield (pts : Array (Chain W 1 Float)) (elems : Array (Array Nat)) (ϕ : Array (Chain U 1 Float))
+    (nx : Nat := 100) (ny : Nat := nx) : Array (Array (Chain U 1 Float)) :=
+  (rectangle pts nx ny).map (·.map (chainfieldMesh pts elems ϕ))
+
+end Mesh
 
 end Fields
 

@@ -182,6 +182,27 @@ def suite : IO Tally := do
   let cols := Fields.pointsCoords (fun x => torus x) #[1, 2, 3] ⟨#[0, 0.25, 0.5]⟩
   let t := t.ok (cols.size == 3 && (cols[0]!).get! 1 == getD (torus 0.25).v 1) fun _ => "pointsCoords"
   let t := t.ok (Fields.pointsRange.size == 125664) fun _ => s!"pointsRange has {Fields.pointsRange.size} samples"
+  -- mesh interpolation (Julia 0.8.46's `scalarfield` throws on Cartan meshes, `value(::InducedMetric)`):
+  -- barycentric interpolation is exact on affine data. Two triangles of the square [0,2]²,
+  -- f(x, y) = 1 + 2x + 3y at the vertices, g(x, y) = (x, y)
+  let pt := fun (x y : Float) => (chainOf (En 3) 1 [1, x, y] : Chain (En 3) 1 Float)
+  let pts := #[pt 0 0, pt 2 0, pt 0 2, pt 2 2]
+  let elems := #[#[1, 2, 3], #[2, 4, 3]]
+  let ϕ := #[1.0, 5.0, 7.0, 11.0]
+  let t := t.ok ((Fields.scalarfield pts elems ϕ (pt 0.5 0.75) - 4.25).abs < 1e-13) fun _ =>
+    s!"scalarfield at (0.5, 0.75) = {Fields.scalarfield pts elems ϕ (pt 0.5 0.75)}"
+  let t := t.ok ((Fields.scalarfield pts elems ϕ (pt 1.5 1.2) - 7.6).abs < 1e-13) fun _ => "scalarfield in the second triangle"
+  let t := t.ok (Fields.scalarfield pts elems ϕ (pt 5 5) == 0) fun _ => "scalarfield outside"
+  let g := pts.map fun p => (chainOf (En 2) 1 [getD p.v 1, getD p.v 2] : Chain (En 2) 1 Float)
+  let c := Fields.chainfieldMesh pts elems g (pt 0.5 0.75)
+  let t := t.ok ((getD c.v 0 - 0.5).abs < 1e-13 && (getD c.v 1 - 0.75).abs < 1e-13) fun _ => s!"chainfield(t, ϕ) = {c.v.toList}"
+  let t := t.ok ((Fields.chainfieldMesh pts elems g (pt 5 5)).v.toList == [1, 0]) fun _ => "chainfield outside"
+  let r := Fields.rectangle pts 3 2
+  let t := t.ok (r.size == 2 && r.all (·.size == 3) && ((r[1]!)[2]!).v.toList == [1, 2, 2] &&
+      ((r[0]!)[1]!).v.toList == [1, 1, 0]) fun _ => "rectangle"
+  let rf := Fields.rectanglefield pts elems g 3 2
+  let t := t.ok (rf.size == 2 && (((rf[1]!)[0]!).v.toList.zip [0, 2]).all fun (a, b) => (a - b).abs < 1e-13) fun _ =>
+    "rectanglefield"
   return t
 
 end Tests.FormsTests.UpDown
