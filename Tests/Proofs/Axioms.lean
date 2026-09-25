@@ -99,3 +99,12 @@ import Grassmann.Tactic
 
 /-- info: 'Grassmann.Spec.Cl.sandwich_sq_of_vector' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Grassmann.Spec.Cl.sandwich_sq_of_vector
+
+/-- info: 'Grassmann.Proofs.implMul_assoc_of_signature' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.implMul_assoc_of_signature
+
+/-- info: 'Grassmann.Proofs.isGrade_implSandwich_of_signature' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.isGrade_implSandwich_of_signature
+
+/-- info: 'Grassmann.Proofs.implWedge_comm_of_flat' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.implWedge_comm_of_flat
