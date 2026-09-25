@@ -5,6 +5,8 @@ import AbstractAnalysis.Sequence
 import AbstractAnalysis.Metric
 import AbstractAnalysis.Limit
 import AbstractAnalysis.Sets
+import AbstractAnalysis.Magma
+import AbstractAnalysis.Perm
 
 /-!
 # AbstractAnalysis
