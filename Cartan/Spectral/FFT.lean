@@ -311,10 +311,35 @@ def bfft (z : CVec) : CVec := dft z 1
 /-- FFTW `ifft = bfft / N`. -/
 def ifft (z : CVec) : CVec := CVec.scale (1 / Float.ofNat z.len) (bfft z)
 
-/-- FFTW `rfft` of a real vector: bins `0 … N÷2`. -/
+/-- The bins `k, …, M` of the real FFT from the half-length transform `Z` of
+`zⱼ = x₂ⱼ + i x₂ⱼ₊₁` (`M = N/2`): `X_k = E_k + W^k O_k` with `E_k = (Z_k + Z̄_{M−k})/2`,
+`O_k = −i (Z_k − Z̄_{M−k})/2` and `W = e^{−2πi/N}` from the table of `N`. -/
+def rfftUnpack (Z tw : CVec) (M : Nat) : (r k : Nat) → CVec → CVec
+  | 0, _, out => out
+  | r + 1, k, out =>
+    let a := k % M
+    let b := (M - k) % M
+    let zr := Z.get! (2 * a); let zi := Z.get! (2 * a + 1)
+    let cr := Z.get! (2 * b); let ci := -(Z.get! (2 * b + 1))
+    let er := (zr + cr) * f64! 0.5; let ei := (zi + ci) * f64! 0.5
+    -- O = −i·(Z_k − conj Z_{M−k})/2
+    let or_ := (zi - ci) * f64! 0.5; let oi := -((zr - cr) * f64! 0.5)
+    let wr := tw.get! (2 * k); let wi := tw.get! (2 * k + 1)
+    let xr := er + (wr * or_ - wi * oi)
+    let xi := ei + (wr * oi + wi * or_)
+    rfftUnpack Z tw M r (k + 1) ((out.set! (2 * k) xr).set! (2 * k + 1) xi)
+
+/-- FFTW `rfft` of a real vector: bins `0 … N÷2`. An even length transforms the `N/2` complex
+numbers `x₂ⱼ + i x₂ⱼ₊₁` (the input's own interleaving) and unpacks the bins (`rfftUnpack`), half
+the work of the complex transform of the real vector, which odd lengths use. -/
 def rfft (x : FloatArray) : CVec :=
-  let full := fft (CVec.ofReal x)
-  ⟨full.data.extract 0 (2 * (x.size / 2 + 1))⟩
+  let N := x.size
+  if N ≥ 4 && N % 2 == 0 then
+    let M := N / 2
+    rfftUnpack (fft x) (twiddles N) M (M + 1) 0 (Flat.zeros (2 * (M + 1)))
+  else
+    let full := fft (CVec.ofReal x)
+    ⟨full.data.extract 0 (2 * (N / 2 + 1))⟩
 
 /-- The Hermitian completion of the half-spectrum `X` (bins `0 … N÷2`) of a real signal of length
 `N`. -/
