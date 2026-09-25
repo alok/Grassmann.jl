@@ -74,6 +74,9 @@ variable {M : Type} [FrameBundle M] {m : M} {F F' F'' : Type}
 /-- Julia `TensorField(dom, x::Number)` (C12): the constant field. -/
 @[inline] def const (m : M) (x : F) : TensorField m F := ofFn m fun _ => x
 
+/-- The zero field (every fiber decoded from zeros). -/
+instance : Inhabited (TensorField m F) := ⟨ofFn m fun _ => FlatFiber.read FloatArray.empty 0⟩
+
 /-- A field from its flat fiber data (C1), when it has the right length. -/
 def ofFlat? (m : M) (data : FloatArray) : Option (TensorField m F) :=
   if h : data.size = FlatFiber.width F * card m then some ⟨data, h, none⟩ else none

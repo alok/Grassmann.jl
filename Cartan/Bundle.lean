@@ -148,6 +148,9 @@ variable {N : Nat} {P G : Type}
 
 instance : FrameBundle (GridBundle N P G) := ⟨fun m => m.space.length⟩
 
+instance [Inhabited G] : Inhabited (GridBundle N P G) :=
+  ⟨⟨default, QuotientTopology.openTop (default : ProductSpace N).size, .global default, 0, rfl⟩⟩
+
 instance [GridPoint N P] [Inhabited G] : Coordinates (GridBundle N P G) P G where
   point m k := GridPoint.pointOf m.space k
   metricAt m k := m.metric.get k
@@ -424,18 +427,25 @@ def ofSimplex (m : SimplexBundle n P G) : FaceBundle n P G := ⟨m.cloud, m.top�
 def toSimplex (m : FaceBundle n P G) : SimplexBundle n P G := ⟨m.cloud, m.top⟩
 
 /-- Julia `mean(points[t[e]])` (Grassmann `src/composite.jl:936`: `sum(m)/N`, the sum left to
-right): the centroid of element `e` (0-based). -/
-def centroid [FlatFiber P] [Add P] [HDiv P Float P] [Inhabited P] (m : FaceBundle n P G) (e : Nat) : P :=
-  let vs := (m.top.get (e + 1)).toList.map fun v => m.cloud.get (v - 1)
-  match vs with
-  | [] => default
-  | x :: xs => xs.foldl (· + ·) x / Float.ofNat n
+right, then Grassmann's division by a real, `x * (1/N)`, or `x / N` for real points): the
+centroid of element `e` (0-based), computed on the flat encoding. -/
+def centroid [FlatFiber P] [LinearFiber P] (m : FaceBundle n P G) (e : Nat) : P :=
+  let w := FlatFiber.width P
+  let vs := (m.top.get (e + 1)).toList.map fun v => (v - 1) * w
+  let nf := Float.ofNat n
+  let r := (1 : Float) / nf
+  let comp (k : Nat) : Float :=
+    let s := match vs with
+      | [] => 0
+      | o :: os => os.foldl (fun acc o' => acc + m.cloud.points[o' + k]!) m.cloud.points[o + k]!
+    if LinearFiber.recipDiv P then s * r else s / nf
+  FlatFiber.read (buildFlat w comp) 0
 
 instance : FrameBundle (FaceBundle n P G) := ⟨fun m => m.top.elements⟩
 
 /-- Julia `m[i]` (`fiber.jl:736-740`): the centroid, with the global metric (an induced metric),
 or the mean of the vertex metrics. -/
-instance [FlatFiber P] [Add P] [HDiv P Float P] [Inhabited P] [Inhabited G] :
+instance [FlatFiber P] [LinearFiber P] [Inhabited G] :
     Coordinates (FaceBundle n P G) P G where
   point m e := m.centroid e
   metricAt m e := m.cloud.metric.get e
