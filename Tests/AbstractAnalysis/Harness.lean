@@ -1,5 +1,6 @@
 import Lean.Data.Json
-import AbstractAnalysis.JuliaFloat
+import AbstractAnalysis.IEEE
+import JuliaBase.Float
 
 /-!
 # Golden-test harness (shared by the AbstractAnalysis and Wilkinson suites)
@@ -46,7 +47,7 @@ def checkFloat (name : String) (got expected : Float) (rtol : Float := 0) (ulps 
     (got.isFinite && expected.isFinite &&
       (AbstractAnalysis.IEEEFloat.ulpDistance got expected ≤ ulps ||
        (got - expected).abs ≤ rtol * max got.abs expected.abs))
-  check name ok s!"got {AbstractAnalysis.Float.toJulia got}, expected {AbstractAnalysis.Float.toJulia expected}"
+  check name ok s!"got {JuliaBase.F64.showString got}, expected {JuliaBase.F64.showString expected}"
 
 /-- Run a suite, print its summary and failures, return `(passed, failed)`. -/
 def runSuite (label : String) (m : TestM Unit) : IO (Nat × Nat) := do

@@ -23,6 +23,8 @@ printed goldens such as `sum(x)[1e-10]` showing `n → 100002`.
 
 namespace AbstractAnalysis
 
+open JuliaBase
+
 /-- Julia `k => v` state (sums, products, `limit(countable)`). -/
 structure Indexed (V : Type) where
   /-- Index `k` (Julia `first(u)`). -/
@@ -210,9 +212,9 @@ on one line **with a trailing newline**; other values print a header line and
 then `show(last(L))` without a newline. -/
 def toJulia [JuliaRepr V] (L : Limit S V) (compact : Bool := false) : String :=
   if JuliaRepr.isNumber V || compact then
-    s!"{JuliaRepr.str L.last} (n → {L.n}, Δ → {Float.toJulia L.r})\n"
+    s!"{JuliaRepr.str L.last} (n → {L.n}, Δ → {F64.showString L.r})\n"
   else
-    s!"Limit as n → {L.n}, Δ → {Float.toJulia L.r}\n{JuliaRepr.repr L.last}"
+    s!"Limit as n → {L.n}, Δ → {F64.showString L.r}\n{JuliaRepr.repr L.last}"
 
 instance [JuliaRepr V] : ToString (Limit S V) := ⟨fun L => L.toJulia⟩
 

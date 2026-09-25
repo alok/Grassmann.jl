@@ -7,7 +7,7 @@ Property tests (SplitMix64) and compile-time `decide` checks for the
 AbstractAnalysis port.
 -/
 
-open AbstractAnalysis Tests.Golden
+open AbstractAnalysis JuliaBase Tests.Golden
 
 namespace Tests.AbstractAnalysis.Props
 
@@ -56,14 +56,14 @@ def suite : TestM Unit := do
     | some q => if !(sameFloat (IEEEFloat.ofRat Float q) x || (x == 0 && q == 0)) then okRat := false
     | none => okRat := false
     if !(sameFloat (IEEEFloat.nextFloat (IEEEFloat.prevFloat x)) x) && x != 0 then okNext := false
-    if !((parseFloat (Float.toJulia x)).map (sameFloat · x) |>.getD false) then okPrint := false
+    if !((parseFloat (F64.showString x)).map (sameFloat · x) |>.getD false) then okPrint := false
     let ax := x.abs
     if ax.isFinite && ax ≥ IEEEFloat.floatmin Float && ax < IEEEFloat.floatmax Float then
       -- ulp(x) is the gap above |x| unless |x| is a power of two approached from below
       if !(sameFloat (IEEEFloat.ulp x) (IEEEFloat.nextFloat ax - ax)) then okUlp := false
   check "ofRat ∘ toRat = id (20000 random floats)" okRat
   check "nextFloat ∘ prevFloat = id" okNext
-  check "parse ∘ toJulia = id (shortest printing round-trips)" okPrint
+  check "parse ∘ showString = id (shortest printing round-trips)" okPrint
   check "ulp = gap above |x|" okUlp
   -- correctly rounded division: ofFraction a b = a / b in IEEE arithmetic
   let mut okDiv := true
@@ -74,10 +74,21 @@ def suite : TestM Unit := do
     if b > 0 && !(sameFloat (IEEEFloat.ofFraction Float a (b + 1)) (Float.ofInt a / Float.ofNat (b + 1))) then
       okDiv := false
   check "ofFraction matches IEEE division" okDiv
-  checkEq "eps(Float64)" (Float.toJulia (IEEEFloat.eps Float)) "2.220446049250313e-16"
-  checkEq "eps(Float32)" (JuliaFloat.float32Repr (IEEEFloat.eps Float32)) "1.1920929f-7"
-  checkEq "prevfloat(Inf)" (Float.toJulia (IEEEFloat.prevFloat (IEEEFloat.inf Float))) "1.7976931348623157e308"
-  checkEq "floatmax(Float32)" (JuliaFloat.float32Repr (IEEEFloat.floatmax Float32)) "3.4028235f38"
+  checkEq "eps(Float32)" (F32.showString (IEEEFloat.eps Float32)) "1.1920929f-7"
+  checkEq "floatmax(Float32)" (F32.showString (IEEEFloat.floatmax Float32)) "3.4028235f38"
+  checkEq "prevfloat(Inf32)" (F32.showString (IEEEFloat.prevFloat (IEEEFloat.inf Float32))) "3.4028235f38"
+  -- the generic toolkit agrees with `JuliaBase.F64` on `Float`
+  check "eps/floatmax/floatmin/maxintfloat/inf/nan agree with JuliaBase.F64"
+    ([IEEEFloat.eps Float, IEEEFloat.floatmax Float, IEEEFloat.floatmin Float, IEEEFloat.maxintfloat Float,
+      IEEEFloat.inf Float, IEEEFloat.nan Float].zip [F64.eps, F64.floatmax, F64.floatmin, F64.maxintfloat,
+      F64.inf, F64.nan] |>.all fun (a, b) => sameFloat a b)
+  let mut okNeighbours := true
+  for _ in [0:5000] do
+    let (x, g') := randFinite g
+    g := g'
+    if !(sameFloat (IEEEFloat.nextFloat x) (F64.nextfloat x) && sameFloat (IEEEFloat.prevFloat x) (F64.prevfloat x) &&
+        IEEEFloat.signBit x == F64.signbit x) then okNeighbours := false
+  check "nextFloat/prevFloat/signBit agree with JuliaBase.F64" okNeighbours
   -- permutation group: sign is a homomorphism on random S6 pairs; orders divide 720
   let mut okSign := true
   let mut okOrder := true

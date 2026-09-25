@@ -16,6 +16,8 @@ a `Limit` over a type without a norm does not typecheck.
 
 namespace AbstractAnalysis
 
+open JuliaBase
+
 /-- Julia `LinearAlgebra.norm` on the values the analysis layer carries. -/
 class Normed (α : Type) where
   /-- Julia `norm(x)`. -/
@@ -29,7 +31,7 @@ class Metric (α : Type) where
 export Metric (dist)
 
 instance (priority := low) {α : Type} [JNumber α] : Normed α := ⟨JNumber.norm⟩
-instance : Normed (Complex Float) := ⟨Complex.absF⟩
+instance : Normed (Complex Float) := ⟨ComplexF64.abs⟩
 
 /-- Julia `LinearAlgebra.generic_norm2` on a list of element norms: plain
 `sqrt(Σ|x|²)` unless that would overflow/underflow, else rescaled by `max|x|`. -/

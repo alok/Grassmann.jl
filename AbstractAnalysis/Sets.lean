@@ -22,6 +22,8 @@ What the proofs buy:
 
 namespace AbstractAnalysis
 
+open JuliaBase
+
 /-! ## Integers -/
 
 /-- Julia `integer(n) = iseven(n) ? n÷2 : -(n÷2)`: `1 ↦ 0, 2 ↦ 1, 3 ↦ -1, 4 ↦ 2, …`. -/

@@ -25,6 +25,8 @@ clean API (Appendix A of the port notes):
 
 namespace AbstractAnalysis
 
+open JuliaBase
+
 /-- Julia's `gequal(a, b) = a ≈ b` with default tolerances. -/
 class ApproxEq (α : Type) where
   /-- Julia `a ≈ b`. -/
@@ -33,12 +35,11 @@ class ApproxEq (α : Type) where
 instance : ApproxEq Int := ⟨(· == ·)⟩
 instance : ApproxEq Nat := ⟨(· == ·)⟩
 instance : ApproxEq Rat := ⟨(· == ·)⟩
-instance : ApproxEq Float := ⟨Float.isApprox⟩
+instance : ApproxEq Float := ⟨fun x y => F64.isapprox x y⟩
 instance : ApproxEq (Complex Int) := ⟨(· == ·)⟩
 instance : ApproxEq (Complex Rat) := ⟨(· == ·)⟩
-/-- Julia `isapprox(::Complex, ::Complex)`: `|x-y| ≤ rtol·max(|x|, |y|)`. -/
-instance : ApproxEq (Complex Float) :=
-  ⟨fun x y => x == y || (Complex.absF (x - y) ≤ rtolDefault * max (Complex.absF x) (Complex.absF y))⟩
+/-- Julia `isapprox(::ComplexF64, ::ComplexF64)`: `|x-y| ≤ rtol·max(|x|, |y|)` with `abs = hypot`. -/
+instance : ApproxEq (Complex Float) := ⟨fun x y => ComplexF64.isapprox x y⟩
 
 /-- A binary law with its inverse: Julia's `F` and `G` type parameters. -/
 structure Law (T : Type) where
@@ -287,15 +288,15 @@ end Julia
 /-- Julia `unityroots(n) = Semimagma(cis.(2π/n .* (0:n-1)))` under `*`/`inv`. -/
 def unityRoots (n : Nat) : Semimagma (Complex Float) (Law.mul (Complex Float) Complex.conj) :=
   let θ := 2 * 3.141592653589793 / Float.ofNat n
-  ⟨(List.range n).toArray.map fun k => Complex.cis (θ * Float.ofNat k)⟩
+  ⟨(List.range n).toArray.map fun k => cis (θ * Float.ofNat k)⟩
 
 /-- The inverse on Gaussian units (`inv(z) = conj(z)/|z|²`, exact for units),
 standing in for Julia's `inv(::Complex{Int})`, which returns a float. -/
-def Complex.invUnit (z : Complex Int) : Complex Int :=
+def gaussianInvUnit (z : Complex Int) : Complex Int :=
   let n := z.re * z.re + z.im * z.im
   ⟨z.re / n, -z.im / n⟩
 
 /-- Julia `magma(Complex(0, 1))`-style law on Gaussian integers. -/
-abbrev Law.gaussian : Law (Complex Int) := Law.mul (Complex Int) Complex.invUnit
+abbrev Law.gaussian : Law (Complex Int) := Law.mul (Complex Int) gaussianInvUnit
 
 end AbstractAnalysis

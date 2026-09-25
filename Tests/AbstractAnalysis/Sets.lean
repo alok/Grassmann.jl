@@ -6,7 +6,7 @@ Oracle tests for the countable sets (`oracle/golden/abstractanalysis/sets.json`)
 plus properties of the clean pairings.
 -/
 
-open Lean AbstractAnalysis Tests.Golden
+open Lean AbstractAnalysis JuliaBase Tests.Golden
 
 namespace Tests.AbstractAnalysis.Sets
 

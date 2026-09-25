@@ -6,7 +6,7 @@ Oracle tests for semimagmas, permutation groups and their Julia quirks
 (`oracle/golden/abstractanalysis/groups.json`).
 -/
 
-open Lean AbstractAnalysis Tests.Golden
+open Lean AbstractAnalysis JuliaBase Tests.Golden
 
 namespace Tests.AbstractAnalysis.Groups
 

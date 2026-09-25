@@ -1,4 +1,4 @@
-import AbstractAnalysis.JuliaFloat
+import AbstractAnalysis.IEEE
 import AbstractAnalysis.Show
 import AbstractAnalysis.Countable
 import AbstractAnalysis.Sequence

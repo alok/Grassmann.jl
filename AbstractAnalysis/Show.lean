@@ -1,12 +1,16 @@
-import AbstractAnalysis.JuliaFloat
+import AbstractAnalysis.IEEE
+import JuliaBase.Show
 
 /-!
 # Julia display and the scalar interface
 
 `JuliaRepr` renders values the way Julia's `show` (`repr`) and `print`
 (`string`) do, which is part of the oracle contract (`show(::Limit)` goldens
-embed `string(::Float64)` verbatim). `Complex` is the minimal Gaussian number
-type the countable sets (`GaussianIntegers`, …) and `unityroots` need.
+embed `string(::Float64)` verbatim). Scalars print through `JuliaBase`'s
+`JuliaShow` (Ryu shortest round-trip for floats); `JuliaRepr` adds the
+container renderings and the `isNumber` flag `show(::Limit)` dispatches on.
+Complex numbers are `JuliaBase.Complex` (Gaussian integers and rationals in
+the countable sets, `ComplexF64` for `unityroots`).
 
 `JNumber` is the scalar interface of the analysis layer: exactly the parts of
 Julia's `Number` tower that `Limit`, `sum`, `prod` and `supnorm` touch.
@@ -14,54 +18,10 @@ Julia's `Number` tower that `Limit`, `sum`, `prod` and `supnorm` touch.
 
 namespace AbstractAnalysis
 
-/-- Julia `Complex{T}`: a pair of real parts. -/
-structure Complex (α : Type) where
-  /-- Real part. -/
-  re : α
-  /-- Imaginary part. -/
-  im : α
-  deriving BEq, DecidableEq, Repr, Inhabited, Hashable
+open JuliaBase
 
-namespace Complex
-
-variable {α : Type}
-
-instance [Add α] : Add (Complex α) := ⟨fun a b => ⟨a.re + b.re, a.im + b.im⟩⟩
-instance [Sub α] : Sub (Complex α) := ⟨fun a b => ⟨a.re - b.re, a.im - b.im⟩⟩
-instance [Neg α] : Neg (Complex α) := ⟨fun a => ⟨-a.re, -a.im⟩⟩
-instance [Add α] [Sub α] [Mul α] : Mul (Complex α) :=
-  ⟨fun a b => ⟨a.re * b.re - a.im * b.im, a.re * b.im + a.im * b.re⟩⟩
-
-/-- Complex conjugate (Julia `conj`). -/
-def conj [Neg α] (z : Complex α) : Complex α := ⟨z.re, -z.im⟩
-
-/-- Julia `abs2`. -/
-def abs2 [Add α] [Mul α] (z : Complex α) : α := z.re * z.re + z.im * z.im
-
-/-- Julia `/` on complex numbers with a field of coefficients (textbook formula;
-exact for `Rat`). -/
-instance [Add α] [Sub α] [Mul α] [Div α] [Neg α] : Div (Complex α) :=
-  ⟨fun a b =>
-    let d := b.re * b.re + b.im * b.im
-    ⟨(a.re * b.re + a.im * b.im) / d, (a.im * b.re - a.re * b.im) / d⟩⟩
-
-/-- Julia `inv(z)`. -/
-def inv [Add α] [Sub α] [Mul α] [Div α] [Neg α] [OfNat α 1] [OfNat α 0] (z : Complex α) : Complex α :=
-  (⟨1, 0⟩ : Complex α) / z
-
-/-- Julia `abs(::Complex{Float64})` (`hypot`, overflow-safe). -/
-def absF (z : Complex Float) : Float :=
-  let a := z.re.abs
-  let b := z.im.abs
-  let m := max a b
-  if m == 0 then 0 else if m.isInf then m else
-    let s := min a b / m
-    m * Float.sqrt (1 + s * s)
-
-/-- Julia `cis(θ) = cos θ + i sin θ`. -/
+/-- Julia `cis(θ) = cos θ + i sin θ` (`JuliaBase.Complex` has no `cis`). -/
 def cis (θ : Float) : Complex Float := ⟨θ.cos, θ.sin⟩
-
-end Complex
 
 /-- Julia-style rendering: `repr` is `show`, `str` is `print`/`string`, and
 `isNumber` records `typeof(x) <: Number` (it selects the one-line form of
@@ -76,37 +36,22 @@ class JuliaRepr (α : Type) where
 
 export JuliaRepr (repr)
 
-instance : JuliaRepr Float := ⟨Float.toJulia, Float.toJulia, true⟩
-instance : JuliaRepr Float32 := ⟨JuliaFloat.float32Repr, Float32.toJulia, true⟩
-instance : JuliaRepr Int := ⟨toString, toString, true⟩
-instance : JuliaRepr Nat := ⟨toString, toString, true⟩
-instance : JuliaRepr Bool := ⟨toString, toString, true⟩
-instance : JuliaRepr String := ⟨fun s => s!"\"{s}\"", id, false⟩
+/-- A Julia number: `show`/`print` from its `JuliaShow` instance. -/
+@[reducible] def JuliaRepr.ofShow (α : Type) [JuliaShow α] : JuliaRepr α :=
+  ⟨JuliaShow.showString, JuliaShow.printString, true⟩
 
+instance : JuliaRepr Float := .ofShow Float
+instance : JuliaRepr Float32 := .ofShow Float32
+instance : JuliaRepr Int := .ofShow Int
+instance : JuliaRepr Nat := .ofShow Nat
+instance : JuliaRepr Bool := .ofShow Bool
 /-- Julia `Rational` shows as `n//d` (always with the denominator). -/
-instance : JuliaRepr Rat := ⟨fun q => s!"{q.num}//{q.den}", fun q => s!"{q.num}//{q.den}", true⟩
-
-/-- Sign test used by complex display (Julia `signbit`). -/
-class SignBit (α : Type) where
-  /-- Julia `signbit(x)`. -/
-  signbit : α → Bool
-  /-- Julia `-x` for display of the imaginary part. -/
-  negate : α → α
-  /-- Whether Julia prints `im` without a `*` (integers and finite floats). -/
-  bareIm : α → Bool
-
-instance : SignBit Float := ⟨fun x => IEEEFloat.signBit x && !x.isNaN, (- ·), fun x => x.isFinite⟩
-instance : SignBit Int := ⟨(· < 0), (- ·), fun _ => true⟩
-instance : SignBit Rat := ⟨(· < 0), (- ·), fun _ => false⟩
+instance : JuliaRepr Rat := .ofShow Rat
+instance : JuliaRepr String := ⟨fun s => s!"\"{s}\"", id, false⟩
 
 /-- Julia `show(::Complex)`: `re + imim`, `re - |im|im`, and `*im` for types
 other than integers and finite floats (e.g. `0//1 + 1//1*im`). -/
-instance {α : Type} [JuliaRepr α] [SignBit α] : JuliaRepr (Complex α) where
-  repr z :=
-    let (op, i) := if SignBit.signbit z.im
-      then (" - ", SignBit.negate z.im) else (" + ", z.im)
-    JuliaRepr.repr z.re ++ op ++ JuliaRepr.repr i ++ (if SignBit.bareIm z.im then "" else "*") ++ "im"
-  isNumber := true
+instance {α : Type} [JuliaShow α] : JuliaRepr (Complex α) := .ofShow (Complex α)
 
 /-- Julia `show` of a vector: `[a, b, c]` (element type headers omitted). -/
 instance {α : Type} [JuliaRepr α] : JuliaRepr (Array α) where
@@ -114,7 +59,7 @@ instance {α : Type} [JuliaRepr α] : JuliaRepr (Array α) where
 
 /-- Julia `show` of a `Vector{Float64}` stored packed. -/
 instance : JuliaRepr FloatArray where
-  repr a := "[" ++ ", ".intercalate (a.toList.map Float.toJulia) ++ "]"
+  repr a := "[" ++ ", ".intercalate (a.toList.map F64.showString) ++ "]"
 
 /-- Julia tuples `(a, b)`. -/
 instance {α β : Type} [JuliaRepr α] [JuliaRepr β] : JuliaRepr (α × β) where
