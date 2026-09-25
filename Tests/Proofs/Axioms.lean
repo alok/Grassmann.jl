@@ -41,3 +41,9 @@ import Grassmann.Proofs
 
 /-- info: 'Grassmann.Proofs.mulSign_eq_coef' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Grassmann.Proofs.mulSign_eq_coef
+
+/-- info: 'Grassmann.Proofs.implMul_assoc_of_conf' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.implMul_assoc_of_conf
+
+/-- info: 'Grassmann.Spec.Cl.mul_self_of_vector' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Spec.Cl.mul_self_of_vector

@@ -14,7 +14,11 @@ split, degenerate and general diagonal metrics):
 * reversion, grade involution, right complement and Hodge star;
 * the fast 64-bit sign kernel `Bits.reorderParity` against its naive
   specification on random masks (proved for all masks; tested as a check of
-  the compiled code).
+  the compiled code);
+* conformal spaces: the transported blade table `Grassmann.Proofs.ConfTable`
+  of `S!"∞∅+"`, `CGA2` and `CGA3` on every pair of blades (the hypothesis of the
+  proved transport theorems, which the kernel cannot evaluate), and the
+  compiled `CGA3` multivector product against `T⁻¹(T x · T y)` on random inputs.
 -/
 import Grassmann
 import Grassmann.Spec
@@ -134,6 +138,31 @@ def signChecks (trials : Nat) : Tests.Gen Tally := do
       s!"reorderParity {a} {b} ≠ spec"
   return t
 
+/-- A random rational multivector with entries in `[-3, 3]`. -/
+def randMVRat (V : TensorBundle) : Tests.Gen (Multivector V Rat) := do
+  let xs ← Tests.Gen.array (2 ^ V.n) (Tests.Gen.int (-3) 3)
+  return Multivector.ofFn fun i => ((xs[i.1]! : Int) : Rat)
+
+/-- The conformal checks: the transported blade tables (exhaustive) and random
+`CGA3` products through `T`. -/
+def conformalChecks (trials : Nat) : Tests.Gen Tally := do
+  let mut t : Tally := {}
+  t := t.check (decide (Grassmann.Proofs.ConfTable S!"∞∅+" (Grassmann.Proofs.gConf 3)))
+    "ConfTable ∞∅+ fails"
+  t := t.check (decide (Grassmann.Proofs.ConfTable CGA2 (Grassmann.Proofs.gConf 4))) "ConfTable CGA2 fails"
+  t := t.check (decide (Grassmann.Proofs.ConfTable CGA3 (Grassmann.Proofs.gConf 5))) "ConfTable CGA3 fails"
+  let g := Grassmann.Proofs.gConf 5
+  for k in [0:trials] do
+    let x ← randMVRat CGA3
+    let y ← randMVRat CGA3
+    let sx : Cl g := ⟨fun c => x.coeff (Grassmann.Proofs.mask c)⟩
+    let sy : Cl g := ⟨fun c => y.coeff (Grassmann.Proofs.mask c)⟩
+    let sxy : Cl g := ⟨fun c => (x * y).coeff (Grassmann.Proofs.mask c)⟩
+    let lhs := Grassmann.Proofs.toDiag sxy
+    let rhs := Grassmann.Proofs.toDiag sx * Grassmann.Proofs.toDiag sy
+    t := t.check ((blades 5).all fun c => lhs.coeff c == rhs.coeff c) s!"CGA3 trial {k}: T(xy) ≠ T(x) T(y)"
+  return t
+
 /-- Run the model suites; returns `(passed, failed)`. -/
 def run : IO (Nat × Nat) := do
   let mut pass := 0
@@ -148,6 +177,8 @@ def run : IO (Nat × Nat) := do
     fail := fail + t.fail + c.fail
   let t := Tests.Gen.run 42 (signChecks 2000)
   t.report "proofs/sign"
-  return (pass + t.pass, fail + t.fail)
+  let c := Tests.Gen.run 43 (conformalChecks 4)
+  c.report "proofs/conformal"
+  return (pass + t.pass + c.pass, fail + t.fail + c.fail)
 
 end Tests.Proofs
