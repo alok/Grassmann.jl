@@ -22,6 +22,7 @@ signed), `antimetric-couple-scalar` (the scalar part is scaled), `trivector-coup
 (`metric(𝟎) = antireverse(𝟎) = 𝟎`), `multivector-of-zero`.
 -/
 import Grassmann.Dynamic.Arith
+import Grassmann.Dynamic.Loops
 import Grassmann.Algebra.Unary
 
 namespace Grassmann
@@ -91,24 +92,59 @@ output blade `β` (Julia `out[complement(B)] = p(V,B)·val`). -/
   let src := sourceBlade V op β
   scaleBy (unCoeff V op src β) (f src)
 
-/-- A chain under a unary map, into grade `H` (`G` or `n - G`). -/
-def chainMap (op : UnOp) {G : Nat} (H : Nat) (c : Chain V G α) : Chain V H α :=
+/-- Whether Julia evaluates `op` on a container through the dense metric: `metric` in a
+non-diagonal space (the compound Gram matrices, `Grassmann.Loops.buildM`), and the Hodge
+complements there, `complementright(metric(x))`/`complementleft(metric(x))`
+(`src/products.jl:1337-1341`). -/
+def gramDense (V : TensorBundle) (op : UnOp) : Bool :=
+  !V.isdiag && !V.istangent &&
+    (op == .metric || op == .complementrighthodge || op == .complementlefthodge)
+
+/-- The plain complement that follows the metric in a non-diagonal Hodge map. -/
+def gramComplement : UnOp → UnOp
+  | .complementrighthodge => .complementright
+  | .complementlefthodge => .complementleft
+  | op => op
+
+/-- A chain under a unary map, into grade `H` (`G` or `n - G`), without the dense metric. -/
+def chainMap₀ (op : UnOp) {G : Nat} (H : Nat) (c : Chain V G α) : Chain V H α :=
   if monomial V op then chainOf V H (monoCoeff (V := V) op c.coeff)
   else ⟨Kernels.un op (.chain G) (.chain H) c.v⟩
 
-/-- A half under a unary map, into parity `q`. -/
-def halfMap (op : UnOp) {p : Bool} (q : Bool) (h : Half V p α) : Half V q α :=
+/-- A chain under a unary map, into grade `H` (`G` or `n - G`). -/
+def chainMap (op : UnOp) {G : Nat} (H : Nat) (c : Chain V G α) : Chain V H α :=
+  if gramDense V op then
+    let m : Chain V G α := ⟨Loops.runM V (.chain G) c.v.data⟩
+    if op == .metric then chainOf V H m.coeff else chainMap₀ (gramComplement op) H m
+  else chainMap₀ op H c
+
+/-- A half under a unary map, into parity `q`, without the dense metric. -/
+def halfMap₀ (op : UnOp) {p : Bool} (q : Bool) (h : Half V p α) : Half V q α :=
   if monomial V op then halfOf V q (monoCoeff (V := V) op h.coeff)
   else ⟨Kernels.un op (halfLayout p) (halfLayout q) h.v⟩
 
-/-- A multivector under a unary map. -/
-def multiMap (op : UnOp) (m : Multivector V α) : Multivector V α :=
+/-- A half under a unary map, into parity `q`. -/
+def halfMap (op : UnOp) {p : Bool} (q : Bool) (h : Half V p α) : Half V q α :=
+  if gramDense V op then
+    let m : Half V p α := ⟨Loops.runM V (halfLayout p) h.v.data⟩
+    if op == .metric then halfOf V q m.coeff else halfMap₀ (gramComplement op) q m
+  else halfMap₀ op q h
+
+/-- A multivector under a unary map, without the dense metric. -/
+def multiMap₀ (op : UnOp) (m : Multivector V α) : Multivector V α :=
   if monomial V op then
     Multivector.ofFn fun i =>
       let β := fullBlade V.n i.1
       let src := sourceBlade V op β
       scaleBy (unCoeff V op src β) (getD m.v (Leibniz.basisRank V.n src))
   else Multivector.unop op m
+
+/-- A multivector under a unary map. -/
+def multiMap (op : UnOp) (m : Multivector V α) : Multivector V α :=
+  if gramDense V op then
+    let g : Multivector V α := ⟨Loops.runM V .full m.v.data⟩
+    if op == .metric then g else multiMap₀ (gramComplement op) g
+  else multiMap₀ op m
 
 /-- Keep the grades `keep g` of a multivector (entries copied, the others zero). -/
 def multiKeep (keep : Nat → Bool) (m : Multivector V α) : Multivector V α :=

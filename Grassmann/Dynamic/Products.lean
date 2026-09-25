@@ -30,6 +30,7 @@ factors). Fixed Julia defects (oracle `defects.json`): `chain0-times-mixed`,
 -/
 import Grassmann.Dynamic.Unary
 import Grassmann.Algebra.Products
+import Grassmann.Dynamic.Loops
 
 namespace Grassmann
 
@@ -55,19 +56,19 @@ inductive POp where
 def POp.bin : POp → BinOp
   | .mul => .mul | .wedge => .wedge | .vee => .vee | .contraction => .contraction
 
-/-! ## Layouts of the dense kinds -/
+/-! ## Julia's generated loops -/
 
-/-- The storage layout and entries of a term or container (`none` for couples,
-`Zero`, `∞`, phasors). A term is a one-hot chain. -/
-def layoutValues? (x : TA V α) : Option ((l : Layout) × Values α (l.size V.n)) :=
+/-- A term or container as an operand of Julia's generated loops, with its raw storage
+(`none` for couples, `Zero`, `∞`, phasors). -/
+def loopSrc? (x : TA V α) : Option (Loops.JSrc × Packed.Arr α) :=
   match x with
-  | one => some ⟨.chain 0, (chainOf V 0 fun β => if β == 0 then Coeff.one else Coeff.zero).v⟩
-  | blade b => some ⟨.chain (popcount b), (chainOf V (popcount b) fun β => if β == b then Coeff.one else Coeff.zero).v⟩
-  | single b v => some ⟨.chain (popcount b), (chainOf V (popcount b) fun β => if β == b then v else Coeff.zero).v⟩
-  | chain g c => some ⟨.chain g, c.v⟩
-  | spinor h => some ⟨.even, h.v⟩
-  | cospinor h => some ⟨.odd, h.v⟩
-  | multi m => some ⟨.full, m.v⟩
+  | one => some (.terms #[0], Loops.termArr Coeff.one)
+  | blade b => some (.terms #[b], Loops.termArr Coeff.one)
+  | single b v => some (.terms #[b], Loops.termArr v)
+  | chain g c => some (.dense (.chain g), c.v.data)
+  | spinor h => some (.dense .even, h.v.data)
+  | cospinor h => some (.dense .odd, h.v.data)
+  | multi m => some (.dense .full, m.v.data)
   | _ => none
 
 /-- A container of layout `l`. -/
@@ -78,13 +79,25 @@ def ofLayout (l : Layout) (v : Values α (l.size V.n)) : TA V α :=
   | .odd, v => cospinor ⟨v⟩
   | .full, v => multi ⟨v⟩
 
-/-- The product `op(a, b)` of two dense elements evaluated by the space's kernels into
+/-- The product `op(a, b)` of two terms or containers by Julia's generated loop into
 layout `lc` (contributions outside `lc` are dropped: callers choose Julia's layout, which
-holds them all). -/
-def kernelInto (op : POp) (lc : Layout) (a b : TA V α) : TA V α :=
-  match layoutValues? a, layoutValues? b with
-  | some ⟨la, x⟩, some ⟨lb, y⟩ => ofLayout lc (Kernels.binProj op.bin la lb lc x y)
+holds them all); `outerFirst` is the loop nesting, `pre` Julia's expression form (the
+generators below their `cache_limit`), see `Grassmann.Loops`. -/
+def loopInto (op : POp) (lc : Layout) (outerFirst pre : Bool) (a b : TA V α) : TA V α :=
+  match loopSrc? a, loopSrc? b with
+  | some (sa, xa), some (sb, xb) =>
+    ofLayout lc (Loops.run pre { V, op := op.bin, a := sa, b := sb, lc, outerFirst } xa xb)
   | _, _ => zero
+
+/-- Julia's `cache_limit` (Leibniz `src/utilities.jl:106`): the generators unroll a
+graded product when `binomial(n, G)·binomial(n, L) < 2¹²`, a graded × container product
+when `n < 12`, a container product when `n < 6`. -/
+def cacheLimit : Nat := 12
+
+/-- Whether the graded × `Chain` generator of grades `L` (a chain when `isChain`, else a
+term) and `G` takes its expression form. -/
+def gradedPre (n L G : Nat) (isChain : Bool) : Bool :=
+  (Layout.chain G).size n * (if isChain then (Layout.chain L).size n else 1) < 2 ^ cacheLimit
 
 /-- The half layout of parity `p`. -/
 @[inline] def halfL (odd : Bool) : Layout := halfLayout odd
@@ -125,12 +138,16 @@ def scalarOf : TA V α → α
 
 /-- The product of a graded element `a` (a term or a chain of grade `L`) and a chain `b`
 of grade `G`; `swap` evaluates `b ⊙ a` (Julia's `op(b::Chain, a::TensorTerm)`), in which
-case `a` is a term. -/
+case `a` is a term. The generated loops run over the first operand outermost. A conformal
+chain × chain contraction is a `Multivector` (`μ = istangent(V)|hasconformal(V)`, only in
+the unrolled chain × chain branch; a term's contraction stays a `Chain`). -/
 def gradedChain (op : POp) (a : TA V α) (L : Nat) {G : Nat} (c : Chain V G α) (swap : Bool) : TA V α :=
   let b : TA V α := chain G c
   let n := V.n
   let tangent := V.istangent
   let isChain := match a with | chain .. => true | _ => false
+  let pre := gradedPre n L G isChain
+  let loop := fun (lc : Layout) => if swap then loopInto op lc true pre b a else loopInto op lc true pre a b
   -- `Single(b)` of a scalar or pseudoscalar chain
   let sb : TA V α := singleOfChain c
   -- the term product with `Single(b)` in Julia's operand order
@@ -155,24 +172,22 @@ def gradedChain (op : POp) (a : TA V α) (L : Nat) {G : Nat} (c : Chain V G α) 
         | single _ x => smul x (complementlefthodge (reverse b))
         | chain _ d => smul (getD d.v 0) (complementlefthodge (reverse b))
         | _ => complementlefthodge (reverse b)
-    else if swap then kernelInto op (halfL ((L + G) % 2 == 1)) b a
-    else kernelInto op (halfL ((L + G) % 2 == 1)) a b
+    else loop (halfL ((L + G) % 2 == 1))
   | .wedge =>
     if L + G > n && !tangent then zero
     else if (G == 0 || G == n) && !tangent then withSingle sb
-    else if tangent then (if swap then kernelInto op .full b a else kernelInto op .full a b)
-    else if swap then kernelInto op (.chain (L + G)) b a else kernelInto op (.chain (L + G)) a b
+    else if tangent then loop .full
+    else loop (.chain (L + G))
   | .vee =>
     if L + G < n && !tangent then zero
     else if (G == 0 || G == n) && !tangent then withSingle sb
-    else if tangent then (if swap then kernelInto op .full b a else kernelInto op .full a b)
-    else if swap then kernelInto op (.chain (L + G - n)) b a else kernelInto op (.chain (L + G - n)) a b
+    else if tangent then loop .full
+    else loop (.chain (L + G - n))
   | .contraction =>
     if (if swap then G < L else L < G) && !tangent then zero
     else if (G == 0 || G == n) && !tangent then withSingle sb
-    else if tangent || V.hasconformal then
-      (if swap then kernelInto op .full b a else kernelInto op .full a b)
-    else if swap then kernelInto op (.chain (G - L)) b a else kernelInto op (.chain (L - G)) a b
+    else if tangent || (V.hasconformal && isChain && pre) then loop .full
+    else loop (.chain (if swap then G - L else L - G))
 
 /-- The product of two chains (Julia `op(a::Chain, b::Chain)`): `gradedChain` with the
 left chain as the graded factor; a scalar or pseudoscalar right chain becomes a term,
@@ -193,11 +208,12 @@ def chainChain (op : POp) {L G : Nat} (a : Chain V L α) (c : Chain V G α) : TA
 
 /-! ## Graded × half or multivector (`src/algebra.jl:1450-1560`) -/
 
-/-- Julia's `maxgrade`, `mingrade`, `nextgrade`, `maxpseudograde` of a container
-(`src/multivectors.jl:1156-1197`): `(min, max, next, maxpseudo)`. -/
-def gradeRange (V : TensorBundle) : TA V α → Nat × Nat × Nat × Nat
+/-- Julia's `mingrade`, `maxgrade`, `nextgrade`, `maxpseudograde` of a container
+(`src/multivectors.jl:1156-1197`): `(min, max, next, maxpseudo)`, as integers (Julia's
+`nextmaxgrade`/`nextmaxpseudograde` can be negative). -/
+def gradeRange (V : TensorBundle) : TA V α → Int × Int × Int × Int
   | spinor _ => (0, if V.n % 2 == 1 then V.n - 1 else V.n, 2, V.n)
-  | cospinor _ => (1, if V.n % 2 == 1 then V.n else V.n - 1, 2, V.n - 1)
+  | cospinor _ => (1, if V.n % 2 == 1 then V.n else (V.n : Int) - 1, 2, (V.n : Int) - 1)
   | _ => (0, V.n, 1, V.n)
 
 /-- The container kind of Julia's generic loop for `op(a, b)` with a graded `a` of grade
@@ -213,16 +229,20 @@ def containerOut (op : POp) (G : Nat) : TA V α → Layout
 
 /-- The product of a graded element `a` (a term or chain of grade `G`) with a half or
 multivector `b`; `swap` evaluates `b ⊙ a`. `core` is the core product itself (used on
-grade blocks of `b`). -/
+grade blocks of `b`). Julia's generated loop runs over the container outermost. -/
 def gradedContainer (core : POp → TA V α → TA V α → TA V α) (op : POp) (a : TA V α) (G : Nat)
     (b : TA V α) (swap : Bool) : TA V α :=
   let n := V.n
+  let N : Int := n
+  let g : Int := G
   let tangent := V.istangent
   let (mn, mx, nx, mxp) := gradeRange V b
-  let blk := fun (g : Nat) => gradeProj g b
+  let blk := fun (k : Int) => gradeProj k.toNat b
   let app := fun (x : TA V α) => if swap then core op x a else core op a x
   let generic := fun (_ : Unit) =>
-    if swap then kernelInto op (containerOut op G b) b a else kernelInto op (containerOut op G b) a b
+    let pre := n < cacheLimit
+    if swap then loopInto op (containerOut op G b) true pre b a
+    else loopInto op (containerOut op G b) false pre a b
   match op with
   | .mul =>
     match a with
@@ -241,36 +261,38 @@ def gradedContainer (core : POp → TA V α → TA V α → TA V α) (op : POp) 
         (if swap then hodge (reverse b) else complementlefthodge (reverse b))
       else generic ()
   | .wedge =>
-    if G + mn > n && !tangent then zero
-    else if G + mn == n && !tangent then app (blk mn)
-    else if G + (mn + nx) == n && !tangent then app (blk mn) + app (blk (mn + nx))
+    if g + mn > N && !tangent then zero
+    else if g + mn == N && !tangent then app (blk mn)
+    else if g + (mn + nx) == N && !tangent then app (blk mn) + app (blk (mn + nx))
     else generic ()
   | .vee =>
-    if G + mx < n && !tangent then zero
-    else if G + mx == n && !tangent then app (blk mx)
-    else if G + (mx - nx) == n && !tangent then app (blk mx) + app (blk (mx - nx))
+    if g + mx < N && !tangent then zero
+    else if g + mx == N && !tangent then app (blk mx)
+    else if g + (mx - nx) == N && !tangent then app (blk mx) + app (blk (mx - nx))
     else generic ()
   | .contraction =>
-    if (if swap then mx < G else G < mn) && !tangent then zero
-    else if (if swap then mx == G else G + mxp == n) && !tangent then
+    if (if swap then mx < g else g < mn) && !tangent then zero
+    else if (if swap then mx == g else g + mxp == N) && !tangent then
       (if swap then core op (blk mx) a else core op a (blk mn))
-    else if (if swap then mx - nx == G else G + (mxp - nx) == n) && !tangent then
+    else if (if swap then mx - nx == g else g + (mxp - nx) == N) && !tangent then
       (if swap then core op (blk mx) a + core op (blk (mx - nx)) a
        else core op a (blk mn) + core op a (blk (mn + nx)))
     else generic ()
 
-/-- The product of two containers (halves and multivectors; `src/products.jl:1146-1320`). -/
+/-- The product of two containers (halves and multivectors; `src/products.jl:1146-1320`,
+the loop over the first operand outermost). -/
 def containerContainer (op : POp) (a b : TA V α) : TA V α :=
   let parity := fun (x : TA V α) => match x with
     | spinor _ => some false
     | cospinor _ => some true
     | _ => none
+  let pre := 2 * V.n < cacheLimit
   match parity a, parity b with
   | some p, some q =>
     let r := p ^^ q
     let r := if op == .vee then r ^^ (V.n % 2 == 1) else r
-    kernelInto op (halfL r) a b
-  | _, _ => kernelInto op .full a b
+    loopInto op (halfL r) true pre a b
+  | _, _ => loopInto op .full true pre a b
 
 /-! ## The core products -/
 
@@ -344,6 +366,7 @@ def coupleOf (re : α) (out : TA V α) : TA V α :=
   match out with
   | single b v => couple b re v
   | blade b => couple b re Coeff.one
+  | zero => couple 0 re Coeff.zero  -- `basis(Zero(V)) = One(V)`, `value(Zero(V)) = 0`
   | _ => single 0 re + out
 
 /-- `z ⟑ t` and `t ⟑ z` for a couple or pseudo-couple `z = (B, re, im)` and a term or
@@ -561,27 +584,86 @@ def isTerm : TA V α → Bool
 /-- Whether an element is graded (a term or a chain). -/
 def isGraded (x : TA V α) : Bool := isTerm x || (match x with | chain .. => true | _ => false)
 
-/-- The grade-`G` part of the dense sandwich `y₁ ⟑ x ⟑ y₂` (Julia's generated
-`product_sandwich` returns `Chain{V,G}` of it): two kernel products, the second
-projected onto grade `G`. -/
-def sandwichProj (G : Nat) (y₁ x y₂ : TA V α) : TA V α :=
-  let d := fun (t : TA V α) => (t.toDense).v
-  let t : Values α (Layout.full.size V.n) := Kernels.bin .mul .full .full .full (d y₁) (d x)
-  chain G ⟨Kernels.binProj .mul .full .full (.chain G) t (d y₂)⟩
+/-- Whether `parityclifford(k)`: Julia's `clifford` negates grade `k`. -/
+@[inline] def cliffordNeg (k : Nat) : Bool := (k * (k + 1) / 2) % 2 == 1
 
-/-- Julia `x ⊘ y = (~y) ⟑ x ⟑ involute(y)`, projected onto the grade of a graded `x`
-when Julia's generated method applies (see `versorGraded`); a `Couple`/`PseudoCouple`
-`x` is sandwiched part by part. -/
-def sandwich (x y : TA V α) : TA V α :=
-  let generic := fun (x y : TA V α) => mul (mul (reverse y) x) (involute y)
+/-- The versor `y` of a generated sandwich as a loop operand, with the parity of its
+grades; the entries are `yc`'s (`y` or `clifford(y)`: Julia's `par ? -b.v[i] : b.v[i]`,
+computed by the caller, in Julia in the versor's own coefficient type). A
+`Couple`/`PseudoCouple` is its `B` term followed by its scalar/volume term. -/
+def versorSrc? (y yc : TA V α) : Option (Loops.JSrc × Packed.Arr α × Nat) :=
+  let parts := fun (b : UInt64) (top : Bool) (re im : α) =>
+    let c := if top then pseudoBits V else 0
+    match yc with
+    | couple b' r i => if b' == b && !top then (i, r) else (yc.coeff b, yc.coeff c)
+    | pseudo b' r i => if b' == b && top then (r, i) else (yc.coeff b, yc.coeff c)
+    | _ => if top then (re, im) else (im, re)
+  let dense := fun (p : Nat) =>
+    match loopSrc? yc, loopSrc? y with
+    | some (s, x), some (s', _) => if s == s' then some (s, x, p) else none
+    | _, _ => none
+  match y with
+  | one => some (.terms #[0], Loops.termArr (yc.coeff 0), 0)
+  | blade b => some (.terms #[b], Loops.termArr (yc.coeff b), popcount b % 2)
+  | single b _ => some (.terms #[b], Loops.termArr (yc.coeff b), popcount b % 2)
+  | couple b re im =>
+    let (u, w) := parts b false re im
+    some (.terms #[b, 0], Loops.termArr₂ u w, popcount b % 2)
+  | pseudo b re im =>
+    let (u, w) := parts b true re im
+    some (.terms #[b, pseudoBits V], Loops.termArr₂ u w, popcount b % 2)
+  | chain g _ => dense (g % 2)
+  | spinor _ => dense 0
+  | cospinor _ => dense 1
+  | _ => none
+
+/-- Julia's generated `product_sandwich` of a graded `x` of grade `G` by the versor `y`,
+both passes by Julia's loops, projected onto grade `G` (`Chain{V,G}`): the first pass with
+the versor entries `y₁`, the second with `y₂` (`clifford(y)`, `y` for `⊘`; `y`,
+`clifford(y)` for `>>>`). -/
+def sandwichLoop (G : Nat) (x y y₁ y₂ : TA V α) : TA V α :=
+  match versorSrc? y y₁, loopSrc? x, versorSrc? y y₂ with
+  | some (sy, a₁, p), some (sx, xa), some (_, a₂, _) =>
+    let k : Loops.SKey := { V, y := sy, x := sx, mid := halfL ((p + G) % 2 == 1), G }
+    chain G ⟨Loops.runS k a₁ xa a₂⟩
+  | _, _, _ => zero
+
+/-- `x ⊘ y` with the versor's images supplied (`yr = ~y`, `yi = involute(y)`,
+`yc = clifford(y)`; Julia computes them in the versor's own coefficient type, before any
+promotion against `x`): see `sandwich`. -/
+def sandwichWith (x y yr yi yc : TA V α) : TA V α :=
+  let generic := fun (x yr yi : TA V α) => mul (mul yr x) yi
   let one := fun (x : TA V α) =>
-    if isTerm x && isTerm y then generic x y
+    if isTerm x && isTerm y then generic x yr yi
     else if isGraded x && versorGraded y then
       match x.grade? with
-      | some G => sandwichProj G (reverse y) x (involute y)
-      | none => generic x y
-    else if isGraded x then generic x (multispin y)
-    else generic x y
+      | some G => sandwichLoop G x y yc y
+      | none => generic x yr yi
+    else if isGraded x then generic x (multispin yr) (multispin yi)
+    else generic x yr yi
+  match x with
+  | couple B r i => one (single 0 r) + one (single B i)
+  | pseudo B r i => one (single B r) + one (topSingle i)
+  | _ => one x
+
+/-- Julia `x ⊘ y = (~y) ⟑ x ⟑ involute(y)`; when Julia's generated method applies (a
+graded `x`, see `versorGraded`) it is the two-pass loop `clifford(y) ⟑ x ⟑ y` (the same
+value) projected onto the grade of `x`; a `Couple`/`PseudoCouple` `x` is sandwiched part
+by part. -/
+@[inline] def sandwich (x y : TA V α) : TA V α :=
+  sandwichWith x y (reverse y) (involute y) (clifford y)
+
+/-- `y >>> x` with `yc = clifford(y)` supplied (see `sandwichWith`). -/
+def tsandwichWith (y yc x : TA V α) : TA V α :=
+  let generic := fun (y yc x : TA V α) => mul (mul y x) yc
+  let one := fun (x : TA V α) =>
+    if isTerm x && isTerm y then generic y yc x
+    else if isGraded x && versorGraded y then
+      match x.grade? with
+      | some G => sandwichLoop G x y y yc
+      | none => generic y yc x
+    else if isGraded x then generic (multispin y) (multispin yc) x
+    else generic y yc x
   match x with
   | couple B r i => one (single 0 r) + one (single B i)
   | pseudo B r i => one (single B r) + one (topSingle i)
@@ -590,20 +672,7 @@ def sandwich (x y : TA V α) : TA V α :=
 /-- Julia `y >>> x = y ⟑ x ⟑ clifford(y)` (the versor on the left), projected like
 `sandwich`. Julia's generated fallback for a versor that is not parity-homogeneous swaps
 the operands (defect `tsandwich-mixed-parity-swap`); here it is `multispin(y) >>> x`. -/
-def tsandwich (y x : TA V α) : TA V α :=
-  let generic := fun (y x : TA V α) => mul (mul y x) (clifford y)
-  let one := fun (x : TA V α) =>
-    if isTerm x && isTerm y then generic y x
-    else if isGraded x && versorGraded y then
-      match x.grade? with
-      | some G => sandwichProj G y x (clifford y)
-      | none => generic y x
-    else if isGraded x then generic (multispin y) x
-    else generic y x
-  match x with
-  | couple B r i => one (single 0 r) + one (single B i)
-  | pseudo B r i => one (single B r) + one (topSingle i)
-  | _ => one x
+@[inline] def tsandwich (y x : TA V α) : TA V α := tsandwichWith y (clifford y) x
 
 end TA
 
