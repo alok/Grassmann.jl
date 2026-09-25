@@ -4,9 +4,10 @@ import Tests.Fatou.Catalog
 Rasters, titles and the per-pixel kernel against the oracle (port-notes/fatou.md G5, G6, G9):
 
 * `sets.json` + `<name>.{iter.u16,mix.f64,zre.f64,zim.f64}`: every catalog set at reduced
-  resolution. Exact tier (rational maps): iteration counts and final iterates bit for bit,
-  `mix` within a few ulps (it goes through `atan2`/`exp`). Transcendental tier (libm inside
-  the map): at most a small fraction of pixels may differ in their count.
+  resolution. Exact tier (rational maps): iteration counts, final iterates and `mix` bit for
+  bit (the colourings use Julia's own `atan`/`exp`/`^` from `JuliaBase`). Transcendental tier
+  (libm inside the map): at most a small fraction of pixels may differ in their count, and
+  `mix` is compared within a few ulps.
 * the full-resolution README rasters (1501×1001, 800², 800², 500²) and the 176² defaults:
   iteration histograms and the FNV-1a hash of the counts, recomputed here.
 * titles (`String(K)`, the PyPlot LaTeX title and y-label), `typeplot`, `basin`.
@@ -18,7 +19,8 @@ namespace Tests.Fatou.Sets
 
 open _root_.Fatou Tests.Fatou Tests.Fatou.Catalog
 
-/-- Ulp budget for `mix` (Julia's own `atan`/`exp` against libm's). -/
+/-- Ulp budget for `mix` in the transcendental tier (the final iterates carry libm
+rounding); the exact tier compares `mix` bit for bit. -/
 def mixUlps : Nat := 4
 
 /-- Iteration-count histogram and summary of a set (as `stats` in `gen.jl`). -/
@@ -73,9 +75,11 @@ def checkRaster {r c : Nat} (name : String) (Z : FilledSet r c) (exact : Bool) :
       if !(if exact then sameC zg ze else closeC zg ze 64 1e-9) then zBad := zBad + 1
       let d := ulps Z.mix[i]! mix[i]!
       if d < 1000000 then mixWorst := max mixWorst d
-      -- exact tier: `mix` differs only by the libm `atan2`/`exp` ulps; transcendental tier:
-      -- the final iterates carry libm rounding amplified by the orbit
-      if !(d ≤ mixUlps || closeF Z.mix[i]! mix[i]! 64 (if exact then 1e-14 else 1e-9)) then
+      -- exact tier: `mix` bit for bit; transcendental tier: the final iterates carry libm
+      -- rounding amplified by the orbit
+      if exact then
+        if !sameF Z.mix[i]! mix[i]! then mixBad := mixBad + 1
+      else if !(d ≤ mixUlps || closeF Z.mix[i]! mix[i]! 64 1e-9) then
         mixBad := mixBad + 1
   if exact then
     check s!"{name} iteration counts" (iterBad == 0) fun _ => s!"{iterBad} of {total} pixels differ"
@@ -182,8 +186,8 @@ def runPoints : TestM Unit := do
       let en ← gNat p "n"
       let ez ← gC p "z"
       let emix ← gF p "mix"
-      let ok := n == en && (if exact then sameC z ez else closeC z ez 64 1e-9) &&
-        closeF (K.mixOf n z) emix mixUlps (if exact then 1e-14 else 1e-9)
+      let ok := n == en && (if exact then sameC z ez && sameF (K.mixOf n z) emix
+        else closeC z ez 64 1e-9 && closeF (K.mixOf n z) emix mixUlps 1e-9)
       if !ok then
         bad := bad + 1
         if exact then
@@ -223,6 +227,35 @@ def runCouple : TestM Unit := do
   check "Couple with B² = -1 is the complex plane" (cx.iter == plain.iter &&
     (cx.zre.toList.zip plain.zre.toList).all (fun (a, b) => sameF a b) &&
     (cx.zim.toList.zip plain.zim.toList).all (fun (a, b) => sameF a b))
+  -- the `B` option of the symbolic front-end: the map compiled over `Couple` numbers
+  let splitB := fatou (mandelbrot! "z^2 + c" (B := "1") { n := 40, N := 20 })
+  check "mandelbrot! (B := \"1\") is the hyperbolic set" (splitB.iter == split.iter &&
+    (splitB.zre.toList.zip split.zre.toList).all (fun (a, b) => sameF a b))
+  let cxB := fatou (mandelbrot! "z^2 + c" (B := "im") { n := 40, N := 20 })
+  check "mandelbrot! (B := \"im\") is the complex set" (cxB.iter == plain.iter)
+  let dual := fatou (mandelbrot (fun z c => Couple.sq 0 z + c) { n := 40, N := 20 }
+    (Q := fun z _ => Couple.abs2 0 z))
+  let dualB := fatou (mandelbrot! "z^2 + c" (B := "0") { n := 40, N := 20 })
+  check "mandelbrot! (B := \"0\") is the dual-number set" (dualB.iter == dual.iter)
+  -- quotients and powers in the `Couple` product: z ↦ z³ + 1/(z² + c) - 0.5z
+  let rat := fatou (juliafill! "z^3 + 1/(z^2 + c) - 0.5z" (B := "1") { n := 30, N := 12 })
+  let ratHand := fatou (juliafill (fun z c => Couple.pow 1 z 3 + Couple.rdiv 1 1 (Couple.pow 1 z 2 + c) -
+      (0.5 : Float) * z) { n := 30, N := 12 } (Q := fun z _ => Couple.abs2 1 z))
+  check "juliafill! over B² = 1 with quotients and powers" (rat.iter == ratHand.iter)
+  -- the `Couple` product: inverse and power laws
+  let pts : List C64 := [⟨0.3, 0.1⟩, ⟨-1.2, 0.7⟩, ⟨2, -0.5⟩, ⟨0.25, 0.125⟩]
+  for s in [(-1 : Int), 0, 1] do
+    check s!"z · z⁻¹ = 1 (B² = {s})" (pts.all fun z =>
+      let w := Couple.mul s z (Couple.inv s z); (w.re - 1).abs < 1e-12 && w.im.abs < 1e-12)
+    check s!"z⁵ = z·z·z·z·z (B² = {s})" (pts.all fun z =>
+      let a := Couple.pow s z 5
+      let b := Couple.mul s (Couple.mul s (Couple.mul s (Couple.mul s z z) z) z) z
+      (a.re - b.re).abs ≤ 1e-12 * (1 + b.re.abs) && (a.im - b.im).abs ≤ 1e-12 * (1 + b.im.abs))
+    check s!"z⁻² = (z⁻¹)² (B² = {s})" (pts.all fun z =>
+      let a := Couple.pow s z (-2)
+      let i := Couple.inv s z
+      let b := Couple.mul s i i
+      sameF a.re b.re && sameF a.im b.im)
 
 /-- `(misclassified, converged)`: converged pixels whose basin index is not the root in the
 angular sector of their final iterate. -/

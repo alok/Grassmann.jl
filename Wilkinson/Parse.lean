@@ -19,7 +19,9 @@ linear output re-parsed by Julia's parser. The tree shapes are what matter
 * unary minus binds looser than `^` and tighter than `*` (`-x^2` is `-(x^2)`,
   `-x*y` is `*(-x, y)`);
 * juxtaposition `2x`, `2(x+1)`, `1.5e3x` multiplies a numeric literal by the
-  following power-level operand.
+  following power-level operand;
+* `f(a, b)` (an identifier directly followed by `(`) is a function call, and `%`
+  (`rem`) is a multiplication-level operator (Fatou's maps use both).
 -/
 
 namespace Wilkinson
@@ -89,7 +91,7 @@ where
         go rest false (acc.push ⟨.ident (String.ofList n), sp⟩) fuel
       else if c == '/' && cs.head? == some '/' then
         go cs.tail false (acc.push ⟨.op "//", sp⟩) fuel
-      else if "+-*/^(),".contains c then go cs false (acc.push ⟨.op c.toString, sp⟩) fuel
+      else if "+-*/^(),%".contains c then go cs false (acc.push ⟨.op c.toString, sp⟩) fuel
       else .error s!"unexpected character '{c}'"
 
 /-- A numeric literal's value: an `Int` if it has no `.`/exponent, else a `Float64`. -/
@@ -185,7 +187,10 @@ partial def parseUnary : P JExpr := do
 
 /-- A primary, optionally raised to a (right-associative) power. -/
 partial def parsePower : P JExpr := do
+  let start := (← get).pos
   let base ← parsePrimary
+  let closed := isOp ((← get).toks[(← get).pos - 1]?) ")" && start < (← get).pos &&
+    isOp ((← get).toks[start]?) "("
   if isOp (← peek) "^" then
     advance
     let ex ← parseUnary
@@ -193,7 +198,11 @@ partial def parsePower : P JExpr := do
   else
     match base with
     | .lit (.int _) | .lit (.f64 _) => juxt base
-    | _ => return base
+    | _ =>
+      -- `(5 + 2im)z^2`: a parenthesised operand juxtaposed with an identifier
+      match ← peek with
+      | some ⟨.ident _, false⟩ => if closed then return .call "*" [base, ← parsePower] else return base
+      | _ => return base
 
 /-- Numeric-literal juxtaposition `2x^2`, `2(x+1)`. -/
 partial def juxt (lit : JExpr) : P JExpr := do
@@ -206,7 +215,12 @@ partial def juxt (lit : JExpr) : P JExpr := do
 partial def parsePrimary : P JExpr := do
   match ← peek with
   | some ⟨.num text, _⟩ => advance; StateT.lift (numLit text false)
-  | some ⟨.ident name, _⟩ => advance; return .sym name
+  | some ⟨.ident name, _⟩ =>
+    advance
+    -- `f(a, …)`: a call when `(` follows the name without whitespace
+    match ← peek with
+    | some ⟨.op "(", false⟩ => advance; return .call name (← parseArgs #[]).toList
+    | _ => return .sym name
   | some ⟨.op "(", _⟩ =>
     -- `(op)(a, b, …)`: an operator called as a function (Julia prints `*(a)` so)
     match ← peekAt 1, ← peekAt 2 with

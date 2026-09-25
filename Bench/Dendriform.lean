@@ -61,12 +61,11 @@ namespace Bench.DeMorgan
 
 open _root_.DeMorgan Bench
 
-/-- `∑ toNat ((p → q) ↔ ((p ∧ q) ∨ ¬p))` over pairs of 64-row columns. The column is
-converted through `UInt64` (`Nat.toFloat` of a value `≥ 2^63` takes ~8 µs, which would swamp
-the formula). -/
+/-- `∑ Float64(((p → q) ↔ ((p ∧ q) ∨ ¬p)).p)` over pairs of 64-row columns. The column word
+is converted with `UInt64.toFloat` (Julia `Float64(::UInt64)`); going through `Nat` would
+allocate a bignum for every value `≥ 2^63`. -/
 def formulaSum (ps : Array (TruthValues 6 × TruthValues 6)) : Float :=
-  ps.foldl (fun acc (p, q) =>
-    acc + ((p.imp q).iff ((p.and q).or p.not)).toNat.toUInt64.toFloat) 0
+  ps.foldl (fun acc (p, q) => acc + ((p.imp q).iff ((p.and q).or p.not)).bits.toFloat) 0
 
 /-- The table of `((p ∧ q) → (r ∨ ¬s)) ↔ (¬(p ∧ q) ∨ r)`; returns the expression's name. -/
 def table4 (vs : Array (TruthTable 4)) : String :=

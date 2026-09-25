@@ -17,9 +17,12 @@ the oracle bit for bit:
 * integer powers with the lowering Julia applies to literal exponents (`literal_pow`,
   intfuncs.jl:465-487) and `power_by_squaring` (intfuncs.jl:394-438);
 * `abs` (correctly rounded `hypot`), `abs2`, `angle`, `exp`, `sin`, `cos`, `sinh`, `cosh`,
-  `log`, `sqrt` (complex.jl:523-714, 887-981). The real kernels they call (`sin`, `cosh`,
-  `atan2`, …) are the platform libm's, which may differ from Julia's own implementations in
-  the last bit; tests put these in a tolerance tier.
+  `log`, `sqrt` (complex.jl:523-714, 887-981). `hypot` and `atan2` (so `abs` and `angle`, the
+  default colouring) are JuliaBase's ports of Julia's own; the other real kernels (`sin`,
+  `cos`, `exp`, `cosh`, …) are the platform libm's, which may differ from Julia's in the last
+  bit, and tests put maps that call them in a tolerance tier;
+* `z ^ w` and `z ^ p` for complex and real non-integer exponents (Julia's `_cpow`, through
+  `JuliaBase.ComplexF64.pow`), as the wiki's `z^(4.0+3.0im)` maps need.
 
 Everything is `@[inline]` so that a map written as a lambda over `C64` specializes into the
 escape-time kernel with its `Complex` constructors cancelled (no allocation per iteration).
@@ -180,7 +183,7 @@ instance : HDiv Float C64 C64 := ⟨realDiv⟩
 @[inline] def abs (z : C64) : Float := F64.hypot z.re z.im
 
 /-- Julia `angle(z)` = `atan(imag(z), real(z))` (complex.jl:641), in `[-π, π]`. -/
-@[inline] def angle (z : C64) : Float := Float.atan2 z.im z.re
+@[inline] def angle (z : C64) : Float := F64.atan2 z.im z.re
 
 /-- Julia `conj(z)`. -/
 @[inline] def conj (z : C64) : C64 := ⟨z.re, -z.im⟩
@@ -267,6 +270,14 @@ instance : NatPow C64 := ⟨natPow⟩
 
 /-- `z ^ n` with an integer exponent means Julia's literal power `z^n`. -/
 instance : HPow C64 Int C64 := ⟨literalPow⟩
+
+/-- Julia `z ^ p` for a complex exponent: `_cpow` (complex.jl:782, 864), e.g. the wiki map
+`z^(4.0+3.0im) - 1`. -/
+instance : HPow C64 C64 C64 := ⟨JuliaBase.ComplexF64.pow⟩
+
+/-- Julia `z ^ p` for a real exponent that is not an integer literal (complex.jl:865, 878:
+`_cpow(z, Float64(p))`). Natural-number literals keep the literal power (`NatPow`). -/
+instance : HPow C64 Float C64 := ⟨fun z p => JuliaBase.ComplexF64.pow z ⟨p, 0⟩⟩
 
 /-! ## Elementary functions (complex.jl) -/
 

@@ -81,7 +81,7 @@ def f64 (x : Float) : JExpr := .lit (.f64 x)
 /-- Julia `Base.operator_precedence` for the operators Wilkinson uses. -/
 def prec : String → Nat
   | "+" | "-" => 11
-  | "*" | "/" | "\\" => 12
+  | "*" | "/" | "\\" | "%" => 12
   | "//" => 13
   | "^" => 15
   | _ => 0

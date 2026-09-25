@@ -21,6 +21,7 @@ open Tests.Golden
 def run : IO (Nat × Nat) := do
   let suites : List (String × TestM Unit) :=
     [("Wilkinson.exprval", Exprval.suite), ("Wilkinson.reduce", ReduceForms.suite),
+     ("Wilkinson.factor", ReduceForms.factorSuite),
      ("Wilkinson.ranges", Ranges.suite), ("Wilkinson.kernels", Kernels.suite),
      ("Wilkinson.stieltjes", Stieltjes.suite), ("Wilkinson.comparison", Comparison.suite),
      ("Wilkinson.props", Props.suite)]

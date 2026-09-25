@@ -61,27 +61,27 @@ def powi (x : Float) (i : Nat) : Float := x ^ Float.ofNat i
 /-- Checks for one scalar map. -/
 def scalarMap (name : String) (f : Float → Float) (x0 : Float) (j : Json) (libm : Bool) : TestM Unit := do
   let rtol := if libm then 1e-12 else 0
-  limCheck s!"{name}.orbit" (orbit f x0 (d := dist)) (jGet j "orbit") rtol (if libm then 2 else 0)
+  limCheck s!"{name}.orbit" (orbit f x0) (jGet j "orbit") rtol (if libm then 2 else 0)
   for k in [1, 5, 10] do
-    limCheck s!"{name}.orbit{k}" (orbitN f x0 k dist) (jGet (jGet j "orbitN") (toString k)) rtol
+    limCheck s!"{name}.orbit{k}" (orbitN f x0 k) (jGet (jGet j "orbitN") (toString k)) rtol
   limCheck s!"{name}.fixedcycle10" ((FixedCycle.mk 10 f dist).run x0) (jGet j "fixedcycle10") rtol
-  let (_, errs) := orbitError f x0 (d := dist)
+  let (_, errs) := orbitError f x0
   let exp := jFloats (jGet j "orbiterror")
   if libm then
     check s!"{name}.orbiterror.len" (((errs.size : Int) - exp.size).natAbs ≤ 2)
   else
     check s!"{name}.orbiterror" (GoldenVal.close errs (jGet j "orbiterror") 0)
-  check s!"{name}.collect5" (GoldenVal.close (⟨(orbitN f x0 5 dist).collect⟩ : FloatArray) (jGet j "collect5") rtol)
+  check s!"{name}.collect5" (GoldenVal.close (⟨(orbitN f x0 5).collect⟩ : FloatArray) (jGet j "collect5") rtol)
 
 /-- Checks for one vector map. -/
 def vectorMap (name : String) (f : FloatArray → FloatArray) (x0 : FloatArray) (j : Json) : TestM Unit := do
-  limCheck s!"{name}.orbit" (orbit f x0 (d := dist)) (jGet j "orbit")
+  limCheck s!"{name}.orbit" (orbit f x0) (jGet j "orbit")
   for k in [1, 5, 10] do
-    limCheck s!"{name}.orbit{k}" (orbitN f x0 k dist) (jGet (jGet j "orbitN") (toString k))
+    limCheck s!"{name}.orbit{k}" (orbitN f x0 k) (jGet (jGet j "orbitN") (toString k))
   limCheck s!"{name}.fixedcycle10" ((FixedCycle.mk 10 f dist).run x0) (jGet j "fixedcycle10")
-  let (_, errs) := orbitError f x0 (d := dist)
+  let (_, errs) := orbitError f x0
   check s!"{name}.orbiterror" (GoldenVal.close errs (jGet j "orbiterror") 0)
-  let col := (orbitN f x0 5 dist).collect
+  let col := (orbitN f x0 5).collect
   let exp := jArr (jGet j "collect5")
   check s!"{name}.collect5" (col.size == exp.size && (List.range exp.size).all fun i =>
     GoldenVal.close col[i]! exp[i]! 0)
@@ -119,6 +119,24 @@ def countable (name : String) (f : Nat → Float) (j : Json) : TestM Unit := do
   limCheck s!"{name}.sum(sum)" S.sum (jGet j "sum_of_sum")
   limCheck s!"{name}.prod(sum)" S.prod (jGet j "prod_of_sum")
   limCheck s!"{name}.rerun" (S.rerun ⟨1, 0.5⟩) (jGet j "sum_rerun")
+  -- `^` and `/` (Julia's own `Float64 ^ Float64` via `JuliaBase.F64.pow`)
+  limCheck s!"{name}.sum^2" (Limit.opRight JuliaBase.F64.pow S (2 : Float)) (jGet j "sum_sq")
+  limCheck s!"{name}.2^sum" (Limit.opLeft JuliaBase.F64.pow (2 : Float) S) (jGet j "two_pow_sum")
+  limCheck s!"{name}.sum^2 (libm)" (S ^ (2 : Float)) (jGet j "sum_sq") 1e-15
+  limCheck s!"{name}.2^sum (libm)" ((2 : Float) ^ S) (jGet j "two_pow_sum") 1e-15
+  limCheck s!"{name}.sum/prod" (S / P) (jGet j "sum_div_prod")
+  limCheck s!"{name}.abs(sum)^prod" (Limit.op₂ JuliaBase.F64.pow (S.map Float.abs dist) P) (jGet j "abs_pow_prod")
+  limCheck s!"{name}.abs(sum)^prod (libm)" (S.map Float.abs dist ^ P) (jGet j "abs_pow_prod") 1e-15
+  limCheck s!"{name}.limsup3" (x.limsup 3) (jGet j "limsup3")
+  limCheck s!"{name}.liminf3" (x.liminf 3) (jGet j "liminf3")
+  check s!"{name}.2^x" (GoldenVal.close (⟨((x.map (JuliaBase.F64.pow 2 ·)).slice 1 12)⟩ : FloatArray)
+    (jGet j "pow2_terms") 0)
+  check s!"{name}.2^x (HPow)" (GoldenVal.close (⟨(((2 : Float) ^ x).slice 1 12)⟩ : FloatArray)
+    (jGet j "pow2_terms") 1e-15)
+  check s!"{name}.x/(x+1)" (GoldenVal.close (⟨((x / (x + (1 : Float))).slice 1 12)⟩ : FloatArray)
+    (jGet j "div_terms") 0)
+  check s!"{name}.abs(x)^x" (GoldenVal.close (⟨((CountableVector.zipWith JuliaBase.F64.pow (x.map Float.abs) x).slice 1 12)⟩ : FloatArray)
+    (jGet j "powx_terms") 0)
 
 /-- The suite. -/
 def suite : TestM Unit := do
@@ -135,7 +153,7 @@ def suite : TestM Unit := do
     | "contraction" => vectorMap name contraction ⟨#[1.0, 2.0]⟩ m
     | "halve_vec" => vectorMap name halve ⟨#[1.0, 2.0]⟩ m
     | other => check s!"unknown map {other}" false
-  limCheck "orbithold" (orbitHold (fun x y => (y + x / y) / 2) 2.0 6 dist) (jGet j "orbithold")
+  limCheck "orbithold" (orbitHold (fun x y => (y + x / y) / 2) 2.0 6) (jGet j "orbithold")
   for c in jArr (jGet j "countable") do
     let name := jStr (jGet c "name")
     match name with
@@ -154,5 +172,9 @@ def suite : TestM Unit := do
     (jGet s "product_0.3") 1e-15
   for n in [10, 20, 25] do
     limCheck s!"prod(Naturals({n}))" (prodNaturals n) (jGet s s!"prod_naturals_{n}")
+  limCheck "log(product(1+x^i))(0.5)" ((Product.log ⟨⟨fun x i => 1 + powi x i, 4⟩⟩).eval 0.5)
+    (jGet s "product_log_0.5")
+  limCheck "log(product(1+x^i))(0.3)" ((Product.log ⟨⟨fun x i => 1 + powi x i, 4⟩⟩).eval 0.3)
+    (jGet s "product_log_0.3") 1e-15
 
 end Tests.AbstractAnalysis.Limits

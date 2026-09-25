@@ -18,6 +18,8 @@ Effort: S < ½ day, M ≈ 1–2 days, L > 2 days.
 Lean paths are relative to the repo root. `Julia.*` means the port reproduces a documented Julia quirk under
 a `Julia` namespace and fixes it in the clean API.
 
+Updated 2026-09-25 by the misc parity work (branch `worktree-wf_4ea667ef-018-7`): statuses below reflect it.
+
 Performance references (Julia 1.13, this machine, measured for this audit, best of 5):
 
 | operation | Julia |
@@ -32,9 +34,8 @@ Performance references (Julia 1.13, this machine, measured for this audit, best 
 | AbstractAnalysis `isgroup(S5)` | 36 ms |
 | AbstractAnalysis `magma([2-cycle gens of S6])` | 2.5 s |
 
-The Lean side was **not** measured. The disk had only ~0.9 GiB free (`/System/Volumes/Data` 100% full), so no
-scratch build was possible. Fatou is the only package here with measured Lean-vs-Julia numbers (docs/PERF.md
-2026-09-24): Lean is at parity with a handwritten Julia kernel and 30–200× faster than Fatou.jl.
+The Lean side is measured by the benchmark harness (`lake exe bench dendriform demorgan wilkinson fatou`,
+docs/perf/latest.md) and, for AbstractAnalysis, by the temporary cases recorded in docs/PERF.md (2026-09-25).
 
 ---
 
@@ -44,8 +45,8 @@ scratch build was possible. Fatou is the only package here with measured Lean-vs
 |---|---|---|---|---|
 | `wedge` (generic function) | `AbstractLattices.HWedge.wedge` (`AbstractLattices/Basic.lean`) | DONE | typeclass replaces the generic function; static tests in `Tests/AbstractLattices.lean` | – |
 | `vee` (generic function) | `AbstractLattices.HVee.vee` (`AbstractLattices/Basic.lean`) | DONE | as above | – |
-| `∧` (`const ∧ = wedge`) | none in AbstractLattices. Grassmann's scoped `∧` (`Grassmann/Notation.lean:65`) maps to **`AbstractTensors.Wedge`** (`AbstractTensors/Ops.lean:110`), a different class | PARTIAL | In Julia there is one function shared by AbstractTensors→Grassmann, DeMorgan and Dendriform. In Lean `AbstractTensors.Wedge`/`Vee` are separate classes that never import AbstractLattices, so `∧`/`∨` cannot reach the Bool/TruthValues/TruthTable/Tree/PBTree instances. The AbstractLattices module doc claims the opposite (doc bug). | M |
-| `∨` (`const ∨ = vee`) | same as `∧` (`Grassmann/Notation.lean:67` → `AbstractTensors.Vee`) | PARTIAL | same split: Dendriform graft `HVee Tree` and DeMorgan `HVee` have no infix anywhere | (same fix) |
+| `∧` (`const ∧ = wedge`) | scoped `∧` in `DeMorgan` (`Connectives.and`) and `Dendriform` (`Graft`); Grassmann's scoped `∧` (`Grassmann/Notation.lean:65`) maps to **`AbstractTensors.Wedge`** (`AbstractTensors/Ops.lean:110`) | PARTIAL | each package now has the Julia infix under `open scoped`, but there is still no single `∧` shared with AbstractTensors (unifying `AbstractTensors.Wedge`/`Vee` with `AbstractLattices.HWedge`/`HVee` is outside the misc ownership: integrator request). The AbstractLattices module doc still claims the opposite (doc bug) | M |
+| `∨` (`const ∨ = vee`) | scoped `∨` in `DeMorgan` and `Dendriform` (graft), Grassmann's → `AbstractTensors.Vee` | PARTIAL | as `∧` | (same fix) |
 | `dist` | `AbstractLattices.Dist.dist` | DONE | stub class, as in Julia (no methods) | – |
 | `wedge(x)`, `vee(x)` unary identity | `wedge₁`, `vee₁`; folds `wedgeAll`, `veeAll` | DONE | – | – |
 | `wedge(::Bool,::Bool)`, `vee(::Bool,::Bool)` | `instance HWedge Bool`, `HVee Bool` + `LawfulDistribLattice Bool` | DONE | static `decide` tests | – |
@@ -70,12 +71,12 @@ scratch build was possible. Fatou is the only package here with measured Lean-vs
 
 | Julia symbol | Lean name(s) + file | status | gap description | effort |
 |---|---|---|---|---|
-| `TruthValues{N}` | `DeMorgan.TruthValues N` (`DeMorgan/TruthValues.lean`, `BitVec (2^N)`, any N) | DONE | oracle `truthvalues.json`; laws by `bv_decide`/ext | – |
+| `TruthValues{N}` | `DeMorgan.TruthValues N` (`DeMorgan/TruthValues.lean`): one `UInt64` word (unboxed) and a masking invariant, `rows N = 2^min(N,6)` as Julia's `UInt64` storage | DONE | oracle `truthvalues.json`; laws per row; `Formula.isTautology_iff` for `N ≤ 6`; `select` by word literals (`@[csimp]`) | – |
 | `TruthValues()`, `TruthValues(p::Bool...)` | `TruthValues.bot`, `TruthValues.ofBools`, `ofNat`, `toNat` | DONE | – | – |
-| `⟂`, `⊥` (N-polymorphic `TruthValues{0}(0)`) | `TruthValues.bot` (implicit N) | PARTIAL | no `⊥`/`⟂` notation; users write `TruthValues.bot` (oracle-checked lifting) | S |
-| `Tautology`, `⊤` | `TruthValues.top` | PARTIAL | no `⊤` notation; the singleton `Tautology` type is subsumed by `top` (fine) | S (with ⊥) |
+| `⟂`, `⊥` (N-polymorphic `TruthValues{0}(0)`) | `TruthValues.bot`, scoped `⊥`/`⟂` (`DeMorgan/TruthTable.lean`) | DONE | `#guard`s in `Tests/DeMorgan.lean` | – |
+| `Tautology`, `⊤` | `TruthValues.top`, scoped `⊤` | DONE | the singleton `Tautology` type is subsumed by `top` | – |
 | `(::TruthValues{0})(t...)`, `(::Tautology)(t...)` callables | – | SKIP | constant functions that only exist for Julia dispatch; `bot`/`top` cover them | – |
-| `wedge`/`∧`, `vee`/`∨` on TruthValues | `HWedge`/`HVee` instances, `and`/`or`, `&&&`/`\|\|\|` | PARTIAL | methods DONE (oracle). The **infix `∧`/`∨`** is unavailable (see AbstractLattices row). README example 2 `((p-->q)∧(q-->r))-->(p-->r)` has to be written with `&&&` (`Tests/DeMorgan.lean:67`) | (AL fix) |
+| `wedge`/`∧`, `vee`/`∨` on TruthValues | `HWedge`/`HVee` instances, `Connectives.and`/`or`, scoped `∧`/`∨`, `&&&`/`\|\|\|` | DONE | oracle; README table 2 `((p-->q)∧(q-->r))-->(p-->r)` is written with `∧` (`Tests/DeMorgan.lean`) | – |
 | `&`, `\|` | `AndOp`/`OrOp` (`&&&`, `\|\|\|`) | DONE | – | – |
 | `!`/`¬` | `TruthValues.not`, scoped prefix `¬` (`DeMorgan/TruthTable.lean:41`), `Complement` | DONE | – | – |
 | `-->`/`→`, `<--`/`←`, `<-->`/`↔` | `imp`/`rimp`/`iff`, scoped `⇒ ⇐ ⇔` | DONE | tokens renamed: `-->` starts a Lean comment and `→ ← ↔` are core tokens; justified | – |
@@ -87,7 +88,7 @@ scratch build was possible. Fatou is the only package here with measured Lean-vs
 | `parstring`, `select`, `tautology`/mask (internal) | `parstring`, `select`, `projections`, `mask` | DONE | oracle `parstring.json` | – |
 | binary/unary ops on TruthTable | `and or imp rimp iff not` + instances, `ofFormula`, `ofFormulaClean` | DONE | – | – |
 | `pretty_table`/`show(::TruthTable)` | `TruthTable.render`, `Repr` | DONE | both README tables reproduced verbatim (`#guard`) | – |
-| `@truthtable p q` (binds REPL globals) | `truthtable p q in e` term macro (`DeMorgan/TruthTable.lean:308`) | PARTIAL | term-scoped only; there is no command form that binds the projections as top-level defs the way the README session does | S |
+| `@truthtable p q` (binds REPL globals) | command `truthtable p q` (top-level defs), term form `truthtable p q in e` (`DeMorgan/TruthTable.lean`) | DONE | README session reproduced (`Tests/DeMorgan.lean`, namespace `Readme`) | – |
 | (Lean extra) `Formula`, `isTautology_iff` | `DeMorgan/TruthValues.lean` | DONE | soundness/completeness of the bit-parallel checker | – |
 
 ## 4. Dendriform.jl
@@ -100,17 +101,17 @@ scratch build was possible. Fatou is the only package here with measured Lean-vs
 | `GroveBin` (+ `ppos` Float16) | `GroveBin`, `ofGrove`, `ppos` (JuliaBase.Float16), `toGrove` (`Dendriform/Display.lean`) | DONE | oracle `display.json`, `float16.json` | – |
 | `==` (sorts in place) | `Grove.Equiv` (`≅`, perm), `Julia.eq` | DONE | pure (no mutation) | – |
 | `Cn` | `catalan` (`Dendriform/Tree.lean:274`) | DONE | – | – |
-| `∨`/`graft` | `Tree.graft`, `PBTree.graft`, `HVee` instances | PARTIAL | functions DONE (oracle); **no infix `∨`** (AbstractLattices split) | (AL fix) |
+| `∨`/`graft` | `Tree.graft`, `PBTree.graft`, `HVee` instances, scoped `∨` (`Graft` class) | DONE | oracle; `#guard`s | – |
 | `left`, `right` | `Tree.left`, `Tree.right`, `PBTree.split` | DONE | – | – |
 | `σ` | `Tree.σ`, `PBTree.σ`, `Grove.σ` | DONE | involution proven | – |
 | `over`/`/`, `under`/`\` | `Tree.over` (`Div`), `Tree.under` (`SDiff`), `PBTree.over` (`HDiv`), `PBTree.under` | DONE | `σ_over` proven | – |
 | `dashv`/`⊣`, `vdash`/`⊢` | `Tree.dashv/vdash`, `Grove.dashv/vdash` (scoped `⊣ ⊢`), `Julia.dashv/vdash` | DONE | axioms proven for all trees (`Dendriform/Axioms.lean`) | – |
 | `+`, `*` | `Tree.sum`, `Tree.mul`, `Grove` `HAdd`/`HMul` (degree-typed), `Julia.add/mul` | DONE | Julia row orders reproduced | – |
 | `∪` (+ `@info` dup count) | `Grove.union` (`Union`), `Grove.unionCount` | DONE | – | – |
-| `⋖`, `⋗` | `Tree.covers`, `Tree.coveredBy` (`Dendriform/Poset.lean`) | PARTIAL | functions DONE (oracle `poset.json`); no `⋖`/`⋗` notation | S |
-| `<`, `>`, `≤`, `≥` on trees (Tamari) | `Tree.tamariLt/Gt/Le/Ge` | PARTIAL | functions DONE (oracle, incl. README `[2,1,7,4,1,3,1] < [2,1,7,4,3,2,1]`); no `LT`/`LE` instances, so `a < b` does not parse on trees | S |
+| `⋖`, `⋗` | `Tree.covers`, `Tree.coveredBy`, scoped `⋖`/`⋗` (`Dendriform/Poset.lean`) | DONE | oracle `poset.json` | – |
+| `<`, `>`, `≤`, `≥` on trees (Tamari) | `LT`/`LE` instances (decidable) on `Tree`, `PBTree n`, `Grove n`; `Tree.tamariLt/Gt/Le/Ge` | DONE | README `[2,1,7,4,1,3,1] < [2,1,7,4,3,2,1]` as `tree![…] < tree![…]` | – |
 | `<`, `≤` on groves (index order) | `Grove.indexLt`, `indexLe` | DONE | – | – |
-| `between`/`⊴` | `Tree.betweenList`, `between` (PBTree→Grove) | PARTIAL | functions DONE; no `⊴` notation | S |
+| `between`/`⊴` | `Tree.betweenList`, `between`, scoped `⊴` | DONE | – | – |
 | `posetnext`, `posetprev` | `posetNext`, `posetPrev`, `nextList`, `prevList` | DONE | – | – |
 | `treecheck`, `grovecheck` | `treeCheck`, `groveCheck` (Tree validity is by construction) | DONE | – | – |
 | `treeindex` (tree/grove/d), `treeindexCn` | `Tree.treeIndex` (binary search), `Grove.treeIndices`, `treeIndexCn`, `treeIndexOfInteger` | DONE | – | – |
@@ -124,8 +125,8 @@ scratch build was possible. Fatou is the only package here with measured Lean-vs
 | `TreeInteger`, `TreeRational`, `ΘInt`, `ΘMax` (internal) | `treeInteger`, `treeRational`, `treeRationals`, `thetaInt`, `thetaMax` (closed form) | DONE | – | – |
 | `GroveError`, `CnInv`, `LeftInherited`, `RightInherited`, `PrimitiveTree` | `groveError`, `catalanInv?`, `leftInherited`, `rightInherited`, `isPrimitive` | DONE | – | – |
 | `intervals`, `intcomp`, `intcompt`, `intervals_full`, `print_*_bin` | `intervals`, `intcomp`, `intcompt`, `intervalsFull`, `printIntervalBin/IntcompBin/IntcomptBin` | DONE | oracle `intervals.json` | – |
-| vector-as-tree coercions (`[1,2]∪[2,1]`, promote rules) | `Tree.ofName?`/`Grove.ofNames?` (Option) | PARTIAL | README `Grove(3,7) ⊣ [1,2]∪[2,1]` is expressible and oracle-tested, but verbose (Option plumbing); there is no checked literal syntax | S |
-| performance (Julia refs above) | `Tests/Dendriform.lean` (no bench) | IN_PROGRESS | no Lean timing; Bench/Harness in flight | – |
+| vector-as-tree coercions (`[1,2]∪[2,1]`, promote rules) | `tree![…]`, `grove![[…],…]` literals checked at elaboration (`by decide`), `PBTree.ofName`, `Grove.ofNames`; `ToString Tree` | DONE | README `Grove(3,7) ⊣ [1,2]∪[2,1]` written with literals | – |
+| performance (Julia refs above) | `Bench/Dendriform.lean` (`dendriform`, `demorgan` suites), Julia twins `oracle/bench/dendriform.jl`, `demorgan.jl` | DONE | DeMorgan `tv_formula_N6` went from 1556× to 1.7× Julia with the `UInt64` storage (docs/PERF.md) | – |
 
 ## 5. AbstractAnalysis.jl
 
@@ -133,18 +134,18 @@ scratch build was possible. Fatou is the only package here with measured Lean-vs
 |---|---|---|---|---|
 | `AbstractCountable`, `CountableFunction`, `AbstractPermutation` | – | SKIP | abstract dispatch supertypes; Lean uses concrete structures and classes | – |
 | `CountableArray`, `CountableVector`, `CountableMatrix` | `CountableArray α N`, `CountableVector α`, rank-2 `CountableArray α 2` (`AbstractAnalysis/Countable.lean`) | DONE | oracle `sets.json`/`limits.json` | – |
-| `CountableArray(n...)` index-tuple grid | `CountableArray.grid n m` | PARTIAL | rank 2 only (Julia takes any rank) | S |
+| `CountableArray(n...)` index-tuple grid | `CountableArray.grid n m`, any rank `CountableArray.gridN` | DONE | – | – |
 | `Ones`, `Zeros`, `Naturals`, `Integers` | `Ones`, `Zeros`, `Naturals`, `Integers` (`Countable.lean`, `Sets.lean`) | DONE | – | – |
 | `counter`, `resize!(::CountableVector)`, call `(x)(n)` | `.f`, `withLen` | DONE | pure | – |
 | `map`/`broadcast`, unary ops (`inv abs exp log sin …`) on countables | `CountableVector.map`, `CountableArray.map` | DONE | named unary methods become `map f`; oracle | – |
-| arithmetic `⊙ ∈ {+ - * / ^}` on countables | `Add/Sub/Mul/Div/Neg`, `HAdd/HSub/HMul/HDiv` with scalars, `HPow (CountableVector) β` | PARTIAL | missing `Number ^ Countable`; `CountableArray` has only `+ - *` | S |
+| arithmetic `⊙ ∈ {+ - * / ^}` on countables | `CountableVector`/`CountableArray`: all five pointwise, with a number on either side, array⊙array on the pointwise minimum size | DONE | oracle `2^x`, `x/(x+1)`, `abs(x)^x` (`limits.json`) | – |
 | `dot` | `CountableVector.dot` (a `Limit`) | DONE | oracle | – |
 | `countabletuple`, `countableproduct` | `countableTuple`, `countableProduct`, `countableProduct3` | DONE | – | – |
-| `FunctionArray`, `FunctionVector`, `FunctionMatrix` | `FunctionVector β α` (`term`, `eval`, `withLen`, `map`, `powers`) | PARTIAL | only rank 1: no `FunctionMatrix`/N-d `FunctionArray` (Julia's needs `Fix{3}`); arithmetic has `+ *` and scalar `*` only (no `- / ^`) | S |
+| `FunctionArray`, `FunctionVector`, `FunctionMatrix` | `FunctionVector β α`; rank-N `FunctionArray β α N`, `FunctionMatrix` (`eval`, `term`, `map`, `zipWith`); `+ - * / ^` and number⊙family | DONE | Julia's `FunctionMatrix(f, n, m)` size quirk (#24) not reproduced | – |
 | `functiontuple`, `functionproduct`, `mapmap` | – | SKIP | broken in Julia (undefined variables, quirk #23); no defined semantics to port | – |
 | `Series` (+ `dot(c, f)`, call, `resize!`) | `Series`, `Series.eval`, `FunctionVector.series` | DONE | oracle `series_pow_*` | – |
-| `Product` (+ call, `log(::Product)`, `resize!`) | `Product`, `Product.eval`, `FunctionVector.product` | PARTIAL | `log(::Product) = sum(log(f))` missing | S |
-| `SequenceArray`, `SequenceVector`, `SequenceMatrix` | `SequenceArray σ S` over `LastDimStorage` (`Array`, `FloatArray`, `SlabArray`), `SequenceVector` (`AbstractAnalysis/Sequence.lean`) | PARTIAL | no `SequenceMatrix` alias; `SlabArray` (the multi-dim/ElasticArray storage Cartan needs) is **untested** | S |
+| `Product` (+ call, `log(::Product)`, `resize!`) | `Product`, `Product.eval`, `Product.log` (Julia's `log`), `FunctionVector.product` | DONE | oracle `product_log_*` | – |
+| `SequenceArray`, `SequenceVector`, `SequenceMatrix` | `SequenceArray σ S` over `LastDimStorage` (`Array`, `FloatArray`, `SlabArray`), `SequenceVector`, `SequenceMatrix` (`AbstractAnalysis/Sequence.lean`) | DONE | `SlabArray` property-tested (`Tests/AbstractAnalysis/Props.lean`) | – |
 | `extract`, `assign!`, `resize_lastdim!` | `LastDimStorage.extract`, `.push`, `SequenceArray.resize/get/take` | DONE | – | – |
 | `cumsum`, `cumprod` (countables) | `CountableVector.cumsum/cumprod` (Julia pairwise accumulate) | DONE | oracle | – |
 | `cumsum`/`cumprod(::Limit)` | – | SKIP | broken in Julia (undefined `D`) | – |
@@ -155,18 +156,18 @@ scratch build was possible. Fatou is the only package here with measured Lean-vs
 | `ElegantPairs0/1`, `ElegantPairs`, `elegantpair`, `elegantproduct`, `elegantinversion` | `ElegantPairs0/1`, `elegantUnpair`, `elegantUnpairFrom`, `elegantPair` (inverse proofs), `elegantProduct` | DONE | – | – |
 | `GaussianNaturals/Integers/Rationals` | same | DONE | – | – |
 | `PrimeIntegers`, `PrimeCache`, `prime` (PrimesExt) | same (`Sets.lean`) | DONE | – | – |
-| ModsExt (`gequal`/`isinvertible` for `AbstractMod`) | – | MISSING | no `ApproxEq (Fin n)` instance or modular `Law` helpers (`+`/`*` mod n with inverse) | S |
+| ModsExt (`gequal`/`isinvertible` for `AbstractMod`) | `ApproxEq (Fin n)` (exact), `Law.addMod`, `Law.mulMod`, `invMod` | DONE | `U(7)`, `ℤ₁₂` checks; Mods.jl is not in the oracle env | – |
 | `Semimagma`, `grouplaw`, `groupinverse` | `Semimagma T L`, `Law` (`op`, `inv`), `Law.mul`, `Law.add` (`AbstractAnalysis/Magma.lean`) | DONE | oracle `groups.json` | – |
 | `order(G)`, `abs(G)`, `order(n,f,g)` | `Semimagma.order`, `(cyclic p).order` | DONE | – | – |
-| `orders(G)` | – | MISSING | per-element cyclic order vector | S |
-| `iseven(G)`, `isodd(G)` (Semimagma) | – | MISSING | only `Perm.isEven` exists (no `isOdd`) | S |
+| `orders(G)` | `Semimagma.orders` | DONE | oracle (Gaussian units, `ℤ_n`); for permutations Julia throws (`group(p.v)`), the port gives the intended orders | – |
+| `iseven(G)`, `isodd(G)` (Semimagma) | `Semimagma.isEven/isOdd` over `HasParity` (Int, Nat, Perm) | DONE | oracle `parity` | – |
 | `==`, `∈`, `issubset` | `setEq` (`BEq`), `mem`, `subset` | DONE | – | – |
 | `compose`, `∘` | `Semimagma.compose`, `composeLeft`, `composeRight` | DONE | – | – |
-| `*`, `+` with Number/element/Semimagma | `composeLeft g H (F := (· * ·))` | PARTIAL | no `HMul`/`HAdd` instances, so `Complex(2,0)*m` must be spelled out | S |
+| `*`, `+` with Number/element/Semimagma | `HMul`/`HAdd` instances (element on either side, plain operation) | DONE | oracle `times2`/`plus1` | – |
 | `cayley` | `Semimagma.cayley` | DONE | – | – |
 | `ismagma`, `isassociative`, `isinvertible`, `issemigroup`, `isgroup`, `isabelian` | `isMagma`, `isAssociative`, `isInvertible`, `isSemigroup`, `isGroup`, `isAbelian` | DONE | kernel-checked on S3/S4 | – |
 | `ismonoid` (broken in Julia) | `isMonoid G e` (explicit identity) | DONE | intended semantics | – |
-| `iscategory`, `issemicategory`, `isgroupoid` | – | MISSING | trivial aliases (`= isMonoid`, `= isSemigroup`, `= isGroup`) | S |
+| `iscategory`, `issemicategory`, `isgroupoid` | `isCategory G e`, `isSemicategory`, `isGroupoid` | DONE | `iscategory` takes the identity (Julia's is broken, quirk #17) | – |
 | `iscyclic` | `isCyclic` (correct), `Julia.isCyclic` (first-two quirk) | DONE | – | – |
 | `magma` (element / vector / closure) | `cyclic`, `magma`, `closeArray` | DONE | – | – |
 | `group` | `group`, `groupOf` | DONE | – | – |
@@ -174,31 +175,31 @@ scratch build was possible. Fatou is the only package here with measured Lean-vs
 | `center` (buggy), `centralizer`, `isnormal`, `normalizer`, `commutator` | `center` (correct) + `Julia.center`, `centralizer`, `isNormal`, `normalizer`, `commutator` | DONE | – | – |
 | `leftcosets`, `rightcosets`, `G / N` | clean `leftCosets/rightCosets`, `Julia.leftCosets/rightCosets/quotient` | DONE | – | – |
 | `unityroots` | `unityRoots` | DONE | oracle (tolerance) | – |
-| `Permutation` (+ `p[i]`, `p(i)`, `p(q)`, `inv`, `^`, `/`, `\`, `one`, `isone`, `iseven`) | `Perm N` (bijectivity carried in the type), `apply`, `mul`, `inv`, `zpow`, `div`, `ldiv`, `one`, `isEven`, group laws proven (`AbstractAnalysis/Perm.lean`) | DONE | `isodd` alias missing (see above) | – |
+| `Permutation` (+ `p[i]`, `p(i)`, `p(q)`, `inv`, `^`, `/`, `\`, `one`, `isone`, `iseven`) | `Perm N` (bijectivity carried in the type), `apply`, `mul`, `inv`, `zpow`, `div`, `ldiv`, `one`, `isEven`, `isOdd`, `Hashable`, group laws proven (`AbstractAnalysis/Perm.lean`) | DONE | – | – |
 | `Cycle{N}` | `Cycle N` (`eval`, `toPerm`, `ofList`, `toList`, `transpositionCount`), `Julia.cycleEq` | DONE | – | – |
-| `Transposition{N}` | – | MISSING | alias for a 2-cycle | S |
-| `CycleProduct`, `decompose`, `order(::CycleProduct)` | `Perm.cycles : List (List (Fin N))`, `cycleProduct : List (Cycle N) → Perm N` | PARTIAL | no `CycleProduct` type and no `decompose : Perm N → Cycle ⊕ CycleProduct` (Julia returns a `Cycle` for one cycle); decomposition is only available as raw lists | S |
+| `Transposition{N}` | `Transposition N` (2-cycle subtype), `Transposition.mk?` | DONE | – | – |
+| `CycleProduct`, `decompose`, `order(::CycleProduct)` | `CycleProduct N` (`toPerm`, `transpositionCount`, `sign`, Julia show incl. `Int64[]`), `Perm.decompose : Cycle N ⊕ CycleProduct N`, `Semimagma.decompose` | DONE | oracle `decompose` show strings for all of S₄ | – |
 | `order(::Perm/::Cycle)`, `levicivita` | `transpositionCount`, `sign` (homomorphism kernel-checked on S3/S4), `groupOrder` | DONE | – | – |
 | `isdisjoint(::Cycle,::Cycle)` | `Cycle.isDisjoint` | DONE | – | – |
-| `isabelian(::Cycle,::Cycle)` | – | MISSING | "disjoint or equal" predicate | S |
-| `commutator(::Perm,::Perm)` (broken in Julia) | – | MISSING | intended element commutator `g⁻¹h⁻¹gh` | S |
+| `isabelian(::Cycle,::Cycle)` | `Cycle.isAbelian` (decides commutation), `Julia.cycleIsAbelian` (disjoint-or-quirk-#21-equal) | DONE | Julia's accepts `(1,2,3,4)`/`(1,2,4,3)` | – |
+| `commutator(::Perm,::Perm)` (broken in Julia) | `Perm.commutator g h = g⁻¹h⁻¹gh` | DONE | intended semantics | – |
 | `SymmetricGroup`, `AlternatingGroup`, `DihedralGroup` (broken in Julia) | same names (Dihedral = intended) | DONE | – | – |
 | `@metric`, `@norm` | `Metric`, `Normed` classes (instances for Float, Complex, FloatArray, Array) (`AbstractAnalysis/Metric.lean`) | DONE | macro-generated methods become instances | – |
 | `supnorm`, `infnorm`, `maxabs`, `minabs` | same | DONE | oracle `metric.json` | – |
 | `residual`, `residuals`, `lipschitz`, `residualproduct` | `Limit.residual`, `residuals`, `CountableVector.residuals`, `lipschitz`, `residualProduct` | DONE | – | – |
 | `isconverging`, `isdiverging`, `iscauchy`, `ismonotonic`, `isincreasing`, `isdecreasing` | `isConverging`, `isDiverging`, `isCauchy`, `isMonotonic`, `isIncreasing`, `isDecreasing`; `isBounded` + `Julia.isBounded` | DONE | – | – |
 | `supseq`, `infseq` (suffix / windowed) | `supseq`, `infseq`, `CountableVector.supseq/infseq` | DONE | – | – |
-| `limsup`, `liminf` | `limsup`, `liminf` (Array, `m`) | PARTIAL | missing the `AbstractCountable` methods (`limit(supseq(x,m), args...)`, which return a `Limit`) and the 3-arg `(x,m,n)` form | S |
+| `limsup`, `liminf` | Array `(x, m)`, `limsupAt/liminfAt (x, m, n)`, `CountableVector.limsup/liminf` (a `Limit`) | DONE | oracle | – |
 | `Limit` (+ `first/last/initial/final/length/residual`, call, `show`) | `Limit S V`, `Indexed`, `Derived`, `first`, `last`, `length`, `residual`, `rerun`, `toJulia`/`ToString` (`AbstractAnalysis/Limit.lean`) | DONE | oracle show strings incl. `n → 100002` | – |
 | `Limit(v0,n,F,D)`, `L[i]`, `L[ϵ]`, `collect(L)` | `ofIterate`/`iterate`, `seek`, `limitEps`, `collect`, `collectSeq` | DONE | – | – |
 | `map(f,L)`, unary ops on Limit | `Limit.map` | DONE | – | – |
-| Limit arithmetic `⊙ ∈ {+ - * / ^}` | `HAdd/HSub/HMul/HDiv` scalar⊙L, L⊙scalar; `L+L`, `L*L`, `L-L` | PARTIAL | missing `^` (scalar and Limit) and `L/L` | S |
+| Limit arithmetic `⊙ ∈ {+ - * / ^}` | all five with a number on either side and `L⊙L` (`opLeft`/`opRight`/`op₂`) | DONE | oracle `sum^2`, `2^sum`, `sum/prod`, `abs(sum)^prod` (bit-exact with Julia's `pow`) | – |
 | `sum`, `prod` (countable and Limit) | `CountableVector.sum/prod`, `Limit.sum/prod`, `prodNaturals` | DONE | oracle | – |
 | `limit` (Limit/countable/n/ϵ, SequenceArray) | `CountableVector.limit/limitEps`, `SequenceArray.limit`, `Limit.limitEps` | DONE | – | – |
-| `orbit`, `orbiterror`, `orbithold`, `FixedCycle` | `orbit`, `orbitN`, `orbitError`, `orbitNTrace`, `orbitHold`, `FixedCycle.run/withLen` | PARTIAL | functions DONE (oracle). The metric has no default: Julia's `orbit(cos, 1.0)` defaults `d = supnorm`, while Lean requires `(d := …)` on every call (`Tests/AbstractAnalysis/Limits.lean:64`). Cartan-facing | S |
+| `orbit`, `orbiterror`, `orbithold`, `FixedCycle` | `orbit`, `orbitN`, `orbitError`, `orbitNTrace`, `orbitHold`, `FixedCycle.run/withLen` | DONE | the metric defaults to the state's `Metric.dist` (Julia's `supnorm`) | – |
 | `derivative`, `derivative2` | same (Float) | DONE | oracle | – |
-| performance: `Semimagma` membership | linear `ApproxEq` scan (`Magma.lean:76-83`) | PARTIAL | same O(n) `∈` as Julia (2.5 s for a 720-element closure); the port notes (§8.6) planned a `HashSet` side index for exact types, not done | S |
-| performance: `Limit` loops (`sum(x)[1e-10]` 0.13 ms in Julia) | `Limit (Indexed Float) Float` | IN_PROGRESS | unmeasured; risk of a boxed `Indexed` per step; Bench/Harness in flight | – |
+| performance: `Semimagma` membership | `magmaHashed`/`groupHashed` (hash side index), `isGroupHashed` (index Cayley table), `@[csimp]` allocation-free scans | DONE | S₆ closure 64 ms (Julia 2.59 s, linear port 3.17 s); `isgroup(S₅)` 4.4 ms (Julia 78 ms; generic 336 ms) | – |
+| performance: `Limit` loops (`sum(x)[1e-10]` 0.13 ms in Julia) | `Limit (Indexed Float) Float`, `@[inline]` `orbit`/`sum`/`limitEps`, cell-reusing `untilConverged` | DONE | measured (docs/PERF.md 2026-09-25): `orbit(cos, 1.0)` 0.95 µs (Julia 0.75 µs); `sum(x)[1e-10]` 0.58 ms (4.5×; one boxed `Float` per step) with the map converting through `UInt64`, 4.3 ms when the map uses `Float.ofNat` | – |
 
 ## 6. Wilkinson.jl (exports `PolynomialAnalysis PolynomialComparison plot factor expand horner polyfactors polyexpand polyhorner`) + SyntaxTree parts
 
@@ -206,12 +207,13 @@ scratch build was possible. Fatou is the only package here with measured Lean-vs
 |---|---|---|---|---|
 | Julia `Expr` (input language) | `JExpr`, `Lit`, `jl⟪…⟫` quotation, `JExpr.parse`, `toJulia` (`Wilkinson/Expr.lean`, `Parse.lean`) | DONE | – | – |
 | `PolynomialAnalysis` (+ print) | `PolynomialAnalysis`, `.make`, `.toJulia` (`Wilkinson/Analysis.lean`) | DONE | oracle `comparison.json`; REDUCE 2-D display → infix (justified) | – |
-| `PolynomialComparison` (+ print) | `PolynomialComparison.make/ofForms/ofReduce`, `.toJulia`, `labels` | PARTIAL | DONE except the `"r"` (rounded factor) form, which is never produced (`rxtra = false`) | (see `factor`) |
+| `PolynomialComparison` (+ print) | `PolynomialComparison.make/ofForms/ofReduce`, `.toJulia`, `labels` | PARTIAL | the `"r"` form is analysed bit-exactly from REDUCE's forms (`ofForms`, 3 golden cases with `rxtra`), but the REDUCE emulation cannot produce REDUCE's rounded factorization (next row), so `ofReduce` never has `rxtra` | (rounded) |
 | `plot(::PolynomialComparison)` | `PolynomialComparison.plotData` (root); figure in `gallery/Gallery/Wilkinson.lean` | DONE | rendering lives in the gallery package (LeanPlot) | – |
 | `expand` (REDUCE) | `Wilkinson/Reduce.lean` `expand` (ℚ[x], REDUCE shapes) | DONE | oracle `reduce.json` | – |
 | `horner` (REDUCE) | `horner` | DONE | oracle | – |
-| `factor` (REDUCE) | `factor` (`Wilkinson/Poly.lean`: rational roots + bounded Kronecker) | PARTIAL | no full Zassenhaus (factors found only by a full search are missed); `factor` under `on rounded` (numeric complex roots) is **missing** | M |
-| `polyfactors`, `polyexpand`, `polyhorner` | same names (`Wilkinson/Reduce.lean`) | PARTIAL | output goes through the canonical expand/horner shapes; the `Reduce.Algebra` intermediate shapes are not reproduced (documented) | S |
+| `factor` (REDUCE) | `factor` (`Wilkinson/Poly.lean`: rational roots, then Berlekamp–Zassenhaus in `Wilkinson/Zassenhaus.lean`), REDUCE's factor order (`ZPoly.reduceBefore`, its `ordp`) | DONE | oracle `factor.json` (85 REDUCE factorizations: Swinnerton-Dyer, cyclotomic, random products to degree 16) | – |
+| `factor` under `on rounded` | – | MISSING | not reproducible from the polynomial: REDUCE splits over `ℂ` with 12-digit roots, keeps trial roots as integers, and orders the factors by its internal bigfloat representation (probed: neither by value nor by exact factor) | L |
+| `polyfactors`, `polyexpand`, `polyhorner` | same names; `Reduce.Alg` replays each `Reduce.Algebra` step (`off exp`, `mkprod` with REDUCE's `tmsf`) | DONE | oracle `reduce.json` + `algebra.json` (603 shapes, identical trees) | – |
 | `floatset`, `geonorm`, `Ω`, `stieltjes`, `simpson`, `exacterr`, `renormalize!`, `errval`, `optimal` | `floatset`/`floatset32`/`logset`, `geonorm`, `Ω`, `stieltjes`, `simpson`, `exacterr`, `renormalize`, `errval`, `optimal` | DONE | bit-exact (Julia exp/log kernels, 256-bit BigFloat); oracle `ranges/kernels/stieltjes.json` | – |
 | `NumericalData` (abstract) | – | SKIP | abstract supertype only | – |
 | `testpoly`, `tests` | `testpoly`, `Reduce.tests` | DONE | allocation tie-break dropped (nondeterministic in Julia) | – |
@@ -219,7 +221,7 @@ scratch build was possible. Fatou is the only package here with measured Lean-vs
 | ST `callcount`, `sub`, `abs`, `alg`, `expravg`, `exprdev`, `exprval` | same (`Wilkinson/SyntaxTree.lean`) | DONE | oracle `exprval.json` | – |
 | ST `genfun`/`genlatest`/`@genfun` | `SyntaxTree.eval` (interpreter over `JNum`) | DONE | eval-and-invokelatest becomes an interpreter | – |
 | ST `linefilter!` | – | SKIP | strips `LineNumberNode`s, which `JExpr` does not have | – |
-| performance (3000-point Stieltjes × forms, 256-bit BigFloat) | – | IN_PROGRESS | Julia cannot load Wilkinson here (PyPlot); unmeasured on both sides; Bench/Harness in flight | – |
+| performance (3000-point Stieltjes × forms, 256-bit BigFloat) | `Bench/Wilkinson.lean` (`wilkinson` suite), twin `oracle/bench/wilkinson.jl` | DONE | 0.36–0.88× Julia against Wilkinson's per-call code generation; Julia with the function precompiled (`*_nocodegen`) is 3–17× faster than Lean's AST interpreter (follow-up: compile the AST) | – |
 
 ## 7. Fatou.jl (exports `fatou juliafill mandelbrot newton basin orbit plot`)
 
@@ -228,11 +230,11 @@ scratch build was possible. Fatou is the only package here with measured Lean-vs
 | `ComplexBundle` | – | SKIP | abstract dispatch type | – |
 | `Rectangle` (∂ scalar/2-vec/4-vec, UInt16 n) | `Bounds` (`square`, `interval`, explicit), `Rectangle` (`rows` ties-to-even, `cols`, `check`) (`Fatou/Grid.lean`) | DONE | oracle `grids.json` (bit-exact axes) | – |
 | `ComplexRectangle`, `ComplexRectangle(Ω::Matrix)` | `Plane rows cols`, `Plane.ofFn`, `Rectangle.grid`, `Plane.pixelBounds` | DONE | – | – |
-| `Define` (fields/kw) | `Spec`, `Define`, `Options`, `Number` (`Fatou/Define.lean`) | PARTIAL | the map is a Lean closure and the title text is a hand-written `label`; Julia takes one `Expr` and derives F, Q, the title and (Newton) the derivative from it (see the Newton/basin rows) | M |
+| `Define` (fields/kw) | `Spec`, `Define`, `Options`, `Number` (`Fatou/Define.lean`); `Symbolic`, `juliafill!`/`mandelbrot!`/`newton!` (`Fatou/Symbolic.lean`) | DONE | one Julia expression string gives F, Q, the Julia-typed map (compiled at elaboration), the title and the LaTeX; oracle `symbolic.json` (43 README/wiki expressions) | – |
 | `juliafill` | `juliafill` | DONE | oracle catalog (`Tests/Fatou/Catalog.lean`, README R2 at full resolution) | – |
-| `juliafill(E; newt=true, m)` (undocumented kw) | – (use `newton`) | PARTIAL | the mode is not exposed from `juliafill`; `newton` has different defaults (ϵ=0.01, m=1) | S |
-| `mandelbrot` | `mandelbrot` (optional `df` for the `m ≠ 0` Newton switch) | PARTIAL | Julia switches to Newton when `m ≠ 0` using REDUCE's derivative; Lean needs a hand-supplied `df` | (Newton fix) |
-| `newton` | `newton f df (map := …)` | PARTIAL | Julia derives `df` **and REDUCE's factored Newton map** symbolically. Lean needs `df` by hand, and bit-exact Julia rasters additionally need REDUCE's factored map passed as `map` (the unfactored `newtonMap` rounds differently). README R4/R5 are reproduced only because the tests hard-code REDUCE's maps | L |
+| `juliafill(E; newt=true, m)` (undocumented kw) | `juliafill! "E" (m := "…")` (Newton mode, `ϵ = 4`) | DONE | – | – |
+| `mandelbrot` | `mandelbrot`, `mandelbrot! "E" (m := "…")` (Newton switch with the CAS derivative) | DONE | – | – |
+| `newton` | `newton!` (CAS derivative and Newton map), `newton f df (map := …)` | PARTIAL | the map is always REDUCE's rational function; its **text** is REDUCE's for 11 of 21 golden maps. The other 10 are REDUCE `off exp` arrangements (`((2i - 5)((z⁶ + z³) - 1) + …)`) of the same function, which round differently in the last bits; `(map := …)` takes REDUCE's text when bit-exact rasters are needed | M |
 | `fatou` (Define/ComplexRectangle/Rectangle/FilledSet/Define chaining) | `fatou`, `Define.onPlane`, `FilledSet.chain`, `refatou`, `computeWith` (`Fatou/Kernel.lean`) | DONE | oracle `chain.*` | – |
 | `(K::Define)(Z)`, `(K::FilledSet)(Z)` call syntax | `chain`/`onPlane` | DONE | no `CoeFun` sugar (cosmetic) | – |
 | `FilledSet` | `FilledSet rows cols` (sizes proven), `iterAt`, `mixAt`, `zAt`, `set`, `iterHistogram` | DONE | – | – |
@@ -244,13 +246,13 @@ scratch build was possible. Fatou is the only package here with measured Lean-vs
 | `nonan`, `(C::ColorScheme)(K)` | `nonan`, `FilledSet.colorScheme` (`Fatou/Raster.lean`) | DONE | oracle `mpl.json`/colour tests | – |
 | `plot`, `imshow`, `title` (PyPlotExt) | `Raster`, `toRGBA8`, gallery `rasterFigure` (`gallery/Gallery/Fatou.lean`) | DONE | rendering and named colormaps live in the gallery package (LeanPlot) | – |
 | `orbit(K::Define)` cobweb plot, `real_orb` | `Define.realOrbit`, `realOrb` (sizes proven), titles/legends (`Fatou/Orbit.lean`); gallery `orbitFigure` | DONE | README R1 reproduced in the gallery | – |
-| UnicodePlotsExt `orbit` (text backend) | – | MISSING | braille cobweb text plot (the port notes list the text goldens under oracle/applied-misc for FlowGeometry only) | M |
-| ImageInTerminalExt `show(io, K; c, bare)` | – | MISSING | terminal image display (ANSI half-blocks/sixel from `colorScheme`) | S |
+| UnicodePlotsExt `orbit` (text backend) | – | MISSING | braille cobweb text plot; UnicodePlots is not in the oracle environment (and cannot be added), so there is nothing to test a port against; `Define.realOrbit` gives the data | M |
+| ImageInTerminalExt `show(io, K; c, bare)` | – | MISSING | output depends on the terminal (sixel vs 24-bit half blocks, resized to the window); `FilledSet.colorScheme`/`Raster` give the image | S |
 | MakieExt (dead code) | – | SKIP | not a module; commented out in Project.toml | – |
-| GrassmannExt `orbit` over `Couple{V,B}` (broken in Julia) | `Fatou.Couple.mul/sq/abs2` (B² = ±1, 0) (`Fatou/Couple.lean`) | PARTIAL | intended semantics only, with no oracle (Julia is broken); there is no `B` option and no bridge to the Lean `Grassmann` Couple type | S |
-| `basin(K, j)` | `basin newt j body` (templates `basinSet0/J`, suffixes) | PARTIAL | Julia computes `body` (the LaTeX of the j-fold composition with c=0, `recomp` + REDUCE `latex`); Lean needs it by hand. README `basin(nf,3)` cannot be reproduced automatically | M |
-| internals `newton_raphson`, `recomp`, `nL`, `jL`, `rdpm`, `nrset`, `jset` | – | MISSING | symbolic layer: derivative, substitution, factoring, LaTeX printer (see the Newton/basin rows) | (Newton/basin fix) |
-| `z^p` for complex/real non-integer `p` in maps (wiki nf16 `z^(4.0+3.0im)`) | `JuliaBase.ComplexF64.pow` exists; `Fatou.C64` has only `NatPow` and `HPow C64 Int` | PARTIAL | no `HPow C64 C64`/`HPow C64 Float` instance, so wiki maps must call `ComplexF64.pow` explicitly | S |
+| GrassmannExt `orbit` over `Couple{V,B}` (broken in Julia) | `(B := "1" / "0" / "im")` on `juliafill!`/`mandelbrot!` (the map compiled over `Couple` numbers, `Q` = Grassmann's `abs2`), `Fatou.Couple.mul/div/rdiv/pow/inv/abs2` (`B² = ±1, 0`) (`Fatou/Couple.lean`) | DONE | intended semantics (Julia's extension is broken, so no oracle): the hyperbolic set's histogram (Julia `t8.jl` with the intended return), `B² = -1` equal to the complex set, quotient/power laws | – |
+| `basin(K, j)` | `Define.basinOf j` (CAS `recomp` + rlfi LaTeX), `basin newt j body` | PARTIAL | `basin(K, 1)` equals Julia's for the 31 expressions whose body REDUCE leaves expanded; the others differ in the same `off exp` arrangement as `newton` | M |
+| internals `newton_raphson`, `recomp`, `nL`, `jL`, `rdpm`, `nrset`, `jset` | `CAS.newtonRaphson`, `recomp`, `latexOf`, `latexFactor`, `latexAllfac` (`Fatou/CAS.lean`), `Define.basinOf` | DONE | titles: 42 of 43 `latex(E)` exact (the other is a Reduce.jl complex-constant conversion defect) | – |
+| `z^p` for complex/real non-integer `p` in maps (wiki nf16 `z^(4.0+3.0im)`) | `HPow C64 C64`, `HPow C64 Float` (Julia's `_cpow`), literal integer powers kept | DONE | – | – |
 | String input (`juliafill("z^2")`) | – | SKIP | broken in Julia 1.x | – |
 | `__init__` thread banner, `Reduce.stop()` | – | SKIP | load-time side effects | – |
 | performance | `Tests/Fatou/Bench.lean`, docs/PERF.md | DONE | at parity with a handwritten Julia kernel; 30–200× faster than Fatou.jl | – |
@@ -258,22 +260,22 @@ scratch build was possible. Fatou is the only package here with measured Lean-vs
 ## 8. Clifford.jl (dead code upstream; sparse graded storage per applied-misc.md §2.3/§4.3)
 
 Clifford.jl's module defines only the unexported `greet()`. `algebra.jl`, `multivectors.jl` and `products.jl` are never
-`include`d. Current Grassmann.jl *exports* `SparseChain`/`MultiGrade` but defines neither. There is no Lean
-counterpart (`rg SparseChain|MultiGrade` finds nothing; `Grassmann.TA` in `Grassmann/Dynamic/Basic.lean` has
-no sparse kinds). There is no oracle, since the Julia code cannot run.
+`include`d. Current Grassmann.jl *exports* `SparseChain`/`MultiGrade` but defines neither. The port implements the
+intended semantics over the Grassmann static layer (`Clifford/Sparse.lean`, `Clifford/MultiGrade.lean`), property-tested
+against the dense `Chain`/`Multivector` (`Tests/Clifford.lean`, 36 properties; registration in `Tests.lean` requested). There is no oracle, since the Julia code cannot run.
 
 | Julia symbol | Lean name(s) + file | status | gap description | effort |
 |---|---|---|---|---|
 | `greet()` | – | SKIP | hello-world stub, not exported | – |
-| `SparseChain{V,G,T}` (+ ctors from `Chain`, `Vector{TensorTerm}`) | – | MISSING | sparse k-vector (sorted `(bladeIndex, value)` pairs, length `binomial(N,G)`) | M |
-| `chainvalues` densify rule (`fill_limit = 0.5`) | – | MISSING | dense `Chain` if under 50% zeros, else sparse; `G ∈ {0,N}` always dense | (with SparseChain) |
-| `MultiGrade{V,G}` (+ ctors from `Vector{TensorGraded}`, `MultiVector`) | – | MISSING | grade-mask `G` + ascending-grade terms; `MultiGrade(::MultiVector)` sparsifies per grade | (with SparseChain) |
-| `+`/`-` (SparseChain±SparseChain/TensorTerm, MultiGrade±MultiGrade/graded, mixed grades → MultiGrade) | – | MISSING | two-pointer merges; implement the **intended** signs (Julia loses the sign of `b` in `Term − SparseChain` and in mixed-grade `-`) | (with SparseChain) |
-| scalar `*`, mixing with dense `MultiVector`/`Chain` (`generate_sums`) | – | MISSING | termwise scale; scatter into dense at `binomsum(N,G)+index` | (with SparseChain) |
-| `reverse`, `involute`, `conj`, unary `±` | – | MISSING | termwise, keeping the MultiGrade structure (Julia wrongly returns a SparseChain) | (with SparseChain) |
-| `complementleft`, `complementright` | – | MISSING | termwise; grade g ↦ N−g with the mask bit-reversed over N+1 bits (Julia XORs the mask, which is a bug) | (with SparseChain) |
-| `scalar`, `vector`, `volume`, `isscalar`, `isvector`, `terms`, `value`, `valuetype`, `adjoint` | – | MISSING | accessors on MultiGrade/SparseChain | (with SparseChain) |
-| `show` (SparseChain, MultiGrade), `==` | – | MISSING | `" + "`/`" - "abs` joined terms with blade indices; termwise equality, and both zero across grades | (with SparseChain) |
+| `SparseChain{V,G,T}` (+ ctors from `Chain`, `Vector{TensorTerm}`) | `Clifford.SparseChain V G α` (`ofChain`, `ofTerms`, `toChain`, `get`, `bladeTerms`) | DONE | property tests vs dense | – |
+| `chainvalues` densify rule (`fill_limit = 0.5`) | `chainValues`, `Graded` (dense/sparse), `fillLimit` | DONE | `G ∈ {0,N}` always dense | – |
+| `MultiGrade{V,G}` (+ ctors from `Vector{TensorGraded}`, `MultiVector`) | `Clifford.MultiGrade V α` (`ofGraded`, `ofMultivector`, `ofChain`, `mask`, `grades`) | DONE | – | – |
+| `+`/`-` (SparseChain±SparseChain/TensorTerm, MultiGrade±MultiGrade/graded, mixed grades → MultiGrade) | `SparseChain.add/sub/addSingle/singleSub`, `MultiGrade.add/sub/addChain/subChain` | DONE | intended signs (Julia loses the sign of `b`) | – |
+| scalar `*`, mixing with dense `MultiVector`/`Chain` (`generate_sums`) | `smul`, `toMultivector`, `ofMultivector` | DONE | – | – |
+| `reverse`, `involute`, `conj`, unary `±` | `reverse`, `involute`, `clifford`, `neg` on both, keeping the MultiGrade structure | DONE | – | – |
+| `complementleft`, `complementright` | same names; `complementMask` bit-reverses the mask over `N+1` bits | DONE | Julia's XOR mask bug fixed | – |
+| `scalar`, `vector`, `volume`, `isscalar`, `isvector`, `terms`, `value`, `valuetype`, `adjoint` | same names on `MultiGrade` (`valuetype` is the type parameter) | DONE | – | – |
+| `show` (SparseChain, MultiGrade), `==` | `ToString` (Julia's joined terms, `0` when empty), `BEq` (termwise, zero across grades) | DONE | – | – |
 
 ## 9. Heisenberg.jl
 
@@ -289,12 +291,12 @@ no sparse kinds). There is no oracle, since the Julia code cannot run.
 |---|---|---|
 | AbstractLattices README (shared `∨` across modules) | **no** (for Grassmann + Dendriform/DeMorgan together) | This is the point of the package. The Lean split between `AbstractLattices.HVee` and `AbstractTensors.Vee` breaks it |
 | PrimitiveBits README `PrimitiveBits16(7)`, `b[2:4]` | yes | `#guard` + oracle |
-| DeMorgan README tables 1 and 2 | yes (verbatim render) | table 2 uses `&&&` for `∧` |
-| Dendriform README `Grove(3,7) ⊣ [1,2]∪[2,1]`, `Grove(2,3)*(…)\|>GroveBin`, `[2,1,7,4,1,3,1] < […]`, `grovedisplay(true)` | yes | the Tamari example is `Tree.tamariLt …` (no `<`); tree literals go through `Tree.ofName?` |
+| DeMorgan README tables 1 and 2 | yes (verbatim render) | table 2 written with `∧`; the `@truthtable p q` session with the `truthtable p q` command |
+| Dendriform README `Grove(3,7) ⊣ [1,2]∪[2,1]`, `Grove(2,3)*(…)\|>GroveBin`, `[2,1,7,4,1,3,1] < […]`, `grovedisplay(true)` | yes | literals `tree![…]`/`grove![…]`, Tamari `<` |
 | AbstractAnalysis README | – | prose only; the port-notes §6.5 goldens are all covered |
 | Wilkinson README (exprval optimal form selection) | yes | – |
-| Fatou README R1–R5 | yes, **only with hand-derived inputs** | R4/R5 need `df`, REDUCE's factored Newton map and `label` typed in. `basin(nf,3)` is not reproducible (needs the LaTeX body) |
-| Fatou wiki (34 examples) | yes, with the same caveat | nf16 needs `ComplexF64.pow` spelled out; o11 `2z%1` needs the `real` override |
+| Fatou README R1–R5 | yes | from the Julia expressions (`juliafill!`, `mandelbrot!`, `newton!`); R4/R5 rasters bit-exact because their Newton maps are among REDUCE's exact texts |
+| Fatou wiki (34 examples) | yes | from the expressions; 10 Newton maps differ from REDUCE's text in the `off exp` arrangement (same function) |
 
 ---
 
@@ -304,8 +306,8 @@ Computed from the status column of the tables above (one row per symbol or symbo
 
 | status | rows |
 |---|---|
-| DONE | 125 |
-| PARTIAL | 32 |
-| MISSING | 19 |
-| IN_PROGRESS | 3 |
+| DONE | 172 |
+| PARTIAL | 5 |
+| MISSING | 3 |
+| IN_PROGRESS | 0 |
 | SKIP | 14 |

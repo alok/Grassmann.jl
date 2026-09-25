@@ -41,6 +41,17 @@ instance : ApproxEq (Complex Rat) := ⟨(· == ·)⟩
 /-- Julia `isapprox(::ComplexF64, ::ComplexF64)`: `|x-y| ≤ rtol·max(|x|, |y|)` with `abs = hypot`. -/
 instance : ApproxEq (Complex Float) := ⟨fun x y => ComplexF64.isapprox x y⟩
 
+/-- Julia `gequal` on residues: exact equality (Julia's ModsExt, `src/AbstractAnalysis.jl`). -/
+instance {n : Nat} : ApproxEq (Fin n) := ⟨(· == ·)⟩
+
+/-- Julia `iseven`/`isodd` on the elements of a semimagma (numbers, permutations). -/
+class HasParity (α : Type) where
+  /-- Julia `iseven(x)`. -/
+  isEven : α → Bool
+
+instance : HasParity Int := ⟨fun n => n % 2 == 0⟩
+instance : HasParity Nat := ⟨fun n => n % 2 == 0⟩
+
 /-- A binary law with its inverse: Julia's `F` and `G` type parameters. -/
 structure Law (T : Type) where
   /-- Julia `grouplaw(G)`. -/
@@ -53,6 +64,27 @@ def Law.mul (T : Type) [Mul T] (inv : T → T) : Law T := ⟨(· * ·), inv⟩
 
 /-- Julia `Semimagma(v, +)`: addition with `-`. -/
 def Law.add (T : Type) [Add T] [Neg T] : Law T := ⟨(· + ·), (- ·)⟩
+
+/-- Addition modulo `n` on residues (Julia's ModsExt `+` on `Mod{n}`), inverse `n - a`. -/
+def Law.addMod (n : Nat) : Law (Fin (n + 1)) := ⟨(· + ·), (- ·)⟩
+
+/-- The inverse of a unit modulo `m` (`a` itself for a non-unit, where Julia's `inv` throws). -/
+def invMod (m a : Nat) : Nat :=
+  if Nat.gcd a m != 1 || m ≤ 1 then a
+  else ((egcd (a % m) m 1 0 m).emod m).toNat
+where
+  /-- Extended Euclid on `(r₀, r₁)` tracking the Bézout coefficient `s₀` with
+  `s₀ * a ≡ r₀ (mod m)` (fuel-bounded). -/
+  egcd (r₀ r₁ : Nat) (s₀ s₁ : Int) : Nat → Int
+    | 0 => s₀
+    | fuel + 1 =>
+      if r₁ = 0 then s₀
+      else egcd r₁ (r₀ % r₁) s₁ (s₀ - (r₀ / r₁ : Nat) * s₁) fuel
+
+/-- Multiplication modulo `n` on residues (Julia's ModsExt `*` on `Mod{n}`), the inverse
+defined on units. -/
+def Law.mulMod (n : Nat) : Law (Fin (n + 1)) :=
+  ⟨(· * ·), fun a => ⟨invMod (n + 1) a.1 % (n + 1), Nat.mod_lt _ (Nat.succ_pos n)⟩⟩
 
 /-- Julia `Semimagma{T,F,G}`: insertion-ordered elements under the law `L`. -/
 structure Semimagma (T : Type) (L : Law T) where
@@ -72,12 +104,23 @@ def closureBound : Nat := 1 <<< 24
 /-- Julia `order(G) = length(G)`. -/
 @[inline] def order (G : Semimagma T L) : Nat := G.v.size
 
+/-- Julia's `g ∈ out` scan with `≈`. This is the kernel-reducible form (the `decide` proofs
+below unfold it); compiled code runs `anyApproxFast`, which scans the array in place instead
+of building a list. -/
+def anyApprox [ApproxEq T] (out : Array T) (g : T) : Bool := out.toList.any (ApproxEq.approx g)
+
+/-- The compiled form of `anyApprox`: an allocation-free scan. -/
+def anyApproxFast [ApproxEq T] (out : Array T) (g : T) : Bool := out.any (ApproxEq.approx g)
+
+@[csimp] theorem anyApprox_eq_anyApproxFast : @anyApprox = @anyApproxFast := by
+  funext T _ out g; simp [anyApprox, anyApproxFast]
+
 /-- Julia `g ∈ G` (linear scan with `≈`). -/
-def mem [ApproxEq T] (g : T) (G : Semimagma T L) : Bool := G.v.toList.any (ApproxEq.approx g)
+def mem [ApproxEq T] (g : T) (G : Semimagma T L) : Bool := anyApprox G.v g
 
 /-- Push unless already present (the `gh ∉ out && push!(out.v, gh)` idiom). -/
 @[inline] def pushNew [ApproxEq T] (out : Array T) (g : T) : Array T :=
-  if out.toList.any (ApproxEq.approx g) then out else out.push g
+  if anyApprox out g then out else out.push g
 
 /-- Julia `H ⊆ G`. -/
 def subset [ApproxEq T] (H G : Semimagma T L) : Bool := H.v.toList.all fun h => mem h G
@@ -111,9 +154,25 @@ def isAssociative [ApproxEq T] (G : Semimagma T L) : Bool :=
   G.v.toList.all fun f => G.v.toList.all fun g => G.v.toList.all fun h =>
     ApproxEq.approx (L.op (L.op f g) h) (L.op f (L.op g h))
 
+/-- The compiled form of `isAssociative`: array scans (no list per row) with `f * g` hoisted
+out of the innermost loop. -/
+def isAssociativeFast [ApproxEq T] (G : Semimagma T L) : Bool :=
+  G.v.all fun f => G.v.all fun g => let fg := L.op f g
+    G.v.all fun h => ApproxEq.approx (L.op fg h) (L.op f (L.op g h))
+
+@[csimp] theorem isAssociative_eq_fast : @isAssociative = @isAssociativeFast := by
+  funext T L _ G; simp [isAssociative, isAssociativeFast]
+
 /-- Julia `ismagma(G)`: closure under the law. -/
 def isMagma [ApproxEq T] (G : Semimagma T L) : Bool :=
   G.v.toList.all fun g => G.v.toList.all fun h => mem (L.op g h) G
+
+/-- The compiled form of `isMagma` (array scans). -/
+def isMagmaFast [ApproxEq T] (G : Semimagma T L) : Bool :=
+  G.v.all fun g => G.v.all fun h => mem (L.op g h) G
+
+@[csimp] theorem isMagma_eq_fast : @isMagma = @isMagmaFast := by
+  funext T L _ G; simp [isMagma, isMagmaFast]
 
 /-- Julia `isinvertible(G)`: every inverse is present. -/
 def isInvertible [ApproxEq T] (G : Semimagma T L) : Bool := G.v.toList.all fun g => mem (L.inv g) G
@@ -124,6 +183,22 @@ def isSemigroup [ApproxEq T] (G : Semimagma T L) : Bool := isMagma G && isAssoci
 /-- Julia `isgroup = isinvertible && issemigroup` (also `isgroupoid`). -/
 def isGroup [ApproxEq T] (G : Semimagma T L) : Bool := isInvertible G && isSemigroup G
 
+/-- Julia `issemicategory = issemigroup` (src/magma.jl:114). -/
+def isSemicategory [ApproxEq T] (G : Semimagma T L) : Bool := isSemigroup G
+
+/-- Julia `isgroupoid = isgroup` (src/magma.jl:113). -/
+def isGroupoid [ApproxEq T] (G : Semimagma T L) : Bool := isGroup G
+
+/-- Julia `iscategory(G) = isone(G) ∈ G && issemicategory(G)` (src/magma.jl:111, broken in
+Julia, quirk #17): the identity `e` is given explicitly. -/
+def isCategory [ApproxEq T] (G : Semimagma T L) (e : T) : Bool := mem e G && isSemicategory G
+
+/-- Julia `iseven(G) = prod(iseven.(G.v))` (src/magma.jl:52): every element is even. -/
+def isEven [HasParity T] (G : Semimagma T L) : Bool := G.v.all HasParity.isEven
+
+/-- Julia `isodd(G) = prod(isodd.(G.v))` (src/magma.jl:53): every element is odd. -/
+def isOdd [HasParity T] (G : Semimagma T L) : Bool := G.v.all fun g => !HasParity.isEven g
+
 /-- `ismonoid` as intended (Julia's is broken, quirk #17): the identity `e` is
 present and the magma is a semigroup. -/
 def isMonoid [ApproxEq T] (G : Semimagma T L) (e : T) : Bool := mem e G && isSemigroup G
@@ -131,6 +206,13 @@ def isMonoid [ApproxEq T] (G : Semimagma T L) (e : T) : Bool := mem e G && isSem
 /-- Julia `isabelian(G)`: all pairs commute. -/
 def isAbelian [ApproxEq T] (G : Semimagma T L) : Bool :=
   G.v.toList.all fun g => G.v.toList.all fun h => ApproxEq.approx (L.op g h) (L.op h g)
+
+/-- The compiled form of `isAbelian` (array scans). -/
+def isAbelianFast [ApproxEq T] (G : Semimagma T L) : Bool :=
+  G.v.all fun g => G.v.all fun h => ApproxEq.approx (L.op g h) (L.op h g)
+
+@[csimp] theorem isAbelian_eq_fast : @isAbelian = @isAbelianFast := by
+  funext T L _ G; simp [isAbelian, isAbelianFast]
 
 /-- Julia `magma(p, F, G)`: the cyclic semimagma `[p, p², p³, …]` until a repeat
 (src/magma.jl:152-161). -/
@@ -140,7 +222,7 @@ where
   /-- Keep multiplying by `p` until a power repeats. -/
   go (out : Array T) (pn : T) : Nat → Array T
     | 0 => out
-    | fuel + 1 => if out.toList.any (ApproxEq.approx pn) then out else go (out.push pn) (L.op pn p) fuel
+    | fuel + 1 => if anyApprox out pn then out else go (out.push pn) (L.op pn p) fuel
 
 /-- Julia `magma(G, out)`: close `out` under the law, appending new products in
 Julia's order (src/magma.jl:165-178). -/
@@ -159,6 +241,68 @@ where
 /-- Julia `magma(G)` / `magma(p::AbstractVector)`: the closure. -/
 def magma [ApproxEq T] (G : Semimagma T L) : Semimagma T L := ⟨closeArray (L := L) G.v⟩
 
+/-- `closeArray` with an exact-equality hash index: the same elements in the same order as
+`closeArray` when `≈` is `==` (permutations, integers, residues), with `O(1)` membership, so
+closing an `n`-element set costs `O(n²)` products instead of `O(n³)` comparisons. Julia's
+`magma` scans linearly (2.5 s for the 720 elements of `S₆`); the port notes (§8.6) planned this
+side index. -/
+def closeArrayHashed [BEq T] [Hashable T] (out : Array T) : Array T :=
+  outer out (out.foldl (fun s g => s.insert g) ∅) 0 closureBound
+where
+  /-- Products `g * out[j]` for the current `j` range. -/
+  inner (out : Array T) (seen : Std.HashSet T) (g : T) (j : Nat) : Nat → Array T × Std.HashSet T
+    | 0 => (out, seen)
+    | fuel + 1 =>
+      if h : j < out.size then
+        let x := L.op g out[j]
+        if seen.contains x then inner out seen g (j + 1) fuel
+        else inner (out.push x) (seen.insert x) g (j + 1) fuel
+      else (out, seen)
+  /-- Row loop. -/
+  outer (out : Array T) (seen : Std.HashSet T) (i : Nat) : Nat → Array T
+    | 0 => out
+    | fuel + 1 =>
+      if h : i < out.size then
+        let r := inner out seen out[i] 0 closureBound
+        outer r.1 r.2 (i + 1) fuel
+      else out
+
+/-- Julia `magma(G)` through the hash index (`closeArrayHashed`): for element types whose `≈`
+is `==`. -/
+def magmaHashed [BEq T] [Hashable T] (G : Semimagma T L) : Semimagma T L :=
+  ⟨closeArrayHashed (L := L) G.v⟩
+
+/-- Julia `group(p, F, G)` through the hash index: the inverses of the generators are added
+(first-seen order), then the set is closed with `closeArrayHashed`. -/
+def groupHashed [BEq T] [Hashable T] (gens : Array T) : Semimagma T L :=
+  ⟨closeArrayHashed (L := L)
+    (gens.foldl (fun acc g => if acc.contains (L.inv g) then acc else acc.push (L.inv g)) gens)⟩
+
+/-- The Cayley table of `G` as element indices (first occurrence), or `none` when some product
+leaves the set: the `n²` products are looked up once in a hash index. -/
+def cayleyIndex [BEq T] [Hashable T] (G : Semimagma T L) : Option (Array (Array Nat)) :=
+  let idx : Std.HashMap T Nat :=
+    G.v.size.fold (fun i _ m => if m.contains G.v[i] then m else m.insert G.v[i] i) ∅
+  G.v.mapM fun g => G.v.mapM fun h => idx.get? (L.op g h)
+
+/-- Julia `isgroup(G)` for element types whose `≈` is `==`, through `cayleyIndex`: closure and
+inverses are hash lookups and associativity is checked on the index table, so the `n³` triple
+loop does no group operations. `isGroup (SymmetricGroup 5)` costs `O(n²)` products instead of
+`4n³`. -/
+def isGroupHashed [BEq T] [Hashable T] (G : Semimagma T L) : Bool :=
+  match cayleyIndex G with
+  | none => false
+  | some tab =>
+    let set : Std.HashSet T := G.v.foldl (fun s g => s.insert g) ∅
+    let n := G.v.size
+    G.v.all (fun g => set.contains (L.inv g)) &&
+    n.all fun f _ => n.all fun g _ =>
+      let fg := tab[f]![g]!
+      let row := tab[g]!
+      let rowF := tab[f]!
+      let rowFG := tab[fg]!
+      n.all fun h _ => rowFG[h]! == rowF[row[h]!]!
+
 /-- Julia `group(G, out)`: add the inverses of the initial elements, then close
 (src/magma.jl:179-186). -/
 def groupOf [ApproxEq T] (out : Array T) : Array T :=
@@ -166,6 +310,22 @@ def groupOf [ApproxEq T] (out : Array T) : Array T :=
 
 /-- Julia `group(p::AbstractVector, F, G)`: the group generated by `p`. -/
 def group [ApproxEq T] (gens : Array T) : Semimagma T L := ⟨groupOf (L := L) gens⟩
+
+/-- Julia `orders(G) = order.(G, F, G⁻¹)` (src/magma.jl:48): for each element, the order of
+the group it generates. Julia's version only works for scalar elements: a permutation is an
+`AbstractVector`, so `order(p, *, inv)` builds `group(p.v, …)` from its image entries and
+throws; this computes the intended orders for every element type. -/
+def orders [ApproxEq T] (G : Semimagma T L) : Array Nat := G.v.map fun g => (group (L := L) #[g]).order
+
+/-- Julia `g * H` / `g + H` for an element or number (`compose(g, H, *)`, src/magma.jl:90-98):
+the plain operation, not the law. -/
+instance [Mul T] : HMul T (Semimagma T L) (Semimagma T L) := ⟨fun g H => composeLeft g H (· * ·)⟩
+/-- Julia `H * g`. -/
+instance [Mul T] : HMul (Semimagma T L) T (Semimagma T L) := ⟨fun H g => composeRight H g (· * ·)⟩
+/-- Julia `g + H`. -/
+instance [Add T] : HAdd T (Semimagma T L) (Semimagma T L) := ⟨fun g H => composeLeft g H (· + ·)⟩
+/-- Julia `H + g`. -/
+instance [Add T] : HAdd (Semimagma T L) T (Semimagma T L) := ⟨fun H g => composeRight H g (· + ·)⟩
 
 /-- Julia `subsemigroup(G, out)`: drop elements with no product back in the set
 (src/magma.jl:194-209). -/

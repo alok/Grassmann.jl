@@ -40,6 +40,8 @@ def suite : TestM Unit := do
       if (jGet r s!"limsup{m}") != .null then
         checkFloat s!"v{i}.limsup{m}" (limsup x m) (jFloat (jGet r s!"limsup{m}"))
         checkFloat s!"v{i}.liminf{m}" (liminf x m) (jFloat (jGet r s!"liminf{m}"))
+    checkFloat s!"v{i}.limsup(x,2,3)" (limsupAt x 2 3) (jFloat (jGet r "limsup_2_3"))
+    checkFloat s!"v{i}.liminf(x,2,3)" (liminfAt x 2 3) (jFloat (jGet r "liminf_2_3"))
   let s := jGet j "scalars"
   checkFloat "supnorm(3,5)" (dist (3 : Int) 5) (jFloat (jGet s "supnorm_3_5"))
   checkFloat "supnorm(-2.5)" (supnorm (-2.5 : Float)) (jFloat (jGet s "supnorm_m2.5"))

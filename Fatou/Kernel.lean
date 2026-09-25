@@ -181,31 +181,37 @@ theorem u32_sub_succ_lt {n N : UInt32} (h : n < N) :
     exact Nat.mod_eq_of_lt (by omega)
   omega
 
-/-- Julia's kernel over the pixels `lo … lo+len-1` of `src`, as one tail-recursive loop.
-State: chunk pixel `j`, current iterate `zr + zi·i`, pixel `cr + ci·i`, count `n`, and the
-outputs so far. `cont q ϵ` is the loop test (`q < ϵ`, or `q > ϵ` in Newton mode), hoisted
-out as a specialized argument. Every complex value is taken apart into unboxed floats, and
-the loop-invariant parameters are separate scalar arguments (so the hot path reloads
-nothing). -/
+/-- Julia's kernel over `len` consecutive pixels of `src`, as one tail-recursive loop.
+State: chunk pixel `j`, the absolute pixel `i` with its column `k` and row `r` (advanced
+incrementally: no division per pixel), current iterate `zr + zi·i`, pixel `cr + ci·i`, count
+`n`, and the outputs so far. `cont q ϵ` is the loop test (`q < ϵ`, or `q > ϵ` in Newton
+mode), hoisted out as a specialized argument. Every complex value is taken apart into
+unboxed floats, and the loop-invariant parameters are separate scalar arguments (so the hot
+path reloads nothing). -/
 @[specialize] def sweep (F : C64 → C64 → C64) (Q : C64 → C64 → Float)
-    (C : C64 → Float → Float → Float) (cont : Float → Float → Bool) (src : Source) (lo : Nat)
+    (C : C64 → Float → Float → Float) (cont : Float → Float → Bool) (src : Source)
     (mandel plane disk : Bool) (seedRe seedIm p Nf ϵ : Float) (N : UInt32) (len : Nat)
-    (j : Nat) (zr zi cr ci : Float) (n : UInt32) (it : ByteArray) (re im mix : FloatArray) : Chunk :=
+    (j i k r : Nat) (zr zi cr ci : Float) (n : UInt32) (it : ByteArray) (re im mix : FloatArray) :
+    Chunk :=
   if hn : n < N ∧ cont (Q ⟨zr, zi⟩ ⟨cr, ci⟩) ϵ = true then
     let w := F ⟨zr, zi⟩ ⟨cr, ci⟩
-    sweep F Q C cont src lo mandel plane disk seedRe seedIm p Nf ϵ N len j w.re w.im cr ci (n + 1)
-      it re im mix
+    sweep F Q C cont src mandel plane disk seedRe seedIm p Nf ϵ N len j i k r w.re w.im cr ci
+      (n + 1) it re im mix
   else
     let fr := if disk then (C64.disk ⟨zr, zi⟩).re else zr
     let fi := if disk then (C64.disk ⟨zr, zi⟩).im else zi
-    let it := pushU16 it n.toUInt16
-    let re := re.push fr
-    let im := im.push fi
-    let mix := mix.push (C ⟨fr, fi⟩ (n.toFloat / Nf) p)
+    let it := setU16 it j n.toUInt16
+    let re := re.set! j fr
+    let im := im.set! j fi
+    let mix := mix.set! j (C ⟨fr, fi⟩ (n.toFloat / Nf) p)
     if hj : j + 1 < len then
-      let cr := src.re (lo + j + 1)
-      let ci := src.im (lo + j + 1)
-      sweep F Q C cont src lo mandel plane disk seedRe seedIm p Nf ϵ N len (j + 1)
+      let wrap := k + 1 == src.cols
+      let k := if wrap then 0 else k + 1
+      let r := if wrap then r + 1 else r
+      let i := i + 1
+      let cr := if src.separable then src.sa.get! k else src.sa.get! i
+      let ci := if src.separable then src.sb.get! r else src.sb.get! i
+      sweep F Q C cont src mandel plane disk seedRe seedIm p Nf ϵ N len (j + 1) i k r
         (startRe mandel plane seedRe cr ci) (startIm mandel plane seedIm cr ci) cr ci 0
         it re im mix
     else ⟨it, re, im, mix⟩
@@ -219,30 +225,29 @@ decreasing_by
 def Chunk.Sized (c : Chunk) (len : Nat) : Prop :=
   c.iter.size = 2 * len ∧ c.zre.size = len ∧ c.zim.size = len ∧ c.mix.size = len
 
-/-- `sweep` started at pixel `j < len`, with the outputs of pixels `0 … j-1` written, returns
-the outputs of exactly `len` pixels. -/
+/-- `sweep` writes into outputs preallocated for `len` pixels (in place: `set!` is an inline
+store, where a `push` per output was an out-of-line runtime call), so it returns the outputs of
+exactly `len` pixels. -/
 theorem sweep_sized (F : C64 → C64 → C64) (Q : C64 → C64 → Float)
-    (C : C64 → Float → Float → Float) (cont : Float → Float → Bool) (src : Source) (lo : Nat)
+    (C : C64 → Float → Float → Float) (cont : Float → Float → Bool) (src : Source)
     (mandel plane disk : Bool) (seedRe seedIm p Nf ϵ : Float) (N : UInt32) (len : Nat)
-    (j : Nat) (zr zi cr ci : Float) (n : UInt32) (it : ByteArray) (re im mix : FloatArray)
-    (hj : j < len) (hit : it.size = 2 * j) (hre : re.size = j) (him : im.size = j)
-    (hmix : mix.size = j) :
-    (sweep F Q C cont src lo mandel plane disk seedRe seedIm p Nf ϵ N len j zr zi cr ci n it re im
-      mix).Sized len := by
-  induction j, zr, zi, cr, ci, n, it, re, im, mix using
-    sweep.induct F Q C cont src lo mandel plane disk seedRe seedIm p Nf ϵ N len with
-  | case1 j zr zi cr ci n it re im mix hn w ih =>
+    (j i k r : Nat) (zr zi cr ci : Float) (n : UInt32) (it : ByteArray) (re im mix : FloatArray)
+    (hit : it.size = 2 * len) (hre : re.size = len) (him : im.size = len)
+    (hmix : mix.size = len) :
+    (sweep F Q C cont src mandel plane disk seedRe seedIm p Nf ϵ N len j i k r zr zi cr ci n it re
+      im mix).Sized len := by
+  induction j, i, k, r, zr, zi, cr, ci, n, it, re, im, mix using
+    sweep.induct F Q C cont src mandel plane disk seedRe seedIm p Nf ϵ N len with
+  | case1 j i k r zr zi cr ci n it re im mix hn w ih =>
     rw [sweep]; simp only [hn]
-    exact ih hj hit hre him hmix
-  | case2 j zr zi cr ci n it re im mix hn fr fi it' re' im' mix' hj' cr' ci' ih =>
+    exact ih hit hre him hmix
+  | case2 j i k r zr zi cr ci n it re im mix hn fr fi it' re' im' mix' hj' wrap k' r' i' cr' ci'
+      ih =>
     rw [sweep]; simp only [hn, hj', ↓reduceDIte]
-    exact ih hj' (by simp [it', hit]; omega) (by simp [re', hre, FloatArray.size_push])
-      (by simp [im', him, FloatArray.size_push]) (by simp [mix', hmix, FloatArray.size_push])
-  | case3 j zr zi cr ci n it re im mix hn hj' =>
+    exact ih (by simp [it', hit]) (by simp [re', hre]) (by simp [im', him]) (by simp [mix', hmix])
+  | case3 j i k r zr zi cr ci n it re im mix hn hj' =>
     rw [sweep]; simp only [hn, hj', ↓reduceDIte]
-    have : j + 1 = len := by omega
-    simp only [Chunk.Sized, pushU16, ByteArray.size_push, FloatArray.size_push, hit, hre, him, hmix]
-    omega
+    exact ⟨by simp [hit], by simp [hre], by simp [him], by simp [hmix]⟩
 
 /-- Run the kernel on the `P.len` pixels of `src` starting at `lo`. -/
 @[specialize] def runChunk (F : C64 → C64 → C64) (Q : C64 → C64 → Float)
@@ -252,10 +257,10 @@ theorem sweep_sized (F : C64 → C64 → C64) (Q : C64 → C64 → Float)
   else
     let cr := src.re lo
     let ci := src.im lo
-    sweep F Q C cont src lo P.mandel P.plane P.disk P.seedRe P.seedIm P.p P.Nf ϵ P.N.toUInt32 P.len 0
+    sweep F Q C cont src P.mandel P.plane P.disk P.seedRe P.seedIm P.p P.Nf ϵ P.N.toUInt32 P.len 0
+      lo (lo % src.cols) (lo / src.cols)
       (startRe P.mandel P.plane P.seedRe cr ci) (startIm P.mandel P.plane P.seedIm cr ci) cr ci 0
-      (ByteArray.emptyWithCapacity (2 * P.len)) (FloatArray.emptyWithCapacity P.len)
-      (FloatArray.emptyWithCapacity P.len) (FloatArray.emptyWithCapacity P.len)
+      (zerosB (2 * P.len)) (zerosF P.len) (zerosF P.len) (zerosF P.len)
 
 /-- A chunk of `P.len` pixels has `P.len` outputs. -/
 theorem runChunk_sized (F : C64 → C64 → C64) (Q : C64 → C64 → Float)
@@ -269,7 +274,7 @@ theorem runChunk_sized (F : C64 → C64 → C64) (Q : C64 → C64 → Float)
     exact ⟨rfl, rfl, rfl, rfl⟩
   · rename_i h
     have h0 : 0 < P.len := by simp at h; omega
-    apply sweep_sized <;> first | exact h0 | rfl
+    apply sweep_sized <;> simp
 
 /-- The loop-invariant parameters of `s` for a chunk of `len` pixels. -/
 def Spec.sweepParams (s : Spec) (len : Nat) : SweepParams :=
@@ -319,13 +324,41 @@ theorem size_concatBytes (cs : List Chunk) (acc : ByteArray) :
   | nil => simp [concatBytes]
   | cons c cs ih => simp [concatBytes, ih, ByteArray.size_append]; omega
 
-/-- Concatenate chunk outputs in order; the three float outputs are copied by parallel tasks. -/
-def Chunk.concat (cs : List Chunk) (total : Nat) : Chunk :=
-  let tre := Task.spawn fun _ => concatFloats Chunk.zre cs (FloatArray.emptyWithCapacity total)
-  let tim := Task.spawn fun _ => concatFloats Chunk.zim cs (FloatArray.emptyWithCapacity total)
-  let mix := concatFloats Chunk.mix cs (FloatArray.emptyWithCapacity total)
-  let iter := concatBytes cs (ByteArray.emptyWithCapacity (2 * total))
-  ⟨iter, tre.get, tim.get, mix⟩
+/-- `concatFloats` over chunks still being computed: wait for each chunk in order and copy it
+at once, so the copying overlaps the computation of the later chunks. -/
+def concatFloatsT (f : Chunk → FloatArray) : List (Task Chunk) → FloatArray → FloatArray
+  | [], acc => acc
+  | t :: ts, acc => concatFloatsT f ts (appendFloats acc (f t.get))
+
+theorem concatFloatsT_eq (f : Chunk → FloatArray) (ts : List (Task Chunk)) (acc : FloatArray) :
+    concatFloatsT f ts acc = concatFloats f (ts.map Task.get) acc := by
+  induction ts generalizing acc with
+  | nil => rfl
+  | cons t ts ih => simp [concatFloatsT, concatFloats, ih]
+
+/-- `concatBytes` over chunks still being computed (in order, as they finish). -/
+def concatBytesT : List (Task Chunk) → ByteArray → ByteArray
+  | [], acc => acc
+  | t :: ts, acc => concatBytesT ts (acc ++ t.get.iter)
+
+theorem concatBytesT_eq (ts : List (Task Chunk)) (acc : ByteArray) :
+    concatBytesT ts acc = concatBytes (ts.map Task.get) acc := by
+  induction ts generalizing acc with
+  | nil => rfl
+  | cons t ts ih => simp [concatBytesT, concatBytes, ih]
+
+/-- Concatenate the outputs of the chunk tasks in order. Each output is assembled by its own
+dedicated thread that copies every chunk as soon as it is done, so the copying overlaps the
+computation (`FloatArray` has no bulk copy: a copy costs about 1.5 ns per float). -/
+def Chunk.concat (ts : List (Task Chunk)) (total : Nat) : Chunk :=
+  let tre := Task.spawn (prio := .dedicated) fun _ =>
+    concatFloatsT Chunk.zre ts (FloatArray.emptyWithCapacity total)
+  let tim := Task.spawn (prio := .dedicated) fun _ =>
+    concatFloatsT Chunk.zim ts (FloatArray.emptyWithCapacity total)
+  let tmix := Task.spawn (prio := .dedicated) fun _ =>
+    concatFloatsT Chunk.mix ts (FloatArray.emptyWithCapacity total)
+  let iter := concatBytesT ts (ByteArray.emptyWithCapacity (2 * total))
+  ⟨iter, tre.get, tim.get, tmix.get⟩
 
 /-- The chunks of rows `r0 … rows-1` hold `(rows - r0)·cols` pixels in all. -/
 theorem spawnChunks_sizes (F : C64 → C64 → C64) (Q : C64 → C64 → Float)
@@ -360,11 +393,11 @@ theorem spawnChunks_sizes (F : C64 → C64 → C64) (Q : C64 → C64 → Float)
     · have : rows - r0 = 0 := by omega
       simp [this]
 
-/-- Rows per parallel chunk: about 64 chunks per raster (enough to balance the uneven cost of
-escape-time rows over the task pool), and a single chunk for small rasters or when `par` is
-off. -/
+/-- Rows per parallel chunk: about 128 chunks per raster (enough to balance the uneven cost of
+escape-time rows over the task pool, including its slower efficiency cores), and a single chunk
+for small rasters or when `par` is off. -/
 def chunkRows (par : Bool) (rows cols : Nat) : Nat :=
-  if !par || rows * cols < 16384 then rows else max 1 ((rows + 63) / 64)
+  if !par || rows * cols < 16384 then rows else max 1 ((rows + 127) / 128)
 
 /-- The raster kernel over the `rows × cols` pixels of `src`, split into row chunks computed as
 parallel tasks. The result has `rows·cols` pixels by construction (`sweep_sized`,
@@ -377,13 +410,14 @@ parallel tasks. The result has `rows·cols` pixels by construction (`sweep_sized
     ⟨runChunk F Q C cont src 0 (s.sweepParams (rows * cols)) s.ϵ,
       runChunk_sized F Q C cont src 0 (s.sweepParams (rows * cols)) s.ϵ⟩
   else
-    ⟨Chunk.concat ((spawnChunks F Q C cont src s rows cols step rows 0).map Task.get) (rows * cols), by
+    ⟨Chunk.concat (spawnChunks F Q C cont src s rows cols step rows 0) (rows * cols), by
       obtain ⟨h1, h2, h3, h4⟩ := spawnChunks_sizes F Q C cont src s rows cols step
         (Nat.lt_of_lt_of_le Nat.zero_lt_one (Nat.le_max_left _ _)) rows 0 (by omega)
       simp only [Nat.sub_zero] at h1 h2 h3 h4
       refine ⟨?_, ?_, ?_, ?_⟩ <;>
-        simp only [Chunk.concat, task_spawn_get, size_concatBytes, size_concatFloats, size_byteEmpty,
-          size_floatEmpty, Nat.zero_add, h1, h2, h3, h4]⟩
+        simp only [Chunk.concat, task_spawn_get, concatFloatsT_eq, concatBytesT_eq,
+          size_concatBytes, size_concatFloats, size_byteEmpty, size_floatEmpty, Nat.zero_add,
+          h1, h2, h3, h4]⟩
 
 /-! ## `FilledSet` -/
 

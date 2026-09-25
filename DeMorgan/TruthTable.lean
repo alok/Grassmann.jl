@@ -25,9 +25,15 @@ namespace DeMorgan
 
 open AbstractLattices
 
-/-- Julia's connectives beyond `∧`/`∨` (DM:52-58), shared by columns and tables so the
-scoped notation works for both. -/
+/-- Julia's connectives (DM:48-58), shared by columns and tables so the scoped notation
+works for both. `and`/`or` are the AbstractLattices `wedge`/`vee` methods (DM:26, 48-49);
+the class restricts the scoped `∧`/`∨` to DeMorgan's types, so opening `DeMorgan` next to
+`Dendriform` or `Grassmann` (whose `∧`/`∨` overload the same tokens) stays unambiguous. -/
 class Connectives (α : Type) where
+  /-- `p ∧ q` (Julia `∧`/`wedge`/`&`) -/
+  and : α → α → α
+  /-- `p ∨ q` (Julia `∨`/`vee`/`|`) -/
+  or : α → α → α
   /-- `¬p` (Julia `!`/`¬`) -/
   not : α → α
   /-- `p → q` (Julia `-->`/`→`) -/
@@ -37,6 +43,11 @@ class Connectives (α : Type) where
   /-- `p ↔ q` (Julia `<-->`/`↔`) -/
   iff : α → α → α
 
+/-- Julia `∧` (AbstractLattices `wedge`, DM:48); overloads Lean's `And` (35, right-assoc)
+through a choice node within `open DeMorgan`, as Grassmann's exterior product does. -/
+scoped infixr:35 " ∧ " => Connectives.and
+/-- Julia `∨` (AbstractLattices `vee`, DM:49); overloads Lean's `Or` (30, right-assoc). -/
+scoped infixr:30 " ∨ " => Connectives.or
 /-- Julia `¬` (DM:58); overloads Lean's `¬` by type within `open DeMorgan`. -/
 scoped prefix:max "¬" => Connectives.not
 /-- Julia `-->` / `→` (DM:52, 58). Right-associative, below `∧`/`∨` as in Julia. -/
@@ -47,6 +58,8 @@ scoped infixr:25 " ⇐ " => Connectives.rimp
 scoped infixr:25 " ⇔ " => Connectives.iff
 
 instance {N : Nat} : Connectives (TruthValues N) where
+  and := TruthValues.and
+  or := TruthValues.or
   not := TruthValues.not
   imp := TruthValues.imp
   rimp := TruthValues.rimp
@@ -113,7 +126,7 @@ def parstring (s : String) : String :=
 
 /-- The projection columns of `N` variables (Julia `select(N)`, DM:84). -/
 def projections (N : Nat) : Array (TruthValues N) :=
-  (Array.range N).map fun n => ⟨select (n + 1) N⟩
+  (Array.range N).map fun n => TruthValues.ofUInt64 N (select (n + 1) N)
 
 /-- Julia `combine(p, q, r, n)` (DM:103-146), transcribed literally: merge the classes of
 `q` (then the new class `(r, n)`) into `p`. Membership and alias tests use `p`'s
@@ -180,7 +193,7 @@ instance : AndOp (TruthTable N) := ⟨and⟩
 /-- Julia `|` (DM:94). -/
 instance : OrOp (TruthTable N) := ⟨or⟩
 instance : Complement (TruthTable N) := ⟨not⟩
-instance : Connectives (TruthTable N) := ⟨not, imp, rimp, iff⟩
+instance : Connectives (TruthTable N) := ⟨and, or, not, imp, rimp, iff⟩
 
 /-! ## The fixed merge -/
 
@@ -272,15 +285,15 @@ def ofFormulaClean (vars : Fin N → TruthTable N) : Formula N → TruthTable N
 
 /-- Julia `pretty_table(::TruthTable)` (DM:163-169) with PrettyTables v2 defaults: one
 column per class, `max` alias-count header rows (missing aliases blank), the `2^N` rows
-`digits(p[c], base=2, pad=2^N)`, cells right-aligned and padded by one space, unicode
-box drawing. The result ends with a newline, like `pretty_table`. -/
+(`rows N`) `digits(p[c], base=2, pad=2^N)`, cells right-aligned and padded by one space,
+unicode box drawing. The result ends with a newline, like `pretty_table`. -/
 def render (t : TruthTable N) : String := Id.run do
   let cols := t.classes
   let h := cols.foldl (fun acc c => max acc c.names.size) 0
   let header : Array (Array String) :=
     (Array.range h).map fun r => cols.map fun c => c.names[r]?.getD ""
   let body : Array (Array String) :=
-    (Array.range (2 ^ N)).map fun k => cols.map fun c => if c.col.eval k then "1" else "0"
+    (Array.range (rows N)).map fun k => cols.map fun c => if c.col.eval k then "1" else "0"
   let widths : Array Nat := (Array.range cols.size).map fun c =>
     (header ++ body).foldl (fun acc row => max acc (row[c]?.getD "").length) 0
   let rule (l m r : String) : String :=
@@ -306,6 +319,31 @@ end TruthTable
 each name to its projection table over `N = #names` variables (the first name varies
 slowest; row 0 is all-true), named by its identifier. -/
 scoped syntax (name := truthtableIn) "truthtable " ident+ " in " term : term
+
+/-- Julia's contradiction `⊥` (DM:39), `TruthValues.bot` at the `N` of the context. -/
+scoped notation "⊥" => TruthValues.bot
+/-- Julia's `⟂`, an alias of `⊥` (DM:40). -/
+scoped notation "⟂" => TruthValues.bot
+/-- Julia's tautology `⊤` (DM:44), `TruthValues.top` at the `N` of the context. -/
+scoped notation "⊤" => TruthValues.top
+
+/-- `truthtable p q r`: Julia's REPL form of `@truthtable p q r` (DM:87-91). Declares
+`def p : TruthTable 3 := TruthTable.proj 3 0 "p"` and so on (the first name varies slowest;
+row 0 is all-true), as Julia binds the projections as globals. -/
+scoped syntax (name := truthtableCmd) "truthtable " ident+ : command
+
+macro_rules
+  | `(command| truthtable $xs*) => do
+    let n := xs.size
+    let nLit := Lean.Syntax.mkNumLit (toString n)
+    let mut cmds : Array (Lean.TSyntax `command) := #[]
+    for idx in List.range n do
+      let x := xs[idx]!
+      let iLit := Lean.Syntax.mkNumLit (toString idx)
+      let nameLit := Lean.Syntax.mkStrLit x.getId.toString
+      cmds := cmds.push (← `(command| def $x : DeMorgan.TruthTable $nLit :=
+          DeMorgan.TruthTable.proj $nLit ⟨$iLit, by decide⟩ $nameLit))
+    return Lean.mkNullNode cmds
 
 macro_rules
   | `(truthtable $xs* in $body) => do

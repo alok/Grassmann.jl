@@ -34,8 +34,12 @@ mixed real/complex methods do. For a fast raster:
   writing the literal inside the map: an inlined decimal literal can be re-parsed on every
   iteration (docs/PERF.md). Integer-valued literals such as `(2 : Float)` are cheap.
 
-Not ported: Julia's symbolic front-end (maps are Lean functions; titles take the `label`),
-`juliafill(E; newt = true)` (use `newton`), and the `@time` printing of `Compute`.
+Julia's symbolic front-end (`juliafill(:(z^2 + c))`, `newton(:(z^3 - 1))`, derivatives,
+REDUCE's Newton maps and LaTeX titles, `basin(K, j)` bodies) is `Fatou.Symbolic` over the
+computer algebra of `Fatou.CAS`: `juliafill! "z^2 + c" …`, `mandelbrot! …`, `newton! "z^3 - 1" …`
+compile the map at elaboration time and fill `expr`/`latex`. A hand-written `Define` (a Lean
+closure with a `label`) remains the fast path with no parsing. Not ported: the `@time`
+printing of `Compute`.
 -/
 
 namespace Fatou
@@ -146,6 +150,9 @@ structure Define where
   /-- the real map `x ↦ F(x, 0)` for the cobweb plot (`src/orbitplot.jl:20`). Julia evaluates
   it with real arithmetic, which can round differently from the complex map. -/
   real : Float → Float := fun x => (F ⟨x, 0⟩ ⟨0, 0⟩).re
+  /-- Julia `string(E)` when the set was defined from an expression (`Fatou.Symbolic`); used by
+  `Define.basinOf` to derive the basin LaTeX as Julia's `basin(K, j)` does -/
+  expr : Option String := none
 
 /-! ## Defaults -/
 
@@ -153,7 +160,7 @@ structure Define where
 def twoPi : Float := 2 * pi
 
 /-- Julia `n^p` for `Float64` arguments (`0^0 = 1`). -/
-@[inline] def powF (n p : Float) : Float := if p == 0 then 1 else n.pow p
+@[inline] def powF (n p : Float) : Float := if p == f64! 0.0 then f64! 1.0 else F64.pow n p
 
 /-- Julia's default escape criterion `Q = :(abs2(z))`. -/
 @[inline] def abs2Q (z _c : C64) : Float := z.abs2
@@ -163,7 +170,7 @@ values in `(-0.5, 0.5]` when `p = 0`. -/
 @[inline] def angleColor (z : C64) (n p : Float) : Float := (z.angle / twoPi) * powF n p
 
 /-- Julia's default colouring for `mandelbrot`, `C = :(exp(-abs(z))*n^p)`, in `(0, 1]`. -/
-@[inline] def mandelColor (z : C64) (n p : Float) : Float := (-z.abs).exp * powF n p
+@[inline] def mandelColor (z : C64) (n p : Float) : Float := F64.exp (-z.abs) * powF n p
 
 /-- The generalized Newton map `z ↦ z - m·f(z)/f'(z)` (Julia builds it symbolically with
 REDUCE, `src/internals.jl:9-12`, and then factors it; this is the unfactored form). A real

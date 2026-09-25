@@ -202,6 +202,15 @@ def limsup {α : Type} [Max α] [Inhabited α] (x : Array α) (m : Nat := 5) : �
 def liminf {α : Type} [Min α] [Inhabited α] (x : Array α) (m : Nat := 5) : α :=
   windowMin (fun i => x[i - 1]!) m (x.size - m)
 
+/-- Julia `limsup(x::AbstractVector, m, n) = supseq(x, m)[n]` (src/metric.jl:543): the window
+maximum at position `n` (1-based). -/
+def limsupAt {α : Type} [Max α] [Inhabited α] (x : Array α) (m n : Nat) : α :=
+  windowMax (fun i => x[i - 1]!) m n
+
+/-- Julia `liminf(x::AbstractVector, m, n) = infseq(x, m)[n]` (src/metric.jl:544). -/
+def liminfAt {α : Type} [Min α] [Inhabited α] (x : Array α) (m n : Nat) : α :=
+  windowMin (fun i => x[i - 1]!) m n
+
 /-! ## Finite differences (src/metric.jl:546-555) -/
 
 /-- Julia's default step `eps()^(1/5)` for `derivative` (the value Julia's

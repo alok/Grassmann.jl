@@ -30,7 +30,12 @@ from the polynomial alone, following REDUCE's own algorithms:
 The result is printed as a Julia-syntax string and parsed by `JExpr.parse`, so
 the parser's flattening rules (`(x ^ 3 + 5 * x ^ 2 + 3x) - 9`) apply exactly as
 in Julia. `factor` with `rounded` (numeric roots) is not reproduced; the
-`CAS` built here returns the exact factorization for it.
+`CAS` built here returns the exact factorization for it. REDUCE's rounded factorizer splits
+into linear factors over `ℂ` with 12-digit roots, keeps roots it finds by trial (`±1`, …) as
+integers, and orders the factors by its internal bigfloat representation (probed: neither by
+value nor by exact factor), so its output cannot be derived from the polynomial alone; the
+comparison goldens carry REDUCE's rounded forms, and `PolynomialComparison.ofForms` analyses
+them.
 -/
 
 namespace Wilkinson
@@ -279,21 +284,286 @@ def polyfactors (a : List Lit) : JExpr :=
 def ofCoeffs (a : List Lit) : Poly :=
   a.zipIdx.foldl (fun acc (c, i) => acc + Poly.const (litRat c) * Poly.pow Poly.X i) Poly.zero
 
-/-- Wilkinson's `polyhorner(x, a) = a₁ + x(a₂ + x(⋯ aₙ))` (src/Wilkinson.jl:23-24).
-Julia builds it with `Reduce.Algebra` operations, whose printed shapes come from
-REDUCE's `off exp` simplifier; the port returns the same polynomial in REDUCE's
-`horner` shape (and, as in Julia, a one-element list as its literal). -/
-def polyhorner (a : List Lit) : JExpr :=
-  match a with
-  | [c] => .lit c
-  | _ => toJExpr (hornerRF (ofCoeffs a))
+/-! ### `Reduce.Algebra`: one REDUCE call per operation, `off exp`
 
-/-- Wilkinson's `polyexpand(x, a) = aₙ x^(n-1) + ⋯ + a₁` (src/Wilkinson.jl:29-30),
-in REDUCE's `expand` shape (see `polyhorner`). -/
+Wilkinson's `polyhorner` and `polyexpand` build their polynomial with `Reduce.Algebra`
+operations. Each operation on symbolic operands is one REDUCE evaluation, with `exp` off, of
+the text of its operands (the previous results as REDUCE printed them); operations on two
+Julia numbers are Julia arithmetic. With `exp` off REDUCE does not multiply sums out:
+
+* a number times a sum is distributed (`multd`), but a sum times a power of `x` (or times
+  another such product) goes through `mkprod` in `multf` and becomes a product whose sum is a
+  *kernel*; the kernel's own text is simplified the same way when it is read;
+* `mkprod` (packages/poly/polrep.red) takes out the common numeric factor and power of `x`,
+  then keeps the remaining sum `u` unexpanded only if REDUCE's term count `tmsf u` does not
+  exceed that of its expansion made primitive (`Alg.tmsf`), makes the leading term (kernel
+  terms first, then descending powers) positive, and is applied to each result as well;
+* the printer writes a negative content `-1` as `-(p)`, or `c - p` when `p` ends in a negative
+  constant, and a kernel with coefficient `1` and no power of `x` inline inside a sum.
+
+This reproduces all of REDUCE's shapes for the ~600 golden coefficient lists
+(`reduce.json`, `algebra.json`); the sign and kernel structure is what `exprval` and the
+Stieltjes bound see. -/
+
+namespace Alg
+
+/-- A kernel: a primitive sum of terms `(c, kernel?, power of x)` with a positive first term. -/
+inductive Ker where
+  | mk (ts : List (Int × Option Ker × Nat))
+  deriving Inhabited
+
+/-- A working term: rational coefficient, optional kernel, power of `x`. -/
+abbrev Term := Rat × Option Ker × Nat
+
+/-- A REDUCE result as printed by `mkprod`: `g · x^m · P / D` with `P` primitive, its first
+term positive. -/
+structure NF where
+  /-- Signed numeric content. -/
+  g : Int
+  /-- Power of `x` taken out. -/
+  m : Nat
+  /-- The primitive sum (or a single term with coefficient `1`). -/
+  P : List (Int × Option Ker × Nat)
+  /-- Denominator. -/
+  D : Nat
+  deriving Inhabited
+
+mutual
+
+/-- A kernel as a sum. -/
+partial def kerRF : Ker → RF
+  | .mk ts => plus (ts.flatMap fun (c, k, e) => termRF c k e true)
+
+/-- A term's forms: `c · K · x^e` (negated when `c < 0`); inside a sum, a kernel with
+coefficient `1` and no power of `x` is spliced in as its terms. -/
+partial def termRF (c : Int) (k : Option Ker) (e : Nat) (inSum : Bool) : List RF :=
+  match k with
+  | none => [signed c e]
+  | some K =>
+    if inSum && c == 1 && e == 0 then
+      match K with | .mk ts => ts.flatMap fun (c', k', e') => termRF c' k' e' true
+    else if inSum || c > 0 then
+      let fs := (if c.natAbs != 1 then [num c.natAbs] else []) ++ [kerRF K] ++
+        (if e > 0 then [xpow e] else [])
+      let t := match fs with | [f] => f | fs => times fs
+      [if c < 0 then minus t else t]
+    else
+      -- a negative product at top level: the sign goes on the kernel factor (`-(p) * x`,
+      -- printed `(c - q) * x` when `p = q - c`) or on the number (`-2 * (p) * x`)
+      let fs := (if c == -1 then [minus (kerRF K)] else [num c, kerRF K]) ++
+        (if e > 0 then [xpow e] else [])
+      [match fs with | [f] => f | fs => times fs]
+
+end
+
+/-- Printing key of a kernel (for combining like terms). -/
+def kerKey : Option Ker → String
+  | none => ""
+  | some K => (kerRF K).str
+
+/-- Combine like terms and drop zeros. -/
+def combine (ts : List Term) : List Term :=
+  let out := ts.foldl (fun (acc : List Term) (c, k, e) =>
+    match acc.findIdx? (fun (_, k', e') => e' == e && kerKey k' == kerKey k) with
+    | some i => acc.modify i fun (c', k', e') => (c' + c, k', e')
+    | none => acc ++ [(c, k, e)]) []
+  out.filter (·.1 != 0)
+
+/-- REDUCE's order of the terms of a sum: kernel terms first, then descending powers. -/
+def order (ts : List Term) : List Term :=
+  let ks := ts.filter (·.2.1.isSome)
+  let ns := ts.filter (·.2.1.isNone)
+  ks.mergeSort (fun a b => a.2.2 ≥ b.2.2) ++ ns.mergeSort (fun a b => a.2.2 ≥ b.2.2)
+
+/-- `mkprod` on a numerator: content, power of `x` and sign out. -/
+def normalize0 (ts : List Term) : NF :=
+  match order (combine ts) with
+  | [] => ⟨0, 0, [], 1⟩
+  | ts@(first :: _) =>
+    let D := ts.foldl (fun acc (c, _, _) => Nat.lcm acc c.den) 1
+    let N := ts.map fun (c, k, e) => ((c * (D : Rat)).num, k, e)
+    let G : Nat := N.foldl (fun (acc : Nat) (c, _, _) => Nat.gcd acc c.natAbs) 0
+    let s : Int := if first.1 < 0 then -1 else 1
+    let m := N.foldl (fun acc (_, _, e) => min acc e) (first.2.2)
+    ⟨s * G, m, N.map fun (c, k, e) => (c / (s * G), k, e - m), D⟩
+
+/-- Every kernel multiplied out (REDUCE `expnd`). -/
+partial def expandAll (ts : List (Int × Option Ker × Nat)) : List Term :=
+  combine (ts.flatMap fun (c, k, e) =>
+    match k with
+    | none => [((c : Rat), none, e)]
+    | some (.mk inner) => (expandAll inner).map fun (c', _, e') => ((c : Rat) * c', none, e + e'))
+
+/-- `expandAll` on working terms. -/
+def expandTerms (ts : List Term) : List Term :=
+  combine (ts.flatMap fun (c, k, e) =>
+    match k with
+    | none => [(c, none, e)]
+    | some (.mk inner) => (expandAll inner).map fun (c', _, e') => (c * c', none, e + e'))
+
+/-- REDUCE `tmsf!*` of a numeric coefficient: `0` for `±1`, else `1`. -/
+@[inline] def tmsCoeff (c : Int) : Nat := if c.natAbs == 1 then 0 else 1
+
+/-- REDUCE's degree surcharge in `tmsf`: `+1` for a square, `+2` for a higher power. -/
+@[inline] def tmsDeg (e : Nat) : Nat := if e ≤ 1 then 0 else if e == 2 then 1 else 2
+
+/-- REDUCE `tmsf` of a polynomial in `x` alone: per term `1 + tmsf*(c) + degree surcharge`,
+and `1` for a constant term. -/
+def tmsX (ts : List (Int × Nat)) : Nat :=
+  ts.foldl (fun acc (c, e) => acc + (if e == 0 then 1 else 1 + tmsCoeff c + tmsDeg e)) 0
+
+/-- REDUCE `tmsf u` (packages/poly/polrep.red), the size `mkprod` compares, on the recursive
+form in which a sum kernel `K` ranks above `x`: `K · lc + red` costs `tmsf K + tmsf*(lc)`
+(`tmsf*` is `0` for `±1`), each `c·x^e` of the reductum `1 + tmsf*(c)` plus `1` for `e = 2` and
+`2` for `e > 2`, and the constant term `1`. -/
+partial def tmsf (ts : List (Int × Option Ker × Nat)) : Nat :=
+  let ks := ts.filterMap fun (c, k, e) => k.map fun K => (K, c, e)
+  let keys := (ks.map fun (K, _, _) => kerKey (some K)).eraseDups
+  let kcost := keys.foldl (fun acc key =>
+    let grp := ks.filter fun (K, _, _) => kerKey (some K) == key
+    match grp with
+    | [] => acc
+    | (Ker.mk inner, _, _) :: _ =>
+      let lc := grp.map fun (_, c, e) => (c, e)
+      let star := match lc with
+        | [(c, 0)] => tmsCoeff c
+        | _ => tmsX lc
+      acc + tmsf inner + star) 0
+  kcost + tmsX (ts.filterMap fun (c, k, e) => if k.isNone then some (c, e) else none)
+
+/-- REDUCE `mkprod` (packages/poly/polrep.red) on a numerator: the common factor `w` (numeric
+content and power of `x`) comes out; a sum `u` with a kernel is kept only if `tmsf u` does not
+exceed `tmsf` of its expansion made primitive, otherwise the expansion replaces it
+(`2*(x - 3) + x^2` stays, `3*(2x + 1) - 2x^3` becomes `3 + 6x - 2x^3`); the leading term
+(kernel terms first, then descending powers) is made positive. REDUCE applies it to every
+sum it makes a kernel of and to each result. -/
+partial def normalize (ts : List Term) : NF :=
+  let nf := normalize0 ts
+  if nf.P.length ≥ 2 && nf.P.any (·.2.1.isSome) then
+    let ex := normalize0 (expandAll nf.P)
+    if ex.P.length ≤ 1 || tmsf nf.P > tmsf ex.P then normalize0 (expandTerms ts) else nf
+  else nf
+
+mutual
+
+/-- REDUCE reading a printed sum back: a kernel with no power of `x` is distributed, one
+times a power of `x` stays a (re-read, re-normalized) kernel. -/
+partial def reread (ts : List (Int × Option Ker × Nat)) : List Term :=
+  combine (ts.flatMap fun (c, k, e) =>
+    match k with
+    | none => [((c : Rat), none, e)]
+    | some (.mk inner) =>
+      if e == 0 then (reread inner).map fun (c', k', e') => ((c : Rat) * c', k', e')
+      else kerTerm (c : Rat) (reread inner) e)
+
+/-- `coef · (sum) · x^e` with `e ≥ 1`: the sum becomes a kernel through `mkprod`. -/
+partial def kerTerm (coef : Rat) (ts : List Term) (e : Nat) : List Term :=
+  let nf := normalize ts
+  match nf.P with
+  | [] => []
+  | [(c, k, e')] => [(coef * (nf.g : Rat) * (c : Rat) / (nf.D : Rat), k, e + nf.m + e')]
+  | P => [(coef * (nf.g : Rat) / (nf.D : Rat), some (.mk P), e + nf.m)]
+
+end
+
+/-- A printed result read back as terms. -/
+def read (nf : NF) : List Term :=
+  let scale : Rat := (nf.g : Rat) / (nf.D : Rat)
+  match nf.P with
+  | [] => []
+  | [(c, k, e)] =>
+    match k with
+    | some (.mk inner) =>
+      if e + nf.m == 0 then (reread inner).map fun (c', k', e') => (scale * (c : Rat) * c', k', e')
+      else kerTerm (scale * (c : Rat)) (reread inner) (e + nf.m)
+    | none => [(scale * (c : Rat), none, e + nf.m)]
+  | P => if nf.m ≥ 1 then kerTerm scale (reread P) nf.m else (reread P).map fun (c, k, e) => (scale * c, k, e)
+
+/-- `x · H` for a printed `H`: a sum times `x` is a kernel. -/
+def mulX (nf : NF) : List Term :=
+  match nf.P with
+  | [] => []
+  | [_] => (read nf).map fun (c, k, e) => (c, k, e + 1)
+  | P => kerTerm ((nf.g : Rat) / (nf.D : Rat)) (reread P) (nf.m + 1)
+
+/-- The printed form of a result. -/
+def nfRF (nf : NF) : RF :=
+  let body : RF := match nf.P with
+    | [] => num 0
+    | [(c, k, e)] =>
+      (termRF (nf.g * c) k (e + nf.m) false).headD (num 0)
+    | P =>
+      let sum := plus (P.flatMap fun (c, k, e) => termRF c k e true)
+      let core := if nf.g == 1 then [sum] else if nf.g == -1 then [minus sum] else [num nf.g, sum]
+      let fs := core ++ (if nf.m > 0 then [xpow nf.m] else [])
+      match fs with | [f] => f | fs => times fs
+  over body nf.D
+
+/-- A `Reduce.Algebra` value: a Julia number or a REDUCE result. -/
+inductive AV where
+  /-- A Julia number (`Int64` or `Float64`). -/
+  | lit (l : Lit)
+  /-- A REDUCE result (Julia `Expr`). -/
+  | red (nf : NF)
+  deriving Inhabited
+
+/-- Terms of a value. -/
+def terms : AV → List Term
+  | .lit l => let r := litRat l; if r == 0 then [] else [(r, none, 0)]
+  | .red nf => read nf
+
+/-- A REDUCE evaluation: an integer result comes back as a Julia `Int`. -/
+def ofTerms (ts : List Term) : AV :=
+  let nf := normalize ts
+  match nf.P with
+  | [] => .lit (.int 0)
+  | [(_, none, 0)] => if nf.m == 0 && nf.D == 1 then .lit (.int nf.g) else .red nf
+  | _ => .red nf
+
+/-- Julia `+` on two numbers. -/
+def litAdd : Lit → Lit → Lit
+  | .int a, .int b => .int (a + b)
+  | .int a, .f64 b => .f64 (Float.ofInt a + b)
+  | .f64 a, .int b => .f64 (a + Float.ofInt b)
+  | .f64 a, .f64 b => .f64 (a + b)
+  | a, _ => a
+
+/-- `Algebra.:+(a, b)`. -/
+def add : AV → AV → AV
+  | .lit a, .lit b => .lit (litAdd a b)
+  | a, b => ofTerms (terms a ++ terms b)
+
+/-- `Algebra.:*(x, h)`. -/
+def mulX' : AV → AV
+  | .lit l => ofTerms ((terms (.lit l)).map fun (c, k, e) => (c, k, e + 1))
+  | .red nf => ofTerms (mulX nf)
+
+/-- `Algebra.:*(a, Algebra.:^(x, j))` for `j ≥ 1`. -/
+def monomial (a : Lit) (j : Nat) : AV :=
+  ofTerms ((terms (.lit a)).map fun (c, k, _) => (c, k, j))
+
+/-- The Julia expression of a value. -/
+def toJ : AV → JExpr
+  | .lit l => .lit l
+  | .red nf => toJExpr (nfRF nf)
+
+end Alg
+
+/-- Wilkinson's `polyhorner(x, a) = a₁ + x(a₂ + x(⋯ aₙ))` (src/Wilkinson.jl:23-24), step by step
+through `Reduce.Algebra` (`polyhorner(x,a,k) = k == length(a) ? a[k] : a[k] + x*polyhorner(x,a,k+1)`;
+see `Alg`). -/
+def polyhorner (a : List Lit) : JExpr :=
+  match a.reverse with
+  | [] => .lit (.int 0)
+  | last :: rest => Alg.toJ (rest.foldl (fun h ak => Alg.add (.lit ak) (Alg.mulX' h)) (.lit last))
+
+/-- Wilkinson's `polyexpand(x, a) = aₙ x^(n-1) + ⋯ + a₁` (src/Wilkinson.jl:29-30), step by step
+through `Reduce.Algebra` (`polyexpand(x,a,k) = k == 1 ? a[1] : a[k]*x^(k-1) + polyexpand(x,a,k-1)`). -/
 def polyexpand (a : List Lit) : JExpr :=
   match a with
-  | [c] => .lit c
-  | _ => toJExpr (expandRF (ofCoeffs a))
+  | [] => .lit (.int 0)
+  | a1 :: rest =>
+    Alg.toJ ((rest.zipIdx.foldl (fun (s : Alg.AV) (ak, i) => Alg.add (Alg.monomial ak (i + 1)) s)) (.lit a1))
 
 /-- The REDUCE emulation as Wilkinson's computer-algebra backend (`factor` stands in
 for `factor` with `on rounded`, so `rxtra` is always false). -/

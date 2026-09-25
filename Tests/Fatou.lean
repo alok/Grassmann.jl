@@ -3,6 +3,7 @@ import Tests.Fatou.Grid
 import Tests.Fatou.Sets
 import Tests.Fatou.Orbit
 import Tests.Fatou.Color
+import Tests.Fatou.Symbolic
 
 /-!
 Fatou test aggregator: oracle goldens from `oracle/fatou/gen.jl` and `oracle/fatou/mpl.py`
@@ -56,7 +57,7 @@ def run : IO (Nat × Nat) := do
   let mut passed := 0
   let mut failed := 0
   for (name, suite) in [("complex", Complex.run), ("grids", Grid.run), ("sets", Sets.run),
-      ("orbits", Orbit.run), ("colour", Color.run)] do
+      ("orbits", Orbit.run), ("colour", Color.run), ("symbolic", Symbolic.run)] do
     let (p, f) ← runSuite name suite
     passed := passed + p
     failed := failed + f

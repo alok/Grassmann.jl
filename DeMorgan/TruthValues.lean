@@ -8,10 +8,18 @@ column of a truth table over `N` propositional variables: row `k ∈ [0, 2^N)` i
 of a `UInt`. The connectives are bitwise (DM:48-58).
 
 Lean design:
-* `TruthValues N` wraps a `BitVec (2 ^ N)`. The row count is in the type, so columns of
-  different `N` cannot be mixed (Julia enforces this by dispatch, DM:48-54) and the
-  column is always masked. Julia stores a 64-bit `UInt` and is limited to `N ≤ 6`; here
-  any `N` works, and `N ≤ 6` agrees with Julia bit for bit.
+* `TruthValues N` is one machine word, a `UInt64` (Julia's `UInt`), plus the proof that the
+  bits beyond the column's rows are clear. The proof is erased, so the structure compiles
+  to an unboxed `uint64_t` and every connective is one or two ALU instructions (the first
+  port stored a `BitVec (2^N)`, whose 64-bit values are GMP bignums: 669 ns for a formula
+  Julia evaluates in 0.43 ns, docs/PERF.md).
+* The row count is `rows N = 2^min(N, 6)`: `2^N` for `N ≤ 6`, the only case Julia supports,
+  and 64 beyond, where Julia's `tautology(N) = UInt(1)<<(1<<N)-UInt(1)` (DM:100) wraps to
+  all ones. The port therefore agrees with Julia bit for bit for every `N`, and the laws
+  below are stated per row `k < rows N`. The tautology checker (`Formula.isTautology_iff`)
+  is complete for `N ≤ 6`, where every assignment is a row.
+* The row count is in the type, so columns of different `N` cannot be mixed (Julia
+  enforces this by dispatch, DM:48-54).
 * Julia's N-polymorphic contradiction `⊥ = TruthValues{0}(0)` and singleton tautology `⊤`
   (DM:39-46), with their lifting rules (DM:148-153), become the implicit-`N` constants
   `TruthValues.bot`/`TruthValues.top`: the lifting is done by elaboration.
@@ -28,60 +36,114 @@ namespace DeMorgan
 
 open AbstractLattices
 
-/-- The truth-table column with bit `k` equal to `f k`, for the `2^N` rows. -/
-def column (N : Nat) (f : Nat → Bool) : BitVec (2 ^ N) :=
-  (BitVec.ofBoolListLE ((List.range (2 ^ N)).map f)).cast (by simp)
+/-- The number of rows of a column: `2^N` for `N ≤ 6`, and 64 (the width of Julia's `UInt`)
+beyond. -/
+def rows (N : Nat) : Nat := 2 ^ min N 6
+
+theorem rows_le_64 (N : Nat) : rows N ≤ 64 :=
+  Nat.pow_le_pow_right (by decide) (Nat.min_le_right N 6)
+
+theorem rows_of_le {N : Nat} (h : N ≤ 6) : rows N = 2 ^ N := by
+  simp [rows, Nat.min_eq_left h]
+
+/-- The machine word with bit `k` equal to `f k` on the `rows N` rows (and clear above). -/
+def column (N : Nat) (f : Nat → Bool) : UInt64 :=
+  ⟨(BitVec.ofBoolListLE ((List.range (rows N)).map f)).setWidth 64⟩
 
 @[simp] theorem getLsbD_column (N : Nat) (f : Nat → Bool) (k : Nat) :
-    (column N f).getLsbD k = (decide (k < 2 ^ N) && f k) := by
-  simp only [column, BitVec.getLsbD_cast, BitVec.getLsbD_ofBoolListLE,
+    (column N f).toBitVec.getLsbD k = (decide (k < rows N) && f k) := by
+  simp only [column, BitVec.getLsbD_setWidth, BitVec.getLsbD_ofBoolListLE,
     List.getD_eq_getElem?_getD]
-  by_cases h : k < 2 ^ N <;> simp [h]
+  have := rows_le_64 N
+  by_cases h : k < rows N
+  · simp [h, show k < 64 by omega]
+  · simp [h]
 
-/-- Julia `TruthValues{N}` (DM:31-33): a column of `2^N` truth values, row `k` = bit `k`. -/
+/-- The all-rows mask (Julia `tautology(N)`, DM:100), one literal per `N`. -/
+def mask : Nat → UInt64
+  | 0 => 0x1
+  | 1 => 0x3
+  | 2 => 0xF
+  | 3 => 0xFF
+  | 4 => 0xFFFF
+  | 5 => 0xFFFFFFFF
+  | _ + 6 => 0xFFFFFFFFFFFFFFFF
+
+/-- A word whose bits `k < 64` match a predicate matches it everywhere once the predicate
+is false from 64 on. -/
+private theorem getLsbD_of_lt64 {w : UInt64} {P : Nat → Bool}
+    (hP : ∀ k, 64 ≤ k → P k = false) (h : ∀ k, k < 64 → w.toBitVec.getLsbD k = P k) (k : Nat) :
+    w.toBitVec.getLsbD k = P k := by
+  by_cases hk : k < 64
+  · exact h k hk
+  · rw [BitVec.getLsbD_of_ge _ _ (by omega), hP k (by omega)]
+
+@[simp] theorem getLsbD_mask (N : Nat) (k : Nat) :
+    (mask N).toBitVec.getLsbD k = decide (k < rows N) := by
+  have hP : ∀ k, 64 ≤ k → decide (k < rows N) = false := fun k hk => by
+    have := rows_le_64 N; simp; omega
+  refine getLsbD_of_lt64 hP ?_ k
+  match N with
+  | 0 | 1 | 2 | 3 | 4 | 5 => decide
+  | n + 6 =>
+    intro k hk
+    have : rows (n + 6) = 64 := by simp [rows]
+    simp only [mask, this, hk, decide_true]
+    exact (BitVec.getLsbD_allOnes (v := 64) (i := k)).trans (by simp [hk])
+
+/-- Julia `TruthValues{N}` (DM:31-33): a column of `rows N` truth values in one machine
+word, row `k` = bit `k`. -/
 structure TruthValues (N : Nat) where
-  /-- The column; bit `k` is the value on row `k`. -/
-  bits : BitVec (2 ^ N)
-  deriving DecidableEq
+  /-- The column (Julia `p.p`); bit `k` is the value on row `k`. -/
+  bits : UInt64
+  /-- The bits beyond the rows are clear. -/
+  masked : ∀ k, rows N ≤ k → bits.toBitVec.getLsbD k = false
 
 namespace TruthValues
 
 variable {N : Nat}
 
-/-- Julia `tautology(N) = UInt(1)<<(1<<N)-UInt(1)` (DM:100): all rows set. Julia's
-`<<` by ≥ 64 gives 0, so `N = 6` still yields all ones; here the width is exact. -/
-def mask (N : Nat) : BitVec (2 ^ N) := BitVec.allOnes _
+instance : DecidableEq (TruthValues N) := fun p q =>
+  if h : p.bits = q.bits then isTrue (by cases p; cases q; simp_all)
+  else isFalse (fun e => h (congrArg TruthValues.bits e))
+
+/-- Build a column from a word, clearing the bits beyond the rows. -/
+@[inline] def ofUInt64 (N : Nat) (w : UInt64) : TruthValues N :=
+  ⟨w &&& mask N, fun k hk => by simp; omega⟩
 
 /-- The contradiction `⊥` (Julia `⊥ = TruthValues{0}(0)`, DM:39), at any `N`
 (Julia's lifting rule `op(TV{0}, TV{N})`, DM:150-151). -/
-def bot : TruthValues N := ⟨0⟩
+@[inline] def bot : TruthValues N := ⟨0, fun _ _ => by simp⟩
 
 /-- The tautology `⊤` (Julia `⊤ = Tautology()`, DM:43-44), lifted to `N` rows
 (DM:152-153). -/
-def top : TruthValues N := ⟨mask N⟩
+@[inline] def top : TruthValues N := ⟨mask N, fun k hk => by simp; omega⟩
 
-/-- The value on row `k` (`false` outside `[0, 2^N)`). -/
-@[inline] def eval (p : TruthValues N) (k : Nat) : Bool := p.bits.getLsbD k
+/-- The value on row `k` (`false` outside the rows). -/
+@[inline] def eval (p : TruthValues N) (k : Nat) : Bool := p.bits.toBitVec.getLsbD k
 
 /-- Julia `TruthValues(p::Bool...)` (DM:37): packs the arguments as bits, argument 1
 at bit 0. **Julia's `N` is the number of arguments** (not log₂ of the row count), which
 this signature reproduces: `ofBools [false, true, true, false] = TruthValues{4}(6)`. -/
 def ofBools (ps : List Bool) : TruthValues ps.length :=
-  ⟨column ps.length fun k => ps.getD k false⟩
+  ⟨column ps.length fun k => ps.getD k false, fun k hk => by simp; omega⟩
 
-/-- Build a column from its natural-number encoding (bits beyond `2^N` are dropped). -/
-def ofNat (N : Nat) (n : Nat) : TruthValues N := ⟨BitVec.ofNat _ n⟩
+/-- Build a column from its natural-number encoding (bits beyond the rows are dropped). -/
+def ofNat (N : Nat) (n : Nat) : TruthValues N := ofUInt64 N (UInt64.ofNat n)
 
 /-- The column as a natural number (Julia `p.p`). -/
 @[inline] def toNat (p : TruthValues N) : Nat := p.bits.toNat
 
 /-- Julia `wedge(p, q) = TruthValues{N}(p.p & q.p)` (DM:48). -/
-@[inline] def and (p q : TruthValues N) : TruthValues N := ⟨p.bits &&& q.bits⟩
+@[inline] def and (p q : TruthValues N) : TruthValues N :=
+  ⟨p.bits &&& q.bits, fun k hk => by simp [p.masked k hk]⟩
 /-- Julia `vee(p, q) = TruthValues{N}(p.p | q.p)` (DM:49). -/
-@[inline] def or (p q : TruthValues N) : TruthValues N := ⟨p.bits ||| q.bits⟩
+@[inline] def or (p q : TruthValues N) : TruthValues N :=
+  ⟨p.bits ||| q.bits, fun k hk => by simp [p.masked k hk, q.masked k hk]⟩
 /-- Julia `!(p) = TruthValues{N}(p.p ⊻ tautology(N))` (DM:55); `!⊥ = ⊤`, `!⊤ = ⊥`
 (DM:56-57). -/
-@[inline] def not (p : TruthValues N) : TruthValues N := ⟨p.bits ^^^ mask N⟩
+@[inline] def not (p : TruthValues N) : TruthValues N :=
+  ⟨p.bits ^^^ mask N, fun k hk => by simp [p.masked k hk]; omega⟩
 /-- Julia `p --> q = ¬p ∨ q` (DM:52). -/
 @[inline] def imp (p q : TruthValues N) : TruthValues N := p.not.or q
 /-- Julia `p <-- q = p ∨ ¬q` (DM:53). -/
@@ -103,35 +165,41 @@ payload **[run]** (port-notes §5.3). -/
 protected def toString (p : TruthValues N) : String :=
   if N = 0 then (if p.toNat = 0 then "⊥" else "⊤")
   else
-    let digits := max 16 ((2 ^ N + 3) / 4)
     let h := String.ofList (Nat.toDigits 16 p.toNat)
-    s!"TruthValues\{{N}}(0x{String.ofList (List.replicate (digits - h.length) '0')}{h})"
+    s!"TruthValues\{{N}}(0x{String.ofList (List.replicate (16 - h.length) '0')}{h})"
 
 instance : ToString (TruthValues N) := ⟨TruthValues.toString⟩
 instance : Repr (TruthValues N) := ⟨fun p _ => TruthValues.toString p⟩
 
 /-! ### Laws -/
 
-@[ext] theorem ext {p q : TruthValues N} (h : ∀ k, k < 2 ^ N → p.eval k = q.eval k) : p = q := by
-  cases p; cases q; congr 1; exact BitVec.eq_of_getLsbD_eq h
+theorem eval_of_ge (p : TruthValues N) {k : Nat} (h : rows N ≤ k) : p.eval k = false :=
+  p.masked k h
+
+@[ext] theorem ext {p q : TruthValues N} (h : ∀ k, k < rows N → p.eval k = q.eval k) : p = q := by
+  have hb : p.bits = q.bits := by
+    apply UInt64.toBitVec_inj.mp
+    apply BitVec.eq_of_getLsbD_eq
+    intro k _
+    by_cases hk : k < rows N
+    · exact h k hk
+    · exact (p.masked k (by omega)).trans (q.masked k (by omega)).symm
+  cases p; cases q; simp_all
 
 @[simp] theorem eval_and (p q : TruthValues N) (k : Nat) :
-    (p.and q).eval k = (p.eval k && q.eval k) := BitVec.getLsbD_and
+    (p.and q).eval k = (p.eval k && q.eval k) := by simp [and, eval]
 @[simp] theorem eval_or (p q : TruthValues N) (k : Nat) :
-    (p.or q).eval k = (p.eval k || q.eval k) := BitVec.getLsbD_or
+    (p.or q).eval k = (p.eval k || q.eval k) := by simp [or, eval]
 @[simp] theorem eval_not (p : TruthValues N) (k : Nat) :
-    p.not.eval k = (decide (k < 2 ^ N) && !p.eval k) := by
-  simp only [not, eval, mask, BitVec.getLsbD_xor, BitVec.getLsbD_allOnes]
-  by_cases h : k < 2 ^ N
+    p.not.eval k = (decide (k < rows N) && !p.eval k) := by
+  simp only [not, eval, UInt64.toBitVec_xor, BitVec.getLsbD_xor, getLsbD_mask]
+  by_cases h : k < rows N
   · simp [h]
-  · simp [h, BitVec.getLsbD_of_ge _ _ (Nat.le_of_not_lt h)]
+  · simp [h, p.masked k (by omega)]
 @[simp] theorem eval_bot (k : Nat) : (bot : TruthValues N).eval k = false := by
   simp [bot, eval]
-@[simp] theorem eval_top (k : Nat) : (top : TruthValues N).eval k = decide (k < 2 ^ N) := by
-  simp [top, eval, mask]
-
-theorem eval_of_ge (p : TruthValues N) {k : Nat} (h : 2 ^ N ≤ k) : p.eval k = false :=
-  BitVec.getLsbD_of_ge _ _ h
+@[simp] theorem eval_top (k : Nat) : (top : TruthValues N).eval k = decide (k < rows N) := by
+  simp [top, eval]
 
 /-- Involution of negation (Julia `¬¬p == p` for masked columns; always true here). -/
 @[simp] theorem not_not (p : TruthValues N) : p.not.not = p := by
@@ -146,7 +214,7 @@ theorem not_or (p q : TruthValues N) : (p.or q).not = p.not.and q.not := by
   ext k hk; simp [hk, Bool.not_or]
 
 /-- `p ↔ q` is the rowwise equality of columns. -/
-theorem eval_iff (p q : TruthValues N) (k : Nat) (hk : k < 2 ^ N) :
+theorem eval_iff (p q : TruthValues N) (k : Nat) (hk : k < rows N) :
     (p.iff q).eval k = (p.eval k == q.eval k) := by
   simp only [iff, imp, eval_and, eval_or, eval_not, hk, decide_true, Bool.true_and]
   cases p.eval k <;> cases q.eval k <;> rfl
@@ -170,8 +238,40 @@ end TruthValues
 
 /-- Julia `select(n, N)` (DM:80-83): the column that is true on the rows whose bit
 `n-1` is zero, `n` being 1-based. Examples **[run]**: `select 1 2 = 0b0101`,
-`select 2 2 = 0b0011`. -/
-def select (n N : Nat) : BitVec (2 ^ N) := column N fun k => !k.testBit (n - 1)
+`select 2 2 = 0b0011`. (Computed by `selectFast`, see `select_eq_selectFast`.) -/
+def select (n N : Nat) : UInt64 := column N fun k => !k.testBit (n - 1)
+
+/-- The 64-row pattern of `select (b + 1)`: true on the rows whose bit `b` is zero. -/
+def selectWord : Nat → UInt64
+  | 0 => 0x5555555555555555
+  | 1 => 0x3333333333333333
+  | 2 => 0x0F0F0F0F0F0F0F0F
+  | 3 => 0x00FF00FF00FF00FF
+  | 4 => 0x0000FFFF0000FFFF
+  | 5 => 0x00000000FFFFFFFF
+  | _ + 6 => 0xFFFFFFFFFFFFFFFF
+
+theorem getLsbD_selectWord (b k : Nat) (hk : k < 64) :
+    (selectWord b).toBitVec.getLsbD k = !k.testBit b := by
+  match b with
+  | 0 | 1 | 2 | 3 | 4 | 5 => revert k; decide
+  | b + 6 =>
+    have h64 : 64 ≤ 2 ^ (b + 6) :=
+      (Nat.pow_le_pow_right (n := 2) (by decide) (show 6 ≤ b + 6 by omega) : 2 ^ 6 ≤ _)
+    have : k.testBit (b + 6) = false := Nat.testBit_lt_two_pow (by omega)
+    simp only [selectWord, this]
+    exact (BitVec.getLsbD_allOnes (v := 64) (i := k)).trans (by simp [hk])
+
+/-- `select` by a word literal and the mask (no per-row loop). -/
+def selectFast (n N : Nat) : UInt64 := selectWord (n - 1) &&& mask N
+
+@[csimp] theorem select_eq_selectFast : @select = @selectFast := by
+  funext n N
+  apply UInt64.toBitVec_inj.mp
+  apply BitVec.eq_of_getLsbD_eq
+  intro k hk
+  simp only [select, selectFast, getLsbD_column, UInt64.toBitVec_and, BitVec.getLsbD_and,
+    getLsbD_mask, getLsbD_selectWord _ _ hk, Bool.and_comm]
 
 /-- The row assignment of the Julia truth table: variable `m` (0-based, declared
 `m+1`-th in `@truthtable`) is true on row `k` iff bit `N-1-m` of `k` is zero. Row 0 is
@@ -180,10 +280,11 @@ def row (N : Nat) (k : Nat) (m : Fin N) : Bool := !k.testBit (N - 1 - m)
 
 /-- The projection column of variable `m`: Julia's `@truthtable` binds variable `m+1`
 of `N` to `select(N - m, N)` (DM:89). -/
-def TruthValues.proj {N : Nat} (m : Fin N) : TruthValues N := ⟨select (N - m) N⟩
+def TruthValues.proj {N : Nat} (m : Fin N) : TruthValues N :=
+  ⟨select (N - m) N, fun k hk => by simp [select]; omega⟩
 
 @[simp] theorem TruthValues.eval_proj {N : Nat} (m : Fin N) (k : Nat) :
-    (TruthValues.proj m).eval k = (decide (k < 2 ^ N) && row N k m) := by
+    (TruthValues.proj m).eval k = (decide (k < rows N) && row N k m) := by
   simp only [TruthValues.proj, TruthValues.eval, select, getLsbD_column, row]
   congr 3
   omega
@@ -243,7 +344,7 @@ def tv : Formula N → TruthValues N
 
 /-- **Soundness of the columns**: row `k` of the bit-parallel column is the formula's
 value under the row-`k` assignment. -/
-theorem eval_tv (φ : Formula N) (k : Nat) (hk : k < 2 ^ N) :
+theorem eval_tv (φ : Formula N) (k : Nat) (hk : k < rows N) :
     φ.tv.eval k = φ.eval (row N k) := by
   induction φ with
   | var m => simp [tv, eval, hk]
@@ -289,14 +390,18 @@ theorem row_rowIndex : ∀ {N : Nat} (ρ : Fin N → Bool), row N (rowIndex ρ) 
       · simp
       · rw [Nat.testBit_two_pow_add_gt (by omega)]
 
-/-- **DeMorgan decides tautologies**: a formula's bit-parallel column is `⊤` exactly
-when the formula is true under every assignment. -/
-theorem tv_eq_top_iff (φ : Formula N) : φ.tv = TruthValues.top ↔ ∀ ρ, φ.eval ρ = true := by
+/-- **DeMorgan decides tautologies**: for `N ≤ 6` (Julia's range, where every assignment is
+a row of the 64-bit column), a formula's bit-parallel column is `⊤` exactly when the formula
+is true under every assignment. -/
+theorem tv_eq_top_iff (φ : Formula N) (hN : N ≤ 6) :
+    φ.tv = TruthValues.top ↔ ∀ ρ, φ.eval ρ = true := by
+  have hrow : ∀ ρ : Fin N → Bool, rowIndex ρ < rows N := fun ρ =>
+    (rows_of_le hN) ▸ rowIndex_lt ρ
   constructor
   · intro h ρ
-    have := eval_tv φ (rowIndex ρ) (rowIndex_lt ρ)
+    have := eval_tv φ (rowIndex ρ) (hrow ρ)
     rw [row_rowIndex, h, TruthValues.eval_top] at this
-    simpa [rowIndex_lt ρ] using this.symm
+    simpa [hrow ρ] using this.symm
   · intro h
     ext k hk
     rw [eval_tv φ k hk, h, TruthValues.eval_top]
@@ -305,8 +410,9 @@ theorem tv_eq_top_iff (φ : Formula N) : φ.tv = TruthValues.top ↔ ∀ ρ, φ.
 /-- Decidable tautology test via one bit-parallel evaluation. -/
 def isTautology (φ : Formula N) : Bool := φ.tv == TruthValues.top
 
-theorem isTautology_iff (φ : Formula N) : φ.isTautology = true ↔ ∀ ρ, φ.eval ρ = true := by
-  simp [isTautology, tv_eq_top_iff]
+theorem isTautology_iff (φ : Formula N) (hN : N ≤ 6 := by decide) :
+    φ.isTautology = true ↔ ∀ ρ, φ.eval ρ = true := by
+  simp [isTautology, tv_eq_top_iff φ hN]
 
 end Formula
 

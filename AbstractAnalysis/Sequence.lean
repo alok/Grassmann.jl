@@ -131,6 +131,11 @@ end SequenceArray
 /-- A 1-D sequence stored in a plain `Array`. -/
 abbrev SequenceVector (α : Type) [Inhabited α] := SequenceArray (Array α) α
 
+/-- Julia `SequenceMatrix{T} = SequenceArray{T,2}` (src/AbstractAnalysis.jl:245): terms are
+packed `Float` columns of a fixed length stacked along the last axis (an `ElasticArray`), the
+storage of Cartan's field orbits. -/
+abbrev SequenceMatrix := SequenceArray SlabArray FloatArray
+
 /-- Julia `accumulate_pairwise!(op, c, v)` (base/accumulate.jl), which `cumsum`
 uses for rounding arithmetic: blocks below 128 elements accumulate their own
 partial sum `s_` and add it to the running offset `s`, so `c[i] = v[1] + (v[2] + … + v[i])`

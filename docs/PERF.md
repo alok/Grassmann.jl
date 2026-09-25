@@ -647,3 +647,32 @@ Not fixable from Cartan: `scale_s2` and `norm_v` (2.1–2.2×) are Julia's SIMD 
 first a copy of the shared operand, then a second pass; `√` throughput bounds `norm`); `sum_s`
 replays Julia's SIMD accumulator layout bit for bit (`JuliaBase.F64.sum`, bounds-checked `Nat`
 reads: a `USize` loop there would help).
+## 2026-09-25: misc packages (DeMorgan, Fatou, AbstractAnalysis, Wilkinson)
+
+Lean medians from `lake exe bench demorgan dendriform wilkinson fatou` after this work, Julia
+from `docs/perf/latest.md` (same machine); the AbstractAnalysis rows were timed with temporary
+cases (there is no `abstractanalysis` suite yet) against Julia runs of the same calls.
+
+| case | before | after | Julia | note |
+|---|---|---|---|---|
+| `demorgan/tv_formula_N6` | 669 ns | 0.71 ns | 0.43 ns | `TruthValues N` is one `UInt64` word (unboxed structure), rows `2^min(N,6)` as Julia's storage; the laws and `isTautology_iff` are stated per row |
+| `demorgan/truthtable_N4` | 39.2 µs | 2.79 µs | 16.5 µs | `select` compares word literals (`@[csimp]`) |
+| `fatou/filled_julia_seq` | 95.8 ms | 90.1 ms | 77.2–79.5 ms | outputs preallocated and written in place (`set!`), not pushed |
+| `fatou/filled_julia_par` | 15.2 ms | 14.8 ms | 9.4–11.9 ms | ~128 row chunks on the task pool, chunk outputs copied by three dedicated threads as they finish; the rest of the gap is the copy (`FloatArray` has no bulk copy, ~1.5 ns/float) |
+| `fatou/newton_par` | 10.3 ms | 9.9 ms | 8.6–9.6 ms | – |
+| `abstractanalysis` `orbit(cos, 1.0)` | 1.62 µs | 0.96 µs | 0.75 µs | `orbit`/`orbitError`/`orbitN` are `@[inline]`, so `untilConverged` specializes on the map and the `Float` state stays unboxed |
+| `abstractanalysis` `sum(CountableVector(i -> 1/i^2, 10))[1e-10]` | 11.1 ms | 4.3 ms / 0.58 ms | 0.13 ms | `sum`/`limitEps` inlined, and the loop no longer keeps the previous state, so each step reuses the `Indexed` cell (one boxed `Float` per step remains). 4.3 ms with the map written `1 / Float.ofNat (i * i)`, 0.58 ms (5.8 ns/step) with `1 / (i * i).toUInt64.toFloat`: `Float.ofNat` in the user's map is most of the cost |
+| `abstractanalysis` `magma([(1 2), (1 … 6)])` (S₆, 720 elements) | 3.17 s | 64 ms | 2.59 s | `magmaHashed` (hash side index, same order as `magma` when `≈` is `==`) |
+| `abstractanalysis` `isgroup(S₅)` | 883 ms | 336 ms / 4.4 ms | 78 ms | `@[csimp]` array scans with `f * g` hoisted, `Perm.mul` via `Vector.map`; `isGroupHashed` checks associativity on an index Cayley table |
+
+Rules learned:
+
+* A polymorphic structure field is boxed even at `Float` (`Indexed Float`). A loop whose state
+  is such a structure can still reuse the structure's cell if the state is dead when the step
+  consumes it (read what the residual needs first, do not carry the previous state); the boxed
+  `Float` inside remains one allocation per step.
+* `List.any`/`all` on `Array.toList` allocates the list on every call; `@[csimp]` lets the
+  kernel-reducible `toList` definition (used by `decide` proofs) compile to `Array.any`.
+* `@[inline]` on a small wrapper (`orbit f x = untilConverged f …`) is what lets a
+  `@[specialize]` loop below it see the concrete map; without it the wrapper is compiled once
+  with closure calls.

@@ -41,6 +41,56 @@ def randPerm (N : Nat) (g : Tests.Rng) : Perm N × Tests.Rng := Id.run do
     a := a.swapIfInBounds i (i + k)
   return (Perm.ofList! a.toList, g)
 
+/-- The multi-dimensional storage (`SlabArray`, `SequenceMatrix`) Cartan's field orbits use:
+push/slice/count round trips, memoized extension, and residuals of a 2-D state. -/
+def slabs (g0 : Tests.Rng) : TestM Unit := do
+  let mut g := g0
+  let mut okRound := true
+  let mut okCount := true
+  for trial in [0:200] do
+    let slab := trial % 7 + 1
+    let n := (trial / 7) % 9
+    -- random slabs, pushed one by one
+    let mut x : SlabArray := ⟨{}, slab⟩
+    let mut cols : Array FloatArray := #[]
+    for _ in [0:n] do
+      let mut c : FloatArray := {}
+      for _ in [0:slab] do
+        let (v, g') := randFinite g
+        g := g'
+        c := c.push v
+      cols := cols.push c
+      x := x.pushSlab c
+    if x.count != n || lastDim x != n then okCount := false
+    for k in [0:n] do
+      let s := x.slice (k + 1)
+      if !(s.size == slab && (List.range slab).all fun i => sameFloat s[i]! cols[k]![i]!) then
+        okRound := false
+  check "SlabArray slice ∘ pushSlab = id" okRound
+  check "SlabArray count = number of pushes" okCount
+  -- a matrix sequence: column k is `[k, k², k³]`, each computed from the previous column
+  let seq : SequenceMatrix :=
+    ⟨(SlabArray.mk {} 3).pushSlab ⟨#[1, 1, 1]⟩, fun v k =>
+      let p := extract v (k - 1)
+      let kf := Float.ofNat k
+      ⟨#[p[0]! + 1, kf * kf, kf * kf * kf]⟩⟩
+  let seq := seq.resize 6
+  checkEq "SequenceMatrix length" seq.length 6
+  let (c4, seq') := seq.get 4
+  check "SequenceMatrix get" (c4.toList == [4.0, 16.0, 64.0])
+  let (c9, seq9) := seq'.get 9
+  check "SequenceMatrix extends on read" (c9.toList == [9.0, 81.0, 729.0] && seq9.length == 9)
+  check "SequenceMatrix take" ((seq.take 3).map (·.toList) == #[[1.0, 1.0, 1.0], [2.0, 4.0, 8.0],
+    [3.0, 9.0, 27.0]])
+  -- residuals of a 2-D state (the 2-norm of column differences, Julia's `supnorm` on arrays)
+  let r := residuals seq9.v (Metric.dist : FloatArray → FloatArray → Float)
+  checkEq "residuals of slabs: count" r.size 8
+  let d23 : Float := Float.sqrt (1 + 25 + 361)
+  check "residuals of slabs: value" (sameFloat r[1]! d23) s!"{r[1]!} vs {d23}"
+  -- the SequenceArray limit of the matrix sequence at 5 terms
+  let L := seq9.limit 5 (Metric.dist : FloatArray → FloatArray → Float)
+  check "SequenceMatrix limit" (L.last.toList == [5.0, 25.0, 125.0] && L.n == 5)
+
 /-- The suite. -/
 def suite : TestM Unit := do
   -- IEEE toolkit: exact decode/re-encode, neighbours, printing round-trips
@@ -112,5 +162,7 @@ def suite : TestM Unit := do
   -- clean vs Julia `isbounded`
   checkEq "isBounded (clean)" (isBounded ⟨#[1.0, 2.0]⟩) true
   checkEq "isbounded (Julia, inverted)" (Julia.isBounded ⟨#[1.0, 2.0]⟩) false
+  slabs g
+
 
 end Tests.AbstractAnalysis.Props
