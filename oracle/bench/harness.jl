@@ -64,6 +64,7 @@ checkval(x::AbstractDict) = Float64(length(x))
 checkval(x::AbstractSet) = Float64(length(x))
 checkval(x::Tuple) = isempty(x) ? 0.0 : sum(checkval, x)
 checkval(::Nothing) = 0.0
+checkval(::Any) = NaN   # not comparable (written as null)
 
 "An opaque identity for literal inputs (no constant propagation through it)."
 @noinline blackbox(salt, x) = Base.compilerbarrier(:const, x)
