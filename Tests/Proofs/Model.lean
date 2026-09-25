@@ -17,9 +17,9 @@ split, degenerate and general diagonal metrics):
   specification on random masks (proved for all masks; tested as a check of
   the compiled code);
 * conformal spaces: the transported blade table `Grassmann.Proofs.ConfTable`
-  of `S!"∞∅+"`, `CGA2` and `CGA3` on every pair of blades (the hypothesis of the
-  proved transport theorems, which the kernel cannot evaluate), and the
-  compiled `CGA3` multivector product against `T⁻¹(T x · T y)` on random inputs.
+  of `S!"∞∅+"`, `CGA2` and `CGA3` on every pair of blades (kernel-checked in
+  `Grassmann.Proofs.Conformal`; this runs the compiled code), and the compiled
+  `CGA3` multivector product against `T⁻¹(T x · T y)` on random inputs.
 -/
 import Grassmann
 import Grassmann.Spec

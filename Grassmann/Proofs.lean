@@ -43,5 +43,6 @@ proved in general, what is checked by kernel evaluation and what is tested):
 * `Grassmann.Proofs.Conformal`: the conformal (null-basis, Chevalley) product
   by transport of structure to a diagonal metric: a transported blade table
   makes the product isomorphic to `Cl(p,q)` and associative on all multivectors
-  (proved); the table itself is checked exhaustively by the test suite.
+  (proved); the tables of `S!"∞∅+"`, `CGA2` and `CGA3` are kernel-checked, so
+  `CGA2_mul_assoc` and `CGA3_mul_assoc` are unconditional.
 -/

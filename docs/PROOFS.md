@@ -191,18 +191,25 @@ isometrically to the diagonal algebra `Cl(1, -1, 1, …)`.
 | item | status |
 |---|---|
 | `toDiag_implMul`: if the blade table transports (`ConfTable`), then `T(x y) = T(x) T(y)` for all multivectors | proved |
-| `implMul_assoc_of_conf`, `CGA2_mul_assoc`, `CGA3_mul_assoc`: the conformal product is then associative | proved (conditional on `ConfTable`) |
+| `implMul_assoc_of_conf`: the conformal product is then associative | proved |
+| `confTable_of_check`: a fast check (each blade product evaluated once, transported as a sparse list, compared in canonical form) decides `ConfTable` | proved |
+| `conf_table_3/4/5`: `ConfTable` for `S!"∞∅+"`, `CGA2`, `CGA3` (every pair of blades) | checked |
+| `CGA2_mul_assoc`, `CGA3_mul_assoc`, `CGA2_toDiag_mul`, `CGA3_toDiag_mul` | proved (unconditional, from the checked tables) |
 | `conf_inverse_3/4/5`: `T⁻¹ ∘ T = id` | checked |
-| `ConfTable` for `S!"∞∅+"`, `CGA2`, `CGA3` (every pair of blades) | tested, exhaustively |
 | random `CGA3` multivector products through `T` | tested |
 
-Why not checked: the conformal branch of `TensorBundle.mul` sorts its terms with
-`Terms.sortBasis`, which uses `Array.qsort`. The kernel cannot reduce
-`Array.qsort` (not even `#[3,1,2].qsort`), and its auxiliary definitions are
-private to core, so no permutation lemma can be proved here. The Chevalley
-recursion itself is kernel-friendly: a copy of it without the sort decides the
-`CGA2` table in about 25 s. With a structural sort in `Terms.sortBasis`, the
-`ConfTable` hypotheses become `decide +kernel` proofs.
+The conformal branch of `TensorBundle.mul` sorts its terms with
+`Terms.sortBasis`. That used to be `Array.qsort`, which the kernel cannot
+reduce (its auxiliary definitions are private to core, so no permutation lemma
+could be proved either); it is now a stable insertion sort by structural
+recursion (`Terms.insertByRank`), with identical results on every test and
+golden (the lists have at most `2ⁿ` distinct blades, usually one to four), and
+about 2.7× faster than the `qsort` version on the `CGA3` blade products
+(interpreted micro-benchmark; `sortBasis` is not on a hot path: the kernels
+use precomputed plans). The whole module checks in about 18 s, 8 s of which is
+the kernel evaluating the 1024 `CGA3` Chevalley products themselves (the
+literal `ConfTable` statement, without the fast check, takes 24 s for `CGA2`
+alone).
 
 ## 4. Tests: `Tests/Proofs`
 
@@ -214,7 +221,7 @@ evaluated at run time, in spaces beyond the `decide` range:
 | full `Multivector` products `*`, `∧`, `∨`, `⋅`, and `~`, `involute`, `!`, `⋆` | random integer multivectors in `E5`, `M5 = S!"-++++"`, `S33 = S!"++-+--"`, `PGA4 = D!"0,1,1,1,1"`, `D5 = D!"1,2,-3,5,-1"`, `E6`, `E7` |
 | every typed `Chain G × Chain H` product (the typed kernels and their even/odd result plans) | the same spaces, every grade pair |
 | `Bits.reorderParity` against `reorderParitySpec 64` | 2000 random mask pairs (the equality is proved; this checks the compiled code) |
-| `ConfTable` | exhaustive, `S!"∞∅+"`, `CGA2`, `CGA3` |
+| `ConfTable` (compiled; also kernel-checked) | exhaustive, `S!"∞∅+"`, `CGA2`, `CGA3` |
 | `T(x y) = T(x) T(y)` for the compiled `CGA3` product | random rational multivectors |
 
 This is where the plan interpreter (`Grassmann.Kernel.Plan.eval₂`) and

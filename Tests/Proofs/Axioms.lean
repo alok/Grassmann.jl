@@ -77,3 +77,9 @@ import Grassmann.Proofs
 
 /-- info: 'Grassmann.Proofs.implHodge_implHodge' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Grassmann.Proofs.implHodge_implHodge
+
+/-- info: 'Grassmann.Proofs.CGA3_mul_assoc' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.CGA3_mul_assoc
+
+/-- info: 'Grassmann.Proofs.conf_table_5' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.conf_table_5
