@@ -22,11 +22,21 @@ The four core products `⟑ ∧ ∨ contraction` follow Julia's method dispatch:
 * **`Couple`/`PseudoCouple`**: Julia's formulas (same blade) and part-by-part
   expansions, summed with the `+` lattice.
 
-Entries are computed by the static kernels (`Kernels.binProj`) into the result
-layout, or by Julia's own formulas where Julia uses them (scalar and pseudoscalar
-factors). Fixed Julia defects (oracle `defects.json`): `chain0-times-mixed`,
-`pseudocouple-mul-diffB`, `contractn-typo`, `vee-scalar-couple-B-unbound`,
-`vee-pseudoscalar-couple`, `conformal-blade-complement` (container-level complements).
+Entries are computed by Julia's generated loops (`Grassmann.Loops`: the same bilinear
+map as the static layer's plans, with Julia's summation order and first-term sums, so
+`Float` results agree bit for bit, the sign of zero included), or by Julia's own formulas
+where Julia uses them (scalar and pseudoscalar factors, couples). Sandwiches of a graded
+element by a graded, half or couple versor run Julia's two-pass `product_sandwich`
+(`sandwichWith`/`tsandwichWith` take the versor's involution images, which Julia computes
+in the versor's own coefficient type).
+
+Fixed Julia defects (oracle `defects.json`): `chain0-times-mixed`, `pseudocouple-mul-diffB`,
+`contractn-typo`, `vee-scalar-couple-B-unbound`, `vee-pseudoscalar-couple`,
+`conformal-blade-complement` (container-level complements), `conformal-generated-sandwich`
+(the generated sandwich with a `Single` versor, which throws in Julia in every space),
+`tsandwich-submanifold-chain-sign` (`y >>> x` is `y⟑x⟑clifford(y)` for a basis blade `y`
+too), `tsandwich-mixed-parity-swap`. A complex coefficient type is multiplied without
+Julia's `conj` in `contraction` (Julia's `dot`).
 -/
 import Grassmann.Dynamic.Unary
 import Grassmann.Algebra.Products
