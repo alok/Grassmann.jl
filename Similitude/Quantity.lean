@@ -129,6 +129,31 @@ instance : ToString (Quantity U d α) := ⟨display⟩
 /-- The value in `α` (Julia `normal(q)`). -/
 @[inline] def normal (q : Quantity U d α) : α := q.val
 
+/-- Julia `quantity(q)` (`dimension.jl:301-302`): the value. Identical to
+`normal`; Julia keeps both names because `quantity(q) = q` is also defined for
+non-quantities (`:300`), a fallback Lean does not need. -/
+@[inline] def quantity (q : Quantity U d α) : α := q.val
+
+/-- Julia `dimensions(q)` (`dimension.jl:303`): the quantity's USQ dimension as a
+group. In Julia the dimension is the runtime field `q.d`; here it is the type
+index `d`, so this recovers the group from the type and the quantity argument is
+erased. -/
+@[inline] def dimensions (_ : Quantity U d α) : USQGroup := d.toGroup
+
+/-- Julia `Dimension(q)` (`dimension.jl:304`): the same as `dimensions`, exported
+from `derived.jl:15`. Julia's companion fallback `Dimension(q) = q` (`:305`)
+has no Lean counterpart — it exists so untyped code can pass either a quantity
+or a bare dimension, and Lean dispatches on the type instead. -/
+@[inline] def Dimension (q : Quantity U d α) : USQGroup := q.dimensions
+
+/-- Julia `unitsystem2(q)` (`dimension.jl:307`): the quantity's unit system. -/
+@[inline] def unitsystem2 (_ : Quantity U d α) : Sys := U
+
+/-- Julia `unitsystem(q) = dimension(U)` (`dimension.jl:306`). Julia's `dimension`
+unwraps a `Constant{D}` and is the identity otherwise (`dimension.jl:20-21`), and
+a unit system is never a `Constant`, so this agrees with `unitsystem2`. -/
+@[inline] def unitsystem (_ : Quantity U d α) : Sys := U
+
 end Quantity
 
 /-- A `ConvertUnit` applies to quantities of its own source system and dimension

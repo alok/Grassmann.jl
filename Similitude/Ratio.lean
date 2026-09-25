@@ -122,6 +122,17 @@ def ratio (_ : ConvertUnit U S d) : Scalar := Similitude.ratio d.toGroup.v U S
 `dimension.jl:245`; this is the intended meaning). -/
 def inv (_ : ConvertUnit U S d) : ConvertUnit S U d := ⟨⟩
 
+/-- Julia `dimensions(c)` (`dimension.jl:230`): the conversion's USQ dimension as
+a group. Julia stores it in the field `c.v`; here it is the type index `d`, so
+the argument is erased. -/
+def dimensions (_ : ConvertUnit U S d) : USQGroup := d.toGroup
+
+/-- Julia `convertdim(c::ConvertUnit{U,S})` (`dimension.jl:231`): the dimension
+with the exponents of every base dimension whose own `U`-to-`S` ratio is exactly
+one zeroed out. This is the dimension `show` prints, not `dimensions`. -/
+def convertDim (_ : ConvertUnit U S d) : Exps 11 :=
+  Similitude.convertDim (pairData U S).2 d.toGroup.v
+
 instance : ToString (ConvertUnit U S d) := ⟨fun _ => showConvert d.toGroup.v U S⟩
 
 end ConvertUnit

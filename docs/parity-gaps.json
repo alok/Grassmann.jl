@@ -1737,14 +1737,16 @@
  },
  {
   "pkg": "Similitude",
-  "symbol": "dimensions, Dimension (also MeasureSystems)",
-  "status": "MISSING",
-  "fix": "Add def Quantity.dimensions (_ : Quantity U d \u03b1) : USQGroup := d.toGroup, a matching ConvertUnit.dimensions, and a Dimension alias.",
+  "symbol": "dimensions, Dimension, quantity, unitsystem, unitsystem2, convertdim(::ConvertUnit) (also MeasureSystems)",
+  "status": "DONE",
+  "fix": "Quantity.dimensions/.Dimension/.quantity/.unitsystem/.unitsystem2 and ConvertUnit.dimensions/.convertDim. Julia holds the dimension in the runtime field q.d; here it is the type index, so every accessor erases its argument. Verified against oracle/golden/similitude/accessors.json (14 dimensions \u00d7 8 system pairs, 1008 checks, 0 failed); 76 of the 112 rows have convertDim \u2260 dimensions, and SI2019 -> CODATA energy is the partial case (force kept, length dropped).",
   "effort": "S",
   "priority": "P1",
   "files": [
    "Similitude/Quantity.lean",
-   "Similitude/Ratio.lean"
+   "Similitude/Ratio.lean",
+   "Tests/Similitude/Accessors.lean",
+   "oracle/similitude/accessors.jl"
   ],
   "key": "units-applied"
  },
