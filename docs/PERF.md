@@ -25,7 +25,7 @@ difference (below).
 | wilkinson (parse, exprval, errval) | 0.54× | `errval_horner9` (3000 points) | 2.3 ms | 2.6 ms | 0.88× |
 | meshtopology (stencils, simplices) | 0.79× | `ghost_sphere` / `simplex_topology` / `degrees` | 7.9 ns / 1.9 ms / 1.7 ms | 30 ns / 1.2 s / 89 µs | 0.26× / 0.0015× / 19× |
 | fatou (escape-time rasters) | 1.1× | `mandelbrot_seq` / `mandelbrot_par` (16 threads) | 71 / 11 ms | 60 / 9.5 ms | 1.2× / 1.1× |
-| grassmann (generated kernels; own harness, below) | — | `Multivector*Multivector` ℝ3 / CGA3 | 14.7 / 146 ns | 8.1 / 146 ns | 1.8× / 1.0× |
+| grassmann (typed algebra, `fused%`, `batch%`; 324 cases) | 5.7× | ℝ3 `Chain1∧Chain1` / ℝ3 `R*v*~R` typed, fused, batch / CGA3 `Multivector*Multivector` | 11.4 ns / 25.3, 12.9, 3.6 ns / 147 ns | 0.70 / 4.3, 4.3, 4.7 / 149 ns | 16× / 5.9×, 3.0×, 0.76× / 0.99× |
 
 Where Lean loses, it is almost always one of four causes, each with a known fix (details in the
 2026-09-25 section at the bottom): **heap-allocated small vectors** (`Values`/`FloatArray`
@@ -367,3 +367,117 @@ interpreter, a follow-up: compile the AST to a closure tree or plan), MeshTopolo
 Geophysics viscosity and sonic-speed profiles (2–4×), `atan`/`x^2.5` and the cached `parity`
 table lookups (3×).
 
+## 2026-09-25: expression fusion (`fused%`), batch kernels (`batch%`), the `grassmann` suite on the harness
+
+Commits `a4605881`…`355357e9`. Lean: `lake exe bench grassmann` (`Bench/Grassmann*.lean`, now a
+harness suite); Julia 1.13.0, Grassmann 0.8.46: `oracle/bench/grassmann.jl` (its twin on
+`oracle/bench/harness.jl`, run by `scripts/bench/run.py`). 324 cases: every group (products,
+sandwiches, inner products, norms and inverses, linear combinations, unary maps, display, fused
+expressions) in ℝ3, STA, PGA3 and CGA3, the core groups in ℝ2, ℝ4, PGA2 and CGA2, and batches in
+the four benchmark spaces. Each body call applies an operation to a ring of 1024 operands; ns per
+operation, minimum of 7 samples, Apple M4 Max, load average ≈ 10 (other agents building). All
+324 checksums equal Julia's. Budgets: `docs/perf/budgets.toml` (the guard passes).
+
+Bold: within 1.2× of Julia (or faster).
+
+| op | ℝ3 Julia | ℝ3 Lean | STA Julia | STA Lean | PGA3 Julia | PGA3 Lean | CGA3 Julia | CGA3 Lean |
+|---|---|---|---|---|---|---|---|---|
+| `copy of an operand` | 0.65 | 10.2 | 1.07 | 11.7 | 1.06 | 12.8 | 2.53 | 15.4 |
+| `Multivector*Multivector` | 8.14 | 15.3 | 41.3 | **39.4** | 37.0 | **36.5** | 149 | **147** |
+| `Spinor*Spinor` | 2.29 | 13.3 | 8.14 | 15.2 | 8.53 | 16.1 | 32.4 | 42.0 |
+| `Chain1∧Chain1` | 0.70 | 11.4 | 2.59 | 13.4 | 2.62 | 14.4 | 3.35 | 12.8 |
+| `Chain2*Chain1` | 2.18 | 12.6 | 3.23 | 11.9 | 3.06 | 12.6 | 5.49 | 17.7 |
+| `R*v*~R` | 4.29 | 25.3 | 11.6 | 27.6 | 13.0 | 29.1 | 41.1 | 57.1 |
+| `R*v*~R [fused]` | 4.28 | 12.9 | 11.7 | 17.7 | 13.3 | **14.7** | 40.7 | **46.9** |
+| `v ⊘ R` | 2.79 | 12.6 | 6.98 | 15.6 | 8.28 | 16.3 | 17.3 | 24.2 |
+| `reverse Multivector` | 0.65 | 11.5 | 1.05 | 13.3 | 1.05 | 13.5 | 2.52 | 19.8 |
+| `reverse in place (m := ~m)` | 0.52 | 3.62 | 1.27 | 4.04 | 1.29 | 4.04 | 1.28 | 5.71 |
+
+Batches, ns per element (`batch% f xs ys`: a fresh output batch per call, Julia `map(f, xs, ys)`;
+`(into)`: `batchInto%` into an exclusive output, Julia `map!(f, out, xs, ys)`; `[soa]`: the
+component-major layout experiment, against Julia's `map`):
+
+| op | ℝ3 Julia | ℝ3 Lean | STA Julia | STA Lean | PGA3 Julia | PGA3 Lean | CGA3 Julia | CGA3 Lean |
+|---|---|---|---|---|---|---|---|---|
+| `batch Spinor*Spinor` | 2.77 | **2.36** | 7.65 | 9.33 | 8.19 | **7.17** | 30.9 | **31.8** |
+| `batch Spinor*Spinor (into)` | 2.44 | **1.97** | 7.68 | **8.16** | 7.96 | **5.77** | 30.7 | **30.5** |
+| `batch Chain1∧Chain1` | 0.92 | 1.24 | 3.60 | **2.46** | 3.61 | **2.39** | 5.31 | **3.84** |
+| `batch R*v*~R` | 4.70 | **3.56** | 12.8 | **13.3** | 13.5 | **10.2** | 39.9 | **40.2** |
+| `batch R*v*~R (into)` | 4.58 | **3.10** | 15.8 | **11.1** | 18.1 | **8.74** | 39.9 | **38.1** |
+| `batch v ⊘ R` | 2.87 | **3.04** | 6.77 | **7.97** | 8.11 | **5.77** | 17.0 | **19.3** |
+| `batch Multivector*Multivector` | 8.06 | **9.43** | 39.7 | **36.1** | 35.6 | **26.1** | 150 | **137** |
+| `batch Spinor*Spinor [soa]` | 2.77 | **2.28** | 7.81 | **9.35** | 8.05 | **7.64** | 30.8 | 63.4 |
+| `batch R*v*~R [soa]` | 4.71 | **3.61** | 12.6 | **13.0** | 13.3 | **10.8** | 40.0 | 56.9 |
+| `batch Multivector*Multivector [soa]` | 7.87 | 9.45 | 40.2 | 63.6 | 35.5 | 55.8 | 150 | 269 |
+
+Fused expressions against the typed operations they replace (ns, Julia evaluates the same
+expression unfused):
+
+| case | ℝ3 typed | ℝ3 fused | ℝ3 Julia | CGA3 typed | CGA3 fused | CGA3 Julia |
+|---|---|---|---|---|---|---|
+| `R*v*~R` | 25.3 | 12.9 | 4.28 | 57.1 | **46.9** | 40.7 |
+| `scalar(a*b)` (`fused% (scalarValue (a * b))`, a coefficient) | 192 | **2.07** | 7.63 | 312 | **7.35** | 148 |
+| `a ⊛ b` | 190 | 10.2 | 3.50 | 224 | **22.9** | 33.8 |
+| `abs2 a` (`(~a) * a`) | 17.9 | **12.2** | 10.2 | 151 | **111** | 158 |
+| `2.5a + 1.5b` (chains) | 42.7 | 11.1 | 0.69 | 56.0 | 12.7 | 0.94 |
+| `u + a` (chain + multivector) | 1693 | 11.2 | 1.02 | 5886 | 21.1 | 4.35 |
+| grade 2 of `a` | 495 | 10.7 | 0.54 | 1614 | 11.3 | 1.13 |
+| `u⁻¹` (chain inverse) | 33.1 | 11.1 | 0.63 | — | — | — |
+
+Findings:
+
+* **Each typed result costs one allocation, ≈ 10–15 ns** (`copy of an operand`: allocate, copy,
+  free), where Julia's `isbits` results stay in registers (0.7–2.5 ns). Typed operations whose
+  arithmetic is small sit on that floor: ℝ3 `∧`, `~`, `⋆`, `⋅` are 15–22× Julia, ℝ3 products
+  of halves and chains 5–6×. Where the arithmetic dominates they match Julia: `Multivector*Multivector`
+  of STA, PGA3 and CGA3 0.95–0.99×. (This is the storage contract of DESIGN.md §2: bulk floats in
+  `FloatArray`. The floor is removed by the two layers below, not by the kernels.)
+* **`fused% e` (`Grassmann.Fuse`)** evaluates the typed layer's own definitions on symbolic
+  coefficients at elaboration time (the kernels' plans in their summation order, a hash-consed
+  graph with common subexpressions shared, exact IEEE rewrites only) and emits one straight-line
+  block and one result buffer; fused ≡ unfused bit for bit up to the sign of zero
+  (`Tests/Fuse`: 41 expressions × 8 spaces × `Float`/`Int` at build time, a compiled subset under
+  `lake test`). `R*v*~R` drops from three allocations to one (ℝ3 25.3 → 12.9 ns, CGA3 57 → 47 ns
+  against Julia's 41). Only the live outputs are computed: a coefficient-valued expression
+  allocates nothing and computes only what it returns (`scalar(a*b)`: 8 of 64 products in ℝ3,
+  2.1 ns against Julia's 7.6; 32 of 1024 in CGA3, 7.4 ns against 148). Layout conversions and
+  grade projections, which the typed layer runs through `convertLayout` (0.5–6 µs, below), are
+  free in a fused expression.
+* **`batch% f` (`Grassmann.Batch`)** runs the same fused body in a loop over element-major
+  `FloatArray` batches (Julia's `Vector{Chain}` layout), reading and writing coefficients in place:
+  no allocation per element. Over the 40 batch cases the geometric mean is **0.96× Julia**
+  (fresh output: 0.66–1.35×; `batchInto%`: 0.48–1.06×). Two fixes made the difference: reads and
+  writes through `rdU`/`wrU` (`implemented_by` unchecked `uget`/`uset`; every offset is in range
+  because the operands are padded to the length the loop reads), where the checked reads cost a
+  compare and a branch per coefficient and kept the loads from being scheduled early (CGA3
+  multivector product 211 → 139 ns per element); and output arrays copied from a shared zero
+  array (one `memcpy`) instead of pushed (ℝ3 spinor product 12.2 → 2.4 ns per element).
+* **Layout, by measurement**: component-major (structure of arrays) equals element-major at the ℝ3
+  widths and is 1.6–2× slower from width 8 on (STA multivector product 36 → 64 ns, CGA3 spinor
+  product 32 → 63 ns, CGA3 multivector product 137 → 269 ns): the kernel body is scalar code (each
+  write keeps `uset`'s exclusivity check, so clang does not vectorize across elements) and
+  component-major turns one stream per operand into one per coefficient. Batches are element-major.
+* **`convertLayout` is the slowest part of the typed layer**: grade projections, `even`/`odd`,
+  sums of different kinds (`Chain1+Chain2`, `Chain1+Multivector`), `⊛` and `scalarValue` take
+  0.5–6 µs (up to 2800× Julia) because it recomputes blade ranks per coefficient at run time
+  (`Grassmann/Types/Dims.lean`); `Values.zipWith`/`map` push each coefficient and recompute
+  `halfDim` at run time (`Spinor-Spinor` 80 ns). Fixes for their owners are in the budgets' notes;
+  `fused%` sidesteps both.
+* **ℝ5 through `basis!`** (measured once, commit `a4605881`, then dropped from the suite because
+  its generated kernels add ~60 MB to a module's `.olean`): `Multivector*Multivector` 153 ns
+  against Julia's 154 (0.99×; the 1.64× of the 2026-09-24 spike predates the current emitter),
+  `Spinor*Spinor` 0.94×, `R*v*~R` 1.10×, `v ⊘ R` 1.04×.
+* **Stale numbers**: the 2026-09-24 table's STA and PGA3 Julia `R*v*~R` (27.5, 42.5 ns) do not
+  reproduce; today they are 11.6 and 13.0 ns (Lean typed 27.6, 29.1; fused 17.7, 14.7; batch 13.3,
+  10.2).
+* **Display** (`repr`, the check is the string length, equal on both sides): Lean 0.69–1.0× Julia.
+* **Compile time.** Julia compiles each `@generated` product on first use: first
+  `Multivector*Multivector` 1.17 s (ℝ3, includes loading the method tables), 0.62 s (STA),
+  0.57 s (PGA3), 8.2 s (CGA3); a first `R*v*~R` 0.09–0.19 s; loading Grassmann 0.25 s. Lean
+  generates the kernels when the library builds (table above: ℝ3 3.2 s elaboration + 3.0 s
+  clang, CGA3 13 + 11 s) and nothing at run time; `fused%` adds 2–30 ms of elaboration per
+  expression (300 ms for a dense CGA3 `a*b + c`, 2000 graph nodes).
+* **`.olean` size of straight-line code**: about 630 bytes per graph node (the term is stored as
+  the definition, twice as LCNF and once as IR): a fused dense CGA3 product is 1.3 MB. The
+  benchmark and test modules are split and trimmed accordingly; `Tests/Fuse/Guards.lean` runs
+  most fusion checks through the interpreter at build time, which adds nothing to the `.olean`.
