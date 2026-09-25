@@ -388,7 +388,8 @@ variable {P G : Type} [Coordinates M P G]
 
 /-- Julia `TensorField(dom, fun)`: the fiber at `i` is `fun` of the coordinate at `i`. -/
 @[simp] theorem get_tabulate [LawfulFlatFiber F] (f : Coordinate P G → F) (i : Nat) (h : i < card m) :
-    (tabulate m f).get i = f (FrameBundle.coordinate m i) := get_ofFn _ i h
+    (tabulate m f).get i = f (FrameBundle.coordinate m i) := by
+  rw [tabulate_eq]; exact get_ofFn _ i h
 
 /-- Julia `f.(t)`: the fiber at `i` is `f` of the local tensor at `i`. -/
 @[simp] theorem get_mapLocal [LawfulFlatFiber F'] (f : LocalTensor (Coordinate P G) F → F')

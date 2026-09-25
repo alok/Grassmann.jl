@@ -189,11 +189,6 @@ section Coordinates
 
 variable {P G : Type} [Coordinates M P G]
 
-/-- Julia `TensorField(dom::FrameBundle, fun)` = `fun.(dom)` (C11): `f` receives the
-`Coordinate`s (point and metric) of the base. -/
-@[inline] def tabulate (m : M) (f : Coordinate P G → F) : TensorField m F :=
-  ofFn m fun i => f (FrameBundle.coordinate m i)
-
 /-- The loop of `tabulatePoint`: the point `i` is written into the storage of the point `i-1`
 (`Coordinates.pointInto`), which `f` has released by then unless it kept it, so the points of a
 grid are not allocated one by one. -/
@@ -231,6 +226,38 @@ theorem pointsData_eq (m : M) (f : P → F) : pointsData m f =
 theorem tabulatePoint_eq (m : M) (f : P → F) :
     tabulatePoint m f = ofFn m fun i => f (Coordinates.point m i) := by
   simp only [tabulatePoint, ofFn, pointsData_eq, buildFlat]
+
+/-- The loop of `tabulate`: as `fillPoints`, `f` receiving the coordinate (reused point, metric). -/
+@[specialize] def fillCoords (m : M) (f : Coordinate P G → F) :
+    (k i off : Nat) → P → FloatArray → FloatArray
+  | 0, _, _, _, a => a
+  | k + 1, i, off, x, a =>
+    let x := Coordinates.pointInto m i x
+    fillCoords m f k (i + 1) (off + FlatFiber.width F) x
+      (FlatFiber.write a off (f ⟨x, Coordinates.metricAt m i⟩))
+
+theorem fillCoords_eq (m : M) (f : Coordinate P G → F) : ∀ (k i off : Nat) (x : P) (a : FloatArray),
+    fillCoords m f k i off x a = fillLoop (fun i => f (FrameBundle.coordinate m i)) k i off a
+  | 0, _, _, _, _ => rfl
+  | k + 1, i, off, x, a => by
+    simp only [fillCoords, fillLoop, Coordinates.pointInto_eq, FrameBundle.coordinate]
+    exact fillCoords_eq m f k (i + 1) _ _ _
+
+/-- Julia `TensorField(dom::FrameBundle, fun)` = `fun.(dom)` (C11): `f` receives the
+`Coordinate`s (point and metric) of the base (the points reused as in `tabulatePoint`). -/
+@[inline] def tabulate (m : M) (f : Coordinate P G → F) : TensorField m F :=
+  { data := if card m = 0 then Flat.zeros (FlatFiber.width F * card m)
+      else fillCoords m f (card m) 0 0 (Coordinates.point m 0) (Flat.zeros (FlatFiber.width F * card m)),
+    size_data := by split <;> simp [fillCoords_eq, size_fillLoop, Flat.size_zeros] }
+
+/-- `tabulate` is `ofFn` of the coordinates. -/
+theorem tabulate_eq (m : M) (f : Coordinate P G → F) :
+    tabulate m f = ofFn m fun i => f (FrameBundle.coordinate m i) := by
+  simp only [tabulate, ofFn, buildFlat]
+  congr 1
+  split
+  · rename_i h; rw [h]; rfl
+  · rw [fillCoords_eq]
 
 /-- Julia `TensorField(dom)` for a frame bundle (C13 → C5): the identity field, whose fibers are
 the base points. -/
