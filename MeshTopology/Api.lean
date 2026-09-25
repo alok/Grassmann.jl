@@ -151,6 +151,29 @@ end LagrangeTetrahedra
 def LagrangeEdges.displayString {M : Nat} (m : LagrangeEdges M) : String :=
   m.summary ++ ":" ++ String.join (m.topology.toList.map fun e => "\n " ++ showInts (e.toList.map Int.ofNat))
 
+/-! ## Quotient aliases and debugging helpers -/
+
+namespace QuotientTopology
+
+variable {N : Nat}
+
+/-- Julia `PolarTopology = BallTopology` (QT:179). -/
+abbrev polar (s : Vector Nat N) : QuotientTopology N := ball s
+
+/-- Julia `RevolvedTopology = TubeTopology` in two dimensions (QT:180). -/
+abbrev revolved (s : Vector Nat 2) : QuotientTopology 2 := tube2 s
+
+/-- Julia `mycollect2(m, Val(K))` (GR:154): `m[Val(K), i…]` at every grid point, column-major. -/
+def collectGhost (m : QuotientTopology N) (K : Nat) : Array (Vector Int N) :=
+  (Array.range m.length).map fun p => m.ghost K ((cartesianIndex m.size (p + 1)).map (Int.ofNat ·))
+
+end QuotientTopology
+
+/-- Julia `edgetopology(adj)` (element.jl:67-70): the nonzero entries of the upper triangle of an
+adjacency matrix, as vertex pairs in column-major (colex) order. -/
+def edgeTopologyOf (A : SparseInt) : Array (Vector Nat 2) :=
+  A.triplets.filterMap fun (i, j, v) => if i ≤ j && v != 0 then some #v[i, j] else none
+
 /-! ## Single multilinear cells -/
 
 /-- Julia `linearelement(l, i…)` (GR:21-50): the corner values of the cell with lowest corner

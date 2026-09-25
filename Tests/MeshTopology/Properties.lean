@@ -143,6 +143,9 @@ def simplexProps : TestM Unit := do
         (List.finRange 3).all fun k => (t.vertexFin h e k).1 + 1 == (t.fullElem e)[k])
     else check s!"{lbl} valid" false
     let es := t.edgeList
+    check s!"{lbl} edgetopology(adjacency) = edges"
+      ((edgeTopologyOf (SimplexTopology.sparseWith t.columns t.totalNodes +
+        (SimplexTopology.sparseWith t.columns t.totalNodes).transpose)).map (·.toArray) == es.map (·.toArray))
     check s!"{lbl} edges strictly colex"
       ((List.range (es.size - 1)).all fun k =>
         let (x, y) := (es[k]!, es[k + 1]!)
