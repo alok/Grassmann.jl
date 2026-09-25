@@ -49,9 +49,27 @@ abbrev GVec (α : Type) [Coeff α] (n g : Nat) := Values α (Leibniz.binomial n 
 @[inline] def wedgeGH {n g h : Nat} (a : GVec α n g) (b : GVec α n h) : GVec α n (g + h) :=
   Kernel.refBin (E n) .wedge (.chain g) (.chain h) (.chain (g + h)) a b
 
-/-- The right complement `!a` of a grade-`g` vector (metric-free). -/
-@[inline] def complementG {n g : Nat} (a : GVec α n g) : GVec α n (n - g) :=
-  Kernel.refUn (E n) .complementright (.chain g) (.chain (n - g)) a
+/-- The source position and sign of each coefficient of the right complement of
+a grade-`g` vector in `n` dimensions: `(!a)[j] = ±a[src j]` (every blade has a
+single complement, `±e_{I∁}`). -/
+def complementTable (n g : Nat) : Array (Nat × Bool) :=
+  let out := Leibniz.indexBasis n (n - g)
+  out.map fun c =>
+    let b := c ^^^ DirectSum.Bits.lowMask n
+    let neg := match (E n).apply₁ .complementright b with
+      | .ok (.single q _) => q < 0
+      | _ => false
+    (Leibniz.bladeRank n b, neg)
+
+/-- The right complement `!a` of a grade-`g` vector (metric-free), by direct
+negation as Julia's generated complement does (so signed zeros survive:
+`!(0.0 e₁₂) = -0.0 e₃` where the sign is negative). -/
+def complementG {n g : Nat} (a : GVec α n g) : GVec α n (n - g) :=
+  let tab := complementTable n g
+  Values.ofFn fun j =>
+    let (src, neg) := tab[j.1]!
+    let x := getD a src
+    if neg then -x else x
 
 /-- The scalar `1` as a grade-0 vector. -/
 @[inline] def oneG (n : Nat) : GVec α n 0 := Values.replicate Coeff.one
