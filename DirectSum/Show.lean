@@ -8,11 +8,11 @@ Julia-exact display of spaces, subspaces and basis terms (DirectSum.jl
   mask `S` (`⟨__+_+⟩`, `⟨∅-1__⟩`); `showHandle V = showSub V (lowMask n)` is the
   full-space handle every element carries (`⟨111⟩`, `⟨∞∅111⟩`, `T¹⟨+++---₁²⟩*`).
 * Coefficients are exact `Rat`s. `showNum r float` prints them as a Julia `Int`
-  (when `float = false` and `r` is integral) or as a Julia `Float64` (shortest
-  round-trip digits for terminating decimals, Julia's `1e-4 ≤ |x| < 1e6` plain
-  range and `e` exponent form otherwise).
+  (when `float = false` and `r` is integral) or as the Julia `Float64` nearest
+  to them, through `JuliaBase.F64.showString` (Ryu shortest round-trip digits).
 -/
 import DirectSum.Space
+import JuliaBase.Float
 
 namespace DirectSum
 
@@ -20,51 +20,15 @@ open Bits Leibniz
 
 /-! ## Numbers -/
 
-/-- `10^k` as a `Nat`. -/
-private def pow10 (k : Nat) : Nat := 10 ^ k
+/-- The `Float64` nearest to `r` (correctly rounded when numerator and
+denominator are below `2^53`, which covers every metric and product
+coefficient here). -/
+@[inline] def ratToFloat (r : Rat) : Float := Float.ofInt r.num / Float.ofNat r.den
 
-/-- If `r` has a terminating decimal expansion with at most 40 fractional
-digits, its digits `m` and scale `k` with `|r| = m / 10^k` and `k` minimal. -/
-private def decimalOf? (r : Rat) : Option (Nat × Nat) :=
-  let rec go (k : Nat) : Nat → Option (Nat × Nat)
-    | 0 => none
-    | fuel + 1 =>
-      if pow10 k % r.den == 0 then some (r.num.natAbs * (pow10 k / r.den), k) else go (k + 1) fuel
-  go 0 41
-
-/-- Insert a decimal point `k` digits from the right of the digit list `s` (at
-least one digit on each side). -/
-private def placePoint (s : List Char) (k : Nat) : String :=
-  let s := if s.length ≤ k then List.replicate (k + 1 - s.length) '0' ++ s else s
-  let intPart := s.take (s.length - k)
-  let frac := s.drop (s.length - k)
-  let frac := if frac.isEmpty then ['0'] else frac
-  String.ofList (intPart ++ '.' :: frac)
-
-/-- Julia `show(::Float64)` of an exactly representable terminating rational:
-plain decimal iff `1e-4 ≤ |x| < 1e6` (integers keep `.0`), otherwise
-`d.ddde±X`. Non-terminating rationals print as `p//q`. -/
-def juliaFloat (r : Rat) : String :=
-  if r.num == 0 then "0.0" else
-  match decimalOf? r with
-  | none => s!"{r.num}//{r.den}"
-  | some (m, k) =>
-    let sign := if r.num < 0 then "-" else ""
-    let all := (toString m).toList
-    let digits := all.reverse.dropWhile (· == '0') |>.reverse
-    let trailing := all.length - digits.length
-    -- |r| = m / 10^k; plain form iff 10^k ≤ m·10^4 and m < 10^6·10^k
-    if pow10 k ≤ m * 10000 && m < 1000000 * pow10 k then
-      let t := min trailing k
-      sign ++ placePoint (all.take (all.length - t)) (k - t)
-    else
-      -- |r| = d₁.d₂… × 10^(len(all) - k - 1)
-      let mant := match digits with
-        | [d] => String.ofList [d, '.', '0']
-        | d :: ds => String.ofList (d :: '.' :: ds)
-        | [] => "0.0"
-      let e : Int := (all.length : Int) - k - 1
-      sign ++ mant ++ "e" ++ toString e
+/-- Julia `show(::Float64)` of the double nearest to `r`, via JuliaBase's port
+of `Ryu.writeshortest` (shortest round-trip digits, `.0` on integers, Julia's
+plain-vs-exponent rule). -/
+def juliaFloat (r : Rat) : String := JuliaBase.F64.showString (ratToFloat r)
 
 /-- A coefficient as Julia prints it: an `Int` when `float = false` and `r` is
 integral, else a `Float64` (`juliaFloat`). -/
@@ -79,6 +43,8 @@ def showNum (r : Rat) (float : Bool := false) : String :=
 #guard juliaFloat (1/100000) == "1.0e-5"
 #guard juliaFloat (1/10000) == "0.0001"
 #guard juliaFloat 100000 == "100000.0"
+#guard juliaFloat (1/3) == "0.3333333333333333"
+#guard juliaFloat (1/10) == "0.1"
 
 /-- A diagonal-form entry: integers print as integers, other values as Julia
 floats (`1.5`) when their decimal terminates, else `p//q`. -/
