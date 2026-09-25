@@ -1,4 +1,6 @@
 import JuliaBase.Math
+import JuliaBase.Trig
+import JuliaBase.Hyperbolic
 
 /-!
 Julia's `Complex{T}` (Julia `base/complex.jl`): the port's one computable complex number
@@ -14,13 +16,14 @@ the noncomputable `ℝ`.
   (`Rat`) use the textbook formulas, which are exact there.
 * **`ComplexF64`** (namespace `ComplexF64`, Julia's `Complex{Float64}`): the robust
   Baudin–Smith division and inverse (complex.jl:390-510), `abs = hypot`, `isapprox`, and
-  Julia's `sqrt`, `exp`, `expm1`, `log`, `log1p`, the trigonometric and hyperbolic
+  Julia's `sqrt`, `exp`, `expm1`, `log`, `log1p`, `cis`, the trigonometric and hyperbolic
   functions and their inverses, and `^` (`_cpow`), ported line by line from Julia 1.13.
-  The real `exp`, `log`, `expm1`, `log1p` and `^` they call are Julia's own kernels
-  (`JuliaBase.Math`), so the arithmetic-only functions (`/`, `inv`, `abs`, `sqrt`) and the
-  real parts built from those kernels agree with the oracle bit for bit; the ones that also
-  call `sin`/`cos`/`atan`/… (`libm` here, Julia's own port of openlibm there) agree to
-  within an ulp or two.
+  Every real function they call is Julia's own kernel (`exp`, `log`, `expm1`, `log1p`, `^`
+  from `JuliaBase.Math`; `sincos`, `sin`, `tan`, `atan`, `atan(y, x)`, `sinpi`, `cospi` from
+  `JuliaBase.Trig`; `sinh`, `cosh`, `asinh` from `JuliaBase.Hyperbolic`), never the platform
+  `libm`, so all of them agree with the oracle bit for bit (`Tests/JuliaBase/trig.json`).
+  `div` and `inv` are `@[inline]` with their constants decoded at elaboration time or hoisted
+  (the rare over/underflow paths stay out of line), so they specialize into hot loops.
 * **`ComplexF32`**: Julia's `/` and `inv`, which widen to `Float64`.
 -/
 
@@ -128,8 +131,9 @@ namespace ComplexF64
 /-- Julia `abs(z::Complex)` = `hypot(re, im)` (complex.jl:277). -/
 @[inline] def abs (z : Complex Float) : Float := F64.hypot z.re z.im
 
-/-- Julia `angle(z) = atan(im, re)` (complex.jl:641). -/
-@[inline] def angle (z : Complex Float) : Float := Float.atan2 z.im z.re
+/-- Julia `angle(z) = atan(im, re)` (complex.jl:641), with Julia's own two-argument arctangent
+(`F64.atan2`). -/
+@[inline] def angle (z : Complex Float) : Float := F64.atan2 z.im z.re
 
 /-- Julia `isfinite(z::Complex)`. -/
 @[inline] def isFinite (z : Complex Float) : Bool := z.re.isFinite && z.im.isFinite
@@ -137,22 +141,45 @@ namespace ComplexF64
 /-- Julia `isnan(z::Complex)`. -/
 @[inline] def isNaN (z : Complex Float) : Bool := z.re.isNaN || z.im.isNaN
 
-/-- Julia `cis(ϕ) = cos ϕ + i sin ϕ` (complex.jl:577). -/
-@[inline] def cis (ϕ : Float) : Complex Float := ⟨Float.cos ϕ, Float.sin ϕ⟩
+/-- Julia `cis(ϕ) = cos ϕ + i sin ϕ` (complex.jl:577), from one `sincos`. -/
+@[inline] def cis (ϕ : Float) : Complex Float :=
+  let (s, c) := F64.sincos ϕ
+  ⟨c, s⟩
 
 /-! ### Division and inverse -/
 
+/-- Julia's over/underflow threshold `0.5*floatmax(Float64)` (complex.jl:398). -/
+def halfov : Float := f64! 0.5 * F64.floatmax
+
+/-- Julia's underflow threshold `floatmin(Float64)*2.0/eps(Float64)` (complex.jl:399). -/
+def twounϵ : Float := F64.floatmin * f64! 2.0 / F64.eps
+
+/-- Julia's scale factor `2.0/(ϵ*ϵ)` (complex.jl:439). -/
+def bs : Float := f64! 2.0 / (F64.eps * F64.eps)
+
+/-- `1/bs`, the unscaling factor of a scaled-up numerator (`s /= bs`, complex.jl:442). -/
+def invBs : Float := f64! 1.0 / bs
+
+/-- `sqrt(floatmin(Float64)/2)`, the lower end of `inv`'s unscaled range (complex.jl:477). -/
+def invLo : Float := (F64.floatmin / f64! 2.0).sqrt
+
+/-- `sqrt(floatmax(Float64)/2)`, the upper end of `inv`'s unscaled range (complex.jl:477). -/
+def invHi : Float := (F64.floatmax / f64! 2.0).sqrt
+
+/-- `floatmax(Float64)/2`, `inv`'s scale-down threshold (complex.jl:487). -/
+def halfFloatmax : Float := F64.floatmax / f64! 2.0
+
 /-- Julia `robust_cdiv2` (complex.jl:457). -/
 @[inline] def robustCdiv2 (a b c d r t : Float) : Float :=
-  if r != 0 then
+  if r != f64! 0.0 then
     let br := b * r
-    if br != 0 then (a + br) * t else a * t + (b * t) * r
+    if br != f64! 0.0 then (a + br) * t else a * t + (b * t) * r
   else (a + d * (b / c)) * t
 
 /-- Julia `robust_cdiv1` (complex.jl:450), times the unscaling factor `s`. -/
 @[inline] def robustCdiv1 (a b c d s : Float) : Complex Float :=
   let r := d / c
-  let t := 1.0 / (c + d * r)
+  let t := f64! 1.0 / (c + d * r)
   ⟨robustCdiv2 a b c d r t * s, robustCdiv2 b (-a) c d r t * s⟩
 
 /-- Julia `cdiv` (complex.jl:425), times the unscaling factor `s` (`scaling_cdiv`,
@@ -161,27 +188,28 @@ complex.jl:432). -/
   if d.abs ≤ c.abs then robustCdiv1 a b c d s
   else
     let r := c / d
-    let t := 1.0 / (d + c * r)
+    let t := f64! 1.0 / (d + c * r)
     ⟨robustCdiv2 b a d c r t * s, -(robustCdiv2 a (-b) d c r t) * s⟩
-
-/-- Julia's over/underflow threshold `0.5*floatmax(Float64)` (complex.jl:398). -/
-def halfov : Float := 0.5 * F64.floatmax
-
-/-- Julia's underflow threshold `floatmin(Float64)*2.0/eps(Float64)` (complex.jl:399). -/
-def twounϵ : Float := F64.floatmin * 2.0 / F64.eps
-
-/-- Julia's scale factor `2.0/(ϵ*ϵ)` (complex.jl:439). -/
-def bs : Float := 2.0 / (F64.eps * F64.eps)
 
 /-- The `c, d` half of `scaleargs_cdiv` (complex.jl:444-448), then `cdiv` and unscaling. -/
 @[inline] def scaleCD (a b c d cd s : Float) : Complex Float :=
-  if cd ≥ halfov then cdiv a b (c * 0.5) (d * 0.5) (s * 0.5)
+  if cd ≥ halfov then cdiv a b (c * f64! 0.5) (d * f64! 0.5) (s * f64! 0.5)
   else if cd ≤ twounϵ then cdiv a b (c * bs) (d * bs) (s * bs)
   else cdiv a b c d s
 
+/-- Julia `scaling_cdiv` (complex.jl:430-435, `@noinline` there too): the over/underflow path
+of `/`, kept out of line so that the common path stays small. -/
+def scalingCdiv (a b c d ab cd : Float) : Complex Float :=
+  -- scaleargs_cdiv (complex.jl:436-449): `s` starts at 1.0
+  if ab ≥ halfov then scaleCD (a * f64! 0.5) (b * f64! 0.5) c d cd (f64! 2.0)
+  else if ab ≤ twounϵ then scaleCD (a * bs) (b * bs) c d cd invBs
+  else scaleCD a b c d cd (f64! 1.0)
+
 /-- Julia `/(z::ComplexF64, w::ComplexF64)` (complex.jl:390-423): robust division with
-over/underflow scaling (Baudin–Smith, arXiv:1210.4539). -/
-def div (z w : Complex Float) : Complex Float :=
+over/underflow scaling (Baudin–Smith, arXiv:1210.4539). Inlined, with every constant decoded at
+elaboration time or hoisted, so that a division inside a specialized loop stays unboxed and
+free of `Float.ofScientific` calls (`docs/PERF.md`). -/
+@[inline] def div (z w : Complex Float) : Complex Float :=
   let a := z.re
   let b := z.im
   let c := w.re
@@ -193,14 +221,10 @@ def div (z w : Complex Float) : Complex Float :=
   let absd := d.abs
   let cd := if absc ≥ absd then absc else absd
   if c.isInf || d.isInf then
-    if isFinite z then ⟨0.0 * F64.sign a * F64.sign c, (-0.0) * F64.sign b * F64.sign d⟩
+    if isFinite z then ⟨f64! 0.0 * F64.sign a * F64.sign c, (-f64! 0.0) * F64.sign b * F64.sign d⟩
     else ⟨F64.nan, F64.nan⟩
-  else if ab ≥ halfov || ab ≤ twounϵ || cd ≥ halfov || cd ≤ twounϵ then
-    -- scaleargs_cdiv (complex.jl:436-449): `s` starts at 1.0
-    if ab ≥ halfov then scaleCD (a * 0.5) (b * 0.5) c d cd 2.0
-    else if ab ≤ twounϵ then scaleCD (a * bs) (b * bs) c d cd (1.0 / bs)
-    else scaleCD a b c d cd 1.0
-  else cdiv a b c d 1.0  -- the unscaled path; multiplying by 1.0 is exact
+  else if ab ≥ halfov || ab ≤ twounϵ || cd ≥ halfov || cd ≤ twounϵ then scalingCdiv a b c d ab cd
+  else cdiv a b c d (f64! 1.0)  -- the unscaled path; multiplying by 1.0 is exact
 
 /-- `z / w` on `ComplexF64` is Julia's robust division. -/
 instance : Div (Complex Float) := ⟨div⟩
@@ -211,31 +235,33 @@ slots. -/
 @[inline] def robustCinv (c d s : Float) (swap : Bool) : Complex Float :=
   let r := d / c
   let z := Float.fma d r c
-  let p := 1.0 / z
+  let p := f64! 1.0 / z
   let q := -r / z
   if swap then ⟨q * s, p * s⟩ else ⟨p * s, q * s⟩
 
+/-- The scaled path of Julia `inv(w::ComplexF64)` (complex.jl:480-500), out of line. -/
+def scaledInv (c d absc absd cd : Float) : Complex Float :=
+  let finish (c d s : Float) : Complex Float :=
+    if absd ≤ absc then robustCinv c d s false else robustCinv (-d) (-c) s true
+  if cd ≥ halfFloatmax then finish (c * f64! 0.5) (d * f64! 0.5) (f64! 0.5)
+  else if cd ≤ twounϵ then finish (c * bs) (d * bs) bs
+  else finish c d (f64! 1.0)
+
 /-- Julia `inv(w::ComplexF64)` (complex.jl:472-501): `conj(w)/muladd(cd, cd, dc²)` in the
 safe range (the `muladd` is a hardware FMA on the oracle machine), and a scaled robust
-inversion outside it. -/
-def inv (w : Complex Float) : Complex Float :=
+inversion outside it. Inlined, with hoisted constants. -/
+@[inline] def inv (w : Complex Float) : Complex Float :=
   let c := w.re
   let d := w.im
   let absc := c.abs
   let absd := d.abs
   let cd := if absc > absd then absc else absd
   let dc := if absc > absd then absd else absc
-  if (F64.floatmin / 2).sqrt ≤ cd && cd ≤ (F64.floatmax / 2).sqrt then
-    Complex.conj w / Float.fma cd cd (dc * dc)
-  else if c.isInf || d.isInf then ⟨F64.copysign 0.0 c, F64.flipsign (-0.0) d⟩
-  else
-    let ϵ := F64.eps
-    let bs := 2 / (ϵ * ϵ)
-    let finish (c d s : Float) : Complex Float :=
-      if absd ≤ absc then robustCinv c d s false else robustCinv (-d) (-c) s true
-    if cd ≥ F64.floatmax / 2 then finish (c * 0.5) (d * 0.5) 0.5
-    else if cd ≤ 2 * F64.floatmin / ϵ then finish (c * bs) (d * bs) bs
-    else finish c d 1.0
+  if invLo ≤ cd && cd ≤ invHi then
+    let m := Float.fma cd cd (dc * dc)
+    ⟨c / m, -d / m⟩
+  else if c.isInf || d.isInf then ⟨F64.copysign (f64! 0.0) c, F64.flipsign (-f64! 0.0) d⟩
+  else scaledInv c d absc absd cd
 
 /-- `z⁻¹` on `ComplexF64` is Julia's robust inverse. -/
 instance : Inv (Complex Float) := ⟨inv⟩
@@ -251,45 +277,37 @@ def isapprox (x y : Complex Float) (atol : Float := 0)
 
 /-! ### Roots, exponentials and logarithms -/
 
+/-- `nextfloat(0.0)/(2*eps(Float64)^2)`, the underflow threshold of `ssqs` (complex.jl:513). -/
+def ssqsTiny : Float := Float.ofBits 1 / (f64! 2.0 * (F64.eps * F64.eps))
+
 /-- Julia `ssqs(x, y)` (complex.jl:509): `x² + y²` and a scaling exponent `k`, rescaled
 when the sum over/underflows. -/
-def ssqs (x y : Float) : Float × Int := Id.run do
-  let mut k : Int := 0
-  let mut ρ := x * x + y * y
-  if !ρ.isFinite && (x.isInf || y.isInf) then
-    ρ := F64.inf
-  else if ρ.isInf || (ρ == 0 && (x != 0 || y != 0)) || ρ < 5e-324 / (2 * F64.eps * F64.eps) then
+def ssqs (x y : Float) : Float × Int :=
+  let ρ := x * x + y * y
+  if !ρ.isFinite && (x.isInf || y.isInf) then (F64.inf, 0)
+  else if ρ.isInf || (ρ == f64! 0.0 && (x != f64! 0.0 || y != f64! 0.0)) || ρ < ssqsTiny then
     let m := F64.max x.abs y.abs
-    k := if m == 0 then 0 else F64.exponent m
+    let k := if m == f64! 0.0 then 0 else F64.exponent m
     let xk := F64.ldexp x (-k)
     let yk := F64.ldexp y (-k)
-    ρ := xk * xk + yk * yk
-  return (ρ, k)
+    (xk * xk + yk * yk, k)
+  else (ρ, 0)
 
 /-- Julia `sqrt(z::Complex)` (complex.jl:523), Kahan's algorithm without intermediate
 over/underflow. -/
-def sqrt (z : Complex Float) : Complex Float := Id.run do
+def sqrt (z : Complex Float) : Complex Float :=
   let x := z.re
   let y := z.im
-  if x == 0 && y == 0 then return ⟨0, y⟩
-  let (ρ0, k0) := ssqs x y
-  let mut ρ := ρ0
-  let mut k := k0
-  if x.isFinite then ρ := F64.ldexp x.abs (-k) + Float.sqrt ρ
-  if JInt.isodd k then
-    k := (k - 1) / 2
+  if x == f64! 0.0 && y == f64! 0.0 then ⟨f64! 0.0, y⟩
   else
-    k := k / 2 - 1
-    ρ := ρ + ρ
-  ρ := F64.ldexp (Float.sqrt ρ) k
-  let mut ξ := ρ
-  let mut η := y
-  if ρ != 0 then
-    if η.isFinite then η := (η / ρ) / 2
-    if x < 0 then
-      ξ := η.abs
-      η := F64.copysign ρ y
-  return ⟨ξ, η⟩
+    let (ρ, k) := ssqs x y
+    let ρ := if x.isFinite then F64.ldexp x.abs (-k) + ρ.sqrt else ρ
+    let (ρ, k) := if JInt.isodd k then (ρ, (k - 1) / 2) else (ρ + ρ, k / 2 - 1)
+    let ρ := F64.ldexp ρ.sqrt k
+    if ρ != f64! 0.0 then
+      let η := if y.isFinite then (y / ρ) / f64! 2.0 else y
+      if x < f64! 0.0 then ⟨η.abs, F64.copysign ρ y⟩ else ⟨ρ, η⟩
+    else ⟨ρ, y⟩
 
 /-- Julia `log(z::Complex)` (complex.jl:643). -/
 def log (z : Complex Float) : Complex Float :=
@@ -300,43 +318,47 @@ def log (z : Complex Float) : Complex Float :=
   let ay := y.abs
   let (θ, β) := if ax < ay then (ax, ay) else (ay, ax)
   let ρρ :=
-    if k == 0 && 0.5 < β * β && (β ≤ 1.25 || ρ < 3) then
-      F64.log1p ((β - 1) * (β + 1) + θ * θ) / 2
-    else F64.log ρ / 2 + Float.ofInt k * F64.ln2
+    if k == 0 && f64! 0.5 < β * β && (β ≤ f64! 1.25 || ρ < f64! 3.0) then
+      F64.log1p ((β - f64! 1.0) * (β + f64! 1.0) + θ * θ) / f64! 2.0
+    else F64.log ρ / f64! 2.0 + Float.ofInt k * F64.ln2
   ⟨ρρ, angle z⟩
 
 /-- Julia `exp(z::Complex)` (complex.jl:694). -/
 def exp (z : Complex Float) : Complex Float :=
   let zr := z.re
   let zi := z.im
-  if zr.isNaN then ⟨zr, if zi == 0 then zi else zr⟩
+  if zr.isNaN then ⟨zr, if zi == f64! 0.0 then zi else zr⟩
   else if !zi.isFinite then
     if zr == F64.inf then ⟨-zr, F64.nan⟩
-    else if zr == -F64.inf then ⟨-0.0, F64.copysign 0 zi⟩
+    else if zr == -F64.inf then ⟨-f64! 0.0, F64.copysign (f64! 0.0) zi⟩
     else ⟨F64.nan, F64.nan⟩
   else
     let er := F64.exp zr
-    if zi == 0 then ⟨er, zi⟩
-    else ⟨er * Float.cos zi, er * Float.sin zi⟩
+    if zi == f64! 0.0 then ⟨er, zi⟩
+    else
+      let (s, c) := F64.sincos zi
+      ⟨er * c, er * s⟩
 
 /-- Julia `expm1(z::Complex)` (complex.jl:717). -/
 def expm1 (z : Complex Float) : Complex Float :=
   let zr := z.re
   let zi := z.im
-  if zr.isNaN then ⟨zr, if zi == 0 then zi else zr⟩
+  if zr.isNaN then ⟨zr, if zi == f64! 0.0 then zi else zr⟩
   else if !zi.isFinite then
     if zr == F64.inf then ⟨-zr, F64.nan⟩
-    else if zr == -F64.inf then ⟨-1, F64.copysign 0 zi⟩
+    else if zr == -F64.inf then ⟨-f64! 1.0, F64.copysign (f64! 0.0) zi⟩
     else ⟨F64.nan, F64.nan⟩
   else
     let erm1 := F64.expm1 zr
-    if zi == 0 then ⟨erm1, zi⟩
+    if zi == f64! 0.0 then ⟨erm1, zi⟩
     else
-      let er := erm1 + 1
+      let er := erm1 + f64! 1.0
       if er.isFinite then
-        let s := Float.sin (0.5 * zi)
-        ⟨erm1 - 2 * er * (s * s), er * Float.sin zi⟩
-      else ⟨er * Float.cos zi, er * Float.sin zi⟩
+        let s := F64.sin (f64! 0.5 * zi)
+        ⟨erm1 - f64! 2.0 * er * (s * s), er * F64.sin zi⟩
+      else
+        let (s, c) := F64.sincos zi
+        ⟨er * c, er * s⟩
 
 /-- Julia `log1p(z::Complex)` (complex.jl:747). -/
 def log1p (z : Complex Float) : Complex Float :=
@@ -345,35 +367,45 @@ def log1p (z : Complex Float) : Complex Float :=
   if zr.isFinite then
     if zi.isInf then log z
     else
-      let u : Complex Float := (1.0 : Float) + z
-      if u.re == 1 && u.im == 0 then z
-      else if u.re ≤ 0 then log u
-      else log u * div z (u - (1.0 : Float))
+      let u : Complex Float := f64! 1.0 + z
+      if u.re == f64! 1.0 && u.im == f64! 0.0 then z
+      else if u.re ≤ f64! 0.0 then log u
+      else log u * div z (u - f64! 1.0)
   else if zr.isNaN then ⟨zr, zr⟩
-  else if zi.isFinite then ⟨F64.inf, F64.copysign (if zr > 0 then 0 else F64.pi) zi⟩
+  else if zi.isFinite then ⟨F64.inf, F64.copysign (if zr > f64! 0.0 then f64! 0.0 else F64.pi) zi⟩
   else ⟨F64.inf, F64.nan⟩
 
 /-! ### Trigonometric and hyperbolic functions -/
 
-/-- Julia `sin(z::Complex)` (complex.jl:887); `sincos` is two `libm` calls. -/
+/-- `Float64(π)/2` (Julia's `oftype(x, pi)/2`, an exact halving). -/
+def halfPi : Float := f64! 1.5707963267948966
+
+/-- `Float64(π)/4`. -/
+def quarterPi : Float := f64! 0.7853981633974483
+
+/-- Julia `sin(z::Complex)` (complex.jl:887), with Julia's own `sincos`, `sinh` and `cosh`. -/
 def sin (z : Complex Float) : Complex Float :=
   let zr := z.re
   let zi := z.im
-  if zr == 0 then ⟨zr, Float.sinh zi⟩
+  if zr == f64! 0.0 then ⟨zr, F64.sinh zi⟩
   else if !zr.isFinite then
-    if zi == 0 || zi.isInf then ⟨F64.nan, zi⟩ else ⟨F64.nan, F64.nan⟩
-  else ⟨Float.sin zr * Float.cosh zi, Float.cos zr * Float.sinh zi⟩
+    if zi == f64! 0.0 || zi.isInf then ⟨F64.nan, zi⟩ else ⟨F64.nan, F64.nan⟩
+  else
+    let (s, c) := F64.sincos zr
+    ⟨s * F64.cosh zi, c * F64.sinh zi⟩
 
 /-- Julia `cos(z::Complex)` (complex.jl:905). -/
 def cos (z : Complex Float) : Complex Float :=
   let zr := z.re
   let zi := z.im
-  if zr == 0 then ⟨Float.cosh zi, if zi.isNaN then zr else -(F64.flipsign zr zi)⟩
+  if zr == f64! 0.0 then ⟨F64.cosh zi, if zi.isNaN then zr else -(F64.flipsign zr zi)⟩
   else if !zr.isFinite then
-    if zi == 0 then ⟨F64.nan, if zr.isNaN then 0 else -(F64.flipsign zi zr)⟩
+    if zi == f64! 0.0 then ⟨F64.nan, if zr.isNaN then f64! 0.0 else -(F64.flipsign zi zr)⟩
     else if zi.isInf then ⟨F64.inf, F64.nan⟩
     else ⟨F64.nan, F64.nan⟩
-  else ⟨Float.cos zr * Float.cosh zi, -(Float.sin zr) * Float.sinh zi⟩
+  else
+    let (s, c) := F64.sincos zr
+    ⟨c * F64.cosh zi, -s * F64.sinh zi⟩
 
 /-- Julia `sinh(z) = i⁻¹ sin(iz)` computed by swapping parts (complex.jl:973). -/
 def sinh (z : Complex Float) : Complex Float :=
@@ -383,20 +415,25 @@ def sinh (z : Complex Float) : Complex Float :=
 /-- Julia `cosh(z) = cos(iz)` (complex.jl:979). -/
 def cosh (z : Complex Float) : Complex Float := cos ⟨z.im, -z.re⟩
 
+/-- `asinh(floatmax(Float64))` (Julia's own `asinh`), the overflow threshold of `tanh`
+(complex.jl:990). -/
+def asinhFloatmax : Float := F64.asinh F64.floatmax
+
 /-- Julia `tanh(z::Complex)` (complex.jl:984), Kahan's overflow-free form. -/
 def tanh (z : Complex Float) : Complex Float :=
   let ξ := z.re
   let η := z.im
-  if ξ.isNaN && η == 0 then ⟨ξ, η⟩
-  else if 4 * ξ.abs > Float.asinh F64.floatmax then
-    ⟨F64.copysign 1 ξ, F64.copysign 0 (η * (if η.isFinite then Float.sin (2 * η.abs) else 1))⟩
+  if ξ.isNaN && η == f64! 0.0 then ⟨ξ, η⟩
+  else if f64! 4.0 * ξ.abs > asinhFloatmax then
+    ⟨F64.copysign (f64! 1.0) ξ,
+      F64.copysign (f64! 0.0) (η * (if η.isFinite then F64.sin (f64! 2.0 * η.abs) else f64! 1.0))⟩
   else
-    let t := Float.tan η
-    let β := 1 + t * t
-    let s := Float.sinh ξ
-    let ρ := Float.sqrt (1 + s * s)
-    if t.isInf then ⟨ρ / s, 1 / t⟩
-    else (⟨β * ρ * s, t⟩ : Complex Float) / (1 + β * s * s)
+    let t := F64.tan η
+    let β := f64! 1.0 + t * t
+    let s := F64.sinh ξ
+    let ρ := (f64! 1.0 + s * s).sqrt
+    if t.isInf then ⟨ρ / s, f64! 1.0 / t⟩
+    else (⟨β * ρ * s, t⟩ : Complex Float) / (f64! 1.0 + β * s * s)
 
 /-- Julia `tan(z) = -i tanh(iz)` (complex.jl:925). -/
 def tan (z : Complex Float) : Complex Float :=
@@ -407,15 +444,15 @@ def tan (z : Complex Float) : Complex Float :=
 def asin (z : Complex Float) : Complex Float :=
   let zr := z.re
   let zi := z.im
-  if zr.isInf && zi.isInf then ⟨F64.copysign (F64.pi / 4) zr, zi⟩
+  if zr.isInf && zi.isInf then ⟨F64.copysign quarterPi zr, zi⟩
   else if zi.isNaN && zr.isInf then ⟨zi, F64.inf⟩
   else
     let ξ :=
-      if zr == 0 then zr
-      else if !zr.isFinite then F64.pi / 2 * F64.sign zr
-      else Float.atan2 zr (sqrt ((1.0 : Float) - z) * sqrt ((1.0 : Float) + z)).re
-    let η := Float.asinh
-      (F64.copysign (sqrt (Complex.conj ((1.0 : Float) - z)) * sqrt ((1.0 : Float) + z)).im zi)
+      if zr == f64! 0.0 then zr
+      else if !zr.isFinite then halfPi * F64.sign zr
+      else F64.atan2 zr (sqrt (f64! 1.0 - z) * sqrt (f64! 1.0 + z)).re
+    let η := F64.asinh
+      (F64.copysign (sqrt (Complex.conj (f64! 1.0 - z)) * sqrt (f64! 1.0 + z)).im zi)
     ⟨ξ, η⟩
 
 /-- Julia `acos(z::Complex)` (complex.jl:945). -/
@@ -425,15 +462,15 @@ def acos (z : Complex Float) : Complex Float :=
   if zr.isNaN then (if zi.isInf then ⟨zr, -zi⟩ else ⟨zr, zr⟩)
   else if zi.isNaN then
     if zr.isInf then ⟨zi, zr.abs⟩
-    else if zr == 0 then ⟨F64.pi / 2, zi⟩
+    else if zr == f64! 0.0 then ⟨halfPi, zi⟩
     else ⟨zi, zi⟩
-  else if zr == 0 && zi == 0 then ⟨F64.pi / 2, -zi⟩
-  else if zr == F64.inf && zi.toBits == (0.0 : Float).toBits then ⟨zi, -zr⟩
-  else if zr == -F64.inf && zi.toBits == (-0.0 : Float).toBits then ⟨F64.pi, -zr⟩
+  else if zr == f64! 0.0 && zi == f64! 0.0 then ⟨halfPi, -zi⟩
+  else if zr == F64.inf && zi.toBits == 0 then ⟨zi, -zr⟩  -- `zi === 0.0`
+  else if zr == -F64.inf && zi.toBits == F64.signMask then ⟨F64.pi, -zr⟩  -- `zi === -0.0`
   else
-    let ξ := 2 * Float.atan2 (sqrt ((1.0 : Float) - z)).re (sqrt ((1.0 : Float) + z)).re
-    let η := Float.asinh (sqrt (Complex.conj ((1.0 : Float) + z)) * sqrt ((1.0 : Float) - z)).im
-    let ξ := if zr.isInf && zi.isInf then ξ - F64.pi / 4 * F64.sign zr else ξ
+    let ξ := f64! 2.0 * F64.atan2 (sqrt (f64! 1.0 - z)).re (sqrt (f64! 1.0 + z)).re
+    let η := F64.asinh (sqrt (Complex.conj (f64! 1.0 + z)) * sqrt (f64! 1.0 - z)).im
+    let ξ := if zr.isInf && zi.isInf then ξ - quarterPi * F64.sign zr else ξ
     ⟨ξ, η⟩
 
 /-- Julia `asinh(z) = -i asin(iz)` by part swapping (complex.jl:1006). -/
@@ -447,12 +484,15 @@ def acosh (z : Complex Float) : Complex Float :=
   let zi := z.im
   if zr.isNaN || zi.isNaN then
     if zr.isInf || zi.isInf then ⟨F64.inf, F64.nan⟩ else ⟨F64.nan, F64.nan⟩
-  else if zr == -F64.inf && zi.toBits == (-0.0 : Float).toBits then ⟨F64.inf, -F64.pi⟩
+  else if zr == -F64.inf && zi.toBits == F64.signMask then ⟨F64.inf, -F64.pi⟩
   else
-    let ξ := Float.asinh (sqrt (Complex.conj (z - (1.0 : Float))) * sqrt (z + (1.0 : Float))).re
-    let η := 2 * Float.atan2 (sqrt (z - (1.0 : Float))).im (sqrt (z + (1.0 : Float))).re
-    let η := if zr.isInf && zi.isInf then η - F64.pi / 4 * F64.sign zi * F64.sign zr else η
+    let ξ := F64.asinh (sqrt (Complex.conj (z - f64! 1.0)) * sqrt (z + f64! 1.0)).re
+    let η := f64! 2.0 * F64.atan2 (sqrt (z - f64! 1.0)).im (sqrt (z + f64! 1.0)).re
+    let η := if zr.isInf && zi.isInf then η - quarterPi * F64.sign zi * F64.sign zr else η
     ⟨ξ, η⟩
+
+/-- `sqrt(floatmax(Float64))/4`, the overflow threshold of `atanh` (complex.jl:1034). -/
+def atanhBig : Float := F64.floatmax.sqrt / f64! 4.0
 
 /-- Julia `atanh(z::Complex)` (complex.jl:1030), Kahan's form. -/
 def atanh (z : Complex Float) : Complex Float :=
@@ -460,70 +500,78 @@ def atanh (z : Complex Float) : Complex Float :=
   let y := z.im
   let ax := x.abs
   let ay := y.abs
-  let θ := Float.sqrt F64.floatmax / 4
-  if ax > θ || ay > θ then
+  if ax > atanhBig || ay > atanhBig then
     if y.isNaN then
-      if x.isInf then ⟨F64.copysign 0 x, y⟩ else ⟨(inv z).re, y⟩
-    else if y.isInf then ⟨F64.copysign 0 x, F64.copysign (F64.pi / 2) y⟩
-    else ⟨(inv z).re, F64.copysign (F64.pi / 2) y⟩
+      if x.isInf then ⟨F64.copysign (f64! 0.0) x, y⟩ else ⟨(inv z).re, y⟩
+    else if y.isInf then ⟨F64.copysign (f64! 0.0) x, F64.copysign halfPi y⟩
+    else ⟨(inv z).re, F64.copysign halfPi y⟩
   else
-    let β := F64.copysign 1 x
+    let β := F64.copysign (f64! 1.0) x
     let z : Complex Float := β * z
     let x := z.re
     let y := z.im
     let (ξ, η) :=
-      if x == 1 then
-        if y == 0 then (F64.inf, y)
+      if x == f64! 1.0 then
+        if y == f64! 0.0 then (F64.inf, y)
         else
-          (F64.log (Float.sqrt (Float.sqrt (Float.fma y y 4)) / Float.sqrt ay),
-            F64.copysign (F64.pi / 2 + Float.atan (ay / 2)) y / 2)
+          (F64.log ((Float.fma y y (f64! 4.0)).sqrt.sqrt / ay.sqrt),
+            F64.copysign (halfPi + F64.atan (ay / f64! 2.0)) y / f64! 2.0)
       else
         let ysq := ay * ay
-        let ξ := if x == 0 then x else F64.log1p (4 * x / Float.fma (1 - x) (1 - x) ysq) / 4
-        (ξ, angle ⟨(1 - x) * (1 + x) - ysq, 2 * y⟩ / 2)
+        let ξ := if x == f64! 0.0 then x
+          else F64.log1p (f64! 4.0 * x / Float.fma (f64! 1.0 - x) (f64! 1.0 - x) ysq) / f64! 4.0
+        (ξ, angle ⟨(f64! 1.0 - x) * (f64! 1.0 + x) - ysq, f64! 2.0 * y⟩ / f64! 2.0)
     β * (⟨ξ, η⟩ : Complex Float)
 
-/-- Julia `atan(z) = -i atanh(iz)` (complex.jl:968). -/
+/-- Julia `atan(z) = -i atanh(iz)` (complex.jl:968).
+
+Julia negates `imag(z)`, and for a NaN imaginary part that flips the NaN's sign bit, which
+`atanh` then reads back through `copysign(zero(x), x)`: `atan(±Inf + NaN·im) = ±π/2 + 0.0im`. A
+Lean NaN has no observable sign (`Float.toBits` canonicalizes NaNs, as Float's logical model
+identifies them), so every Lean NaN behaves as Julia's positive `NaN` and `-NaN` would read as
+positive too; that one case is written out. -/
 def atan (z : Complex Float) : Complex Float :=
-  let w := atanh ⟨-z.im, z.re⟩
-  ⟨w.im, -w.re⟩
+  if z.im.isNaN && z.re.isInf then ⟨F64.copysign halfPi z.re, f64! 0.0⟩
+  else
+    let w := atanh ⟨-z.im, z.re⟩
+    ⟨w.im, -w.re⟩
 
 /-! ### Powers -/
 
-/-- Julia `_cpow(z, p)` (complex.jl:782): `z^p` for complex `z` and `p`. -/
+/-- Julia `_cpow(z, p)` (complex.jl:782): `z^p` for complex `z` and `p`. A negative real base
+with a real, non-integer power uses Julia's own `cospi`/`sinpi`. -/
 def pow (z p : Complex Float) : Complex Float :=
-  if p.im == 0 then
+  if p.im == f64! 0.0 then
     let pr := p.re
-    if pr == pr.floor && pr.abs < 2147483647 then
-      if pr == 0 then ⟨1, F64.flipsign (F64.copysign 0 pr) z.im⟩
+    if pr == pr.floor && pr.abs < f64! 2147483647.0 then
+      if pr == f64! 0.0 then ⟨f64! 1.0, F64.flipsign (F64.copysign (f64! 0.0) pr) z.im⟩
       else
-        let ip : Int := if pr < 0 then -((-pr).toUInt64.toNat : Int) else (pr.toUInt64.toNat : Int)
-        if z.im == 0 then
+        let ip : Int := if pr < f64! 0.0 then -((-pr).toUInt64.toNat : Int) else (pr.toUInt64.toNat : Int)
+        if z.im == f64! 0.0 then
           let zr := z.re
-          if ip < 0 && zr == 0 then ⟨F64.nan, F64.nan⟩
+          if ip < 0 && zr == f64! 0.0 then ⟨F64.nan, F64.nan⟩
           else
             let (re, im) :=
-              if ip < 0 then (powBySquaring (· * ·) 1 (1 / zr) ip.natAbs, -z.im)
-              else (powBySquaring (· * ·) 1 zr ip.natAbs, z.im)
+              if ip < 0 then (powBySquaring (· * ·) (f64! 1.0) (f64! 1.0 / zr) ip.natAbs, -z.im)
+              else (powBySquaring (· * ·) (f64! 1.0) zr ip.natAbs, z.im)
             ⟨re, if ip % 2 == 0 && F64.signbit zr then -im else im⟩
-        else if ip < 0 then powBySquaring (· * ·) ⟨1, 0⟩ (inv z) ip.natAbs
-        else powBySquaring (· * ·) ⟨1, 0⟩ z ip.natAbs
-    else if z.im == 0 then
+        else if ip < 0 then powBySquaring (· * ·) ⟨f64! 1.0, f64! 0.0⟩ (inv z) ip.natAbs
+        else powBySquaring (· * ·) ⟨f64! 1.0, f64! 0.0⟩ z ip.natAbs
+    else if z.im == f64! 0.0 then
       let zr := z.re
-      if zr == 0 then (if pr > 0 then z else ⟨F64.nan, F64.nan⟩)
-      else if zr > 0 then ⟨F64.pow zr pr, F64.flipsign z.im pr⟩
+      if zr == f64! 0.0 then (if pr > f64! 0.0 then z else ⟨F64.nan, F64.nan⟩)
+      else if zr > f64! 0.0 then ⟨F64.pow zr pr, F64.flipsign z.im pr⟩
       else
         let rp := F64.pow (-zr) pr
         if pr.isFinite then
-          -- Julia uses `cospi`/`sinpi`; `cos(π p)`/`sin(π p)` here (≤ 1 ulp apart).
-          rp * (⟨Float.cos (F64.pi * pr), F64.flipsign (Float.sin (F64.pi * pr)) z.im⟩ : Complex Float)
-        else if rp == 0 then ⟨0, 0⟩ else ⟨F64.nan, F64.nan⟩
+          rp * (⟨F64.cospi pr, F64.flipsign (F64.sinpi pr) z.im⟩ : Complex Float)
+        else if rp == f64! 0.0 then ⟨f64! 0.0, f64! 0.0⟩ else ⟨F64.nan, F64.nan⟩
     else finish (F64.pow (abs z) pr) (pr * angle z)
-  else if z.im == 0 then
-    if z.re == 0 then (if p.re > 0 then z else ⟨F64.nan, F64.nan⟩)
+  else if z.im == f64! 0.0 then
+    if z.re == f64! 0.0 then (if p.re > f64! 0.0 then z else ⟨F64.nan, F64.nan⟩)
     else
       let zr := z.re
-      if zr > 0 then finish (F64.pow zr p.re) (p.im * F64.log zr)
+      if zr > f64! 0.0 then finish (F64.pow zr p.re) (p.im * F64.log zr)
       else
         let r := -zr
         let θ := F64.copysign F64.pi z.im
@@ -536,7 +584,7 @@ where
   /-- `rᵖ · cis(ϕ)` with Julia's non-finite-phase handling. -/
   finish (rp ϕ : Float) : Complex Float :=
     if ϕ.isFinite then rp * cis ϕ
-    else if rp == 0 then ⟨0, 0⟩ else ⟨F64.nan, F64.nan⟩
+    else if rp == f64! 0.0 then ⟨f64! 0.0, f64! 0.0⟩ else ⟨F64.nan, F64.nan⟩
 
 end ComplexF64
 
@@ -557,10 +605,10 @@ def div (z w : Complex Float32) : Complex Float32 :=
   let d := w.im.toFloat
   if c.isInf || d.isInf then
     if z.re.isFinite && z.im.isFinite then
-      ⟨0 * F32.sign z.re * F32.sign w.re, -0.0 * F32.sign z.im * F32.sign w.im⟩
+      ⟨f32! 0.0 * F32.sign z.re * F32.sign w.re, (-f32! 0.0) * F32.sign z.im * F32.sign w.im⟩
     else ⟨Float32.ofBits 0x7FC00000, Float32.ofBits 0x7FC00000⟩
   else
-    let mag := 1 / Float.fma c c (d * d)
+    let mag := f64! 1.0 / Float.fma c c (d * d)
     ⟨(Float.fma a c (b * d) * mag).toFloat32, (Float.fma b c (-(a * d)) * mag).toFloat32⟩
 
 /-- `z / w` on `ComplexF32` is Julia's widened division. -/
@@ -572,9 +620,9 @@ def inv (w : Complex Float32) : Complex Float32 :=
   let c := w.re.toFloat
   let d := w.im.toFloat
   if c.isInf || d.isInf then
-    ⟨F32.copysign 0 w.re, if F32.signbit w.im then 0 else -0.0⟩
+    ⟨F32.copysign (f32! 0.0) w.re, if F32.signbit w.im then f32! 0.0 else -f32! 0.0⟩
   else
-    let mag := 1 / Float.fma c c (d * d)
+    let mag := f64! 1.0 / Float.fma c c (d * d)
     ⟨(c * mag).toFloat32, (-d * mag).toFloat32⟩
 
 /-- `z⁻¹` on `ComplexF32` is Julia's widened inverse. -/
