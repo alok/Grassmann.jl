@@ -171,6 +171,12 @@ structure IndexTables where
   rank : Array Nat
   /-- Grade offsets `binomcumsum n`. -/
   offsets : Array Nat
+  /-- Mask ↦ position in the multivector layout (Julia `basisindex - 1`), size `2ⁿ`. -/
+  pos : Array Nat
+  /-- Even-grade offsets `spincumsum n`. -/
+  spinOffsets : Array Nat
+  /-- Odd-grade offsets `anticumsum n`. -/
+  antiOffsets : Array Nat
   /-- Even-grade (spinor) layout: position ↦ mask, size `2ⁿ⁻¹` (1 if `n = 0`). -/
   even : Array UInt64
   /-- Odd-grade layout: position ↦ mask, size `2ⁿ⁻¹` (0 if `n = 0`). -/
@@ -182,9 +188,15 @@ def IndexTables.build (n : Nat) : IndexTables :=
   let grades := (List.range (n + 1)).map fun g => (indexBasisSpec n g).map (·.toUInt64)
   let evens := (List.range (n + 1)).filter (· % 2 == 0) |>.flatMap fun g => grades[g]!
   let odds := (List.range (n + 1)).filter (· % 2 == 1) |>.flatMap fun g => grades[g]!
+  let rank := (List.range (2 ^ n)).toArray.map fun b => bladeRankCF n b.toUInt64
+  let offsets := binomcumsum n
   { basis := grades.flatten.toArray
-    rank := (List.range (2 ^ n)).toArray.map fun b => bladeRankCF n b.toUInt64
-    offsets := binomcumsum n
+    rank
+    offsets
+    pos := (List.range (2 ^ n)).toArray.map fun b =>
+      offsets[popcount b.toUInt64]! + rank[b]!
+    spinOffsets := spincumsum n
+    antiOffsets := anticumsum n
     even := evens.toArray
     odd := odds.toArray }
 
@@ -198,9 +210,16 @@ def tables : Array (Thunk IndexTables) :=
 
 /-! ## Julia index functions -/
 
-/-- Runtime implementation of `bladeRank`. -/
+/-- The table entry `a[i]`, `0` out of range (inline read, no panic path). -/
+@[inline] private def natAt (a : Array Nat) (i : Nat) : Nat := if h : i < a.size then a[i] else 0
+
+/-- Whether the tables of dimension `n` cover mask `b` (`n ≤ 12` and `b < 2ⁿ`); a shift, not
+`2 ^ n` (which is a GMP call on `Nat`). -/
+@[inline] private def tabled (n : Nat) (b : UInt64) : Bool := n ≤ tableLimit && b >>> n.toUInt64 == 0
+
+/-- Runtime implementation of `bladeRank`: one table read for `n ≤ 12`. -/
 def bladeRankImpl (n : Nat) (b : UInt64) : Nat :=
-  if n ≤ tableLimit && b.toNat < 2 ^ n then (table n).rank[b.toNat]! else bladeRankCF n b
+  if tabled n b then natAt (table n).rank b.toNat else bladeRankCF n b
 
 /-- 0-based lex rank of `b` within its grade (Julia `bladeindex(n,b) - 1`). -/
 @[implemented_by bladeRankImpl]
@@ -210,20 +229,41 @@ def bladeRank (n : Nat) (b : UInt64) : Nat := bladeRankCF n b
 `Leibniz.jl src/utilities.jl:181-184`). -/
 @[inline] def bladeIndex (n : Nat) (b : UInt64) : Nat := bladeRank n b + 1
 
+/-- Runtime implementation of `basisRank`: one table read for `n ≤ 12`. -/
+def basisRankImpl (n : Nat) (b : UInt64) : Nat :=
+  if tabled n b then natAt (table n).pos b.toNat else binomsum n (popcount b) + bladeRankCF n b
+
 /-- 0-based position of `b` in the full multivector layout. -/
-@[inline] def basisRank (n : Nat) (b : UInt64) : Nat := binomsum n (popcount b) + bladeRank n b
+@[implemented_by basisRankImpl]
+def basisRank (n : Nat) (b : UInt64) : Nat := binomsum n (popcount b) + bladeRank n b
 
 /-- Julia `basisindex(n,b) = binomsum(n,popcount b) + bladeindex(n,b)` (1-based). -/
 @[inline] def basisIndex (n : Nat) (b : UInt64) : Nat := basisRank n b + 1
 
+/-- Runtime implementation of `spinRank`: two table reads for `n ≤ 12`. -/
+def spinRankImpl (n : Nat) (b : UInt64) : Nat :=
+  if tabled n b then
+    let t := table n
+    natAt t.spinOffsets (popcount b) + natAt t.rank b.toNat
+  else spinsum n (popcount b) + bladeRankCF n b
+
 /-- 0-based position of an even blade in the spinor layout. -/
-@[inline] def spinRank (n : Nat) (b : UInt64) : Nat := spinsum n (popcount b) + bladeRank n b
+@[implemented_by spinRankImpl]
+def spinRank (n : Nat) (b : UInt64) : Nat := spinsum n (popcount b) + bladeRank n b
 
 /-- Julia `spinindex(n,b)` (1-based; meaningful for even `b`). -/
 @[inline] def spinIndex (n : Nat) (b : UInt64) : Nat := spinRank n b + 1
 
+/-- Runtime implementation of `antiRank`: two table reads for `n ≤ 12`. -/
+def antiRankImpl (n : Nat) (b : UInt64) : Nat :=
+  if tabled n b then
+    let t := table n
+    natAt t.antiOffsets (popcount b) + natAt t.rank b.toNat
+  else antisum n (popcount b) + bladeRankCF n b
+
 /-- 0-based position of an odd blade in the co-spinor layout. -/
-@[inline] def antiRank (n : Nat) (b : UInt64) : Nat := antisum n (popcount b) + bladeRank n b
+@[implemented_by antiRankImpl]
+def antiRank (n : Nat) (b : UInt64) : Nat := antisum n (popcount b) + bladeRank n b
 
 /-- Julia `antiindex(n,b)` (1-based; meaningful for odd `b`). Julia's cache gives
 `antiindex(1,0b1) = 2` (quirk Q2); the correct value is 1. -/
