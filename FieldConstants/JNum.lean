@@ -60,6 +60,10 @@ def ident : JNum → JNum → Bool
   | float a, float b => a.toBits == b.toBits
   | _, _ => false
 
+/-- `===` is reflexive. -/
+theorem ident_refl (a : JNum) : a.ident a = true := by
+  cases a <;> simp [ident]
+
 instance (n : Nat) : OfNat JNum n := ⟨int (Int64.ofNat n)⟩
 
 /-- Coerce a float literal. -/
@@ -150,10 +154,12 @@ def isZero : JNum → Bool
 /-- Julia `isapprox(y, x; rtol = eps()^0.9)` as used by `UnitSystems.unit`
 (`UnitSystems.jl:276`): `x == y`, or both finite with
 `|x - y| ≤ rtol·max(|x|, |y|)`. -/
-def isApproxUnit (y x : JNum) : Bool :=
-  let a := y.toFloat
-  let b := x.toFloat
-  a == b || (a.isFinite && b.isFinite && (a - b).abs ≤ f64! 8.161992717227193e-15 * max a.abs b.abs)
+def isApproxUnit (y x : JNum) : Bool := isApproxUnitF y.toFloat x.toFloat
+where
+  /-- The same test on bare `Float64`s. -/
+  isApproxUnitF (a b : Float) : Bool :=
+    a == b || (JuliaBase.F64.isfinite a && JuliaBase.F64.isfinite b &&
+      (a - b).abs ≤ f64! 8.161992717227193e-15 * max a.abs b.abs)
 
 /-- Julia `UnitSystems.unit(x, y=1) = isapprox(y, x, rtol=eps()^0.9) ? y : x`:
 snap a conversion factor that is within `8.2e-15` of `y` to exactly `y`. -/

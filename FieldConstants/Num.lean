@@ -90,6 +90,10 @@ def snap (x y : Num) : Num :=
 /-- Julia `===` (same kind, same payload bits). -/
 def ident (a b : Num) : Bool := a.const == b.const && a.v.ident b.v
 
+/-- `===` is reflexive. -/
+theorem ident_refl (a : Num) : a.ident a = true := by
+  cases a with | mk v c => simp [ident, JNum.ident_refl]
+
 /-- Julia `show`: the payload (a `Constant` prints like its value). -/
 protected def toString (a : Num) : String := a.v.toString
 

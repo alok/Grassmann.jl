@@ -146,4 +146,52 @@ instance : UnitAlg Num where
   special := true
   plit n := .p (.int (Int64.ofInt n))
 
+/-- `Constant{x}^n` on a bare `Float64` payload: `inv(x)^(-n)` for a negative
+literal, Julia's `pow_body` otherwise (`FieldConstants.jl:84`). -/
+@[inline] def floatLpow (x : Float) (n : Int) : Float :=
+  if n < 0 then JuliaBase.F64.powInt (f64! 1.0 / x) (-n) else JuliaBase.F64.powInt x n
+
+/-- The unboxed fast-path scalar: a bare `Float64` (a single-field structure is
+represented as its field, so chains over `NumF` run on unboxed floats with no
+allocation per operation). It is a separate type rather than an instance on
+`Float` so that `UnitSystems.einstein` and the like stay unambiguous next to
+other libraries' `Float` functions.
+
+`NumF` forgets two distinctions that `Num` tracks: `Int64` versus `Float64`
+payloads (`===` of `1` and `1.0`, `Int64` overflow), and `Constant` versus plain
+operands (`Number / Constant` rounds twice, `a*inv(b)`). Value dispatch stays
+live, keyed on bit patterns. On the named systems this changes nothing: all
+131 × 48 × 48 factors are bit-identical to `Num`'s
+(`Tests/UnitSystems/FastPaths.lean`); for other systems a factor can differ from
+Julia's in the last bits. Use `Num` when kinds and exactness matter. -/
+structure NumF where
+  /-- the value -/
+  x : Float
+  deriving Inhabited
+
+namespace NumF
+
+/-- Julia `inv`. -/ @[inline] def inv (a : NumF) : NumF := ⟨f64! 1.0 / a.x⟩
+
+end NumF
+
+instance : UnitAlg NumF where
+  mul a b := ⟨a.x * b.x⟩
+  div a b := ⟨a.x / b.x⟩
+  add a b := ⟨a.x + b.x⟩
+  sub a b := ⟨a.x - b.x⟩
+  beq a b := a.x == b.x
+  inv := NumF.inv
+  lpow a n := ⟨floatLpow a.x n⟩
+  sqrt a := ⟨a.x.sqrt⟩
+  ilit n := ⟨(Int64.ofInt n).toFloat⟩
+  flit x := ⟨x⟩
+  tau := ⟨f64! 6.283185307179586⟩
+  measured m := ⟨m.value.toFloat⟩
+  snap a b := if JNum.isApproxUnit.isApproxUnitF b.x a.x then b else a
+  isOne a := a.x == f64! 1.0
+  ident a b := a.x.toBits == b.x.toBits
+  eqFloat a f := a.x == f
+  special := true
+
 end UnitSystems
