@@ -53,6 +53,13 @@ def operatorDiag {X : Type} [Kernels V] [DenseLayout X V α] (t : X) (G : Nat) :
 @[specialize] def gradedoperator {X : Type} [Kernels V] [DenseLayout X V α] (t : X) : Outermorphism V V α :=
   ⟨((List.range V.n).map fun k => DMat.ofMat (operator t (k + 1)).mat).toArray⟩
 
+/-- Julia `T ⊘ R` for an operator with chain columns (`forms.jl:1157`): every column
+sandwiched by `R`, `(T ⊘ R)[j] = T[j] ⊘ R`. -/
+@[specialize] def TensorOperator.sandwichColumns {W : TensorBundle} {ld : Layout} {H : Nat} {Y : Type}
+    [Kernels W] [Sandwich (Chain W H α) Y (Chain W H α)] (T : TensorOperator V ld W (.chain H) α) (R : Y) :
+    TensorOperator V ld W (.chain H) α :=
+  TensorOperator.ofColumns fun j => (sandwich (T.column j : Chain W H α) R : Chain W H α)
+
 /-! ## Metric tensors -/
 
 /-- Julia `metricdyad(V)` / `metrictensor(V)` (`forms.jl:1582-1593`): the Gram

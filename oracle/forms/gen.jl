@@ -92,6 +92,10 @@ function exactcase(A, B, x, y)
     n ≥ 2 && (d["pfaffian"] = @safe pfaffian(bivector(T)))
     d["show"] = @safe repr(T)
     d["display"] = @safe body(T)
+    d["summary"] = @safe summary(T)
+    d["summaryOuter"] = @safe summary(outermorphism(T))
+    n ≥ 2 && (d["summaryCompound"] = @safe summary(compound(T, 2)))
+    d["printtex"] = @safe Grassmann.printtex(T)
     n ≤ 4 && (d["displayOuter"] = @safe body(outermorphism(T)))
     n ≤ 4 && (d["showOuter"] = @safe repr(outermorphism(T)))
     n ≤ 4 && n ≥ 2 && (d["displayCompound"] = @safe body(compound(T, 2)))
@@ -152,6 +156,7 @@ function floatcase(A, b)
     d["expm1"] = hang ? Dict("E" => "hang") : @safe expm1(T)
     d["exp10"] = hang ? Dict("E" => "hang") : @safe exp(T / 10)
     d["show"] = @safe repr(T)
+    d["summaryInv"] = @safe summary(inv(T))
     d["displayInv"] = @safe body(inv(T))
     d["showInv"] = @safe repr(inv(T))
     return d
@@ -253,7 +258,8 @@ for dv in Any[[1, 2, 3], [2, 3, 5], [1, 1, 2], [4, -2], [3, 1, 4, 1], [2, 2, 2]]
         "eigpolys" => @safe(eigpolys(Df)), "eigvals" => @safe(eigvals(Df)),
         "sylvester" => @safe(Grassmann.sylvester(Df)), "eigmults" => @safe(Grassmann.eigmults(Chain{V,1}(dv...))),
         "scalar" => @safe(scalar(Df)), "half" => @safe(value(value(Df / 2))),
-        "show" => @safe(repr(D)), "showOuter" => @safe(repr(OD)), "display" => @safe(body(D))))
+        "show" => @safe(repr(D)), "showOuter" => @safe(repr(OD)), "display" => @safe(body(D)),
+        "summary" => @safe(summary(D)), "summaryOuter" => @safe(summary(OD))))
 end
 save("diag", Dict("meta" => meta, "cases" => diags))
 
@@ -275,7 +281,7 @@ for (m, n) in [(3, 2), (2, 3), (4, 2), (4, 3), (3, 1)], trial in 1:3
         "compound" => [@safe(compound(T, g)) for g in 1:min(m, n)],
         "outer" => @safe(Matrix(O)), "outerMV" => @safe(O(Multivector{V}(mv...))),
         "pinv" => @safe(inv(Tf)), "transpose" => @safe(transpose(T)),
-        "display" => @safe(body(T)), "show" => @safe(repr(T))))
+        "display" => @safe(body(T)), "show" => @safe(repr(T)), "summary" => @safe(summary(T))))
 end
 save("rect", Dict("meta" => meta, "cases" => rect))
 
@@ -341,6 +347,11 @@ for s in Any[2, 3, 4, "+++", "-++", "2,3,5", "∞∅++", "∅++", "-+++"]
     push!(elems, Dict("spinor" => sp,
         "op" => [@safe(Matrix(operator(Spinor{V}(sp...), G))) for G in 1:n]))
     d["operators"] = elems
+    Tn = TensorOperator(Chain{V,1}([Chain{V,1}(rand(-2:2, n)...) for _ in 1:n]...))
+    bv = Chain{V,2}(rand(-2:2, binomial(n, 2))...)
+    d["sandwichT"] = enc(Matrix(Tn))
+    d["sandwichB"] = enc(bv)
+    d["sandwich"] = @safe Matrix(Tn ⊘ bv)
     if !Grassmann.DirectSum.hasconformal(V) && n ≤ 3
         d["alltex"] = @safe collect(Grassmann.alltex(V))
         d["cayley1"] = @safe body(cayley(V, 1))

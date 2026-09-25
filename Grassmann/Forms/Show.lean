@@ -328,6 +328,17 @@ namespace DiagonalOperator
 
 variable {V : TensorBundle} {l : Layout} {α : Type} [Coeff α] [JuliaShow α]
 
+/-- Julia's `summary(D)` (`forms.jl:543`): `n×n DiagonalMorphism{V, Chain{V, 1, T, n}}`
+(`DiagonalOutermorphism` for a multivector diagonal, `DiagonalOperator` otherwise). -/
+def summary [JuliaTypeName α] (_ : DiagonalOperator V l α) : String :=
+  let N := l.size V.n
+  let inner := Forms.Show.typeName V l (JuliaTypeName.name α) false
+  let kind := match l with
+    | .chain 1 => "DiagonalMorphism"
+    | .full => "DiagonalOutermorphism"
+    | _ => "DiagonalOperator"
+  s!"{N}×{N} {kind}\{{V}, {inner}}"
+
 /-- Julia `show(::DiagonalOperator)` (`forms.jl:545`): as the materialised operator. -/
 instance : ToString (DiagonalOperator V l α) := ⟨fun D => D.toOperator.showJulia⟩
 
@@ -339,6 +350,16 @@ end DiagonalOperator
 namespace Outermorphism
 
 variable {V W : TensorBundle} {α : Type} [Coeff α] [JuliaShow α]
+
+/-- Julia's `summary(O)` (`forms.jl:790`): `2ᵐ×2ⁿ Outermorphism{V, Tuple{…}}` with the
+type of every stored compound. -/
+def summary [JuliaTypeName α] (O : Outermorphism V W α) : String :=
+  let T := JuliaTypeName.name α
+  let blockType := fun (g : Nat) =>
+    let inner := Forms.Show.typeName W (.chain g) T false
+    Forms.Show.typeName V (.chain g) inner true
+  let blocks := (List.range O.blocks.size).map fun k => blockType (k + 1)
+  s!"{2 ^ W.n}×{2 ^ V.n} Outermorphism\{{V}, Tuple\{{", ".intercalate blocks}}}"
 
 /-- Julia `show(::Outermorphism)` (`forms.jl:792`): as the full block matrix. -/
 instance : ToString (Outermorphism V W α) := ⟨fun O => O.toOperator.showJulia⟩

@@ -95,6 +95,10 @@ def spaceCase (t : Tally) (c : Json) (k : Nat) : Tally := Id.run do
       let sp : Spinor V Int := (Half.ofList? (ints (fld e "spinor"))).getD Half.zero
       for G in [1:n + 1] do
         t := t.mat .bits (opRows (operator sp G)) (ops[G - 1]!) (w s!"operator(spinor, {G})")
+  -- `T ⊘ B`: every column sandwiched by a bivector
+  let Tn : Endomorphism V (.chain 1) Int := endo V (intRows (fld c "sandwichT"))
+  let bv : Chain V 2 Int := chainOf V 2 (ints (fld c "sandwichB"))
+  t := t.mat .bits (opRows (Tn.sandwichColumns bv)) (fld c "sandwich") (w "T ⊘ B")
   match fld c "alltex" with
   | .arr tex =>
     let mine := alltex V

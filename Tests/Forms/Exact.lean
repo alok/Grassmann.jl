@@ -67,6 +67,10 @@ def check (t : Tally) (c : Json) (k : Nat) : Tally := Id.run do
       t := t.nums .bits (vals pf.v) (fld c "pfaffian") (w "pfaffian")
   t := t.str A.showJulia (fld c "show") (w "show")
   t := t.str A.displayBody (fld c "display") (w "display")
+  t := t.str A.summary (fld c "summary") (w "summary")
+  t := t.str O.summary (fld c "summaryOuter") (w "summary(O)")
+  if n ≥ 2 then t := t.str (A.compound 2).summary (fld c "summaryCompound") (w "summary(Λ²T)")
+  t := t.str A.printtex (fld c "printtex") (w "printtex")
   if n ≤ 4 then
     t := t.str O.displayBody (fld c "displayOuter") (w "display(O)")
     t := t.str (toString O) (fld c "showOuter") (w "show(O)")

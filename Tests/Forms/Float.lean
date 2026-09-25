@@ -62,6 +62,7 @@ def check (t : Tally) (c : Json) (k : Nat) : Tally := Id.run do
   else t := t.skip  -- Julia's 2×2 `exp` hangs when the discriminant vanishes
   t := t.str A.showJulia (fld c "show") (w "show")
   t := t.str A.inv.displayBody (fld c "displayInv") (w "display(inv)")
+  t := t.str A.inv.summary (fld c "summaryInv") (w "summary(inv)")
   t := t.str A.inv.showJulia (fld c "showInv") (w "show(inv)")
   return t
 

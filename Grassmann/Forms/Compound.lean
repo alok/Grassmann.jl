@@ -430,6 +430,12 @@ with more. -/
     let g : Endomorphism W (.chain 1) α := T.comp tt
     tt.comp (g.invSquare (W := W))
 
+/-- The inverse of a square operator of any layout by Gauss-Jordan elimination with
+partial pivoting (`norm` ranks the pivots, e.g. `Float.abs`): for the layouts Julia's
+Cramer inverse does not cover (`Spinor`, `Multivector`, grade-`g` operators). -/
+@[specialize] def inverse {l : Layout} [Div α] (norm : α → Float) (T : Endomorphism V l α) : Endomorphism V l α :=
+  ⟨gaussJordan norm T.mat⟩
+
 /-- Julia `invdet(T) = (inv(T), det(T))` (`composite.jl:774-785`, `forms.jl:602-605`),
 the determinant as Julia's `!(t₁ ∧ yₙ₋₁)`. -/
 @[inline] def invdet [Div α] (T : Simplex V W α) : Simplex W V α × α :=

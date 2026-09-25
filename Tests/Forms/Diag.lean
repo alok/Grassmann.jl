@@ -68,6 +68,8 @@ def diagCase (t : Tally) (c : Json) (k : Nat) : Tally := Id.run do
   t := t.str (toString D) (fld c "show") (w "show")
   t := t.str (toString OD) (fld c "showOuter") (w "show(O)")
   t := t.str D.displayBody (fld c "display") (w "display")
+  t := t.str D.summary (fld c "summary") (w "summary")
+  t := t.str OD.summary (fld c "summaryOuter") (w "summary(O)")
   return t
 
 /-- One non-square case (`m × n`). -/
@@ -111,6 +113,7 @@ def rectCase (t : Tally) (c : Json) (k : Nat) : Tally := Id.run do
   t := t.mat .bits (opRows A.transpose) (fld c "transpose") (w "transpose")
   t := t.str A.displayBody (fld c "display") (w "display")
   t := t.str A.showJulia (fld c "show") (w "show")
+  t := t.str A.summary (fld c "summary") (w "summary")
   return t
 
 /-- Run the suite. -/
