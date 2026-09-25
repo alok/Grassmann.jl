@@ -14,8 +14,9 @@ namespace Grassmann.Forms.UnrolledMat
 
 open StaticVectors AbstractTensors
 
--- the longest functions (the compounds of `6 × 6` operators) nest thousands of `let`s
+-- the longest functions (the compounds of `6 × 6` operators) are thousands of `let`s long
 set_option maxRecDepth 100000
+set_option maxHeartbeats 1000000
 
 variable {α : Type} [Coeff α]
 

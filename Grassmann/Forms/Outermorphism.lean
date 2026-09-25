@@ -137,22 +137,56 @@ of grade `g` at `off` (the sizes of the domain's lower stored grades). -/
       let out :=
         if g = 0 then Packed.push out (Mat.rd xd off)
         else if g ≤ k && inDom then
-          match O.blocks[g - 1]? with
-          | some b =>
+          -- a bounds-checked index, not `blocks[g - 1]?` (an `Option` allocated per grade)
+          if h : g - 1 < O.blocks.size then
+            let b := O.blocks[g - 1]
             let a := b.mat.v.data
             Mat.pushLoop (fun i => Mat.sdot0 id a xd b.rows 1 b.cols i off) rg 0 out
-          | none => pushZeros rg out
+          else pushZeros rg out
         else pushZeros rg out
       applyLoop O l xd k n m (g + 1) off' out fuel
+
+/-- Whether block `g - 1` of `O` is square of side `d` (its storage read at run time). -/
+@[inline] def blockSide (O : Outermorphism V W α) (g d : Nat) : Bool :=
+  if h : g - 1 < O.blocks.size then
+    let b := O.blocks[g - 1]
+    b.rows == d && b.cols == d
+  else false
+
+/-- The generated straight-line `applyValues .full` (`Grassmann.Forms.Unrolled.applyFull3…4`,
+bit-identical to `applyLoop`) for the compounds of an endomorphism of `n = 3, 4` generators
+(what `ofSimplex` builds: `C(n, g) × C(n, g)` blocks), else `fallback`. -/
+@[specialize] def applyFullOr (O : Outermorphism V W α) (xd : Packed.Arr α) (fallback : Unit → Packed.Arr α) :
+    Packed.Arr α :=
+  let bl := fun (g : Nat) => if h : g - 1 < O.blocks.size then O.blocks[g - 1].mat.v.data else xd
+  if V.n == 3 && W.n == 3 && O.blocks.size == 3 && O.blockSide 1 3 && O.blockSide 2 3 && O.blockSide 3 1 then
+    Unrolled.applyFull3 (bl 1) (bl 2) (bl 3) xd
+  else if V.n == 4 && W.n == 4 && O.blocks.size == 4 && O.blockSide 1 4 && O.blockSide 2 6 &&
+      O.blockSide 3 4 && O.blockSide 4 1 then
+    Unrolled.applyFull4 (bl 1) (bl 2) (bl 3) (bl 4) xd
+  else fallback ()
 
 /-- The image of a coefficient vector stored in layout `l` (Julia `contraction(O, x)`,
 `forms.jl:1050-1073`): the scalar part is kept, grade `g ≤ k` goes through
 `Λᵍ F`, higher grades of the codomain are zero. One tail-recursive pass over the grades,
-no intermediate lists; the result size is checked with `Forms.layoutSize` (no `Nat` powers). -/
-@[specialize] def applyValues (O : Outermorphism V W α) (l : Layout) (x : Values α (l.size V.n)) :
+no intermediate lists; the result size is checked with `Forms.layoutSize` (no `Nat` powers).
+The algorithm `Grassmann.Forms.Unrolled.applyFull3…4` are generated from. -/
+@[specialize] def applyValuesGeneric (O : Outermorphism V W α) (l : Layout) (x : Values α (l.size V.n)) :
     Values α (l.size W.n) :=
   let m := W.n
   let res := applyLoop O l x.data O.depth V.n m 0 0 (Packed.mkEmpty (layoutSize m l)) (m + 1)
+  if h : Packed.size res = layoutSize m l then ⟨res, h.trans (layoutSize_eq m l)⟩
+  else zeroValues _
+
+/-- `applyValuesGeneric`, with the generated straight-line forms for full coefficient vectors
+of `n = 3, 4` generators (`applyFullOr`, bit-identical). -/
+@[specialize] def applyValues (O : Outermorphism V W α) (l : Layout) (x : Values α (l.size V.n)) :
+    Values α (l.size W.n) :=
+  let m := W.n
+  let loop := fun (_ : Unit) => applyLoop O l x.data O.depth V.n m 0 0 (Packed.mkEmpty (layoutSize m l)) (m + 1)
+  let res := match l with
+    | .full => applyFullOr O x.data loop
+    | _ => loop ()
   if h : Packed.size res = layoutSize m l then ⟨res, h.trans (layoutSize_eq m l)⟩
   else zeroValues _
 

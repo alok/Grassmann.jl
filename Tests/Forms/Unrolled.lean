@@ -9,7 +9,8 @@ import Tests.Forms.Common
 `n = 2 … 6` (including exact zeros, negative zeros and integers), every coefficient of
 `det`, `inv`, `adjugate`, `solve`, `characteristic`, the compounds and of the `5 × 5`, `6 × 6` products
 `A x`, `A B` (`Grassmann.Forms.UnrolledMat`) is compared by its bits (NaNs identified), and so are
-the eigenvalues-only iteration's values and `eigen`'s (`n ≥ 5`). The Julia
+the eigenvalues-only iteration's values and `eigen`'s (`n ≥ 5`), and the generated outermorphism
+application on multivectors (`n = 3, 4`; the loop elsewhere). The Julia
 goldens of `forms/exact` and `forms/float` then cover the generated forms too.
 -/
 
@@ -66,6 +67,11 @@ def check (n : Nat) (t : Tally) (seed : UInt64) : Tally := Id.run do
   if n ≥ 3 then
     for g in List.range' 1 n do
       t := t.ok (sameAll (T.compound g).mat.v.data (T.compoundGeneric g).mat.v.data) (w s!"compound {g}")
+    -- the outermorphism on a full coefficient vector (`applyFull3…4`)
+    let O := T.outermorphism
+    let ms := entries (1 <<< n) (seed + 7)
+    let m : Multivector V Float := ⟨Values.ofFn fun i => ms[i.1]!⟩
+    t := t.ok (sameAll (O.applyValues .full m.v).data (O.applyValuesGeneric .full m.v).data) (w "O ⋅ M")
   if n ≥ 5 then
     let U : Endomorphism V (.chain 1) Float := TensorOperator.ofFn fun i j => xs[i.1 * n + j.1]!
     t := t.ok (sameAll (T.mat.mulVec v.v).data (T.mat.mulVecGeneric v.v).data) (w "A x")

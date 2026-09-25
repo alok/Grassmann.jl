@@ -12,7 +12,8 @@ straight-line Lean code generic over `[Coeff α]`:
 
 * `Unrolled`: the determinant family of `Grassmann.Forms.Compound` (`detGeneric`, the
   Cramer `invSquareGeneric`, `adjugateGeneric`, `solveGeneric`: DirectSum's wedge plans,
-  prefix/suffix Cramer symbols, complements) and `characteristicGeneric`;
+  prefix/suffix Cramer symbols, complements), `compoundGeneric`, `characteristicGeneric`,
+  and `Outermorphism.applyValuesGeneric .full` (the block-diagonal product of the compounds);
 * `UnrolledMat`: the matrix-vector and matrix-matrix products of `Grassmann.Forms.Mat` for
   `5 × 5` and `6 × 6` (the strided dots, Julia's order).
 
@@ -34,6 +35,7 @@ inductive Sym where
   | int (k : Int)
   | raw (k : Nat)
   | vec (k : Nat)
+  | blk (g k : Nat)
   | add (a b : Sym)
   | sub (a b : Sym)
   | mul (a b : Sym)
@@ -72,6 +74,7 @@ unsafe def emit (s : Sym) : StateM St String := do
     return if k < 0 then s!"(-({ones}))" else s!"({ones})"
   | .raw k => return s!"a{k}"
   | .vec k => return s!"b{k}"
+  | .blk g k => return s!"c{g}_{k}"
   | _ =>
     let key := ptrAddrUnsafe s
     if let some nm := (← get).memo[key]? then return nm
@@ -96,6 +99,13 @@ def symOp2 (n : Nat) : Simplex (E n) (E n) Sym := TensorOperator.ofFn fun i j =>
 /-- The symbolic vector of `ℝⁿ`. -/
 def symVec (n : Nat) : Chain (E n) 1 Sym := ⟨Values.ofFn fun i => .vec i.1⟩
 
+/-- The symbolic outermorphism of `ℝⁿ` whose grade-`g` compound is read from the raw storage
+`b{g}` (column-major, `C(n,g) × C(n,g)`). -/
+def symOuter (n : Nat) : Outermorphism (E n) (E n) Sym :=
+  ⟨((List.range n).map fun g =>
+    let r := Leibniz.choose n (g + 1)
+    (⟨r, r, Mat.ofFn fun i j => .blk (g + 1) (j.1 * r + i.1)⟩ : Forms.DMat Sym)).toArray⟩
+
 /-- The input bindings: `na` slots of `raw`, `nb` slots of `vv`, read with `rd`. -/
 def inputs (rd : String) (na nb : Nat) : Array String :=
   ((Array.range na).map fun k => s!"  let a{k} := {rd} raw {k}") ++
@@ -104,6 +114,23 @@ def inputs (rd : String) (na nb : Nat) : Array String :=
 /-- `Packed.push (… (Packed.push (Packed.mkEmpty k) x₀) …) xₖ₋₁`. -/
 def pushes (xs : Array String) : String :=
   xs.foldl (fun acc x => s!"Packed.push ({acc}) {x}") s!"Packed.mkEmpty {xs.size}"
+
+/-- `applyFull{n}`: `O ⋅ x` of an outermorphism of `ℝⁿ` on a full coefficient vector
+(`Outermorphism.applyValuesGeneric .full`), the compounds' storage `m1 … mn` and `xv` as inputs. -/
+unsafe def applyFullDefn (n : Nat) : String :=
+  let O := symOuter n
+  let x : Values Sym ((DirectSum.Layout.full).size (E n).n) := Values.ofFn fun i => .vec i.1
+  let outs := (O.applyValuesGeneric .full x).data
+  let (res, st) := (outs.mapM emit).run {}
+  let blocks := (List.range n).map fun g =>
+    let r := Leibniz.choose n (g + 1)
+    (List.range (r * r)).map fun k => s!"  let c{g + 1}_{k} := Mat.rd m{g + 1} {k}"
+  let ins := blocks.flatten.toArray ++ (Array.range (2 ^ n)).map fun k => s!"  let b{k} := Mat.rd xv {k}"
+  let args := " ".intercalate ((List.range n).map fun g => s!"m{g + 1}")
+  let lines := ins ++ st.lines ++ #[s!"  {pushes res}"]
+  s!"/-- `O ⋅ x` of an outermorphism of `ℝ^{n}` on a full coefficient vector (`applyValues .full`),
+the compounds `Λᵍ F` column-major in `m1 … m{n}`. -/\n@[specialize] def applyFull{n} ({args} xv : Packed.Arr α) : Packed.Arr α :=\n" ++
+    "\n".intercalate lines.toList ++ "\n"
 
 /-- A function returning the listed symbolic outputs as raw storage (or a scalar). -/
 unsafe def defn (rd name doc sig : String) (na nb : Nat) (outs : Array Sym) (scalar : Bool) : String :=
@@ -129,8 +156,9 @@ namespace {ns}
 
 open StaticVectors AbstractTensors
 
--- the longest functions (the compounds of `6 × 6` operators) nest thousands of `let`s
+-- the longest functions (the compounds of `6 × 6` operators) are thousands of `let`s long
 set_option maxRecDepth 100000
+set_option maxHeartbeats 1000000
 
 variable \{α : Type} [Coeff α]
 "
@@ -138,8 +166,9 @@ variable \{α : Type} [Coeff α]
 /-- The determinant family and the characteristic polynomials. -/
 unsafe def unrolled : IO Unit := do
   IO.println (header "Straight-line forms of the determinant family of `n × n` grade-1 operators, `n = 2 … 6`:
-`det`, the Cramer `inv`, the `adjugate`, the Cramer `solve` (Julia `value(T) \\ v`) and the
-characteristic polynomial." "Grassmann.Forms.Mat" "Grassmann.Forms.Unrolled"
+`det`, the Cramer `inv`, the `adjugate`, the Cramer `solve` (Julia `value(T) \\ v`), the
+compounds, the outermorphism application on full coefficient vectors and the characteristic
+polynomial." "Grassmann.Forms.Mat" "Grassmann.Forms.Unrolled"
     " > Grassmann/Forms/Unrolled.lean")
   IO.println "open Grassmann.Forms\n"
   let rd := "Mat.rd"
@@ -169,6 +198,10 @@ characteristic polynomial." "Grassmann.Forms.Mat" "Grassmann.Forms.Unrolled"
     IO.println (s!"/-- The compound `Λᵍ T` of a `{n} × {n}` operator, `1 ≤ g ≤ {n}` (empty otherwise). -/\n" ++
       s!"@[specialize] def compound{n} (g : Nat) (raw : Packed.Arr α) : Packed.Arr α :=\n  match g with\n" ++
       "\n".intercalate arms ++ "\n  | _ => Packed.mkEmpty 0\n")
+  -- `n ≥ 5` is left to the loop: the hundreds of bounds-checked block reads make every
+  -- specialisation of `applyValues` (one per coefficient type) exceed the compiler's budget
+  for n in [3, 4] do
+    IO.println (applyFullDefn n)
   for n in [3, 4, 5, 6] do
     let T := symOp n
     IO.println (defn rd s!"characteristic{n}"
