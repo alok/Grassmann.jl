@@ -1,0 +1,62 @@
+# Julia defects met by the FlowGeometry goldens (oracle/flowgeometry/gen.jl, FlowGeometry.jl 0.1.5 @
+# 395ab65). The Lean port (FlowGeometry/*) fixes them or implements the evident intent; golden
+# entries that record a Julia error ({"E": …}) are skipped unless the error is a DomainError (Lean:
+# NaN). Keys ending in `_patched` hold Julia's own value of the intent, computed by the patched
+# methods at the top of gen.jl. Port notes: docs/port-notes/applied-misc.md §4.2, §8.4;
+# docs/port-notes/plot-inventory.md "FG-B*".
+
+[FG-B1-torustopology]
+source = "src/airfoils.jl:58"
+behavior = "complex(::Airfoil) throws UndefVarError: TorusTopology (a MeshTopology name, not imported)"
+port = "the closed outline over doubleinterval(interval(N)) with the 1-D torus gluing; gen.jl imports Cartan.TorusTopology"
+
+[FG-B2-british]
+source = "src/airfoils.jl:49-51, 119-122"
+behavior = "upper/lower/complex of British throw: Vector{ComplexF64} * TensorField has no method (the chord slope is a range)"
+port = "the broadcast product, i.e. thickness laid off perpendicular to the chord; goldens `*_patched`"
+
+[FG-B3-naca6a]
+source = "src/profiles.jl:329-330, 337"
+behavior = "NACA6A throws for x < 0.87437: sum.(naca6(x, 0.8, Values(0), Values(0))) adds a Float64 and a Values (MethodError)"
+port = "the scalar intent naca6(x, 0.8, 0, 0) (value) and naca6(x, 0.8, 0) (slope); no golden"
+
+[FG-B4-camber]
+source = "src/airfoils.jl:114, 137"
+behavior = "British{n,p}() and American{n,p}() refer to an undefined `Camber`"
+port = "not provided (the NACA\"…\" parser and the explicit constructors cover them)"
+
+[FG-B5-addbound]
+source = "src/FlowGeometry.jl:52-53"
+behavior = "addbound/airfoilbox default to undefined globals xn, xm, yn, ym (UndefVarError)"
+port = "explicit bounds: addbound(points, edges, rectangle) and airfoilbox(N, xn, xm, yn, ym); golden `addbound_patched`"
+
+[FG-B6-interval]
+source = "src/airfoils.jl:56-59, 72-122"
+behavior = "SymmetricArc, DoubleArc and British have no `interval` method, so complex/points throw"
+port = "the (upper) profile's interval; golden `complex_patched`. A DoubleArc of unequal sample counts gets an explicit base axis"
+
+[FG-B7-initedges]
+source = "src/FlowGeometry.jl:39"
+behavior = "initedges(::Profile) throws MethodError (initpoint of a Coordinate)"
+port = "Cartan's initedges(interval(N)); golden `initedges_patched`"
+
+[FG-B8-edgeslist-bang]
+source = "src/FlowGeometry.jl:44-48"
+behavior = "edgeslist!(::PointCloud, r) throws: push! of a Chain into a PointArray of Coordinates (convert error)"
+port = "returns the extended point cloud and the closed loop over the new points; golden `edgeslist!_patched`"
+
+[FG-B9-arc-call]
+source = "src/airfoils.jl:29-42"
+behavior = "UpperArc/LowerArc are profiles but not callable (no p(x) method)"
+port = "Eval.none: NaN at a point; the sampled fields, intervals and surfaces are Julia's"
+
+[FG-B10-wing-camber]
+source = "src/FlowGeometry.jl:203"
+behavior = "wing(N) evaluates profile(N.c) (unused), so it throws for SymmetricArc/DoubleArc (no field c)"
+port = "the unused line is dropped; wing works for every surface airfoil"
+
+# Quirks reproduced on purpose (goldens compare them): ParabolicArc slope t/400; Modified front row
+# (1,1,1,1) (negative thickness of NACA 0012-64 near the leading edge); NACA5 reflexed fits and the
+# slope without /6; NACA6 value path swaps g and h, slope takes log(a-x) (DomainError, NaN in Lean);
+# upper/lower force the last point to 1+0im for every c, x0; the 16- and 6A-series parser maps
+# Modified{t = min-pressure digit, m = thickness}; rectcirc omits the centre offsets.
