@@ -65,6 +65,9 @@ example : Chain ℝ3 2 Int := bivector m
 example : Chain ℝ3 3 Int := volume s
 example : Spinor ℝ3 Int := (2 : Int) + s
 example : Multivector ℝ3 Int := (2 : Int) + a
+example : Chain ℝ3 1 Int := x
+example : Chain ℝ3 1 Int := e₁
+example : Single ℝ3 1 Int := e₁
 
 -- variable space and grades: the indices stay symbolic
 example {V : TensorBundle} {G H : Nat} (c : Chain V G Rat) (d : Chain V H Rat) :

@@ -122,6 +122,10 @@ variable {G : Nat}
 
 end Single
 
+/-- Julia `Chain(t::Single)`: a scaled blade is a (one-hot) chain; with the
+`Submanifold → Single` coercion this also makes a unit blade an `Int` chain. -/
+instance {G : Nat} : Coe (Single V G α) (Chain V G α) := ⟨Chain.ofSingle⟩
+
 /-- Julia `Multivector(b::Submanifold)`: the unit blade with an `Int` coefficient. -/
 @[inline] def _root_.DirectSum.Submanifold.toMultivector {G : Nat} (b : Submanifold V G) :
     Multivector V Int := Grassmann.toMultivector b
