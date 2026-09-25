@@ -392,6 +392,88 @@ def refine1 (m : SimplexBundle 2 (HPoint ℝ2)) (η : Array Nat) :
   let mids := η.map fun i => (xs[i]! + xs[i - 1]!) / 2
   initmesh ((xs ++ mids).qsort (· < ·))
 
+/-! ### Mesh data: MATLAB pdetool `P`, `E`, `T` (`element.jl:69-123`)
+
+`P` is given by its `d` rows (row `k` holds coordinate `k` of every point), `E` and `T` by their
+columns, of which the first `d` (edges) and `d + 1` (elements) entries are the 1-based vertex ids;
+pdetool's further rows (parameters, subdomains) are ignored, as Julia's `list(1, n)` does. The
+points become homogeneous in `V` (Julia's `varmanifold(d+1)`: take `V` with `d + 1` generators). -/
+
+section MeshData
+
+variable {n : Nat} {V : TensorBundle} {G : Type}
+
+/-- Julia `initpoints(P, Val(d))` (`element.jl:71-74`): the points `(1, P[1,k], …, P[d,k])`. -/
+def initpoints (V : TensorBundle) (P : Array (Array Float)) : Array (HPoint V) :=
+  let np := (P[0]?.map (·.size)).getD 0
+  (Array.range np).map fun k => Chain.ofFn fun i => if i.1 = 0 then 1 else (P[i.1 - 1]!)[k]!
+
+/-- The first `n` entries of the columns of a pdetool matrix as elements. -/
+def columnsOf (n : Nat) (E : Array (Array Nat)) : Array (Vector Nat n) :=
+  E.map fun c => Vector.ofFn fun k => c[k.1]!
+
+/-- Julia `initpointsdata(P, E)` (`element.jl:80-83`): the points with the boundary elements
+`E` (`d` vertices each) over them. -/
+def initpointsdata (V : TensorBundle) (d : Nat) (P : Array (Array Float)) (E : Array (Array Nat)) :
+    SimplexBundle d (HPoint V) :=
+  let pts := initpoints V P
+  ⟨.ofArray pts, SimplexTopology.ofElements (columnsOf d E) 0 (some pts.size)⟩
+
+/-- Julia `initmeshdata(P, E, T)` (`element.jl:85-88`): the mesh of the elements `T` over all the
+points, and the boundary of `initpointsdata`. -/
+def initmeshdata (V : TensorBundle) (d : Nat) (P : Array (Array Float)) (E T : Array (Array Nat)) :
+    SimplexBundle (d + 1) (HPoint V) × SimplexBundle d (HPoint V) :=
+  let e := initpointsdata V d P E
+  let np := e.cloud.size
+  (⟨e.cloud, SimplexTopology.ofElements (columnsOf (d + 1) T) 0 (some np) (some (.oneTo np))⟩, e)
+
+/-- Julia `edgemeshdata(pt, E, Val(2))` (`element.jl:99-123`): the edges of a triangle mesh
+(`edgetopology`, colex order) with each boundary edge of `E` turned to its orientation in `E`,
+and the 1-based indices of the boundary edges among them (`0` for an edge the mesh lacks, where
+Julia throws). -/
+def edgemeshdata (t : SimplexBundle 3 (HPoint V) G) (E : Array (Array Nat)) :
+    Array (Vector Nat 2) × Array Nat :=
+  (columnsOf 2 E).foldl (fun (ed, ind) b =>
+    match ed.findIdx? (· == b) with
+    | some j => (ed, ind.push (j + 1))
+    | none =>
+      match ed.findIdx? (· == #v[b[1], b[0]]) with
+      | some k => (ed.set! k b, ind.push (k + 1))
+      | none => (ed, ind.push 0)) (t.top.edgeList, #[])
+
+/-- Julia `totalmeshdata(P, E, T)` (`element.jl:92-98`) for a planar mesh: the triangles `T` over
+all the points, and the boundary `E` as the sub-topology of the mesh's edge topology (every
+edge, the boundary ones selected and oriented as in `E`). -/
+def totalmeshdata (V : TensorBundle) (P : Array (Array Float)) (E T : Array (Array Nat)) :
+    SimplexBundle 3 (HPoint V) × SimplexBundle 2 (HPoint V) :=
+  let pts := initpoints V P
+  let np := pts.size
+  let t : SimplexBundle 3 (HPoint V) :=
+    ⟨.ofArray pts, SimplexTopology.ofElements (columnsOf 3 T) 0 (some np) (some (.oneTo np))⟩
+  let (ed, ind) := edgemeshdata t E
+  let ⟨conn, h⟩ := flattenElems ed
+  let sel := ind.foldl (fun acc k => acc ++ (ed[k - 1]!).toArray) #[]
+  (t, ⟨t.cloud, SimplexTopology.raw 0 conn ed.size h (verticesOf sel) np (.arr ind) (verticesOf conn)⟩)
+
+/-- Julia `array(m)` (`element.jl:329`): the coordinates of every point of the full mesh, one row
+per point (homogeneous coordinate first). -/
+def array (m : SimplexBundle n (HPoint V) G) : Array (Array Float) :=
+  (Array.range (m.cloud.points.size / V.n)).map fun v =>
+    (Array.range V.n).map fun c => m.coord (v + 1) c
+
+/-- Julia `array(immersion(m))` (`element.jl:331-345`): the elements, one row each (1-based
+full ids; the sub-elements of a sub-topology). -/
+def arrayTop (m : SimplexBundle n (HPoint V) G) : Array (Array Nat) :=
+  m.top.topology.map (·.toArray)
+
+/-- Julia `submesh(m)` (`element.jl:380-385`): the affine coordinates (without the homogeneous
+`1`) of the full mesh's points, restricted to the bundle's vertices unless it covers them all. -/
+def submesh (m : SimplexBundle n (HPoint V) G) : Array (Array Float) :=
+  let rows := (m.array).map (·.extract 1 V.n)
+  if m.top.isCover then rows else m.top.verts.toArray.map fun v => rows[v - 1]!
+
+end MeshData
+
 end SimplexBundle
 
 /-! ## Face fields: norms and markers (§4.8) -/

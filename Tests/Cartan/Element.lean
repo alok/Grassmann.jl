@@ -36,6 +36,60 @@ def mesh (n : Nat) (V : TensorBundle) (c : Json) : TestM (SimplexBundle n (HPoin
 def flatChains {W : TensorBundle} {G : Nat} (xs : Array (Chain W G Float)) : FloatArray :=
   xs.foldl (fun acc x => x.v.toList.foldl FloatArray.push acc) .empty
 
+/-- A golden topology (elements, vertices, sub-elements, node count) against a bundle's. -/
+def checkTop {n : Nat} {V : TensorBundle} (label : String) (m : SimplexBundle n (HPoint V))
+    (j : Json) : TestM Unit := do
+  let els ← (← jArr (← jField j "elements")).mapM jNats
+  checkEq s!"{label} elements" (m.arrayTop.toList.map (·.toList)) (els.toList.map (·.toList))
+  let full ← (← jArr (← jField j "full")).mapM jNats
+  checkEq s!"{label} full" ((m.top.fulltopology).toList.map (·.toList)) (full.toList.map (·.toList))
+  checkEq s!"{label} vertices" m.top.verts.toArray.toList (← jNats (← jField j "vertices")).toList
+  checkEq s!"{label} sub" m.top.sub.toArray.toList (← jNats (← jField j "sub")).toList
+  checkEq s!"{label} fullvertices" m.top.fullVerts.toArray.toList
+    (← jNats (← jField j "fullvertices")).toList
+  checkEq s!"{label} nodes" m.top.totalNodes (← jNat (← jField j "nodes"))
+
+/-- A golden bundle (flat full points and topology). -/
+def checkBundle {n : Nat} {V : TensorBundle} (label : String) (m : SimplexBundle n (HPoint V))
+    (j : Json) : TestM Unit := do
+  checkFloats s!"{label} points" m.cloud.points (← gFloats (← jField j "points"))
+  checkTop label m (← jField j "top")
+
+/-- A golden matrix (rows of floats). -/
+def matOf (j : Json) : TestM (List (List UInt64)) := do
+  let rows ← jArr j
+  rows.toList.mapM fun r => do return (← gFloats r).toList.map Float.toBits
+
+/-- The mesh-data constructors (`meshdata.json`). -/
+def runMeshData : TestM Unit := do
+  let g ← load "element/meshdata"
+  let P ← (← jArr (← jField g "P")).mapM fun r => do return (← gFloats r).toList.toArray
+  let E ← (← jArr (← jField g "E")).mapM jNats
+  let T ← (← jArr (← jField g "T")).mapM jNats
+  let bits (rows : Array (Array Float)) : List (List UInt64) := rows.toList.map (·.toList.map Float.toBits)
+  checkBundle "meshdata initpointsdata" (SimplexBundle.initpointsdata ℝ3 2 P E) (← jField g "initpointsdata")
+  let (t, e) := SimplexBundle.initmeshdata ℝ3 2 P E T
+  let im ← jField g "initmeshdata"
+  checkBundle "meshdata initmeshdata t" t (← jField im "t")
+  checkBundle "meshdata initmeshdata e" e (← jField im "e")
+  checkEq "meshdata submesh t" (bits t.submesh) (← matOf (← jField im "submesh_t"))
+  checkEq "meshdata submesh e" (bits e.submesh) (← matOf (← jField im "submesh_e"))
+  checkEq "meshdata array t" (bits t.array) (← matOf (← jField im "array_t"))
+  checkEq "meshdata array(immersion t)" (t.arrayTop.toList.map (·.toList))
+    ((← (← jArr (← jField im "array_top")).mapM jNats).toList.map (·.toList))
+  let (tt, te) := SimplexBundle.totalmeshdata ℝ3 P E T
+  let tm ← jField g "totalmeshdata"
+  checkBundle "meshdata totalmeshdata t" tt (← jField tm "t")
+  checkBundle "meshdata totalmeshdata e" te (← jField tm "e")
+  let P3 : Array (Array Float) := #[#[0, 1, 0, 0, 0.25], #[0, 0, 1, 0, 0.25], #[0, 0, 0, 1, 0.25]]
+  let E3 : Array (Array Nat) := #[#[1, 2, 3], #[1, 2, 4], #[1, 3, 4], #[2, 3, 4]]
+  let T3 : Array (Array Nat) := #[#[1, 2, 3, 5], #[1, 2, 4, 5], #[1, 3, 4, 5], #[2, 3, 4, 5]]
+  let (t3, e3) := SimplexBundle.initmeshdata ℝ4 3 P3 E3 T3
+  let i3 ← jField g "initmeshdata3"
+  checkBundle "meshdata initmeshdata3 t" t3 (← jField i3 "t")
+  checkBundle "meshdata initmeshdata3 e" e3 (← jField i3 "e")
+  checkEq "meshdata submesh t3" (bits t3.submesh) (← matOf (← jField i3 "submesh_t"))
+
 /-- The checks of one mesh. -/
 def runCase (n : Nat) (V : TensorBundle) (name : String) (c : Json) (flipB3 : Bool := false) :
     TestM Unit := do
@@ -105,6 +159,7 @@ def runCase (n : Nat) (V : TensorBundle) (name : String) (c : Json) (flipB3 : Bo
 
 /-- Run the finite-element checks. -/
 def run : TestM Unit := do
+  runMeshData
   let g ← load "element/fem"
   runCase 3 ℝ3 "two" (← jField g "two")
   runCase 3 ℝ3 "grid" (← jField g "grid")
