@@ -38,6 +38,12 @@ kernel (`refBin`/`refBinProj`/`refUn`). At a call site whose operation and
 layouts are literals (every typed instance of the algebra layer), the
 projection of the instance, the dispatchers and the `match`es fold away and
 the call is a direct call of the kernel specialized at the coefficient type.
+Two caveats of the compiler (Lean v4.35): the grade patterns (`.chain 2`) compile
+to `instDecidableEqNat` tests, which LCNF folds only after its specialization
+pass, so a call site also specializes the (dead) kernels of the other grades of
+its operation (compile time only; the final code is the direct call); and the
+typed layer's parity layouts (`halfLayout ((G + H) % 2 == 1)`) do not fold at all
+(no `Nat.mod`/`Nat.beq` folding), leaving one branch on a closed `Bool`.
 -/
 import Grassmann.Kernel.Codegen.Plans
 import Grassmann.Kernel.Class
