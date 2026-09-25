@@ -4,9 +4,10 @@ import Tests.AbstractTensors.Notation
 import Tests.AbstractTensors.StaticVectorsTests
 import Tests.AbstractTensors.ComplexTests
 import Tests.AbstractTensors.GenericTests
+import Tests.AbstractTensors.Kinds
 
 /-!
-AbstractTensors and StaticVectors test suites. `Notation` is compile-time
+AbstractTensors and StaticVectors test suites. `Notation` and `Kinds` are compile-time
 only; the others check oracle goldens at run time.
 -/
 
