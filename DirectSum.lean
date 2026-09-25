@@ -8,3 +8,4 @@ import DirectSum.Parity
 import DirectSum.BladeAlgebra
 import DirectSum.Compat
 import DirectSum.Blade
+import DirectSum.Names

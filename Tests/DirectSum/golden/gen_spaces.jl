@@ -160,6 +160,29 @@ for (N, Sm) in ((6, 0b101101), (5, 0b10110), (8, 0b11011010)), B in 0:(1<<count_
 end
 sparse = [Dict("spec" => spec, "show" => @safe(repr(Λ(V)))) for (V, spec) in (
     I(9), I(22), I(23), I(62), osum(R(5), adj(R(5))), osum(R(7), adj(R(7))), osum(R(14), adj(R(14))), R(12))]
+# ---------------------------------------------------------------- blade name lookup (Λ(V).name)
+perms(v) = length(v) <= 1 ? [v] : [[[v[i]]; p] for i in eachindex(v) for p in perms(deleteat!(copy(v), i))]
+combos(v, k) = k == 0 ? [Int[]] : [[[v[i]]; r] for i in eachindex(v) for r in combos(v[i+1:end], k - 1)]
+subsets(v) = [c for k in 1:length(v) for c in combos(v, k)]
+termrec(t) = t isa Zero ? Dict("zero" => true, "show" => repr(t)) :
+    t isa Submanifold ? Dict("bits" => u(t), "coef" => "1", "show" => repr(t)) :
+    Dict("bits" => u(basis(t)), "coef" => string(value(t)), "show" => repr(t))
+namesof(prefix, sets) = [prefix * join(string.(p)) for c in sets for p in perms(c)]
+lookups = Any[]
+for (V, spec, names) in (
+        (R(3)..., vcat(namesof("v", subsets([1, 2, 3])), ["v11", "v22", "v1231", "v2112"])),
+        (S("-+-+")..., vcat(namesof("v", subsets([1, 2, 3, 4])), ["v11", "v22", "v3113", "v2442"])),
+        (I(62)..., ["v32a87Ng", "v2378agN", "v1a", "vZ1"]),
+        (adj(R(3))..., ["w1", "w21", "w123", "w312", "w231"]),
+        (osum(R(2), adj(R(2)))..., ["v1", "w1", "v1w1", "v21w12", "v12w21", "v2w1"]),
+        (S("∞∅+")..., ["v∞", "v∅", "v1", "v∞∅", "v∞1", "v∅1", "v∞∅1"]),
+        (tan(R(2))..., ["v1", "∂1", "∂1v1", "∂1v12", "v12"]))
+    B = Λ(V)
+    for s in names
+        push!(lookups, Dict("spec" => spec, "name" => s, "result" => @safe(termrec(getproperty(B, Symbol(s))))))
+    end
+end
+
 powers = [Dict("expr" => e, "show" => @safe(repr(v))) for (e, v) in (
     "R^0" => (ℝ^1)^0, "R^5" => (ℝ^1)^5, "(R^2)^3" => (ℝ^2)^3, "(R')^2" => ((ℝ^1)')^2)]
 
@@ -167,5 +190,5 @@ open(ARGS[1], "w") do io
     JSON.print(io, Dict("spaces" => spaces, "signature_parse" => sigparse, "diagonal_parse" => diagparse,
         "bundle_parse" => vparse, "index_tables" => tabs, "index_spots" => spots, "printindex" => printidx,
         "printindices_62" => pi62, "complement" => compl, "grade_parities" => parities,
-        "expandbits" => pdep, "powers" => powers, "sparse" => sparse))
+        "expandbits" => pdep, "powers" => powers, "sparse" => sparse, "lookup" => lookups))
 end

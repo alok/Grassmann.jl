@@ -11,6 +11,7 @@ and counted (Leibniz Q2: cumulative sums and `antiindex` for `n < 2`).
 -/
 import Tests.DirectSum.Common
 import DirectSum.Compat
+import DirectSum.Names
 
 open Lean DirectSum DirectSum.Bits
 
@@ -142,6 +143,35 @@ def checkParse (t : Tally) (j : Json) : Tally := Id.run do
     t := t.check (showOrErr mine == jShow (r.getObjValD "show")) s!"power {e}: `{showOrErr mine}`"
   return t
 
+/-- Blade lookup by name against Julia `getproperty(Λ(V), name)`. Julia's sign
+for repeated indices through `Λ(V)` and its errors on some dyadic names are
+quirk Q16 (fixed here: the geometric product decides). -/
+def checkLookup (t : Tally) (j : Json) : Tally := Id.run do
+  let mut t := t
+  for r in jArr j "lookup" do
+    let s := jStr r "name"
+    let .ok V := build (r.getObjValD "spec") | t := t.bad s!"lookup recipe {s}"
+    let mine := V.lookup s
+    let res := r.getObjValD "result"
+    let repeated := match V.generatorsOf s with
+      | some gs => decide (gs.eraseDups.length < gs.length)
+      | none => false
+    match (res.getObjVal? "error"), mine with
+    | .ok _, none => t := t.ok
+    | .ok _, some _ => t := t.defect "DirectSum Q16 name lookup (Julia throws on out-of-order dyadic names)"
+    | .error _, none => t := t.bad s!"lookup {s}: Lean found nothing"
+    | .error _, some r' =>
+      let want : Terms := if (res.getObjValD "zero") == .bool true then #[]
+        else #[((jNat res "bits").toUInt64, (match TensorBundle.parseRat (jStr res "coef") with
+          | .ok x => x | .error _ => 0))]
+      let got := r'.terms
+      let shown := match r' with
+        | .zero => "𝟎" | .blade b => V.bladeLabel b | .single c b => V.showTerm c b | _ => "?"
+      if normTerms got == normTerms want && shown == jStr res "show" then t := t.ok
+      else if repeated then t := t.defect "DirectSum Q16 name lookup (repeated-index sign through Λ(V))"
+      else t := t.bad s!"lookup {s}: `{shown}` vs `{jStr res "show"}`"
+  return t
+
 /-- Nat array field. -/
 def natArr (j : Json) (k : String) : Array Nat := (jArr j k).map fun | .num x => (jsonRat x).num.toNat | _ => 0
 
@@ -213,6 +243,7 @@ def run : IO Tally := do
   t := checkParse t j
   t := checkIndex t j
   t := checkPrinting t j
+  t := checkLookup t j
   return t
 
 end DirectSumTests.Spaces
