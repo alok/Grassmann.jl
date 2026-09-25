@@ -146,7 +146,7 @@ negative or zero entries) and every commutative ring `R`:
 | `Cl.IsGrade.add`, `.neg`, `.sub`, `.smul`, `Cl.isGrade_scalar` | grades are closed under the linear operations |
 | `Cl.wedge_comm_of_even`, `Cl.wedge_comm_of_odd` | graded commutativity split by the parity of `pq` |
 | `Cl.reverse_sandwich`, `Cl.sandwich_mul`, `Cl.sandwich_scalar` | `~(R x R̃) = R x̃ R̃`; with `R̃ R = 1`, `(R x R̃)(R y R̃) = R x y R̃`; with `R R̃ = 1`, scalars are fixed |
-| `Cl.sandwich_sq_of_vector` | a unit versor is an isometry on vectors: `(R v R̃)² = B(v,v)` |
+| `Cl.sandwich_sq_of_vector` | with `R̃ R = R R̃ = 1`, sandwiching is an isometry on vectors: `(R v R̃)² = B(v,v)` |
 | `Cl.proj_sandwich_of_even` | for even `R` and a vector `v`, `R v R̃` has no part of grade `k ≢ 1 (mod 4)` (rings without 2-torsion; no normalization needed) |
 | `Cl.isGrade_sandwich_of_even` | hence, in dimension `≤ 4`, **the sandwich of a vector by an even element is a vector** |
 

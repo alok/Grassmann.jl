@@ -70,7 +70,7 @@ example (u v w : Cl g) (hu : IsGrade 1 u) (hv : IsGrade 1 v) (hw : IsGrade 1 w) 
 
 example (r x y : Cl g) (h : reverse r * r = 1) :
     r * x * reverse r * (r * y * reverse r) = r * (x * y) * reverse r := by grind [grassmann]
-/-- A unit versor is an isometry on vectors. -/
+/-- Sandwiching by a unit element (`R̃ R = R R̃ = 1`) is an isometry on vectors. -/
 example (r v : Cl g) (hl : reverse r * r = 1) (hr : r * reverse r = 1) (hv : IsGrade 1 v) :
     r * v * reverse r * (r * v * reverse r) = scalar (dot v v) := by grind [grassmann]
 /-- **Grade preservation**: in dimension `≤ 4` an even element sandwiches

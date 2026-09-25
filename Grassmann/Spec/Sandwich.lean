@@ -10,8 +10,8 @@ Sandwiches `R x R̃` and the small laws that make the specification usable by
 * Grades are closed under sums, negations, differences and scalar multiples;
   scalars have grade `0`, generators grade `1`.
 * Sandwiches: `~(R x R̃) = R x̃ R̃` (`reverse_sandwich`); when `R̃ R = 1`,
-  sandwiching is multiplicative (`sandwich_mul`); a unit versor is an isometry
-  on vectors, `(R v R̃)² = v²` (`sandwich_sq_of_vector`).
+  sandwiching is multiplicative (`sandwich_mul`); with `R R̃ = 1` as well it
+  is an isometry on vectors, `(R v R̃)² = v²` (`sandwich_sq_of_vector`).
 * **Grade preservation** (`proj_sandwich_of_even`): for an even `R` and a
   vector `v`, `R v R̃` has no part of grade `k ≢ 1 (mod 4)`, over any
   commutative ring without 2-torsion. It is self-reverse (so the grades
@@ -211,8 +211,8 @@ theorem sandwich_mul {r : Cl g} (h : reverse r * r = 1) (x y : Cl g) :
 theorem sandwich_scalar {r : Cl g} (h : r * reverse r = 1) (c : R) : r * scalar c * reverse r = scalar c := by
   rw [mul_scalar, smul_mul, h, scalar_eq_smul_one]
 
-/-- **A unit versor is an isometry on vectors**: if `R̃ R = R R̃ = 1` then
-`(R v R̃)² = v² = B(v, v)`. -/
+/-- **Sandwiching by a unit element is an isometry on vectors**: if
+`R̃ R = R R̃ = 1` then `(R v R̃)² = v² = B(v, v)`. -/
 theorem sandwich_sq_of_vector {r v : Cl g} (hl : reverse r * r = 1) (hr : r * reverse r = 1)
     (hv : IsGrade 1 v) : r * v * reverse r * (r * v * reverse r) = scalar (dot v v) := by
   rw [sandwich_mul hl, mul_self_of_vector hv, sandwich_scalar hr]
