@@ -1,4 +1,5 @@
 import Cartan.Field
+import Cartan.Generated
 
 /-!
 # Field kernels: Grassmann products over whole fields
@@ -16,8 +17,10 @@ plan up once and evaluates it at every point directly on the flat fiber arrays, 
 own accumulation order, so its results are bit-identical to the pointwise product (the property
 tests check this against the pointwise lift on random fields).
 
-The planned field instances apply to fibers with a dense `Float` layout (`Chain`, `Spinor`,
-`CoSpinor`, `Multivector`); everything else uses the pointwise lift.
+For the spaces with generated kernels (`Cartan.Generated`: `ℝ2`, `ℝ3`, `ℝ4`) the plan is not
+interpreted at all: the straight-line kernel of the key runs instead (same arithmetic, same
+order). The planned field instances apply to fibers with a dense `Float` layout (`Chain`,
+`Spinor`, `CoSpinor`, `Multivector`); everything else uses the pointwise lift.
 -/
 
 namespace Cartan
@@ -129,21 +132,33 @@ fiber values, used if the plan cannot be built or does not have `Z`'s width. -/
 def planZip (op : BinOp) (pointwise : X → Y → Z) (a : TensorField m X) (b : TensorField m Y) :
     TensorField m Z :=
   let n := card m
-  match Kernel.binPlan V op (layoutOf X) (layoutOf Y) (layoutOf Z) with
-  | some fp =>
-    let out := Kernel.evalZip fp a.data b.data (FlatFiber.width X) (FlatFiber.width Y) n
-    if h : out.size = FlatFiber.width Z * n then ⟨out, h, none⟩ else zipWith pointwise a b
-  | none => zipWith pointwise a b
+  let fallback (_ : Unit) : TensorField m Z :=
+    match Kernel.binPlan V op (layoutOf X) (layoutOf Y) (layoutOf Z) with
+    | some fp =>
+      let out := Kernel.evalZip fp a.data b.data (FlatFiber.width X) (FlatFiber.width Y) n
+      if h : out.size = FlatFiber.width Z * n then ⟨out, h, none⟩ else zipWith pointwise a b
+    | none => zipWith pointwise a b
+  match Generated.bin? V op (layoutOf X) (layoutOf Y) (layoutOf Z) with
+  | some k =>
+    let out := k a.data b.data n
+    if h : out.size = FlatFiber.width Z * n then ⟨out, h, none⟩ else fallback ()
+  | none => fallback ()
 
 /-- The linear Grassmann map `op : X → Z` over a field, through its plan
 (`Kernels.un op (layoutOf X) (layoutOf Z)`); `pointwise` as for `planZip`. -/
 def planMap (op : UnOp) (pointwise : X → Z) (a : TensorField m X) : TensorField m Z :=
   let n := card m
-  match Kernel.unPlan V op (layoutOf X) (layoutOf Z) with
-  | some fp =>
-    let out := Kernel.evalMap fp a.data (FlatFiber.width X) n
-    if h : out.size = FlatFiber.width Z * n then ⟨out, h, none⟩ else map pointwise a
-  | none => map pointwise a
+  let fallback (_ : Unit) : TensorField m Z :=
+    match Kernel.unPlan V op (layoutOf X) (layoutOf Z) with
+    | some fp =>
+      let out := Kernel.evalMap fp a.data (FlatFiber.width X) n
+      if h : out.size = FlatFiber.width Z * n then ⟨out, h, none⟩ else map pointwise a
+    | none => map pointwise a
+  match Generated.un? V op (layoutOf X) (layoutOf Z) with
+  | some k =>
+    let out := k a.data n
+    if h : out.size = FlatFiber.width Z * n then ⟨out, h, none⟩ else fallback ()
+  | none => fallback ()
 
 end TensorField
 
