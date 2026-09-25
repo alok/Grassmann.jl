@@ -167,9 +167,8 @@ theorem isGrade_scalar (r : R) : IsGrade 0 (scalar r : Cl g) := by
   show (if a = 0 then r else 0) = 0
   exact ite_eq_right fun e => h ((grade_eq_zero_iff a).mpr e)
 
-/-- A multivector is the sum of its grade projections below `k`, … — here only
-what the sandwich theorem needs: the coefficient of blade `a` is that of its
-grade part. -/
+/-- The coefficient of a blade is the coefficient of the grade part of that
+blade's grade. -/
 theorem coeff_proj_grade (x : Cl g) (a : BitVec n) : (proj (grade a) x).coeff a = x.coeff a := by
   show (if grade a = grade a then x.coeff a else 0) = x.coeff a
   rw [ite_eq_left rfl]
