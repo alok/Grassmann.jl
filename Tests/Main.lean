@@ -1,6 +1,31 @@
 import Tests
 
-/-- Test driver: `lake test` / `lake exe tests [suite …]`. Suites register in `Tests/Main.lean`. -/
-def main (_args : List String) : IO UInt32 := do
-  IO.println "tests: no suites registered yet"
-  return 0
+/-- A registered test suite: a name and an action returning `(passed, failed)`. -/
+structure Suite where
+  name : String
+  run : IO (Nat × Nat)
+
+/-- Every suite `lake test` runs. Suites read goldens relative to the repository root. -/
+def suites : List Suite := [
+  ⟨"JuliaBase", Tests.JuliaBase.run⟩,
+  ⟨"AbstractTensors", Tests.AbstractTensors.run⟩,
+  ⟨"AbstractLattices", Tests.AbstractLattices.run⟩,
+  ⟨"PrimitiveBits", Tests.PrimitiveBits.run⟩,
+  ⟨"DeMorgan", Tests.DeMorgan.run⟩,
+  ⟨"Dendriform", Tests.Dendriform.run⟩
+]
+
+/-- Test driver: `lake test` runs everything; `lake exe tests A B` runs the named suites. -/
+def main (args : List String) : IO UInt32 := do
+  let chosen := if args.isEmpty then suites else suites.filter (args.contains ·.name)
+  let mut totalPass := 0
+  let mut totalFail := 0
+  for s in chosen do
+    let t0 ← IO.monoMsNow
+    let (p, f) ← s.run
+    let t1 ← IO.monoMsNow
+    IO.println s!"[{if f == 0 then "PASS" else "FAIL"}] {s.name}: {p} passed, {f} failed ({t1 - t0} ms)"
+    totalPass := totalPass + p
+    totalFail := totalFail + f
+  IO.println s!"TOTAL: {totalPass} passed, {totalFail} failed"
+  return if totalFail == 0 then 0 else 1
