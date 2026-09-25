@@ -116,15 +116,22 @@ def extraFunctions : List (String × (UnitSystem α → α)) :=
 def scalarFunctions : List (String × (UnitSystem α → α)) :=
   dimensionlessFunctions ++ constantFunctions ++ physicsFunctions ++ derivedFunctions ++ extraFunctions
 
-/-- Julia `sackurtetrode(U, P=atmosphere(U), T=kelvin(U), m=dalton(U))`
-(`initdata.jl:30`), the Sackur–Tetrode entropy constant (not a monomial, so it
-exists for `Num` only). -/
-def sackurtetrode (U : UnitSystem Num) (P : Num := atmosphere U) (T : Num := kelvin U)
-    (m : Num := dalton U) : Num :=
-  let e52 : Num := .c (.float (JuliaBase.F64.exp 2.5))
+/-- The argument of the logarithm in Julia's `sackurtetrode` (`initdata.jl:30`):
+`(Constant(exp(5/2))*kB*sqrt(kB/g₀/turn/ħ^2)^3)*(T/P*sqrt(m*T)^3)`, generic in the
+scalar (MeasureSystems takes the logarithm of the measured group). -/
+def sackurtetrodeArg (U : UnitSystem α) (P : α := atmosphere U) (T : α := kelvin U)
+    (m : α := dalton U) : α :=
+  let e52 : α := flit (JuliaBase.F64.exp 2.5)
   let inner := e52 * boltzmann U *
     UnitAlg.sqrt (boltzmann U / gravity U / turn U / planckreduced U ^ (2 : Int)) ^ (3 : Int)
-  let arg := inner * (T / P * UnitAlg.sqrt (m * T) ^ (3 : Int))
+  inner * (T / P * UnitAlg.sqrt (m * T) ^ (3 : Int))
+
+/-- Julia `sackurtetrode(U, P=atmosphere(U), T=kelvin(U), m=dalton(U))`
+(`initdata.jl:30`), the Sackur–Tetrode entropy constant (not a monomial: its
+value is the logarithm of `sackurtetrodeArg`). -/
+def sackurtetrode (U : UnitSystem Num) (P : Num := atmosphere U) (T : Num := kelvin U)
+    (m : Num := dalton U) : Num :=
+  let arg := sackurtetrodeArg U P T m
   ⟨arg.v.log, arg.const⟩
 
 /-- Module-level numeric constants of UnitSystems (Julia names), without the aliases. -/

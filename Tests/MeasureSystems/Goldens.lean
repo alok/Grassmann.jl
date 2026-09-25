@@ -139,7 +139,13 @@ def derivedSuite : IO Suite := do
     | "μE☾" =>
       s := s.check (μE.toMeas.display == str (idx r 1)) fun _ => s!"μE☾: got {μE.toMeas.display}"
       s := checkMNum s "μE☾" μE.toMNum r 2
-    | nm => match MeasureSystems.Constants.table.lookup nm with
+    | nm =>
+      if nm.startsWith "sackurtetrode(" then
+        let U := sysOf! ((nm.drop 14).dropEnd 1).toString
+        let (shown, m) := MeasureSystems.sackurtetrode U
+        s := s.check (shown == str (idx r 1)) fun _ => s!"{nm}: got {shown}, want {str (idx r 1)}"
+        s := checkMNum s nm m r 2
+      else match MeasureSystems.Constants.table.lookup nm with
       | some (shown, m) =>
         s := s.check (shown == str (idx r 1)) fun _ => s!"{nm}: got {shown}, want {str (idx r 1)}"
         s := checkMNum s nm m r 2

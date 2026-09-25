@@ -201,6 +201,8 @@ def powRat (a : Measurement) (r : Rat) : Measurement :=
 /-- `a^y` for a `Float64` (`math.jl:297`). -/
 def powFloat (a : Measurement) (y : Float) : Measurement :=
   result1 (JuliaBase.F64.pow a.val y) (y * JuliaBase.F64.pow a.val (y - 1.0)) a
+/-- `log(a)` (`math.jl`: `result(log(a.val), inv(a.val), a)`). -/
+def log (a : Measurement) : Measurement := result1 (JuliaBase.F64.log a.val) (1.0 / a.val) a
 /-- `sqrt(a)` -/
 def sqrt (a : Measurement) : Measurement := let v := a.val.sqrt; result1 v (1.0 / (2.0 * v)) a
 /-- `cbrt(a)` -/

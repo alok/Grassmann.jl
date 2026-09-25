@@ -85,6 +85,21 @@ def δμ₀ : MNum :=
   MNum.sub (productM (match μ₀ Scalar with | .grp g => g | _ => Group.one))
     (.float (f64! 12.566370614359172 * f64! 1e-7))
 
+/-- MeasureSystems' `sackurtetrode(U)`: the logarithm of a measured group
+(`LogGroup{ℯ}` of `Group{:Measures}`), printed `log(monomial⋅coefficient) = value ± err`
+with the value `log(product(g))` in `Measurement` arithmetic. -/
+def sackurtetrode (U : Sys) : String × MNum :=
+  match sackurtetrodeArg (U.sys Scalar) with
+  | .grp g =>
+    let m : MNum := match productM g with
+      | .float x => .float (JuliaBase.F64.log x)
+      | .meas x => .meas x.log
+    let shown := match m with
+      | .float x => JuliaBase.F64.showString x
+      | .meas x => x.display
+    (s!"log({g.showWith constantsNames false "𝟙"}) = {shown}", m)
+  | x => (x.toString, .float (JuliaBase.F64.log x.toFloat))
+
 /-! ### Named measured constants (UnitSystems `systems.jl:28-72` re-evaluated)
 
 The SI2019 quantities of the physics constants, with uncertainties. -/
