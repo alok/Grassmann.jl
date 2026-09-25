@@ -38,6 +38,21 @@ function us_ratioall(ds::Vector{Any}, ps::Vector{Any})
     end
     acc
 end
+# Similitude quantities with Float64 values (dimensions carried at run time).
+function us_qarith(as::Vector, bs::Vector)
+    acc = 0.0
+    for (a, b) in zip(as, bs)
+        acc += Float64(((a * b) / (a + a)).v)
+    end
+    acc
+end
+function us_qconvert(as::Vector, bs::Vector)
+    acc = 0.0
+    for (a, b) in zip(as, bs)
+        acc += Float64(float(((a / b)(Similitude.English)).v))
+    end
+    acc
+end
 # Measurements arithmetic with correlated error propagation.
 function us_measarith(as::Vector, bs::Vector)
     acc = 0.0
@@ -101,6 +116,11 @@ function suite_unitsystems(ctx)
     bench!(i -> us_ratioall(blackbox(i, ds), ps), ctx, "ratio_runtime";
            ops = length(ds) * length(ps), param = "$(length(ds))×$(length(ps))")
     m = sized(ctx, 1000, 20)
+    qx = [1.0 + i / m for i in 0:m-1]
+    qas = [Similitude.Metric(x, Similitude.energy) for x in qx]
+    qbs = [Similitude.Metric(x + 0.5, Similitude.evaldim(:time)) for x in qx]
+    bench!(i -> us_qarith(blackbox(i, qas), qbs), ctx, "quantity_arith"; ops = m, param = "n=$m")
+    bench!(i -> us_qconvert(blackbox(i, qas), qbs), ctx, "quantity_convert"; ops = m, param = "n=$m")
     as = [us_M.measurement(1.0 + i / m, 0.01 * (1 + i % 7)) for i in 0:m-1]
     bs = [us_M.measurement(2.0 + i / m, 0.02) for i in 0:m-1]
     bench!(i -> us_measarith(blackbox(i, as), bs), ctx, "measurement_arith"; ops = m, param = "n=$m")

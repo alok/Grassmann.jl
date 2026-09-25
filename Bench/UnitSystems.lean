@@ -26,6 +26,10 @@ Julia twin: `oracle/bench/unitsystems.jl` (UnitSystems 0.3 / Similitude).
 * `ratio_runtime`: Similitude's exact conversion factor `ratio(d, U, S)` of every quantity's
   dimension for the six pairs of `convert_pairs`, evaluated at run time (Lean caches the eleven
   constant ratios per pair of systems; Julia recomputes them).
+* `quantity_arith`, `quantity_convert`: typed Similitude quantities with `Float64` values,
+  `(a*b)/(a+a)` and `(a/b)(English)` for `10³` pairs of a Metric energy and a Metric time (Lean
+  computes the dimensions during elaboration and hoists the conversion factor; Julia's `Quantity`
+  carries its dimension group at run time and recomputes `ratio`).
 * `measurement_arith`: Measurements.jl arithmetic with linear, correlated error propagation:
   `a*b + a/b - a*a` over `10³` pairs of independent measurements (MeasureSystems' `Measurement`).
 * `measured_ratio`: MeasureSystems' measured conversion factors (`product` of the exact ratio with
@@ -83,6 +87,24 @@ quantity's dimension and pair. -/
 def ratioAll (ds : Array USQGroup) (ps : Array (Sys × Sys)) : Float :=
   ds.foldl (fun acc d => ps.foldl (fun acc (U, S) => acc + (Similitude.ratio d.v U S).toFloat) acc) 0
 
+/-- `∑ ((a*b)/(a+a)).v` over pairs of typed quantities. -/
+def quantityArith (xs ys : FloatArray) (i : Nat) (acc : Float) : Float :=
+  if h : i < xs.size then
+    let a : Quantity .Metric Dim.energy Float := ⟨xs[i]'h⟩
+    let b : Quantity .Metric Dim.time Float := ⟨ys[i]!⟩
+    quantityArith xs ys (i + 1) (acc + ((a * b) / (a + a)).val)
+  else acc
+termination_by xs.size - i
+
+/-- `∑ ((a/b)(English)).v` over pairs of typed quantities. -/
+def quantityConvert (xs ys : FloatArray) (i : Nat) (acc : Float) : Float :=
+  if h : i < xs.size then
+    let a : Quantity .Metric Dim.energy Float := ⟨xs[i]'h⟩
+    let b : Quantity .Metric Dim.time Float := ⟨ys[i]!⟩
+    quantityConvert xs ys (i + 1) (acc + ((a / b).to .English).val)
+  else acc
+termination_by xs.size - i
+
 /-- `∑ (value + uncertainty)` of `a*b + a/b - a*a` over pairs of measurements. -/
 def measurementArith (as bs : Array MeasureSystems.Measurement) : Float :=
   (as.zip bs).foldl (fun acc (a, b) => let c := a * b + a / b - a * a; acc + (c.val + c.err)) 0
@@ -131,6 +153,10 @@ def suite : Suite := ⟨"unitsystems", do
   bench "ratio_runtime" (ops := ds.size * pss.size) (param := s!"{ds.size}×{pss.size}") fun s =>
     ratioAll (blackBox s ds) pss
   let m ← size 1000 20
+  let qx := values m
+  let qy := (values m).foldl (fun acc x => acc.push (x + 0.5)) (FloatArray.emptyWithCapacity m)
+  bench "quantity_arith" (ops := m) (param := s!"n={m}") fun s => quantityArith (blackBox s qx) qy 0 0.0
+  bench "quantity_convert" (ops := m) (param := s!"n={m}") fun s => quantityConvert (blackBox s qx) qy 0 0.0
   -- independent measurements `1 + i/m ± 0.01(1 + i mod 7)` and `2 + i/m ± 0.02`
   let as := (Array.range m).map fun i =>
     MeasureSystems.Measurement.indep (1.0 + i.toUInt64.toFloat / m.toUInt64.toFloat)
