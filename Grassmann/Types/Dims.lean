@@ -36,13 +36,18 @@ that for `n = 0` the even half holds the scalar (`1`) and the odd half is empty
 (DESIGN §4.2 `halfDim`). -/
 def halfDim (n : Nat) (odd : Bool) : Nat := (halfLayout odd).size n
 
+/-- The even half is stored in the `.even` layout. -/
 @[simp] theorem halfLayout_false : halfLayout false = .even := rfl
+/-- The odd half is stored in the `.odd` layout. -/
 @[simp] theorem halfLayout_true : halfLayout true = .odd := rfl
 
+/-- A half of an `(n+1)`-generator space has `2^n` coefficients. -/
 theorem halfDim_succ (n : Nat) (odd : Bool) : halfDim (n + 1) odd = 2 ^ n := by
   cases odd <;> simp [halfDim, halfLayout, Layout.size]
 
+/-- For `n = 0` the even half is the scalar. -/
 theorem halfDim_zero_false : halfDim 0 false = 1 := rfl
+/-- For `n = 0` the odd half is empty. -/
 theorem halfDim_zero_true : halfDim 0 true = 0 := rfl
 
 /-- The chain storage size is the layout size (definitionally). -/

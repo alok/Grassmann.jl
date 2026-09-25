@@ -44,6 +44,7 @@ private opaque evalBundle (t : Term) : TermElabM TensorBundle
 def asciiAlias (label : String) : String :=
   (label.replace "∞" "inf").replace "∅" "o"
 
+/-- Elaborate `basis! V`: evaluate `V`, then declare the space, the blades and the aliases. -/
 @[command_elab basisCmd] def elabBasis : CommandElab
   | `(basis! $t) => do
     let V ← liftTermElabM (evalBundle t)
