@@ -562,6 +562,12 @@ def unitize (t : TA V Float) : TA V Float :=
     | some (_, x) => x
     | none => (c.toDense.v.toArray.find? (· != c0)).getD c0)
 
+/-- Julia `antiabs(t)` / `pseudoabs(t)` (= `coabs`, AbstractTensors `src/AbstractTensors.jl:549`). -/
+@[inline] def antiabs (t : TA V Float) : TA V Float := coabs t
+
+/-- Julia `antiabs2(t)` / `pseudoabs2(t)` (= `coabs2`). -/
+@[inline] def antiabs2 (t : TA V Float) : TA V Float := coabs2 t
+
 /-- Julia `geomabs(t) = abs(t) + coabs(t)` (AbstractTensors `src/AbstractTensors.jl:452`). -/
 def geomabs (t : TA V Float) : TA V Float := add (abs t) (coabs t)
 

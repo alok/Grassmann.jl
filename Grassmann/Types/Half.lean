@@ -31,6 +31,13 @@ abbrev CoSpinor (V : TensorBundle) (α : Type) [Coeff α] := Half V true α
 /-- Julia `AntiSpinor`, the same type as `CoSpinor`. -/
 abbrev AntiSpinor (V : TensorBundle) (α : Type) [Coeff α] := Half V true α
 
+/-- Julia `Quaternion{V,T} = Spinor{V,T,4}` (the even algebra of a 3-generator space; Julia
+prints `typeof(1 + v12 - v13)` as `Quaternion{⟨111⟩, Int64}`). -/
+abbrev Quaternion (V : TensorBundle) (α : Type) [Coeff α] := Half V false α
+
+/-- Julia `AntiQuaternion{V,T} = CoSpinor{V,T,4}`. -/
+abbrev AntiQuaternion (V : TensorBundle) (α : Type) [Coeff α] := Half V true α
+
 namespace Half
 
 variable {V : TensorBundle} {p q : Bool} {α : Type} [Coeff α]

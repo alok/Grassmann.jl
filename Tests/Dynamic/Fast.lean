@@ -30,9 +30,11 @@ def randVals (n : Nat) : Tests.Gen (Values Float n) := do
   for _ in [0:n] do xs := xs.push (← randEntry)
   return Values.ofFn fun i => xs[i.1]!
 
-/-- A random container of `V` (a chain of any grade, a spinor, a co-spinor or a multivector). -/
+/-- A random container of `V` (a chain of any grade, a spinor, a co-spinor or a multivector) or
+term (`Single`). -/
 def randContainer (V : TensorBundle) : Tests.Gen (TA V Float) := do
-  match ← Tests.Gen.nat 4 with
+  match ← Tests.Gen.nat 5 with
+  | 4 => return .single (← Tests.Gen.nat (2 ^ V.n)).toUInt64 (← randEntry)
   | 0 => let g ← Tests.Gen.nat (V.n + 1); return .chain g ⟨← randVals _⟩
   | 1 => return .spinor ⟨← randVals _⟩
   | 2 => return .cospinor ⟨← randVals _⟩

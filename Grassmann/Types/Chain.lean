@@ -21,6 +21,15 @@ structure Chain (V : TensorBundle) (G : Nat) (α : Type) [Coeff α] where
   /-- The coefficients in Julia's `bladeindex` order. -/
   v : Values α (Leibniz.binomial V.n G)
 
+/-- Julia `GradedVector{V,T} = Chain{V,1,T}` (`src/multivectors.jl:1210`). -/
+abbrev GradedVector (V : TensorBundle) (α : Type) [Coeff α] := Chain V 1 α
+
+/-- Julia `Bivector{V,T} = Chain{V,2,T}`. -/
+abbrev Bivector (V : TensorBundle) (α : Type) [Coeff α] := Chain V 2 α
+
+/-- Julia `Trivector{V,T} = Chain{V,3,T}`. -/
+abbrev Trivector (V : TensorBundle) (α : Type) [Coeff α] := Chain V 3 α
+
 namespace Chain
 
 variable {V : TensorBundle} {G H : Nat} {α : Type} [Coeff α]

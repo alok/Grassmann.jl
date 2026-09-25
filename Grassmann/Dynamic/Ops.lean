@@ -291,6 +291,74 @@ def isapprox [JApprox α] (a b : TA V α) (atol : Float := 0)
 
 end Predicates
 
+/-! ## Spaces, basis names and aliases -/
+
+section Spaces
+
+/-- Julia `antigrade(t)` / `pseudograde(t)` of a graded element: `grade(V) - grade(t)`
+(`none` for mixed kinds). -/
+def antigrade? (x : TA V α) : Option Nat := x.grade?.map (V.grade - ·)
+
+/-- Julia `pseudograde(t)` (= `antigrade`). -/
+@[inline] def pseudograde? (x : TA V α) : Option Nat := antigrade? x
+
+/-- Julia `indices(basis(t))` of a term, couple or pseudo-couple: the 1-based generator
+indices of its blade (`indices(Λ(3).v12) = [1, 2]`). -/
+def indices? (x : TA V α) : Option (List Nat) :=
+  x.bits?.map fun b => ((List.range V.n).filter fun i => testBit b i).map (· + 1)
+
+/-- The basis blades of `V` in Julia's order (`Λ(V).b`: `v, v₁, v₂, …, v₁₂…ₙ`), as dynamic
+elements (`One` and `Submanifold`s). -/
+def basisBlades (V : TensorBundle) : Array (TA V α) := (Leibniz.indexBasisAll V.n).map ofBlade
+
+variable [Kernels V]
+
+/-- Julia `getproperty(Λ(V), name)` (`Λ(3).v21 = -1v₁₂`, `Λ(3).v11 = 1v`): DirectSum's blade
+name lookup (`TensorBundle.lookup`) as a dynamic element; `none` for a malformed name. -/
+def blade? (V : TensorBundle) [Kernels V] (name : String) : Option (TA V α) :=
+  (V.lookup name).map ofBladeResult
+
+/-- The element of `W` with the coefficients of `x` (same blade masks, same kind): Julia's
+`interop` of two plain signatures one of which extends the other (`Λ(ℝ^2).v1 ∧ Λ(ℝ^3).v3`,
+design.md:172: the operands meet in the union space). `none` unless `W` extends `V` (a
+signature whose first `n` generators are `V`'s, neither conformal, tangent nor dyadic). -/
+def embed (W : TensorBundle) (x : TA V α) : Option (TA W α) :=
+  let extends_ := V.n ≤ W.n && V.dyadmode == 0 && W.dyadmode == 0 && !V.istangent && !W.istangent &&
+    !V.hasconformal && !W.hasconformal &&
+    (match V.metric, W.metric with
+     | .signature s, .signature t => s == t &&& lowMask V.n
+     | .euclid, .euclid => true
+     | .euclid, .signature t => t &&& lowMask V.n == 0
+     | .signature s, .euclid => s == 0
+     | _, _ => false)
+  if !extends_ then none else
+  match x with
+  | zero => some .zero
+  | one => some .one
+  | infinity => some .infinity
+  | blade b => some (.blade b)
+  | single b v => some (.single b v)
+  | couple b re im => if popcount b == V.n && V.n != W.n then none else some (.couple b re im)
+  | chain g _ => some (.chain g (chainOf W g x.coeff))
+  | spinor _ => some (.spinor (halfOf W false x.coeff))
+  | cospinor _ => some (.cospinor (halfOf W true x.coeff))
+  | multi _ => some (.multi (multiOf W x.coeff))
+  | _ => none
+
+/-- Julia `x'` (`adjoint`, `src/products.jl:943-1070`): the element in the dual space `V'`
+with conjugated coefficients; a `Couple` or `PseudoCouple`, which have no `adjoint` method,
+fall back to Julia's `adjoint(x::Number) = conj(x)`, the reverse in `V`. `none` for a space
+without an adjoint (dyadic) or containers whose storage size would change. -/
+def adjoint? [Conj α] (x : TA V α) : Option ((W : TensorBundle) × TA W α) :=
+  match x with
+  | couple .. | pseudo .. => some ⟨V, reverse x⟩
+  | _ => do
+    let W ← V.adjoint.toOption
+    let y ← retarget W Conj.conj x
+    return ⟨W, y⟩
+
+end Spaces
+
 end TA
 
 end Grassmann

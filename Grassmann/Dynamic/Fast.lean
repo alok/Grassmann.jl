@@ -99,6 +99,24 @@ variable {V : TensorBundle} {α : Type} [Coeff α] [Kernels V] [DynKernels V]
 @[inline] def prodF (op : POp) (a b : TA V α) : TA V α :=
   if DynKernels.fast V then
     match a, b with
+    | single A x, single B y =>
+      -- DirectSum's diagonal blade product (`TensorBundle.mulDiag`), scaled exactly as
+      -- `termProd` scales its `BladeResult`: `x·y` on a positive disjoint product,
+      -- `(x·y)·c` otherwise
+      if op == .mul then
+        let d := A ^^^ B
+        match V.metric with
+        | .euclid | .signature _ =>
+          -- a signature: the sign is Julia's `parityjoin` (reordering and shared negative
+          -- generators), the factor `±1`
+          let neg := parityjoin V.sigBits A B
+          if A &&& B == 0 then single d (if neg then (x * y) * Coeff.ofRat (-1) else x * y)
+          else single d ((x * y) * Coeff.ofRat (if neg then -1 else 1))
+        | _ =>
+          let (c, d) := V.mulDiag A B
+          if A &&& B == 0 then single d (if c < 0 then (x * y) * Coeff.ofRat (-1) else x * y)
+          else single d ((x * y) * Coeff.ofRat c)
+      else prod op a b
     | chain g x, chain h y =>
       if 0 < g && g < V.n && 0 < h && h < V.n then
         match chainOut V.n op g h with
