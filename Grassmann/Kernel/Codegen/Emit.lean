@@ -340,16 +340,12 @@ def fieldValue (V : Term) (field : Field) (ops : Array (KOp × Ident)) : Command
 
 /-! ## Emitting a space -/
 
-/-- Emit and compile every kernel of `planned` under the prefix `pre`, then the dispatchers
-and the `Kernels` instance for the space `V` (a term denoting `space`, e.g. an `abbrev`). -/
-def emitSpace (space : TensorBundle) (V : Term) (pre : Name) (planned : Array Planned) :
-    CommandElabM Emitted := do
-  let n := space.n
-  let mut em : Emitted := {}
-  let mut names : Array Name := #[]
-  -- kernels, deduplicated: a projecting key whose strict plan exists reuses the strict kernel
+/-- The kernel of every planned specification: its declaration name under `pre`, and
+whether it is emitted for it (`true`) or shared with the strict kernel of the same
+key, whose plan it equals (a projection that drops nothing). -/
+def assignKernels (pre : Name) (planned : Array Planned) : Array (Planned × Name × Bool) := Id.run do
   let mut byKey : Std.HashMap (KOp × Layout × Layout × Layout) (Plan × Name) := {}
-  let mut assigned : Array (Spec × Name) := #[]
+  let mut out := #[]
   for pl in planned do
     let s := pl.spec
     let k := s.key
@@ -357,17 +353,32 @@ def emitSpace (space : TensorBundle) (V : Term) (pre : Name) (planned : Array Pl
     if s.field == .binProj then
       if let some (q, nm) := byKey.get? key then
         if q.entries == pl.plan.entries then
-          assigned := assigned.push (s, nm)
+          out := out.push (pl, nm, false)
           continue
     let nm := kernelName pre s
+    if s.field == .bin then byKey := byKey.insert key (pl.plan, nm)
+    out := out.push (pl, nm, true)
+  return out
+
+/-- Emit and compile every kernel of `planned` under the prefix `pre`, then the dispatchers
+and the `Kernels` instance for the space `V` (a term denoting `space`, e.g. an `abbrev`). -/
+def emitSpace (space : TensorBundle) (V : Term) (pre : Name) (planned : Array Planned) :
+    CommandElabM Emitted := do
+  let n := space.n
+  let mut em : Emitted := {}
+  let mut names : Array Name := #[]
+  let mut assigned : Array (Spec × Name) := #[]
+  for (pl, nm, fresh) in assignKernels pre planned do
+    let s := pl.spec
+    let k := s.key
+    assigned := assigned.push (s, nm)
+    if !fresh then continue
     let unary := s.field == .un
     let doc := s!"Generated kernel (DESIGN.md §5.2): `{opTag k.op}` of \
       {layoutDoc k.la}{if unary then "" else s!" × {layoutDoc k.lb}"} → {layoutDoc k.lc}\
       {if k.project then " (projected)" else ""} in `{space}`, {pl.plan.size} entries."
     liftTermElabM <| addKernel nm doc unary (k.la.size n) (k.lb.size n) (k.lc.size n) pl.plan
     names := names.push nm
-    if s.field == .bin then byKey := byKey.insert key (pl.plan, nm)
-    assigned := assigned.push (s, nm)
     em := { em with kernels := em.kernels + 1, entries := em.entries + pl.plan.size }
   liftCoreM <| compileDecls names
   -- group by field and operation, in first-appearance order
