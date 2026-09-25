@@ -1,5 +1,9 @@
+import Bench.Harness
+import Bench.Harness.Optional
 import Bench.Math
-import Tests.MeshTopology.Bench
-import Tests.Fatou.Bench
 
-/-! Benchmarks (`lake exe bench`). Package benchmarks live next to their tests; scalar math in `Bench.Math`. -/
+/-!
+Benchmarks (`lake exe bench`, driver `Bench/Main.lean`). Every suite runs on the harness of
+`Bench.Harness` and has a Julia twin under `oracle/bench/`; `scripts/bench/compare.py` joins
+the two result files into `docs/perf/latest.md`. See `docs/perf/README.md`.
+-/

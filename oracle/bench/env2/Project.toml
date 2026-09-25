@@ -1,0 +1,4 @@
+[deps]
+DeMorgan = "454c4576-8353-43f8-8d90-1177b7ee912a"
+Dendriform = "d8da5c1c-6f31-57d0-a642-102aa94a823b"
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"

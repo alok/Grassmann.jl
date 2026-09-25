@@ -1,16 +1,21 @@
+import Bench.Harness
 import JuliaBase
 
 /-!
-# Scalar kernel benchmarks
+# `math`: Julia's scalar kernels (`JuliaBase.Math`)
 
-Throughput of Julia's own kernels (`JuliaBase.Math`) against the platform `libm` that Lean's
-`Float.exp`/`Float.log`/`Float.pow` call: ns per call over a sweep of arguments, the result
-folded into an accumulator so nothing is dead code.
+ns per call of Julia's own `exp`/`log`/`expm1`/`log1p`/`^` as ported to Lean, over a sweep of
+`n = 10⁴` arguments folded into a sum (`sweep`), against the same loop in Julia
+(`oracle/bench/math.jl`). The `*_libm` cases are Lean-only references: the platform `libm`
+that `Float.exp`/`Float.log`/`Float.pow` call.
+
+Both languages generate the arguments by repeated addition from the same start and step, so
+the sums (the checks) agree bit for bit when the kernels do.
 -/
 
 namespace Bench.Math
 
-open JuliaBase
+open JuliaBase Bench
 
 /-- `∑ f(x₀ + i·dx)` for `i < n` (tail-recursive, unboxed Floats). -/
 @[specialize] def sweep (f : Float → Float) (x dx : Float) : Nat → Float → Float
@@ -22,29 +27,25 @@ open JuliaBase
   | 0, acc => acc
   | k + 1, acc => sweep2 f (x + dx) dx y k (acc + f x y)
 
-/-- Time `n` calls; returns ns per call (and prints the checksum so the loop is kept). -/
-def time (name : String) (n : Nat) (run : Unit → Float) : IO Unit := do
-  let t0 ← IO.monoNanosNow
-  let s := run ()
-  let t1 ← IO.monoNanosNow
-  let ns := (t1 - t0).toFloat / n.toFloat
-  IO.println s!"  {name}: {F64.showCompact ns} ns/op (checksum {F64.showCompact s})"
+/-- `x ^ 7` by Julia's `pow_body` (a top-level function so its literal is hoisted). -/
+def pow7 (x : Float) : Float := F64.powInt x 7
 
-/-- Run the suite; `smoke` uses few iterations. -/
-def run (smoke : Bool) : IO Unit := do
-  let n := if smoke then 10000 else 10000000
-  IO.println s!"math ({n} calls each)"
-  let dx := 1400.0 / n.toFloat
-  time "Float.exp (libm)" n fun _ => sweep Float.exp (-700.0) dx n 0
-  time "F64.exp (Julia)" n fun _ => sweep F64.exp (-700.0) dx n 0
-  let lx := 1.0e6 / n.toFloat
-  time "Float.log (libm)" n fun _ => sweep Float.log 1.0e-3 lx n 0
-  time "F64.log (Julia)" n fun _ => sweep F64.log 1.0e-3 lx n 0
-  time "F64.expm1 (Julia)" n fun _ => sweep F64.expm1 (-2.0) (4.0 / n.toFloat) n 0
-  time "F64.log1p (Julia)" n fun _ => sweep F64.log1p (-0.5) (4.0 / n.toFloat) n 0
-  let px := 100.0 / n.toFloat
-  time "Float.pow x 2.5 (libm)" n fun _ => sweep2 Float.pow 1.0e-3 px 2.5 n 0
-  time "F64.pow x 2.5 (Julia)" n fun _ => sweep2 F64.pow 1.0e-3 px 2.5 n 0
-  time "F64.powInt x 7 (pow_body)" n fun _ => sweep (fun x => F64.powInt x 7) 1.0e-3 px n 0
+/-- The suite. -/
+def suite : Suite := ⟨"math", do
+  let n := 10000
+  let p := s!"n={n}"
+  let n' := n.toUInt64.toFloat
+  let ex := 1400.0 / n'
+  bench "exp" (ops := n) (param := p) fun i => sweep F64.exp (blackBox i (-700.0)) ex n 0
+  bench "exp_libm" (ops := n) (param := p) fun i => sweep Float.exp (blackBox i (-700.0)) ex n 0
+  let lx := 1.0e6 / n'
+  bench "log" (ops := n) (param := p) fun i => sweep F64.log (blackBox i 1.0e-3) lx n 0
+  bench "log_libm" (ops := n) (param := p) fun i => sweep Float.log (blackBox i 1.0e-3) lx n 0
+  bench "expm1" (ops := n) (param := p) fun i => sweep F64.expm1 (blackBox i (-2.0)) (4.0 / n') n 0
+  bench "log1p" (ops := n) (param := p) fun i => sweep F64.log1p (blackBox i (-0.5)) (4.0 / n') n 0
+  let px := 100.0 / n'
+  bench "pow_2.5" (ops := n) (param := p) fun i => sweep2 F64.pow (blackBox i 1.0e-3) px 2.5 n 0
+  bench "pow_2.5_libm" (ops := n) (param := p) fun i => sweep2 Float.pow (blackBox i 1.0e-3) px 2.5 n 0
+  bench "pow_int7" (ops := n) (param := p) fun i => sweep pow7 (blackBox i 1.0e-3) px n 0⟩
 
 end Bench.Math
