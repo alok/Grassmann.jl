@@ -94,8 +94,8 @@ note = "Bit-exact replay of Julia's 2x4-accumulator SIMD layout with USize/uget 
 # powInt 10.0 d with an Int d per call (Float.ofInt and toIntTrunc through Int); a table of the exact powers 10^0..10^22 gives identical results.
 [[budget]]
 pattern = "juliabase/round_digits"
-ratio = 6.7
-note = "Exact powers of ten from a table; the remaining cost is F64.round, Int bookkeeping and closed-term Int literals."
+ratio = 2.4
+note = "Exact powers of ten from a table and a specialized bench loop; F64.round and Int bookkeeping remain."
 
 # Julia ComplexF64 algorithms on Julia kernels; ssqs returns a (Float x Int) pair (a boxed Float, Int exponent arithmetic) and the kernels pay out-of-line float_to_bits calls.
 [[budget]]
@@ -104,16 +104,16 @@ ratio = 5.9
 note = "Julia ComplexF64 algorithms on Julia kernels; ssqs returns a (Float x Int) pair (a boxed Float, Int exponent arithmetic) and the kernels pay out-of-line float_to_bits calls."
 [[budget]]
 pattern = "juliabase/complex_exp"
-ratio = 7.3
-note = "Julia ComplexF64 algorithms on Julia kernels; ssqs returns a (Float x Int) pair (a boxed Float, Int exponent arithmetic) and the kernels pay out-of-line float_to_bits calls."
+ratio = 3.6
+note = "Inline ComplexF64.exp; the remaining cost is F64.exp plus sincos (Payne-Hanek for the ~17% of arguments beyond 2^20·π/2)."
 [[budget]]
 pattern = "juliabase/complex_log"
-ratio = 7.9
-note = "Julia ComplexF64 algorithms on Julia kernels; ssqs returns a (Float x Int) pair (a boxed Float, Int exponent arithmetic) and the kernels pay out-of-line float_to_bits calls."
+ratio = 2.0
+note = "Inline ComplexF64.log and ssqs, Int64 exponent conversion; measured 1.4x."
 [[budget]]
 pattern = "juliabase/complex_sqrt"
-ratio = 4.7
-note = "Julia ComplexF64 algorithms on Julia kernels; ssqs returns a (Float x Int) pair (a boxed Float, Int exponent arithmetic) and the kernels pay out-of-line float_to_bits calls."
+ratio = 2.0
+note = "Inline ComplexF64.sqrt (no boxed result) and ssqs; measured 1.5x."
 
 # Ryu digit generation is exact, but the layout builds the String one push at a time through Nat digit arithmetic.
 [[budget]]
@@ -198,8 +198,8 @@ note = "Julia constant-folds the literal exponent (literal_pow with Val(7)); Lea
 # Payne-Hanek reduction through Nat/bignum arithmetic; Julia uses UInt128 table words.
 [[budget]]
 pattern = "math/sin_1e10"
-ratio = 8.7
-note = "Payne-Hanek reduction through Nat/bignum arithmetic; Julia uses UInt128 table words."
+ratio = 2.9
+note = "Payne-Hanek on UInt64 limbs with inline table reads and an inlined fromFraction; the result structure is still allocated (the reduction is not inlined)."
 
 # Julia own kernels, bit-exact; the gap is out-of-line lean_float_to_bits/of_bits calls (about five per call, docs/PERF.md) and Int bookkeeping.
 [[budget]]

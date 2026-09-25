@@ -405,3 +405,12 @@ Findings:
   (`zipUpd`, `withUpd`) so `f` inlines.
 * Julia's twins fuse whole expressions (`cumsum(a)[end]`, `reverse(a)[1]` cost ~0.5 ns); the Lean
   cases pay for the full vector result (`cumsum16` 163 ns, `reverse16` 34 ns).
+* **A `where`-local loop of a `@[specialize]` function is not specialized.** `sumComplex f zs := go 0 0
+  where go …` compiled to `sumComplex_go(f, …)`, calling `f` as a closure on boxed values; the
+  harness loops of the `juliabase` suite are now `@[specialize]` recursive functions (the Julia
+  twins' loops are specialized on `f`): `round_digits` 18.9 → 6.7 ns (Julia 3.7), `complex_sqrt`
+  36 → 20 (13.2), `complex_exp` 42 → 22 (7.8), `complex_log` 49 → 23 (16.3), together with
+  `@[inline]` `ComplexF64.sqrt`/`log`/`exp` (their `Complex Float` results were boxed). Other
+  suites with `where go` loops over a function argument pay the same.
+* Payne–Hanek (`sin(1e10)`) 59 → 20.5 ns (Julia 9.1): the table read was a local closure called
+  seven times and `fromFraction` returned a boxed pair.
