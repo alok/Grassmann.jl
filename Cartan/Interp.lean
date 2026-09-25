@@ -45,6 +45,31 @@ where
         if p.get! mid < t then go (mid + 1) hi fuel else go lo mid fuel
       else lo
 
+/-- Walk the count `h` down while `p[h-1] ≥ t` (at most `k` steps). -/
+def walkDown (p : FloatArray) (t : Float) : Nat → Nat → Nat
+  | 0, h => h
+  | k + 1, h => if h > 0 && p.get! (h - 1) ≥ t then walkDown p t k (h - 1) else h
+
+/-- Walk the count `h` up while `p[h] < t` (at most `k` steps). -/
+def walkUp (p : FloatArray) (t : Float) : Nat → Nat → Nat
+  | 0, h => h
+  | k + 1, h => if h < p.size && p.get! h < t then walkUp p t k (h + 1) else h
+
+/-- `countBelow p t 0 p.size` for an ascending `p` (a range's points): the count guessed from the
+end points (`(t - p₀)/(p_{n-1} - p₀)·(n-1)`, exact up to a step or two on a uniform grid),
+corrected by at most four steps each way and verified (`p[h-1] < t ≤ p[h]`, which pins the count
+of an ascending array); the bisection when the guess fails (and outside or at `NaN`). -/
+def countBelowAsc (p : FloatArray) (t : Float) : Nat :=
+  let n := p.size
+  if n < 2 then countBelow p t 0 n else
+  let a := p.get! 0
+  let z := p.get! (n - 1)
+  let g := (t - a) / (z - a) * Float.ofNat (n - 1)
+  if g ≥ 0 && g ≤ Float.ofNat (n - 1) then
+    let h := walkUp p t 4 (walkDown p t 4 (g.floor.toUInt64.toNat + 1))
+    if (h == 0 || p.get! (h - 1) < t) && (h == n || p.get! h ≥ t) then h else countBelow p t 0 n
+  else countBelow p t 0 n
+
 /-- Julia `searchpoints(p, t)` (`grid.jl:102-106`): the bracket start `i` (1-based: `t ∈ (p[i], p[i+1]]`,
 or `i = 1` when `t == p[1]`) and whether `t` lies below the range (`i = 0`). -/
 def searchpoints (p : FloatArray) (t : Float) : Nat × Bool :=
@@ -181,10 +206,49 @@ where
                   else Interp.repositionHigh (!partnerHigh) (b.space.coords[a]) x[a]
             go st fuel x'
 
-/-- Julia `t(x)` for a 1-D field. -/
-@[inline] def eval1 {b : GridBundle 1 P G} (t : TensorField b F) (x : Float) : F := t.eval #v[x]
-/-- Julia `t(x, y)` for a 2-D field. -/
-@[inline] def eval2 {b : GridBundle 2 P G} (t : TensorField b F) (x y : Float) : F := t.eval #v[x, y]
+/-- The in-range bracket of `x` in the points `c` of the axis `a` (0-based lower corner), or `none`
+outside (or at `NaN`), as `eval` decides it (`searchpoints`); an increasing range is searched from
+a guess (`countBelowAsc`, the same count). -/
+@[inline] def bracket (a : Axis) (c : FloatArray) (x : Float) : Option Nat :=
+  let asc := a.isRange && c.size ≥ 2 && c.get! 0 < c.get! 1
+  let k := if asc then Interp.countBelowAsc c x else Interp.countBelow c x 0 c.size
+  let i := if k == 0 && x == c.get! 0 then 1 else k
+  if i == 0 || i == c.size then none else some (i - 1)
+
+/-- Julia `t(x)` for a 1-D field: inside the grid the linear interpolation of the bracketing
+fibers (the operations of `eval`, without its vectors), else `eval` (zero outside an open end,
+repositioned through a glued one, `NaN` fibers at `NaN`). -/
+@[specialize] def eval1 {b : GridBundle 1 P G} (t : TensorField b F) (x : Float) : F :=
+  let c0 := b.space.coords[0]
+  match bracket b.space.axes[0] c0 x with
+  | some i =>
+    let w := FlatFiber.width F
+    let x1 := c0.get! i
+    let x2 := c0.get! (i + 1)
+    FlatFiber.read (buildFlat (F := Float) w fun c =>
+      linterpComp (F := F) x x1 x2 (t.data.get! (i * w + c)) (t.data.get! ((i + 1) * w + c))) 0
+  | none => t.eval #v[x]
+
+/-- Julia `t(x, y)` for a 2-D field: inside the grid the bilinear interpolation of the cell
+(`linterp_y(linterp_x(f₁₁, f₂₁), linterp_x(f₁₂, f₂₂))`, the operations of `eval`), else `eval`. -/
+@[specialize] def eval2 {b : GridBundle 2 P G} (t : TensorField b F) (x y : Float) : F :=
+  let c0 := b.space.coords[0]
+  let c1 := b.space.coords[1]
+  match bracket b.space.axes[0] c0 x, bracket b.space.axes[1] c1 y with
+  | some i, some j =>
+    let w := FlatFiber.width F
+    let n0 := b.space.axes[0].length
+    let x1 := c0.get! i
+    let x2 := c0.get! (i + 1)
+    let y1 := c1.get! j
+    let y2 := c1.get! (j + 1)
+    let lo := j * n0
+    let hi := (j + 1) * n0
+    FlatFiber.read (buildFlat (F := Float) w fun c =>
+      let f1 := linterpComp (F := F) x x1 x2 (t.data.get! ((lo + i) * w + c)) (t.data.get! ((lo + i + 1) * w + c))
+      let f2 := linterpComp (F := F) x x1 x2 (t.data.get! ((hi + i) * w + c)) (t.data.get! ((hi + i + 1) * w + c))
+      linterpComp (F := F) y y1 y2 f1 f2) 0
+  | _, _ => t.eval #v[x, y]
 /-- Julia `t(x, y, z)` for a 3-D field. -/
 @[inline] def eval3 {b : GridBundle 3 P G} (t : TensorField b F) (x y z : Float) : F := t.eval #v[x, y, z]
 
