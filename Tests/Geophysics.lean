@@ -4,6 +4,7 @@ import Tests.Geophysics.Planets
 import Tests.Geophysics.Gases
 import Tests.Geophysics.Weather
 import Tests.Geophysics.Display
+import Tests.Geophysics.Typed
 
 /-!
 # Geophysics test aggregator
@@ -23,7 +24,7 @@ def run : IO (Nat × Nat) := do
   let mut pass := 0
   let mut fail := 0
   let suites : List (IO Tally) :=
-    [mathSuite, unitsSuite, planetsSuite, gasesSuite, fluidSuite, displaySuite, customSuite] ++
+    [mathSuite, unitsSuite, planetsSuite, gasesSuite, fluidSuite, displaySuite, customSuite, typedSuite] ++
       weathers.map (weatherSuite ·.1)
   for suite in suites do
     let t0 ← IO.monoMsNow
