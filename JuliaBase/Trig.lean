@@ -168,16 +168,16 @@ def fromFraction (neg : Bool) (xh xl : UInt64) : Float × Float :=
 def paynehanek (x : Float) : RemPio2 :=
   let u := x.toBits
   let bigX := (u &&& 0x000FFFFFFFFFFFFF) ||| 0x0010000000000000
-  let k : Int64 := ((u &&& 0x7FF0000000000000) >>> 52).toInt64 - 1075
-  let idx : Int64 := k >>> 6  -- arithmetic shift, as Julia's `>>`
-  let shift : UInt64 := (k - (idx <<< 6)).toUInt64
-  let word (i : Int64) : UInt64 := if i < 0 then 0 else inv2pi[i.toNatClampNeg]!
+  let k : Int64 := ((u &&& 0x7FF0000000000000) >>> 52).toInt64 - i64! 1075
+  let idx : Int64 := k >>> i64! 6  -- arithmetic shift, as Julia's `>>`
+  let shift : UInt64 := (k - (idx <<< i64! 6)).toUInt64
+  let word (i : Int64) : UInt64 := if i < i64! 0 then 0 else inv2pi[i.toNatClampNeg]!
   let (a1, a2, a3) : UInt64 × UInt64 × UInt64 :=
-    if shift == 0 then (word idx, word (idx + 1), word (idx + 2))
+    if shift == 0 then (word idx, word (idx + i64! 1), word (idx + i64! 2))
     else
-      ((word idx <<< shift) ||| (word (idx + 1) >>> (64 - shift)),
-       (word (idx + 1) <<< shift) ||| (word (idx + 2) >>> (64 - shift)),
-       (word (idx + 2) <<< shift) ||| (word (idx + 3) >>> (64 - shift)))
+      ((word idx <<< shift) ||| (word (idx + i64! 1) >>> (64 - shift)),
+       (word (idx + i64! 1) <<< shift) ||| (word (idx + i64! 2) >>> (64 - shift)),
+       (word (idx + i64! 2) <<< shift) ||| (word (idx + i64! 3) >>> (64 - shift)))
   -- `w = UInt128(X*a1) << 64 + widemul(X, a2) + widemul(X, a3) >> 64` (mod 2^128)
   let (w2h, w2l) := mul64 bigX a2
   let (w3h, _) := mul64 bigX a3
@@ -203,14 +203,14 @@ def paynehanek (x : Float) : RemPio2 :=
   if xhp ≤ 0x400f6a7a then
     if (xhp &&& 0xfffff) == 0x921fb then codyWaiteExt x xhp
     else if xhp ≤ 0x4002d97c then
-      if x > f64! 0.0 then codyWaite2c x (f64! 1.0) 1 else codyWaite2c x (f64! -1.0) (-1)
-    else if x > f64! 0.0 then codyWaite2c x (f64! 2.0) 2 else codyWaite2c x (f64! -2.0) (-2)
+      if x > f64! 0.0 then codyWaite2c x (f64! 1.0) (i64! 1) else codyWaite2c x (f64! -1.0) (i64! -1)
+    else if x > f64! 0.0 then codyWaite2c x (f64! 2.0) (i64! 2) else codyWaite2c x (f64! -2.0) (i64! -2)
   else if xhp ≤ 0x401c463b then
     if xhp ≤ 0x4015fdbc then
       if xhp == 0x4012d97c then codyWaiteExt x xhp
-      else if x > f64! 0.0 then codyWaite2c x (f64! 3.0) 3 else codyWaite2c x (f64! -3.0) (-3)
+      else if x > f64! 0.0 then codyWaite2c x (f64! 3.0) (i64! 3) else codyWaite2c x (f64! -3.0) (i64! -3)
     else if xhp == 0x401921fb then codyWaiteExt x xhp
-    else if x > f64! 0.0 then codyWaite2c x (f64! 4.0) 4 else codyWaite2c x (f64! -4.0) (-4)
+    else if x > f64! 0.0 then codyWaite2c x (f64! 4.0) (i64! 4) else codyWaite2c x (f64! -4.0) (i64! -4)
   else if xhp < 0x413921fb then codyWaiteExt x xhp
   else paynehanek x
 
@@ -604,13 +604,13 @@ def atan2 (y x : Float) : Float :=
       else if y.abs == inf then (if sy then f64! -1.5707963267948966 else f64! 1.5707963267948966)
       else
         -- `k = reinterpret(Int32, ypw - xpw) >> 20`: the exponent difference of `y/x`
-        let k : Int32 := (poshighword y - poshighword x).toInt32 >>> 20
-        if k > 60 then
+        let k : Int32 := (poshighword y - poshighword x).toInt32 >>> i32! 20
+        if k > i32! 60 then
           -- `|y/x| > 2^60`: `m &= 1`
           let z := f64! 1.5707963267948966 + f64! 0.5 * piLo
           if sy then -z else z
         else
-          let z := if x < f64! 0.0 && k < -60 then f64! 0.0 else atan (y / x).abs
+          let z := if x < f64! 0.0 && k < i32! -60 then f64! 0.0 else atan (y / x).abs
           if !sx then (if sy then -z else z)
           else if !sy then pi - (z - piLo)
           else (z - piLo) - pi
@@ -811,12 +811,12 @@ def atan2 (y x : Float32) : Float32 :=
       else if y.abs == inf then (if sy then -halfPi32 else halfPi32)
       else
         let pw (v : Float32) : UInt32 := v.toBits &&& 0x7fffffff
-        let k : Int32 := (pw y - pw x).toInt32 >>> 23
-        if k > 26 then
+        let k : Int32 := (pw y - pw x).toInt32 >>> i32! 23
+        if k > i32! 26 then
           let z := halfPi32 + f32! 0.5 * piLo
           if sy then -z else z
         else
-          let z := if x < f32! 0.0 && k < -26 then f32! 0.0 else atan (y / x).abs
+          let z := if x < f32! 0.0 && k < i32! -26 then f32! 0.0 else atan (y / x).abs
           if !sx then (if sy then -z else z)
           else if !sy then pi32 - (z - piLo)
           else (z - piLo) - pi32

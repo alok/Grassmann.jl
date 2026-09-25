@@ -60,7 +60,7 @@ through the bit pattern (wrapping `Int64` arithmetic, as in Julia). -/
   Float.ofBits ((k.toUInt64 <<< 52) + x.toBits)
 
 /-- `2^k` from its bits, `reinterpret(Float64, (1023 + k) << 52)`. -/
-@[inline] def twoPow (k : Int64) : Float := Float.ofBits ((1023 + k).toUInt64 <<< 52)
+@[inline] def twoPow (k : Int64) : Float := Float.ofBits ((i64! 1023 + k).toUInt64 <<< 52)
 
 /-- The bases of Julia's `exp_impl` and `_log`: `Val(2)`, `Val(:ℯ)`, `Val(10)`. -/
 inductive Radix where
@@ -387,12 +387,12 @@ case, `jp = 128F - 127` indexing `t_log_Float64`. -/
       let xu := x.toBits
       let m := ((xu >>> 52) &&& 0x7FF).toInt64
       let (xu, m) : UInt64 × Int64 :=
-        if m == 0 then
+        if m == i64! 0 then
           let xu' := (x * f64! 1.8014398509481984e16).toBits
-          (xu', ((xu' >>> 52) &&& 0x7FF).toInt64 - 54)
+          (xu', ((xu' >>> 52) &&& 0x7FF).toInt64 - i64! 54)
         else (xu, m)
       let y := Float.ofBits ((xu &&& 0x000FFFFFFFFFFFFF) ||| 0x3FF0000000000000)
-      let mf := (m - 1023).toFloat
+      let mf := (m - i64! 1023).toFloat
       let bigF := (y + f64! 3.5184372088832e13) - f64! 3.5184372088832e13
       logProc1 y mf bigF (y - bigF) b
   else if x == f64! 0.0 then -F64.inf
