@@ -1,4 +1,4 @@
-import Tests.Golden.Registry
+import Tests.Golden.Reference
 
 /-!
 # Built-in evaluators
@@ -119,7 +119,8 @@ def multivectorIdentity : Evaluator := fun _ args => do
 def builtinRegistrations : Array Registration := #[
   { name := "juliabase/show", suite := "floats", op := "show", eval := floatsShow },
   { name := "leibniz/storage", suite := "construct", op := "construct", eval := constructDense },
-  { name := "identity/Multivector", suite := "unary", op := "Multivector", eval := multivectorIdentity }
+  { name := "identity/Multivector", suite := "unary", op := "Multivector", eval := multivectorIdentity },
+  referenceRegistration
 ]
 
 end Tests.Golden

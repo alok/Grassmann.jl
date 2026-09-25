@@ -58,20 +58,25 @@ structure Report where
   defects : Array (String × Nat × Nat) := #[]
   /-- Evaluator name ↦ (pass, fail). -/
   evaluators : Array (String × Nat × Nat) := #[]
+  /-- Pending (harness-found, not yet in `defects.json`) defect id ↦ (skipped, _). -/
+  pending : Array (String × Nat × Nat) := #[]
+  /-- Known-issue id ↦ (expected failures, unexpected passes). -/
+  known : Array (String × Nat × Nat) := #[]
   /-- The first failure messages. -/
   failures : Array String := #[]
   /-- Wall time in milliseconds. -/
   ms : Nat := 0
+  /-- How many failure messages to keep (`GOLDEN_MAX_FAILURES`, default 25). -/
+  cap : Nat := 25
+  /-- The statistics recounted from the shards' cases (checked against the manifest totals). -/
+  recounted : Stats := {}
   deriving Inhabited
 
 namespace Report
 
-/-- Maximum failure messages kept per suite. -/
-def maxFailures : Nat := 25
-
 /-- Record a failure message. -/
 def note (r : Report) (msg : String) : Report :=
-  if r.failures.size < maxFailures then { r with failures := r.failures.push msg } else r
+  if r.failures.size < r.cap then { r with failures := r.failures.push msg } else r
 
 /-- Record one schema check. -/
 def check (r : Report) (ok : Bool) (msg : Unit → String) : Report :=
@@ -97,6 +102,10 @@ def print (r : Report) : IO Unit := do
   for (k, p, f) in r.evaluators do IO.println s!"  [{tag}]   evaluator {k}: {p} pass, {f} fail"
   for (k, s, c) in r.defects.qsort (·.1 < ·.1) do
     IO.println s!"  [{tag}]   defect {k}: {s} skipped, {c} compared with ref"
+  for (k, s, _) in r.pending do
+    IO.println s!"  [{tag}]   pending defect {k} (not yet in defects.json): {s} skipped"
+  for (k, x, p) in r.known do
+    IO.println s!"  [{tag}]   known issue {k}: {x} expected failures, {p} passes"
   for m in r.failures do IO.eprintln s!"  [{tag}]   FAIL {m}"
   if r.failed > r.failures.size then
     IO.eprintln s!"  [{tag}]   … {r.failed - r.failures.size} more failures"
@@ -137,7 +146,8 @@ def matchSubject (s : Shard) (c : GoldenCase) : MatchSubject :=
     conformal := (s.space.map (·.conformal)).getD false, isq := s.space.bind (·.Isq) }
 
 /-- Schema violations of one case (beyond its decode problems). -/
-def caseProblems (s : Shard) (defects : DefectTable) (c : GoldenCase) : Array String := Id.run do
+def caseProblems (s : Shard) (defects : DefectTable) (c : GoldenCase) (subj : MatchSubject) :
+    Array String := Id.run do
   let mut ps := c.problems
   let n := shardN s
   let perSpace := s.suite != "floats" && s.suite != "docs" && s.suite != "construct"
@@ -166,7 +176,7 @@ def caseProblems (s : Shard) (defects : DefectTable) (c : GoldenCase) : Array St
   for id in c.defects do
     if (defects.policy? id).isNone then ps := ps.push s!"unknown defect id {id}"
   -- the committed tags are exactly those the table assigns (floats cases are never tagged)
-  let tags := if s.suite == "floats" then #[] else defects.tags (matchSubject s c)
+  let tags := if s.suite == "floats" then #[] else defects.tags subj
   if tags != c.defects then ps := ps.push s!"defect tags {c.defects} but the table gives {tags}"
   -- floats: the show string round-trips to the exact bits (NaN to some NaN)
   if s.suite == "floats" then
@@ -217,6 +227,7 @@ def checkShard (r : Report) (e : ShardEntry) (s : Shard) (bytes : Nat) : Report 
     r := r.check ps.isEmpty fun _ => s!"{e.file}: input {x.label.getD "?"}: {ps}"
   -- statistics
   let st := recount s
+  r := { r with recounted := r.recounted.add st }
   r := r.check (st == s.stats.normalize) fun _ => s!"{e.file}: stats {repr s.stats} vs recount {repr st}"
   r := r.check (e.stats.cases == st.cases && e.stats.errors == st.errors
       && e.stats.refMismatch == st.refMismatch && e.stats.unexplained == st.unexplained) fun _ =>
@@ -233,15 +244,21 @@ def valueMode (s : Shard) (reg : Registration) (op : String) : ValueMode :=
     | some (rtol, atol) => .componentwise rtol atol
     | none => .exact
 
-/-- Evaluate one case under the defect policy and record the outcome. -/
-def evalCase (r : Report) (s : Shard) (defects : DefectTable) (regs : Array Registration)
-    (c : GoldenCase) : Report := Id.run do
+/-- Evaluate one case under the defect policy and record the outcome. `pending` holds the
+harness-found defects not yet in `defects.json` (`Tests.Golden.Pending`). -/
+def evalCase (r : Report) (s : Shard) (defects pending : DefectTable)
+    (regs : Array (Registration × Evaluator)) (c : GoldenCase) (subj : MatchSubject) : Report := Id.run do
   let mut r := r
-  let policy := defects.strongest c.defects
+  let pendingTags := if s.suite == "floats" then #[] else pending.tags subj
+  let policy := match defects.strongest c.defects, pending.strongest pendingTags with
+    | some a, some b => some (a.max b)
+    | a, b => a <|> b
   if policy == some .skip then
     r := { r with skippedDefect := r.skippedDefect + 1 }
     for id in c.defects do
       if defects.policy? id == some .skip then r := { r with defects := Report.bump r.defects id true }
+    for id in pendingTags do
+      if pending.policy? id == some .skip then r := { r with pending := Report.bump r.pending id true }
     return r
   let ctx : EvalCtx := { suite := s.suite, shard := s.name, op := c.op, space := s.space, k := c.k, case := c }
   let result := evaluate regs ctx c.args
@@ -253,7 +270,7 @@ def evalCase (r : Report) (s : Shard) (defects : DefectTable) (regs : Array Regi
       let some (reg, got) := result | return { r with unimplemented := r.unimplemented + 1 }
       let ref := (Coeffs.decode (sniffRefType rj) rj).toOption.getD (.raw rj)
       let why := compareWithRef (valueMode s reg c.op) got ref
-      return record r reg c why
+      return record r reg s.name c subj why
     if c.isError then
       r := { r with skippedDefect := r.skippedDefect + 1 }
       for id in c.defects do r := { r with defects := Report.bump r.defects id true }
@@ -269,22 +286,30 @@ def evalCase (r : Report) (s : Shard) (defects : DefectTable) (regs : Array Regi
       | none => r
   let some (reg, got) := result | return { r with unimplemented := r.unimplemented + 1 }
   let why := compareWithOut reg.aspects (valueMode s reg c.op) (s.suite == "composite") got out
-  return record r reg c why
+  return record r reg s.name c subj why
 where
-  /-- Record a pass or a failure of evaluator `reg`. -/
-  record (r : Report) (reg : Registration) (c : GoldenCase) (why : Array String) : Report :=
+  /-- Record a pass or a failure of evaluator `reg` (an expected failure if one of its known
+  issues covers the case). -/
+  record (r : Report) (reg : Registration) (shard : String) (c : GoldenCase) (subj : MatchSubject)
+      (why : Array String) : Report :=
+    let issue := reg.knownIssues.find? fun k => k.tables.any (·.test subj)
     if why.isEmpty then
+      let r := match issue with
+        | some k => { r with known := Report.bump r.known k.id false }
+        | none => r
       { r with evalPass := r.evalPass + 1, evaluators := Report.bump r.evaluators reg.name true }
+    else if let some k := issue then
+      { r with known := Report.bump r.known k.id true }
     else
       let where_ := match c.a, c.b with
         | some a, some b => s!"a={a} b={b}"
         | some a, none => s!"a={a}"
         | _, _ => (c.label <|> c.input).getD ""
-      { (r.note s!"{reg.name} {c.op} case {c.idx} ({where_}): {why}") with
+      { (r.note s!"{reg.name} {shard} {c.op} case {c.idx} ({where_}): {why}") with
         evalFail := r.evalFail + 1, evaluators := Report.bump r.evaluators reg.name false }
 
 /-- Process one shard: schema checks, then every case. -/
-def runShard (defects : DefectTable) (regs : Array Registration) (r : Report) (e : ShardEntry)
+def runShard (defects pending : DefectTable) (regs : Array Registration) (r : Report) (e : ShardEntry)
     (loaded : Except String (Shard × Nat)) : Report := Id.run do
   let mut r := { r with shards := r.shards + 1 }
   match loaded with
@@ -292,35 +317,52 @@ def runShard (defects : DefectTable) (regs : Array Registration) (r : Report) (e
   | .ok (s, bytes) =>
     r := checkShard r e s bytes
     -- the applicable registrations, once per op
-    let mut byOp : Array (String × Array Registration) := #[]
+    let mut byOp : Array (String × Array (Registration × Evaluator)) := #[]
     for c in s.cases do
-      let ps := caseProblems s defects c
+      let subj := matchSubject s c
+      let ps := caseProblems s defects c subj
       r := r.check ps.isEmpty fun _ => s!"{e.file} case {c.idx} ({c.op}): {ps.toList.take 4}"
       let regsOp ← match byOp.find? (·.1 == c.op) with
         | some (_, rs) => pure rs
         | none => do
-          let rs := applicable regs s.suite c.op
+          let rs := prepared regs { suite := s.suite, shard := s.name, space := s.space, op := c.op }
           byOp := byOp.push (c.op, rs)
           pure rs
-      r := evalCase r s defects regsOp c
+      r := evalCase r s defects pending regsOp c subj
     return { r with cases := r.cases + s.cases.size }
 
 /-- Run one suite end to end. -/
-def runSuite (root : System.FilePath) (defects : DefectTable) (regs : Array Registration)
+def runSuite (root : System.FilePath) (defects pending : DefectTable) (regs : Array Registration)
     (suite : String) : IO Report := do
   let t0 ← IO.monoMsNow
-  let mut r : Report := { suite }
+  let cap := ((← IO.getEnv "GOLDEN_MAX_FAILURES").bind (·.toNat?)).getD 25
+  let mut r : Report := { suite, cap }
   let m ← try pure (some (← loadManifest root suite)) catch err => do
     r := r.check false fun _ => s!"{suite}.json: {err}"
     pure none
   let some m := m | return r
   r := r.check (m.schema == 1 && m.suite == suite) fun _ => s!"{suite}.json: meta"
-  r ← forEachShard root m r fun r e loaded => pure (runShard defects regs r e loaded)
-  -- totals and the shard files on disk
+  -- `GOLDEN_SHARDS=E2,CGA3` restricts the shards (development aid); `GOLDEN_VERBOSE` times them
+  let only := (← IO.getEnv "GOLDEN_SHARDS").map fun s => (s.splitOn ",").filter (· != "")
+  let verbose := (← IO.getEnv "GOLDEN_VERBOSE").isSome
+  let all := only.isNone
+  let m' := match only with
+    | some names => { m with shards := m.shards.filter (names.contains ·.shard) }
+    | none => m
+  r ← forEachShard root m' r fun r e loaded => do
+    let t ← IO.monoMsNow
+    let r' := runShard defects pending regs r e loaded
+    if verbose then
+      IO.println s!"  [golden/{suite}]   shard {e.shard}: {r'.cases - r.cases} cases, {(← IO.monoMsNow) - t} ms"
+    pure r'
+  -- totals: the manifest's sums, and (for a full run) the recount including per-defect totals
   let sum := m.shards.foldl (fun acc e => acc.add e.stats) ({} : Stats)
   r := r.check (sum.cases == m.totals.cases && sum.errors == m.totals.errors
       && sum.refMismatch == m.totals.refMismatch && sum.unexplained == m.totals.unexplained) fun _ =>
     s!"{suite}.json: totals {repr m.totals} vs sum {repr sum}"
+  if all then
+    r := r.check (r.recounted.normalize == m.totals.normalize) fun _ =>
+      s!"{suite}.json: totals {repr m.totals} vs recount {repr r.recounted.normalize}"
   r := r.check (m.totals.unexplained == 0) fun _ => s!"{suite}.json: {m.totals.unexplained} unexplained cases"
   let listed := m.shards.map fun e => (System.FilePath.mk e.file).fileName.getD ""
   let onDisk ← try
@@ -331,10 +373,5 @@ def runSuite (root : System.FilePath) (defects : DefectTable) (regs : Array Regi
   r := r.check stray.isEmpty fun _ => s!"{suite}: shard files not in the manifest: {stray}"
   let t1 ← IO.monoMsNow
   return { r with ms := t1 - t0 }
-
-/-- Check the per-defect totals of every suite manifest against the shard tags. -/
-def checkDefectTotals (r : Report) (m : Manifest) (tagCounts : Stats) : Report :=
-  r.check (m.totals.normalize.defects == tagCounts.normalize.defects) fun _ =>
-    s!"{m.suite}.json: defect totals"
 
 end Tests.Golden

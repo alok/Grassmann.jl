@@ -6,6 +6,8 @@ import Tests.Golden.Shard
 import Tests.Golden.Registry
 import Tests.Golden.Compare
 import Tests.Golden.Runner
+import Tests.Golden.Pending
+import Tests.Golden.Reference
 import Tests.Golden.Builtin
 
 /-!
@@ -20,10 +22,12 @@ The Lean consumer of the element-level Julia oracle `oracle/golden/**`
 | `Tests.Golden.Elem` | `GoldenElem`: the neutral decoded element (§7), `encode ∘ decode = id`, storage support and field-presence invariants (§7.1) |
 | `Tests.Golden.Space` | space descriptors (§5) → `DirectSum.TensorBundle`, twice (fields, and the Julia source evaluated with DirectSum), checked against DirectSum's printing and tables |
 | `Tests.Golden.Defects` | `defects.json` (§10): policies and the full match language |
+| `Tests.Golden.Pending` | Julia defects found by the harness and not yet in `defects.json` |
 | `Tests.Golden.Shard` | manifests, shards and case records (§3, §4, §8); streaming loaders |
 | `Tests.Golden.Registry` | the pluggable evaluator registry |
 | `Tests.Golden.Compare` | comparators (§11 rules 2–4) |
 | `Tests.Golden.Runner` | the consumer algorithm (§11) and reporting |
+| `Tests.Golden.Reference` | the DirectSum reference evaluator: values of arith, products and linear unary maps from `DirectSum.Ops` |
 | `Tests.Golden.Builtin` | built-in evaluators (JuliaBase scalar display, Leibniz storage orders, identities) |
 
 `Tests.Golden.run` loads every suite end to end (about 129k cases), validates every schema
@@ -43,10 +47,14 @@ def runWith (extra : Array Registration) (suites : List String := elementSuites)
     IO.eprintln s!"  [golden] cannot load defects.json: {e}"
     return (0, 1)
   let regs := builtinRegistrations ++ extra
+  -- a pending defect that reached defects.json should be deleted from Tests.Golden.Pending
+  for d in pendingDefects.entries do
+    if (defects.policy? d.id).isSome then
+      IO.println s!"  [golden] note: pending defect {d.id} is now in defects.json; remove it from Tests/Golden/Pending.lean"
   let mut passed := 1  -- defects.json decoded (ids unique, policies and match tables valid)
   let mut failed := 0
   for suite in suites do
-    let r ← runSuite root defects regs suite
+    let r ← runSuite root defects pendingDefects regs suite
     r.print
     passed := passed + r.passed
     failed := failed + r.failed

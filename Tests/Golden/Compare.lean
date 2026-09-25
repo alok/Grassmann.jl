@@ -30,6 +30,17 @@ def GoldenElem.values? (e : GoldenElem) : Option Coeffs :=
   | some d => some d
   | none => e.value
 
+/-- A one-coefficient vector `s` as the dense vector of `s·One` of length `N`. -/
+def embedScalar (w : Coeffs) (N : Nat) : Coeffs :=
+  let fz := FloatArray.mk (Array.replicate N 0)
+  match w with
+  | .exact v => .exact ((Array.replicate N 0).set! 0 (v[0]?.getD 0))
+  | .float v => .float (fz.set! 0 (v[0]?.getD 0))
+  | .complexExact re im =>
+    .complexExact ((Array.replicate N 0).set! 0 (re[0]?.getD 0)) ((Array.replicate N 0).set! 0 (im[0]?.getD 0))
+  | .complexFloat re im => .complexFloat (fz.set! 0 (re[0]?.getD 0)) (fz.set! 0 (im[0]?.getD 0))
+  | .raw v => .raw ((Array.replicate N (Lean.Json.str "0")).set! 0 (v[0]?.getD .null))
+
 /-- Compare an evaluator result with Julia's output element. `mode` is the value
 comparison; `composite` disables kind and string checks (they are informational there). -/
 def compareWithOut (asp : Aspects) (mode : ValueMode) (composite : Bool) (got want : GoldenElem) :
@@ -51,6 +62,8 @@ def compareWithOut (asp : Aspects) (mode : ValueMode) (composite : Bool) (got wa
       if gT != wT && !composite then why := why.push s!"T {gT.name} vs {wT.name}"
     match got.values?, want.values? with
     | some g, some w =>
+      -- a plain-number result is that number times One (schema §8.2)
+      let w := if want.dense.isNone && w.size == 1 && g.size != 1 then embedScalar w g.size else w
       if let some r := compareCoeffs mode g w then why := why.push s!"values: {r}"
     | some _, none => why := why.push "values: Julia's result has none"
     | none, _ => pure ()
