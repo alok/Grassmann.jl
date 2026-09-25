@@ -332,4 +332,18 @@ def MatchTable.test (m : MatchTable) (s : MatchSubject) : Bool :=
 def DefectTable.tags (t : DefectTable) (s : MatchSubject) : Array String :=
   t.entries.filterMap fun d => if d.tables.any (·.test s) then some d.id else none
 
+/-! ## Self-checks of the match language -/
+
+#guard (Glob.compile "add|sub").test "sub"
+#guard !(Glob.compile "add|sub").test "subs"
+#guard (Glob.compile "*Subamnifold*").test "UndefVarError: `Subamnifold` not defined"
+#guard (Glob.compile "CGA*").test "CGA3"
+#guard !(Glob.compile "CGA*").test "E3"
+#guard (Glob.compile "*(::Multivector{*}) is ambiguous*").test "MethodError: f(::Multivector{⟨+++⟩, Int64}) is ambiguous."
+#guard (Glob.compile "a*b*c").test "abc" && (Glob.compile "a*b*c").test "aXbYbZc" && !(Glob.compile "a*b*c").test "acb"
+#guard (Glob.compile "*").test ""
+#guard (KindPat.compile "Chain:0|Chain:n").test 3 { kind := "Chain", grade := some 3 }
+#guard !(KindPat.compile "Chain:0|Chain:n").test 3 { kind := "Chain", grade := some 2 }
+#guard (KindPat.compile "*").test 3 { kind := "Number" }
+
 end Tests.Golden

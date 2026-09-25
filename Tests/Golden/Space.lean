@@ -239,6 +239,96 @@ where
       | some (n, r) => return (TensorBundle.euclidean n, r)
       | none => throw s!"cannot evaluate {String.ofList (cs.take 20)}"
 
+/-! ## Space displays → (bundle, subspace mask) -/
+
+/-- Whether `c` is a Unicode subscript digit. -/
+def isSubDigit (c : Char) : Bool := '₀' ≤ c && c ≤ '₉'
+
+/-- The value of a superscript digit string (`²` ↦ 2, `¹²` ↦ 12). -/
+def supValue (cs : List Char) : Nat :=
+  let digit := fun (c : Char) => match c with
+    | '⁰' => 0 | '¹' => 1 | '²' => 2 | '³' => 3 | '⁴' => 4
+    | '⁵' => 5 | '⁶' => 6 | '⁷' => 7 | '⁸' => 8 | _ => 9
+  cs.foldl (fun acc c => 10 * acc + digit c) 0
+
+/-- Reconstruct a bundle and a subspace mask from a Julia space display (Julia
+`show(::Submanifold)`, the `V` of an element or a docs `Space` value): `T^μ` prefix, `∞`/`∅`,
+the metric entries (`+`/`-` for a diagonal `Signature`, `1`/`-1` for a conformal one, `1` for
+the `Int` manifold, comma-separated values for a `DiagonalForm`, `_` for a generator outside
+the subspace), the tangent-variable subscripts (superscripts after them for a dyadic space),
+and the `'`/`*` suffix. The result is one bundle that prints this way: `showSub` of it must
+give the string back (checked by the harness), which exercises DirectSum's printing of every
+space the goldens mention. `none` if the string is not a space display. -/
+def parseHandle? (s : String) : Option (TensorBundle × UInt64) := do
+  let cs := s.toList
+  let (mu, cs) := match cs with
+    | 'T' :: rest => (supValue (rest.takeWhile isScriptDigit), rest.dropWhile isScriptDigit)
+    | _ => (0, cs)
+  let '⟨' :: rest := cs | none
+  let inner := rest.takeWhile (· != '⟩')
+  let after := (rest.dropWhile (· != '⟩')).drop 1
+  let dyadmode : Int ← match after with
+    | [] => some 0
+    | ['\''] => some 1
+    | ['*'] => some (-1)
+    | _ => none
+  let scripts := inner.filter isScriptDigit
+  let body := inner.filter (!isScriptDigit ·)
+  let nu := (scripts.filter isSubDigit).length
+  let nu := if nu == 0 then scripts.length else nu   -- a dual tangent space uses superscripts
+  let (inf, body) := match body with | '∞' :: r => (true, r) | r => (false, r)
+  let (origin, body) := match body with | '∅' :: r => (true, r) | r => (false, r)
+  let nulls := (if inf then 1 else 0) + (if origin then 1 else 0)
+  -- metric entries: (present, value) with value the effective square (or the sign)
+  let (metricKind, entries) : String × List (Bool × Rat) ←
+    if body.contains ',' then
+      let es ← ((String.ofList body).splitOn ",").mapM fun e =>
+        if e == "_" then some (false, (1 : Rat)) else (TensorBundle.parseRat e).toOption.map (true, ·)
+      some ("diagonal", es)
+    else if inf && origin then
+      let rec toks : List Char → Option (List (Bool × Rat))
+        | [] => some []
+        | '_' :: r => do pure ((false, 1) :: (← toks r))
+        | '-' :: '1' :: r => do pure ((true, -1) :: (← toks r))
+        | '1' :: r => do pure ((true, 1) :: (← toks r))
+        | _ => none
+      some ("signature", ← toks body)
+    else if !body.isEmpty && body.all (fun c => c == '1' || c == '_') && !inf && !origin then
+      some ("euclid", body.map fun c => (c == '1', (1 : Rat)))
+    else
+      let es ← body.mapM fun c => match c with
+        | '+' => some (true, (1 : Rat))
+        | '-' => some (true, (-1 : Rat))
+        | '_' => some (false, (1 : Rat))
+        | _ => none
+      some ("signature", es)
+  let m := entries.length
+  let slots := if dyadmode < 0 then 2 * nu else nu
+  let n := nulls + m + slots
+  let dual := dyadmode > 0
+  let metric : Metric ← match metricKind with
+    | "diagonal" => some (.diagonal (entries.toArray.map fun (_, x) => if dual then -x else x))
+    | "euclid" => some .euclid
+    | _ =>
+      -- ∅ carries a `-` bit in Julia's metric word; the ∞/∅ bits do not print
+      let base : UInt64 := if origin then Bits.shl 1 (if inf then 1 else 0) else 0
+      some (.signature (entries.zipIdx.foldl (fun acc ((_, x), k) =>
+        if x < 0 then acc ||| Bits.shl 1 (nulls + k) else acc) base))
+  let mask : UInt64 := Id.run do
+    let mut mask := Bits.lowMask nulls
+    for ((present, _), k) in entries.zipIdx do
+      if present then mask := mask ||| Bits.shl 1 (nulls + k)
+    return mask ||| Bits.shl (Bits.lowMask slots) (nulls + m)
+  let V : TensorBundle := { n, metric, hasinf := inf, hasorigin := origin, dyadmode,
+                            diffvars := nu, diffmode := mu }
+  return (V, mask)
+
+/-- Whether DirectSum prints a Julia space display back exactly (through `parseHandle?`). -/
+def handleRoundTrips (s : String) : Bool :=
+  match parseHandle? s with
+  | some (V, S) => V.showSub S == s
+  | none => false
+
 /-! ## Checks -/
 
 /-- Julia `show` of the bundle itself: an `Int` manifold shows as its dimension. -/
@@ -294,5 +384,18 @@ def checkSpace (d : SpaceDesc) : Array Check := Id.run do
     let mine := pseudoscalarSquare? V
     cs := cs.push { what := "Isq", ok := mine == some (isq : Rat), detail := s!"{repr mine} vs {isq}" }
   return cs
+
+/-! ## Self-checks -/
+
+#guard (evalBundleSrc "S\"∞∅+++\"").toOption == some S!"∞∅+++"
+#guard (evalBundleSrc "(S\"+++\")'").toOption == some (S!"+++").dual
+#guard (evalBundleSrc "tangent(S\"++\",2,2)").toOption == some ((S!"++").tangent 2 2)
+#guard ((evalBundleSrc "S\"++\"⊕(S\"++\")'").toOption.map (·.toString)) == some "⟨++--⟩*"
+#guard (evalBundleSrc "S\"+x+\"").toOption.isNone
+#guard handleRoundTrips "⟨∞∅-1-1-1⟩'" && handleRoundTrips "⟨0,-1,-1,-1⟩'" && handleRoundTrips "T²⟨++₁₂⟩"
+#guard handleRoundTrips "⟨__+_+⟩" && handleRoundTrips "⟨1__1⟩" && handleRoundTrips "⟨++--⟩*"
+#guard !handleRoundTrips "⟨+x+⟩" && !handleRoundTrips "⟨+++"
+#guard pseudoscalarSquare? S!"-+++" == some (-1)
+#guard pseudoscalarSquare? D!"0,1,1,1" == some 0
 
 end Tests.Golden

@@ -22,7 +22,7 @@ counts, the per-defect and per-evaluator breakdown and the first failures.
 
 namespace Tests.Golden
 
-open Lean
+open Lean DirectSum
 
 /-- Per-suite results. -/
 structure Report where
@@ -62,6 +62,8 @@ structure Report where
   pending : Array (String × Nat × Nat) := #[]
   /-- Known-issue id ↦ (expected failures, unexpected passes). -/
   known : Array (String × Nat × Nat) := #[]
+  /-- Op ↦ (unimplemented cases, _): the coverage gaps. -/
+  unimplOps : Array (String × Nat × Nat) := #[]
   /-- The first failure messages. -/
   failures : Array String := #[]
   /-- Wall time in milliseconds. -/
@@ -106,6 +108,11 @@ def print (r : Report) : IO Unit := do
     IO.println s!"  [{tag}]   pending defect {k} (not yet in defects.json): {s} skipped"
   for (k, x, p) in r.known do
     IO.println s!"  [{tag}]   known issue {k}: {x} expected failures, {p} passes"
+  if !r.unimplOps.isEmpty then
+    let ops := (r.unimplOps.qsort fun a b => a.2.1 > b.2.1 || (a.2.1 == b.2.1 && a.1 < b.1)).toList
+    let shown := ops.take 16 |>.map fun (k, c, _) => s!"{k} {c}"
+    let more := if ops.length > 16 then s!", … ({ops.length - 16} more ops)" else ""
+    IO.println s!"  [{tag}]   unimplemented by op: {", ".intercalate shown}{more}"
   for m in r.failures do IO.eprintln s!"  [{tag}]   FAIL {m}"
   if r.failed > r.failures.size then
     IO.eprintln s!"  [{tag}]   … {r.failed - r.failures.size} more failures"
@@ -200,6 +207,40 @@ def recount (s : Shard) : Stats := Id.run do
     for d in c.defects do st := st.addDefect d
   return st.normalize
 
+/-- The space displays of an element: its `V`, a docs `Space` value's `str`, and those of
+Phasor parts (accumulated without duplicates). -/
+partial def elemSpaces (e : GoldenElem) (acc : Array String) : Array String :=
+  let add := fun (acc : Array String) (v : String) => if acc.contains v then acc else acc.push v
+  let acc := match e.V with | some v => add acc v | none => acc
+  let acc := if e.kind == .space then (match e.str? with | some v => add acc v | none => acc) else acc
+  let acc := match e.amp with | some a => elemSpaces a acc | none => acc
+  match e.angle with | some a => elemSpaces a acc | none => acc
+
+/-- Space-printing checks on the displays a shard's elements carry: every one is printed
+back exactly by DirectSum (`handleRoundTrips`) with the generator count `spaceDims?` uses,
+and in the unary suite the space of `adjoint` outputs is DirectSum's `adjoint` of the shard's
+space. -/
+def checkElementSpaces (r : Report) (e : ShardEntry) (s : Shard) : Report := Id.run do
+  let mut r := r
+  let outs := s.cases.filterMap (·.out)
+  let shows := (s.inputs ++ outs).foldl (fun acc x => elemSpaces x acc) #[]
+  for v in shows do
+    let dimsOk := match parseHandle? v, spaceDims? v with
+      | some (_, S), some n => Bits.popcount S == n
+      | _, _ => false
+    r := r.check (handleRoundTrips v && dimsOk) fun _ =>
+      s!"{e.file}: DirectSum does not print the space display {v} back \
+        ({(parseHandle? v).map fun (V, S) => V.showSub S})"
+  if s.suite == "unary" then
+    if let some d := s.space then
+      let adj := (d.bundle.adjoint).toOption.map (·.showHandle)
+      let vs := s.cases.foldl (fun acc c => match c.op, c.out.bind (·.V) with
+        | "adjoint", some v => if acc.contains v then acc else acc.push v
+        | _, _ => acc) #[]
+      for v in vs do
+        r := r.check (adj == some v) fun _ => s!"{e.file}: adjoint space {v} vs DirectSum {adj}"
+  return r
+
 /-- Validate one shard's schema (everything but the per-case checks). -/
 def checkShard (r : Report) (e : ShardEntry) (s : Shard) (bytes : Nat) : Report := Id.run do
   let mut r := r
@@ -267,7 +308,7 @@ def evalCase (r : Report) (s : Shard) (defects pending : DefectTable)
     if let some rj := c.ref then
       r := { r with refCompared := r.refCompared + 1 }
       for id in c.defects do r := { r with defects := Report.bump r.defects id false }
-      let some (reg, got) := result | return { r with unimplemented := r.unimplemented + 1 }
+      let some (reg, got) := result | return unimpl r c.op
       let ref := (Coeffs.decode (sniffRefType rj) rj).toOption.getD (.raw rj)
       let why := compareWithRef (valueMode s reg c.op) got ref
       return record r reg s.name c subj why
@@ -284,10 +325,13 @@ def evalCase (r : Report) (s : Shard) (defects pending : DefectTable)
         if got.kind == .error then { r with portRejects := r.portRejects + 1 }
         else { r with portComputes := r.portComputes + 1 }
       | none => r
-  let some (reg, got) := result | return { r with unimplemented := r.unimplemented + 1 }
+  let some (reg, got) := result | return unimpl r c.op
   let why := compareWithOut reg.aspects (valueMode s reg c.op) (s.suite == "composite") got out
   return record r reg s.name c subj why
 where
+  /-- Record an unimplemented case. -/
+  unimpl (r : Report) (op : String) : Report :=
+    { r with unimplemented := r.unimplemented + 1, unimplOps := Report.bump r.unimplOps op true }
   /-- Record a pass or a failure of evaluator `reg` (an expected failure if one of its known
   issues covers the case). -/
   record (r : Report) (reg : Registration) (shard : String) (c : GoldenCase) (subj : MatchSubject)
@@ -316,6 +360,7 @@ def runShard (defects pending : DefectTable) (regs : Array Registration) (r : Re
   | .error err => return r.check false fun _ => s!"{e.file}: {err}"
   | .ok (s, bytes) =>
     r := checkShard r e s bytes
+    r := checkElementSpaces r e s
     -- the applicable registrations, once per op
     let mut byOp : Array (String × Array (Registration × Evaluator)) := #[]
     for c in s.cases do

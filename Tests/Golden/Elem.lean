@@ -401,4 +401,18 @@ partial def GoldenElem.validate (e : GoldenElem) (n : Option Nat) (strict : Bool
       errs := need errs ((compareCoeffs .exact nat g).isNone) "native is not the storage gather of dense"
   return errs
 
+/-! ## Self-checks -/
+
+#guard spaceDims? "⟨+++⟩" == some 3
+#guard spaceDims? "⟨∞∅-1-1-1⟩'" == some 5
+#guard spaceDims? "⟨0,-1,-1,-1⟩'" == some 4
+#guard spaceDims? "T²⟨++₁₂⟩" == some 4
+#guard spaceDims? "⟨_+++⟩" == some 3
+#guard spaceDims? "⟨1__1⟩" == some 2
+#guard spaceDims? "⟨++--⟩*" == some 4
+#guard spaceDims? "v₁₂" == none
+#guard supportIndices 3 .spinor 0 0 == some #[0, 4, 5, 6]
+#guard supportIndices 3 .pseudoCouple 0 3 == some #[4, 7]
+#guard supportIndices 4 .chain 2 0 == some #[5, 6, 7, 8, 9, 10]
+
 end Tests.Golden

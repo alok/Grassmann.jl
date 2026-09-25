@@ -490,4 +490,30 @@ def compareCoeffs (mode : ValueMode) (got want : Coeffs) : Option String :=
     (firstDisagreement mode got want 0 got.size).map fun i =>
       s!"coefficient {i}: {(got.get i).show} vs {(want.get i).show}"
 
+/-! ## Self-checks of the grammars -/
+
+#guard parseInt64? "-9223372036854775808" == some (-9223372036854775808)
+#guard parseInt64? "9223372036854775808" == none
+#guard parseInt64? "1.0" == none
+#guard parseRational? "-1//3" == some (-1/3)
+#guard parseRational? "2//4" == none      -- not reduced
+#guard parseRational? "1//-3" == none     -- sign on the numerator
+#guard (parseJuliaFloat? "0.1").map (·.toBits) == some 0x3FB999999999999A
+#guard (parseJuliaFloat? "-0.0").map (·.toBits) == some 0x8000000000000000
+#guard (parseJuliaFloat? "5.0e-324").map (·.toBits) == some 1
+#guard (parseJuliaFloat? "1.7976931348623157e308").map (·.toBits) == some 0x7FEFFFFFFFFFFFFF
+#guard (parseJuliaFloat? "2.2250738585072014e-308").map (·.toBits) == some 0x0010000000000000
+#guard (parseJuliaFloat? "-Inf").map (·.toBits) == some 0xFFF0000000000000
+#guard (parseJuliaFloat? "NaN").map (·.isNaN) == some true
+#guard parseJuliaFloat? "1e5" == none      -- Julia always prints the `.`
+#guard parseJuliaFloat? "1.0e+5" == none   -- and never a `+` exponent
+#guard parseJuliaFloat? ".5" == none
+#guard (parseJuliaFloat? "0.30000000000000004").map encodeFloat == some "0.30000000000000004"
+#guard CoeffType.ofName "Complex{Float64}" == .complex .float64
+#guard CoeffType.ofName "Irrational{:π}" == .other "Irrational{:π}"
+#guard CoeffType.promote .int64 .rational == some .rational
+#guard CoeffType.promote .bool (.complex .float64) == some (.complex .float64)
+#guard floatToRat 0.75 == some (3/4)
+#guard floatToRat (-2.5e-3) == some (-5764607523034235/2305843009213693952)
+
 end Tests.Golden

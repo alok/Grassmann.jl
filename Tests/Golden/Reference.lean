@@ -12,8 +12,8 @@ it over dense vectors gives an independent **value** evaluator for
 
 * arith: `add`, `sub`, `neg`, `mul`/`div`/`rdiv` by a number;
 * products: every op except `sandwich`/`tsandwich` (whose reference projects, §8.3);
-* unary: the involutions, complements, `metric`/`antimetric`, `even`/`odd`, `real`/`imag`,
-  and the grade projections `scalar`…`volume`, `grade:k`.
+* unary: `neg`, the involutions, complements, `metric`/`antimetric`, `even`/`odd`,
+  `real`/`imag`, and the grade projections `scalar`…`volume`, `grade:k`.
 
 It checks values only (`Aspects.kind/str/compact := false`): Julia's result *kind* comes from
 the Grassmann layer, which registers its own evaluators later and then takes precedence.
@@ -255,6 +255,11 @@ def referencePrepare (p : PrepCtx) : Prepared :=
         let a ← args[0]?
         let b ← args[1]?
         return valuesOnly (← applyBinary N t (← NumVec.ofElem? N a) (← NumVec.ofElem? N b))⟩
+    else if op == "neg" then
+      ⟨fun _ args => do
+        let a ← args[0]?
+        if args.size != 1 then none
+        return valuesOnly ((← NumVec.ofElem? N a).scale (-1))⟩
     else if let some g := projectionGrade? V op then
       ⟨fun _ args => do
         let a ← args[0]?
