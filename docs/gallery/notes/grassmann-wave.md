@@ -1,0 +1,1 @@
+The README's `gridsize=(10,10)` is padded to `(10,10,10)` (Makie `to_ndim`; Makie 0.24 wants the 3-tuple). The arrowheads are Makie's `meshscatter` cones (tessellated `Cone`, size 0.2·min(widths)/min(gridsize)), built as a shaded LeanPlot mesh (LeanPlot's own 3D streamplot recipe draws flat triangles); both use `Axis3` instead of the README's `LScene`.

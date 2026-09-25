@@ -1,0 +1,1 @@
+Julia's `lines` of 3D points opens an `LScene`; both sides use Makie's default `Axis3` (azimuth 1.275π, elevation π/8) so the frames are comparable. For t ∈ [-2π, -2π+5.6] the curve retraces itself (period 7); LeanPlot's coverage accumulation draws the doubled stretch slightly heavier than Cairo, which strokes the union of the path.

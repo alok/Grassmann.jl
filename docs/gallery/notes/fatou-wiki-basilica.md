@@ -1,0 +1,1 @@
+The wiki image is PyPlot `imshow` with a LaTeX title; both sides here draw a heatmap over the bounds with the plain-text `String(K)` title and the Makie colormap of the same name. `cmap = ""` is viridis, PyPlot's default; the wiki passes the string `"z^2-1"`, which Julia 1.x can no longer `parse`, so both sides use the expression.
