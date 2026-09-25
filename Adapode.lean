@@ -1,1 +1,11 @@
-/-! Adapode: Lean port of chakravala/Adapode.jl. See docs/port-notes/. -/
+import Adapode.Constants
+
+/-!
+# Adapode: adaptive ODE (and, later, PDE) solvers
+
+Lean port of Michael Reed's Adapode.jl (master `91e8516`, version 0.3.14; semantics, citations and
+defects in `docs/port-notes/adapode.md`).
+
+* `Adapode.Constants`: the Butcher and Adams tables (`CB`, `CBA`, `CAB`, `CAM`, `Gauss`) as exact
+  rationals with kernel-checked order conditions, and Julia's `Float64` values.
+-/
