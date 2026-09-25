@@ -89,6 +89,12 @@ def boundaryComponentsN {b : GridBundle (N + 1) P G} (t : TensorField b F) (n : 
   (List.finRange (N + 1)).toArray.flatMap fun a =>
     #[⟨_, t.leafAt n a⟩, ⟨_, t.leafAt (b.size[a] - 1 - n) a⟩]
 
+/-- Julia `boundarycomponents(f, ns::Vector)` (`Cartan.jl:654-656`): the boundary leaves at every
+depth in `ns` (0-based), concatenated. -/
+def boundaryComponentsAt {b : GridBundle 2 P G} (t : TensorField b F) (ns : List Nat) :
+    Array (AnyField (GridBundle 1 Float G) F) :=
+  ns.toArray.flatMap fun n => t.boundaryComponents n
+
 /-- Julia `extract(x, i)` for a 2-D field (`Cartan.jl:253`): the last-axis coordinate `i` (0-based)
 paired with the slice `x[:, i]`. -/
 def extract {b : GridBundle 2 P G} (t : TensorField b F) (i : Nat) :

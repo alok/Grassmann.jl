@@ -78,6 +78,8 @@ def run : TestM Unit := do
     (← jField c "boundarycomponents(aa)")
   checkFields "slices boundarycomponents(aa,2)" ((aa.boundaryComponents 1).map (out ·.field))
     (← jField c "boundarycomponents(aa,2)")
+  checkFields "slices boundarycomponents(aa,[1,2])" ((aa.boundaryComponentsAt [0, 1]).map (out ·.field))
+    (← jField c "boundarycomponents(aa,[1,2])")
   checkField "slices a3" (out a3) (← jField c "a3")
   checkField "slices leaf(a3,2)" (out (a3.leafAt 1)) (← jField c "leaf(a3,2)")
   checkFields "slices boundarycomponents(a3)" ((a3.boundaryComponentsN).map (out ·.field))

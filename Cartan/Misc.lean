@@ -96,6 +96,17 @@ def graphBundle {b : SimplexBundle n P G} (t : TensorField b F) :
   let b' : SimplexBundle n _ := ⟨⟨buildFlat (card b) t.graphAt, .induced, 0⟩, b.top.subImmersion⟩
   ⟨b', (t.rebase? b').getD default⟩
 
+/-- Julia `t(i::ImmersedTopology)` for a simplex field (`Cartan.jl:311`): the field restricted to
+the sub-mesh `top` of the same point cloud, `TensorField(coordinates(t)(i), fiber(t)[vertices(i)])`
+(vertices of `top` outside the field's bundle read the zero fiber). -/
+def restrict {b : SimplexBundle n P G} (t : TensorField b F) (top : SimplexTopology n) :
+    TensorField (b.withTop top) F :=
+  ofFn _ fun i =>
+    let full := top.getImage (i + 1)
+    let j := b.top.vinv.get (full - 1)
+    if j == 0 then FlatFiber.read (buildFlat (F := Float) (FlatFiber.width F) fun _ => 0) 0
+    else t.get (j - 1)
+
 /-- Julia `discontinuous(t::SimplexMap)` (`Cartan.jl:604-605`) as a disconnected mesh: every element
 gets its own copies of its vertices (`view(fiber(t), vertices(m))`, the per-element vertex
 values), and the element `e` uses the nodes `N e, …, N e + N - 1`. -/

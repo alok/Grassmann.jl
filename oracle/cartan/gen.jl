@@ -199,6 +199,7 @@ sl["leaf(aa,2)"] = encfield(Cartan.leaf(aa, 2)); sl["leaf(aa,2,1)"] = encfield(C
 sl["aa[:,2]"] = encfield(aa[:, 2]); sl["aa[3,:]"] = encfield(aa[3, :])
 sl["boundarycomponents(aa)"] = [encfield(c) for c in boundarycomponents(aa)]
 sl["boundarycomponents(aa,2)"] = [encfield(c) for c in boundarycomponents(aa, 2)]
+sl["boundarycomponents(aa,[1,2])"] = [encfield(c) for c in boundarycomponents(aa, [1, 2])]
 a3 = (x -> x[1] + 10x[2] + 100x[3]).(TensorField(ProductSpace(0:1.0:2, 0:1.0:3, 0:1.0:1)))
 sl["a3"] = encfield(a3)
 sl["leaf(a3,2)"] = encfield(Cartan.leaf(a3, 2))
@@ -246,6 +247,8 @@ simp["sub_points"] = flatall(points(sub))
 simp["sub_size"] = collect(size(sub))
 simp["sub_field"] = encfield(TensorField(sub, [7.0, 8.0, 9.0, 10.0]))
 simp["elem2"] = sprint(show, tf[2])
+rt = tf(st[[2, 3]])
+simp["restrict"] = encfield(rt)
 fp = sb ⊕ (0:0.5:1)
 simp["fiberproduct_size"] = collect(size(fp))
 simp["fiberproduct_points"] = flatall([point(fp[i, j]) for i in 1:size(fp)[1], j in 1:size(fp)[2]])

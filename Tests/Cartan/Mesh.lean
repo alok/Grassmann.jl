@@ -48,6 +48,7 @@ def runMesh : TestM Unit := do
   check "simplex sub size" ([card sub] == size.toList) fun _ => s!"got {card sub}"
   checkField "simplex sub field" (out ((TensorField.ofArray? sub #[(7 : Float), 8, 9, 10]).get!)) (← jField c "sub_field")
   checkStr "simplex elem2" (toString (tf.localAt 1)) (← jField c "elem2")
+  checkField "simplex restrict" (out (tf.restrict (sb.top.getSub #[2, 3]))) (← jField c "restrict")
   let fp := FiberProductBundle.ofBase sb (Axis.colon 0 0.5 1)
   let fsize ← (← jArr (← jField c "fiberproduct_size")).mapM jNat
   check "fiberproduct size" (BaseShape.shape fp == fsize.toList) fun _ => s!"got {BaseShape.shape fp}"

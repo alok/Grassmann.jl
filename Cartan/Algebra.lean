@@ -212,26 +212,28 @@ instance [HMul F F' F''] : HMul (TensorField m F) (TensorField m F') (TensorFiel
 instance [HDiv F F' F''] : HDiv (TensorField m F) (TensorField m F') (TensorField m F'') :=
   ⟨zipWith (· / ·)⟩
 
-/-- Julia `t + x` with a scalar (`+.(fiber(t), Ref(x))`, never lazy). -/
-instance (priority := low) [HAdd F Float F'] : HAdd (TensorField m F) Float (TensorField m F') :=
+/-- Julia `t + x` with a constant `x` (a number or a Grassmann element: `+.(fiber(t), Ref(x))`,
+never lazy). -/
+instance (priority := low) {X : Type} [HAdd F X F'] : HAdd (TensorField m F) X (TensorField m F') :=
   ⟨fun t x => t.map (· + x)⟩
-/-- Julia `x + t` with a scalar. -/
-instance (priority := low) [HAdd Float F F'] : HAdd Float (TensorField m F) (TensorField m F') :=
+/-- Julia `x + t` with a constant. -/
+instance (priority := low) {X : Type} [HAdd X F F'] : HAdd X (TensorField m F) (TensorField m F') :=
   ⟨fun x t => t.map (x + ·)⟩
-/-- Julia `t - x` with a scalar. -/
-instance (priority := low) [HSub F Float F'] : HSub (TensorField m F) Float (TensorField m F') :=
+/-- Julia `t - x` with a constant. -/
+instance (priority := low) {X : Type} [HSub F X F'] : HSub (TensorField m F) X (TensorField m F') :=
   ⟨fun t x => t.map (· - x)⟩
-/-- Julia `x - t` with a scalar. -/
-instance (priority := low) [HSub Float F F'] : HSub Float (TensorField m F) (TensorField m F') :=
+/-- Julia `x - t` with a constant. -/
+instance (priority := low) {X : Type} [HSub X F F'] : HSub X (TensorField m F) (TensorField m F') :=
   ⟨fun x t => t.map (x - ·)⟩
-/-- Julia `x * t` with a scalar, for fibers without a linear flat encoding. -/
-instance (priority := low) [HMul Float F F'] : HMul Float (TensorField m F) (TensorField m F') :=
+/-- Julia `x * t` with a constant (`Grassmann.:*.(x, fiber(t))`), for fibers without a linear flat
+encoding or a non-scalar `x`. -/
+instance (priority := low) {X : Type} [HMul X F F'] : HMul X (TensorField m F) (TensorField m F') :=
   ⟨fun x t => t.map (x * ·)⟩
-/-- Julia `t * x` with a scalar, for fibers without a linear flat encoding. -/
-instance (priority := low) [HMul F Float F'] : HMul (TensorField m F) Float (TensorField m F') :=
+/-- Julia `t * x` with a constant. -/
+instance (priority := low) {X : Type} [HMul F X F'] : HMul (TensorField m F) X (TensorField m F') :=
   ⟨fun t x => t.map (· * x)⟩
-/-- Julia `t / x` with a scalar, for fibers without a linear flat encoding. -/
-instance (priority := low) [HDiv F Float F'] : HDiv (TensorField m F) Float (TensorField m F') :=
+/-- Julia `t / x` with a constant (`./(fiber(t), x)`, `Cartan.jl:443`). -/
+instance (priority := low) {X : Type} [HDiv F X F'] : HDiv (TensorField m F) X (TensorField m F') :=
   ⟨fun t x => t.map (· / x)⟩
 
 /-- Julia `a ∧ b` (group A). -/
