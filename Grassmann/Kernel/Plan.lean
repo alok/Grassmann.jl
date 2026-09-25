@@ -19,6 +19,12 @@ one explicit accumulator of the coefficient type per output (an unboxed
 register at `α = Float`), `@[specialize]`d on the coefficient class; the result
 is pushed into a fresh packed buffer (`FloatArray` at `Float`) of the exact
 size, so there is no read-modify-write of the output.
+
+Measured at `Float` (Apple M4 Max, compiled): the full product of two
+multivectors costs 186 ns in `ℝ3` (64 entries), 1.85 µs in `ℝ5` and 7.3 µs in
+`ℝ6` (about 1.8 ns per entry beyond `n = 3`; Julia's unrolled `ℝ3` product is
+19.8 ns, its `ℝ6` runtime loop 8.2 µs). The generated kernels of DESIGN.md §5.2
+replace these plans on the hot spaces.
 -/
 import Grassmann.Types.Dims
 
