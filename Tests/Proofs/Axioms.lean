@@ -8,6 +8,7 @@ beyond Lean's three standard axioms: `sorryAx` (a `sorry`), a custom `axiom`, or
 import DirectSum.Proofs
 import Grassmann.Spec
 import Grassmann.Proofs
+import Grassmann.Tactic
 
 /-- info: 'DirectSum.Proofs.reorderParity_eq_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms DirectSum.Proofs.reorderParity_eq_spec
@@ -83,3 +84,9 @@ import Grassmann.Proofs
 
 /-- info: 'Grassmann.Proofs.conf_table_5' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Grassmann.Proofs.conf_table_5
+
+/-- info: 'Grassmann.Tactic.eq_of_coords' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Tactic.eq_of_coords
+
+/-- info: 'Grassmann.Tactic.coords_of_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Tactic.coords_of_eq
