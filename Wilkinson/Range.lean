@@ -1,5 +1,4 @@
 import JuliaBase.Range
-import Wilkinson.FloatOps
 
 /-!
 # Wilkinson's sample grids: Julia float ranges `l:st:u`

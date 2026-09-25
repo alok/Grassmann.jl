@@ -42,7 +42,7 @@ def suite : TestM Unit := do
       s!"got {JuliaBase.F32.powInt x n}, expected {hexF32 (jGet c "r")}"
   for c in jArr (jGet j "sum") do
     let n := jNat (jGet c "n")
-    let s := juliaSum (sumVec n (jNat (jGet c "seed")))
+    let s := JuliaBase.F64.sum (sumVec n (jNat (jGet c "seed")))
     check s!"sum(length {n})" (sameFloat s (hexF64 (jGet c "r"))) s!"got {s}, expected {hexF64 (jGet c "r")}"
   for c in jArr (jGet j "big") do
     let (a, b, cc) := (hexF64 (jGet c "a"), hexF64 (jGet c "b"), hexF64 (jGet c "c"))

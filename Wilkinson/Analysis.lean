@@ -1,3 +1,4 @@
+import JuliaBase.Sum
 import Wilkinson.Range
 import Wilkinson.SyntaxTree
 
@@ -92,7 +93,7 @@ where
 /-- Julia `sum(v[a:s:b])`: materialise the strided slice (1-based indices), then
 Julia's vectorised `sum`. -/
 def stridedSum (p : FloatArray) (a s b : Nat) : Float :=
-  juliaSum (go a (FloatArray.emptyWithCapacity (b / s + 1)) (b + 1))
+  F64.sum (go a (FloatArray.emptyWithCapacity (b / s + 1)) (b + 1))
 where
   /-- Tail-recursive gather. -/
   go (i : Nat) (acc : FloatArray) : Nat → FloatArray

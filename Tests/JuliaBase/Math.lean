@@ -12,6 +12,7 @@ Julia's own numerics against the oracle (`Tests/JuliaBase/math.json`, written by
   `float32-pow-large-odd-sign` is checked against the sign-corrected value);
 * `rdig`/`rsig`/`hidigit`: `round(x; digits)`, `round(x; sigdigits)`, `Base.hidigit`;
 * `parse`: `tryparse(Float64, s)` (`F64.parse?`);
+* `sum`/`sumgen`: `sum(::Vector{Float64})` (`F64.sum`) of explicit and generated vectors;
 * `eps64`/`eps32`, `exponent64`/`exponent32`, `rat64`/`rat32`: `F64.epsOf`, `F32.epsOf`,
   `IEEEFloat.exponent`, and the correctly rounded `IEEEFloat.ofFraction`/`ofRat` of big
   rationals.
@@ -63,6 +64,15 @@ def unary32 : String → Option (Float32 → Float32)
 def f32PowSignDefect (x : Float32) (n : Int) : Bool :=
   let n := max (-2147483648) (min 2147483647 n)
   x < 0 && n % 2 != 0 && !(-4096 ≤ n && n ≤ 24576)
+
+/-- The generator's reproducible vector (`sumvec(n, s)` in `gen_golden.jl`, also used by the
+Wilkinson goldens): integers scaled by powers of two, exact in both languages. -/
+def sumVec (n seed : Nat) : FloatArray :=
+  (List.range n).foldl (fun acc k =>
+    let i := k + 1
+    let h : Int := ((i * 0x9E3779B1 + seed) % 2 ^ 32 : Nat)
+    let e : Int := ((i * seed + 7) % 61 : Nat)
+    acc.push (Float.scaleB (Float.ofInt (h - 2 ^ 31)) (e - 91))) (FloatArray.emptyWithCapacity n)
 
 /-- Check one `math.json` row (rows of kinds this module does not know are skipped). -/
 def checkRow (t : Tally) : List String → Tally
@@ -124,6 +134,16 @@ def checkRow (t : Tally) : List String → Tally
   | ["hidigit", hx, h] =>
     t.check (F64.hidigit (f64 hx) == int h) fun _ =>
       s!"hidigit({F64.showString (f64 hx)}): got {F64.hidigit (f64 hx)}, want {h}"
+  | "sum" :: n :: rest =>
+    let xs := rest.dropLast
+    let want := f64 (rest.getLastD "0")
+    let got := F64.sum (xs.foldl (fun acc h => acc.push (f64 h)) (FloatArray.emptyWithCapacity xs.length))
+    t.check (xs.length == (int n).toNat && sameFloat got want) fun _ =>
+      s!"sum of {n} explicit values: got {F64.showString got}, want {F64.showString want}"
+  | ["sumgen", n, seed, hr] =>
+    let got := F64.sum (sumVec (int n).toNat (int seed).toNat)
+    t.check (sameFloat got (f64 hr)) fun _ =>
+      s!"sum(sumvec({n}, {seed})): got {F64.showString got}, want {F64.showString (f64 hr)}"
   | ["parse", str, want] =>
     match F64.parse? str, want with
     | none, "ERR" => t.check true fun _ => ""
