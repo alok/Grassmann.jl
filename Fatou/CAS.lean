@@ -678,6 +678,24 @@ def ofPolySigned (p : Poly) : Out :=
   | (c, _) :: _ :: _ => if c < 0 then minus (ofPoly (Poly.neg p)) else ofPoly p
   | _ => ofPoly p
 
+/-- REDUCE's default printing with `allfac`: a sum's common integer factor and common powers of
+kernels are written outside it (`(z^{2}-2) z^{2}`), a negative leading coefficient as `-(…)`. -/
+def ofPolyAllfac (p : Poly) : Out :=
+  let ts := terms p
+  if ts.length < 2 then ofPoly p else
+  let content : Nat := ts.foldl (fun g (c, _) => Nat.gcd g c.natAbs) 0
+  let g := Poly.monoGcd p
+  if content ≤ 1 && g.isEmpty then ofPolySigned p else
+  let prim := Poly.divMono (Poly.smul (QI.ofRat (1 / (content : Rat))) p) g
+  let sgn := match terms prim with
+    | (c, _) :: _ => decide (c < 0)
+    | [] => false
+  let body := ofPoly (if sgn then Poly.neg prim else prim)
+  let monos : List Out := g.map fun (k, e) => if e == 1 then kern k else pow (kern k) e
+  let fs := (if content ≤ 1 then [] else [num content]) ++ [body] ++ monos
+  let prod := match fs with | [f] => f | fs => times fs
+  if sgn then minus prod else prod
+
 /-- An integer polynomial in `z` (coefficients `[c₀, c₁, …]`) as a sum. -/
 def ofZ (a : Array Int) : Out :=
   ofPoly (Poly.ofDense (a.map fun c => QI.ofInt c))
@@ -703,7 +721,9 @@ def factored (p : Poly) : Out := Id.run do
     if prim.isUnivariate && prim.all (fun (_, a) => a.im == 0 && a.re.den == 1) && !prim.isConst then
       let fz := factorZ (prim.toDense.map fun a => a.re.num)
       fz.factors.map fun (f, e) => powOf (ofZ f) e
-    else if prim.isConst then [] else [ofPoly prim]
+    else if prim.isConst then
+      (if prim.constVal == QI.one then [] else [ofPoly prim])
+    else [ofPoly prim]
   let monos : List Out := (gOther.map fun (k, e) => powOf (kern k) e) ++
     (if zpow > 0 then [powOf (kern (.var "z")) zpow] else [])
   let fs := (if content == 1 then [] else [num content]) ++ facs ++ monos
@@ -714,9 +734,11 @@ def factored (p : Poly) : Out := Id.run do
   return if sgn < 0 then minus body else body
 
 /-- REDUCE's output of a rational function: `num/den`, each `factored` (with `on factor`)
-or as sums with the sign pulled out (default printing). -/
-def ofRF (r : RF) (factor : Bool) : Out :=
-  let pr (p : Poly) : Out := if factor then factored p else ofPolySigned p
+or as sums with the sign pulled out (default printing; `allfac` factors out common monomials
+and integers when `allfac` is set). -/
+def ofRF (r : RF) (factor : Bool) (allfac : Bool := false) : Out :=
+  let pr (p : Poly) : Out :=
+    if factor then factored p else if allfac then ofPolyAllfac p else ofPolySigned p
   if r.den.isConst && r.den.constVal == QI.one then pr r.num
   else quot (pr r.num) (pr r.den)
 
@@ -897,6 +919,9 @@ def factorJExpr (r : RF) : Except String JExpr := Out.toJExpr (Out.ofRF r true)
 
 /-- The LaTeX of `factor(r)`. -/
 def latexFactor (r : RF) : String := Out.latex (Out.ofRF r true)
+
+/-- REDUCE's `latex(r)` with `allfac` grouping of common factors (the basin bodies `jL`). -/
+def latexAllfac (r : RF) : String := Out.latex (Out.ofRF r false (allfac := true))
 
 end CAS
 

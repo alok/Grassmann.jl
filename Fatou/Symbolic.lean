@@ -557,7 +557,7 @@ def ofString (src : String) (newt : Bool := false) (m : String := "") (map : Opt
 @[inline] def juliafill (S : Symbolic) (o : Options := {}) (Q : C64 → C64 → Float := abs2Q)
     (C : C64 → Float → Float → Float := angleColor) (real : Option (Float → Float) := none) :
     Define :=
-  let d := Fatou.juliafill S.F { o with label := S.src, latex := some S.latex } Q C real
+  let d := Fatou.juliafill S.F { o with label := S.src, latex := some (o.latex.getD S.latex) } Q C real
   { d with expr := some S.src }
 
 /-- Julia `mandelbrot(E; …)` (`src/Fatou.jl:250-271`): Newton mode (with the multiplicity of
@@ -572,7 +572,8 @@ def ofString (src : String) (newt : Bool := false) (m : String := "") (map : Opt
       F, Q := fun z c => (f z c).abs, C, real := real.getD fun x => (F ⟨x, 0⟩ ⟨0, 0⟩).re,
       expr := some S.src }
   else
-    let d := Fatou.mandelbrot S.F { o with label := S.src, latex := some S.latex } Q C none real
+    let d := Fatou.mandelbrot S.F { o with label := S.src, latex := some (o.latex.getD S.latex) } Q C none
+      real
     { d with expr := some S.src }
 
 /-- Julia `newton(E; …)` (`src/Fatou.jl:299-318`) for a symbolic Newton map. -/
@@ -591,8 +592,9 @@ end Symbolic
 /-- Julia `basin(K, j)` (`src/Fatou.jl:335`, `src/internals.jl:18-32`) of a set defined from
 an expression: the LaTeX set notation of the `j`-th basin, whose body is the LaTeX of the
 `j`-fold composition of the (Newton) map with `c := 0` (`nL`/`jL`), printed by `Fatou.CAS`
-(REDUCE's `factor` form, so `j = 1` reproduces REDUCE; deeper compositions are the same
-function in the CAS's expanded normal form). -/
+(Newton maps in REDUCE's `factor` form, the maps of `juliafill`/`mandelbrot` with `allfac`
+grouping, so `j = 1` reproduces REDUCE; deeper compositions are the same function in the
+CAS's expanded normal form). -/
 def Define.basinOf (K : Define) (j : Nat) : Except String String := do
   if j == 0 then return basin K.spec.newt 0 ""
   let some src := K.expr | throw "basin: the set was not defined from an expression"
@@ -607,7 +609,7 @@ def Define.basinOf (K : Define) (j : Nat) : Except String String := do
       pure (CAS.latexFactor (CAS.recomp F (CAS.RF.kern (.var "z")) j))
     else do
       let f ← CAS.simp E
-      pure (CAS.latexFactor (CAS.recomp f (CAS.RF.kern (.var "z")) j))
+      pure (CAS.latexAllfac (CAS.recomp f (CAS.RF.kern (.var "z")) j))
   return basin K.spec.newt j body
 
 /-! ## Elaboration-time maps: `juliafill!`, `mandelbrot!`, `newton!` -/
@@ -705,20 +707,30 @@ elaboration time. -/
 syntax (name := juliafillBang) "juliafill! " str (ppSpace term:max)? : term
 /-- `mandelbrot! "z^2 + c" opts`, or `mandelbrot! "z^3 - 1" (m := "1") opts` for Julia's Newton
 switch (`m ≠ 0`). -/
-syntax (name := mandelbrotBang) "mandelbrot! " str (" (" &"m" " := " str ")")? (ppSpace term:max)? :
+syntax (name := mandelbrotBang) "mandelbrot! " str (" (" ident " := " str ")")* (ppSpace term:max)? :
   term
 /-- `newton! "z^3 - 1" opts`, `newton! "sin(z) - 1" (m := "1 - 1im") opts`: Julia
 `newton(E; m, opts…)`, the Newton map derived by `Fatou.CAS` and compiled at elaboration time.
 `(map := "…")` iterates the given Julia expression instead (e.g. REDUCE's own form). -/
-syntax (name := newtonBang) "newton! " str (" (" &"m" " := " str ")")? (" (" &"map" " := " str ")")?
-  (ppSpace term:max)? : term
+syntax (name := newtonBang) "newton! " str (" (" ident " := " str ")")* (ppSpace term:max)? : term
 /-- `symbolic! "E"` / `symbolic! "E" (m := "m")`: the `Symbolic` value itself (Newton mode when
 `m` is given). -/
-syntax (name := symbolicBang) "symbolic! " str (" (" &"m" " := " str ")")? : term
+syntax (name := symbolicBang) "symbolic! " str (" (" ident " := " str ")")* : term
 
-/-- The string of an optional `(key := "…")` group. -/
-def groupStr? (s : Syntax) : Option String :=
-  if s.getNumArgs == 5 then s[3].isStrLit? else none
+/-- The value of `(key := "…")` among the repeated groups `s` (each group's five nodes, nested
+or flattened). -/
+def groupStr? (s : Syntax) (key : String) : Option String :=
+  let flat : Array Syntax := s.getArgs.flatMap fun g => if g.getNumArgs == 5 then g.getArgs else #[g]
+  (List.range (flat.size / 5)).findSome? fun k =>
+    if flat[5 * k + 1]!.getId.toString == key then flat[5 * k + 3]!.isStrLit? else none
+
+/-- Reject keys other than `m` and `map`. -/
+def checkKeys (s : Syntax) (allowed : List String) : TermElabM Unit := do
+  let flat : Array Syntax := s.getArgs.flatMap fun g => if g.getNumArgs == 5 then g.getArgs else #[g]
+  for k in List.range (flat.size / 5) do
+    let key := flat[5 * k + 1]!.getId.toString
+    unless allowed.contains key do throwErrorAt flat[5 * k + 1]! "unknown option {key}"
+
 
 /-- The options argument, or `{}`. -/
 def optsTerm (s : Syntax) : TermElabM Term := do
@@ -731,16 +743,20 @@ def optsTerm (s : Syntax) : TermElabM Term := do
   elabTerm (← `(Fatou.Symbolic.juliafill $S $(← optsTerm stx[2]))) ty
 
 @[term_elab mandelbrotBang] def elabMandelbrot : TermElab := fun stx ty => do
-  let m := groupStr? stx[2]
+  checkKeys stx[2] ["m"]
+  let m := groupStr? stx[2] "m"
   let S ← exprToSyntax (← symbolicExpr stx[1].isStrLit?.get! m.isSome m none)
   elabTerm (← `(Fatou.Symbolic.mandelbrot $S $(← optsTerm stx[3]))) ty
 
 @[term_elab newtonBang] def elabNewton : TermElab := fun stx ty => do
-  let S ← exprToSyntax (← symbolicExpr stx[1].isStrLit?.get! true (groupStr? stx[2]) (groupStr? stx[3]))
-  elabTerm (← `(Fatou.Symbolic.newton $S $(← optsTerm stx[4]))) ty
+  checkKeys stx[2] ["m", "map"]
+  let S ← exprToSyntax
+    (← symbolicExpr stx[1].isStrLit?.get! true (groupStr? stx[2] "m") (groupStr? stx[2] "map"))
+  elabTerm (← `(Fatou.Symbolic.newton $S $(← optsTerm stx[3]))) ty
 
 @[term_elab symbolicBang] def elabSymbolic : TermElab := fun stx _ => do
-  let m := groupStr? stx[2]
+  checkKeys stx[2] ["m"]
+  let m := groupStr? stx[2] "m"
   symbolicExpr stx[1].isStrLit?.get! m.isSome m none
 
 end Sym
