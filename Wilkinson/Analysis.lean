@@ -304,4 +304,40 @@ def PolynomialComparison.plotData (c : PolynomialComparison) : Array Series × S
     #[actual 0 "expand (actual)" "r", actual 1 "horner (actual)" "b", actual 2 "factor (actual)" "g"]
   (s, s!"$\\log|x|,\\,\\Delta={F64.showString c.set.stepValue}$")
 
+/-- Julia's `isless` on floats (`NaN` sorts last, `-0.0 < 0.0`). -/
+def islessF (a b : Float) : Bool := JuliaBase.F64.isless a b
+
+/-- Julia `≤` on `exprval` tuples: lexicographic, component by component. -/
+def valLE (a b : Float × Nat × Float × Float × Float) : Bool :=
+  let (a1, a2, a3, a4, a5) := a
+  let (b1, b2, b3, b4, b5) := b
+  let fs : List (Float × Float) := [(a1, b1), (Float.ofNat a2, Float.ofNat b2), (a3, b3), (a4, b4), (a5, b5)]
+  go fs
+where
+  /-- First differing component decides; all equal means `≤`. -/
+  go : List (Float × Float) → Bool
+    | [] => true
+    | (x, y) :: rest => if islessF x y then true else if islessF y x then false else go rest
+
+/-- Julia `testpoly(expr, T)` (src/polynomial.jl:135-161): does the `exprval`
+ordering of the Horner and factored forms agree with the ordering of their
+Stieltjes error values (`agree`), is the polynomial factorizable (`fact`), and
+does the lower `exprval` form also have the lower error value than the expanded
+form (`conj`)? Julia also accepts a form whose evaluation *allocated* fewer bytes
+(`ehb[1] < eeb[1] || ehb[2] ≤ eeb[2]`), which makes the result depend on the
+allocator; the port compares the error values alone. -/
+def testpoly (cas : CAS) (e : JExpr) (T : NumType) : Bool × Bool × Bool :=
+  let ee := cas.expand e
+  let eh := cas.horner e
+  let ef := cas.factor eh
+  let ehv := exprval eh
+  let eev := exprval ee
+  let better (a b : Float) : Bool := a < b
+  if eh == ef then
+    (true, false, valLE ehv eev && better (errval eh T) (errval ee T))
+  else
+    let efv := exprval ef
+    (valLE ehv efv == better (errval eh T) (errval ef T), true,
+      (valLE ehv eev && better (errval eh T) (errval ee T)) || (valLE efv eev && better (errval ef T) (errval ee T)))
+
 end Wilkinson

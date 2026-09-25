@@ -300,6 +300,17 @@ def cas : CAS := ⟨expand, horner, factor, factor⟩
 
 end Reduce
 
+/-- Julia `tests(d, n, T; apply = polyfactors)` (src/polynomial.jl:163-179): run
+`testpoly` on `apply(x, roots)` for each root list (Julia draws `rand(d)` roots;
+the caller supplies them) and return the fractions `(agree, factorizable, conj)`. -/
+def tests (rootSets : List (List Float)) (T : NumType := .f64)
+    (apply : List Lit → JExpr := Reduce.polyfactors) : Rat × Rat × Rat :=
+  let n : Rat := rootSets.length
+  let (a, f, c) := rootSets.foldl (fun (a, f, c) rs =>
+    let (x, y, z) := testpoly Reduce.cas (apply (rs.map Lit.f64)) T
+    (a + (if x then 1 else 0), f + (if y then 1 else 0), c + (if z then 1 else 0))) ((0 : Nat), (0 : Nat), (0 : Nat))
+  if rootSets.isEmpty then (0, 0, 0) else ((a : Rat) / n, (f : Rat) / n, (c : Rat) / n)
+
 /-- Julia `PolynomialComparison(j, T, N)` with the REDUCE emulation. -/
 def PolynomialComparison.ofReduce (j : JExpr) (T : NumType := .f64) (N : Nat := 3000) : PolynomialComparison :=
   PolynomialComparison.make Reduce.cas j T N

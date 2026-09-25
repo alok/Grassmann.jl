@@ -200,5 +200,7 @@ def suite : TestM Unit := do
       !(prod == Poly.ofZ N)
     | none => false
   check "content · ∏ fᵢ^eᵢ · x^m = N" badF.isEmpty
+  -- Reed's experiment on a factorizable cubic: exprval and the error values agree
+  checkEq "testpoly((x-1)(x-2)(x-3))" (testpoly Reduce.cas jl⟪(x-1)*(x-2)*(x-3)⟫ .f64) (true, true, true)
 
 end Tests.Wilkinson.Props
