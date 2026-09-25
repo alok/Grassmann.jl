@@ -1,4 +1,4 @@
-import Similitude.Registry
+import Similitude.Quantity
 
 /-!
 # The quotient `U/~`
@@ -27,5 +27,15 @@ def quotient (U : Sys) : List (USQGroup × List Conv) :=
 def printQuotient (U : Sys) : String :=
   String.join <| (quotient U).map fun (k, qs) =>
     s!"    {k.print} => " ++ ", ".intercalate (qs.map fun q => s!"{q.name} ({q.dim.toGroup.print})") ++ "\n"
+
+/-- Julia `dimlist(U)` (`derived.jl:444-447`): the image of each base dimension,
+`F=MLT⁻², M=M, …` (`M` alone when a system with USQ letters leaves it fixed). -/
+def dimlist (U : Sys) : String :=
+  let isq := (dimText U.name).1 == usqBasis.text
+  let bases := [USQ.F, USQ.M, USQ.L, USQ.T, USQ.Q, USQ.Θ, USQ.N, USQ.J, USQ.A, USQ.R, USQ.C]
+  ", ".intercalate <| bases.map fun b =>
+    let g := b.toGroup
+    let img : USQGroup := Group.mk' (U.image g.v) (.int 1)
+    if isq && img.v.beq g.v then g.print else s!"{g.print}={img.print}"
 
 end Similitude
