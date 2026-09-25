@@ -63,6 +63,19 @@ def run : TestM Unit := do
       Axis.range 0 twoPiF 100, Axis.range 0.001 1000 777] do
     checkEq s!"collect({a}) bits" (a.toFloatArray.toList.map Float.toBits)
       ((buildFlat a.length a.get).toList.map Float.toBits)
+  -- explicit-axes parameters are the size forms on the same axes
+  let T' := Parameter.torusOn (Parameter.linSpace (fun _ => 0) (fun _ => twoPiF) #v[60, 60])
+  checkEq "TorusParameter(axes) = TorusParameter(60, 60)" T'.data.toList T.data.toList
+  check "TorusParameter(axes) glued" T'.immersion.isCompact
+  let ps : ProductSpace 2 := .ofAxes #v[Axis.colon (-5) 2 5, Axis.linRange 0 1 7]
+  let O := Parameter.openOn ps
+  checkEq "OpenParameter(-5:2:5, LinRange(0,1,7)) shape" (BaseShape.shape O.base) [6, 7]
+  checkEq "OpenParameter(-5:2:5, …) point 8" (O.get 8).coords.toList [-1, 1 / 6]
+  let M := Parameter.mobiusOn (.ofAxes #v[Axis.linRange (-piF) piF 9, Axis.linRange (-1) 1 5])
+  checkEq "MobiusParameter(axes) = MobiusParameter(9, 5)" M.data.toList (Parameter.mobius 9 5).data.toList
+  let c1 := Parameter.torusOn1 (Axis.linRange 0 twoPiF 13)
+  checkEq "TorusParameter(r) = TorusParameter(13)" c1.data.toList (Parameter.torus1 13).data.toList
+  check "TorusParameter(r) keeps the range" c1.range?.isSome
   checkEq "show of a range axis" (toString (Axis.colon 0 0.5 2)) "0.0:0.5:2.0"
   checkEq "show of a LinRange axis" (toString (Axis.linRange 0 1 5)) "LinRange{Float64}(0.0, 1.0, 5)"
   checkEq "Global display" (MetricStore.induced.showGlobal 2) "Global{2}(InducedMetric())"

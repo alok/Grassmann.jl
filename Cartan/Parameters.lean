@@ -144,6 +144,77 @@ def hopfHi (i : Fin 3) : Float := if i.1 = 0 then 7 * piF / 16 else if i.1 = 1 t
 def hopf3 (n : Vector Nat 3) : TensorField (baseN (hopfLo n[0]) hopfHi n).hopf3 (AffinePoint 3) :=
   TensorField.identity _
 
+/-! ## Explicit axes (`quotient.jl:60-70`)
+
+Julia `XParameter(p::ProductSpace)`, `XParameter(xs, ys, …)` and `XParameter(Values(xs, ys))`
+take the coordinate vectors themselves (`OpenParameter(-5:2:5, LinRange(0, 1, 7))`): the identity
+field of the grid of `p` with the topology `X`. In Julia 0.4.16 they reach the same missing
+`XTopology(::PointArray)` as the size forms (B1); these are the intended fields. The `On` forms
+take a `ProductSpace` (build one from axes with `ProductSpace.ofAxes #v[xs, ys]`), the `On1`
+forms one `Axis` (real points). -/
+
+/-- Julia `OpenParameter(p::ProductSpace)`. -/
+def openOn {N : Nat} (p : ProductSpace N) : TensorField (GridBundle.ofSpace p) (AffinePoint N) :=
+  TensorField.identity _
+/-- Julia `MirrorParameter(p::ProductSpace)`. -/
+def mirrorOn {N : Nat} (p : ProductSpace N) : TensorField (GridBundle.ofSpace p).mirror (AffinePoint N) :=
+  TensorField.identity _
+/-- Julia `ClampedParameter(p::ProductSpace)`. -/
+def clampedOn {N : Nat} (p : ProductSpace N) :
+    TensorField (GridBundle.ofSpace p).clamped (AffinePoint N) := TensorField.identity _
+/-- Julia `TorusParameter(p::ProductSpace)`. -/
+def torusOn {N : Nat} (p : ProductSpace N) : TensorField (GridBundle.ofSpace p).torus (AffinePoint N) :=
+  TensorField.identity _
+/-- Julia `BallParameter(p::ProductSpace)`. -/
+def ballOn {N : Nat} (p : ProductSpace N) : TensorField (GridBundle.ofSpace p).ball (AffinePoint N) :=
+  TensorField.identity _
+/-- Julia `SphereParameter(p::ProductSpace)`. -/
+def sphereOn {N : Nat} (p : ProductSpace N) : TensorField (GridBundle.ofSpace p).sphere (AffinePoint N) :=
+  TensorField.identity _
+/-- Julia `CylinderParameter(p::ProductSpace)`. -/
+def cylinderOn (p : ProductSpace 2) : TensorField (GridBundle.ofSpace p).cylinder (AffinePoint 2) :=
+  TensorField.identity _
+/-- Julia `MobiusParameter(p::ProductSpace)`. -/
+def mobiusOn (p : ProductSpace 2) : TensorField (GridBundle.ofSpace p).mobius (AffinePoint 2) :=
+  TensorField.identity _
+/-- Julia `WingParameter(p::ProductSpace)`. -/
+def wingOn (p : ProductSpace 2) : TensorField (GridBundle.ofSpace p).wing (AffinePoint 2) :=
+  TensorField.identity _
+/-- Julia `KleinParameter(p::ProductSpace)`. -/
+def kleinOn (p : ProductSpace 2) : TensorField (GridBundle.ofSpace p).klein (AffinePoint 2) :=
+  TensorField.identity _
+/-- Julia `ConeParameter(p::ProductSpace)`. -/
+def coneOn (p : ProductSpace 2) : TensorField (GridBundle.ofSpace p).cone (AffinePoint 2) :=
+  TensorField.identity _
+/-- Julia `TubeParameter(p::ProductSpace)` (2-D). -/
+def tubeOn (p : ProductSpace 2) : TensorField (GridBundle.ofSpace p).tube (AffinePoint 2) :=
+  TensorField.identity _
+/-- Julia `TubeParameter(p::ProductSpace)` (3-D). -/
+def tube3On (p : ProductSpace 3) : TensorField (GridBundle.ofSpace p).tube3 (AffinePoint 3) :=
+  TensorField.identity _
+/-- Julia `GeographicParameter(p::ProductSpace)`. -/
+def geographicOn (p : ProductSpace 2) : TensorField (GridBundle.ofSpace p).geographic (AffinePoint 2) :=
+  TensorField.identity _
+/-- Julia `HopfParameter(p::ProductSpace)` (2-D). -/
+def hopfOn (p : ProductSpace 2) : TensorField (GridBundle.ofSpace p).hopf (AffinePoint 2) :=
+  TensorField.identity _
+/-- Julia `HopfParameter(p::ProductSpace)` (3-D). -/
+def hopf3On (p : ProductSpace 3) : TensorField (GridBundle.ofSpace p).hopf3 (AffinePoint 3) :=
+  TensorField.identity _
+
+/-- Julia `OpenParameter(r)` for one coordinate vector (real points; a range stays a range). -/
+def openOn1 (a : Axis) : TensorField (GridBundle.ofAxis a) Float := TensorField.identity1 _
+/-- Julia `MirrorParameter(r)`. -/
+def mirrorOn1 (a : Axis) : TensorField (GridBundle.ofAxis a).mirror Float := TensorField.identity1 _
+/-- Julia `ClampedParameter(r)`. -/
+def clampedOn1 (a : Axis) : TensorField (GridBundle.ofAxis a).clamped Float := TensorField.identity1 _
+/-- Julia `TorusParameter(r)`. -/
+def torusOn1 (a : Axis) : TensorField (GridBundle.ofAxis a).torus Float := TensorField.identity1 _
+/-- Julia `BallParameter(r)`. -/
+def ballOn1 (a : Axis) : TensorField (GridBundle.ofAxis a).ball Float := TensorField.identity1 _
+/-- Julia `SphereParameter(r)`. -/
+def sphereOn1 (a : Axis) : TensorField (GridBundle.ofAxis a).sphere Float := TensorField.identity1 _
+
 /-! ## Julia's default sizes (`quotient.jl:77-110`) -/
 
 /-- Julia `TorusParameter()` = `TorusParameter(61, 61)`. -/
