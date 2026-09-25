@@ -64,11 +64,13 @@ def sapply (f : BitVec n → Sparse n) (xs : Sparse n) : Sparse n :=
 def lmap (f : BitVec n → Sparse n) (x : BitVec n → Rat) : BitVec n → Rat :=
   fun d => bsum n fun c => x c * sfun (f c) d
 
+/-- Concatenated sparse multivectors add. -/
 theorem sfun_append (xs ys : Sparse n) (d : BitVec n) : sfun (xs ++ ys) d = sfun xs d + sfun ys d := by
   induction xs with
   | nil => simp [sfun]; grind
   | cons p xs ih => obtain ⟨s, α⟩ := p; simp only [List.cons_append, sfun, ih]; grind
 
+/-- Scaling every term scales the coefficient function. -/
 theorem sfun_map_scale (xs : Sparse n) (α : Rat) (d : BitVec n) :
     sfun (xs.map fun (t, β) => (t, α * β)) d = α * sfun xs d := by
   induction xs with
@@ -270,7 +272,9 @@ theorem implMul_assoc_of_conf {V : TensorBundle} {g : Fin n → Rat} (h : ConfTa
 /-! ## The conformal spaces -/
 
 theorem conf_inverse_3 : ConfInverse 3 := by unfold ConfInverse; decide +kernel
+/-- `T⁻¹ ∘ T = id` on the blades of `CGA2` (`n = 4`). -/
 theorem conf_inverse_4 : ConfInverse 4 := by unfold ConfInverse; decide +kernel
+/-- `T⁻¹ ∘ T = id` on the blades of `CGA3` (`n = 5`). -/
 theorem conf_inverse_5 : ConfInverse 5 := by unfold ConfInverse; decide +kernel
 
 /-- `CGA2`: if the transported table holds (it is checked exhaustively on every

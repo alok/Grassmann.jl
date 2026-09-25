@@ -29,9 +29,11 @@ variable {R : Type u} [CommRing R] {n : Nat}
 
 theorem not_eq_xor_allOnes (c : BitVec n) : ~~~c = c ^^^ BitVec.allOnes n := BitVec.xor_allOnes.symm
 
+/-- A blade and its complement make up the pseudoscalar. -/
 theorem not_xor_self (c : BitVec n) : ~~~c ^^^ c = BitVec.allOnes n := by
   rw [not_eq_xor_allOnes, BitVec.xor_comm c, BitVec.xor_assoc, xor_self', xor_zero']
 
+/-- The complement mask is the xor with `2ⁿ - 1`. -/
 theorem toNat_not_eq (c : BitVec n) : (~~~c).toNat = c.toNat ^^^ (2 ^ n - 1) := by
   rw [not_eq_xor_allOnes, BitVec.toNat_xor, BitVec.toNat_allOnes]
 

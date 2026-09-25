@@ -29,6 +29,7 @@ variable {R : Type u} [CommRing R] {n : Nat}
 reordering sign on disjoint blades and `0` on overlapping ones. -/
 def wcoef (a b : BitVec n) : R := if a &&& b = 0 then signOf (sign a b) else 0
 
+/-- A blade is empty exactly when its mask is `0`. -/
 theorem toNat_eq_zero_iff (a : BitVec n) : a.toNat = 0 ↔ a = 0 := by
   constructor
   · intro h; exact BitVec.eq_of_toNat_eq (by rw [h]; rfl)
@@ -63,9 +64,11 @@ theorem wcoef_cocycle : IsCocycle (wcoef : BitVec n → BitVec n → R) := by
   simp only [wcoef_eq_coef_zero]
   exact coef_cocycle _ a b c
 
+/-- `e_∅` is a left unit of `∧` on blades. -/
 theorem wcoef_zero_left (b : BitVec n) : (wcoef 0 b : R) = 1 := by
   rw [wcoef_eq_coef_zero, coef_zero_left]
 
+/-- `e_∅` is a right unit of `∧` on blades. -/
 theorem wcoef_zero_right (a : BitVec n) : (wcoef a 0 : R) = 1 := by
   rw [wcoef_eq_coef_zero, coef_zero_right]
 
@@ -94,6 +97,7 @@ variable {g : Fin n → R}
 /-- **The exterior (wedge) product**, `x ∧ y`, as an explicit finite sum. -/
 def wedge (x y : Cl g) : Cl g := ⟨twist wcoef x.coeff y.coeff⟩
 
+/-- The coefficients of an exterior product. -/
 theorem coeff_wedge (x y : Cl g) (c : BitVec n) :
     (wedge x y).coeff c = bsum n fun a => x.coeff a * y.coeff (a ^^^ c) * wcoef a (a ^^^ c) := rfl
 
@@ -155,11 +159,13 @@ def IsGrade (k : Nat) (x : Cl g) : Prop := ∀ a, grade a ≠ k → x.coeff a = 
 /-- The grade-`k` part `⟨x⟩ₖ`. -/
 def proj (k : Nat) (x : Cl g) : Cl g := ⟨fun a => if grade a = k then x.coeff a else 0⟩
 
+/-- `⟨x⟩ₖ` is a `k`-vector. -/
 theorem isGrade_proj (k : Nat) (x : Cl g) : IsGrade k (proj k x) := by
   intro a h
   show (if grade a = k then x.coeff a else 0) = 0
   rw [ite_eq_right h]
 
+/-- Projecting a `k`-vector to grade `k` keeps it. -/
 theorem proj_eq_self {k : Nat} {x : Cl g} (h : IsGrade k x) : proj k x = x := by
   ext a
   show (if grade a = k then x.coeff a else 0) = x.coeff a
@@ -167,6 +173,7 @@ theorem proj_eq_self {k : Nat} {x : Cl g} (h : IsGrade k x) : proj k x = x := by
   · rw [ite_eq_left hk]
   · rw [ite_eq_right hk, h a hk]
 
+/-- Projections to different grades are orthogonal. -/
 theorem proj_proj_of_ne {j k : Nat} (h : j ≠ k) (x : Cl g) : proj j (proj k x) = 0 := by
   ext a
   show (if grade a = j then (if grade a = k then x.coeff a else 0) else 0) = 0
@@ -174,6 +181,7 @@ theorem proj_proj_of_ne {j k : Nat} (h : j ≠ k) (x : Cl g) : proj j (proj k x)
   · rw [ite_eq_left hj, ite_eq_right (by omega)]
   · rw [ite_eq_right hj]
 
+/-- Grade projection is additive. -/
 theorem proj_add (k : Nat) (x y : Cl g) : proj k (x + y) = proj k x + proj k y := by
   ext a
   show (if grade a = k then x.coeff a + y.coeff a else 0)
@@ -182,6 +190,7 @@ theorem proj_add (k : Nat) (x y : Cl g) : proj k (x + y) = proj k x + proj k y :
   · rw [ite_eq_left hk, ite_eq_left hk, ite_eq_left hk]
   · rw [ite_eq_right hk, ite_eq_right hk, ite_eq_right hk, Semiring.add_zero]
 
+/-- Grade projection commutes with scalars. -/
 theorem proj_smul (k : Nat) (r : R) (x : Cl g) : proj k (r • x) = r • proj k x := by
   ext a
   show (if grade a = k then r * x.coeff a else 0) = r * (if grade a = k then x.coeff a else 0)
@@ -195,6 +204,7 @@ theorem isGrade_blade (a : BitVec n) : IsGrade (grade a) (blade a : Cl g) := by
   show (if c = a then (1 : R) else 0) = 0
   exact ite_eq_right fun e => h (by rw [e])
 
+/-- A generator has grade `1`. -/
 theorem grade_twoPow (i : Fin n) : grade (BitVec.twoPow n i) = 1 := by
   rw [grade, BitVec.toNat_twoPow, Nat.mod_eq_of_lt (Nat.pow_lt_pow_right (by decide) i.2),
     bitCount_two_pow i.2]

@@ -33,16 +33,21 @@ variable {R : Type u} [CommRing R]
 /-- `signOf s = (-1)^s`. -/
 def signOf (s : Bool) : R := if s then -1 else 1
 
+/-- `(-1)^false = 1`. -/
 @[simp] theorem signOf_false : (signOf false : R) = 1 := rfl
 
+/-- `(-1)^true = -1`. -/
 @[simp] theorem signOf_true : (signOf true : R) = -1 := rfl
 
+/-- Signs multiply: `(-1)^{s ⊕ t} = (-1)^s (-1)^t`. -/
 theorem signOf_xor (s t : Bool) : (signOf (s ^^ t) : R) = signOf s * signOf t := by
   cases s <;> cases t <;> simp [signOf] <;> grind
 
+/-- A sign squares to `1`. -/
 theorem signOf_mul_self (s : Bool) : (signOf s : R) * signOf s = 1 := by
   cases s <;> simp [signOf] <;> grind
 
+/-- Flipping the exponent negates the sign. -/
 theorem signOf_not (s : Bool) : (signOf (!s) : R) = -signOf s := by
   cases s <;> simp [signOf] <;> grind
 
@@ -61,9 +66,11 @@ def metricFactor (g : Nat → R) : Nat → Nat → R
   | 0, _ => 1
   | n + 1, m => metricFactor g n m * (if m.testBit n then g n else 1)
 
+/-- The metric factor on `n+1` generators: one more factor for the top generator. -/
 theorem metricFactor_succ (g : Nat → R) (n m : Nat) :
     metricFactor g (n + 1) m = metricFactor g n m * (if m.testBit n then g n else 1) := rfl
 
+/-- The metric factor only reads the mask below the width. -/
 theorem metricFactor_congr (g : Nat → R) {n m m' : Nat} (h : ∀ i < n, m.testBit i = m'.testBit i) :
     metricFactor g n m = metricFactor g n m' := by
   induction n with
@@ -95,6 +102,7 @@ theorem metricFactor_two_pow (g : Nat → R) {n i : Nat} (hi : i < n) : metricFa
             Semiring.mul_one]
       rw [hz i (Nat.le_refl i), ite_eq_left (by simp), Semiring.one_mul]
 
+/-- The empty blade has metric factor `1`. -/
 @[simp] theorem metricFactor_zero_mask (g : Nat → R) (n : Nat) : metricFactor g n 0 = 1 := by
   induction n with
   | zero => rfl
@@ -161,12 +169,15 @@ theorem bladeCoef_cocycle (g : Nat → R) (n a b c : Nat) :
   unfold bladeCoef
   grind
 
+/-- The unit blade is a left unit of the blade product: `c(0, b) = 1`. -/
 theorem bladeCoef_zero_left (g : Nat → R) (n b : Nat) : bladeCoef g n 0 b = 1 := by
   simp [bladeCoef, Semiring.mul_one]
 
+/-- The unit blade is a right unit of the blade product: `c(a, 0) = 1`. -/
 theorem bladeCoef_zero_right (g : Nat → R) (n a : Nat) : bladeCoef g n a 0 = 1 := by
   simp [bladeCoef, Semiring.mul_one]
 
+/-- The blade coefficient only reads the masks below the width. -/
 theorem bladeCoef_congr (g : Nat → R) {n a a' b b' : Nat} (ha : ∀ i < n, a.testBit i = a'.testBit i)
     (hb : ∀ i < n, b.testBit i = b'.testBit i) : bladeCoef g n a b = bladeCoef g n a' b' := by
   unfold bladeCoef

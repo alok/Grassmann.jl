@@ -55,14 +55,17 @@ namespace IsSignatureSpace
 variable {V : TensorBundle} (hV : IsSignatureSpace V)
 include hV
 
+/-- A plain signature space is diagonal. -/
 theorem isdiag : V.isdiag = true := by
   unfold TensorBundle.isdiag
   rcases hV.metric with ⟨s, h⟩ | h <;> rw [h]
   simp [hV.conformal]
 
+/-- A plain signature space has no tangent variables. -/
 theorem istangent : V.istangent = false := by
   unfold TensorBundle.istangent; simp [hV.tangent]
 
+/-- A plain signature space has no tangent mask. -/
 theorem diffmask : V.diffmask = 0 := by
   unfold TensorBundle.diffmask TensorBundle.diffmaskV TensorBundle.diffmaskW
   rw [hV.tangent]
@@ -70,16 +73,19 @@ theorem diffmask : V.diffmask = 0 := by
   have hs : ∀ k, Bits.shl 0 k = 0 := fun k => by unfold Bits.shl; split <;> simp
   rw [h0, hs]; split <;> simp [hs]
 
+/-- In a plain signature space `symmetricmask` splits nothing off. -/
 theorem symmetricmask (a b : UInt64) : V.symmetricmask a b = (a, b, 0, 0) := by
   unfold TensorBundle.symmetricmask
   rw [hV.diffmask]
   simp
 
+/-- In a plain signature space the product parity is `parityjoin` of the signature bits. -/
 theorem parity (a b : UInt64) : V.parity a b = parityjoin V.sigBits a b := by
   unfold TensorBundle.parity
   rw [hV.diffmask]
   simp
 
+/-- Every metric value of a plain signature space is `±1`. -/
 theorem metricAt (i : Nat) : V.metricAt i = 1 ∨ V.metricAt i = -1 := by
   unfold TensorBundle.metricAt
   rcases hV.metric with ⟨s, h⟩ | h <;> rw [h]
@@ -104,6 +110,7 @@ theorem metricProduct (b : UInt64) : V.metricProduct b = 1 ∨ V.metricProduct b
         rcases h with h | h <;> rcases hV.metricAt (Bits.ctz x + 1) with h' | h' <;> rw [h, h'] <;> grind
   exact key 64 b 1 (Or.inl rfl)
 
+/-- The shared-generator coefficient is the sign of `parityjoin` (the metric factor has absolute value `1`). -/
 theorem parityinner (a b : UInt64) :
     V.parityinner a b = if parityjoin V.sigBits a b then -1 else 1 := by
   unfold TensorBundle.parityinner
@@ -188,6 +195,7 @@ namespace IsFlatSpace
 variable {V : TensorBundle} (hV : IsFlatSpace V)
 include hV
 
+/-- A flat space has no tangent mask. -/
 theorem diffmask : V.diffmask = 0 := by
   unfold TensorBundle.diffmask TensorBundle.diffmaskV TensorBundle.diffmaskW
   rw [hV.tangent]
@@ -195,11 +203,13 @@ theorem diffmask : V.diffmask = 0 := by
   have hs : ∀ k, Bits.shl 0 k = 0 := fun k => by unfold Bits.shl; split <;> simp
   rw [h0, hs]; split <;> simp [hs]
 
+/-- In a flat space `symmetricmask` splits nothing off. -/
 theorem symmetricmask (a b : UInt64) : V.symmetricmask a b = (a, b, 0, 0) := by
   unfold TensorBundle.symmetricmask
   rw [hV.diffmask]
   simp
 
+/-- No product vanishes by `diffcheck` in a flat space. -/
 theorem diffcheck (a b : UInt64) : V.diffcheck a b = false := by
   unfold TensorBundle.diffcheck
   simp [hV.conformal, hV.tangent]
@@ -209,6 +219,7 @@ private theorem and_not_zero' (x : UInt64) : x &&& ~~~0 = x := by
   apply UInt64.toBitVec_inj.mp
   simp
 
+/-- On disjoint blades the product parity is the reordering parity (no shared generators, no metric sign). -/
 theorem parity_of_disjoint {a b : UInt64} (h : a &&& b = 0) : V.parity a b = Bits.reorderParity a b := by
   show parityjoin V.sigBits (a &&& ~~~V.diffmask) (b &&& ~~~V.diffmask) = _
   rw [hV.diffmask, and_not_zero', and_not_zero']

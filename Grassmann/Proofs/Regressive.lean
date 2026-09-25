@@ -27,10 +27,15 @@ theorem implVee_blade (hn : n ≤ 64) {V : TensorBundle} {g : Fin n → Rat} (h 
     ofTerms g (V.terms₂ .vee (mask a) (mask b)) = Cl.vee (Cl.blade a) (Cl.blade b) := by
   rw [ofTerms_of_matches hn (h a b), ← Cl.vee_blade]
 
+/-- `ℝ2`: the regressive product on every pair of blades is the spec `∨`. -/
 theorem R2_vee_table : VeeAgrees ℝ2 (gEuclid 2) := by unfold VeeAgrees; decide +kernel
+/-- `ℝ3`: the regressive product on every pair of blades is the spec `∨`. -/
 theorem R3_vee_table : VeeAgrees ℝ3 (gEuclid 3) := by unfold VeeAgrees; decide +kernel
+/-- `STA`: the regressive product on every pair of blades is the spec `∨`. -/
 theorem STA_vee_table : VeeAgrees STA gSTA := by unfold VeeAgrees; decide +kernel
+/-- `PGA3`: the regressive product on every pair of blades is the spec `∨`. -/
 theorem PGA3_vee_table : VeeAgrees PGA3 (gPGA 4) := by unfold VeeAgrees; decide +kernel
+/-- `D!"1,2,-3"`: the regressive product on every pair of blades is the spec `∨`. -/
 theorem D123_vee_table : VeeAgrees D!"1,2,-3" gD123 := by unfold VeeAgrees; decide +kernel
 
 end Grassmann.Proofs

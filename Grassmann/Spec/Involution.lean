@@ -64,9 +64,11 @@ def revSign (a : BitVec n) : R := signOf (Leibniz.parityreverse (grade a))
 /-- The grade-involution sign of a blade, `(-1)^k` (Julia `parityinvolute`). -/
 def invSign (a : BitVec n) : R := signOf (Leibniz.parityinvolute (grade a))
 
+/-- The reversion sign is `(-1)^{σ(a,a)}`. -/
 theorem revSign_eq (a : BitVec n) : (revSign a : R) = signOf (sign a a) := by
   rw [revSign, sign, sigma_self]; rfl
 
+/-- The involution sign is `(-1)^{|a|}`. -/
 theorem invSign_eq (a : BitVec n) : (invSign a : R) = signOf (bitParity n a.toNat) := rfl
 
 /-- The reversion identity of the blade signs: `σ(a⊕b, a⊕b) + σ(a,b) ≡ σ(a,a) + σ(b,b) + σ(b,a)`. -/
@@ -93,10 +95,12 @@ theorem invSign_twist (k : BitVec n → BitVec n → R) (a b : BitVec n) :
     invSign (a ^^^ b) * k a b = invSign a * invSign b * k a b := by
   rw [invSign_eq, invSign_eq, invSign_eq, BitVec.toNat_xor, bitParity_xor, signOf_xor]
 
+/-- The geometric-product coefficients are reversed by the reversion sign. -/
 theorem coef_revSign (g : Fin n → R) (a b : BitVec n) :
     revSign (a ^^^ b) * coef g a b = revSign a * revSign b * coef g b a :=
   revSign_twist (m := fun a b => mf g (a &&& b)) (fun a b => by rw [BitVec.and_comm]) (coef_eq g) a b
 
+/-- The exterior-product coefficients are reversed by the reversion sign. -/
 theorem wcoef_revSign (a b : BitVec n) :
     revSign (a ^^^ b) * (wcoef a b : R) = revSign a * revSign b * wcoef b a :=
   revSign_twist (m := fun a b => if a &&& b = 0 then 1 else 0) (fun a b => by rw [BitVec.and_comm])
@@ -145,12 +149,15 @@ private theorem signOf_mul_self_mul (s : Bool) (r : R) : signOf s * (signOf s * 
   have := signOf_mul_self (R := R) s
   grind
 
+/-- Reversion is an involution. -/
 theorem reverse_reverse (x : Cl g) : reverse (reverse x) = x := by
   ext a; exact signOf_mul_self_mul _ _
 
+/-- The grade involution is an involution. -/
 theorem involute_involute (x : Cl g) : involute (involute x) = x := by
   ext a; exact signOf_mul_self_mul _ _
 
+/-- Reversion and the grade involution commute. -/
 theorem reverse_involute (x : Cl g) : reverse (involute x) = involute (reverse x) := by
   ext a
   show revSign a * (invSign a * x.coeff a) = invSign a * (revSign a * x.coeff a)
@@ -160,9 +167,11 @@ theorem reverse_involute (x : Cl g) : reverse (involute x) = involute (reverse x
 theorem clifford_mul (x y : Cl g) : clifford (x * y) = clifford y * clifford x := by
   rw [clifford, reverse_mul, involute_mul]; rfl
 
+/-- Clifford conjugation is an involution. -/
 theorem clifford_clifford (x : Cl g) : clifford (clifford x) = x := by
   rw [clifford, clifford, ← reverse_involute, involute_involute, reverse_reverse]
 
+/-- Reversion is additive. -/
 theorem reverse_add (x y : Cl g) : reverse (x + y) = reverse x + reverse y := by
   ext a; show revSign a * (x.coeff a + y.coeff a) = revSign a * x.coeff a + revSign a * y.coeff a
   grind

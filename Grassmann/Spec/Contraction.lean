@@ -161,11 +161,13 @@ private theorem signOf_mul_self_mul (s : Bool) (r : R) : signOf s * (signOf s * 
   have := signOf_mul_self (R := R) s
   grind
 
+/-- `!` undoes its inverse. -/
 theorem compl_complInv (x : Cl g) : compl (complInv x) = x := by
   ext c
   show signOf (sign (~~~c) c) * (signOf (sign (~~~c) (~~~(~~~c))) * x.coeff (~~~(~~~c))) = x.coeff c
   rw [BitVec.not_not]; exact signOf_mul_self_mul _ _
 
+/-- The inverse undoes `!`. -/
 theorem complInv_compl (x : Cl g) : complInv (compl x) = x := by
   ext c
   show signOf (sign c (~~~c)) * (signOf (sign (~~~(~~~c)) (~~~c)) * x.coeff (~~~(~~~c))) = x.coeff c
@@ -177,6 +179,7 @@ def vee (x y : Cl g) : Cl g := complInv (wedge (compl x) (compl y))
 /-- De Morgan: `!(x ∨ y) = !x ∧ !y`. -/
 theorem compl_vee (x y : Cl g) : compl (vee x y) = wedge (compl x) (compl y) := compl_complInv _
 
+/-- `ā ⊕ b̄ = a ⊕ b`. -/
 theorem not_xor_not (a b : BitVec n) : ~~~a ^^^ ~~~b = a ^^^ b := by
   rw [not_eq_xor_allOnes, not_eq_xor_allOnes]
   apply BitVec.eq_of_toNat_eq

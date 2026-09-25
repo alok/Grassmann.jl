@@ -53,9 +53,11 @@ theorem xor_eq_zero_iff (a c : BitVec n) : a ^^^ c = 0 ↔ a = c := by
     rwa [BitVec.xor_assoc, xor_self', xor_zero', zero_xor'] at this
   · rintro rfl; exact xor_self' a
 
+/-- `a ⊕ (a ⊕ x) = x`. -/
 theorem xor_xor_cancel_left (a x : BitVec n) : a ^^^ (a ^^^ x) = x := by
   rw [← BitVec.xor_assoc, BitVec.xor_self, BitVec.zero_xor]
 
+/-- `(x ⊕ a) ⊕ a = x`. -/
 theorem xor_xor_cancel_right (a x : BitVec n) : x ^^^ a ^^^ a = x := by
   rw [BitVec.xor_assoc, BitVec.xor_self, BitVec.xor_zero]
 

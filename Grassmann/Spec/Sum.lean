@@ -21,8 +21,10 @@ def bsum : (n : Nat) → (BitVec n → R) → R
   | 0, f => f 0#0
   | n + 1, f => bsum n (fun x => f (BitVec.cons false x)) + bsum n (fun x => f (BitVec.cons true x))
 
+/-- The sum over the single blade of a 0-dimensional space. -/
 @[simp] theorem bsum_zero_dim (f : BitVec 0 → R) : bsum 0 f = f 0#0 := rfl
 
+/-- A sum over `n+1` generators splits on the top bit. -/
 theorem bsum_succ (n : Nat) (f : BitVec (n + 1) → R) :
     bsum (n + 1) f = bsum n (fun x => f (BitVec.cons false x)) + bsum n (fun x => f (BitVec.cons true x)) :=
   rfl

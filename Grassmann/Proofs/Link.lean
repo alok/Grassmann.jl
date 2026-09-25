@@ -35,11 +35,13 @@ variable {n : Nat}
 `DirectSum.Bits`). -/
 def mask (a : BitVec n) : UInt64 := a.toNat.toUInt64
 
+/-- A blade's `UInt64` mask has the same bits. -/
 theorem toNat_mask (hn : n ≤ 64) (a : BitVec n) : (mask a).toNat = a.toNat := by
   unfold mask
   rw [Nat.toUInt64_eq, UInt64.toNat_ofNat', Nat.mod_eq_of_lt (Nat.lt_of_lt_of_le a.isLt
     (Nat.pow_le_pow_right (by decide) hn))]
 
+/-- Distinct blades have distinct masks. -/
 theorem mask_inj (hn : n ≤ 64) {a b : BitVec n} (h : mask a = mask b) : a = b := by
   apply BitVec.eq_of_toNat_eq
   rw [← toNat_mask hn a, ← toNat_mask hn b, h]

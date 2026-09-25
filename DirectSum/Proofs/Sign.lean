@@ -72,13 +72,17 @@ private theorem odd_toNat (c : Bool) : (c.toNat % 2 == 1) = c := by cases c <;> 
 
 @[simp] theorem bitCount_zero (a : Nat) : bitCount 0 a = 0 := rfl
 
+/-- The grade on `n+1` generators counts the top generator too. -/
 theorem bitCount_succ (n a : Nat) : bitCount (n + 1) a = bitCount n a + (a.testBit n).toNat := rfl
 
+/-- No generators, even grade. -/
 @[simp] theorem bitParity_zero (a : Nat) : bitParity 0 a = false := rfl
 
+/-- The grade parity on `n+1` generators flips with the top generator. -/
 theorem bitParity_succ (n a : Nat) : bitParity (n + 1) a = (bitParity n a ^^ a.testBit n) := by
   simp only [bitParity, bitCount_succ, odd_add, odd_toNat]
 
+/-- No generators, no inversions. -/
 @[simp] theorem sigma_zero (a b : Nat) : sigma 0 a b = false := rfl
 
 /-- `σ` on `n+1` generators: the new top generator of `a` jumps over the
@@ -96,10 +100,12 @@ theorem bitCount_congr {n a a' : Nat} (h : ∀ i < n, a.testBit i = a'.testBit i
   | succ n ih =>
     rw [bitCount_succ, bitCount_succ, ih (fun i hi => h i (by omega)), h n (by omega)]
 
+/-- The grade parity only reads the mask below the width. -/
 theorem bitParity_congr {n a a' : Nat} (h : ∀ i < n, a.testBit i = a'.testBit i) :
     bitParity n a = bitParity n a' := by
   simp only [bitParity, bitCount_congr h]
 
+/-- `σ` only reads the masks below the width. -/
 theorem sigma_congr {n a a' b b' : Nat} (ha : ∀ i < n, a.testBit i = a'.testBit i)
     (hb : ∀ i < n, b.testBit i = b'.testBit i) : sigma n a b = sigma n a' b' := by
   induction n with
@@ -120,6 +126,7 @@ theorem bitCount_of_lt {n m a : Nat} (hnm : n ≤ m) (ha : a < 2 ^ n) : bitCount
     · rw [bitCount_succ, ih (by omega), testBit_of_lt ha (by omega)]; rfl
     · rw [h]
 
+/-- Widening the space does not change the grade parity of a blade that fits. -/
 theorem bitParity_of_lt {n m a : Nat} (hnm : n ≤ m) (ha : a < 2 ^ n) :
     bitParity m a = bitParity n a := by
   simp only [bitParity, bitCount_of_lt hnm ha]
@@ -165,16 +172,19 @@ theorem sigma_xor_right (n a b b' : Nat) : sigma n a (b ^^^ b') = (sigma n a b ^
   | zero => rfl
   | succ n ih => rw [sigma_succ, sigma_succ, sigma_succ, ih, bitParity_xor, bxor_right]
 
+/-- The unit blade reorders nothing on the left: `σ(0, b) = 0`. -/
 @[simp] theorem sigma_zero_left (n b : Nat) : sigma n 0 b = false := by
   induction n with
   | zero => rfl
   | succ n ih => simp [sigma_succ, ih]
 
+/-- The empty blade has grade `0`. -/
 @[simp] theorem bitCount_zero_mask (n : Nat) : bitCount n 0 = 0 := by
   induction n with
   | zero => rfl
   | succ n ih => simp [bitCount_succ, ih]
 
+/-- The unit blade reorders nothing on the right: `σ(a, 0) = 0`. -/
 @[simp] theorem sigma_zero_right (n a : Nat) : sigma n a 0 = false := by
   induction n with
   | zero => rfl
@@ -212,6 +222,7 @@ theorem bitCount_and_le_left (n a b : Nat) : bitCount n (a &&& b) ≤ bitCount n
     rw [bitCount_succ, bitCount_succ, Nat.testBit_and]
     cases a.testBit n <;> cases b.testBit n <;> simp [Bool.toNat] <;> omega
 
+/-- The common part of two blades is symmetric. -/
 theorem bitCount_and_comm (n a b : Nat) : bitCount n (a &&& b) = bitCount n (b &&& a) := by
   rw [Nat.and_comm]
 
@@ -361,6 +372,7 @@ def xorSum (f : Nat → Bool) : Nat → Bool
   | 0 => false
   | n + 1 => xorSum f n ^^ f n
 
+/-- Xor-sums of summands that agree below `n` agree. -/
 theorem xorSum_congr {f f' : Nat → Bool} {n : Nat} (h : ∀ i < n, f i = f' i) :
     xorSum f n = xorSum f' n := by
   induction n with
@@ -378,11 +390,13 @@ theorem xorSum_and_lt (f : Nat → Bool) {m n : Nat} (h : m ≤ n) :
     · subst h'; simp only [xorSum]
       rw [xorSum_congr (f' := f) (fun i hi => by simp; omega)]; simp
 
+/-- The grade parity is the xor of the bits. -/
 theorem bitParity_eq_xorSum (n a : Nat) : bitParity n a = xorSum a.testBit n := by
   induction n with
   | zero => rfl
   | succ n ih => rw [bitParity_succ, ih]; rfl
 
+/-- `σ` as a xor-sum: `⨁_{i<n} aᵢ ∧ (parity of the bits of b below i)`. -/
 theorem sigma_eq_xorSum (n a b : Nat) :
     sigma n a b = xorSum (fun i => a.testBit i && bitParity i b) n := by
   induction n with

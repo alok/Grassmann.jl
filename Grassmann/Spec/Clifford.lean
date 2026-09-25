@@ -50,6 +50,7 @@ def coef (g : Fin n → R) (a b : BitVec n) : R := bladeCoef (extendMetric g) n 
 /-- The metric factor `Π_{i ∈ a} gᵢ` of a blade (`e_a ẽ_a = mf g a`). -/
 def mf (g : Fin n → R) (a : BitVec n) : R := metricFactor (extendMetric g) n a.toNat
 
+/-- The blade coefficient is the reordering sign times the metric factor of the shared generators. -/
 theorem coef_eq (g : Fin n → R) (a b : BitVec n) :
     coef g a b = signOf (sign a b) * mf g (a &&& b) := by
   simp [coef, bladeCoef, sign, mf, BitVec.toNat_and]
@@ -60,9 +61,11 @@ theorem coef_cocycle (g : Fin n → R) : IsCocycle (coef g) := by
   simp only [coef, BitVec.toNat_xor]
   exact bladeCoef_cocycle _ _ _ _ _
 
+/-- `e_∅` is a left unit on blades. -/
 theorem coef_zero_left (g : Fin n → R) (b : BitVec n) : coef g 0 b = 1 := by
   simp [coef, bladeCoef_zero_left]
 
+/-- `e_∅` is a right unit on blades. -/
 theorem coef_zero_right (g : Fin n → R) (a : BitVec n) : coef g a 0 = 1 := by
   simp [coef, bladeCoef_zero_right]
 
@@ -101,14 +104,22 @@ instance : One (Cl g) := ⟨blade 0⟩
 /-- **The geometric product**, as an explicit finite sum over blade pairs. -/
 instance : Mul (Cl g) := ⟨fun x y => ⟨twist (coef g) x.coeff y.coeff⟩⟩
 
+/-- Coefficients of `0`. -/
 @[simp] theorem coeff_zero (a : BitVec n) : (0 : Cl g).coeff a = 0 := rfl
+/-- Coefficients of a sum. -/
 @[simp] theorem coeff_add (x y : Cl g) (a : BitVec n) : (x + y).coeff a = x.coeff a + y.coeff a := rfl
+/-- Coefficients of a negation. -/
 @[simp] theorem coeff_neg (x : Cl g) (a : BitVec n) : (-x).coeff a = -x.coeff a := rfl
+/-- Coefficients of a difference. -/
 @[simp] theorem coeff_sub (x y : Cl g) (a : BitVec n) : (x - y).coeff a = x.coeff a - y.coeff a := rfl
+/-- Coefficients of a scalar multiple. -/
 @[simp] theorem coeff_smul (r : R) (x : Cl g) (a : BitVec n) : (r • x).coeff a = r * x.coeff a := rfl
+/-- Coefficients of a basis blade. -/
 @[simp] theorem coeff_blade (a c : BitVec n) : (blade a : Cl g).coeff c = if c = a then 1 else 0 := rfl
+/-- Coefficients of a scalar. -/
 @[simp] theorem coeff_scalar (r : R) (c : BitVec n) :
     (scalar r : Cl g).coeff c = if c = 0 then r else 0 := rfl
+/-- Coefficients of `1`. -/
 @[simp] theorem coeff_one (c : BitVec n) : (1 : Cl g).coeff c = if c = 0 then 1 else 0 := rfl
 
 /-- The coefficients of a geometric product. -/
@@ -214,6 +225,7 @@ theorem blade_mul_blade_coeff (a b : BitVec n) :
 private theorem toNat_twoPow {i : Nat} (hi : i < n) : (BitVec.twoPow n i).toNat = 2 ^ i := by
   rw [BitVec.toNat_twoPow, Nat.mod_eq_of_lt (Nat.pow_lt_pow_right (by decide) hi)]
 
+/-- A generator does not reorder against itself. -/
 theorem sign_gen_gen (i : Fin n) : sign (BitVec.twoPow n i) (BitVec.twoPow n i) = false := by
   rw [sign, toNat_twoPow i.2, sigma_self, bitCount_two_pow i.2]; rfl
 
