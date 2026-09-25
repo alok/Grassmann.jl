@@ -14,6 +14,7 @@ import Grassmann.Forms.Eval
 import Grassmann.Forms.Lie
 import Grassmann.Forms.Simplex
 import Grassmann.Forms.Fit
+import Grassmann.Forms.Literal
 import Grassmann.Fields
 import Grassmann.Calculus
 
@@ -55,7 +56,11 @@ Port of Grassmann.jl `src/forms.jl` (and the determinant/simplex part of
 * `Grassmann.Calculus` (imported here): `V(∇)` (`nabla`, `nablaM` with tangent spaces),
   `∂`/`boundary`, `d`/`differential`, `δ`/`codifferential`, `gradient`, `divergence`, `curl`
   and the simplex boundary `∧(ω)⋅v1`.
-* `Grassmann.Forms.MatFun`: `exp`, `expm1` (Grassmann's Padé), `log`.
+* `Grassmann.Forms.MatFun`: `exp`, `expm1` (Grassmann's Padé), `log`; of outermorphisms,
+  dyadics and projectors too.
+* `Grassmann.Forms.Literal`: the operator literals `op![…]`, `endo![…]`, `outer![…]`,
+  `spectral![…]` (Julia `@TensorOperator`, `@Endomorphism`, `@Outermorphism`,
+  `@SpectralOperator`), shape-checked at elaboration.
 * `Grassmann.Forms.Cayley`: `operator(t, G)`, `gradedoperator`, `metrictensor`,
   `metricextensor`, `antimetrictensor`, Cayley tables.
 * `Grassmann.Forms.Show`: Julia's 2-arg and 3-arg display, `printtex`, `alltex`.

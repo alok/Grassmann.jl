@@ -1,4 +1,5 @@
 import Tests.Forms.Common
+import Grassmann.Forms.Literal
 
 /-!
 # Static types and notation of the Forms layer (compile-time checks, and a few goldens)
@@ -51,6 +52,19 @@ example : Chain ℝ3 1 Float := Tf.characteristic
 example : Endomorphism ℝ3 (.chain 1) Int := T + AbstractTensors.UniformScaling.mk (1 : Int)
 example : Chain ℝ3 1 Int := T.pfaffian
 
+-- operator literals (Julia `@TensorOperator`, `@Endomorphism`, `@Outermorphism`,
+-- `@SpectralOperator`): the shape is in the type
+example : TensorOperator (En 3) (.chain 1) (En 2) (.chain 1) Int := op![[1, 2, 3], [4, 5, 6]]
+example : Endomorphism (En 2) (.chain 1) Float := endo![[1, 2], [3, 4]]
+example : Outermorphism (En 2) (En 2) Float := outer![[1, 2], [3, 4]]
+example : TensorOperator.EigenResult (En 2) := spectral![[2, 1], [1, 2]]
+
+/-- error: operator literal: row 2 has 1 entries, row 1 has 2 -/
+#guard_msgs in example : Endomorphism (En 2) (.chain 1) Int := endo![[1, 2], [3]]
+
+/-- error: endo![…]: a square literal is expected, got 1 × 2 -/
+#guard_msgs in example : Endomorphism (En 2) (.chain 1) Int := endo![[1, 2]]
+
 end StaticTypes
 
 /-- The worked examples of port-notes/grassmann-forms.md §6.2 through the notation. -/
@@ -69,6 +83,13 @@ def suite : IO Tally := do
   t := t.ok (toString (Endomorphism.pfaffian T) == "6v₁ - 3v₂ + 2v₃") fun _ => "pfaffian"
   let O := T.outermorphism
   t := t.ok (O.tr == 2 && O.det == -3) fun _ => "tr(O), det(O)"
+  -- literals: `op!` rows are Julia's rows; docs algebra.md:1053 `@TensorOperator([1 2; 3 4])\Chain(5,6)`
+  let L : Endomorphism (En 2) (.chain 1) Float := endo![[1, 2], [3, 4]]
+  let sol := L.solve (chainOf (En 2) 1 [5, 6])
+  t := t.ok ((getD sol.v 0 + 4).abs < 1e-12 && (getD sol.v 1 - 4.5).abs < 1e-12) fun _ => s!"[1 2; 3 4]\\(5,6) = {sol}"
+  t := t.ok ((op![[1, 2, 3], [4, 5, 6]] : TensorOperator (En 3) (.chain 1) (En 2) (.chain 1) Int).toRows ==
+    [[1, 2, 3], [4, 5, 6]]) fun _ => "op! rows"
+  t := t.ok ((outer![[1, 2], [3, 4]] : Outermorphism (En 2) (En 2) Int).det == -2) fun _ => "outer! det"
   t := t.ok (toString (O * (c [1, 1, 1] ∧ c [0, 1, 0]) : Chain ℝ3 2 Int) ==
     toString ((T * c [1, 1, 1] : Chain ℝ3 1 Int) ∧ (T * c [0, 1, 0] : Chain ℝ3 1 Int))) fun _ => "O(x∧y)"
   t := t.ok ((lieBracket [T, U]).toRows == [[4, -10, -2], [10, 0, 18], [6, -16, -4]]) fun _ => "𝓛[T,U]"
