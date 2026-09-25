@@ -142,7 +142,7 @@ instance {α : Type} [Coeff α] : Coeff (Complex α) where
 /-- `Float` with Julia's own bit-exact kernels where `JuliaBase` has them (`exp`, `expm1`,
 `log`, `log1p`, `^` from `JuliaBase.Math`, `cbrt` from `JuliaBase.F64.cbrt`) and the C
 `libm` for the trigonometric and hyperbolic functions (Julia ports openlibm for those;
-results agree to an ulp or two). -/
+results agree to an ulp or two). The `Float32` instance below follows the same rule. -/
 instance : Analytic Float where
   sqrt := Float.sqrt
   cbrt := F64.cbrt
@@ -168,7 +168,7 @@ instance : Analytic Float where
 
 instance : Analytic Float32 where
   sqrt := Float32.sqrt
-  cbrt := Float32.cbrt
+  cbrt := F32.cbrt
   exp := F32.exp
   expm1 := F32.expm1
   log := F32.log

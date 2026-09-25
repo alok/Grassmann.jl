@@ -21,7 +21,7 @@ verified bit for bit against the Julia 1.13 oracle (`Tests/JuliaBase/`).
 * `JuliaBase.Num`: `F64`/`F32`/`JInt` namespaces with Julia `rem`, `mod`, `div`, `fld`,
   `cld`, NaN-propagating `max`/`min` with `-0.0 < 0.0`, `isapprox` (default
   `rtol = √eps` when `atol = 0`), `round` (half to even), `sign`, `copysign`, `flipsign`,
-  `nextfloat`/`prevfloat`, `isless`/`isequal`, `hypot`, Julia's own `cbrt`,
+  `nextfloat`/`prevfloat`, `isless`/`isequal`, `hypot`, Julia's own `cbrt` (`Float64` and `Float32`),
   `Float64(::Rational)`, `exponent`/`ldexp`, the float constants (`Float64` and `Float32`),
   `isodd`, `power_by_squaring`, and the oracle comparator `F64.ulpDist`. This is the one
   home of Julia's scalar semantics: every other package builds on it rather than keeping

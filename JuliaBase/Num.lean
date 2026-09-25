@@ -436,6 +436,33 @@ def hypot (x y : Float32) : Float32 :=
     let y' := y.toFloat
     (Float.fma x' x' (y' * y')).sqrt.toFloat32
 
+/-- Julia `_approx_cbrt(x::Float32)` (special/cbrt.jl:61): the bit-level first guess
+`u ÷ 3 + ⌊adj·2^23⌋` with `adj = 127·2/3 - 0.03306235651` (`709958130`), rescaling subnormals
+by `maxintfloat(Float32) = 2^24` (`adj - 8`: `642849266`). Assumes `x` finite and nonzero. -/
+def approxCbrt (x : Float32) : Float32 :=
+  let u := x.toBits &&& 0x7FFFFFFF
+  if u ≥ 0x00800000 then copysign (Float32.ofBits (u / 3 + 709958130)) x
+  else
+    let x' := x * Float32.ofBits 0x4B800000
+    let u := x'.toBits &&& 0x7FFFFFFF
+    copysign (Float32.ofBits (u / 3 + 642849266)) x'
+
+/-- Julia `_improve_cbrt(x::Float32, t)` (special/cbrt.jl:79): two Newton steps
+`t ← t·(t³ + 2x)/(2t³ + x)` in `Float64`, rounded once. -/
+def improveCbrt (x t : Float32) : Float32 :=
+  let xx := x.toFloat
+  let tt := t.toFloat
+  let tt3 := tt * tt * tt
+  let tt := tt * ((2 * xx + tt3) / (xx + 2 * tt3))
+  let tt3 := tt * tt * tt
+  let tt := tt * ((2 * xx + tt3) / (xx + 2 * tt3))
+  tt.toFloat32
+
+/-- Julia `cbrt(x::Float32)` (special/cbrt.jl:142), Julia's own algorithm (not the platform
+libm that `Float32.cbrt` calls). -/
+def cbrt (x : Float32) : Float32 :=
+  if !x.isFinite || x == 0 then x else improveCbrt x (approxCbrt x)
+
 end F32
 
 /-! ## `Int` (Julia `Int64`, without overflow)

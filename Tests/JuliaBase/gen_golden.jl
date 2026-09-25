@@ -544,8 +544,13 @@ end
 function math_golden(dir)
     rng = Random.Xoshiro(20260925)
     open(joinpath(dir, "math.json"), "w") do io
+        cases = math_rows(rng, 6000)
+        # later additions draw from their own streams so `cases` stays reproducible
+        rng2 = Random.Xoshiro(20260926)
+        cbrt32 = [[hex(x), hex(cbrt(x))] for x in vcat(Float32[0, -0f0, Inf32, -Inf32, NaN32, 8, -27, 1f-45],
+                                                        [sample32(rng2) for _ in 1:2000])]
         JSON.print(io, Dict("meta" => Dict("julia" => string(VERSION), "seed" => 20260925),
-            "cases" => math_rows(rng, 6000), "float16" => f16all()))
+            "cases" => cases, "float16" => f16all(), "cbrt32" => cbrt32))
     end
 end
 

@@ -14,6 +14,7 @@ Julia's own numerics against the oracle (`Tests/JuliaBase/math.json`, written by
 * `parse`: `tryparse(Float64, s)` (`F64.parse?`);
 * `sum`/`sumgen`: `sum(::Vector{Float64})` (`F64.sum`) of explicit and generated vectors;
 * `colon32`: `collect(a:st:b)` for `Float32` endpoints (`colon32`);
+* `cbrt32`: Julia's own `cbrt(::Float32)` (`F32.cbrt`);
 * `f16` and `float16`: the correctly rounded `Float16(p//q)` (`Float16.ofRat`) and
   `string(::Float16)` of every nonnegative finite `Float16`;
 * `eps64`/`eps32`, `exponent64`/`exponent32`, `rat64`/`rat32`: `F64.epsOf`, `F32.epsOf`,
@@ -244,6 +245,14 @@ def golden : IO (Nat × Nat) := do
   for h : i in [0:strs.size] do
     let x : Float16 := ⟨i / 1024, i % 1024⟩
     t := t.check (toString x == jStr strs[i]) fun _ => s!"string(Float16 0x{i}): got {x}, want {jStr strs[i]}"
+  -- Julia's own `cbrt(::Float32)`
+  for row in jArr j "cbrt32" do
+    match jRow row with
+    | [hx, hr] =>
+      let got := F32.cbrt (f32 hx)
+      t := t.check (sameF32 got (f32 hr)) fun _ =>
+        s!"cbrt({F32.showString (f32 hx)}): got {F32.showString got}, want {F32.showString (f32 hr)}"
+    | r => t := t.check false fun _ => s!"malformed cbrt32 row {r}"
   t.report "math golden"
 
 /-- The TSV fuzz file `PREFIX_math.tsv`. -/
