@@ -62,7 +62,7 @@ The `UInt64` kernels of `DirectSum.Bits`, for **all** 64-bit masks:
 |---|---|---|
 | `parity_eq_bitParity` | `Bits.parity x` (six folding xors) is the popcount parity | proved |
 | `prefixParity_testBit` | bit `i` of `Bits.prefixParity b` (a Hillis-Steele prefix-xor scan) is the parity of the bits of `b` below `i` | proved |
-| `reorderParity_eq_sigma`, `reorderParity_eq_spec` | `Bits.reorderParity a b = reorderParitySpec 64 a b`; this replaces the 4-bit `decide` check `reorderParity_eq_spec_4` | proved |
+| `reorderParity_eq_sigma`, `reorderParity_eq_spec` | `Bits.reorderParity a b = reorderParitySpec 64 a b`; this generalizes the 4-bit `decide` check `Bits.reorderParity_eq_spec_4` | proved |
 | `reorderParity_cocycle`, `reorderParity_swap` | the implementation itself satisfies the cocycle and swap identities | proved |
 | `parityjoin_eq`, `signOf_parityjoin` | Julia's `parityjoin` (the signature-space product sign) is the spec blade coefficient | proved |
 
@@ -224,7 +224,8 @@ generated kernels) are exercised; they are not proved.
   algebraic laws. The regressive product is linked blade by blade, not yet
   lifted to all multivectors (the spec side is not a plain twisted product).
 * Tangent (`∂`), dyadic and `MetricTensor` spaces are outside the diagonal
-  model.
+  model (the exterior product excepted: it is metric-independent, and
+  `implWedge_eq_wedge_of_flat` covers `MetricTensor` spaces too).
 * Mathlib's `CliffordAlgebra` bridge (DESIGN.md §8.5) belongs in `bridge/`.
 
 ## Building and running
