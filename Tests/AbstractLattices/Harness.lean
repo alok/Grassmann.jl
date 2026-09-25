@@ -50,25 +50,25 @@ def readJson (path : System.FilePath) : IO Lean.Json := do
   | .error e => throw <| IO.userError s!"{path}: {e}"
 
 /-- Field access that throws a readable error. -/
-def field (j : Lean.Json) (k : String) : IO Lean.Json :=
+def jField (j : Lean.Json) (k : String) : TestM Lean.Json :=
   match j.getObjVal? k with
   | .ok v => return v
   | .error e => throw <| IO.userError s!"missing field {k}: {e}"
 
 /-- Array access that throws a readable error. -/
-def arr (j : Lean.Json) : IO (Array Lean.Json) :=
+def jArr (j : Lean.Json) : TestM (Array Lean.Json) :=
   match j.getArr? with
   | .ok v => return v
   | .error e => throw <| IO.userError e
 
 /-- String access that throws a readable error. -/
-def str (j : Lean.Json) : IO String :=
+def jStr (j : Lean.Json) : TestM String :=
   match j.getStr? with
   | .ok v => return v
   | .error e => throw <| IO.userError e
 
 /-- Natural-number access (JSON number or decimal string, for BigInts). -/
-def nat (j : Lean.Json) : IO Nat :=
+def jNat (j : Lean.Json) : TestM Nat :=
   match j.getNat? with
   | .ok v => return v
   | .error _ =>
@@ -78,20 +78,47 @@ def nat (j : Lean.Json) : IO Nat :=
       | none => throw <| IO.userError s!"not a natural: {s}"
     | .error e => throw <| IO.userError e
 
-/-- Integer access. -/
-def int (j : Lean.Json) : IO Int :=
+/-- Integer access (JSON number or decimal string). -/
+def jInt (j : Lean.Json) : TestM Int :=
   match j.getInt? with
   | .ok v => return v
-  | .error e => throw <| IO.userError e
+  | .error _ =>
+    match j.getStr? with
+    | .ok s => match s.toInt? with
+      | some n => return n
+      | none => throw <| IO.userError s!"not an integer: {s}"
+    | .error e => throw <| IO.userError e
 
-/-- Bool access. -/
-def bool (j : Lean.Json) : IO Bool :=
+/-- Bool access (also accepts 0/1). -/
+def jBool (j : Lean.Json) : TestM Bool :=
   match j.getBool? with
   | .ok v => return v
-  | .error e => throw <| IO.userError e
+  | .error e =>
+    match j.getNat? with
+    | .ok n => return n != 0
+    | .error _ => throw <| IO.userError e
 
 /-- Array of naturals. -/
-def nats (j : Lean.Json) : IO (Array Nat) := do
-  (← arr j).mapM nat
+def jNats (j : Lean.Json) : TestM (Array Nat) := do
+  (← jArr j).mapM jNat
+
+/-- Array of Bools. -/
+def jBools (j : Lean.Json) : TestM (Array Bool) := do
+  (← jArr j).mapM jBool
+
+/-- Array of strings. -/
+def jStrs (j : Lean.Json) : TestM (Array String) := do
+  (← jArr j).mapM jStr
+
+/-- `field` then `jNat`, etc.: shorthands for the common `c["k"]` pattern. -/
+def gNat (j : Lean.Json) (k : String) : TestM Nat := do jNat (← jField j k)
+/-- String field. -/
+def gStr (j : Lean.Json) (k : String) : TestM String := do jStr (← jField j k)
+/-- Bool field. -/
+def gBool (j : Lean.Json) (k : String) : TestM Bool := do jBool (← jField j k)
+/-- Array field. -/
+def gArr (j : Lean.Json) (k : String) : TestM (Array Lean.Json) := do jArr (← jField j k)
+/-- Array-of-naturals field. -/
+def gNats (j : Lean.Json) (k : String) : TestM (Array Nat) := do jNats (← jField j k)
 
 end Tests.Small
