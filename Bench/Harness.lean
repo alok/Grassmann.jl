@@ -7,7 +7,9 @@ A small benchmark DSL shared by every suite of `lake exe bench`, mirrored line f
 Julia harness `oracle/bench/harness.jl`, so that each Lean case key `suite/case` has a Julia
 twin measured by the same algorithm:
 
-1. **Warm-up.** The body runs once untimed (first-touch allocation, thunks, caches).
+1. **Warm-up.** The body runs once untimed (first-touch allocation, thunks, caches), then once
+   timed; that call's checksum is the reported `check` (skipped when the first call alone
+   exceeded the case cap).
 2. **Calibration.** The iteration count `k` grows ×4 until one timed batch of `k` body calls
    takes at least a tenth of the per-sample target; `k` is then scaled so that one batch takes
    about `sampleNs` (default 20 ms).
