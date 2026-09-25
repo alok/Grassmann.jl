@@ -250,7 +250,7 @@ scratch build was possible. Fatou is the only package here with measured Lean-vs
 | UnicodePlotsExt `orbit` (text backend) | – | MISSING | braille cobweb text plot; UnicodePlots is not in the oracle environment (and cannot be added), so there is nothing to test a port against; `Define.realOrbit` gives the data | M |
 | ImageInTerminalExt `show(io, K; c, bare)` | – | MISSING | output depends on the terminal (sixel vs 24-bit half blocks, resized to the window); `FilledSet.colorScheme`/`Raster` give the image | S |
 | MakieExt (dead code) | – | SKIP | not a module; commented out in Project.toml | – |
-| GrassmannExt `orbit` over `Couple{V,B}` (broken in Julia) | `Fatou.Couple.mul/sq/abs2` (B² = ±1, 0) (`Fatou/Couple.lean`) | PARTIAL | intended semantics only, with no oracle (Julia is broken); there is no `B` option and no bridge to the Lean `Grassmann` Couple type | S |
+| GrassmannExt `orbit` over `Couple{V,B}` (broken in Julia) | `(B := "1" / "0" / "im")` on `juliafill!`/`mandelbrot!` (the map compiled over `Couple` numbers, `Q` = Grassmann's `abs2`), `Fatou.Couple.mul/div/rdiv/pow/inv/abs2` (`B² = ±1, 0`) (`Fatou/Couple.lean`) | DONE | intended semantics (Julia's extension is broken, so no oracle): the hyperbolic set's histogram (Julia `t8.jl` with the intended return), `B² = -1` equal to the complex set, quotient/power laws | – |
 | `basin(K, j)` | `Define.basinOf j` (CAS `recomp` + rlfi LaTeX), `basin newt j body` | PARTIAL | `basin(K, 1)` equals Julia's for the 31 expressions whose body REDUCE leaves expanded; the others differ in the same `off exp` arrangement as `newton` | M |
 | internals `newton_raphson`, `recomp`, `nL`, `jL`, `rdpm`, `nrset`, `jset` | `CAS.newtonRaphson`, `recomp`, `latexOf`, `latexFactor`, `latexAllfac` (`Fatou/CAS.lean`), `Define.basinOf` | DONE | titles: 42 of 43 `latex(E)` exact (the other is a Reduce.jl complex-constant conversion defect) | – |
 | `z^p` for complex/real non-integer `p` in maps (wiki nf16 `z^(4.0+3.0im)`) | `HPow C64 C64`, `HPow C64 Float` (Julia's `_cpow`), literal integer powers kept | DONE | – | – |
@@ -307,8 +307,8 @@ Computed from the status column of the tables above (one row per symbol or symbo
 
 | status | rows |
 |---|---|
-| DONE | 169 |
-| PARTIAL | 6 |
+| DONE | 170 |
+| PARTIAL | 5 |
 | MISSING | 3 |
 | IN_PROGRESS | 2 |
 | SKIP | 14 |

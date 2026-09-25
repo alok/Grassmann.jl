@@ -227,6 +227,35 @@ def runCouple : TestM Unit := do
   check "Couple with B² = -1 is the complex plane" (cx.iter == plain.iter &&
     (cx.zre.toList.zip plain.zre.toList).all (fun (a, b) => sameF a b) &&
     (cx.zim.toList.zip plain.zim.toList).all (fun (a, b) => sameF a b))
+  -- the `B` option of the symbolic front-end: the map compiled over `Couple` numbers
+  let splitB := fatou (mandelbrot! "z^2 + c" (B := "1") { n := 40, N := 20 })
+  check "mandelbrot! (B := \"1\") is the hyperbolic set" (splitB.iter == split.iter &&
+    (splitB.zre.toList.zip split.zre.toList).all (fun (a, b) => sameF a b))
+  let cxB := fatou (mandelbrot! "z^2 + c" (B := "im") { n := 40, N := 20 })
+  check "mandelbrot! (B := \"im\") is the complex set" (cxB.iter == plain.iter)
+  let dual := fatou (mandelbrot (fun z c => Couple.sq 0 z + c) { n := 40, N := 20 }
+    (Q := fun z _ => Couple.abs2 0 z))
+  let dualB := fatou (mandelbrot! "z^2 + c" (B := "0") { n := 40, N := 20 })
+  check "mandelbrot! (B := \"0\") is the dual-number set" (dualB.iter == dual.iter)
+  -- quotients and powers in the `Couple` product: z ↦ z³ + 1/(z² + c) - 0.5z
+  let rat := fatou (juliafill! "z^3 + 1/(z^2 + c) - 0.5z" (B := "1") { n := 30, N := 12 })
+  let ratHand := fatou (juliafill (fun z c => Couple.pow 1 z 3 + Couple.rdiv 1 1 (Couple.pow 1 z 2 + c) -
+      (0.5 : Float) * z) { n := 30, N := 12 } (Q := fun z _ => Couple.abs2 1 z))
+  check "juliafill! over B² = 1 with quotients and powers" (rat.iter == ratHand.iter)
+  -- the `Couple` product: inverse and power laws
+  let pts : List C64 := [⟨0.3, 0.1⟩, ⟨-1.2, 0.7⟩, ⟨2, -0.5⟩, ⟨0.25, 0.125⟩]
+  for s in [(-1 : Int), 0, 1] do
+    check s!"z · z⁻¹ = 1 (B² = {s})" (pts.all fun z =>
+      let w := Couple.mul s z (Couple.inv s z); (w.re - 1).abs < 1e-12 && w.im.abs < 1e-12)
+    check s!"z⁵ = z·z·z·z·z (B² = {s})" (pts.all fun z =>
+      let a := Couple.pow s z 5
+      let b := Couple.mul s (Couple.mul s (Couple.mul s (Couple.mul s z z) z) z) z
+      (a.re - b.re).abs ≤ 1e-12 * (1 + b.re.abs) && (a.im - b.im).abs ≤ 1e-12 * (1 + b.im.abs))
+    check s!"z⁻² = (z⁻¹)² (B² = {s})" (pts.all fun z =>
+      let a := Couple.pow s z (-2)
+      let i := Couple.inv s z
+      let b := Couple.mul s i i
+      sameF a.re b.re && sameF a.im b.im)
 
 /-- `(misclassified, converged)`: converged pixels whose basin index is not the root in the
 angular sector of their final iterate. -/

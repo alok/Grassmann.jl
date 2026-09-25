@@ -1,5 +1,6 @@
 import Fatou.Kernel
 import Fatou.CAS
+import Fatou.Couple
 
 /-!
 # The symbolic front-end: maps from Julia expressions
@@ -166,6 +167,9 @@ inductive Fn where
   | powLit (n : Int) | powInt (n : Int) | powCC
   | exp | sin | cos | tan | sinh | cosh | log | sqrt
   | abs | abs2 | angle | real | imag
+  /-- `Couple` product, quotient, real-over-couple quotient, literal power and `abs2` for a
+  basis blade with `B² = s` (Fatou's Grassmann `B` option). -/
+  | cmul (s : Int) | cdiv (s : Int) | crdiv (s : Int) | cpow (s : Int) (n : Int) | cabs2 (s : Int)
   deriving Inhabited, BEq
 
 /-- A lowered map: the variables `z`, `c` (both `ComplexF64`), folded constants, and
@@ -185,7 +189,8 @@ inductive Low where
 
 /-- Is the result of a dynamic node complex (otherwise real)? -/
 def Fn.complex : Fn → Bool
-  | .addRR | .subRR | .mulRR | .divRR | .negR | .abs | .abs2 | .angle | .real | .imag => false
+  | .addRR | .subRR | .mulRR | .divRR | .negR | .abs | .abs2 | .angle | .real | .imag
+  | .cabs2 _ => false
   | _ => true
 
 /-- A lowered subexpression: a folded constant, or a dynamic node with its type. -/
@@ -370,6 +375,29 @@ partial def Low.eval (z c : C64) : Low → C64 ⊕ Float
     | .sqrt => .inl (C64.sqrt (C 0))
     | .abs => .inr (C64.abs (C 0)) | .abs2 => .inr (C64.abs2 (C 0))
     | .angle => .inr (C64.angle (C 0)) | .real => .inr (C 0).re | .imag => .inr (C 0).im
+    | .cmul s => .inl (Couple.mul s (C 0) (C 1)) | .cdiv s => .inl (Couple.div s (C 0) (C 1))
+    | .crdiv s => .inl (Couple.rdiv s (R 0) (C 1)) | .cpow s n => .inl (Couple.pow s (C 0) n)
+    | .cabs2 s => .inr (Couple.abs2 s (C 0))
+
+/-- The map evaluated over `Couple{V,B}` numbers `a + b·B` with `B² = s` instead of `ℂ`
+(Fatou's Grassmann extension, `ext/GrassmannExt.jl`): products, quotients, integer powers and
+`abs2` become the `Couple` operations; sums and real scalings are unchanged. `im`, complex
+constants and the transcendental functions have no `Couple` counterpart here. -/
+partial def Low.couple (s : Int) : Low → Except String Low
+  | .cconst a b => if b == 0 then .ok (.cconst a b) else .error "a complex constant with B"
+  | .op f args => do
+    let args ← args.mapM (Low.couple s)
+    match f with
+    | .mulCC => return .op (.cmul s) args
+    | .divCC => return .op (.cdiv s) args
+    | .divRC => return .op (.crdiv s) args
+    | .powLit n | .powInt n => return .op (.cpow s n) args
+    | .abs2 => return .op (.cabs2 s) args
+    | .mulIC | .mulCI => throw "im with B"
+    | .powCC | .exp | .sin | .cos | .tan | .sinh | .cosh | .log | .sqrt | .abs | .angle =>
+      throw "a transcendental function with B"
+    | f => return .op f args
+  | l => .ok l
 
 /-- `-v` of a constant (Julia's unary minus keeps the type). -/
 def negConst : JVal → JVal
@@ -654,6 +682,8 @@ def Fn.const : Fn → Name
   | .sinh => ``C64.sinh | .cosh => ``C64.cosh | .log => ``C64.log | .sqrt => ``C64.sqrt
   | .abs => ``C64.abs | .abs2 => ``C64.abs2 | .angle => ``C64.angle
   | .real => ``JuliaBase.Complex.re | .imag => ``JuliaBase.Complex.im
+  | .cmul _ => ``Fatou.Couple.mul | .cdiv _ => ``Fatou.Couple.div | .crdiv _ => ``Fatou.Couple.rdiv
+  | .cpow _ _ => ``Fatou.Couple.pow | .cabs2 _ => ``Fatou.Couple.abs2
 
 /-- The Lean term of a lowered map, in the free variables `z`, `c`. -/
 partial def Low.toExpr (z c : Expr) : Low → TermElabM Expr
@@ -665,11 +695,14 @@ partial def Low.toExpr (z c : Expr) : Low → TermElabM Expr
     let as ← args.mapM (Low.toExpr z c)
     match f with
     | .powLit n | .powInt n => return mkApp2 (Lean.mkConst f.const) as[0]! (intExpr n)
+    | .cpow s n => return mkApp3 (Lean.mkConst f.const) (intExpr s) as[0]! (intExpr n)
+    | .cmul s | .cdiv s | .crdiv s | .cabs2 s => return mkAppN (Lean.mkConst f.const) (#[intExpr s] ++ as.toArray)
     | .real | .imag => return mkApp2 (Lean.mkConst f.const [Level.zero]) (Lean.mkConst ``Float) as[0]!
     | _ => return mkAppN (Lean.mkConst f.const) as.toArray
 
-/-- The lambda `fun (z c : C64) => E` of a Julia expression, as a term. -/
-def mapExpr (E : JExpr) : TermElabM Expr := do
+/-- The lambda `fun (z c : C64) => E` of a Julia expression, as a term; over `Couple` numbers
+with `B² = s` when `B = some s`. -/
+def mapExpr (E : JExpr) (B : Option Int := none) : TermElabM Expr := do
   let n ← match lower E with
     | .ok n => pure n
     | .error e => throwError "cannot compile {E.toJulia}: {e}"
@@ -679,6 +712,11 @@ def mapExpr (E : JExpr) : TermElabM Expr := do
       | .const v => let w := v.toC64; pure (Low.cconst w.re w.im)
       | .cx l => pure l
       | .re l => pure (Low.op .addRC [l, .cconst 0 0])
+    let body ← match B with
+      | none => pure body
+      | some s => match body.couple s with
+        | .ok b => pure b
+        | .error e => throwError "cannot compile {E.toJulia} over B² = {s}: {e}"
     mkLambdaFVars #[z, c] (← Low.toExpr z c body)
 
 /-- A `Number` literal term. -/
@@ -690,8 +728,8 @@ def numberExpr : Number → TermElabM Expr
 
 /-- The `Symbolic` term for source `src`, Newton mode, multiplicity text `m` and an optional
 REDUCE map text, all derived at elaboration time. -/
-def symbolicExpr (src : String) (newt : Bool) (m : Option String) (map : Option String) :
-    TermElabM Expr := do
+def symbolicExpr (src : String) (newt : Bool) (m : Option String) (map : Option String)
+    (B : Option Int := none) : TermElabM Expr := do
   let E ← match JExpr.parse src with
     | .ok e => pure e
     | .error e => throwError "cannot parse {src}: {e}"
@@ -708,8 +746,8 @@ def symbolicExpr (src : String) (newt : Bool) (m : Option String) (map : Option 
       | .ok e => pure e
       | .error e => throwError "cannot parse {s}: {e}"
     | none => pure Fe
-  let f ← mapExpr E
-  let F ← mapExpr Fe
+  let f ← mapExpr E B
+  let F ← mapExpr Fe B
   return mkAppN (Lean.mkConst ``Symbolic.mk)
     #[toExpr E.toJulia, f, F, toExpr Fe.toJulia, toExpr newt, ← numberExpr mv, toExpr latex]
 
@@ -745,23 +783,43 @@ def checkKeys (s : Syntax) (allowed : List String) : TermElabM Unit := do
     unless allowed.contains key do throwErrorAt flat[5 * k + 1]! "unknown option {key}"
 
 
+/-- The `(B := "…")` option: `B² = s` for Julia's basis blades (`"1"`/`"+1"` split-complex
+`Λ(S"+-").v12`, `"0"` dual, `"-1"`/`"im"` the complex plane, Julia's default `B = im`). -/
+def blade? (s : Syntax) : TermElabM (Option Int) := do
+  match groupStr? s "B" with
+  | none => return none
+  | some "im" | some "-1" => return some (-1)
+  | some "1" | some "+1" => return some 1
+  | some "0" => return some 0
+  | some b => throwError "B := {b}: expected \"1\", \"0\", \"-1\" or \"im\" (B² = 1, 0, -1)"
+
 /-- The options argument, or `{}`. -/
 def optsTerm (s : Syntax) : TermElabM Term := do
   match s.getOptional? with
   | some t => return ⟨t⟩
   | none => `(({} : Fatou.Options))
 
+/-- The escape functional for a `B` option: Grassmann's `abs2` of the `Couple`. -/
+def blade.Q (B : Option Int) : TermElabM Term :=
+  match B with
+  | none => `(Fatou.abs2Q)
+  | some s => do
+    let sL := Lean.Syntax.mkNumLit (toString s.natAbs)
+    if s < 0 then `(fun z _ => Fatou.Couple.abs2 (-$sL) z) else `(fun z _ => Fatou.Couple.abs2 $sL z)
+
 @[term_elab juliafillBang] def elabJuliafill : TermElab := fun stx ty => do
-  checkKeys stx[2] ["m"]
+  checkKeys stx[2] ["m", "B"]
   let m := groupStr? stx[2] "m"
-  let S ← exprToSyntax (← symbolicExpr stx[1].isStrLit?.get! m.isSome m none)
-  elabTerm (← `(Fatou.Symbolic.juliafill $S $(← optsTerm stx[3]))) ty
+  let B ← blade? stx[2]
+  let S ← exprToSyntax (← symbolicExpr stx[1].isStrLit?.get! m.isSome m none B)
+  elabTerm (← `(Fatou.Symbolic.juliafill $S $(← optsTerm stx[3]) (Q := $(← blade.Q B)))) ty
 
 @[term_elab mandelbrotBang] def elabMandelbrot : TermElab := fun stx ty => do
-  checkKeys stx[2] ["m"]
+  checkKeys stx[2] ["m", "B"]
   let m := groupStr? stx[2] "m"
-  let S ← exprToSyntax (← symbolicExpr stx[1].isStrLit?.get! m.isSome m none)
-  elabTerm (← `(Fatou.Symbolic.mandelbrot $S $(← optsTerm stx[3]))) ty
+  let B ← blade? stx[2]
+  let S ← exprToSyntax (← symbolicExpr stx[1].isStrLit?.get! m.isSome m none B)
+  elabTerm (← `(Fatou.Symbolic.mandelbrot $S $(← optsTerm stx[3]) (Q := $(← blade.Q B)))) ty
 
 @[term_elab newtonBang] def elabNewton : TermElab := fun stx ty => do
   checkKeys stx[2] ["m", "map"]
