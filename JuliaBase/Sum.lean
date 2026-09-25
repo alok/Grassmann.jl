@@ -1,3 +1,5 @@
+import JuliaBase.FloatLit
+
 /-!
 # Julia `sum(::Vector{Float64})`, bit for bit
 
@@ -26,7 +28,7 @@ def sumBlock (a : FloatArray) (i0 i1 : Nat) : Float :=
   let r0 := i0 + 2
   let m := i1 + 1 - r0
   let nvec := m / 8 * 8
-  let s := if nvec == 0 then v else vec 0 v (-0.0) (-0.0) (-0.0) (-0.0) (-0.0) (-0.0) (-0.0) (nvec / 8)
+  let s := if nvec == 0 then v else vec 0 v (-f64! 0.0) (-f64! 0.0) (-f64! 0.0) (-f64! 0.0) (-f64! 0.0) (-f64! 0.0) (-f64! 0.0) (nvec / 8)
   tail (r0 + nvec) s (m - nvec)
 where
   /-- The vector loop over groups of 8. -/
@@ -50,7 +52,7 @@ where
 each block summed by `sumBlock`. -/
 def sum (a : FloatArray) : Float :=
   let n := a.size
-  if n == 0 then 0.0
+  if n == 0 then f64! 0.0
   else if n == 1 then a[0]!
   else if n < 16 then seq 2 (a[0]! + a[1]!) (n - 2)
   else impl 0 (n - 1) n

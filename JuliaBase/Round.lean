@@ -19,20 +19,20 @@ An overflowing result falls back to `x` (`invstep`) or to a signed zero (`step`)
 Julia. -/
 def roundDigitsFinite (x : Float) (d : Int) : Float :=
   if d ≥ 0 then
-    let invstep := powInt 10.0 d
+    let invstep := powInt (f64! 10.0) d
     if invstep.isFinite then
       let y := round (x * invstep) / invstep
       if y.isFinite then y else x
     else
-      let invstepsqrt := pow 10.0 (Float.ofInt d / 2)
+      let invstepsqrt := pow (f64! 10.0) (Float.ofInt d / f64! 2.0)
       let y := round ((x * invstepsqrt) * invstepsqrt) / invstepsqrt / invstepsqrt
       if y.isFinite then y else x
   else
-    let step := powInt 10.0 (-d)
+    let step := powInt (f64! 10.0) (-d)
     let y := round (x / step) * step
     if y.isFinite then y
-    else if x > 0 then 0.0
-    else if x < 0 then -0.0
+    else if x > 0 then f64! 0.0
+    else if x < 0 then -f64! 0.0
     else x
 
 /-- Julia `round(x::Float64, digits = d)` (floatfuncs.jl:48): `x` itself if it is not
@@ -44,7 +44,7 @@ def roundDigits (x : Float) (d : Int) : Float :=
 (floatfuncs.jl:129), the decimal exponent of the leading digit plus one, with Julia's own
 `log10`; `0` for `x = 0` (and, where Julia throws, for `±Inf` and `NaN`). -/
 def hidigit (x : Float) : Int :=
-  if x == 0.0 || !x.isFinite then 0
+  if x == f64! 0.0 || !x.isFinite then 0
   else 1 + toIntTrunc (log10 x.abs).floor
 
 /-- Julia `round(x::Float64, sigdigits = n)` (floatfuncs.jl:141): round to `n - hidigit(x)`

@@ -1,5 +1,6 @@
 import JuliaBase.Num
 import JuliaBase.Ryu
+import JuliaBase.FloatLit
 
 /-
 Julia's float printing: `Ryu.writeshortest` (Julia `share/julia/base/ryu/shortest.jl:262-461`)
@@ -95,7 +96,7 @@ def layout (x : Float) (neg isF32 : Bool) (d : Decimal) (o : ShortestOpts) : Str
   let expForm :=
     !(-4 < pt && pt ≤ maxpt &&
       !(pt ≥ olength &&
-        (F64.mod (x + 0.05) (pow10Wrapped (pt - olength).toNat) - 0.05).abs > 0.05))
+        (F64.mod (x + f64! 0.05) (pow10Wrapped (pt - olength).toNat) - f64! 0.05).abs > f64! 0.05))
   let mut precision := o.precision
   if !expForm then
     if pt ≤ 0 then
