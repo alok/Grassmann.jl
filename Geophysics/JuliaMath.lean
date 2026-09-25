@@ -1,4 +1,5 @@
 import FieldConstants
+import JuliaBase.MathTables
 import Geophysics.Lit
 
 /-!
@@ -33,6 +34,9 @@ uses the functions here. Arguments outside a function's domain (Julia throws a
 -/
 
 namespace Geophysics.JMath
+
+/-- Two's-complement bits of an integer, modulo `2^64` (Julia's wrapping `Int64` shifts). -/
+@[inline] def u64OfInt (i : Int) : UInt64 := (i.emod (2 ^ 64)).toNat.toUInt64
 
 /-- Julia `muladd` as compiled on aarch64: a fused multiply-add. -/
 @[inline] def ma (x y z : Float) : Float := Float.fma x y z
@@ -84,7 +88,7 @@ def magic : Float := (f64% 6.755399441055744e15)
 
 /-- Julia `table_unpack(N)`: `2^(j/256)` as a high/low pair, `j = N & 255`. -/
 @[inline] def tableUnpack (n : Int64) : Float × Float :=
-  let j : UInt64 := FieldConstants.Julia.jTable[(n.toUInt64 &&& 255).toNat]!
+  let j : UInt64 := JuliaBase.Math.jTable[(n.toUInt64 &&& 255).toNat]!
   (Float.ofBits ((0x3FF0000000000000 : UInt64) ||| (j &&& 0x000FFFFFFFFFFFFF)),
    Float.ofBits ((0x3C00000000000000 : UInt64) ||| (j >>> 8)))
 
@@ -138,7 +142,7 @@ def exp2Part (x xlo : Float) : Float :=
 /-- Julia `log_proc1(y, mf, F, f)` for base `e` (`log.jl:155-183`). -/
 def logProc1 (y mf bigF f : Float) : Float :=
   let jp := ((f64% 128.0) * bigF).toUInt64.toNat - 127
-  let (hb, lb) := FieldConstants.Julia.logTable64[jp - 1]!
+  let (hb, lb) := JuliaBase.Math.logTable64[jp - 1]!
   let hi := Float.ofBits hb
   let lo := Float.ofBits lb
   let lHi := mf * (f64% 0.6931471805601177) + hi
@@ -209,8 +213,8 @@ def log1p (x : Float) : Float :=
   let z := Float.ofBits (xu - (tmpU &&& 0xfff0000000000000))
   let k := (tmp >>> 52).toFloat
   let idx := ((tmpU >>> 45) &&& 127).toNat
-  let t := FieldConstants.Julia.logTableT[idx]!
-  let logctail := Float.ofBits FieldConstants.Julia.logTableTail[idx]!
+  let t := JuliaBase.Math.logTableT[idx]!
+  let logctail := Float.ofBits JuliaBase.Math.logTableTail[idx]!
   let invc := Float.ofBits (((t &&& 0xff) ||| 0x1ff00) <<< 45)
   let logc := Float.ofBits (t &&& (~~~ (0xff : UInt64)))
   let r := Float.fma z invc (-(f64% 1.0))
@@ -375,14 +379,14 @@ def fromFraction (neg : Bool) (x : Nat) : Float × Float :=
     let s : UInt64 := if neg then 0x8000000000000000 else 0
     let n1 : Int := topSetBit x
     let m1 : UInt64 := (((shr x (n1 - 26)) % 2 ^ 64).toUInt64 : UInt64) <<< (27 : UInt64)
-    let d1 : UInt64 := (FieldConstants.Julia.u64OfInt (n1 - 128 + 1021)) <<< 52
+    let d1 : UInt64 := (u64OfInt (n1 - 128 + 1021)) <<< 52
     let z1 := Float.ofBits (s ||| (d1 + m1))
     let x2 := (x - (shr m1.toNat (53 - n1) % 2 ^ 128)) % 2 ^ 128
     if x2 == 0 then (z1, (f64% 0.0))
     else
       let n2 : Int := topSetBit x2
       let m2 : UInt64 := ((shr x2 (n2 - 53)) % 2 ^ 64).toUInt64
-      let d2 : UInt64 := (FieldConstants.Julia.u64OfInt (n2 - 128 + 1021)) <<< 52
+      let d2 : UInt64 := (u64OfInt (n2 - 128 + 1021)) <<< 52
       (z1, Float.ofBits (s ||| (d2 + m2)))
 
 /-- Julia `paynehanek(x)`: reduction of a huge argument modulo `π/2`

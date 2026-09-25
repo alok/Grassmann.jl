@@ -21,7 +21,10 @@ def suites : List Suite := [
   ⟨"Similitude", Tests.Similitude.run⟩,
   ⟨"MeasureSystems", Tests.MeasureSystems.run⟩,
   ⟨"MeshTopology", Tests.MeshTopology.run⟩,
-  ⟨"Fatou", Tests.Fatou.run⟩
+  ⟨"Fatou", Tests.Fatou.run⟩,
+  ⟨"Geophysics", Tests.Geophysics.run⟩,
+  ⟨"Grassmann", Tests.Grassmann.run⟩,
+  ⟨"Golden", Tests.Golden.run⟩
 ]
 
 /-- Test driver: `lake test` runs everything; `lake exe tests A B` runs the named suites. -/

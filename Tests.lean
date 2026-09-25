@@ -14,3 +14,6 @@ import Tests.Similitude
 import Tests.MeasureSystems
 import Tests.MeshTopology
 import Tests.Fatou
+import Tests.Grassmann
+import Tests.Golden
+import Tests.Geophysics
