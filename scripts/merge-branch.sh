@@ -3,8 +3,12 @@
 # - union-resolves conflicts in append-only docs (docs/PERF.md), stops on any other conflict
 # - re-stages every path the branch touched right before committing (jj's watchman trigger can
 #   reset the git index mid-merge), then verifies every file the branch added exists in HEAD.
+# - refuses to run unless the checkout is on `master` (MERGE_INTO overrides): a scheduled job once
+#   switched this checkout to its own branch and a day of merges landed there.
 set -euo pipefail
 b="$1"; msg="${2:-merge: $1}"
+want="${MERGE_INTO:-master}"; cur=$(git branch --show-current)
+if [ "$cur" != "$want" ]; then echo "refusing: checkout is on '$cur', not '$want'"; exit 4; fi
 base=$(git merge-base HEAD "$b")
 if ! out=$(git merge --no-ff --no-commit "$b" 2>&1); then
   if [ -z "$(git diff --name-only --diff-filter=U)" ]; then echo "merge failed: $out"; exit 3; fi
