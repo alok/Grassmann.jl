@@ -132,5 +132,14 @@ def fuzz (path : System.FilePath) : IO (Nat × Nat) := do
 #guard JInt.fld (-7) 2 == -4 && JInt.div (-7) 2 == -3 && JInt.mod 7 (-2) == -1 && JInt.cld 7 2 == 4
 #guard F64.hypot 3.0 4.0 == 5.0 && F64.hypot F64.nan F64.inf == F64.inf
 #guard F64.cbrt 27.0 == 3.0 && F64.cbrt (-8.0) == -2.0
+#guard F64.isless (-0.0) 0.0 && !F64.isless 0.0 (-0.0) && F64.isless F64.inf F64.nan
+#guard F64.ulpDist 1.0 (F64.nextfloat 1.0) == 1 && F64.ulpDist (-0.0) 0.0 == 1
+#guard F64.ulpDist F64.nan F64.nan == 0 && F64.ulpDist (F64.prevfloat 0.0) 5e-324 == 3
+#guard F64.ofRat ((1 : Rat) / 3) == 1.0 / 3.0 && F64.ofRat (-7) == -7.0
+#guard F64.exponent 1.0 == 0 && F64.exponent (-12.0) == 3 && F64.exponent 5e-324 == -1074
+#guard F64.ldexp 1.0 (-1074) == 5e-324 && F64.ldexp 3.0 4 == 48.0
+#guard F64.expm1 0.0 == 0.0 && F64.expm1 (-F64.inf) == -1.0 && F64.log1p (-1.0) == -F64.inf
+#guard JInt.isodd (-3) && !JInt.isodd 4
+#guard powBySquaring (· * ·) 1 (3 : Nat) 13 == 1594323 && powBySquaring (· * ·) 1 (2 : Nat) 0 == 1
 
 end Tests.JuliaBase.Num
