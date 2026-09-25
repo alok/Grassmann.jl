@@ -235,11 +235,28 @@ open Forms
 /-- The `g`-th compound `Λᵍ T` (Julia `compound(T, g)`, `composite.jl:715-720`,
 `forms.jl:586`): column `I` is the wedge of the columns indexed by the
 `g`-subset `I`, i.e. `(Λᵍ T)[J, I] = det T[J, I]`. `Λ⁰ T` is the `1×1` identity. -/
-@[specialize] def compound (T : Simplex V W α) (g : Nat) : TensorOperator V (.chain g) W (.chain g) α :=
+@[specialize] def compoundGeneric (T : Simplex V W α) (g : Nat) : TensorOperator V (.chain g) W (.chain g) α :=
   let cs := T.cols1.toArray
   ⟨Mat.ofCols fun j =>
     let I := DirectSum.Bits.indices (Leibniz.indexBasis V.n g)[j.1]!
     castLen (wedgeList (I.toList.map fun i => cs[i - 1]!))⟩
+
+/-- Julia `compound(T, g)`: the generated straight-line forms for square operators of
+`3 ≤ n ≤ 6` (`Grassmann.Forms.Unrolled`, bit-identical to `compoundGeneric`). -/
+@[specialize] def compound (T : Simplex V W α) (g : Nat) : TensorOperator V (.chain g) W (.chain g) α :=
+  let a := T.mat.v.data
+  let gen : Option (Packed.Arr α) :=
+    if V.n = W.n && 1 ≤ g && g ≤ V.n then
+      match V.n with
+      | 3 => some (Unrolled.compound3 g a)
+      | 4 => some (Unrolled.compound4 g a)
+      | 5 => some (Unrolled.compound5 g a)
+      | 6 => some (Unrolled.compound6 g a)
+      | _ => none
+    else none
+  match gen with
+  | some r => ⟨⟨Mat.finish r⟩⟩
+  | none => T.compoundGeneric g
 
 /-- Julia `∧(T) = t₁ ∧ … ∧ tₙ` (`algebra.jl:115`, `forms.jl:596`): the wedge of
 all columns, a grade-`n` element of the codomain (the pseudoscalar `det·I` for

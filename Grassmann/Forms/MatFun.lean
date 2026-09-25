@@ -45,45 +45,174 @@ def norm1 (A : Mat n n Float) : Float :=
 /-- `λI + M` (Julia `S(c)*I + M`, adding to the diagonal only). -/
 @[inline] def addI (c : Float) (M : Mat n n Float) : Mat n n Float := M.addDiag c
 
+/-- `32382376266240000` (Julia `S(32382376266240000)`). -/
+def k32382376266240000 : Float := f64! 32382376266240000.0
+
+/-- `16380` (Julia `S(16380)`). -/
+def k16380 : Float := f64! 16380.0
+
+/-- `40840800` (Julia `S(40840800)`). -/
+def k40840800 : Float := f64! 40840800.0
+
+/-- `33522128640` (Julia `S(33522128640)`). -/
+def k33522128640 : Float := f64! 33522128640.0
+
+/-- `10559470521600` (Julia `S(10559470521600)`). -/
+def k10559470521600 : Float := f64! 10559470521600.0
+
+/-- `1187353796428800` (Julia `S(1187353796428800)`). -/
+def k1187353796428800 : Float := f64! 1187353796428800.0
+
+/-- `64764752532480000` (Julia `S(64764752532480000)`). -/
+def k64764752532480000 : Float := f64! 64764752532480000.0
+
+/-- `182` (Julia `S(182)`). -/
+def k182 : Float := f64! 182.0
+
+/-- `960960` (Julia `S(960960)`). -/
+def k960960 : Float := f64! 960960.0
+
+/-- `1323241920` (Julia `S(1323241920)`). -/
+def k1323241920 : Float := f64! 1323241920.0
+
+/-- `670442572800` (Julia `S(670442572800)`). -/
+def k670442572800 : Float := f64! 670442572800.0
+
+/-- `129060195264000` (Julia `S(129060195264000)`). -/
+def k129060195264000 : Float := f64! 129060195264000.0
+
+/-- `7771770303897600` (Julia `S(7771770303897600)`). -/
+def k7771770303897600 : Float := f64! 7771770303897600.0
+
+/-- `8821612800` (Julia `S(8821612800)`). -/
+def k8821612800 : Float := f64! 8821612800.0
+
+/-- `302702400` (Julia `S(302702400)`). -/
+def k302702400 : Float := f64! 302702400.0
+
+/-- `2162160` (Julia `S(2162160)`). -/
+def k2162160 : Float := f64! 2162160.0
+
+/-- `3960` (Julia `S(3960)`). -/
+def k3960 : Float := f64! 3960.0
+
+/-- `17643225600` (Julia `S(17643225600)`). -/
+def k17643225600 : Float := f64! 17643225600.0
+
+/-- `2075673600` (Julia `S(2075673600)`). -/
+def k2075673600 : Float := f64! 2075673600.0
+
+/-- `30270240` (Julia `S(30270240)`). -/
+def k30270240 : Float := f64! 30270240.0
+
+/-- `110880` (Julia `S(110880)`). -/
+def k110880 : Float := f64! 110880.0
+
+/-- `90` (Julia `S(90)`). -/
+def k90 : Float := f64! 90.0
+
+/-- `8648640` (Julia `S(8648640)`). -/
+def k8648640 : Float := f64! 8648640.0
+
+/-- `277200` (Julia `S(277200)`). -/
+def k277200 : Float := f64! 277200.0
+
+/-- `1512` (Julia `S(1512)`). -/
+def k1512 : Float := f64! 1512.0
+
+/-- `17297280` (Julia `S(17297280)`). -/
+def k17297280 : Float := f64! 17297280.0
+
+/-- `1995840` (Julia `S(1995840)`). -/
+def k1995840 : Float := f64! 1995840.0
+
+/-- `25200` (Julia `S(25200)`). -/
+def k25200 : Float := f64! 25200.0
+
+/-- `56` (Julia `S(56)`). -/
+def k56 : Float := f64! 56.0
+
+/-- `15120` (Julia `S(15120)`). -/
+def k15120 : Float := f64! 15120.0
+
+/-- `420` (Julia `S(420)`). -/
+def k420 : Float := f64! 420.0
+
+/-- `30240` (Julia `S(30240)`). -/
+def k30240 : Float := f64! 30240.0
+
+/-- `3360` (Julia `S(3360)`). -/
+def k3360 : Float := f64! 3360.0
+
+/-- `30` (Julia `S(30)`). -/
+def k30 : Float := f64! 30.0
+
+/-- `60` (Julia `S(60)`). -/
+def k60 : Float := f64! 60.0
+
+/-- `120` (Julia `S(120)`). -/
+def k120 : Float := f64! 120.0
+
+/-- `12` (Julia `S(12)`). -/
+def k12 : Float := f64! 12.0
+
+/-- `2.1`, a Padé threshold. -/
+def t21 : Float := f64! 2.1
+
+/-- `0.95`, a Padé threshold. -/
+def t095 : Float := f64! 0.95
+
+/-- `0.25`, a Padé threshold. -/
+def t025 : Float := f64! 0.25
+
+/-- `0.015`, a Padé threshold. -/
+def t0015 : Float := f64! 0.015
+
+/-- `5.4`, a Padé threshold. -/
+def t54 : Float := f64! 5.4
+
 /-- Julia's generic `exp(A)` (Higham's Padé scaling and squaring,
-`composite.jl:246-297`), with `inv` the matrix inverse for `(V - U) \ (V + U)`. -/
+`composite.jl:246-297`), with `inv` the matrix inverse for `(V - U) \ (V + U)`. The
+coefficients are module constants (an integer or decimal literal inlined here would be
+converted at every call). -/
 def pade (inv : Mat n n Float → Mat n n Float) (A : Mat n n Float) : Mat n n Float :=
   let nA := norm1 A
   let solve := fun (V U : Mat n n Float) => (inv (V - U)).mul (V + U)
-  if nA ≤ 2.1 then
+  if nA ≤ t21 then
     let A2 := A.mul A
     let (U, V) :=
-      if nA > 0.95 then
-        let U := addI (S 8821612800) (A2.mul (addI (S 302702400) (A2.mul (addI (S 2162160) (A2.mul (addI (S 3960) A2))))))
-        let V := addI (S 17643225600) (A2.mul (addI (S 2075673600) (A2.mul (addI (S 30270240) (A2.mul (addI (S 110880) (S 90 * A2)))))))
+      if nA > t095 then
+        let U := addI k8821612800 (A2.mul (addI k302702400 (A2.mul (addI k2162160 (A2.mul (addI k3960 A2))))))
+        let V := addI k17643225600 (A2.mul (addI k2075673600 (A2.mul (addI k30270240 (A2.mul (addI k110880 (k90 * A2)))))))
         (A.mul U, V)
-      else if nA > 0.25 then
-        let U := addI (S 8648640) (A2.mul (addI (S 277200) (A2.mul (addI (S 1512) A2))))
-        let V := addI (S 17297280) (A2.mul (addI (S 1995840) (A2.mul (addI (S 25200) (S 56 * A2)))))
+      else if nA > t025 then
+        let U := addI k8648640 (A2.mul (addI k277200 (A2.mul (addI k1512 A2))))
+        let V := addI k17297280 (A2.mul (addI k1995840 (A2.mul (addI k25200 (k56 * A2)))))
         (A.mul U, V)
-      else if nA > 0.015 then
-        let U := addI (S 15120) (A2.mul (addI (S 420) A2))
-        let V := addI (S 30240) (A2.mul (addI (S 3360) (S 30 * A2)))
+      else if nA > t0015 then
+        let U := addI k15120 (A2.mul (addI k420 A2))
+        let V := addI k30240 (A2.mul (addI k3360 (k30 * A2)))
         (A.mul U, V)
       else
-        let U := addI (S 60) A2
-        let V := addI (S 120) (S 12 * A2)
+        let U := addI k60 A2
+        let V := addI k120 (k12 * A2)
         (A.mul U, V)
     solve V U
   else
-    let s := Float.log2 (nA / 5.4)
+    let s := Float.log2 (nA / t54)
     let si : Nat := if s > 0 then s.ceil.toUInt64.toNat else 0
-    let A := if s > 0 then A / Float.ofNat (2 ^ si) else A
+    -- Julia `A /= 2^si`: the exact power of two
+    let A := if s > 0 then A / Float.scaleB 1 si else A
     let A2 := A.mul A
     let A4 := A2.mul A2
     let A6 := A2.mul A4
-    let U := addI (S 32382376266240000)
-      ((A6.mul ((A6 + S 16380 * A4) + S 40840800 * A2)) +
-        ((S 33522128640 * A6 + S 10559470521600 * A4) + S 1187353796428800 * A2))
+    let U := addI k32382376266240000
+      ((A6.mul ((A6 + k16380 * A4) + k40840800 * A2)) +
+        ((k33522128640 * A6 + k10559470521600 * A4) + k1187353796428800 * A2))
     let U := A.mul U
-    let V := addI (S 64764752532480000)
-      ((A6.mul ((S 182 * A6 + S 960960 * A4) + S 1323241920 * A2)) +
-        ((S 670442572800 * A6 + S 129060195264000 * A4) + S 7771770303897600 * A2))
+    let V := addI k64764752532480000
+      ((A6.mul ((k182 * A6 + k960960 * A4) + k1323241920 * A2)) +
+        ((k670442572800 * A6 + k129060195264000 * A4) + k7771770303897600 * A2))
     let E := solve V U
     (List.range si).foldl (fun E _ => E.mul E) E
 

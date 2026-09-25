@@ -65,7 +65,11 @@ unsafe def emit (s : Sym) : StateM St String := do
   match s with
   | .zero => return "Coeff.zero"
   | .one => return "Coeff.one"
-  | .int k => return s!"(Coeff.ofInt ({k}))"
+  | .int k =>
+    -- a small integer as a sum of ones: exact in every coefficient type, and no
+    -- `Coeff.ofInt` (at `Float`, a conversion through `Float.ofScientific` per call)
+    let ones := " + ".intercalate (List.replicate k.natAbs "Coeff.one")
+    return if k < 0 then s!"(-({ones}))" else s!"({ones})"
   | .raw k => return s!"a{k}"
   | .vec k => return s!"b{k}"
   | _ =>
@@ -125,6 +129,9 @@ namespace {ns}
 
 open StaticVectors AbstractTensors
 
+-- the longest functions (the compounds of `6 × 6` operators) nest thousands of `let`s
+set_option maxRecDepth 100000
+
 variable \{α : Type} [Coeff α]
 "
 
@@ -152,6 +159,16 @@ characteristic polynomial." "Grassmann.Forms.Mat" "Grassmann.Forms.Unrolled"
     let T := symOp n
     IO.println (defn rd s!"solve{n}" s!"The Cramer solve (Julia `value(T) \\ v`) of a `{n} × {n}` operator."
       "[Div α] (raw vv : Packed.Arr α) : Packed.Arr α" (n * n) n (T.solveGeneric (symVec n)).v.data false)
+  for n in [3, 4, 5, 6] do
+    let T := symOp n
+    for g in List.range' 1 n do
+      IO.println (defn rd s!"compound{n}g{g}"
+        s!"The grade-{g} compound `Λ^{g} T` of a `{n} × {n}` operator (`compoundGeneric`), column-major."
+        "(raw : Packed.Arr α) : Packed.Arr α" (n * n) 0 (T.compoundGeneric g).mat.v.data false)
+    let arms := (List.range' 1 n).map fun g => s!"  | {g} => compound{n}g{g} raw"
+    IO.println (s!"/-- The compound `Λᵍ T` of a `{n} × {n}` operator, `1 ≤ g ≤ {n}` (empty otherwise). -/\n" ++
+      s!"@[specialize] def compound{n} (g : Nat) (raw : Packed.Arr α) : Packed.Arr α :=\n  match g with\n" ++
+      "\n".intercalate arms ++ "\n  | _ => Packed.mkEmpty 0\n")
   for n in [3, 4, 5, 6] do
     let T := symOp n
     IO.println (defn rd s!"characteristic{n}"
