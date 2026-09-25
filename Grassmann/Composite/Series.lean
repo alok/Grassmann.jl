@@ -52,8 +52,10 @@ def seriesFuel : Nat := 10000
 /-- The cap `k ≤ 10000` of Julia's generated loops. -/
 def seriesCap : Nat := 10000
 
-/-- "No cap" for the generic loops (the fuel still bounds them). -/
-def noCap : Nat := 1 <<< 62
+/-- "No cap" for the generic loops (the fuel still bounds them). `2^30`, not a larger
+power: a `Nat` literal beyond 32 bits is parsed from a string (`lean_cstr_to_nat`, a GMP
+allocation) wherever it is inlined, i.e. once per iteration of a series loop. -/
+def noCap : Nat := 1 <<< 30
 
 /-- Julia's series loop (module docstring): `S` the partial sum, `term` the next term,
 `n1 n2 n3` the running norms, `k` the current index (stepping by `dk`, stopping past

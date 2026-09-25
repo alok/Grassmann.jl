@@ -111,35 +111,84 @@ the `1 × 1` identity for `g = 0` and zero beyond `min(n, m)`. -/
 /-- The grade-1 map (Julia `O.v[1]`). -/
 @[inline] def base (O : Outermorphism V W α) : Simplex V W α := O.block 1
 
+/-- Whether layout `l` stores grade `g` (`Forms.layoutGrades` as a predicate). -/
+@[inline] def storesGrade (g : Nat) : Layout → Bool
+  | .chain h => g == h
+  | .even => g % 2 == 0
+  | .odd => g % 2 == 1
+  | .full => true
+
+/-- Push `rg` zeros. -/
+@[specialize] def pushZeros (rg : Nat) (out : Packed.Arr α) : Packed.Arr α :=
+  Mat.pushLoop (fun _ => Coeff.zero) rg 0 out
+
+/-- The grades `g, …, m` of `applyValues`: the codomain grades stored in `l`, the domain block
+of grade `g` at `off` (the sizes of the domain's lower stored grades). -/
+@[specialize] def applyLoop (O : Outermorphism V W α) (l : Layout) (xd : Packed.Arr α) (k n m : Nat) :
+    (g off : Nat) → Packed.Arr α → (fuel : Nat) → Packed.Arr α
+  | _, _, out, 0 => out
+  | g, off, out, fuel + 1 =>
+    if g > m then out
+    else if !storesGrade g l then applyLoop O l xd k n m (g + 1) off out fuel
+    else
+      let inDom := g ≤ n
+      let off' := if inDom then off + Leibniz.choose n g else off
+      let rg := Leibniz.choose m g
+      let out :=
+        if g = 0 then Packed.push out (Mat.rd xd off)
+        else if g ≤ k && inDom then
+          -- a bounds-checked index, not `blocks[g - 1]?` (an `Option` allocated per grade)
+          if h : g - 1 < O.blocks.size then
+            let b := O.blocks[g - 1]
+            let a := b.mat.v.data
+            Mat.pushLoop (fun i => Mat.sdot0 id a xd b.rows 1 b.cols i off) rg 0 out
+          else pushZeros rg out
+        else pushZeros rg out
+      applyLoop O l xd k n m (g + 1) off' out fuel
+
+/-- Whether block `g - 1` of `O` is square of side `d` (its storage read at run time). -/
+@[inline] def blockSide (O : Outermorphism V W α) (g d : Nat) : Bool :=
+  if h : g - 1 < O.blocks.size then
+    let b := O.blocks[g - 1]
+    b.rows == d && b.cols == d
+  else false
+
+/-- The generated straight-line `applyValues .full` (`Grassmann.Forms.Unrolled.applyFull3…4`,
+bit-identical to `applyLoop`) for the compounds of an endomorphism of `n = 3, 4` generators
+(what `ofSimplex` builds: `C(n, g) × C(n, g)` blocks), else `fallback`. -/
+@[specialize] def applyFullOr (O : Outermorphism V W α) (xd : Packed.Arr α) (fallback : Unit → Packed.Arr α) :
+    Packed.Arr α :=
+  let bl := fun (g : Nat) => if h : g - 1 < O.blocks.size then O.blocks[g - 1].mat.v.data else xd
+  if V.n == 3 && W.n == 3 && O.blocks.size == 3 && O.blockSide 1 3 && O.blockSide 2 3 && O.blockSide 3 1 then
+    Unrolled.applyFull3 (bl 1) (bl 2) (bl 3) xd
+  else if V.n == 4 && W.n == 4 && O.blocks.size == 4 && O.blockSide 1 4 && O.blockSide 2 6 &&
+      O.blockSide 3 4 && O.blockSide 4 1 then
+    Unrolled.applyFull4 (bl 1) (bl 2) (bl 3) (bl 4) xd
+  else fallback ()
+
 /-- The image of a coefficient vector stored in layout `l` (Julia `contraction(O, x)`,
 `forms.jl:1050-1073`): the scalar part is kept, grade `g ≤ k` goes through
-`Λᵍ F`, higher grades of the codomain are zero. -/
+`Λᵍ F`, higher grades of the codomain are zero. One tail-recursive pass over the grades,
+no intermediate lists; the result size is checked with `Forms.layoutSize` (no `Nat` powers).
+The algorithm `Grassmann.Forms.Unrolled.applyFull3…4` are generated from. -/
+@[specialize] def applyValuesGeneric (O : Outermorphism V W α) (l : Layout) (x : Values α (l.size V.n)) :
+    Values α (l.size W.n) :=
+  let m := W.n
+  let res := applyLoop O l x.data O.depth V.n m 0 0 (Packed.mkEmpty (layoutSize m l)) (m + 1)
+  if h : Packed.size res = layoutSize m l then ⟨res, h.trans (layoutSize_eq m l)⟩
+  else zeroValues _
+
+/-- `applyValuesGeneric`, with the generated straight-line forms for full coefficient vectors
+of `n = 3, 4` generators (`applyFullOr`, bit-identical). -/
 @[specialize] def applyValues (O : Outermorphism V W α) (l : Layout) (x : Values α (l.size V.n)) :
     Values α (l.size W.n) :=
-  let k := O.depth
-  let n := V.n
   let m := W.n
-  let xd := x.data
-  -- the codomain grades in storage order; the domain block of grade `g` starts at
-  -- `off` = the sizes of the domain layout's lower grades
-  let grades := Forms.layoutGrades m l
-  let domGrades := Forms.layoutGrades n l
-  let res := grades.foldl (fun (acc : Packed.Arr α × Nat) g =>
-    let (out, off) := acc
-    let inDom := domGrades.contains g
-    let off' := if inDom then off + Leibniz.choose n g else off
-    let rg := Leibniz.choose m g
-    if g = 0 then (Packed.push out (Mat.rd xd off), off')
-    else if g ≤ k && inDom then
-      match O.blocks[g - 1]? with
-      | some b =>
-        let a := b.mat.v.data
-        let r := b.rows
-        let c := b.cols
-        (Mat.pushLoop (fun i => Mat.sdot0 id a xd r 1 c i off) rg 0 out, off')
-      | none => (Mat.pushLoop (fun _ => Coeff.zero) rg 0 out, off')
-    else (Mat.pushLoop (fun _ => Coeff.zero) rg 0 out, off')) (Packed.mkEmpty (l.size m), 0)
-  Mat.finish res.1
+  let loop := fun (_ : Unit) => applyLoop O l x.data O.depth V.n m 0 0 (Packed.mkEmpty (layoutSize m l)) (m + 1)
+  let res := match l with
+    | .full => applyFullOr O x.data loop
+    | _ => loop ()
+  if h : Packed.size res = layoutSize m l then ⟨res, h.trans (layoutSize_eq m l)⟩
+  else zeroValues _
 
 /-- Julia `O(x) = O ⋅ x` for any element of the domain algebra (`forms.jl:723,
 1050-1073`): a `Chain` of grade `g` goes to a `Chain` of grade `g`, a `Spinor`
@@ -175,7 +224,7 @@ is `det(I + F)`. -/
   (List.range O.blocks.size).foldl (fun acc k => acc + (O.block (k + 1)).tr) Coeff.one
 
 /-- Julia `scalar(O) = tr(O) / 2ⁿ` (`forms.jl:743`). -/
-@[inline] def scalar [Div α] (O : Outermorphism V W α) : α := O.tr / Coeff.ofInt (2 ^ V.n)
+@[inline] def scalar [Div α] (O : Outermorphism V W α) : α := O.tr / Coeff.ofInt (pow2 V.n)
 
 /-- Julia `∧(O)` (`forms.jl:746-753`): the first column of the top compound
 `Λᵏ F`, `k = min(n, m)`; for a square map the pseudoscalar `det(F)·I` of the

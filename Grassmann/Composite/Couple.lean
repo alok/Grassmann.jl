@@ -16,12 +16,16 @@ being a type parameter; here the blade is data):
 | op | `β = -1` (elliptic) | `β = +1` (hyperbolic) | `β = 0` (parabolic) |
 |---|---|---|---|
 | `exp` | `eᵃ(cos θ + B sin θ)` | `eᵃ(cosh θ + B sinh θ)` | `eᵃ(1 + bB)` |
-| `log`, `log1p`, `sqrt`, `cbrt`, `cosh`, `sinh` | Julia's `ComplexF64` functions | `log(radius) + angle`, `radius^(1/n)·exp(angle/n)`, series | (`angle` undefined: `NaN`) |
+| `log`, `log1p`, `sqrt`, `cbrt` | Julia's `ComplexF64` functions | `log(radius) + angle`, `radius^(1/n)·exp(angle/n)` | (`angle` undefined: `NaN`) |
+| `cosh`, `sinh` | Julia's `ComplexF64` functions | `cosh a cosh b + sinh a sinh b·B`, … | `cosh a + b sinh a·B`, … |
 
 with `θ = |b|·√|abs2(B)|`. Result types: a `Single` becomes a `Couple` under
 `exp`, `log`, `sqrt` (Julia returns a `Couple`, or a `Single` when the scalar
 part is structurally absent; the values agree), while `cosh`/`sinh` of a `Single`
-stay single terms (`Single V 0`, `Single V G`), exactly as Julia's series do.
+stay single terms (`Single V 0`, `Single V G`), exactly as Julia's series do. Julia sums the
+`cosh`/`sinh` series of a non-elliptic blade until the partial sums agree to `√eps`; the
+closed forms here (with `√|β|` for non-unit blades) are that series' limit, so they agree with
+Julia to its truncation (`≤ 1e-8` relative) and are exact where Julia's are not.
 
 Julia defects fixed here (port-notes §8.3): the parabolic `exp` of a couple
 returns `eᵃ(1 + t)` instead of `eᵃ(1 + bB)` (item 1); a zero angle gives
@@ -68,22 +72,171 @@ namespace BPair
 /-- The unit `1 + 0B`. -/
 def one : BPair := ⟨f1, f0⟩
 
-/-- Grassmann's generic `expm1` series (`C:31-51`) in the algebra of one blade. -/
-def expm1 (β : Float) (t : BPair) : BPair := expm1Generic add (mul β) sdiv norm t
+/-! The series of one blade as loops over unboxed `Float` pairs: the operations and the
+stopping rule of `Composite.seriesLoop` specialized at `BPair` (`expm1Generic`,
+`coshGenericTail`, `sinhGenericWith`, `qlogWith`), written out so the partial sum and
+the term stay in registers (a `BPair` loop argument is a heap object per step). -/
 
-/-- Grassmann's generic `cosh` series (`C:458-481`): `1 + τ/2 + τ²/4! + …`, `τ = t⟑t`. -/
+/-- The loop of the one-blade `expm1`: `term ↦ term ⟑ (t/k)`, `k` from 3. -/
+def expm1Loop (β tr ti : Float) (Sr Si ur ui n1 n2 n3 : Float) (k : Nat) : Nat → BPair
+  | 0 => ⟨Sr, Si⟩
+  | fuel + 1 =>
+    if (n2 < n1 || n2 > f1) && k ≤ noCap then
+      let Sr := Sr + ur
+      let Si := Si + ui
+      let ns := Float.sqrt (Sr * Sr + Si * Si)
+      if approx ns n3 then ⟨Sr, Si⟩
+      else
+        let c := natF k
+        let vr := tr / c
+        let vi := ti / c
+        let ur' := ur * vr + (ui * vi) * β
+        let ui' := ur * vi + ui * vr
+        expm1Loop β tr ti Sr Si ur' ui' n2 (Float.sqrt (ur' * ur' + ui' * ui')) ns (k + 1) fuel
+    else ⟨Sr, Si⟩
+
+/-- Grassmann's generic `expm1` series (`C:31-51`) in the algebra of one blade
+(`expm1Generic` at `BPair`). -/
+def expm1 (β : Float) (t : BPair) : BPair :=
+  let m := mul β t t
+  let ur := m.re / f2
+  let ui := m.im / f2
+  let f := norm t
+  expm1Loop β t.re t.im t.re t.im ur ui f (Float.sqrt (ur * ur + ui * ui)) f 3 seriesFuel
+
+/-- The loop of the one-blade `cosh`/`sinh` tails: `term ↦ term ⟑ (τ/(k(k-1)))`, `k` by 2. -/
+def tauLoop (β τr τi : Float) (Sr Si ur ui n1 n2 n3 : Float) (k : Nat) : Nat → BPair
+  | 0 => ⟨Sr, Si⟩
+  | fuel + 1 =>
+    if (n2 < n1 || n2 > f1) && k ≤ noCap then
+      let Sr := Sr + ur
+      let Si := Si + ui
+      let ns := Float.sqrt (Sr * Sr + Si * Si)
+      if approx ns n3 then ⟨Sr, Si⟩
+      else
+        let c := natF (k * (k - 1))
+        let vr := τr / c
+        let vi := τi / c
+        let ur' := ur * vr + (ui * vi) * β
+        let ui' := ur * vi + ui * vr
+        tauLoop β τr τi Sr Si ur' ui' n2 (Float.sqrt (ur' * ur' + ui' * ui')) ns (k + 2) fuel
+    else ⟨Sr, Si⟩
+
+/-- Grassmann's generic `cosh` series (`C:458-481`): `1 + τ/2 + τ²/4! + …`, `τ = t⟑t`
+(`coshGenericTail` at `BPair`). -/
 def cosh (β : Float) (t : BPair) : BPair :=
   let τ := mul β t t
-  let S := coshGenericTail add (mul β) sdiv norm τ
+  let Sr := τ.re / f2
+  let Si := τ.im / f2
+  let q := mul β τ τ
+  let ur := q.re / f24
+  let ui := q.im / f24
+  let f := Float.sqrt (Sr * Sr + Si * Si)
+  let S := tauLoop β τ.re τ.im Sr Si ur ui f (Float.sqrt (ur * ur + ui * ui)) f 6 seriesFuel
   ⟨f1 + S.re, S.im⟩
 
-/-- Grassmann's generic `sinh` series (`C:517-539`): `t + t⟑τ/3! + …`, `τ = t⟑t`. -/
+/-- Grassmann's generic `sinh` series (`C:517-539`): `t + t⟑τ/3! + …`, `τ = t⟑t`
+(`sinhGenericWith` at `BPair`). -/
 def sinh (β : Float) (t : BPair) : BPair :=
   let τ := mul β t t
-  sinhGenericWith add sdiv norm (fun x => mul β x τ) (fun d x => mul β x (sdiv τ (natF d))) t
+  let q := mul β t τ
+  let ur := q.re / f6
+  let ui := q.im / f6
+  let f := norm t
+  tauLoop β τ.re τ.im t.re t.im ur ui f (Float.sqrt (ur * ur + ui * ui)) f 5 seriesFuel
 
-/-- Grassmann's `qlog(w) = 2 atanh w` series (`C:303-321`). -/
-def qlog (β : Float) (w : BPair) : BPair := qlogWith add (mul β) sdiv smul norm w
+/-- `cosh(a + bB)` in closed form, `B² = β` (the sum of Grassmann's series, `C:458-481`, which
+Julia truncates at relative change `√eps`): with `s = √|β|`, `cosh a·cosh(bs) + sinh a·sinh(bs)/s·B`
+for `β > 0`, `cosh a·cos(bs) + sinh a·sin(bs)/s·B` for `β < 0`, `cosh a + b·sinh a·B` for
+`β = 0`. -/
+def coshClosed (β : Float) (t : BPair) : BPair :=
+  let a := t.re
+  let b := t.im
+  if β == f0 then ⟨Float.cosh a, b * Float.sinh a⟩
+  else if b == f0 then ⟨Float.cosh a, f0⟩
+  else
+    let s := Float.sqrt β.abs
+    let θ := b * s
+    if β > f0 then ⟨Float.cosh a * Float.cosh θ, Float.sinh a * Float.sinh θ / s⟩
+    else ⟨Float.cosh a * Float.cos θ, Float.sinh a * Float.sin θ / s⟩
+
+/-- `sinh(a + bB)` in closed form, `B² = β` (see `coshClosed`): `sinh a·cosh(bs) +
+cosh a·sinh(bs)/s·B` for `β > 0`, `sinh a·cos(bs) + cosh a·sin(bs)/s·B` for `β < 0`,
+`sinh a + b·cosh a·B` for `β = 0`. -/
+def sinhClosed (β : Float) (t : BPair) : BPair :=
+  let a := t.re
+  let b := t.im
+  if β == f0 then ⟨Float.sinh a, b * Float.cosh a⟩
+  else if b == f0 then ⟨Float.sinh a, f0⟩
+  else
+    let s := Float.sqrt β.abs
+    let θ := b * s
+    if β > f0 then ⟨Float.sinh a * Float.cosh θ, Float.cosh a * Float.sinh θ / s⟩
+    else ⟨Float.sinh a * Float.cos θ, Float.cosh a * Float.sin θ / s⟩
+
+/-- The number of trailing zero bits of a positive `p` (`JuliaBase.powBySquaring`'s
+`trailing_zeros`), on `UInt64`. -/
+def tz64 (p : UInt64) : Nat → Nat
+  | 0 => 0
+  | fuel + 1 => if p &&& 1 == 1 || p == 0 then 0 else tz64 (p >>> 1) fuel + 1
+
+/-- The state machine of `JuliaBase.powBySquaring` on a complex number, unboxed: square `x`
+`s` more times, then `y := x` (`init`) or `y := y ⟑ x`, then the next bit group of `p`. Julia's
+complex `*`: `(a c - b d, a d + b c)`. -/
+def cPowRun (xr xi yr yi : Float) (s : Nat) (p : UInt64) (init : Bool) : Nat → BPair
+  | 0 => ⟨yr, yi⟩
+  | fuel + 1 =>
+    if s > 0 then cPowRun (xr * xr - xi * xi) (xr * xi + xi * xr) yr yi (s - 1) p init fuel
+    else
+      let yr' := if init then xr else yr * xr - yi * xi
+      let yi' := if init then xi else yr * xi + yi * xr
+      if p == 0 then ⟨yr', yi'⟩
+      else
+        let t := tz64 p 64 + 1
+        cPowRun xr xi yr' yi' t (if t ≥ 64 then 0 else p >>> t.toUInt64) false fuel
+
+/-- Julia `power_by_squaring(z, p)` of a complex number (`JuliaBase.powBySquaring` at
+`Complex Float` with its multiplication), without boxing: the same operations in the same
+order, one result allocated. -/
+def cPow (re im : Float) (p : Nat) : BPair :=
+  if p == 0 then ⟨f1, f0⟩
+  else if p == 1 then ⟨re, im⟩
+  else if p == 2 then ⟨re * re - im * im, re * im + im * re⟩
+  else
+    let q := p.toUInt64
+    let t := tz64 q 64 + 1
+    cPowRun re im re im (t - 1) (if t ≥ 64 then 0 else q >>> t.toUInt64) true (4 * 64 + 4)
+
+/-- The loop of the one-blade `qlog`: `prod ↦ prod ⟑ w²`, `term = prod/k`, `k` by 2 to `x`. -/
+def qlogPairLoop (β w2r w2i : Float) (x : Nat) (Sr Si pr pi ur ui n1 n2 n3 : Float) (k : Nat) :
+    Nat → BPair
+  | 0 => ⟨Sr, Si⟩
+  | fuel + 1 =>
+    if (n2 < n1 || n2 > f1) && k ≤ x then
+      let Sr := Sr + ur
+      let Si := Si + ui
+      let ns := Float.sqrt (Sr * Sr + Si * Si)
+      if approx ns n3 then ⟨Sr, Si⟩
+      else
+        let pr' := pr * w2r + (pi * w2i) * β
+        let pi' := pr * w2i + pi * w2r
+        let c := natF k
+        let ur' := pr' / c
+        let ui' := pi' / c
+        qlogPairLoop β w2r w2i x Sr Si pr' pi' ur' ui' n2 (Float.sqrt (ur' * ur' + ui' * ui')) ns (k + 2) fuel
+    else ⟨Sr, Si⟩
+
+/-- Grassmann's `qlog(w) = 2 atanh w` series (`C:303-321`; `qlogWith` at `BPair`). -/
+def qlog (β : Float) (w : BPair) : BPair :=
+  let w2 := mul β w w
+  let f := norm w
+  let prod := mul β w w2
+  let ur := prod.re / f3
+  let ui := prod.im / f3
+  let x : Nat := 10000
+  let S := qlogPairLoop β w2.re w2.im x w.re w.im prod.re prod.im ur ui f
+    (Float.sqrt (ur * ur + ui * ui)) f 5 (x / 2 + 1)
+  smul f2 S
 
 /-- The inverse `(re - im·B)/(re² - im²·β)` (`nan` parts when not invertible). -/
 @[inline] def inv (β : Float) (a : BPair) : BPair :=
@@ -213,18 +366,19 @@ when `B² = -1` (Julia has no `cbrt(::ComplexF64)`, a `MethodError`), otherwise
     ⟨z.bits, s * e.re, s * e.im⟩
 
 /-- Julia `cosh(z::Couple)` (`src/composite.jl:458-481`): the complex `cosh` when
-`B² = -1`, otherwise Grassmann's generic series. -/
+`B² = -1`, otherwise the sum of Grassmann's generic series in closed form
+(`BPair.coshClosed`; Julia's truncated series agrees to its `√eps` stopping rule). -/
 @[inline] def cosh (z : Couple V Float) : Couple V Float :=
   let β := z.blSq
   if β == -f1 then onBlade z.bits (ComplexF64.cosh z.toComplex)
-  else ofPair z.bits (BPair.cosh β z.pair)
+  else ofPair z.bits (BPair.coshClosed β z.pair)
 
 /-- Julia `sinh(z::Couple)` (`src/composite.jl:517-539`): the complex `sinh` when
-`B² = -1`, otherwise Grassmann's generic series. -/
+`B² = -1`, otherwise the series' sum in closed form (`BPair.sinhClosed`). -/
 @[inline] def sinh (z : Couple V Float) : Couple V Float :=
   let β := z.blSq
   if β == -f1 then onBlade z.bits (ComplexF64.sinh z.toComplex)
-  else ofPair z.bits (BPair.sinh β z.pair)
+  else ofPair z.bits (BPair.sinhClosed β z.pair)
 
 /-- Julia `a / b` of two couples on the same blade (`src/algebra.jl:556-605`): the complex
 division when `B² = -1` (Julia's robust `ComplexF64` algorithm), otherwise
@@ -236,20 +390,22 @@ defect `couple-inv-hyperbolic`). The blade of `a` is kept; `b` must share it. -/
   else ofPair a.bits (BPair.mul β a.pair (BPair.inv β b.pair))
 
 /-- `tanh z = sinh z / cosh z` (AbstractTensors `tanh`, AT:419). -/
-def tanh (z : Couple V Float) : Couple V Float := divSame z.sinh z.cosh
+@[specialize V] def tanh (z : Couple V Float) : Couple V Float := divSame z.sinh z.cosh
 
 /-- Julia `z ^ k` for a couple (`src/algebra.jl:440-470`): `z` for `k = 1`; the complex
 power `Complex(z)^k` (`power_by_squaring`, of `inv(z)` for `k < 0`) when `B² = -1`;
 otherwise Julia's repeated/binary multiplication in the blade algebra, and
 `inv(z)^|k|` for `k < 0` (Julia returns `One` there). -/
-def pow (z : Couple V Float) (k : Int) : Couple V Float :=
+@[specialize V] def pow (z : Couple V Float) (k : Int) : Couple V Float :=
   if k == 1 then z
   else
     let β := z.blSq
     if β == -f1 then
-      let w := z.toComplex
-      onBlade z.bits (if k ≥ 0 then powBySquaring (· * ·) ⟨f1, f0⟩ w k.toNat
-        else powBySquaring (· * ·) ⟨f1, f0⟩ (ComplexF64.inv w) k.natAbs)
+      -- `Complex(z)^k` by squaring, unboxed (`BPair.cPow`, the operations of `powBySquaring`)
+      if k ≥ 0 then ofPair z.bits (BPair.cPow z.re z.im k.natAbs)
+      else
+        let w := ComplexF64.inv z.toComplex
+        ofPair z.bits (BPair.cPow w.re w.im k.natAbs)
     else if k ≥ 0 then ofPair z.bits (powJulia (BPair.mul β) BPair.one z.pair k.toNat)
     else ofPair z.bits (powJulia (BPair.mul β) BPair.one (BPair.inv β z.pair) k.natAbs)
 
@@ -257,40 +413,40 @@ def pow (z : Couple V Float) (k : Int) : Couple V Float :=
 @[inline] def sq (z : Couple V Float) : Couple V Float := ofPair z.bits (BPair.mul z.blSq z.pair z.pair)
 
 /-- `coth z = cosh z / sinh z` (AbstractTensors `AT:420`). -/
-def coth (z : Couple V Float) : Couple V Float := divSame z.cosh z.sinh
+@[specialize V] def coth (z : Couple V Float) : Couple V Float := divSame z.cosh z.sinh
 
 /-- AbstractTensors `asinh(z) = log(z + sqrt(1 + z⟑z))` (`AT:421`), in the blade algebra
 (the complex `asinh` formula when `B² = -1`). -/
-def asinh (z : Couple V Float) : Couple V Float :=
+@[specialize V] def asinh (z : Couple V Float) : Couple V Float :=
   let s := (⟨z.bits, f1 + z.sq.re, z.sq.im⟩ : Couple V Float).sqrt
   log ⟨z.bits, z.re + s.re, z.im + s.im⟩
 
 /-- AbstractTensors `acosh(z) = log(z + sqrt(z⟑z - 1))` (`AT:422`). -/
-def acosh (z : Couple V Float) : Couple V Float :=
+@[specialize V] def acosh (z : Couple V Float) : Couple V Float :=
   let s := (⟨z.bits, z.sq.re - f1, z.sq.im⟩ : Couple V Float).sqrt
   log ⟨z.bits, z.re + s.re, z.im + s.im⟩
 
 /-- AbstractTensors `atanh(z) = (log(1 + z) - log(1 - z))/2` (`AT:423`). -/
-def atanh (z : Couple V Float) : Couple V Float :=
+@[specialize V] def atanh (z : Couple V Float) : Couple V Float :=
   let a := log (⟨z.bits, f1 + z.re, z.im⟩ : Couple V Float)
   let b := log (⟨z.bits, f1 - z.re, -z.im⟩ : Couple V Float)
   ⟨z.bits, (a.re - b.re) / f2, (a.im - b.im) / f2⟩
 
 /-- AbstractTensors `acoth(z) = (log(z + 1) - log(z - 1))/2` (`AT:424`). -/
-def acoth (z : Couple V Float) : Couple V Float :=
+@[specialize V] def acoth (z : Couple V Float) : Couple V Float :=
   let a := log (⟨z.bits, z.re + f1, z.im⟩ : Couple V Float)
   let b := log (⟨z.bits, z.re - f1, z.im⟩ : Couple V Float)
   ⟨z.bits, (a.re - b.re) / f2, (a.im - b.im) / f2⟩
 
 /-- Julia `b ^ z = exp(z ⟑ log(b))` for a real base `b` (AbstractTensors `AT:326`). -/
-def rpow (b : Float) (z : Couple V Float) : Couple V Float :=
+@[specialize V] def rpow (b : Float) (z : Couple V Float) : Couple V Float :=
   let l := F64.log b
   exp ⟨z.bits, z.re * l, z.im * l⟩
 
 /-- A real power `z ^ x = exp(x·log z)` (the complex power `Complex(z)^x` when `B² = -1`).
 Julia defines no `Couple ^ Real`; this is the principal branch, consistent with `sqrt`
 (`x = 1/2`) and `cbrt` (`x = 1/3`) up to rounding. -/
-def powf (z : Couple V Float) (x : Float) : Couple V Float :=
+@[specialize V] def powf (z : Couple V Float) (x : Float) : Couple V Float :=
   if z.blSq == -f1 then onBlade z.bits (ComplexF64.pow z.toComplex ⟨x, f0⟩)
   else
     let l := z.log
@@ -332,7 +488,7 @@ negative scalar gets the angle `π` when `I² = -1`). -/
 
 /-- Julia `log1p(t)` of a term: the generic `qlog(t/(t+2))` series (`C:370`; there is no
 term method, so even `log1p(1.0v)` is the series value `0.6931471795482411`). -/
-def log1p (s : Single V G Float) : Couple V Float :=
+@[specialize V] def log1p (s : Single V G Float) : Couple V Float :=
   let b : UInt64 := if G == 0 then 0 else s.bits
   let β := bladeSq V b
   let t := s.pair
@@ -357,16 +513,16 @@ for a zero term, else `exp(log(t)/3)`. -/
     Couple.exp ⟨l.bits, l.re / f3, l.im / f3⟩
 
 /-- `cosh` of the scaled blade `c·e_b` as a scalar: `cosh(c)` (Julia's `TensorGraded{V,0}`
-method) for the scalar blade, otherwise Grassmann's generic series, whose partial sums
-never leave the scalars. -/
+method) for the scalar blade, otherwise the sum of Grassmann's generic series (whose partial
+sums never leave the scalars) in closed form: `cosh(c√β)`, `cos(c√-β)` or `1`. -/
 @[inline] def coshBlade (V : TensorBundle) (b : UInt64) (c : Float) : Float :=
   if b == 0 then Float.cosh c
-  else (BPair.cosh (bladeSq V b) ⟨f0, c⟩).re
+  else (BPair.coshClosed (bladeSq V b) ⟨f0, c⟩).re
 
 /-- `sinh` of the scaled blade `c·e_b` as its coefficient on `e_b` (see `coshBlade`). -/
 @[inline] def sinhBlade (V : TensorBundle) (b : UInt64) (c : Float) : Float :=
   if b == 0 then Float.sinh c
-  else (BPair.sinh (bladeSq V b) ⟨f0, c⟩).im
+  else (BPair.sinhClosed (bladeSq V b) ⟨f0, c⟩).im
 
 /-- Julia `cosh(t)` of a term (`C:456`, `C:458-481`): a scalar. -/
 @[inline] def cosh (s : Single V G Float) : Single V 0 Float :=
@@ -443,32 +599,32 @@ non-unit metric entries and negative `k` it is wrong (defect `term-power-period4
 
 /-- AbstractTensors `asinh(t) = log(t + sqrt(1 + t⟑t))` (`AT:421`) of a term: `t⟑t` is a
 scalar, whose (real) square root is `NaN` where Julia throws `DomainError`. -/
-def asinh (s : Single V G Float) : Couple V Float :=
+@[specialize V] def asinh (s : Single V G Float) : Couple V Float :=
   (plusScalar (Float.sqrt (f1 + s.sqScalar)) s).log
 
 /-- AbstractTensors `acosh(t) = log(t + sqrt(t⟑t - 1))` (`AT:422`) of a term. -/
-def acosh (s : Single V G Float) : Couple V Float :=
+@[specialize V] def acosh (s : Single V G Float) : Couple V Float :=
   (plusScalar (Float.sqrt (s.sqScalar - f1)) s).log
 
 /-- AbstractTensors `atanh(t) = (log(1 + t) - log(1 - t))/2` (`AT:423`) of a term. -/
-def atanh (s : Single V G Float) : Couple V Float :=
+@[specialize V] def atanh (s : Single V G Float) : Couple V Float :=
   Couple.atanh (plusScalar f0 s)
 
 /-- AbstractTensors `acoth(t) = (log(t + 1) - log(t - 1))/2` (`AT:424`) of a term. -/
-def acoth (s : Single V G Float) : Couple V Float :=
+@[specialize V] def acoth (s : Single V G Float) : Couple V Float :=
   Couple.acoth (plusScalar f0 s)
 
 /-- `(-I/k) ⟑ (a + b·e_{b'})` for a couple `a + b·e_{b'}` whose blade `b'` is the
 pseudoscalar times the blade of a term: the pseudo-couple on the term's blade
 (`-(b/k)·(I ⟑ e_{b'})`) plus `-(a/k)·I`. -/
-def negPseudoTimes (k : Float) (w : Couple V Float) : PseudoCouple V Float :=
+@[specialize V] def negPseudoTimes (k : Float) (w : Couple V Float) : PseudoCouple V Float :=
   let (σ, b'') := bladeMul V (pseudoMask V) w.bits
   ⟨b'', -(w.im / k) * σ, -(w.re / k)⟩
 
 /-- AbstractTensors `asin(t) = (-I) ⟑ log(I⟑t + sqrt(1 - t⟑t))` (`AT:425`) of a term: `I⟑t` is
 a term, `1 - t⟑t` a scalar, so the logarithm is the closed form of a couple on the blade of
 `I⟑t` and the result a pseudo-couple (`asin(0.5v₁) = 0.5236v₁ + 5.6e-17v₁₂₃` in `ℝ3`). -/
-def asin (s : Single V G Float) : PseudoCouple V Float :=
+@[specialize V] def asin (s : Single V G Float) : PseudoCouple V Float :=
   let (σ, b') := bladeMul V (pseudoMask V) (if G == 0 then 0 else s.bits)
   let r := Float.sqrt (f1 - s.sqScalar)
   let x : Couple V Float := if b' == 0 then ⟨0, r + σ * s.val, f0⟩ else ⟨b', r, σ * s.val⟩
@@ -476,7 +632,7 @@ def asin (s : Single V G Float) : PseudoCouple V Float :=
 
 /-- AbstractTensors `atan(t) = ((-I)/2) ⟑ (log(1 + I⟑t) - log(1 - I⟑t))` (`AT:427`) of a term,
 a pseudo-couple (`atan(0.5v₁₂) = 0.5493v₁₂ - 0.0v₁₂₃` in `ℝ3`). -/
-def atan (s : Single V G Float) : PseudoCouple V Float :=
+@[specialize V] def atan (s : Single V G Float) : PseudoCouple V Float :=
   let (σ, b') := bladeMul V (pseudoMask V) (if G == 0 then 0 else s.bits)
   let c := σ * s.val
   let (p, m) : Couple V Float × Couple V Float :=
@@ -506,7 +662,7 @@ which is not the exponential (port-notes §8.3 item 11, fixed). -/
 
 /-- `expm1(z) = exp(z) - 1` as a couple (Julia `expm1(t::Phasor) = exp(t) - One(V)`,
 `C:130`, with the fixed `exp`). -/
-def expm1 (z : Phasor V Float) : Couple V Float :=
+@[specialize V] def expm1 (z : Phasor V Float) : Couple V Float :=
   let e := z.exp.complexify
   ⟨e.bits, e.re - f1, e.im⟩
 
@@ -516,7 +672,7 @@ def expm1 (z : Phasor V Float) : Couple V Float :=
 
 /-- Julia `log1p(z::Phasor) = log(One(V) + z)` (`src/composite.jl:364`), where the sum
 complexifies the phasor. -/
-def log1p (z : Phasor V Float) : Couple V Float :=
+@[specialize V] def log1p (z : Phasor V Float) : Couple V Float :=
   let c := z.complexify
   Couple.log ⟨c.bits, f1 + c.re, c.im⟩
 
@@ -538,7 +694,7 @@ def log1p (z : Phasor V Float) : Couple V Float :=
   ⟨F64.powInt z.amp n, ⟨z.angle.bits, k * z.angle.re, k * z.angle.im⟩⟩
 
 /-- Julia `z ^ x = Phasor(amplitude^x, x·angle)` for a real exponent (`src/algebra.jl:422`). -/
-def powf (z : Phasor V Float) (x : Float) : Phasor V Float :=
+@[specialize V] def powf (z : Phasor V Float) (x : Float) : Phasor V Float :=
   ⟨F64.pow z.amp x, ⟨z.angle.bits, x * z.angle.re, x * z.angle.im⟩⟩
 
 /-- Julia `radius(z::Phasor) = radius(amplitude(z)) = |amplitude|` (`src/multivectors.jl:912`). -/

@@ -99,7 +99,7 @@ def rowMajor {W : TensorBundle} {ld lc : Layout} (X : TensorOperator V ld W lc F
 /-- Julia `characteristic(X)` (`forms.jl:1445-1462`): the monic characteristic
 polynomial's lower coefficients `(c₀, …, c_{n-1})`, by Julia's closed forms for
 `n ≤ 4` and `characteristicExact` beyond. -/
-@[specialize] def characteristic [Div α] (X : Endomorphism V (.chain 1) α) : Chain V 1 α :=
+@[specialize] def characteristicGeneric [Div α] (X : Endomorphism V (.chain 1) α) : Chain V 1 α :=
   let n := V.n
   let c := fun (l : List α) => (⟨Values.ofFn fun i => l[i.1]?.getD Coeff.zero⟩ : Chain V 1 α)
   if n = 1 then c [-X.entry 0 0]
@@ -118,6 +118,17 @@ polynomial's lower coefficients `(c₀, …, c_{n-1})`, by Julia's closed forms 
     let a1 := (a3 * (a32 - Coeff.ofInt 3 * trX2) + Coeff.ofInt 2 * (X2.comp X).tr) / Coeff.ofInt (-6)
     c [a0, a1, a2, -a3]
   else X.characteristicExact
+
+/-- Julia `characteristic(X)`: the generated straight-line forms for `3 ≤ n ≤ 6`
+(`Grassmann.Forms.Unrolled`, bit-identical to `characteristicGeneric`: the closed forms for
+`n ≤ 4`, the traces of the compounds beyond), `characteristicGeneric` otherwise. -/
+@[specialize] def characteristic [Div α] (X : Endomorphism V (.chain 1) α) : Chain V 1 α :=
+  let a := X.mat.v.data
+  if V.n = 3 then ⟨Mat.finish (Unrolled.characteristic3 a)⟩
+  else if V.n = 4 then ⟨Mat.finish (Unrolled.characteristic4 a)⟩
+  else if V.n = 5 then ⟨Mat.finish (Unrolled.characteristic5 a)⟩
+  else if V.n = 6 then ⟨Mat.finish (Unrolled.characteristic6 a)⟩
+  else X.characteristicGeneric
 
 /-- Julia `characteristic(X, m)` (`forms.jl:1464-1498`): the coefficient
 `c_{m-1}` (1-based `m`). -/
@@ -157,9 +168,9 @@ def eigvals (X : Endomorphism V (.chain 1) Float) : Spectrum ((Layout.chain 1).s
     | some s => s
     | none => .real (Values.replicate 0)
   else
-    let d := Eigen.eigen X.rowMajor n
-    if d.real then .real (Values.ofFn fun i => d.re.get! i.1)
-    else .complex (Values.ofFn fun i => ⟨d.re.get! i.1, d.im.get! i.1⟩)
+    let (re, im) := Eigen.eigenvalues X.rowMajor n
+    if (List.range n).all fun k => im.get! k == 0 then .real (Values.ofFn fun i => re.get! i.1)
+    else .complex (Values.ofFn fun i => ⟨re.get! i.1, im.get! i.1⟩)
 
 /-- Julia `eigvalsreal(X)` (`forms.jl:1384-1393`): real eigenvalues, or Julia's
 `DomainError` (`n < 5`, a complex root) / a complex spectrum (`n ≥ 5`). -/
@@ -217,9 +228,14 @@ def eigenreal (X : Endomorphism V (.chain 1) Float) : Except String (SpectralOpe
 /-- Julia `eigen(X)` (`forms.jl:1428-1431`): real-typed when every eigenvalue is
 real, complex otherwise. -/
 def eigen (X : Endomorphism V (.chain 1) Float) : EigenResult V :=
-  match X.eigenreal with
-  | .ok S => .real S
-  | .error _ => .complex X.eigencomplex
+  -- one decomposition, read as real or complex (`eigenreal`/`eigencomplex` each run one)
+  let d := X.eigenDecomposition
+  let n := d.n
+  if d.real then
+    .real ⟨TensorOperator.ofFn fun i j => d.vre.get! (i.1 * n + j.1), Values.ofFn fun k => d.re.get! k.1⟩
+  else
+    .complex ⟨TensorOperator.ofFn fun i j => ⟨d.vre.get! (i.1 * n + j.1), d.vim.get! (i.1 * n + j.1)⟩,
+      Values.ofFn fun k => ⟨d.re.get! k.1, d.im.get! k.1⟩⟩
 
 /-- Julia `eigvecs(X)` (`forms.jl:1338-1348`): the eigenvectors as the columns of
 an operator (complex-typed). -/
@@ -266,7 +282,152 @@ def discriminantcomplex (X : Endomorphism V (.chain 1) Float) : Float :=
     t * t - 4 * X.det
   else (discriminantValues X.eigvalscomplex).re
 
+/-- Julia `discriminantreal(X)` (`forms.jl:1531-1533`): `tr² − 4 det` for `n = 2`, else
+`det(vandermondereal(X))²` (an error where the eigenvalues are not real). -/
+def discriminantreal (X : Endomorphism V (.chain 1) Float) : Except String Float :=
+  if V.n = 2 then
+    let t := X.tr
+    .ok (t * t - 4 * X.det)
+  else X.eigvalsreal.map discriminantValues
+
+/-- Julia `disc = discriminant` (`forms.jl:1537`). -/
+@[inline] def disc (X : Endomorphism V (.chain 1) Float) : Float := X.discriminant
+
+/-- Julia `discreal = discriminantreal` (`forms.jl:1537`). -/
+@[inline] def discreal (X : Endomorphism V (.chain 1) Float) : Except String Float := X.discriminantreal
+
+/-- Julia `disccomplex = discriminantcomplex` (`forms.jl:1537`). -/
+@[inline] def disccomplex (X : Endomorphism V (.chain 1) Float) : Float := X.discriminantcomplex
+
 end TensorOperator
+
+namespace TensorOperator
+
+variable {V : TensorBundle}
+
+/-- The eigenvectors as a real-typed operator (the columns), from the dense eigensolver's
+decomposition; the imaginary parts are dropped (callers check `d.real`). -/
+def realVecs (d : Eigen.Decomposition) : Endomorphism V (.chain 1) Float :=
+  TensorOperator.ofFn fun i j => d.vre.get! (i.1 * d.n + j.1)
+
+/-- Julia `eigvecsreal(X)` of a real grade-1 endomorphism (`forms.jl:1342`,
+`Endomorphism{V}(map(Float64, eigvecs(Matrix(X))))`): the eigenvectors (unit columns, in
+the order of `eigvals`) as a real operator, or Julia's `InexactError` when an eigenvalue
+is complex. -/
+def eigvecsreal (X : Endomorphism V (.chain 1) Float) : Except String (Endomorphism V (.chain 1) Float) :=
+  let d := X.eigenDecomposition
+  if d.real then .ok (realVecs d) else .error "InexactError: Float64(complex eigenvector)"
+
+/-- Julia's type-unstable `eigvecs(X)` (`forms.jl:1338`, LAPACK `eigvecs(Matrix(X))`): a
+real operator when every eigenvalue is real, a complex one otherwise. -/
+inductive EigVecs (V : TensorBundle) where
+  /-- Real eigenvectors (Julia `Matrix{Float64}`). -/
+  | real (T : Endomorphism V (.chain 1) Float)
+  /-- Complex eigenvectors (Julia `Matrix{ComplexF64}`). -/
+  | complex (T : Endomorphism V (.chain 1) (Complex Float))
+
+/-- The eigenvectors as a complex operator, whatever Julia's type. -/
+def EigVecs.toComplex : EigVecs V → Endomorphism V (.chain 1) (Complex Float)
+  | .real T => T.map fun x => ⟨x, 0⟩
+  | .complex T => T
+
+/-- Julia `eigvecs(X)` of a real grade-1 endomorphism (`forms.jl:1338`): real-typed exactly
+when every eigenvalue is real (then equal to `eigvecsreal X`), complex otherwise
+(`eigvecscomplex X`). -/
+def eigvecs (X : Endomorphism V (.chain 1) Float) : EigVecs V :=
+  let d := X.eigenDecomposition
+  if d.real then .real (realVecs d) else .complex X.eigvecscomplex
+
+end TensorOperator
+
+namespace Forms
+
+open StaticVectors JuliaBase
+
+/-! ## Polynomial roots of any degree (`composite.jl:1092-1226`)
+
+`Forms.Roots` has Julia's closed forms (degree ≤ 4); Julia's `monicroots(a...)` of a
+higher degree is `eigvals(companion(Values(a...)))` (`composite.jl:1113`), the LAPACK
+eigenvalues of the companion matrix, here `Forms.Eigen` (sorted by `(re, im)` as Julia's
+`eigsortby`), so those roots agree with Julia to rounding, not bit for bit. The non-monic
+`roots(a₀, …, a_N)` divide by the leading coefficient first (`composite.jl:1094-1110`). -/
+
+/-- The companion decomposition of `zⁿ + a_{n-1}zⁿ⁻¹ + … + a₀` (the dense eigensolver). -/
+def companionEigen {n : Nat} (a : Values Float n) : Eigen.Decomposition :=
+  Eigen.eigen (Endomorphism.companion a).rowMajor n
+
+/-- Julia `monicroots(a₀, …, a_{n-1})` of any degree (`composite.jl:1112-1180`): the closed
+forms for `n ≤ 4`, the eigenvalues of the companion matrix beyond, real-typed exactly
+when Julia's result is. -/
+def monicroots {n : Nat} (a : Values Float n) : Spectrum n :=
+  match Roots.monicroots? a with
+  | some s => s
+  | none =>
+    let d := companionEigen a
+    if d.real then .real (Values.ofFn fun i => d.re.get! i.1)
+    else .complex (Values.ofFn fun i => ⟨d.re.get! i.1, d.im.get! i.1⟩)
+
+/-- Julia `monicrootsreal(a₀, …, a_{n-1})` of any degree (`composite.jl:1193-1214`): the real
+roots, or Julia's `DomainError` (closed forms) / `InexactError` (a complex companion
+eigenvalue, `n ≥ 5`). -/
+def monicrootsreal {n : Nat} (a : Values Float n) : Except String (Values Float n) :=
+  match Roots.monicrootsreal? a with
+  | some r => r
+  | none =>
+    let d := companionEigen a
+    if d.real then .ok (Values.ofFn fun i => d.re.get! i.1)
+    else .error "InexactError: Float64(complex root)"
+
+/-- Julia `monicrootscomplex(a₀, …, a_{n-1})` of any degree (`composite.jl:1216-1226`). -/
+def monicrootscomplex {n : Nat} (a : Values Float n) : Values (Complex Float) n :=
+  match Roots.monicrootscomplex? a with
+  | some r => r
+  | none =>
+    let d := companionEigen a
+    Values.ofFn fun i => ⟨d.re.get! i.1, d.im.get! i.1⟩
+
+/-- The monic coefficients `(a₀/a_N, …, a_{N-1}/a_N)` of `a₀ + a₁z + … + a_N z^N` (Julia
+`a[list(1,N-1)]./a[N]`, one division each). -/
+@[inline] def monicOf {n : Nat} (a : Values Float (n + 1)) : Values Float n :=
+  let lead := a.get ⟨n, Nat.lt_succ_self n⟩
+  Values.ofFn fun i => a.get ⟨i.1, Nat.lt_succ_of_lt i.2⟩ / lead
+
+/-- Julia `roots(a₀, a₁, …, a_N)` (`composite.jl:1094-1099`): the roots of
+`a₀ + a₁z + … + a_N z^N`, `monicroots` of the coefficients divided by `a_N`. A constant
+(`N = 0`) has no roots; Julia returns `zero(a₀)` there, which is `rootsConst`. -/
+def roots {n : Nat} (a : Values Float (n + 1)) : Spectrum n := monicroots (monicOf a)
+
+/-- Julia `rootsreal(a₀, …, a_N)` (`composite.jl:1101-1103`). -/
+def rootsreal {n : Nat} (a : Values Float (n + 1)) : Except String (Values Float n) :=
+  monicrootsreal (monicOf a)
+
+/-- Julia `rootscomplex(a₀, …, a_N)` (`composite.jl:1105-1110`). -/
+def rootscomplex {n : Nat} (a : Values Float (n + 1)) : Values (Complex Float) n :=
+  monicrootscomplex (monicOf a)
+
+/-- Julia `roots(a₀)`, `rootsreal(a₀)`, `rootscomplex(a₀)` of a constant: `zero(a₀)`
+(`composite.jl:1095, 1102, 1106`), the degenerate value Julia returns for "no roots". -/
+@[inline] def rootsConst (_ : Float) : Float := 0
+
+/-- Julia `monicroots(a₀::Complex)`, `monicrootscomplex(a₀::Complex)` of `z + a₀`:
+`-a₀` (`composite.jl:1115, 1219`). -/
+@[inline] def monicrootsC1 (a0 : Complex Float) : Complex Float := -a0
+
+/-- Julia `monicrootscomplex(a₀::Complex, a₁::Real)` of `z² + a₁z + a₀`
+(`composite.jl:1220`, `quadratic(a0, a1, sqrt(Complex(a1*a1-4a0)))`, `composite.jl:1120-1126`)
+with a complex constant term. (Julia has no method for a complex `a₁`: `quadratic`
+compares `a1 < 0`.) -/
+def monicrootscomplexC (a0 : Complex Float) (a1 : Float) : Values (Complex Float) 2 :=
+  let rt := ComplexF64.sqrt ⟨a1 * a1 - 4 * a0.re, -(4 * a0.im)⟩
+  let a02 : Complex Float := ⟨2 * a0.re, 2 * a0.im⟩
+  if a1 < 0 then
+    let s : Complex Float := ⟨-a1 + rt.re, rt.im⟩
+    Values.ofFn fun i => if i.1 = 0 then ComplexF64.div a02 s else ⟨s.re / 2, s.im / 2⟩
+  else
+    let s : Complex Float := ⟨-a1 - rt.re, -rt.im⟩
+    Values.ofFn fun i => if i.1 = 0 then ⟨s.re / 2, s.im / 2⟩ else ComplexF64.div a02 s
+
+end Forms
 
 namespace Outermorphism
 

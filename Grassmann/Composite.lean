@@ -5,6 +5,11 @@ import Grassmann.Composite.Dense
 import Grassmann.Composite.Chain
 import Grassmann.Composite.Spinor
 import Grassmann.Composite.Ring
+import Grassmann.Composite.Norm
+import Grassmann.Composite.Project
+import Grassmann.Composite.Pow
+import Grassmann.Composite.Phasor
+import Grassmann.Composite.Kinds
 
 /-!
 # Grassmann.Composite: transcendental functions of the typed elements
@@ -40,7 +45,14 @@ Also:
 * `Couple.radius`/`angle`/`polarize`/`vectorize`/`complexify`/`divSame`,
   `Phasor.complexify`/`inv`/`eval`/`angleOn` (Julia `∠`), the quaternion
   `Half.radius`/`angle` and `Spinor.quatvalue`, `Chain.complexify`/`polarize`,
-  Grassmann's two-argument hyperbolic arctangent `Composite.atanh2`;
+  Grassmann's two-argument hyperbolic arctangent `Composite.atanh2`; the complex-like
+  accessors `realvalue`/`imagvalue`/`reim`/`amplitude`/`phase`/`unitangle`, `a ∠ θ`,
+  `hyperplanes` and `𝕚 𝕛 𝕜` (`Composite.Phasor`);
+* `^` on every kind (`Composite.Pow`: integer and real exponents, real bases);
+* `abs`, `unit`, `unitize`, `unitnorm`, `geomabs` per kind with Julia's result kinds
+  (`Composite.Norm`); `↑`/`↓` (`project`/`reject`, `Composite.Project`);
+* the derived functions (`cot` … `acsch`, `sinc`, `cosc`, `exp2` …) on every kind
+  (`Composite.Kinds`, generated);
 * the `co`/`pseudo` family on chains (`Chain.coexp`, `coabs`, `coinv`, …) and, through
   `AbstractTensors.Generic`, on multivectors;
 * `TensorRing` instances for `Multivector V Float` (every space) and `Spinor V Float`
@@ -50,13 +62,27 @@ Also:
 
 ## Performance
 
-The closed forms of terms and couples are `@[inline]`: at a call site with a literal space
-they compile to straight-line code (`Couple.exp` 8 ns vs Julia 13 ns in `ℝ3`). The
-closed forms of chains and quaternions cost one or two kernel products and a few
-`Values` allocations (≈150-250 ns vs Julia's 15-80 ns: Julia keeps everything in
-registers); the series paths are bounded by the plan kernels (a dense `ℝ3` `exp` by
-series ≈4.6 µs vs 1.2 µs). `Tests/Composite/Bench.lean` has the numbers and the Julia
-loops.
+The closed forms of terms and couples are `@[inline]` straight-line code; chains, quaternions
+and multivectors whose (non-scalar) square is a scalar take closed forms computed from their
+coefficients (the square as a signature-weighted sum, no product kernel), and the series and
+inverses run on the storage with in-place updates. Measured by the `composite` bench suite
+(`Bench/Composite.lean`, its Julia twin `oracle/bench/composite.jl`; Apple M4 Max, ns per call
+including the construction of the argument, which alone costs 15 ns here and 0.6 ns in Julia):
+
+| call (`ℝ3` unless noted) | Lean | Julia |
+|---|---|---|
+| `Couple.exp`, `Single.exp` | 19, 18 | 5.1, 6.3 |
+| `Couple.log`, `Couple.sqrt` (through `ComplexF64`) | 50, 47 | 14, 14 |
+| `Couple.cosh` (hyperbolic) | 32 | 18 |
+| `Chain.exp` (bivector) | 47 | 16 |
+| `Chain.cos` | 41 | 31 |
+| `Spinor.exp`, `log`, `sqrt` | 41, 44, 70 | 22, 26, 75 |
+| `Multivector.exp`, `log`, `sqrt` | 265, 237, 313 | 197, 148, 228 |
+| `PGA3` motor `exp` | 220 | 161 |
+| `CGA3` translator `exp` | 76 | 15 |
+| `↑`/`↓` (`Inf3`, `CGA3`) | 38-51 | 0.5-9 (constant-folded) |
+| README torus / orbit-2 / orbit-4 / helix | 406 / 247 / 368 / 614 | 305 / 60 / 219 / 1136 |
+| `chainfield` (the `orb` versor) | 201 | 59 |
 
 ## Semantics
 

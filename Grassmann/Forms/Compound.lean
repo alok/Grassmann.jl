@@ -29,6 +29,7 @@ spaces: `(tᵀt)⁻¹tᵀ` for fewer columns than dimensions (Julia's reciprocal
 Euclidean codomains) and `tᵀ(ttᵀ)⁻¹` for more (`composite.jl:761-772`).
 -/
 import Grassmann.Forms.Operator
+import Grassmann.Forms.Unrolled
 
 namespace Grassmann
 
@@ -219,74 +220,6 @@ symbolically; generated, bit-identical to the plan interpreter and to Julia). -/
   let s1234 := ((((Coeff.zero + q123 * d4) - q124 * d3) + q134 * d2) - q234 * d1)
   s1234
 
-/-- The straight-line `4 × 4` Cramer inverse (Julia `_inv(4, 4)`: `val = (−y₃, y₂∧x₁,
-−(y₁∧x₂), x₃)`, `dt = t₁ ∧ y₃`, rows `!(valᵢ · (1/dt))` with `!e₂₃₄ = −e₁`,
-`!e₁₃₄ = e₂`, `!e₁₂₄ = −e₃`, `!e₁₂₃ = e₄`), column-major. Generated from the wedge plans. -/
-@[inline] def inv4 [Div α] (raw : Packed.Arr α) : Packed.Arr α :=
-  let a1 := Mat.rd raw 0
-  let a2 := Mat.rd raw 1
-  let a3 := Mat.rd raw 2
-  let a4 := Mat.rd raw 3
-  let b1 := Mat.rd raw 4
-  let b2 := Mat.rd raw 5
-  let b3 := Mat.rd raw 6
-  let b4 := Mat.rd raw 7
-  let c1 := Mat.rd raw 8
-  let c2 := Mat.rd raw 9
-  let c3 := Mat.rd raw 10
-  let c4 := Mat.rd raw 11
-  let d1 := Mat.rd raw 12
-  let d2 := Mat.rd raw 13
-  let d3 := Mat.rd raw 14
-  let d4 := Mat.rd raw 15
-  let x12 := ((Coeff.zero + a1 * b2) - a2 * b1)
-  let x13 := ((Coeff.zero + a1 * b3) - a3 * b1)
-  let x14 := ((Coeff.zero + a1 * b4) - a4 * b1)
-  let x23 := ((Coeff.zero + a2 * b3) - a3 * b2)
-  let x24 := ((Coeff.zero + a2 * b4) - a4 * b2)
-  let x34 := ((Coeff.zero + a3 * b4) - a4 * b3)
-  let z123 := (((Coeff.zero + x12 * c3) - x13 * c2) + x23 * c1)
-  let z124 := (((Coeff.zero + x12 * c4) - x14 * c2) + x24 * c1)
-  let z134 := (((Coeff.zero + x13 * c4) - x14 * c3) + x34 * c1)
-  let z234 := (((Coeff.zero + x23 * c4) - x24 * c3) + x34 * c2)
-  let y12 := ((Coeff.zero + c1 * d2) - c2 * d1)
-  let y13 := ((Coeff.zero + c1 * d3) - c3 * d1)
-  let y14 := ((Coeff.zero + c1 * d4) - c4 * d1)
-  let y23 := ((Coeff.zero + c2 * d3) - c3 * d2)
-  let y24 := ((Coeff.zero + c2 * d4) - c4 * d2)
-  let y34 := ((Coeff.zero + c3 * d4) - c4 * d3)
-  let w123 := (((Coeff.zero + b1 * y23) - b2 * y13) + b3 * y12)
-  let w124 := (((Coeff.zero + b1 * y24) - b2 * y14) + b4 * y12)
-  let w134 := (((Coeff.zero + b1 * y34) - b3 * y14) + b4 * y13)
-  let w234 := (((Coeff.zero + b2 * y34) - b3 * y24) + b4 * y23)
-  let dt1234 := ((((Coeff.zero + a1 * w234) - a2 * w134) + a3 * w124) - a4 * w123)
-  let m123 := (((Coeff.zero + y12 * a3) - y13 * a2) + y23 * a1)
-  let m124 := (((Coeff.zero + y12 * a4) - y14 * a2) + y24 * a1)
-  let m134 := (((Coeff.zero + y13 * a4) - y14 * a3) + y34 * a1)
-  let m234 := (((Coeff.zero + y23 * a4) - y24 * a3) + y34 * a2)
-  let k123 := (((Coeff.zero + d1 * x23) - d2 * x13) + d3 * x12)
-  let k124 := (((Coeff.zero + d1 * x24) - d2 * x14) + d4 * x12)
-  let k134 := (((Coeff.zero + d1 * x34) - d3 * x14) + d4 * x13)
-  let k234 := (((Coeff.zero + d2 * x34) - d3 * x24) + d4 * x23)
-  let r := Coeff.one / dt1234
-  -- the four numerators (grade 3: 123, 124, 134, 234) with Julia's signs
-  let n1 := ((-w123) * r, (-w124) * r, (-w134) * r, (-w234) * r)
-  let n2 := (m123 * r, m124 * r, m134 * r, m234 * r)
-  let n3 := ((-k123) * r, (-k124) * r, (-k134) * r, (-k234) * r)
-  let n4 := (z123 * r, z124 * r, z134 * r, z234 * r)
-  -- complement: row = (−v₂₃₄, v₁₃₄, −v₁₂₄, v₁₂₃)
-  let row := fun (v : α × α × α × α) => (-v.2.2.2, v.2.2.1, -v.2.1, v.1)
-  let (r11, r12, r13, r14) := row n1
-  let (r21, r22, r23, r24) := row n2
-  let (r31, r32, r33, r34) := row n3
-  let (r41, r42, r43, r44) := row n4
-  let push4 := fun (out : Packed.Arr α) (x y z w : α) =>
-    Packed.push (Packed.push (Packed.push (Packed.push out x) y) z) w
-  let out := push4 (Packed.mkEmpty 16) r11 r21 r31 r41
-  let out := push4 out r12 r22 r32 r42
-  let out := push4 out r13 r23 r33 r43
-  push4 out r14 r24 r34 r44
-
 end Forms
 
 namespace TensorOperator
@@ -302,11 +235,28 @@ open Forms
 /-- The `g`-th compound `Λᵍ T` (Julia `compound(T, g)`, `composite.jl:715-720`,
 `forms.jl:586`): column `I` is the wedge of the columns indexed by the
 `g`-subset `I`, i.e. `(Λᵍ T)[J, I] = det T[J, I]`. `Λ⁰ T` is the `1×1` identity. -/
-@[specialize] def compound (T : Simplex V W α) (g : Nat) : TensorOperator V (.chain g) W (.chain g) α :=
+@[specialize] def compoundGeneric (T : Simplex V W α) (g : Nat) : TensorOperator V (.chain g) W (.chain g) α :=
   let cs := T.cols1.toArray
   ⟨Mat.ofCols fun j =>
     let I := DirectSum.Bits.indices (Leibniz.indexBasis V.n g)[j.1]!
     castLen (wedgeList (I.toList.map fun i => cs[i - 1]!))⟩
+
+/-- Julia `compound(T, g)`: the generated straight-line forms for square operators of
+`3 ≤ n ≤ 6` (`Grassmann.Forms.Unrolled`, bit-identical to `compoundGeneric`). -/
+@[specialize] def compound (T : Simplex V W α) (g : Nat) : TensorOperator V (.chain g) W (.chain g) α :=
+  let a := T.mat.v.data
+  let gen : Option (Packed.Arr α) :=
+    if V.n = W.n && 1 ≤ g && g ≤ V.n then
+      match V.n with
+      | 3 => some (Unrolled.compound3 g a)
+      | 4 => some (Unrolled.compound4 g a)
+      | 5 => some (Unrolled.compound5 g a)
+      | 6 => some (Unrolled.compound6 g a)
+      | _ => none
+    else none
+  match gen with
+  | some r => ⟨⟨Mat.finish r⟩⟩
+  | none => T.compoundGeneric g
 
 /-- Julia `∧(T) = t₁ ∧ … ∧ tₙ` (`algebra.jl:115`, `forms.jl:596`): the wedge of
 all columns, a grade-`n` element of the codomain (the pseudoscalar `det·I` for
@@ -332,7 +282,13 @@ grade-1 operator: the scalar coefficient (Julia prints it as the grade-0 chain
     let (b12, b13, b23) := wedge3 (Mat.rd a 0) (Mat.rd a 1) (Mat.rd a 2) (Mat.rd a 3) (Mat.rd a 4) (Mat.rd a 5)
     wedge21 b12 b13 b23 (Mat.rd a 6) (Mat.rd a 7) (Mat.rd a 8)
   else if V.n = 4 ∧ W.n = 4 then det4 a
+  else if V.n = 5 ∧ W.n = 5 then Unrolled.det5 a
+  else if V.n = 6 ∧ W.n = 6 then Unrolled.det6 a
   else at0 T.wedgeAll.v
+
+/-- `det` by the generic wedge of the columns (`t₁ ∧ … ∧ tₙ` through the wedge plans), the
+algorithm `Grassmann.Forms.Unrolled.det5`/`det6` are generated from. -/
+@[specialize] def detGeneric (T : Simplex V W α) : α := at0 T.wedgeAll.v
 
 /-- The wedge `a ∧ b` of raw coefficient storage of grades `g`, `h` in `n` dimensions. -/
 @[inline] def wedgeRaw (n g h : Nat) (a b : Packed.Arr α) : Packed.Arr α := wedgeP n g h a b
@@ -403,7 +359,23 @@ from the Cramer symbols. -/
 /-- Julia `adjugate(T)` of a square grade-1 operator (`composite.jl:796-803`,
 `forms.jl:607-609`): the classical adjugate, `adj(T) T = det(T) I`, exact.
 Its row `i` is `!(yₙ₋ᵢ ∧ xᵢ₋₁)` (with signs). -/
-@[specialize] def adjugate (T : Simplex V W α) : Simplex W V α := ofRowsP T.adjugateRows
+@[specialize] def adjugateGeneric (T : Simplex V W α) : Simplex W V α := ofRowsP T.adjugateRows
+
+/-- Raw column-major storage as an operator of the transposed spaces. -/
+@[inline] def ofRawT (a : Packed.Arr α) : Simplex W V α := ⟨⟨Mat.finish a⟩⟩
+
+/-- Julia `adjugate(T)`: the generated straight-line forms for `2 ≤ n ≤ 6`
+(`Grassmann.Forms.Unrolled`, bit-identical to `adjugateGeneric`), the Cramer symbols beyond. -/
+@[specialize] def adjugate (T : Simplex V W α) : Simplex W V α :=
+  let a := T.mat.v.data
+  if V.n = W.n then
+    if V.n = 3 then ofRawT (Unrolled.adjugate3 a)
+    else if V.n = 2 then ofRawT (Unrolled.adjugate2 a)
+    else if V.n = 4 then ofRawT (Unrolled.adjugate4 a)
+    else if V.n = 5 then ofRawT (Unrolled.adjugate5 a)
+    else if V.n = 6 then ofRawT (Unrolled.adjugate6 a)
+    else T.adjugateGeneric
+  else T.adjugateGeneric
 
 /-- Julia `cofactor(T) = transpose(adjugate(T))` (`composite.jl:805-812`). -/
 @[inline] def cofactor (T : Simplex V W α) : Simplex V W α := T.adjugate.transpose
@@ -420,6 +392,13 @@ so it can differ in the last bit from `det`, the left fold). -/
 @[specialize] def cramerDet (T : Simplex V W α) : α :=
   let (xs, ys) := T.prefixSuffix
   T.cramerDetOf xs ys
+
+/-- The Cramer inverse through the Cramer symbols (one pass for the adjugate rows and
+`dt`): the algorithm `Grassmann.Forms.Unrolled.inv5`/`inv6` are generated from. -/
+@[specialize] def invSquareGeneric [Div α] (T : Simplex V W α) : Simplex W V α :=
+  let (xs, ys) := T.prefixSuffix
+  let r := Coeff.one / T.cramerDetOf xs ys
+  ofRowsP ((T.adjugateRowsOf xs ys).map (scaleP · r))
 
 /-- The inverse of a square grade-1 operator by Cramer's rule (Julia `inv`,
 `composite.jl:761-772`): the adjugate times `1/dt`, Julia's `dt = t₁ ∧ yₙ₋₁`
@@ -441,34 +420,11 @@ by its reciprocal, `algebra.jl:704-706`). For one column, `c · (1/c²)` (Julia
     let (q1, q2) := (a * r, c * r)
     -- column-major `[[-p₂, p₁], [-q₂, q₁]]`
     ⟨⟨Mat.finish (Packed.push (Packed.push (Packed.push (Packed.push (Packed.mkEmpty 4) (-p2)) (-q2)) p1) q1)⟩⟩
-  else if V.n = 3 ∧ W.n = 3 then
-    -- val = (y₂, y₁ ∧ x₁, x₂) = (t₂∧t₃, t₃∧t₁, t₁∧t₂), dt = t₁ ∧ y₂; rows `!(valᵢ · (1/dt))`,
-    -- `!e₂₃ = e₁`, `!e₁₃ = −e₂`, `!e₁₂ = e₃`
-    let raw := T.mat.v.data
-    let e := fun (k : Nat) => Mat.rd raw k
-    let (a1, a2, a3) := (e 0, e 1, e 2)
-    let (b1, b2, b3) := (e 3, e 4, e 5)
-    let (c1, c2, c3) := (e 6, e 7, e 8)
-    let (y12, y13, y23) := wedge3 b1 b2 b3 c1 c2 c3
-    let r := Coeff.one / wedge12 a1 a2 a3 y12 y13 y23
-    let (m12, m13, m23) := wedge3 c1 c2 c3 a1 a2 a3
-    let (x12, x13, x23) := wedge3 a1 a2 a3 b1 b2 b3
-    let row := fun (v12 v13 v23 : α) => (v23 * r, -(v13 * r), v12 * r)
-    let r1 := row y12 y13 y23
-    let r2 := row m12 m13 m23
-    let r3 := row x12 x13 x23
-    -- rows r₁, r₂, r₃ stored column-major
-    let push3 := fun (out : Packed.Arr α) (x y z : α) => Packed.push (Packed.push (Packed.push out x) y) z
-    let out := push3 (Packed.mkEmpty 9) r1.1 r2.1 r3.1
-    let out := push3 out r1.2.1 r2.2.1 r3.2.1
-    let out := push3 out r1.2.2 r2.2.2 r3.2.2
-    ⟨⟨Mat.finish out⟩⟩
-  else if V.n = 4 ∧ W.n = 4 then ⟨⟨Mat.finish (inv4 T.mat.v.data)⟩⟩
-  else
-    -- one pass over the Cramer symbols for both the adjugate and `dt`
-    let (xs, ys) := T.prefixSuffix
-    let r := Coeff.one / T.cramerDetOf xs ys
-    ofRowsP ((T.adjugateRowsOf xs ys).map (scaleP · r))
+  else if V.n = 3 ∧ W.n = 3 then ofRawT (Unrolled.inv3 T.mat.v.data)
+  else if V.n = 4 ∧ W.n = 4 then ofRawT (Unrolled.inv4 T.mat.v.data)
+  else if V.n = 5 ∧ W.n = 5 then ofRawT (Unrolled.inv5 T.mat.v.data)
+  else if V.n = 6 ∧ W.n = 6 then ofRawT (Unrolled.inv6 T.mat.v.data)
+  else T.invSquareGeneric
 
 /-- Checked write of raw packed storage (a no-op out of range). -/
 @[inline] def wr (a : Packed.Arr α) (i : Nat) (x : α) : Packed.Arr α :=
@@ -551,7 +507,7 @@ the determinant as Julia's `!(t₁ ∧ yₙ₋₁)`. -/
 /-- Julia `value(T) \ v` (`composite.jl:722-732`): solve `T c = v` by Cramer's rule
 (numerators `x_{i-1} ∧ v ∧ y_{n-i}` over `det`) for a square operator; the
 least-norm / least-squares solution `pinv(T) v` otherwise. -/
-@[specialize] def solve [Div α] (T : Simplex V W α) (v : Chain W 1 α) : Chain V 1 α :=
+@[specialize] def solveGeneric [Div α] (T : Simplex V W α) (v : Chain W 1 α) : Chain V 1 α :=
   if V.n = W.n ∧ V.n ≥ 2 then
     let n := W.n
     let (xs, ys) := T.prefixSuffix
@@ -571,6 +527,21 @@ least-norm / least-squares solution `pinv(T) v` otherwise. -/
     Chain.ofFn fun i => nums[i.1]! / detx
   else
     ⟨T.inv.applyValues v.v⟩
+
+/-- Julia `value(T) \ v` (`composite.jl:722-732`): the generated straight-line Cramer solves
+for `2 ≤ n ≤ 6` (`Grassmann.Forms.Unrolled`, bit-identical to `solveGeneric`), the Cramer
+symbols beyond, the least-squares / least-norm solution for a non-square operator. -/
+@[specialize] def solve [Div α] (T : Simplex V W α) (v : Chain W 1 α) : Chain V 1 α :=
+  let a := T.mat.v.data
+  let b := v.v.data
+  if V.n = W.n then
+    if V.n = 3 then ⟨Mat.finish (Unrolled.solve3 a b)⟩
+    else if V.n = 2 then ⟨Mat.finish (Unrolled.solve2 a b)⟩
+    else if V.n = 4 then ⟨Mat.finish (Unrolled.solve4 a b)⟩
+    else if V.n = 5 then ⟨Mat.finish (Unrolled.solve5 a b)⟩
+    else if V.n = 6 then ⟨Mat.finish (Unrolled.solve6 a b)⟩
+    else T.solveGeneric v
+  else T.solveGeneric v
 
 /-- `k!`. -/
 def factorialNat : Nat → Nat

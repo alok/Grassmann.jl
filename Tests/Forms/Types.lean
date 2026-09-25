@@ -1,4 +1,5 @@
 import Tests.Forms.Common
+import Grassmann.Forms.Literal
 
 /-!
 # Static types and notation of the Forms layer (compile-time checks, and a few goldens)
@@ -44,12 +45,28 @@ example : Endomorphism ℝ3 (.chain 1) Int := T * D
 example : Spinor ℝ3 Int := S2 * s
 example : Spinor ℝ3 Int := S2 s
 example : Dyadic ℝ3 1 ℝ3 1 Int := x ⊗ x
+example : Dyadic ℝ3 1 ℝ3 1 Int := (⟨1, 2⟩ : Single ℝ3 1 Int) ⊗ x
+example : Dyadic ℝ3 1 ℝ3 2 Int := B ⊗ (⟨4, 3⟩ : Single ℝ3 1 Int)
+example : Chain ℝ3 1 Int := (2 : Int) ⊗ x
 example : Chain ℝ3 1 Int := (x ⊗ x : Dyadic ℝ3 1 ℝ3 1 Int) * x
 example : Endomorphism ℝ3 (.chain 1) Float := Tf.inv
 example : Endomorphism ℝ3 (.chain 1) Float := Tf.exp
 example : Chain ℝ3 1 Float := Tf.characteristic
 example : Endomorphism ℝ3 (.chain 1) Int := T + AbstractTensors.UniformScaling.mk (1 : Int)
 example : Chain ℝ3 1 Int := T.pfaffian
+
+-- operator literals (Julia `@TensorOperator`, `@Endomorphism`, `@Outermorphism`,
+-- `@SpectralOperator`): the shape is in the type
+example : TensorOperator (En 3) (.chain 1) (En 2) (.chain 1) Int := op![[1, 2, 3], [4, 5, 6]]
+example : Endomorphism (En 2) (.chain 1) Float := endo![[1, 2], [3, 4]]
+example : Outermorphism (En 2) (En 2) Float := outer![[1, 2], [3, 4]]
+example : TensorOperator.EigenResult (En 2) := spectral![[2, 1], [1, 2]]
+
+/-- error: operator literal: row 2 has 1 entries, row 1 has 2 -/
+#guard_msgs in example : Endomorphism (En 2) (.chain 1) Int := endo![[1, 2], [3]]
+
+/-- error: endo![…]: a square literal is expected, got 1 × 2 -/
+#guard_msgs in example : Endomorphism (En 2) (.chain 1) Int := endo![[1, 2]]
 
 end StaticTypes
 
@@ -69,12 +86,33 @@ def suite : IO Tally := do
   t := t.ok (toString (Endomorphism.pfaffian T) == "6v₁ - 3v₂ + 2v₃") fun _ => "pfaffian"
   let O := T.outermorphism
   t := t.ok (O.tr == 2 && O.det == -3) fun _ => "tr(O), det(O)"
+  -- literals: `op!` rows are Julia's rows; docs algebra.md:1053 `@TensorOperator([1 2; 3 4])\Chain(5,6)`
+  let L : Endomorphism (En 2) (.chain 1) Float := endo![[1, 2], [3, 4]]
+  let sol := L.solve (chainOf (En 2) 1 [5, 6])
+  t := t.ok ((getD sol.v 0 + 4).abs < 1e-12 && (getD sol.v 1 - 4.5).abs < 1e-12) fun _ => s!"[1 2; 3 4]\\(5,6) = {sol}"
+  t := t.ok ((op![[1, 2, 3], [4, 5, 6]] : TensorOperator (En 3) (.chain 1) (En 2) (.chain 1) Int).toRows ==
+    [[1, 2, 3], [4, 5, 6]]) fun _ => "op! rows"
+  t := t.ok ((outer![[1, 2], [3, 4]] : Outermorphism (En 2) (En 2) Int).det == -2) fun _ => "outer! det"
+  -- call syntax: `m(g)` grade parts, `m.v12` by name, `v ∈ t` for simplices
+  let mm : Multivector ℝ3 Int := ⟨Values.ofFn fun i => (i.1 : Int) + 1⟩
+  t := t.ok ((mm 2).v.toList == [5, 6, 7] && (mm 0).v.toList == [1] && mm.byName "v12" == some 5 &&
+    mm.byName "v₁₂₃" == some 8 && mm.byName "v4" == none && mm.byName "w1" == none) fun _ => "m(g), m.v12"
+  let sp : Spinor ℝ3 Int := ⟨Values.ofFn fun i => (i.1 : Int) + 1⟩
+  t := t.ok ((sp 2).v.toList == [2, 3, 4]) fun _ => "spinor(g)"
+  let tri : Simplex ℝ3 ℝ3 Float := TensorOperator.ofFn fun i j => if i.1 = 0 then 1 else if i.1 = j.1 then 2 else 0
+  let inside : Chain ℝ3 1 Float := chainOf ℝ3 1 [1, 0.5, 0.5]
+  let outside : Chain ℝ3 1 Float := chainOf ℝ3 1 [1, 3, 3]
+  t := t.ok (decide (inside ∈ tri) && !decide (outside ∈ tri)) fun _ => "∈ simplex"
   t := t.ok (toString (O * (c [1, 1, 1] ∧ c [0, 1, 0]) : Chain ℝ3 2 Int) ==
     toString ((T * c [1, 1, 1] : Chain ℝ3 1 Int) ∧ (T * c [0, 1, 0] : Chain ℝ3 1 Int))) fun _ => "O(x∧y)"
   t := t.ok ((lieBracket [T, U]).toRows == [[4, -10, -2], [10, 0, 18], [6, -16, -4]]) fun _ => "𝓛[T,U]"
+  t := t.ok ((𝓛[T, U]).toRows == (lieBracket [T, U]).toRows) fun _ => "𝓛[…] notation"
   let Tf := T.map Float.ofInt
   t := t.ok (toString Tf.characteristic == "3.0v₁ - 12.0v₂ - 16.0v₃") fun _ => s!"characteristic {Tf.characteristic}"
   t := t.ok (toString Tf.eigpolys == "5.33333v₁ - 4.0v₂ - 3.0v₃") fun _ => "eigpolys"
+  t := t.ok (Tf.disc == Tf.discriminant && Tf.disccomplex == Tf.discriminantcomplex &&
+    (match Tf.discreal, Tf.discriminantreal with | .ok a, .ok b => a == b | .error _, .error _ => true | _, _ => false))
+    fun _ => "disc, discreal, disccomplex"
   t := t.ok (toString (Endomorphism.companion (n := 3) (Values.ofFn fun i => (i.1 + 1 : Int))) ==
     "(0v₁+1v₂+0v₃)v₁ + (0v₁+0v₂+1v₃)v₂ + (-1v₁-2v₂-3v₃)v₃") fun _ => "companion"
   t := t.ok (lieBracketString == "LieBracket[...]") fun _ => "LieBracket"

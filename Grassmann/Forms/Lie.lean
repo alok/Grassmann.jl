@@ -41,6 +41,13 @@ def lieBracket {V : TensorBundle} {l : Layout} {α : Type} [AbstractTensors.Coef
     (Xs : List (Endomorphism V l α)) : Endomorphism V l α :=
   bracket TensorOperator.comp Xs
 
+/-- Julia's `𝓛[X, Y, …]` (`forms.jl:1539-1552`): the Lie bracket of endomorphisms, scoped in
+`Grassmann` (`lieBracket [X, Y, …]`). -/
+scoped syntax "𝓛[" term,* "]" : term
+
+macro_rules
+  | `(𝓛[ $xs,* ]) => `(lieBracket [$xs,*])
+
 /-- Julia `LieDerivative{X}` (`forms.jl:1548-1550`): a wrapped operator acting by
 brackets, `𝓛(X)(Y…) = bracket(X, Y…)`. -/
 structure LieDerivative (X : Type) where

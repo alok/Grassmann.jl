@@ -51,7 +51,7 @@ positions `1 … 3`): a loop in a plain signature space, the chain kernel otherw
   let p := plainNeg V
   if p != notPlain then
     let (bs, o) := bladeTable V.n (halfLayout false)
-    weightedSumLoop (plainAbs2 p) bs o s.v 1 f0 (halfDim V.n false)
+    weightedSumLoop (plainAbs2 p) bs o s.v 1 f0 s.v.data.size
   else getD s.bivectorPart.abs2.v 0
 
 /-- The coefficient `acos(⟨z⟩₀/r)/|b|` of Julia's `angle(z::Quaternion, r)`
@@ -71,7 +71,7 @@ quaternion (`n = 3`: the even storage is the scalar followed by the bivector). -
 @[inline] def logPolar (s : Half V false Float) : Half V false Float :=
   let r := s.radius
   let k := s.angleCoef r
-  ⟨setFirst (s.v.map (· * k)) (F64.log r)⟩
+  ⟨setFirst (vmap (· * k) s.v) (F64.log r)⟩
 
 /-- Julia `log(t::Spinor)`: the polar form for Euclidean quaternions
 (`src/composite.jl:367`), otherwise `qlog((t - 1)/(t + 1))` (`C:369`); `none` where Julia
@@ -84,7 +84,7 @@ throws. -/
 
 /-- Julia `log1p(t::Spinor)`: `log(1 + t)` for Euclidean quaternions (`C:368`), otherwise
 `qlog(t/(t + 2))` (`C:370`); `none` where Julia throws. -/
-def log1p? (s : Half V false Float) : Option (Half V false Float) :=
+@[specialize V] def log1p? (s : Half V false Float) : Option (Half V false Float) :=
   if euclideanQuaternions V then some (addScalar f1 s).logPolar else s.log1pSeries?
 
 /-- Julia `log1p(t::Spinor)`; `NaN` coefficients where Julia throws. -/
@@ -99,11 +99,11 @@ def log1p? (s : Half V false Float) : Option (Half V false Float) :=
     -- `cos θ + B·sin θ/θ`, `θ = √contraction(B, B)` (Julia `exp(t::Chain)`, `C:148-156`)
     let r := s.radius
     let k := s.angleCoef r
-    let b : Half V false Float := ⟨s.v.map fun y => (y * k) / n⟩
+    let b : Half V false Float := ⟨vmap (fun y => (y * k) / n) s.v⟩
     let θ := Float.sqrt b.bivAbs2
     let x := sinOver θ
     let q := qrt r
-    some ⟨setFirst (b.v.map fun y => q * (y * x)) (q * Float.cos θ)⟩
+    some ⟨setFirst (vmap (fun y => q * (y * x)) b.v) (q * Float.cos θ)⟩
   else if s.isScalar then some (scalarF (qrt s.scalarValue))
   else s.logSeries?.map fun l => exp (sdiv l n)
 
@@ -120,11 +120,11 @@ def log1p? (s : Half V false Float) : Option (Half V false Float) :=
 @[inline] def cbrt (s : Half V false Float) : Half V false Float := s.cbrt?.getD nan
 
 /-- `tanh t = sinh t / cosh t` (AbstractTensors `AT:419`) on a spinor. -/
-def tanh (s : Half V false Float) : Half V false Float := smul' s.sinh (invD s.cosh)
+@[specialize V] def tanh (s : Half V false Float) : Half V false Float := smul' s.sinh (invD s.cosh)
 
 /-- Julia `b ^ t = exp(t ⟑ log(b))` for a real base (AbstractTensors `AT:326`). -/
 @[inline] def rpow (b : Float) (s : Half V false Float) : Half V false Float :=
-  exp ⟨s.v.map (· * F64.log b)⟩
+  exp ⟨vmap (· * F64.log b) s.v⟩
 
 end Half
 
@@ -136,12 +136,15 @@ variable {α : Type} [Coeff α]
 
 /-- Julia `quatvalue(q::Quaternion) = (q[1], q[2], -q[3], q[4])`: the components
 `(s, i, j, k)` of `quaternion(s, i, j, k)` (`i = v₁₂`, `j = -v₁₃`, `k = v₂₃`). -/
-def quatvalue (q : Spinor V α) : Values α 4 :=
+@[specialize V] def quatvalue (q : Spinor V α) : Values α 4 :=
   Values.ofFn fun t => match t.1 with
     | 0 => getD q.v 0 | 1 => getD q.v 1 | 2 => -getD q.v 2 | _ => getD q.v 3
 
 /-- Julia `quatvalue(q::TensorAlgebra) = quatvalue(Spinor(even(q)))` for a multivector. -/
 @[inline] def quatvalueOf (m : Multivector V α) : Values α 4 := quatvalue (m.half false)
+
+/-- Julia `quatvalues = quatvalue` (`src/multivectors.jl:1093`). -/
+@[inline] def quatvalues (q : Spinor V α) : Values α 4 := quatvalue q
 
 end Spinor
 
@@ -150,7 +153,7 @@ namespace CoSpinor
 variable {α : Type} [Coeff α]
 
 /-- Julia `quatvalue(q::AntiQuaternion) = (q[4], q[3], q[2], q[1])`. -/
-def quatvalue (q : CoSpinor V α) : Values α 4 :=
+@[specialize V] def quatvalue (q : CoSpinor V α) : Values α 4 :=
   Values.ofFn fun t => getD q.v (3 - t.1)
 
 variable [Kernels V]
@@ -189,23 +192,23 @@ variable [Kernels V]
 
 /-- Julia `exp(t::PseudoCouple{V,B})` (`src/composite.jl:120-128`): through the couple on
 `I` when `B` is the scalar blade, else through `multispin(t)`; as a multivector. -/
-def exp (z : PseudoCouple V Float) : Multivector V Float :=
+@[specialize V] def exp (z : PseudoCouple V Float) : Multivector V Float :=
   if z.bits == 0 then toMultivector (ofPseudo z.onPseudo.exp)
   else Multivector.exp (toMultivector z)
 
 /-- Julia `expm1(t::PseudoCouple)` (`C:112-119`): `exp(t) - 1` for the scalar blade, else
 `expm1(multispin(t))`. -/
-def expm1 (z : PseudoCouple V Float) : Multivector V Float :=
+@[specialize V] def expm1 (z : PseudoCouple V Float) : Multivector V Float :=
   if z.bits == 0 then Multivector.addScalar (-f1) (exp z)
   else Multivector.expm1 (toMultivector z)
 
 /-- Julia `log(t::PseudoCouple)` (`C:373-381`). -/
-def log (z : PseudoCouple V Float) : Multivector V Float :=
+@[specialize V] def log (z : PseudoCouple V Float) : Multivector V Float :=
   if z.bits == 0 then toMultivector (ofPseudo z.onPseudo.log)
   else Multivector.log (toMultivector z)
 
 /-- Julia `log1p(t::PseudoCouple)` (`C:382-390`). -/
-def log1p (z : PseudoCouple V Float) : Multivector V Float :=
+@[specialize V] def log1p (z : PseudoCouple V Float) : Multivector V Float :=
   if z.bits == 0 then toMultivector (ofPseudo z.onPseudo.log1p)
   else Multivector.log1p (toMultivector z)
 
@@ -217,7 +220,7 @@ def log1p (z : PseudoCouple V Float) : Multivector V Float :=
 
 /-- Julia `complexify(t::PseudoCouple) = !t` (`src/multivectors.jl:1049`): the right
 complement, a couple on the complement of `B` (`complexify(3v₁ + 4v₁₂₃) = 4 + 3v₂₃`). -/
-def complexify {α : Type} [Coeff α] (z : PseudoCouple V α) : Multivector V α :=
+@[specialize V] def complexify {α : Type} [Coeff α] (z : PseudoCouple V α) : Multivector V α :=
   Multivector.complementright (toMultivector z)
 
 end PseudoCouple
@@ -226,12 +229,12 @@ end PseudoCouple
 
 /-- Julia `complexify(t::Chain{V,1,T,2}) = Couple{V,Submanifold(V)}(t[1], t[2])`
 (`src/multivectors.jl:1046`): a plane vector as a couple on the pseudoscalar. -/
-def Chain.complexify {α : Type} [Coeff α] (c : Chain V 1 α) : Couple V α :=
+@[specialize V] def Chain.complexify {α : Type} [Coeff α] (c : Chain V 1 α) : Couple V α :=
   ⟨pseudoMask V, getD c.v 0, getD c.v 1⟩
 
 /-- Julia `polarize(t::Chain{V,1,T,2}) = Phasor{V}(t[1], t[2]·I)`
 (`src/multivectors.jl:1054`): the chain is read as (amplitude, angle). -/
-def Chain.polarize {α : Type} [Coeff α] (c : Chain V 1 α) : Phasor V α :=
+@[specialize V] def Chain.polarize {α : Type} [Coeff α] (c : Chain V 1 α) : Phasor V α :=
   ⟨getD c.v 0, ⟨pseudoMask V, Coeff.zero, getD c.v 1⟩⟩
 
 end Grassmann

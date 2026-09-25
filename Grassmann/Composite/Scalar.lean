@@ -47,8 +47,10 @@ hot loops). -/
 @[inline] def natF (k : Nat) : Float := k.toUInt64.toFloat
 
 /-- Julia `a ≈ b` on two `Float64`s (`Base.isapprox`, `rtol = √eps`, `atol = 0`): the
-series stopping test and the `isscalar` test. -/
-@[inline] def approx (a b : Float) : Bool := F64.isapprox a b
+series stopping test and the `isscalar` test. `JuliaBase.F64.isapprox` with its defaults,
+written inline (the finiteness tests as comparisons, not runtime calls). -/
+@[inline] def approx (a b : Float) : Bool :=
+  a == b || (F64.isfinite a && F64.isfinite b && (a - b).abs ≤ max f0 (F64.rtoldefault * max a.abs b.abs))
 
 /-- Julia `isscalar(t) = norm(t) ≈ norm(scalar(t))` (`src/multivectors.jl:1140`) from the
 two norms: an element whose non-scalar part is below ~1.7e-4 of its scalar part counts
@@ -194,7 +196,7 @@ def invPseudoCoef (V : TensorBundle) : Float :=
 /-- Julia `iszero(metric(V))` (`src/composite.jl:367`, `:442`): a `Signature` without
 negative generators or the Euclidean `Int` space. A `DiagonalForm`'s `metric` is a cache
 index in Julia (not a sign word), so those spaces take the general branch. -/
-def zeroMetric (V : TensorBundle) : Bool :=
+@[inline] def zeroMetric (V : TensorBundle) : Bool :=
   match V.metric with
   | .signature s => s == 0
   | .euclid => true
@@ -202,7 +204,7 @@ def zeroMetric (V : TensorBundle) : Bool :=
 
 /-- Julia `isR301(V)` (`src/composite.jl:175-177`): the `DiagonalForm` `⟨1,1,1,0⟩` of 3D
 projective geometric algebra (`S"+++0"` or `D"0,1,1,1"` do not count). -/
-def isR301 (V : TensorBundle) : Bool :=
+@[inline] def isR301 (V : TensorBundle) : Bool :=
   match V.metric with
   | .diagonal d => d == #[1, 1, 1, 0] && V.n == 4 && V.diffvars == 0 && V.dyadmode == 0
   | _ => false

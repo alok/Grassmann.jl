@@ -94,6 +94,22 @@ end Dyadic
 instance {V W : TensorBundle} {G H : Nat} {α : Type} [Coeff α] :
     TensorProd (Chain W H α) (Chain V G α) (Dyadic V G W H α) := ⟨fun x y => ⟨x, y⟩⟩
 
+/-- Julia `x ⊗ y` with a term on either side (`algebra.jl:150-152`, `Single`/`Submanifold`
+operands): the dyadic of the chains. -/
+instance {V W : TensorBundle} {G H : Nat} {α : Type} [Coeff α] :
+    TensorProd (Single W H α) (Chain V G α) (Dyadic V G W H α) := ⟨fun x y => ⟨Chain.ofSingle x, y⟩⟩
+instance {V W : TensorBundle} {G H : Nat} {α : Type} [Coeff α] :
+    TensorProd (Chain W H α) (Single V G α) (Dyadic V G W H α) := ⟨fun x y => ⟨x, Chain.ofSingle y⟩⟩
+instance {V W : TensorBundle} {G H : Nat} {α : Type} [Coeff α] :
+    TensorProd (Single W H α) (Single V G α) (Dyadic V G W H α) :=
+  ⟨fun x y => ⟨Chain.ofSingle x, Chain.ofSingle y⟩⟩
+
+/-- Julia `a ⊗ t = a * t` for a scalar `a` (`AT:333`, `⊗` of numbers is multiplication). -/
+instance {V : TensorBundle} {G : Nat} {α : Type} [Coeff α] : TensorProd α (Chain V G α) (Chain V G α) :=
+  ⟨fun a t => a * t⟩
+instance {V : TensorBundle} {G : Nat} {α : Type} [Coeff α] : TensorProd (Chain V G α) α (Chain V G α) :=
+  ⟨fun t a => t * a⟩
+
 /-! ## Projector -/
 
 /-- Julia `Projector{V,T,Λ}` (`forms.jl:374-380`): `λ v ⊗ v`, `x ↦ v (λ (v ⋅ x))`
@@ -103,6 +119,9 @@ structure Projector (V : TensorBundle) (G : Nat) (α : Type) [Coeff α] where
   v : Chain V G α
   /-- The eigenvalue (Julia `P.λ`, default `1`). -/
   lam : α
+
+/-- Julia `const Proj = Projector` (`forms.jl:382`); `Proj(v, λ)` is `Projector.ofVector`. -/
+abbrev Proj (V : TensorBundle) (G : Nat) (α : Type) [Coeff α] := Projector V G α
 
 namespace Projector
 

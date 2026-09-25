@@ -42,29 +42,61 @@ variable [Kernels V]
 @[inline] def scalarV (V : TensorBundle) (l : Layout) (x : Float) : Values Float (l.size V.n) :=
   Values.ofFn fun i => if i.1 = 0 then x else f0
 
+/-- `cosh t` for an element with `t ⟑ t = p` a scalar: `cosh √p`, `cos √-p`, or `1`. -/
+@[inline] def coshOfSquare (p : Float) : Float :=
+  if p > f0 then Float.cosh (Float.sqrt p) else if p < f0 then Float.cos (Float.sqrt (-p)) else f1
+
+/-- `sinh t / t` for an element with `t ⟑ t = p` a scalar: `sinh √p/√p`, `sin √-p/√-p`, or `1`. -/
+@[inline] def sinhOfSquareOver (p : Float) : Float :=
+  if p > f0 then sinhOver (Float.sqrt p) else if p < f0 then sinOver (Float.sqrt (-p)) else f1
+
+/-- `x ⟑ x` of a grade-`g` chain (`g ≥ 1`) when it is structurally a scalar and the space is a
+plain signature space (vectors, pseudovectors, every grade when `n ≤ 3`: the cross terms cancel
+exactly, as in Julia's product): `Σ xᵢ²·(e_bᵢ ⟑ e_bᵢ)`, a loop over the coefficients with no
+product kernel; `none` otherwise. -/
+@[inline] def chainSqFast? (g : Nat) (x : Values Float ((Layout.chain g).size V.n)) : Option Float :=
+  let s := plainNeg V
+  if s != notPlain && (g ≤ 1 || g + 1 ≥ V.n || V.n ≤ 3) then some (weightedSum (plainSq s) (.chain g) x)
+  else none
+
 /-- `cosh` of a grade-`g` chain (its coefficients `x`) as a spinor: `cosh(x₀)` for
 `g = 0` (Julia `C:456`), otherwise Grassmann's generic series (`C:458-481`) over
-`τ = x⟑x`. -/
-def coshChainV (g : Nat) (x : Values Float ((Layout.chain g).size V.n)) : Half V false Float :=
+`τ = x⟑x`, summed in closed form when `τ` is a scalar. -/
+@[specialize V] def coshChainV (g : Nat) (x : Values Float ((Layout.chain g).size V.n)) : Half V false Float :=
   if g == 0 then Half.scalarF (Float.cosh (getD x 0))
-  else
+  else match chainSqFast? g x with
+  | some p => Half.scalarF (coshOfSquare p)
+  | none =>
     let τ : Half V false Float := ⟨Kernels.bin .mul (.chain g) (.chain g) (halfLayout false) x x⟩
-    Half.addScalar f1 (coshGenericTail (· + ·) Half.smul' Half.sdiv Half.fnorm τ)
+    if vScalarOnly τ.v then
+      -- `τ = p` is exactly a scalar: every partial sum and term of the spinor series is one;
+      -- the series' limit in closed form, `cosh √p`, `cos √-p` or `1` (Julia's truncated sum
+      -- agrees to its `√eps` stopping rule)
+      Half.scalarF (coshOfSquare τ.scalarValue)
+    else Half.addScalar f1 (coshGenericTail Half.addF Half.smul' Half.sdiv Half.fnorm τ)
 
 /-- `sinh` of a grade-`g` chain (its coefficients `x`) as the half of parity `g`:
 `sinh(x₀)` for `g = 0` (Julia `C:515`), otherwise Grassmann's generic series
 (`C:517-539`): `S = t`, `term = t⟑τ/6`, next term `term ⟑ (τ/(k(k-1)))`. -/
-def sinhChainV (g : Nat) (x : Values Float ((Layout.chain g).size V.n)) :
+@[specialize V] def sinhChainV (g : Nat) (x : Values Float ((Layout.chain g).size V.n)) :
     Values Float ((halfLayout (g % 2 == 1)).size V.n) :=
   if g == 0 then scalarV V _ (Float.sinh (getD x 0))
-  else
+  else match chainSqFast? g x with
+  | some p => embedChain V g (halfLayout (g % 2 == 1)) (sinhOfSquareOver p) x
+  | none =>
     let lp := halfLayout (g % 2 == 1)
     let τ : Values Float ((halfLayout false).size V.n) :=
       Kernels.bin .mul (.chain g) (.chain g) (halfLayout false) x x
-    let t0 : Values Float (lp.size V.n) := convertLayout V.n (.chain g) lp x
+    let t0 : Values Float (lp.size V.n) := embedChain V g lp f1 x
+    if vScalarOnly τ then
+      -- `τ = p` is exactly a scalar: the series' limit `t·sinh(√p)/√p` (`sin`, `1` for
+      -- `p ≤ 0`) in closed form
+      let c := sinhOfSquareOver (getD τ 0)
+      vmap (· * c) t0
+    else
     let mulτ := fun (y : Values Float (lp.size V.n)) => Kernels.bin .mul lp (halfLayout false) lp y τ
-    sinhGenericWith (· + ·) (fun y k => y.map (· / k)) (·.norm) mulτ
-      (fun d y => Kernels.bin .mul lp (halfLayout false) lp y (τ.map (· / natF d))) t0
+    sinhGenericWith (vzip (· + ·)) (fun y k => vmap (· / k) y) vnorm mulτ
+      (fun d y => Kernels.bin .mul lp (halfLayout false) lp y (vmap (· / natF d) τ)) t0
 
 /-- The grade of the pseudoscalar `I = V(I)` (the non-tangent generators). -/
 @[inline] def pseudoGrade (V : TensorBundle) : Nat := V.n - V.diffvars
@@ -95,14 +127,14 @@ variable {G : Nat} [Kernels V]
 /-- The chain's coefficients in layout `l` (`.even`/`.full` for an even `G`, `.odd`/`.full` for
 an odd one): the space's embedding kernel (the parity projection of the chain). -/
 @[inline] def embedLayout (l : Layout) (c : Chain V G Float) : Values Float (l.size V.n) :=
-  Kernels.un (if G % 2 == 0 then .even else .odd) (.chain G) l c.v
+  if storesGrade G l then embedChain V G l f1 c.v else zeros V l
 
 /-- The chain as the even half (meaningful for even `G`). -/
 @[inline] def evenHalf (c : Chain V G Float) : Half V false Float := ⟨c.embedLayout (halfLayout false)⟩
 
 /-- `a + x·c` in layout `l` (`G > 0`: the scalar slot is free). -/
 @[inline] def affine (l : Layout) (a x : Float) (c : Chain V G Float) : Values Float (l.size V.n) :=
-  setFirst (Kernels.un (if G % 2 == 0 then .even else .odd) (.chain G) l (c.v.map (· * x))) a
+  if storesGrade G l then vset (embedChain V G l x c.v) 0 a else vset (zeros V l) 0 a
 
 /-- `a + x·c` as a spinor (for even `G > 0`). -/
 @[inline] def spinorAffine (a x : Float) (c : Chain V G Float) : Half V false Float :=
@@ -146,7 +178,7 @@ space of dimension ≤ 3 are scalars, `Σ cᵢ²·Bᵢ²`. -/
 (`src/composite.jl:142-147`): with `u = √|abs2(t)|` and `v = (t∧t)·(-½/u)` (a multiple of
 `I`, `I² = 0`), `exp t = (cos u - v sin u) + ((sin u + v cos u) ⟑ t) ⟑ (1/u - v/u²)`, and
 `1 + t` for `u < 10⁻⁵`. -/
-def expPGA (c : Chain V G Float) : Half V false Float :=
+@[specialize V] def expPGA (c : Chain V G Float) : Half V false Float :=
   let u := Float.sqrt (Float.abs (getD c.abs2.v 0))
   if u < pgaCut then spinorAffine f1 f1 c
   else
@@ -172,7 +204,7 @@ def expPGA (c : Chain V G Float) : Half V false Float :=
 /-- Julia `exp(t::Chain)` (`src/composite.jl:136-159`, `C:407`): a `Spinor` for even `G`, a
 `Multivector` (`scalar + odd`) for odd `G`, returned as a multivector. -/
 @[inline] def exp (c : Chain V G Float) : Multivector V Float :=
-  if G == 0 then Multivector.scalar (F64.exp (getD c.v 0))
+  if G == 0 then mvScalar (F64.exp (getD c.v 0))
   else if G % 2 == 0 && isR301 V && G == 2 then (expPGA c).toMV
   else match expClosed? c with
     | some (a, x) => mvAffine a x c
@@ -182,16 +214,16 @@ def expPGA (c : Chain V G Float) : Half V false Float :=
 
 /-- Julia `expm1(t::Chain) = expm1(multispin(t))` (`src/composite.jl:28-30`): the scalar
 `expm1` for `G = 0`, the generated series of the `Spinor`/`Multivector` otherwise. -/
-def expm1 (c : Chain V G Float) : Multivector V Float :=
-  if G == 0 then Multivector.scalar (F64.expm1 (getD c.v 0))
+@[specialize V] def expm1 (c : Chain V G Float) : Multivector V Float :=
+  if G == 0 then mvScalar (F64.expm1 (getD c.v 0))
   else if G % 2 == 0 then (Half.expm1 (evenHalf c)).toMV
   else Multivector.expm1 (toMultivector c)
 
 /-- Julia `log(t::Chain)`: the scalar `log` for `G = 0` (`C:407`), otherwise the generic
 `qlog((t - 1)/(t + 1))` (`C:369`) on the `Spinor`/`Multivector` of `t`; `none` where
 Julia throws (`inv` undefined). -/
-def log? (c : Chain V G Float) : Option (Multivector V Float) :=
-  if G == 0 then some (Multivector.scalar (F64.log (getD c.v 0)))
+@[specialize V] def log? (c : Chain V G Float) : Option (Multivector V Float) :=
+  if G == 0 then some (mvScalar (F64.log (getD c.v 0)))
   else if G % 2 == 0 then (Half.logSeries? (evenHalf c)).map Half.toMultivector
   else Multivector.log? (toMultivector c)
 
@@ -199,7 +231,7 @@ def log? (c : Chain V G Float) : Option (Multivector V Float) :=
 @[inline] def log (c : Chain V G Float) : Multivector V Float := c.log?.getD Multivector.nan
 
 /-- Julia `log1p(t::Chain) = qlog(t/(t + 2))` (`C:370`), or `none`. -/
-def log1p? (c : Chain V G Float) : Option (Multivector V Float) :=
+@[specialize V] def log1p? (c : Chain V G Float) : Option (Multivector V Float) :=
   if G % 2 == 0 then (Half.log1pSeries? (evenHalf c)).map Half.toMultivector
   else Multivector.log1p? (toMultivector c)
 
@@ -209,9 +241,9 @@ def log1p? (c : Chain V G Float) : Option (Multivector V Float) :=
 /-- Julia `sqrt`/`cbrt` of a chain (`src/composite.jl:436-451`): the scalar root for
 `G = 0` (`qrtScalar`), `0` for the zero chain (`isscalar`), else `exp(log(t)/n)`; `none`
 where Julia throws (the logarithm's `inv` undefined). -/
-def root? (qrtScalar : Float → Float) (n : Float) (c : Chain V G Float) : Option (Multivector V Float) :=
-  if G == 0 then some (Multivector.scalar (qrtScalar (getD c.v 0)))
-  else if isScalarNorms c.v.norm f0 then some (Multivector.scalar (qrtScalar f0))
+@[specialize V] def root? (qrtScalar : Float → Float) (n : Float) (c : Chain V G Float) : Option (Multivector V Float) :=
+  if G == 0 then some (mvScalar (qrtScalar (getD c.v 0)))
+  else if isScalarNorms c.v.norm f0 then some (mvScalar (qrtScalar f0))
   else if G % 2 == 0 then
     (Half.logSeries? (evenHalf c)).map fun l => Half.toMultivector (Half.exp (Half.sdiv l n))
   else (Multivector.log? (toMultivector c)).map fun l => Multivector.exp (l / n)
@@ -238,23 +270,29 @@ def root? (qrtScalar : Float → Float) (n : Float) (c : Chain V G Float) : Opti
 
 /-- `tanh t = sinh t / cosh t` (AbstractTensors `AT:419`); `NaN` coefficients where the
 inverse of `cosh t` is undefined. -/
-def tanh (c : Chain V G Float) : Half V (G % 2 == 1) Float :=
+@[specialize V] def tanh (c : Chain V G Float) : Half V (G % 2 == 1) Float :=
   let lp := halfLayout (G % 2 == 1)
   ⟨Kernels.bin .mul lp (halfLayout false) lp c.sinh.v (Half.invD c.cosh).v⟩
 
 /-- AbstractTensors `cos(t) = cosh(I ⟑ t)` (`AT:407`) of a chain: a spinor. -/
-def cos (c : Chain V G Float) : Half V false Float :=
-  coshChainV (pseudoGrade V - G) (mulPseudoChain G c.v)
+@[specialize V] def cos (c : Chain V G Float) : Half V false Float :=
+  let s := plainNeg V
+  let g' := V.n - G
+  if s != notPlain && G ≤ V.n && g' ≥ 1 && (g' ≤ 1 || g' + 1 ≥ V.n || V.n ≤ 3) then
+    -- plain space: `I ⟑ e_b = ±e_{b ⊻ I}`, so `(I⟑t)² = Σ tᵢ²·(e_{bᵢ⊻I})²`, a scalar here
+    let m := pseudoMask V
+    Half.scalarF (coshOfSquare (weightedSum (fun b => plainSq s (b ^^^ m)) (.chain G) c.v))
+  else coshChainV (pseudoGrade V - G) (mulPseudoChain G c.v)
 
 /-- AbstractTensors `sin(t) = sinh(I ⟑ t)/I` (`AT:408`) of a chain: the half of the parity
 of `G`. -/
-def sin (c : Chain V G Float) : Half V (G % 2 == 1) Float :=
+@[specialize V] def sin (c : Chain V G Float) : Half V (G % 2 == 1) Float :=
   let g' := pseudoGrade V - G
   ⟨divPseudo (halfLayout (g' % 2 == 1)) (halfLayout (G % 2 == 1)) (sinhChainV g' (mulPseudoChain G c.v))⟩
 
 /-- AbstractTensors `tan(t) = sin(t)/cos(t)` (`AT:409`) of a chain; `NaN` coefficients where
 the inverse of `cos t` is undefined. -/
-def tan (c : Chain V G Float) : Half V (G % 2 == 1) Float :=
+@[specialize V] def tan (c : Chain V G Float) : Half V (G % 2 == 1) Float :=
   let lp := halfLayout (G % 2 == 1)
   ⟨Kernels.bin .mul lp (halfLayout false) lp c.sin.v (Half.invD c.cos).v⟩
 
@@ -273,19 +311,19 @@ def scalarPow3 (x : Float) (d : Nat) : Float :=
 dimension ≤ 3 (no tangent variables) `sq^⌊k/2⌋` times `t` when `k` is odd, with
 `sq = contraction(~t, t)`; otherwise Julia's repeated/binary multiplication; and
 `inv(t)^|k|` for `k < 0` (Julia returns `t` or `One` there). -/
-def pow (c : Chain V G Float) (k : Int) : Multivector V Float :=
+@[specialize V] def pow (c : Chain V G Float) (k : Int) : Multivector V Float :=
   if k == 1 then toMultivector c
   else
     let c' := if k < 0 then c.inv else c
     let n := k.natAbs
-    if n == 0 then Multivector.one
+    if n == 0 then (mvScalar f1)
     else if n == 1 then toMultivector c'
     else if V.n ≤ 3 && V.diffvars == 0 then
       let sq := getD ((contraction (~c') c' : Chain V (G - G) Float).cast (Nat.sub_self G)).v 0
       let v := scalarPow3 sq (n / 2)
-      if n % 2 == 0 then Multivector.scalar v else toMultivector (v * c')
-    else if G % 2 == 0 then Half.toMultivector (powJulia Half.smul' Spinor.one (evenHalf c') n)
-    else powJulia (· * ·) Multivector.one (toMultivector c') n
+      if n % 2 == 0 then mvScalar v else toMultivector (v * c')
+    else if G % 2 == 0 then Half.toMultivector (powJulia Half.smul' (spScalar f1) (evenHalf c') n)
+    else powJulia (· * ·) (mvScalar f1) (toMultivector c') n
 
 /-- Julia `b ^ t = exp(t ⟑ log(b))` for a real base (AbstractTensors `AT:326`). -/
 @[inline] def rpow (b : Float) (c : Chain V G Float) : Multivector V Float := exp (c * F64.log b)

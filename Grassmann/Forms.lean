@@ -13,6 +13,11 @@ import Grassmann.Forms.Show
 import Grassmann.Forms.Eval
 import Grassmann.Forms.Lie
 import Grassmann.Forms.Simplex
+import Grassmann.Forms.Fit
+import Grassmann.Forms.Literal
+import Grassmann.Fields
+import Grassmann.Calculus
+import Grassmann.Calculus.Simplicial
 
 /-!
 # Grassmann.Forms: linear algebra of Grassmann elements
@@ -41,8 +46,23 @@ Port of Grassmann.jl `src/forms.jl` (and the determinant/simplex part of
   (symmetric `tred2`/`tql2`, general `orthes`/`hqr2`).
 * `Grassmann.Forms.Dyadic`: `Dyadic`, `Projector`, `SpectralOperator`.
 * `Grassmann.Forms.Spectral`: `characteristic`, `eigpolys`, `sylvester`,
-  `eigmults`, `eigvals*`, `eigen*`, `vandermonde`, `discriminant*`.
-* `Grassmann.Forms.MatFun`: `exp`, `expm1` (Grassmann's Padé), `log`.
+  `eigmults`, `eigvals*`, `eigvecs*`, `eigen*`, `vandermonde`, `discriminant*`, and the
+  polynomial roots of any degree (`roots*`, `monicroots*`: the closed forms of
+  `Forms.Roots` up to degree 4, the companion matrix's eigenvalues beyond).
+* `Grassmann.Forms.Fit`: `polynom`, `approx`, the least-squares Vandermonde fit
+  `vandermonde(x, y, N)` and `vandermondeinterp`.
+* `Grassmann.Fields` (imported here): `points`, `chainfield`, `vectorfield`/`pointfield`,
+  the sampled curves and vector fields of versors, on the `↑`/`↓` maps of
+  `Grassmann.Composite.Project`.
+* `Grassmann.Calculus` (imported here): `V(∇)` (`nabla`, `nablaM` with tangent spaces),
+  `∂`/`boundary`, `d`/`differential`, `δ`/`codifferential`, `gradient`, `divergence`, `curl`
+  and the simplex boundary `∧(ω)⋅v1`; `Grassmann.Calculus.Simplicial` (imported here):
+  `skeleton`, `𝒫`, `subcomplex`, `collapse`, `chain`, `path`, `count_gdims`, `χ`, `betti`.
+* `Grassmann.Forms.MatFun`: `exp`, `expm1` (Grassmann's Padé), `log`; of outermorphisms,
+  dyadics and projectors too.
+* `Grassmann.Forms.Literal`: the operator literals `op![…]`, `endo![…]`, `outer![…]`,
+  `spectral![…]` (Julia `@TensorOperator`, `@Endomorphism`, `@Outermorphism`,
+  `@SpectralOperator`), shape-checked at elaboration.
 * `Grassmann.Forms.Cayley`: `operator(t, G)`, `gradedoperator`, `metrictensor`,
   `metricextensor`, `antimetrictensor`, Cayley tables.
 * `Grassmann.Forms.Show`: Julia's 2-arg and 3-arg display, `printtex`, `alltex`.
@@ -67,24 +87,35 @@ outermorphism's sign on grades ≥ 2, `==`, the 1×1 adjugate, `det(::SpectralOp
 
 ## Performance
 
-Operators store their entries in one column-major `FloatArray` at `Float` (no boxing);
-the application, composition and row-application loops are tail-recursive strided dots
-specialised at the coefficient type, unrolled for `2 × 2` to `4 × 4`. The determinant
-family runs DirectSum's wedge plans (cached per dimension, Julia's accumulation order),
-with straight-line forms of the plans in 2-4 dimensions.
+Operators store their entries in one column-major `FloatArray` at `Float` (no boxing). The
+determinant family (`det`, the Cramer `inv`, `adjugate`, `solve`), the compounds, the
+characteristic polynomials, the `5 × 5`/`6 × 6` products and the outermorphism application
+on multivectors of `n = 3, 4` are straight-line code generated from the generic algorithms
+(`oracle/forms/GenUnrolled.lean`, bit-identical to them: `Tests/Forms/Unrolled.lean`); the
+rest are tail-recursive strided dots specialised at the coefficient type. Small products write
+their results in place, the Padé `exp` updates its temporaries in place, and `eigvals` runs
+the Hessenberg QR iteration without eigenvectors (a tail-recursive, unboxed sweep).
 
-Measured (Apple M4 Max, compiled, `Float`, ns per call; Julia 1.13 with Grassmann
-0.8.46, whose isbits tuples are stack-allocated and fully unrolled):
+Measured by the `forms` bench suite (`Bench/Forms.lean`, its Julia twin
+`oracle/bench/forms.jl`; Apple M4 Max, ns per operation, `K = 64` random operators;
+Julia 1.13, Grassmann 0.8.46, whose isbits results are stack-allocated):
 
-| operation | `n = 3` Lean | Julia | `n = 4` Lean | Julia | `n = 6` Lean | Julia |
-|---|---|---|---|---|---|---|
-| `T * x` | 20 | 0.7 | 24 | 1.9 | 75 | 3.1 |
-| `T * U` | 26 | 2.7 | 37 | 2.8 | 350 | 24 |
-| `det` | 42 | 1.7 | 44 | 5.2 | 920 | 19 |
-| `inv` | 110 | 6.3 | 215 | 13 | 2180 | 151 |
-| `exp` | 1050 | 59 | 1650 | 158 | 7900 | 412 |
-| `O * M` (outermorphism on a multivector) | 290 | 2.7 | 400 | 2.0 | 1550 | 89 |
-| `outermorphism(T)` | 2600 | 410 | 6900 | 1400 | 52000 | 34500 |
+| operation | `n = 3` Lean | Julia | `n = 4` Lean | Julia | `n = 5` Lean | Julia | `n = 6` Lean | Julia |
+|---|---|---|---|---|---|---|---|---|
+| `T * x` | 16 | 1.2 | 20 | 3.8 | 23 | 5.3 | 28 | 6.8 |
+| `T * U` | 19 | 30 | 25 | 42 | 64 | 53 | 109 | 72 |
+| `det` | 4.3 | 1.9 | 6.7 | 7.2 | 14 | 10 | 27 | 20 |
+| `inv` | 30 | 33 | 41 | 88 | 82 | 119 | 154 | 207 |
+| `adjugate` | 27 | 26 | 41 | 89 | 75 | 122 | 150 | 202 |
+| `solve` (Cramer `T \ x`) | 25 | 3.7 | 27 | 13 | 44 | 99 | 97 | 215 |
+| `characteristic` | 28 | 5.3 | 25 | 24 | 38 | 251 | 90 | 834 |
+| `exp` | 257 | 101 | 413 | 176 | 924 | 302 | 1553 | 446 |
+| `eigvals` | 143 | 26 | 336 | 202 | 8451 | 4102 | 12272 | 5267 |
+| `outermorphism(T)` | 210 | 112 | 364 | 249 | 945 | 605 | 3163 | 1686 |
+| `O * M` | 27 | 5.2 | 60 | 14 | 458 | 48 | 1264 | 220 |
 
-Every result allocates a fresh `FloatArray`; Julia's results live on the stack.
+The documented Cramer solve `A \ b` of a `5 × 5` dyadic operator (`docs/src/tutorials/
+dyadic-tensors.md:54-75`, 72 ns there) is 61 ns (Julia 89 ns on the same machine). The
+remaining gaps are allocation-bound: every result is a fresh `FloatArray` (a push per entry
+where the size is not an input's), Julia's live in registers.
 -/

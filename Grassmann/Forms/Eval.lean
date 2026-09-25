@@ -32,16 +32,20 @@ namespace Forms
 diagonal values or the restricted Gram matrix. -/
 def restrict (V : TensorBundle) (mask : UInt64) : TensorBundle :=
   let S := mask &&& lowMask V.n
-  let idx := (List.range V.n).filter fun i => testBit S i
-  let M := idx.length
+  -- the number of kept generators by a popcount (the index list only where a metric needs it:
+  -- this runs whenever a subspace's size is needed at run time)
+  let M := popcount S
   match V.metric with
   | .euclid => TensorBundle.euclidean M
   | .signature neg =>
     { V with n := M, metric := .signature (pext neg S),
              hasinf := V.hasinf && testBit S 0,
              hasorigin := V.hasorigin && testBit S (if V.hasinf then 1 else 0) }
-  | .diagonal d => { V with n := M, metric := .diagonal (idx.toArray.map fun i => d[i]?.getD 1) }
+  | .diagonal d =>
+    let idx := (List.range V.n).filter fun i => testBit S i
+    { V with n := M, metric := .diagonal (idx.toArray.map fun i => d[i]?.getD 1) }
   | .tensor g =>
+    let idx := (List.range V.n).filter fun i => testBit S i
     { V with n := M, metric := .tensor (idx.toArray.map fun i => idx.toArray.map fun j =>
         (g[i]?.bind (·[j]?)).getD 0) }
 
@@ -60,6 +64,10 @@ namespace Chain
 blades of `x` inside `W`, renumbered by `pext`. -/
 @[specialize] def project (x : Chain V G α) (S : SubSpace V) : Chain (Forms.restrict V S.mask) G α :=
   let S' := S.mask &&& lowMask V.n
+  if G == 1 then
+    -- vectors: coefficient `i` is the `i`-th generator of `S` (no blade tables)
+    Chain.ofFn fun i => getD x.v (pdep ((1 : UInt64) <<< i.1.toUInt64) S').toNat.log2
+  else
   let bsW := Leibniz.indexBasis (Forms.restrict V S.mask).n G
   Chain.ofFn fun i =>
     let b := pdep bsW[i.1]! S'
@@ -69,6 +77,12 @@ blades of `x` inside `W`, renumbered by `pext`. -/
 subspace, its blades renumbered by `pdep` into the mask `S` of `W`. -/
 @[specialize] def embedSub (S : SubSpace W) (x : Chain (Forms.restrict W S.mask) G α) : Chain W G α :=
   let S' := S.mask &&& lowMask W.n
+  if G == 1 then
+    -- vectors: generator `k` of `W` holds coefficient `#{j < k in S}` of `x` if `k ∈ S`
+    Chain.ofFn fun i =>
+      let b := (1 : UInt64) <<< i.1.toUInt64
+      if b &&& S' != 0 then getD x.v (popcount (S' &&& (b - 1))) else Coeff.zero
+  else
   Chain.ofFn fun i =>
     let b := (Leibniz.indexBasis W.n G)[i.1]!
     if popcount (b &&& S') == G then x.coeff (pext b S') else Coeff.zero
@@ -129,6 +143,36 @@ namespace Multivector
 /-- Julia `m(y₁, …, y_k) = m ⋅ (y₁ ∧ … ∧ y_k)` (`forms.jl:294`). -/
 @[specialize] def eval [Kernels V] (m : Multivector V α) (ys : List (Chain V 1 α)) : Multivector V α :=
   contraction m (wedgeVectors ys)
+
+end Multivector
+
+/-! ## Call syntax -/
+
+/-- Julia `A(g)` of a multivector (`src/multivectors.jl:313-318`): the grade-`g` part as a
+chain (`m 2` is `gradePart m 2`). -/
+instance : CoeFun (Multivector V α) (fun _ => (g : Nat) → Chain V g α) := ⟨fun m g => gradePart m g⟩
+
+/-- Julia `A(g)` of a spinor or co-spinor: the grade-`g` part as a chain. -/
+instance {p : Bool} : CoeFun (Half V p α) (fun _ => (g : Nat) → Chain V g α) := ⟨fun h g => gradePart h g⟩
+
+namespace Multivector
+
+/-- The generator indices of a blade name in Julia's `Λ(V)` notation (`"v"`, `"v12"`,
+`"v₁₂"`; `none` for other names), as the blade's mask. -/
+def bladeOfName (n : Nat) (s : String) : Option UInt64 :=
+  match s.toList with
+  | 'v' :: ds =>
+    let digit := fun (c : Char) =>
+      if c.isDigit then some (c.toNat - '0'.toNat)
+      else if '₀' ≤ c && c ≤ '₉' then some (c.toNat - '₀'.toNat) else none
+    ds.foldlM (init := (0 : UInt64)) fun acc c => do
+      let k ← digit c
+      if 1 ≤ k && k ≤ n then pure (acc ||| ((1 : UInt64) <<< (k - 1).toUInt64)) else none
+  | _ => none
+
+/-- Julia `m.v12` (`src/multivectors.jl:630-650`, `getproperty` by blade name): the coefficient
+of the named blade (`none` for a name that is not a blade of `V`; generators `1 … 9`). -/
+def byName (m : Multivector V α) (s : String) : Option α := (bladeOfName V.n s).map m.coeff
 
 end Multivector
 

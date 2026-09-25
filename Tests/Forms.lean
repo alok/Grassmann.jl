@@ -6,6 +6,12 @@ import Tests.Forms.Diag
 import Tests.Forms.Geometry
 import Tests.Forms.Props
 import Tests.Forms.Types
+import Tests.Forms.Parity
+import Tests.Forms.UpDown
+import Tests.Forms.Norms
+import Tests.Forms.Unrolled
+import Tests.Forms.Calculus
+import Tests.Forms.OpFun
 
 /-!
 # Forms test aggregator
@@ -23,6 +29,12 @@ elements (`Grassmann.Forms`): the Julia goldens in `oracle/golden/forms/`
 | `forms/geometry` | simplices, metric tensors, sandwich operators, Cayley/TeX, rank-one forms, evaluation, element spectra |
 | `forms/props` | Cauchy–Binet, adjugates, exact inverses, Newton's identities, Pfaffians, eigen residuals, `exp`/`log` |
 | `forms/types` | static result types and the worked examples through the notation |
+| `forms/parity` | roots of any degree, `eigvecs`/`eigvecsreal`, Vandermonde operators and fits |
+| `forms/updown` | `↑`/`↓` (project/reject) in every kind of space, the README curves, `chainfield` |
+| `forms/norms` | `abs`, `unit`, `unitize`, `unitnorm`, `geomabs` per element kind (Julia's kinds) |
+| `forms/unrolled` | the generated `det`, `inv`, `adjugate`, `solve` (`n ≤ 6`) bit-identical to the generic algorithms |
+| `forms/opfun` | `exp`, `expm1`, `log` of outermorphisms, dyadics and projectors |
+| `forms/calculus` | `V(∇)`, `∂`, `d`, `δ`, `gradient`, `divergence`, `curl` (`Grassmann.Calculus`), simplex boundaries, tangent-space `∇` |
 -/
 
 namespace Tests.Forms
@@ -34,7 +46,8 @@ def run : IO (Nat × Nat) := do
   IO.println "Forms"
   let suites : List (IO Tally) :=
     [Exact.suite, FloatSuite.suite, SpectralSuite.suite, DiagSuite.suite, GeometrySuite.suite,
-     Props.suite, Types.suite]
+     Props.suite, Types.suite, Parity.suite, UpDown.suite, Norms.suite, Unrolled.suite,
+     CalculusSuite.suite, OpFunSuite.suite]
   let mut pass := 0
   let mut fail := 0
   for suite in suites do
