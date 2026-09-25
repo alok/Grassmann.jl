@@ -78,6 +78,26 @@ def suite : IO Tally := do
   t := t.ok (toString (Endomorphism.companion (n := 3) (Values.ofFn fun i => (i.1 + 1 : Int))) ==
     "(0v₁+1v₂+0v₃)v₁ + (0v₁+0v₂+1v₃)v₂ + (-1v₁-2v₂-3v₃)v₃") fun _ => "companion"
   t := t.ok (lieBracketString == "LieBracket[...]") fun _ => "LieBracket"
+  -- indexing with basis blades (Julia `T ⋅ v₂`, `T ⋅ 2v₃`, `Λ²T ⋅ v₁₃`, `d[2]`)
+  let v2 : Submanifold ℝ3 1 := ⟨2⟩
+  let v13 : Submanifold ℝ3 2 := ⟨5⟩
+  t := t.ok (toString (T.columnOfBlade v2 : Chain ℝ3 1 Int) == "4v₁ + 5v₂ + 6v₃") fun _ => "T⋅v₂"
+  t := t.ok (toString (T.applySingle (⟨4, 2⟩ : Single ℝ3 1 Int) : Chain ℝ3 1 Int) == "14v₁ + 16v₂ + 20v₃")
+    fun _ => "T⋅2v₃"
+  t := t.ok (toString ((T.compound 2).columnOfBlade v13 : Chain ℝ3 2 Int) == "-6v₁₂ - 11v₁₃ - 4v₂₃")
+    fun _ => "Λ²T⋅v₁₃"
+  let d : DiagonalMorphism ℝ3 Int := ⟨Values.ofFn fun i => (i.1 + 1 : Int)⟩
+  t := t.ok (toString (DiagonalMorphism.term d 1) == "2v₂") fun _ => "d[2]"
+  -- barycentric interpolation reproduces affine functions; affinehull picks the vertices
+  let cf := fun (l : List Float) => (chainOf ℝ3 1 l : Chain ℝ3 1 Float)
+  let pts : Array (Chain ℝ3 1 Float) := #[cf [1, 0, 0], cf [1, 2, 0], cf [1, 0, 3], cf [1, 5, 5]]
+  match (affinehull (V := ℝ3) pts [1, 2, 3] : Option (Simplex ℝ3 ℝ3 Float)) with
+  | some S =>
+    let f : Values Float 3 := Values.ofFn fun i => #[1.0, 5.0, 7.0][i.1]!   -- f = 1 + 2x + 2y
+    let v := S.interpolate f (cf [1, 0.5, 0.75])
+    t := t.ok ((v - 3.5).abs < 1e-12) fun _ => s!"interpolate: {v}"
+    t := t.ok ((S.volume - 3).abs < 1e-12) fun _ => s!"volume: {S.volume}"
+  | none => t := t.ok false fun _ => "affinehull"
   return t
 
 end Tests.FormsTests.Types

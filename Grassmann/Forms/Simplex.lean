@@ -172,6 +172,27 @@ for homogeneous 2-D points, with the Euclidean norm. -/
 
 end TensorOperator
 
+/-- Cartan `affinehull(m, i)` of one element of a point list (`fiber.jl:547-553`):
+the simplex with vertices `pts[k]`, `k ∈ idx` (1-based indices, as a mesh's
+immersion lists them). -/
+def affinehull {V W : TensorBundle} {α : Type} [Coeff α] (pts : Array (Chain W 1 α)) (idx : List Nat) :
+    Option (Simplex V W α) :=
+  TensorOperator.ofColumnList? (idx.map fun k => pts[k - 1]?.getD Chain.zero)
+
+/-- Julia `volumes(m)` of a list of simplices (`composite.jl:932-933`): their
+`|detsimplex|` (edge lengths for segments). -/
+def volumes {V W : TensorBundle} {α : Type} [Coeff α] [Div α] [Analytic α]
+    (ts : List (Simplex V W α)) : List α :=
+  ts.map (·.volume)
+
+/-- Barycentric interpolation inside a simplex: `Σᵢ λᵢ(p) fᵢ` with the barycentric
+coordinates `λ = t \ p` (Cramer) of the homogeneous point `p` and the vertex values
+`f` (the per-element step of MeshTopology/Cartan `interp`). -/
+def TensorOperator.interpolate {V W : TensorBundle} {α : Type} [Coeff α] [Div α]
+    (T : Simplex V W α) (f : Values α ((Layout.chain 1).size V.n)) (p : Chain W 1 α) : α :=
+  let lam := T.solve p
+  Mat.dotPlain lam.v f
+
 /-- Julia `findfirst(P, t)` (`composite.jl:917-922`): the first simplex (1-based)
 containing `P`, `0` if none. -/
 def findfirstSimplex {V W : TensorBundle} {α : Type} [Coeff α] [SignBit α]

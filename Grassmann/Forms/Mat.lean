@@ -283,6 +283,9 @@ the others added left to right). -/
     else ⟨finish (fillCols (fun i j => sdot0 id a b r 1 c i (j * c)) r k 0 (Packed.mkEmpty (r * k)))⟩
   else ⟨finish (fillCols (fun i j => sdot0 id a b r 1 c i (j * c)) r k 0 (Packed.mkEmpty (r * k)))⟩
 
+/-- `Σᵢ xᵢ yᵢ` without conjugation, a left fold from the first product. -/
+@[inline] def dotPlain {n : Nat} (x y : Values α n) : α := sdot0 id x.data y.data 1 1 n 0 0
+
 /-- The transpose (Julia `_transpose`, `forms.jl:305-308`). -/
 @[inline] def transpose (A : Mat r c α) : Mat c r α :=
   let a := A.v.data

@@ -191,6 +191,11 @@ variable {V : TensorBundle} {α : Type} [Coeff α]
 /-- Julia `cofactor(D) = adjugate(D)` (`forms.jl:525`). -/
 @[inline] def cofactor (D : DiagonalMorphism V α) : DiagonalMorphism V α := adjugate D
 
+/-- Julia `D[i+1] = value(D)(i+1)` (`forms.jl:504`): the `i`-th diagonal entry times
+its basis vector, a `Single` (`d[2] = 2v₂`). -/
+def term (D : DiagonalMorphism V α) (i : Nat) : Single V 1 α :=
+  ⟨Leibniz.unrank V.n 1 i, getD D.d i⟩
+
 /-- Julia `inv(D)`: entrywise (`forms.jl:532-537`). -/
 @[inline] def inv [Div α] (D : DiagonalMorphism V α) : DiagonalMorphism V α := D.map (Coeff.one / ·)
 

@@ -146,6 +146,24 @@ def ofRows? (rows : List (List α)) : Option (TensorOperator V ld W lc α) :=
     (j : Fin (ld.size V.n)) : Y :=
   OfLayout.ofVals (V := W) (l := lc) (T.colValues j)
 
+/-- Julia `T ⋅ b` for a basis blade `b` of the domain grade (`forms.jl:945-946`):
+the column of `b` (Julia `x[bladeindex(y)]`), for any coefficient type. -/
+def columnOfBlade {G : Nat} {Y : Type} [OfLayout W lc α Y] (T : TensorOperator V (.chain G) W lc α)
+    (b : Submanifold V G) : Y :=
+  let j := Leibniz.bladeRank V.n b.bits
+  let r := lc.size W.n
+  let a := T.mat.v.data
+  OfLayout.ofVals (V := W) (l := lc) (Mat.finish (Mat.pushLoop (fun i => Mat.rd a (j * r + i)) r 0 (Packed.mkEmpty r)))
+
+/-- Julia `T ⋅ (s·b)` for a scaled basis blade (`forms.jl:945`): `s` times its column. -/
+def applySingle {G : Nat} {Y : Type} [OfLayout W lc α Y] (T : TensorOperator V (.chain G) W lc α)
+    (s : Single V G α) : Y :=
+  let j := Leibniz.bladeRank V.n s.bits
+  let r := lc.size W.n
+  let a := T.mat.v.data
+  OfLayout.ofVals (V := W) (l := lc)
+    (Mat.finish (Mat.pushLoop (fun i => s.val * Mat.rd a (j * r + i)) r 0 (Packed.mkEmpty r)))
+
 /-- The columns in order (Julia `value(T)`, the nested chain's entries). -/
 def columns {Y : Type} [OfLayout W lc α Y] (T : TensorOperator V ld W lc α) : List Y :=
   (List.finRange (ld.size V.n)).map T.column
