@@ -5,6 +5,7 @@ import Geophysics.Gas
 import Geophysics.Atmosphere
 import Geophysics.Data
 import Geophysics.Show
+import Geophysics.Typed
 
 /-!
 # Geophysics
