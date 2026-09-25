@@ -320,7 +320,7 @@ variable {n : Nat} (C : Column n)
   let T0 := C.T.get i
   let a0 := C.a.get i
   let h0 := C.h.get i
-  if a0.isInf then
+  if JuliaBase.F64.isinf a0 then
     let Δh := hG - h0
     if a0 < (f64! 0.0) then
       let x := Δh / C.ha
@@ -337,7 +337,7 @@ operation computes the temperature first, so all of them throw; Lean returns
 `NaN` for all of them (otherwise `NaN^0 = 1` would let a pressure through). -/
 @[inline] def domainError (hG : Float) (i : Fin n) : Bool :=
   let a0 := C.a.get i
-  a0.isInf && a0 < (f64! 0.0) &&
+  JuliaBase.F64.isinf a0 && a0 < (f64! 0.0) &&
     (let x := (hG - C.h.get i) / C.ha
      (f64! 1.0) - x * x < (f64! 0.0))
 
@@ -372,8 +372,10 @@ def gravity (h : Float) : Float :=
 @[inline] def layer (hG : Float) : Fin n := layerOf C.hW C.pos (hG * C.toW)
 
 /-- Julia `op(hG, i, W, U)`: the layer-level primitive of every operation (`NaN`
-where Julia's temperature throws, see `domainError`). -/
-def opAt (o : Op) (hG : Float) (i : Fin n) : Float :=
+where Julia's temperature throws, see `domainError`). Inlined, so that a literal
+operation folds the dispatch (`Column.temperature` and friends); `opAt` is the
+out-of-line form for an operation chosen at run time. -/
+@[inline] def opAtInline (o : Op) (hG : Float) (i : Fin n) : Float :=
   if C.domainError hG i then JuliaBase.F64.nan else
   let U := C.u
   let F := C.fluid
@@ -409,10 +411,62 @@ def opAt (o : Op) (hG : Float) (i : Fin n) : Float :=
   | .specificenergy => F.specificenergyU U T
   | .specificenthalpy => F.specificenthalpyU U T
 
+/-- Julia `op(hG, i, W, U)` for an operation chosen at run time. -/
+def opAt (o : Op) (hG : Float) (i : Fin n) : Float := C.opAtInline o hG i
+
+/-- `eval`, inlined (a literal operation folds the dispatch). -/
+@[inline] def evalInline (o : Op) (h : Float) : Float :=
+  let hG := C.altgeopotent h
+  C.opAtInline o hG (C.layer hG)
+
 /-- Julia `op(h, W, U)` (`Geophysics.jl:864-868`): at geometric altitude `h` in `U`. -/
 def eval (o : Op) (h : Float) : Float :=
   let hG := C.altgeopotent h
   C.opAt o hG (C.layer hG)
+
+/-! One function per operation, as Julia has (`temperature(h, W, U)`, …): the
+dispatch on the operation is folded away. -/
+
+/-- Julia `temperature(h, W, U)`. -/ def temperature (h : Float) : Float := C.evalInline .temperature h
+/-- Julia `pressure(h, W, U)`. -/ def pressure (h : Float) : Float := C.evalInline .pressure h
+/-- Julia `density(h, W, U)`. -/ def density (h : Float) : Float := C.evalInline .density h
+/-- Julia `specificweight(h, W, U)`. -/
+def specificweight (h : Float) : Float := C.evalInline .specificweight h
+/-- Julia `specificvolume(h, W, U)`. -/
+def specificvolume (h : Float) : Float := C.evalInline .specificvolume h
+/-- Julia `specificimpedance(h, W, U)`. -/
+def specificimpedance (h : Float) : Float := C.evalInline .specificimpedance h
+/-- Julia `thermaldiffusivity(h, W, U)`. -/
+def thermaldiffusivity (h : Float) : Float := C.evalInline .thermaldiffusivity h
+/-- Julia `intensity(h, W, U)`. -/ def intensity (h : Float) : Float := C.evalInline .intensity h
+/-- Julia `heatcapacity(h, W, U)`. -/ def heatcapacity (h : Float) : Float := C.evalInline .heatcapacity h
+/-- Julia `kinematic(h, W, U)`. -/ def kinematic (h : Float) : Float := C.evalInline .kinematic h
+/-- Julia `elasticity(h, W, U)`. -/ def elasticity (h : Float) : Float := C.evalInline .elasticity h
+/-- Julia `viscosity(h, W, U)`. -/ def viscosity (h : Float) : Float := C.evalInline .viscosity h
+/-- Julia `thermalconductivity(h, W, U)`. -/
+def thermalconductivity (h : Float) : Float := C.evalInline .thermalconductivity h
+/-- Julia `heatvolume(h, W, U)`. -/ def heatvolume (h : Float) : Float := C.evalInline .heatvolume h
+/-- Julia `heatpressure(h, W, U)`. -/ def heatpressure (h : Float) : Float := C.evalInline .heatpressure h
+/-- Julia `heatratio(h, W, U)`. -/ def heatratio (h : Float) : Float := C.evalInline .heatratio h
+/-- Julia `prandtl(h, W, U)`. -/ def prandtl (h : Float) : Float := C.evalInline .prandtl h
+/-- Julia `sonicspeed(h, W, U)`. -/ def sonicspeed (h : Float) : Float := C.evalInline .sonicspeed h
+/-- Julia `freedom(h, W, U)`. -/ def freedom (h : Float) : Float := C.evalInline .freedom h
+/-- Julia `specificenergy(h, W, U)`. -/
+def specificenergy (h : Float) : Float := C.evalInline .specificenergy h
+/-- Julia `specificenthalpy(h, W, U)`. -/
+def specificenthalpy (h : Float) : Float := C.evalInline .specificenthalpy h
+
+/-- The per-operation function (`Column.temperature` for `.temperature`, …). -/
+def fn : Op → (Column n → Float → Float)
+  | .temperature => temperature | .pressure => pressure | .density => density
+  | .specificweight => specificweight | .specificvolume => specificvolume
+  | .specificimpedance => specificimpedance | .thermaldiffusivity => thermaldiffusivity
+  | .intensity => intensity | .heatcapacity => heatcapacity | .kinematic => kinematic
+  | .elasticity => elasticity | .viscosity => viscosity
+  | .thermalconductivity => thermalconductivity | .heatvolume => heatvolume
+  | .heatpressure => heatpressure | .heatratio => heatratio | .prandtl => prandtl
+  | .sonicspeed => sonicspeed | .freedom => freedom | .specificenergy => specificenergy
+  | .specificenthalpy => specificenthalpy
 
 /-- Julia `op(W, U) = op(0, W, U)`: the sea-level value. -/
 @[inline] def seaLevel (o : Op) : Float := C.sea.get! o.idx
