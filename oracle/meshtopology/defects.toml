@@ -3,7 +3,7 @@
 # `fixed` entries are patched in `Fixed.MeshTopology` by oracle/meshtopology/load.jl (one textual
 # fix each); the Lean port implements the fixed semantics and the goldens record the upstream
 # value next to it as {"fixed": …, "julia": …}. `replicated` entries are kept for parity (the
-# Lean docstrings say so). Ids Q1-Q30 are the port notes' Q-list; Q31-Q32 were found while
+# Lean docstrings say so). Ids Q1-Q30 are the port notes' Q-list; Q18g and Q31-Q35 were found while
 # writing the oracle.
 
 [Q1]
@@ -175,3 +175,18 @@ what = "resize and resample rebuild the topology without its collapse flags."
 status = "fixed"
 where = "QT:309-314"
 what = "cross_sector(Q1, Q4) passes 8 of the 10 face slots (MethodError)."
+
+[Q18g]
+status = "fixed"
+where = "LG:330"
+what = "_getelement accepts only a Values of element indices but getelement2/3 pass a single index (every renumbered Lagrange element of degree ≥ 2 throws)."
+
+[Q34]
+status = "fixed"
+where = "MT:607"
+what = "getelement of a DiscontinuousTopology sub-mesh binds N inside the argument type (UndefVarError)."
+
+[Q35]
+status = "fixed"
+where = "MT:434"
+what = "subimmersion of a non-full sub-mesh whose vertices are OneTo passes a view as the element list (MethodError)."

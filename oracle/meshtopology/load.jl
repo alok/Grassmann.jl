@@ -61,6 +61,14 @@ const FIXES = [
     # Q18a: typos in the Lagrange getelement chain.
     ("lagrange.jl", "_getelemeent" => "_getelement", 2),
     ("lagrange.jl", "getelment3" => "getelement3", 1),
+    # Q18g: _getelement only accepts a Values of element indices, but is called with one index.
+    ("lagrange.jl", "function _getelement(t::ImmersedTopology,ind::Values)" =>
+        "function _getelement(t::ImmersedTopology,ind)", 1),
+    # Q34: getelement of a DiscontinuousTopology sub-mesh leaves N unbound.
+    ("MeshTopology.jl", "function getelement(m::DiscontinuousTopology{N,P,<:SimplexTopology{N,<:AbstractVector}} where {N,P},i::Int)" =>
+        "function getelement(m::DiscontinuousTopology{N,P,<:SimplexTopology{N,<:AbstractVector}},i::Int) where {N,P}", 1),
+    # Q35: subimmersion of a sub-mesh with OneTo vertices passes a view as the element list.
+    ("MeshTopology.jl", "    top,ind = topology(m),vertices(m)\n" => "    top,ind = collect(topology(m)),vertices(m)\n", 1),
     # Q18b: subimmersion(::Lagrange*) leaves M unbound; tetrahedra build triangles.
     ("lagrange.jl", r"function subimmersion\(m::(Lagrange\w+)\{M,N,<:(\w+)\} where \{M,N\}\)" =>
         s"function subimmersion(m::\1{M,N,<:\2}) where {M,N}", 6),
