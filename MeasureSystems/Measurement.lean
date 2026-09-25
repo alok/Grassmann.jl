@@ -24,7 +24,7 @@ Julia creates fresh tags on every evaluation, which makes them independent
 
 namespace MeasureSystems
 
-open FieldConstants FieldConstants.Julia
+open FieldConstants
 
 /-- The identity of an independent measurement: `(value, uncertainty, tag)`. -/
 abbrev MTag := Float × Float × Nat
@@ -160,16 +160,16 @@ def parse? (str : String) (id : Nat) : Option Measurement := do
       | _ => none
     let (valStr, valDec) ← numPart v
     let (errStr, errDec) ← numPart errTxt
-    let mut val ← parseFloat? valStr
-    let mut err ← parseFloat? errStr
+    let mut val ← JuliaBase.F64.parse? valStr
+    let mut err ← JuliaBase.F64.parse? errStr
     if valDec.isSome && errDec.isNone then
       err := err / JuliaBase.F64.exp10 (Float.ofNat (valDec.get!.length - 1))
     if !tail.isEmpty then
-      let fact ← parseFloat? ("1" ++ tail)
+      let fact ← JuliaBase.F64.parse? ("1" ++ tail)
       val := val * fact
       err := err * fact
     return indep val err id
-  | [v] => let x ← parseFloat? v; return indep x 0.0 id
+  | [v] => let x ← JuliaBase.F64.parse? v; return indep x 0.0 id
   | _ => none
 
 /-! ### Display -/

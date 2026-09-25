@@ -19,7 +19,7 @@ instead of infinite recursion (`:515-516`).
 
 namespace FieldAlgebra
 
-open FieldConstants FieldConstants.Julia
+open FieldConstants
 
 /-- The base of a formal logarithm or exponential. `num` holds a Julia number
 (the `Int` bases `2` and `10` print as `log2(`/`log10(`, the `Float64` value

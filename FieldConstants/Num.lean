@@ -20,7 +20,6 @@ change the last bit of downstream results, so the port tracks the distinction.
 
 namespace FieldConstants
 
-open Julia
 
 /-- A Julia real that is either a `FieldConstants.Constant{N}` (`const = true`)
 or a plain number. -/

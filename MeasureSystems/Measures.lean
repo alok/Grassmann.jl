@@ -20,7 +20,7 @@ quantity value in which sums of constants are measurements.
 
 namespace MeasureSystems
 
-open FieldConstants FieldConstants.Julia FieldAlgebra UnitSystems Similitude
+open FieldConstants FieldAlgebra UnitSystems Similitude
 
 /-- The measured generators (0-based basis indices) with their Julia definitions;
 each independent measurement is tagged by its 1-based generator index. -/

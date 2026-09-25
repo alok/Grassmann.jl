@@ -22,7 +22,7 @@ physics) compute Similitude's exact values.
 
 namespace Similitude
 
-open FieldConstants FieldConstants.Julia FieldAlgebra UnitSystems
+open FieldConstants FieldAlgebra UnitSystems
 
 /-- A Julia number as Similitude computes with it. -/
 inductive Scalar where

@@ -11,7 +11,7 @@ Julia float printing, parsing, the `Base.Math` exp/log/pow ports (bit-exact),
 
 namespace Tests.FieldAlgebra.FieldConstantsTests
 
-open Lean Tests.Units FieldConstants FieldConstants.Julia
+open Lean Tests.Units FieldConstants
 
 /-- Decode a `[kind, value]` pair of the operator table into a `JNum`. -/
 def jnumOf (j : Json) : JNum :=
@@ -37,13 +37,13 @@ def run : IO Suite := do
     s := s.check (got == want) fun _ => s!"show {hexOf x}: got {got}, want {want}"
     -- shortest repr must round-trip through the parser
     if x.isFinite then
-      let back := parseFloat want
+      let back := JuliaBase.F64.parse want
       s := s.check (sameBits back x) fun _ => s!"parse(repr) {want}"
   -- parsing arbitrary decimal strings
   for r in arr (fld j "parse") do
     let txt := str (idx r 0)
     let want := str (idx r 1)
-    match parseFloat? txt with
+    match JuliaBase.F64.parse? txt with
     | none => s := s.check (want == "ERR") fun _ => s!"parse {txt}: got ERR, want {want}"
     | some v =>
       s := s.check (want != "ERR" && sameBits v (hexFloat (idx r 1))) fun _ =>

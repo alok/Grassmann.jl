@@ -1,4 +1,4 @@
-import FieldConstants.Julia.Float
+import JuliaBase
 
 /-!
 # `JNum`: the payload of a Julia `FieldConstants.Constant{N}`
@@ -25,7 +25,6 @@ The Int/Float distinction is observable: it decides whether a result prints as
 
 namespace FieldConstants
 
-open Julia
 
 /-- A Julia real scalar: `Int64` or `Float64` (the payload of `Constant{N}`). -/
 inductive JNum where

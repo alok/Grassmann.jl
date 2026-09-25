@@ -18,7 +18,7 @@ Julia sources: `FieldAlgebra.jl/src/FieldAlgebra.jl:97-301, 391-429`.
 
 namespace FieldAlgebra
 
-open FieldConstants FieldConstants.Julia
+open FieldConstants
 
 /-- Superscript digits `⁰…⁹` (Julia `expos`, `FieldAlgebra.jl:97`). -/
 def expos : Array Char := #['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹']
@@ -53,7 +53,7 @@ namespace Expo
 /-- Numeric value as a `Float64`. -/
 def toFloat : Expo → Float
   | int n => Float.ofInt n
-  | rat q => ofRat (q.num < 0) q.num.natAbs q.den
+  | rat q => JuliaBase.IEEEFloat.ofRat Float q
   | float x => x
 
 /-- Julia `iszero`. -/
@@ -137,11 +137,13 @@ def printExpo : Expo → String
 fraction within `eps(x)` (continued fractions; identical to Julia's result for
 the half/third/quarter exponents that occur). -/
 def rationalize (x : Float) : Rat :=
-  let ⟨neg, m, e⟩ := decode x
-  let tol := eps x
-  let (p, q) := if e ≥ 0 then (m <<< e.toNat, 1) else (m, 1 <<< (-e).toNat)
-  let r := go p q 0 1 1 0 tol x.abs 64
-  if neg then -r else r
+  match JuliaBase.IEEEFloat.decode x with
+  | none => 0
+  | some (neg, m, e) =>
+    let tol := JuliaBase.F64.epsOf x
+    let (p, q) := if e ≥ 0 then (m <<< e.toNat, 1) else (m, 1 <<< (-e).toNat)
+    let r := go p q 0 1 1 0 tol x.abs 64
+    if neg then -r else r
 where
   go (p q h0 k0 h1 k1 : Nat) (tol ax : Float) : Nat → Rat
     | 0 => mkRat h1 k1
@@ -150,7 +152,7 @@ where
       let a := p / q
       let h2 := a * h1 + h0
       let k2 := a * k1 + k0
-      let approx := ofRat false h2 k2
+      let approx := JuliaBase.IEEEFloat.ofFraction Float h2 k2
       if (approx - ax).abs ≤ tol then mkRat h2 k2
       else go q (p % q) h1 k1 h2 k2 tol ax f
 

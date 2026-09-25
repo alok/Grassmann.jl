@@ -11,6 +11,7 @@ Julia's own numerics against the oracle (`Tests/JuliaBase/math.json`, written by
   `literal_pow` and `power_by_squaring` (the fixed Julia defect
   `float32-pow-large-odd-sign` is checked against the sign-corrected value);
 * `rdig`/`rsig`/`hidigit`: `round(x; digits)`, `round(x; sigdigits)`, `Base.hidigit`;
+* `parse`: `tryparse(Float64, s)` (`F64.parse?`);
 * `eps64`/`eps32`, `exponent64`/`exponent32`, `rat64`/`rat32`: `F64.epsOf`, `F32.epsOf`,
   `IEEEFloat.exponent`, and the correctly rounded `IEEEFloat.ofFraction`/`ofRat` of big
   rationals.
@@ -123,6 +124,13 @@ def checkRow (t : Tally) : List String → Tally
   | ["hidigit", hx, h] =>
     t.check (F64.hidigit (f64 hx) == int h) fun _ =>
       s!"hidigit({F64.showString (f64 hx)}): got {F64.hidigit (f64 hx)}, want {h}"
+  | ["parse", str, want] =>
+    match F64.parse? str, want with
+    | none, "ERR" => t.check true fun _ => ""
+    | some v, "ERR" => t.check false fun _ => s!"parse({str.quote}): got {F64.showString v}, want an error"
+    | none, _ => t.check false fun _ => s!"parse({str.quote}): got an error, want {F64.showString (f64 want)}"
+    | some v, _ => t.check (sameFloat v (f64 want)) fun _ =>
+      s!"parse({str.quote}): got {F64.showString v}, want {F64.showString (f64 want)}"
   | ["eps64", hx, hr] =>
     let got := F64.epsOf (f64 hx)
     t.check (sameFloat got (f64 hr)) fun _ => s!"eps({F64.showString (f64 hx)}): got {F64.showString got}"
