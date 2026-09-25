@@ -1,5 +1,7 @@
 import Bench.Harness
 import Cartan
+import Cartan.Element
+import Cartan.Spectral
 
 /-!
 # `cartan`: tensor-field kernels
@@ -34,6 +36,24 @@ def fieldCheck (a : FloatArray) : Float :=
 @[inline] def torusPoint (u v : Float) : Chain ℝ3 1 Float :=
   let r := 3 + Float.cos v
   chain3 (r * Float.cos u) (r * Float.sin u) (Float.sin v)
+
+/-- The check of a flat array (`fieldCheck`). -/
+@[inline] def chkA (a : FloatArray) : Float := fieldCheck a
+
+/-- Julia `gridmesh(a, b)` of the twin: the unit square in `2ab` triangles on the points
+`(i/a, j/b)` (node `k = i + (a+1) j`, 0-based). -/
+def gridMesh (a b : Nat) : SimplexBundle 3 (HPoint ℝ3) :=
+  let pts : Array (HPoint ℝ3) := (Array.range ((a + 1) * (b + 1))).map fun k =>
+    let i := k % (a + 1)
+    let j := k / (a + 1)
+    Chain.ofFn fun c => if c.1 = 0 then 1 else if c.1 = 1 then Float.ofNat i / Float.ofNat a
+      else Float.ofNat j / Float.ofNat b
+  let node (i j : Nat) : Nat := 1 + i + (a + 1) * j
+  let els := (Array.range (a * b)).flatMap fun q =>
+    let i := q % a
+    let j := q / a
+    #[#v[node i j, node (i + 1) j, node (i + 1) (j + 1)], #v[node i j, node (i + 1) (j + 1), node i (j + 1)]]
+  SimplexBundle.ofPoints pts els
 
 /-- The suite. -/
 def suite : Suite := ⟨"cartan", do
@@ -87,6 +107,34 @@ def suite : Suite := ⟨"cartan", do
   -- a parametrized surface (Julia `torus.(TorusParameter(n, n))`)
   let T := Parameter.torus #v[n, n]
   bench "torus" (ops := pts) (param := p) fun s =>
-    chk <| (blackBox s T).map fun q => torusPoint (q.get! 0) (q.get! 1)⟩
+    chk <| (blackBox s T).map fun q => torusPoint (q.get! 0) (q.get! 1)
+  -- evaluation at scattered points (Julia `a(x, y)`)
+  let K ← size 100000 100
+  let xs : FloatArray := ⟨(Array.range K).map fun k => Float.ofNat (k * 7919 % 100003) / 100003⟩
+  let ys : FloatArray := ⟨(Array.range K).map fun k => Float.ofNat (k * 104729 % 100019) / 100019⟩
+  bench "eval_a" (ops := K) (param := s!"{K}") fun s =>
+    let a' := blackBox s a
+    chkA (buildFlat (F := Float) K fun k => a'.eval2 (xs.get! k) (ys.get! k))
+  -- finite elements on a structured triangulation (Julia `volumes`, `gradienthat`, `gradient`,
+  -- `assembleload`); ns per element (per node for the load)
+  let mm ← size 300 10
+  let mesh := gridMesh mm mm
+  let ne := 2 * mm * mm
+  let np := (mm + 1) * (mm + 1)
+  let u : FloatArray := ⟨(Array.range np).map fun k =>
+    let x := Float.ofNat (k % (mm + 1)) / Float.ofNat mm
+    let y := Float.ofNat (k / (mm + 1)) / Float.ofNat mm
+    x * x + 2 * y⟩
+  let mp := s!"{mm}×{mm}"
+  bench "mesh_volumes" (ops := ne) (param := mp) fun s => chk (blackBox s mesh).volumes
+  bench "mesh_gradienthat" (ops := ne) (param := mp) fun s => chk (blackBox s mesh).gradienthat
+  bench "mesh_gradient" (ops := ne) (param := mp) fun s => chk ((blackBox s mesh).gradient2 u)
+  bench "mesh_load" (ops := np) (param := mp) fun s => chkA (blackBox s mesh).assembleload
+  -- FFT of 2^16 complex points (Julia FFTW `fft`)
+  let nf ← size 65536 64
+  let z : Spectral.CVec := ⟨(Array.range (2 * nf)).map fun k => Float.sin (Float.ofNat k * 0.001)⟩
+  bench "fft_c" (ops := nf) (param := s!"{nf}") fun s => chkA (Spectral.fft (blackBox s z))
+  bench "rfft_r" (ops := nf) (param := s!"{nf}") fun s =>
+    chkA (Spectral.rfft (blackBox s ⟨(Array.range nf).map fun k => z.get! (2 * k)⟩))⟩
 
 end Bench.Cartan

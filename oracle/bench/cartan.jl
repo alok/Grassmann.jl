@@ -6,6 +6,23 @@ using .BenchHarness
 using Grassmann, Cartan
 import LinearAlgebra
 const CMT = Cartan.MeshTopology
+# MeshTopology 0.1.0 references names it never imports (defect B1): the intended bindings, so
+# `gradient` and `assembleload` run (oracle/cartan/element/fem.jl).
+@eval CMT begin
+    const Grassmann = Main.Grassmann; const Leibniz = Main.Grassmann.Leibniz
+    const ∂ = Main.Grassmann.∂; const Submanifold = Main.Grassmann.Submanifold
+    const Variables = Main.Grassmann.Variables
+    fiber(x) = Main.Cartan.fiber(x); means(a...) = Main.Cartan.means(a...)
+end
+@eval CMT fibertype(x::AbstractArray) = eltype(x)
+@eval CMT fibertype(x::$(Cartan.TensorField)) = $(Cartan.fibertype)(x)
+# FFTW (the `fft_c`/`rfft_r` twins) when the environment has it
+const HAVE_FFTW = try
+    @eval import FFTW
+    true
+catch
+    false
+end
 # Cartan 0.4.16 builds `TorusTopology(::ProductSpace)`, which MeshTopology 0.1.0 lacks (defect B1
 # of oracle/cartan/defects.toml); the intended method goes through the point array's size.
 CMT.TorusTopology(p::Cartan.ProductSpace) = CMT.TorusTopology(Cartan.PointArray(p))
@@ -19,6 +36,21 @@ function ccheck(t::TensorField)
     n == 0 ? 0.0 : Float64(a[1] + a[n÷2+1] + a[n])
 end
 ccheck(x::Real) = Float64(x)
+ccheck(a::AbstractVector{<:Real}) = (n = length(a); n == 0 ? 0.0 : Float64(a[1] + a[n÷2+1] + a[n]))
+ccheck(a::AbstractVector{<:Complex}) = ccheck(reinterpret(Float64, a))
+
+"The unit square in `2ab` triangles on the points `(i/a, j/b)` (Lean `Bench.Cartan.gridMesh`)."
+function gridmesh(a, b)
+    V = Cartan.varmanifold(3)
+    pts = [Chain{V,1}(1.0, i / a, j / b) for j in 0:b for i in 0:a]
+    node(i, j) = 1 + i + (a + 1) * j
+    els = Values{3,Int}[]
+    for j in 0:b-1, i in 0:a-1
+        push!(els, Values(node(i, j), node(i + 1, j), node(i + 1, j + 1)))
+        push!(els, Values(node(i, j), node(i + 1, j + 1), node(i, j + 1)))
+    end
+    PointCloud(pts)(SimplexTopology(els, length(pts)))
+end
 
 ctorus(x) = (r = 3 + cos(x[2]); Chain(r * cos(x[1]), r * sin(x[1]), sin(x[2])))
 
@@ -59,6 +91,26 @@ function suite_cartan(ctx)
     bench!(i -> ccheck(supnorm(blackbox(i, v))), ctx, "supnorm_v"; ops = pts, param = p)
     T = TorusParameter(n, n)
     bench!(i -> ccheck(ctorus.(blackbox(i, T))), ctx, "torus"; ops = pts, param = p)
+    K = sized(ctx, 100000, 100)
+    xs = [((k * 7919) % 100003) / 100003 for k in 0:K-1]
+    ys = [((k * 104729) % 100019) / 100019 for k in 0:K-1]
+    bench!(i -> (a2 = blackbox(i, a); ccheck([a2(xs[k], ys[k]) for k in 1:K])), ctx, "eval_a"; ops = K, param = "$K")
+    mm = sized(ctx, 300, 10)
+    mesh = gridmesh(mm, mm)
+    ne, np = 2mm * mm, (mm + 1)^2
+    u = [(k % (mm + 1) / mm)^2 + 2 * (k ÷ (mm + 1) / mm) for k in 0:np-1]
+    mp = "$(mm)×$(mm)"
+    bench!(i -> ccheck(volumes(blackbox(i, mesh))), ctx, "mesh_volumes"; ops = ne, param = mp)
+    bench!(i -> ccheck(TensorField(FaceBundle(mesh), reinterpret(Float64, Cartan.gradienthat(blackbox(i, mesh))))), ctx, "mesh_gradienthat"; ops = ne, param = mp)
+    bench!(i -> ccheck(Cartan.gradient_2(TensorField(blackbox(i, mesh), u))), ctx, "mesh_gradient"; ops = ne, param = mp)
+    bench!(i -> ccheck(Cartan.assembleload(blackbox(i, mesh))), ctx, "mesh_load"; ops = np, param = mp)
+    if HAVE_FFTW
+        nf = sized(ctx, 65536, 64)
+        z = [complex(sin((2k) * 0.001), sin((2k + 1) * 0.001)) for k in 0:nf-1]
+        bench!(i -> ccheck(FFTW.fft(blackbox(i, z))), ctx, "fft_c"; ops = nf, param = "$nf")
+        r = real.(z)
+        bench!(i -> ccheck(FFTW.rfft(blackbox(i, r))), ctx, "rfft_r"; ops = nf, param = "$nf")
+    end
 end
 
 register!("cartan", suite_cartan)
