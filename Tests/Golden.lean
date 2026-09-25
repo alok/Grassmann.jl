@@ -1,0 +1,86 @@
+import Tests.Golden.Scalar
+import Tests.Golden.Elem
+import Tests.Golden.Space
+import Tests.Golden.Defects
+import Tests.Golden.Shard
+import Tests.Golden.Registry
+import Tests.Golden.Compare
+import Tests.Golden.Runner
+import Tests.Golden.Pending
+import Tests.Golden.Reference
+import Tests.Golden.Builtin
+
+/-!
+# The element-oracle harness (modules `Tests.Golden.*`, namespace `Tests.ElementOracle`)
+
+The Lean consumer of the element-level Julia oracle `oracle/golden/**`
+(docs/port-notes/oracle-schema.md, the normative schema; DESIGN.md §7).
+
+| module | role |
+|---|---|
+| `Tests.Golden.Scalar` | coefficient grammars (§6): exact `Int64`/`Rational`/`Bool`, bit-exact `Float64` from Julia `repr`, `Complex`; `Coeffs` vectors (`FloatArray` for floats); value comparison |
+| `Tests.Golden.Elem` | `GoldenElem`: the neutral decoded element (§7), `encode ∘ decode = id`, storage support and field-presence invariants (§7.1) |
+| `Tests.Golden.Space` | space descriptors (§5) → `DirectSum.TensorBundle`, twice (fields, and the Julia source evaluated with DirectSum), checked against DirectSum's printing and tables |
+| `Tests.Golden.Defects` | `defects.json` (§10): policies and the full match language |
+| `Tests.Golden.Pending` | Julia defects found by the harness and not yet in `defects.json` |
+| `Tests.Golden.Shard` | manifests, shards and case records (§3, §4, §8); streaming loaders |
+| `Tests.Golden.Registry` | the pluggable evaluator registry |
+| `Tests.Golden.Compare` | comparators (§11 rules 2–4) |
+| `Tests.Golden.Runner` | the consumer algorithm (§11) and reporting |
+| `Tests.Golden.Reference` | the DirectSum reference evaluator: values of arith, products and linear unary maps from `DirectSum.Ops` |
+| `Tests.Golden.Builtin` | built-in evaluators (JuliaBase scalar display, Leibniz storage orders, identities) |
+
+The declarations live in namespace `Tests.ElementOracle`: the namespace `Tests.Golden` already
+holds the float-golden helpers of the AbstractAnalysis and Wilkinson suites
+(`Tests/AbstractAnalysis/Harness.lean`), so only the entry point `Tests.Golden.run` is defined
+there.
+
+`Tests.Golden.run` loads every suite end to end (about 129k cases), validates every schema
+invariant, re-derives every defect tag, and runs every registered evaluator. Environment switches:
+`GOLDEN_SUITES=products,unary` restricts the suites, `GOLDEN_SHARDS=E3,CGA3` the shards,
+`GOLDEN_MAX_FAILURES=n` sets how many failure messages are kept per suite (25),
+`GOLDEN_VERBOSE` times every shard, and `GOLDEN_SHOW_KNOWN` reports known issues as failures.
+-/
+
+namespace Tests.ElementOracle
+
+/-- Run the given suites with the built-in evaluators plus `extra` (highest precedence
+last). Returns `(passed, failed)` over schema checks and evaluated cases, and prints a
+report per suite. -/
+def runWith (extra : Array Registration) (suites : List String := elementSuites) : IO (Nat × Nat) := do
+  IO.println "Golden (element oracle):"
+  let root := goldenRoot
+  let defects ← try loadDefects root catch e => do
+    IO.eprintln s!"  [golden] cannot load defects.json: {e}"
+    return (0, 1)
+  let regs := builtinRegistrations ++ extra
+  -- `GOLDEN_SHOW_KNOWN` reports known issues as ordinary failures (to see their details)
+  let regs := if (← IO.getEnv "GOLDEN_SHOW_KNOWN").isSome then regs.map ({ · with knownIssues := #[] }) else regs
+  -- a pending defect that reached defects.json should be deleted from Tests.Golden.Pending
+  for d in pendingDefects.entries do
+    if (defects.policy? d.id).isSome then
+      IO.println s!"  [golden] note: pending defect {d.id} is now in defects.json; remove it from Tests/Golden/Pending.lean"
+  let mut passed := 1  -- defects.json decoded (ids unique, policies and match tables valid)
+  let mut failed := 0
+  for suite in suites do
+    let r ← runSuite root defects pendingDefects regs suite
+    r.print
+    passed := passed + r.passed
+    failed := failed + r.failed
+  -- the reasons behind the pending-defect skips and the expected failures
+  for d in pendingDefects.entries do
+    IO.println s!"  [golden] pending defect {d.id} ({d.source}): {d.title}"
+  for reg in regs do
+    for k in reg.knownIssues do
+      IO.println s!"  [golden] known issue {k.id} of {reg.name}: {k.note}"
+  return (passed, failed)
+
+end Tests.ElementOracle
+
+/-- Run the element-oracle harness over every suite (or those named in `GOLDEN_SUITES`,
+comma-separated) with the built-in and every registered evaluator. -/
+def Tests.Golden.run : IO (Nat × Nat) := do
+  let suites := match (← IO.getEnv "GOLDEN_SUITES") with
+    | some s => (s.splitOn ",").filter (· != "")
+    | none => Tests.ElementOracle.elementSuites
+  Tests.ElementOracle.runWith (← Tests.ElementOracle.registered) suites
