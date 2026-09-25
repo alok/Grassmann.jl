@@ -97,6 +97,7 @@ model's `bsum`/`twist` definitions; they use only the standard axioms
   what the identity amounts to, or to close the coordinates another way.
 
 ```lean
+-- `vec a b c = a • v₁ + b • v₂ + c • v₃`, as in the examples file
 example (u₁ u₂ u₃ w₁ w₂ w₃ : R) :
     Cl.hodge (Cl.wedge (vec u₁ u₂ u₃) (vec w₁ w₂ w₃))
       = vec (u₂ * w₃ - u₃ * w₂) (u₃ * w₁ - u₁ * w₃) (u₁ * w₂ - u₂ * w₁) := by
@@ -153,7 +154,7 @@ kernel check of the certificates dominates.
 
 ### Extension points used
 
-`grind` (v4.35) offers these extension points, all used here:
+The `grind` extension points (toolchain v4.35) used here:
 
 | mechanism | used for |
 |---|---|
@@ -246,7 +247,7 @@ The non-commutative normalizer compares the goal's two sides as they stand;
 equalities that `grind` learns about sub-products (from E-matching) are used
 by congruence closure only where those sub-products literally occur. So:
 
-* `ṽ v = v²` for a vector works (`ṽ` and `v` are atoms, merged), but
+* `ṽ v = B(v, v)` for a vector works (`ṽ` and `v` are atoms, merged), but
   `r (ṽ r̃) = r v r̃` does not (the atom `ṽ` inside a product);
 * products of generators that need several anticommutations and
   re-bracketings (`e₀ e₁ e₀ = -g₀ e₁`) are out of reach.
