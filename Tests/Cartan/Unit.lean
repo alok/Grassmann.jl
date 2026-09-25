@@ -1,4 +1,5 @@
 import Tests.Cartan.Common
+import Cartan.Aliases
 
 /-!
 # Unit checks of the Cartan API
@@ -30,6 +31,15 @@ example : TensorField g (Chain ℝ3 0 Float) := v ⋅ v
 example : TensorField g (Chain ℝ3 1 Float) := v × v
 example : TensorField g Float := v.norm
 example : TensorField (GridBundle.ofAxis (Axis.colon 0 0.25 2)) Float := t.sin + t
+
+/-! Julia's field kinds (`Cartan.jl:118-148`) name the same types. -/
+
+example : VectorField g ℝ3 := v
+example : BivectorField g ℝ3 := v ∧ v
+example : ScalarField g := v.norm
+example : RectangleMap g (Chain ℝ3 1 Float) := v
+example : RealFunction (GridBundle.ofAxis (Axis.colon 0 0.25 2)) := t
+example : SurfaceGrid g := v.norm
 
 /-! Sizes and shapes the kernel computes. -/
 
@@ -76,6 +86,8 @@ def run : TestM Unit := do
   let c1 := Parameter.torusOn1 (Axis.linRange 0 twoPiF 13)
   checkEq "TorusParameter(r) = TorusParameter(13)" c1.data.toList (Parameter.torus1 13).data.toList
   check "TorusParameter(r) keeps the range" c1.range?.isSome
+  checkEq "codomain = fibers" t.codomain.size 9
+  check "no extrinsic metric" (!t.isextrinsic)
   checkEq "show of a range axis" (toString (Axis.colon 0 0.5 2)) "0.0:0.5:2.0"
   checkEq "show of a LinRange axis" (toString (Axis.linRange 0 1 5)) "LinRange{Float64}(0.0, 1.0, 5)"
   checkEq "Global display" (MetricStore.induced.showGlobal 2) "Global{2}(InducedMetric())"
