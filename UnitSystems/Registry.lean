@@ -127,8 +127,8 @@ def sackurtetrode (U : UnitSystem Num) (P : Num := atmosphere U) (T : Num := kel
   let arg := inner * (T / P * UnitAlg.sqrt (m * T) ^ (3 : Int))
   ⟨arg.v.log, arg.const⟩
 
-/-- Module-level numeric constants of UnitSystems (Julia names). -/
-def moduleConstants : List (String × Num) :=
+/-- Module-level numeric constants of UnitSystems (Julia names), without the aliases. -/
+def baseConstants : List (String × Num) :=
   let N := Num
   [("g₀", ms N .g₀), ("atm", ms N .atm), ("T₀", ms N .T₀), ("ft", ms N .ft), ("ftUS", ms N .ftUS),
    ("lb", ms N .lb), ("inHg", ms N .inHg), ("Ωᵢₜ", ms N .Ωᵢₜ), ("Vᵢₜ", ms N .Vᵢₜ),
@@ -176,5 +176,49 @@ def moduleConstants : List (String × Num) :=
    ("mQCD", Convert.mass (QCD N) (SI2019 N)), ("BTU", thermalunit (British N)),
    ("BTUJ", thermalunit (SI2019 N)), ("HP", horsepower (Metric N)), ("gal", gallon (Metric N)),
    ("kcal", kilocalorie (SI2019 N)), ("cal", calorie (SI2019 N))]
+
+/-- Julia's aliases of module constants (`systems.jl:65-78`): `BTUftlb = thermalunit(British)`
+and the ASCII names of `systems.jl:77-78`. -/
+def aliasConstants : List (String × Num) :=
+  let N := Num
+  let byName (nm : String) : Num := ((baseConstants.lookup nm).getD (ms N .g₀))
+  [("BTUftlb", thermalunit (British N))] ++
+  ([("Mu", "Mᵤ"), ("Ru", "Rᵤ"), ("SB", "σ"), ("hh", "𝘩"), ("cc", "𝘤"), ("m0", "μ₀"), ("e0", "ε₀"),
+    ("ke", "kₑ"), ("me", "mₑ"), ("mp", "mₚ"), ("mu", "Da"), ("mᵤ", "Da"), ("ee", "𝘦"), ("FF", "𝔉"),
+    ("Z0", "Z₀"), ("G0", "G₀"), ("Eh", "Eₕ"), ("a0", "a₀"), ("re", "rₑ"), ("g0", "g₀"), ("lP", "ℓP"),
+    ("aL", "αL"), ("ϵ₀", "ε₀"), ("mpe", "μₚₑ"), ("mep", "μₑₚ"), ("meu", "μₑᵤ"), ("mpu", "μₚᵤ"),
+    ("ainv", "αinv"), ("aG", "αG")].map fun (a, b) => (a, byName b))
+
+/-- The calories (`UnitSystems.jl:343-344`): plain numbers, `cal = kcal/1e3`. -/
+def calories : List (String × Num) :=
+  let kc : List (String × String × JNum) :=
+    [("ₜₕ", "thermochemical", .int 4184), ("₄", "4 °C", .int 4204), ("₁₀", "10 °C", .float 4185.5),
+     ("₂₀", "20 °C", .int 4182), ("ₘ", "mean", .int 4190), ("ᵢₜ", "international", .float 4186.8)]
+  kc.flatMap fun (sfx, _, k) =>
+    [("kcal" ++ sfx, .p k), ("cal" ++ sfx, .p (.float (k.toFloat / f64! 1e3)))]
+
+/-- The irrationals UnitSystems re-exports (`UnitSystems.jl:20`), as `Float64`. -/
+def irrationalConstants : List (String × Float) :=
+  [("eulergamma", f64! 0.5772156649015329), ("golden", f64! 1.618033988749895),
+   ("φ", f64! 1.618033988749895)]
+
+/-- Module-level numeric constants of UnitSystems (Julia names), aliases included. -/
+def moduleConstants : List (String × Num) := baseConstants ++ aliasConstants ++ calories
+
+/-- `atomicmass = dalton` (`systems.jl:26`). -/
+abbrev atomicmass (U : UnitSystem α) (C : Coupling α := U.C) : α := dalton U C
+/-- `universal = molargas` (`systems.jl:73`). -/
+abbrev universal (U : UnitSystem α) (C : Coupling α := U.C) : α := molargas U C
+/-- `US = UnitSystem` (`systems.jl:77`). -/
+abbrev US := UnitSystem
+
+/-- `intensity = irradiance` (`systems.jl:26`). -/
+abbrev Convert.intensity (U S : UnitSystem α) : α := Convert.irradiance U S
+/-- `temp = temperature` (the conversion). -/
+abbrev Convert.temp (U S : UnitSystem α) : α := Convert.temperature U S
+/-- `intensity` as a `Conv` (`systems.jl:26`). -/
+@[match_pattern] abbrev Conv.intensity : Conv := .irradiance
+/-- `temp` as a `Conv`. -/
+@[match_pattern] abbrev Conv.temp : Conv := .temperature
 
 end UnitSystems
