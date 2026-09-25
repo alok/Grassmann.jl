@@ -11,10 +11,13 @@ The composite suite (`Grassmann.Composite`):
 -/
 import Tests.Golden
 import Tests.Golden.Composite
+import Tests.Golden.CompositeDocs
 import Tests.Composite.Unit
 
 /-- Run the composite suites; returns `(passed, failed)`. -/
 def Tests.Composite.run : IO (Nat × Nat) := do
   let (p₁, f₁) ← Tests.Composite.Unit.run
-  let (p₂, f₂) ← Tests.ElementOracle.runWith #[Tests.ElementOracle.compositeRegistration] ["composite"]
+  let (p₂, f₂) ← Tests.ElementOracle.runWith
+    #[Tests.ElementOracle.compositeRegistration, Tests.ElementOracle.compositeDocsRegistration]
+    ["composite", "docs"]
   return (p₁ + p₂, f₁ + f₂)
