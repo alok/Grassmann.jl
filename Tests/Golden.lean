@@ -63,6 +63,12 @@ def runWith (extra : Array Registration) (suites : List String := elementSuites)
     r.print
     passed := passed + r.passed
     failed := failed + r.failed
+  -- the reasons behind the pending-defect skips and the expected failures
+  for d in pendingDefects.entries do
+    IO.println s!"  [golden] pending defect {d.id} ({d.source}): {d.title}"
+  for reg in regs do
+    for k in reg.knownIssues do
+      IO.println s!"  [golden] known issue {k.id} of {reg.name}: {k.note}"
   return (passed, failed)
 
 end Tests.ElementOracle
