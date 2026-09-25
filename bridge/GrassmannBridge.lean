@@ -2,3 +2,4 @@ import GrassmannBridge.Algebra
 import GrassmannBridge.Monomial
 import GrassmannBridge.Clifford
 import GrassmannBridge.Transport
+import GrassmannBridge.Exterior
