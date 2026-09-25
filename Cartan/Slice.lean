@@ -66,6 +66,24 @@ def leafAt {b : GridBundle (N + 1) P G} (t : TensorField b F) (i : Nat)
     (j : Fin (N + 1) := Fin.last N) : TensorField (b.sliceAt j i) F :=
   t.sliceAt j i
 
+/-- Julia `assign!(t, i, fiber)` (AbstractAnalysis, used by `orbit` and the time series,
+`Cartan.jl:519-554`): the slice `i` (0-based) of the last axis replaced by the flat fibers `fib`
+(the slice is the contiguous block `i` of the column-major data); unchanged when `fib` does not
+have the slice's size or `i` is past the axis. -/
+def assignLast {b : GridBundle (N + 1) P G} (t : TensorField b F) (i : Nat) (fib : FloatArray) :
+    TensorField b F :=
+  let len := (b.space.axes[Fin.last N]).length
+  let blk := t.data.size / len
+  if len != 0 && i < len && fib.size == blk && blk * len == t.data.size then
+    { t with data := writeFrom fib (i * blk) blk 0 t.data,
+             size_data := by rw [size_writeFrom]; exact t.size_data }
+  else t
+
+/-- Julia `assign!(t, i, s)` with a slice field (`leafAt` is its inverse). -/
+@[inline] def assignLeaf {b : GridBundle (N + 1) P G} (t : TensorField b F) (i : Nat)
+    (s : TensorField (b.sliceAt (Fin.last N) i) F) : TensorField b F :=
+  t.assignLast i s.data
+
 /-- Julia `boundarycomponents(f, n)` for a 1-D field (`Cartan.jl:614`): the local tensors at depth
 `n` (0-based) from both ends. -/
 def boundaryComponents1 {M : Type} [FrameBundle M] {m : M} {Q : Type} [Coordinates M P Q]

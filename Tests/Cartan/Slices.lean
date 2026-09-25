@@ -110,6 +110,15 @@ def run : TestM Unit := do
     check s!"slices {name} r" (o.r == r) fun _ => s!"got {o.r}, expected {r}"
     check s!"slices {name} c" (o.c == cc) fun _ => s!"got {o.c}, expected {cc}"
     checkField s!"slices {name} field" o.field (← jField w "field")
+  -- `assign!` along the last axis: `leafAt` then `assignLeaf` is the identity, and a new slice
+  -- lands in its contiguous block
+  check "assign! leaf round trip" ((List.range 3).all fun i =>
+    ((a3.assignLeaf i (a3.leafAt i)).data.toList.map Float.toBits) == a3.data.toList.map Float.toBits)
+  let new : FloatArray := ⟨(Array.range 12).map fun k => Float.ofNat k + 0.5⟩
+  let a3' := a3.assignLast 1 new
+  checkEq "assign! slice 1" (a3'.leafAt 1).data.toList new.toList
+  checkEq "assign! keeps slice 0" (a3'.leafAt 0).data.toList (a3.leafAt 0).data.toList
+  checkEq "assign! wrong size is a no-op" (a3.assignLast 1 ⟨#[1, 2]⟩).data.toList a3.data.toList
   -- fields of leaves (`element/variation.json`): Variation, alteration, modification
   let gv ← load "element/variation"
   let av : TensorField gaa Float := .tabulatePoint gaa fun x =>
