@@ -316,6 +316,16 @@ def temperatureAt (hG : Float) (i : Fin n) : Float :=
       1000.0 - (1000.0 - T0) * exp ((-0.012 / (1000.0 - T0)) * ξ)
   else if a0 == 0.0 then T0 else T0 + a0 * (hG - h0)
 
+/-- Whether Julia's `temperature(hG, i, W, U)` throws: in the 1976 elliptic layer
+the argument of `sqrt(1 - (Δh/ha)^2)` is negative (a `DomainError`). Every
+operation computes the temperature first, so all of them throw; Lean returns
+`NaN` for all of them (otherwise `NaN^0 = 1` would let a pressure through). -/
+def domainError (hG : Float) (i : Fin n) : Bool :=
+  let a0 := C.a.get i
+  a0.isInf && a0 < 0.0 &&
+    (let x := (hG - C.h.get i) / C.ha
+     1.0 - x * x < 0.0)
+
 /-- Julia `pressure(hG, T, i, W, U)` (`Geophysics.jl:736-744`). -/
 def pressureT (hG T : Float) (i : Fin n) : Float :=
   let a := C.a.get i
@@ -344,8 +354,10 @@ def gravity (h : Float) : Float :=
 /-- Julia `layer(hG, W, U) = layer(length(hG, units(W), U), W)` (`Geophysics.jl:572`). -/
 @[inline] def layer (hG : Float) : Fin n := layerOf C.hW C.pos (hG * C.toW)
 
-/-- Julia `op(hG, i, W, U)`: the layer-level primitive of every operation. -/
+/-- Julia `op(hG, i, W, U)`: the layer-level primitive of every operation (`NaN`
+where Julia's temperature throws, see `domainError`). -/
 def opAt (o : Op) (hG : Float) (i : Fin n) : Float :=
+  if C.domainError hG i then JMath.nan else
   let U := C.u
   let F := C.fluid
   let T := C.temperatureAt hG i
@@ -563,6 +575,7 @@ def ratioFrom (o : Op) (h : Float) (U S : Sys) : Float := W.ratio o (convert .le
 geopotential altitude in layer `i`, in `W`'s units. -/
 def stateAt (hG : Float) (i : Fin n) : FluidState :=
   let C := W.native
+  if C.domainError hG i then ⟨W.fluid, W.units, JMath.nan, JMath.nan⟩ else
   let T := C.temperatureAt hG i
   ⟨W.fluid, W.units, T, C.pressureT hG T i⟩
 
