@@ -129,6 +129,13 @@ a square operator). -/
 def wedgeAll (T : Simplex V W α) : Chain W V.n α :=
   ⟨castLen (wedgeList T.cols1)⟩
 
+/-- Julia `∧(T)` with more columns than dimensions (`algebra.jl:115-121`): the
+`1 × C(n,m)` top compound `Λᵐ T` as a grade-`m` chain of the domain (Julia
+`map(Real, compound(t, m))`). -/
+def wedgeAllWide (T : Simplex V W α) : Chain V W.n α :=
+  let C := T.compound W.n
+  ⟨Values.ofFn fun j => C.entry 0 j.1⟩
+
 /-- Julia `det(T) = !∧(T)` (`composite.jl:952`, `forms.jl:595`) for a square
 grade-1 operator: the scalar coefficient (Julia prints it as the grade-0 chain
 `-3v`). For a non-square operator this is the first coefficient of the wedge. -/
