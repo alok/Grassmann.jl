@@ -15,6 +15,7 @@ import Grassmann.Forms.Lie
 import Grassmann.Forms.Simplex
 import Grassmann.Forms.Fit
 import Grassmann.Fields
+import Grassmann.Calculus
 
 /-!
 # Grassmann.Forms: linear algebra of Grassmann elements
@@ -51,6 +52,9 @@ Port of Grassmann.jl `src/forms.jl` (and the determinant/simplex part of
 * `Grassmann.Fields` (imported here): `points`, `chainfield`, `vectorfield`/`pointfield`,
   the sampled curves and vector fields of versors, on the `↑`/`↓` maps of
   `Grassmann.Composite.Project`.
+* `Grassmann.Calculus` (imported here): `V(∇)` (`nabla`, `nablaM` with tangent spaces),
+  `∂`/`boundary`, `d`/`differential`, `δ`/`codifferential`, `gradient`, `divergence`, `curl`
+  and the simplex boundary `∧(ω)⋅v1`.
 * `Grassmann.Forms.MatFun`: `exp`, `expm1` (Grassmann's Padé), `log`.
 * `Grassmann.Forms.Cayley`: `operator(t, G)`, `gradedoperator`, `metrictensor`,
   `metricextensor`, `antimetrictensor`, Cayley tables.

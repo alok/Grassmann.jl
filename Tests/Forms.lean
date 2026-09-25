@@ -10,6 +10,7 @@ import Tests.Forms.Parity
 import Tests.Forms.UpDown
 import Tests.Forms.Norms
 import Tests.Forms.Unrolled
+import Tests.Forms.Calculus
 
 /-!
 # Forms test aggregator
@@ -31,6 +32,7 @@ elements (`Grassmann.Forms`): the Julia goldens in `oracle/golden/forms/`
 | `forms/updown` | `↑`/`↓` (project/reject) in every kind of space, the README curves, `chainfield` |
 | `forms/norms` | `abs`, `unit`, `unitize`, `unitnorm`, `geomabs` per element kind (Julia's kinds) |
 | `forms/unrolled` | the generated `det`, `inv`, `adjugate`, `solve` (`n ≤ 6`) bit-identical to the generic algorithms |
+| `forms/calculus` | `V(∇)`, `∂`, `d`, `δ`, `gradient`, `divergence`, `curl` (`Grassmann.Calculus`), simplex boundaries, tangent-space `∇` |
 -/
 
 namespace Tests.Forms
@@ -42,7 +44,8 @@ def run : IO (Nat × Nat) := do
   IO.println "Forms"
   let suites : List (IO Tally) :=
     [Exact.suite, FloatSuite.suite, SpectralSuite.suite, DiagSuite.suite, GeometrySuite.suite,
-     Props.suite, Types.suite, Parity.suite, UpDown.suite, Norms.suite, Unrolled.suite]
+     Props.suite, Types.suite, Parity.suite, UpDown.suite, Norms.suite, Unrolled.suite,
+     CalculusSuite.suite]
   let mut pass := 0
   let mut fail := 0
   for suite in suites do

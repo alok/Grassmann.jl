@@ -1,6 +1,7 @@
 import Tests.Golden.Registry
 import Tests.Golden.Space
 import Grassmann.Composite
+import Grassmann.Calculus
 
 /-!
 # The composite statements of the docs suite (`oracle/golden/docs/*.json`)
@@ -9,7 +10,8 @@ The docs suite (docs/port-notes/oracle-schema.md §8.8) evaluates README/documen
 statements REPL-style in a Julia sandbox; its evaluators see only the statement text. This
 module evaluates the statements whose value is a composite function (`exp`, `log`, `sqrt`,
 `inv`, `^`, `complexify`, `vectorize`, …) or a rotation built from one (`~R*a*R`,
-`R >>> v₁`), keyed by the shard and the statement (and the case index where the statement
+`R >>> v₁`), and the vector-calculus statements (`V(∇)`, `∂`, `⋆d`: `Grassmann.Calculus`, tangent
+spaces included), keyed by the shard and the statement (and the case index where the statement
 depends on an earlier assignment, e.g. `R = exp(π/8*v12)` then `R>>>v1`). The space is the
 output's `V` display (`Tests.ElementOracle.parseHandle?`). Values are compared
 componentwise (`rtol = 1e-12`, `atol = 1e-14`: products of closed forms round differently
@@ -116,6 +118,8 @@ def byInput : List (String × String × DocFn) := [
   ("54-sandwich-scaling", "v12^2", fun V => (v12 V ^ 2 : Couple V Float).toMultivector),
   ("54-sandwich-scaling", "(v1+v2)^3", fun V => ch V 1 [1, 1, 0] ^ 3),
   ("54-sandwich-scaling", "v12^-1", fun V => (v12 V ^ (-1 : Int) : Couple V Float).toMultivector),
+  ("20-algebra.md-1104", "(ℝ^3)(∇)", fun V => toMultivector (Calculus.nabla V Float)),
+  ("20-algebra.md-1104", "tangent(ℝ^3)(∇)", fun V => Calculus.nablaM V Float),
   ("58-dims", "complexify(Phasor(2.0, π/3))", fun V =>
     (Phasor.complexify (⟨2.0, ⟨0, π / 3, 0.0⟩⟩ : Phasor V Float)).toMultivector)
 ]
@@ -123,6 +127,8 @@ def byInput : List (String × String × DocFn) := [
 /-- Statements that depend on an earlier assignment, by shard and case index (the input
 is checked too). -/
 def byIndex : List (String × Nat × String × DocFn) := [
+  ("27-algebra.md-1408", 6, "V(∇)", fun V => Calculus.nablaM V Float),
+  ("39-simplicial", 1, "∂(ω)", fun V => toMultivector (Calculus.boundary (⟨7, 1.0⟩ : Single V 3 Float))),
   ("37-display-edge-cases", 76, "R>>>v1", fun V => expB V 3 (π / 4) >>> (⟨1, 1.0⟩ : Single V 1 Float)),
   ("37-display-edge-cases", 77, "v1⊘R", fun V => toMultivector ((⟨1, 1.0⟩ : Single V 1 Float) ⊘ expB V 3 (π / 4))),
   ("37-display-edge-cases", 80, "R>>>v1", fun V => expB V 3 (π / 8) >>> (⟨1, 1.0⟩ : Single V 1 Float)),
@@ -132,6 +138,17 @@ def byIndex : List (String × Nat × String × DocFn) := [
   ("37-display-edge-cases", 84, "R*v1*~R", fun V => let R := expB V 3 (π / 8); R * e V 1 * R.reverse)
 ]
 
+/-- Statements whose Julia value is an `Any`-typed multivector of integers (the tangent-space
+calculus, recorded as their display strings `"0"`, `"-1"`, …): compared as those strings. -/
+def anyInts : List (String × String × DocFn) := [
+  ("21-algebra.md-1116", "@basis tangent(ℝ^3,2,3); ⋆d(v1+v2+v3)", fun V =>
+    hodge (Calculus.differentialM (e V 1 + e V 2 + e V 4))),
+  ("22-algebra.md-1120", "∂(Λ(tangent(ℝ^4,2,4)).v1234)", fun V => Calculus.boundaryM (e V 15))
+]
+
+/-- Julia's display of an integral coefficient of an `Any` array (`0`, `-1`). -/
+def intString (x : Float) : String := toString x.toInt64.toInt
+
 end CompositeDocs
 
 open CompositeDocs in
@@ -139,9 +156,13 @@ open CompositeDocs in
 def compositeDocsEval : Evaluator := fun ctx _ => do
   let c := ctx.case
   let input ← c.input
+  let out ← c.out
+  if let some (_, _, f) := anyInts.find? fun (s, inp, _) => s == ctx.shard && inp == input then
+    let V ← out.V.bind (fun v => (parseHandle? v).map (·.1))
+    let m := f V
+    return { kind := .multivector, dense := some (.raw (m.v.toArray.map fun x => .str (intString x))) }
   let f ← (byIndex.find? fun (s, i, inp, _) => s == ctx.shard && i == c.idx && inp == input).map (·.2.2.2)
     <|> (byInput.find? fun (s, inp, _) => s == ctx.shard && inp == input).map (·.2.2)
-  let out ← c.out
   -- the space: the output's `V`, or Julia's default `Phasor` space `Submanifold(2)`
   let V ← match out.V with
     | some v => (parseHandle? v).map (·.1)
