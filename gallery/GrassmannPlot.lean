@@ -5,3 +5,4 @@ import GrassmannPlot.Curves
 import GrassmannPlot.Surfaces
 import GrassmannPlot.Arrows
 import GrassmannPlot.Stream
+import GrassmannPlot.Volume

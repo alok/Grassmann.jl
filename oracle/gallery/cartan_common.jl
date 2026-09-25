@@ -17,9 +17,45 @@ end
 "The coordinates of the fibers of a field, as vectors of Float64 (column-major order)."
 coords(t) = [Float64.(collect(Grassmann.value(p))) for p in vec(fiber(t))]
 
-"Sums and a sample (every `k`-th entry) of a float vector."
-summary_of(v, k) = Dict("n" => length(v), "stride" => k, "sample" => jf(every(v, k)),
-    "sum" => jf(sum(v)), "sumabs" => jf(sum(abs, v)))
+"Sums (over the non-NaN entries) and a sample (every `k`-th entry) of a float vector."
+function summary_of(v, k)
+    v = Float64.(collect(v))
+    f = filter(!isnan, v)
+    Dict("n" => length(v), "stride" => k, "sample" => jf(every(v, k)),
+        "sum" => jf(sum(f; init = 0.0)), "sumabs" => jf(sum(abs, f; init = 0.0)))
+end
+
+"Summaries of the coordinates of a vector of points (`x1`, `x2`, … with every `k`-th point)."
+function pts_summary(pts; k = 1)
+    d = length(first(pts))
+    out = Dict{String,Any}("n" => length(pts), "dim" => d)
+    for i in 1:d
+        out["x$i"] = summary_of([Float64(p[i]) for p in pts], k)
+    end
+    out
+end
+
+"""
+Order-independent summary of NaN-separated polylines (the traced order of contour lines is an
+implementation detail): the point and separator counts and the moments `Σxᵢ`, `Σxᵢxⱼ` of the
+non-NaN points.
+"""
+function lines_moments(pts)
+    d = length(first(pts))
+    good = [Float64.(collect(p)) for p in pts if !any(isnan, p)]
+    m1 = [sum(p[i] for p in good) for i in 1:d]
+    m2 = [sum(p[i] * p[k] for p in good) for i in 1:d for k in i:d]
+    Dict("n" => length(pts), "nnan" => length(pts) - length(good), "dim" => d, "m1" => m1, "m2" => m2)
+end
+
+"The colour attribute of a plot: a summary of its values, or the RGBA of a single colour."
+function color_summary(c; k = 1)
+    c isa AbstractVector{<:Real} && return Dict("values" => summary_of(c, k))
+    c isa AbstractArray{<:Real} && return Dict("values" => summary_of(vec(c), k))
+    c isa AbstractVector && return Dict("n" => length(c))
+    col = Makie.to_color(c)
+    Dict("rgba" => [Float64(col.r), Float64(col.g), Float64(col.b), Float64(col.alpha)])
+end
 
 """
 Dump a curve field and its `speed` colouring (what `lines(t)` draws, `MakieExt.jl:171-176`):

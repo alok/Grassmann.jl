@@ -47,7 +47,11 @@ instance instVoxelsGrid {P G : Type} [Inhabited G] {b : GridBundle 3 P G} : Maki
     let o : Voxels.Options := { colorrange := a.colorrange, scale := a.colorscale, gap := a.gap
                                 lowclip := a.lowclip, highclip := a.highclip }
     let (m, rgba) := voxelMesh chunk o a.colormap
-    c.drawMesh m (some (a.color.getD (.perElement rgba))) (a.shading.getD true) a
+    let c := c.drawMesh m (some (a.color.getD (.perElement rgba))) (a.shading.getD true) a
+    -- Makie's `data_limits` of a voxel plot is the whole extent, not the drawn cubes: two
+    -- invisible corner points make the automatic limits the same
+    let corners := Pts3.ofArrays ⟨#[chunk.x.1, chunk.x.2]⟩ ⟨#[chunk.y.1, chunk.y.2]⟩ ⟨#[chunk.z.1, chunk.z.2]⟩
+    c.drawScatter corners (some (.solid RGBA.transparent)) { markersize := 0 }
   dim _ := 3
 
 end GrassmannPlot

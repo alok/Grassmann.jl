@@ -1,0 +1,11 @@
+# Cartan.jl docs/src/plot.md:266-272 (Makie's scatter example on a TensorField):
+#   xs = range(0, 10, length = 30); ys = 0.5 .* sin.(xs)
+#   xy = TensorField(xs,ys)
+#   scatter(xy)
+include("cartan_common.jl")
+xs = range(0, 10, length = 30)
+ys = 0.5 .* sin.(xs)
+xy = TensorField(xs,ys)
+fig, ax, pl = scatter(xy)
+dumpdata("cartan-plot-scatter", Dict("points" => pts_summary(pl[1][])))
+savefig("cartan-plot-scatter", fig)
