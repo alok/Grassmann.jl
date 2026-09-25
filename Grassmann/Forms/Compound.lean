@@ -310,6 +310,42 @@ def solve [Div α] (T : Simplex V W α) (v : Chain W 1 α) : Chain V 1 α :=
   else
     ⟨T.inv.applyValues v.v⟩
 
+/-- `k!`. -/
+def factorialNat : Nat → Nat
+  | 0 => 1
+  | k + 1 => (k + 1) * factorialNat k
+
 end TensorOperator
+
+namespace Chain
+
+variable {V : TensorBundle} {α : Type} [Coeff α]
+
+open Forms
+
+/-- `ω ∧ ω ∧ … ∧ ω` (`k` factors, a left fold) of a bivector, grade `2k`. -/
+def wedgePower {n : Nat} (ω : GVec α n 2) : (k : Nat) → GVec α n (2 * k)
+  | 0 => oneG n
+  | 1 => ω
+  | k + 2 => (wedgeGH (wedgePower ω (k + 1)) ω).cast (by congr 1)
+
+/-- Julia `pfaffian(ω)` of a bivector (`composite.jl:887-895`): with `k = ⌊n/2⌋`,
+`!(ω^∧k) / k!` (`!ω` when `k = 1`): the Pfaffian as a grade-0 chain in even
+dimension, a vector in odd dimension (`pfaffian(2v₁₂ + 3v₁₃ + 6v₂₃) = 6v₁ - 3v₂ + 2v₃`).
+The division by `k!` is Julia's tensor division, by the reciprocal. -/
+def pfaffian [Div α] (ω : Chain V 2 α) : Chain V (V.n - 2 * (V.n / 2)) α :=
+  let k := V.n / 2
+  let c : GVec α V.n (V.n - 2 * k) := complementG (wedgePower (n := V.n) ω.v k)
+  if k ≤ 1 then ⟨c⟩
+  else
+    let r : α := Coeff.one / Coeff.ofInt (TensorOperator.factorialNat k)
+    ⟨c.map (· * r)⟩
+
+end Chain
+
+/-- Julia `pfaffian(A::Endomorphism) = pfaffian(bivector(A))` (`forms.jl:592`). -/
+@[inline] def Endomorphism.pfaffian {V : TensorBundle} {α : Type} [Coeff α] [Div α]
+    (A : Endomorphism V (.chain 1) α) : Chain V (V.n - 2 * (V.n / 2)) α :=
+  (Endomorphism.bivector A).pfaffian
 
 end Grassmann
