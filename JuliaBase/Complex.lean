@@ -19,6 +19,7 @@ the noncomputable `ℝ`.
   The arithmetic-only functions (`/`, `inv`, `abs`, `sqrt`) agree with the oracle bit for
   bit; the ones that call `libm` agree to within its tolerance (Julia uses its own
   `libm`).
+* **`ComplexF32`**: Julia's `/` and `inv`, which widen to `Float64`.
 -/
 
 universe u
@@ -99,14 +100,16 @@ instance [Sub α] : HSub (Complex α) α (Complex α) := ⟨fun z x => ⟨z.re -
 
 /-- `/` on complex numbers over an exact field (`Rat`): the textbook formula
 `z·conj(w)/abs2(w)`, exact there (Julia's generic `/`, complex.jl:350, computes the same
-exact value by Smith's algorithm). `Complex Float` uses the robust `ComplexF64.div`. -/
+exact value by Smith's algorithm). `Complex Float` and `Complex Float32` use Julia's
+`ComplexF64.div`/`ComplexF32.div`. Over `Int` this is truncating division, whereas Julia's
+`/` on `Complex{Int}` returns a `ComplexF64`. -/
 instance (priority := low) instDivGeneric [Add α] [Sub α] [Mul α] [Div α] : Div (Complex α) :=
   ⟨fun z w =>
     let d := w.re * w.re + w.im * w.im
     ⟨(z.re * w.re + z.im * w.im) / d, (z.im * w.re - z.re * w.im) / d⟩⟩
 
 /-- Julia `inv(z) = conj(z)/abs2(z)` (complex.jl:279) over an exact field. `Complex Float`
-uses the robust `ComplexF64.inv`. -/
+and `Complex Float32` use `ComplexF64.inv`/`ComplexF32.inv`. -/
 instance (priority := low) instInvGeneric [Add α] [Mul α] [Neg α] [Div α] : Inv (Complex α) :=
   ⟨fun z => let d := z.re * z.re + z.im * z.im; ⟨z.re / d, -z.im / d⟩⟩
 
@@ -534,5 +537,47 @@ where
     else if rp == 0 then ⟨0, 0⟩ else ⟨F64.nan, F64.nan⟩
 
 end ComplexF64
+
+/-! ## `ComplexF32` -/
+
+/-- Julia `ComplexF32 = Complex{Float32}` (complex.jl:39). -/
+abbrev ComplexF32 : Type := Complex Float32
+
+namespace ComplexF32
+
+/-- Julia `/(z::ComplexF32, w::ComplexF32)` (complex.jl:369): widen both to `Float64`,
+`mag = inv(muladd(c, c, d^2))`, then `muladd(a, c, b*d)*mag + muladd(b, c, -a*d)*mag·i`
+rounded back to `Float32` (the `muladd`s are FMAs on the oracle machine). -/
+def div (z w : Complex Float32) : Complex Float32 :=
+  let a := z.re.toFloat
+  let b := z.im.toFloat
+  let c := w.re.toFloat
+  let d := w.im.toFloat
+  if c.isInf || d.isInf then
+    if z.re.isFinite && z.im.isFinite then
+      ⟨0 * F32.sign z.re * F32.sign w.re, -0.0 * F32.sign z.im * F32.sign w.im⟩
+    else ⟨Float32.ofBits 0x7FC00000, Float32.ofBits 0x7FC00000⟩
+  else
+    let mag := 1 / Float.fma c c (d * d)
+    ⟨(Float.fma a c (b * d) * mag).toFloat32, (Float.fma b c (-(a * d)) * mag).toFloat32⟩
+
+/-- `z / w` on `ComplexF32` is Julia's widened division. -/
+instance : Div (Complex Float32) := ⟨div⟩
+
+/-- Julia `inv(z::ComplexF32)` (complex.jl:466): widen to `Float64`,
+`mag = inv(muladd(c, c, d^2))`, `Complex(c*mag, -d*mag)` rounded back. -/
+def inv (w : Complex Float32) : Complex Float32 :=
+  let c := w.re.toFloat
+  let d := w.im.toFloat
+  if c.isInf || d.isInf then
+    ⟨F32.copysign 0 w.re, if F32.signbit w.im then 0 else -0.0⟩
+  else
+    let mag := 1 / Float.fma c c (d * d)
+    ⟨(c * mag).toFloat32, (-d * mag).toFloat32⟩
+
+/-- `z⁻¹` on `ComplexF32` is Julia's widened inverse. -/
+instance : Inv (Complex Float32) := ⟨inv⟩
+
+end ComplexF32
 
 end JuliaBase

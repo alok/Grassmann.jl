@@ -410,6 +410,10 @@ namespace F32
   else if x == y then (if signbit x then x else y)
   else if x < y then x else y
 
+/-- Julia `sign(x::Float32)`: `-1f0`, `1f0`, or `x` itself for `±0f0` and NaN. -/
+@[inline] def sign (x : Float32) : Float32 :=
+  if x < 0 then -1 else if x > 0 then 1 else x
+
 /-- Julia `rtoldefault(Float32)` = `sqrt(eps(Float32))` = `2^-11.5`, rounded. -/
 def rtoldefault : Float32 := (Float32.ofBits 0x34000000).sqrt
 

@@ -139,6 +139,31 @@ def fuzz (path : System.FilePath) : IO (Nat × Nat) := do
 #guard F64.exponent 1.0 == 0 && F64.exponent (-12.0) == 3 && F64.exponent 5e-324 == -1074
 #guard F64.ldexp 1.0 (-1074) == 5e-324 && F64.ldexp 3.0 4 == 48.0
 #guard F64.expm1 0.0 == 0.0 && F64.expm1 (-F64.inf) == -1.0 && F64.log1p (-1.0) == -F64.inf
+/-- Julia 1.13 `ComplexF32` goldens `(z, w, z / w, inv(w))` as `Float32` bits:
+`(re z, im z, re w, im w, re q, im q, re i, im i)`. -/
+def complexF32Goldens : List (UInt32 × UInt32 × UInt32 × UInt32 × UInt32 × UInt32 × UInt32 × UInt32) := [
+  (0x3f800000, 0x40000000, 0x40400000, 0x40800000, 0x3ee147ae, 0x3da3d70a, 0x3df5c28f, 0xbe23d70a),
+  (0x0da24260, 0x40400000, 0x612d78ec, 0xbbe56042, 0x80000177, 0x1e8dabc6, 0x1dbce508, 0x0000007d),
+  (0x3dcccccd, 0xbe99999a, 0x7f800000, 0x3f800000, 0x00000000, 0x00000000, 0x00000000, 0x80000000),
+  (0x7fc00000, 0x3f800000, 0x7f800000, 0x00000000, 0x7fc00000, 0x7fc00000, 0x00000000, 0x80000000),
+  (0x80000000, 0x40a00000, 0x3f800000, 0x80000000, 0x80000000, 0x40a00000, 0x3f800000, 0x00000000),
+  (0xbedfa36c, 0x3ffe28e1, 0xbfd23cb0, 0x3f90aedb, 0x3f3ebb43, 0xbf323951, 0xbed389dc, 0xbe919424),
+  (0xbf3cf070, 0xbdcb8166, 0xbedb9fb6, 0x3f6d16b0, 0x3e5cbd8c, 0x3f327330, 0xbed2d462, 0xbf639855),
+  (0xbee55fdf, 0x3e98f08c, 0x3f47a64c, 0xbe8fc5c9, 0xbf216efd, 0x3e1fb545, 0x3f914a92, 0x3ed14174),
+  (0x40167f2a, 0xbfc01f33, 0xbfbedbf3, 0xbf55c7a0, 0xbf4577a1, 0x3fb82467, 0xbf02b1c0, 0x3e9263c0),
+  (0xbf9d5290, 0x3ff83277, 0x3f0f81c7, 0xbef1c4cf, 0xc03f291c, 0x3f71683d, 0x3f859076, 0x3f6104ab)]
+
+/-- Bitwise `Float32` equality with all NaNs equal. -/
+def sameF32 (x : Float32) (b : UInt32) : Bool :=
+  (x.isNaN && (Float32.ofBits b).isNaN) || x.toBits == b
+
+#guard complexF32Goldens.all fun (a, b, c, d, qr, qi, ir, ii) =>
+  let z : Complex Float32 := ⟨Float32.ofBits a, Float32.ofBits b⟩
+  let w : Complex Float32 := ⟨Float32.ofBits c, Float32.ofBits d⟩
+  let q := z / w
+  let i := w⁻¹
+  sameF32 q.re qr && sameF32 q.im qi && sameF32 i.re ir && sameF32 i.im ii
+
 #guard JInt.isodd (-3) && !JInt.isodd 4
 #guard powBySquaring (· * ·) 1 (3 : Nat) 13 == 1594323 && powBySquaring (· * ·) 1 (2 : Nat) 0 == 1
 
