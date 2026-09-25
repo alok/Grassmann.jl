@@ -1,5 +1,6 @@
 import Tests.Forms.Common
 import Grassmann.Calculus
+import Grassmann.Calculus.Simplicial
 
 /-!
 # `Grassmann.Calculus` against Julia
@@ -147,6 +148,31 @@ def suite : IO Tally := do
   let _ : Chain S!"+++" 2 Float := differential v
   let _ : Chain S!"+++" 1 Float := curl v
   let t := t.ok ((boundary v).v.toList == [6]) fun _ => s!"∂(v1+2v2+3v3) = {(boundary v).v.toList}"
+  -- simplicial complexes (docs `39-simplicial`, Julia's values)
+  let R5 := En 5
+  let blade := fun (b : UInt64) => (termMV R5 b 1 : Multivector R5 Float)
+  let ω := blade 7
+  let sk := skeleton ω
+  let want : List (UInt64 × Float) := [(1, 2), (2, 2), (4, 2), (3, 1), (5, 1), (6, 1), (7, 1)]
+  let t := t.ok ((Leibniz.indexBasisAll 5).toList.zip sk.v.toList |>.all fun (b, x) =>
+      x == ((want.find? (·.1 == b)).map (·.2)).getD 0) fun _ => s!"skeleton(v123) = {sk.v.toList}"
+  let t := t.ok (χ sk == 1 && betti sk == #[1, 0, 0, 0, 0]) fun _ => s!"χ, betti of skeleton(v123): {χ sk} {betti sk}"
+  let t := t.ok (χ (skeleton (boundaryM ω)) == 0 && betti (skeleton (boundaryM ω)) == #[1, 1, 0, 0, 0]) fun _ =>
+    "χ, betti of skeleton(∂v123)"
+  let ws : List UInt64 := [3, 7, 15, 31]
+  let t := t.ok (ws.map (fun b => (χ (skeleton (blade b)), χ (skeleton (boundaryM (blade b))))) == [(1, 2), (1, 0), (1, 2), (1, 0)])
+    fun _ => "χ pairs"
+  let t := t.ok (ws.map (fun b => betti (skeleton (boundaryM (blade b)))) ==
+      [#[2, 0, 0, 0, 0], #[1, 1, 0, 0, 0], #[0, -2, 0, 0, 0], #[1, -4, -5, 0, 0]]) fun _ =>
+    s!"betti list {ws.map (fun b => betti (skeleton (boundaryM (blade b))))}"
+  let v1234 : Single R5 4 Float := ⟨15, 1⟩
+  let t := t.ok ((chain v1234).v.toList == [1, 0, -1, 0, 1, 0, 0, 1, 0, 0] &&
+      (path v1234).v.toList == [1, 0, 0, 0, 1, 0, 0, 1, 0, 0]) fun _ => s!"chain, path of v1234: {(chain v1234).v.toList}"
+  -- 𝒫 keeps the empty face; subcomplex is the skeleton of the boundary; count_gdims, boundary_null
+  let t := t.ok (getD (𝒫 ω).v 0 == 6 && (subcomplex ω).v.toList == (skeleton (absym (boundaryM ω))).v.toList) fun _ =>
+    s!"𝒫, subcomplex: {(𝒫 ω).v.toList}"
+  let t := t.ok (countGdims sk == #[0, 3, 3, 1, 0, 0] && boundaryNull sk == #[3, 1, 0, 0, 0, 0]) fun _ =>
+    s!"count_gdims, boundary_null: {countGdims sk} {boundaryNull sk}"
   return t
 
 end Tests.FormsTests.CalculusSuite

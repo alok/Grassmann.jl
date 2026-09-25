@@ -2,6 +2,7 @@ import Tests.Golden.Registry
 import Tests.Golden.Space
 import Grassmann.Composite
 import Grassmann.Calculus
+import Grassmann.Calculus.Simplicial
 
 /-!
 # The composite statements of the docs suite (`oracle/golden/docs/*.json`)
@@ -120,6 +121,8 @@ def byInput : List (String × String × DocFn) := [
   ("54-sandwich-scaling", "v12^-1", fun V => (v12 V ^ (-1 : Int) : Couple V Float).toMultivector),
   ("20-algebra.md-1104", "(ℝ^3)(∇)", fun V => toMultivector (Calculus.nabla V Float)),
   ("20-algebra.md-1104", "tangent(ℝ^3)(∇)", fun V => Calculus.nablaM V Float),
+  ("39-simplicial", "chain(Λ(ℝ5).v1234)", fun V => toMultivector (Calculus.chain (⟨15, 1.0⟩ : Single V 4 Float))),
+  ("39-simplicial", "path(Λ(ℝ5).v1234)", fun V => toMultivector (Calculus.path (⟨15, 1.0⟩ : Single V 4 Float))),
   ("58-dims", "complexify(Phasor(2.0, π/3))", fun V =>
     (Phasor.complexify (⟨2.0, ⟨0, π / 3, 0.0⟩⟩ : Phasor V Float)).toMultivector)
 ]
@@ -129,6 +132,7 @@ is checked too). -/
 def byIndex : List (String × Nat × String × DocFn) := [
   ("27-algebra.md-1408", 6, "V(∇)", fun V => Calculus.nablaM V Float),
   ("39-simplicial", 1, "∂(ω)", fun V => toMultivector (Calculus.boundary (⟨7, 1.0⟩ : Single V 3 Float))),
+  ("39-simplicial", 2, "skeleton(ω)", fun V => Calculus.skeleton (Calculus.termMV V 7 1.0)),
   ("37-display-edge-cases", 76, "R>>>v1", fun V => expB V 3 (π / 4) >>> (⟨1, 1.0⟩ : Single V 1 Float)),
   ("37-display-edge-cases", 77, "v1⊘R", fun V => toMultivector ((⟨1, 1.0⟩ : Single V 1 Float) ⊘ expB V 3 (π / 4))),
   ("37-display-edge-cases", 80, "R>>>v1", fun V => expB V 3 (π / 8) >>> (⟨1, 1.0⟩ : Single V 1 Float)),

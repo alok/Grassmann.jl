@@ -17,6 +17,7 @@ import Grassmann.Forms.Fit
 import Grassmann.Forms.Literal
 import Grassmann.Fields
 import Grassmann.Calculus
+import Grassmann.Calculus.Simplicial
 
 /-!
 # Grassmann.Forms: linear algebra of Grassmann elements
@@ -55,7 +56,8 @@ Port of Grassmann.jl `src/forms.jl` (and the determinant/simplex part of
   `Grassmann.Composite.Project`.
 * `Grassmann.Calculus` (imported here): `V(∇)` (`nabla`, `nablaM` with tangent spaces),
   `∂`/`boundary`, `d`/`differential`, `δ`/`codifferential`, `gradient`, `divergence`, `curl`
-  and the simplex boundary `∧(ω)⋅v1`.
+  and the simplex boundary `∧(ω)⋅v1`; `Grassmann.Calculus.Simplicial` (imported here):
+  `skeleton`, `𝒫`, `subcomplex`, `collapse`, `chain`, `path`, `count_gdims`, `χ`, `betti`.
 * `Grassmann.Forms.MatFun`: `exp`, `expm1` (Grassmann's Padé), `log`; of outermorphisms,
   dyadics and projectors too.
 * `Grassmann.Forms.Literal`: the operator literals `op![…]`, `endo![…]`, `outer![…]`,
