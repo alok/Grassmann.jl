@@ -3,7 +3,7 @@ version = "0.1.0"
 description = "Lean 4 port of Michael Reed's Grassmann.jl ecosystem (DirectSum, Leibniz, AbstractTensors, Grassmann, Cartan, ...)"
 keywords = ["math", "geometric-algebra", "clifford-algebra", "differential-geometry"]
 license = "AGPL-3.0-or-later"
-defaultTargets = ["JuliaBase", "StaticVectors", "AbstractTensors", "Leibniz", "DirectSum", "Grassmann", "tests", "bench"]
+defaultTargets = ["JuliaBase", "StaticVectors", "AbstractTensors", "Leibniz", "DirectSum", "Grassmann", "FieldAlgebra", "FieldConstants", "UnitSystems", "Similitude", "MeasureSystems", "Dendriform", "DeMorgan", "AbstractLattices", "AbstractAnalysis", "Wilkinson", "PrimitiveBits", "MeshTopology", "Fatou", "Cartan", "Adapode", "Geophysics", "FlowGeometry", "tests", "bench"]
 testDriver = "tests"
 
 [leanOptions]
@@ -43,3 +43,54 @@ root = "Tests.Main"
 [[lean_exe]]
 name = "bench"
 root = "Bench.Main"
+
+[[lean_lib]]
+name = "FieldAlgebra"
+
+[[lean_lib]]
+name = "FieldConstants"
+
+[[lean_lib]]
+name = "UnitSystems"
+
+[[lean_lib]]
+name = "Similitude"
+
+[[lean_lib]]
+name = "MeasureSystems"
+
+[[lean_lib]]
+name = "Dendriform"
+
+[[lean_lib]]
+name = "DeMorgan"
+
+[[lean_lib]]
+name = "AbstractLattices"
+
+[[lean_lib]]
+name = "AbstractAnalysis"
+
+[[lean_lib]]
+name = "Wilkinson"
+
+[[lean_lib]]
+name = "PrimitiveBits"
+
+[[lean_lib]]
+name = "MeshTopology"
+
+[[lean_lib]]
+name = "Fatou"
+
+[[lean_lib]]
+name = "Cartan"
+
+[[lean_lib]]
+name = "Adapode"
+
+[[lean_lib]]
+name = "Geophysics"
+
+[[lean_lib]]
+name = "FlowGeometry"

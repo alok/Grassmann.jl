@@ -7,3 +7,5 @@
 /oracle/.julia/
 *.jl.cov
 *.jl.mem
+/.claude/worktrees/
+/.claude/settings.local.json
