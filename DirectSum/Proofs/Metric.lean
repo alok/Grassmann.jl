@@ -70,6 +70,31 @@ theorem metricFactor_congr (g : Nat → R) {n m m' : Nat} (h : ∀ i < n, m.test
   | zero => rfl
   | succ n ih => rw [metricFactor_succ, metricFactor_succ, ih (fun i hi => h i (by omega)), h n (by omega)]
 
+/-- The metric factor only reads the metric below the width. -/
+theorem metricFactor_congr_metric {g g' : Nat → R} {n : Nat} (h : ∀ i < n, g i = g' i) (m : Nat) :
+    metricFactor g n m = metricFactor g' n m := by
+  induction n with
+  | zero => rfl
+  | succ n ih => rw [metricFactor_succ, metricFactor_succ, ih (fun i hi => h i (by omega)), h n (by omega)]
+
+/-- The metric factor of a single generator is its square. -/
+theorem metricFactor_two_pow (g : Nat → R) {n i : Nat} (hi : i < n) : metricFactor g n (2 ^ i) = g i := by
+  induction n with
+  | zero => omega
+  | succ n ih =>
+    rw [metricFactor_succ, Nat.testBit_two_pow]
+    rcases Nat.lt_or_eq_of_le (Nat.le_of_lt_succ hi) with h | h
+    · rw [ih h, ite_eq_right (by simp; omega), Semiring.mul_one]
+    · subst h
+      have hz : ∀ m ≤ i, metricFactor g m (2 ^ i) = 1 := by
+        intro m hm
+        induction m with
+        | zero => rfl
+        | succ m ihm =>
+          rw [metricFactor_succ, ihm (by omega), Nat.testBit_two_pow, ite_eq_right (by simp; omega),
+            Semiring.mul_one]
+      rw [hz i (Nat.le_refl i), ite_eq_left (by simp), Semiring.one_mul]
+
 @[simp] theorem metricFactor_zero_mask (g : Nat → R) (n : Nat) : metricFactor g n 0 = 1 := by
   induction n with
   | zero => rfl

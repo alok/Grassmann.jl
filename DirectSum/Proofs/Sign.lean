@@ -285,6 +285,50 @@ theorem sigma_self (n a : Nat) : sigma n a a = Leibniz.parityreverse (bitCount n
     · simp
     · simp only [Bool.toNat_true, Bool.true_and]; rw [odd_half_succ]
 
+/-! ## Grades of combined blades -/
+
+/-- `|a ⊕ b| + 2|a ∧ b| = |a| + |b|`: the symmetric difference loses the common
+generators twice. -/
+theorem bitCount_xor_add (n a b : Nat) :
+    bitCount n (a ^^^ b) + 2 * bitCount n (a &&& b) = bitCount n a + bitCount n b := by
+  induction n with
+  | zero => rfl
+  | succ n ih =>
+    simp only [bitCount_succ, Nat.testBit_xor, Nat.testBit_and]
+    cases a.testBit n <;> cases b.testBit n <;> simp [Bool.toNat] <;> omega
+
+/-- The complement of a blade in `n` generators has the complementary grade. -/
+theorem bitCount_xor_allOnes (n x : Nat) : bitCount n (x ^^^ (2 ^ n - 1)) + bitCount n x = n := by
+  have key : ∀ m ≤ n, bitCount m (x ^^^ (2 ^ n - 1)) + bitCount m x = m := by
+    intro m hm
+    induction m with
+    | zero => rfl
+    | succ m ih =>
+      have ih := ih (by omega)
+      simp only [bitCount_succ, Nat.testBit_xor, Nat.testBit_two_pow_sub_one, show m < n from by omega,
+        decide_true]
+      cases x.testBit m <;> simp [Bool.toNat] <;> omega
+  exact key n (Nat.le_refl n)
+
+/-- A single generator has grade one. -/
+theorem bitCount_two_pow {n i : Nat} (hi : i < n) : bitCount n (2 ^ i) = 1 := by
+  induction n with
+  | zero => omega
+  | succ n ih =>
+    rw [bitCount_succ, Nat.testBit_two_pow]
+    rcases Nat.lt_or_eq_of_le (Nat.le_of_lt_succ hi) with h | h
+    · rw [ih h]; simp; omega
+    · subst h
+      have : bitCount i (2 ^ i) = 0 := by
+        -- `2 ^ i` has no bits below `i`
+        have hz : ∀ m ≤ i, bitCount m (2 ^ i) = 0 := by
+          intro m hm
+          induction m with
+          | zero => rfl
+          | succ m ihm => rw [bitCount_succ, ihm (by omega), Nat.testBit_two_pow]; simp; omega
+        exact hz i (Nat.le_refl i)
+      rw [this]; simp
+
 /-! ## Xor-sums
 
 `xorSum f n = f 0 ^^ … ^^ f (n-1)`, the form in which the fast bit-parallel
