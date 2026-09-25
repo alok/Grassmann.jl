@@ -1,0 +1,595 @@
+# oracle/defects.toml: known Julia defects that the oracle goldens exhibit.
+#
+# The Lean port implements the *correct* mathematics (DESIGN.md §0: "documented Julia defects ...
+# we fix, not replicate"), so golden cases hitting a defect must be skipped or compared against
+# the corrected value. The generator tags every matching case with `"defects": [id, ...]`;
+# consumers normally just read that array. The match patterns below are the source of truth
+# (regenerate after editing: `julia --project=oracle oracle/generate_all.jl`).
+#
+# Entry fields
+#   id       stable identifier used in the goldens
+#   title    one-line description
+#   source   Julia file:line (Grassmann 0.8.46 / DirectSum 0.8.21 / Leibniz 0.3.0 / AT 0.8.11)
+#   notes    port-note references (docs/port-notes/*.md)
+#   correct  what the Lean port does instead
+#   policy   how a consumer treats tagged cases:
+#              "ref"        compare the dense vector against the case's `ref` when it has one
+#                           (the generator's independent reference: linear combination for
+#                           arith, Multivector path for products/unary); otherwise, if `out`
+#                           is an Error, skip; otherwise the case was not actually affected
+#                           and is compared against `out` as usual
+#              "skip"       skip the case (no trustworthy expected value in the golden)
+#              "replicate"  Julia's behavior is intentionally reproduced; compare against `out`
+#   match    zero or more match tables; a case is tagged if ANY table matches. Within a table
+#            every given field must match:
+#              suite, space, op, block, input, file, msg, out : glob with `*` wildcards and
+#                         `|` alternatives (`msg` is the error message of an Error output, `out`
+#                         the output kind, `block`/`input`/`file` apply to the docs/blades suites)
+#              kinds    : one pattern per operand, each `Kind` or `Kind:g` (g an integer or `n` =
+#                         the space's top grade) with `|` alternatives, or `*`
+#              when     : a named predicate (oracle/README.md "Defect predicates")
+# Entries without match tables are documented defects that no generated golden exercises
+# (kept so the list is complete; several of them crash or hang Julia and are avoided on purpose).
+
+schema = 1
+
+# ---------------------------------------------------------------------------------------------
+# + / - lattice (arith suite)
+# ---------------------------------------------------------------------------------------------
+
+[[defect]]
+id = "pseudocouple-addsub"
+title = "PseudoCouple ± PseudoCouple with the same B uses imagvalue(b) in the real part"
+source = "Grassmann.jl src/products.jl:558"
+notes = "grassmann-types.md §4.5, §4.12 #5; grassmann-products.md App. A #1"
+correct = "componentwise: (re_a ± re_b)·B + (im_a ± im_b)·I"
+policy = "ref"
+  [[defect.match]]
+  suite = "arith"
+  op = "add|sub"
+  kinds = ["PseudoCouple", "PseudoCouple"]
+
+[[defect]]
+id = "subamnifold-typo"
+title = "`Subamnifold` typo: term + PseudoCouple with basis(term) ≠ B throws UndefVarError (cascades into ∧/∨/× of PseudoCouples)"
+source = "Grassmann.jl src/products.jl:651"
+notes = "grassmann-types.md §4.12 #6; grassmann-products.md App. A #4; grassmann-algebra.md §4.16 #16"
+correct = "Submanifold(V); the sum is the ordinary linear combination"
+policy = "ref"
+  [[defect.match]]
+  msg = "*Subamnifold*"
+
+[[defect]]
+id = "chain-minus-term-swap"
+title = "Chain{0} - term and Chain{n} - term (different grade) add the term instead of subtracting it"
+source = "Grassmann.jl src/algebra.jl:856-876 (adder(::TensorTerm,::Chain,op,swap=true): the Couple/PseudoCouple branches apply `right` (identity) to value(a) where `left` (negation) is needed); reached from src/products.jl:937-938 and :880-886"
+notes = "found by the element oracle (arith suite, ref mismatch); grassmann-types.md §4.5"
+correct = "the ordinary difference; result kind as for +"
+policy = "ref"
+  [[defect.match]]
+  suite = "arith"
+  op = "sub"
+  kinds = ["Chain:0|Chain:n", "*"]
+
+[[defect]]
+id = "zero-method-gaps"
+title = "Zero lacks methods: -Zero, Zero/n (ambiguous), antireverse/antimetric(Zero), 0 - Zero"
+source = "DirectSum.jl src/DirectSum.jl:563-613 (no unary minus); Grassmann.jl src/products.jl:400-402"
+notes = "grassmann-algebra.md §4.16 #17, #18; grassmann-products.md App. A #11"
+correct = "Zero is absorbing/identity: -Zero = Zero, Zero/n = Zero, every linear map of Zero = Zero"
+policy = "ref"
+  [[defect.match]]
+  kinds = ["Zero"]
+  out = "Error"
+  [[defect.match]]
+  kinds = ["Zero", "*"]
+  out = "Error"
+  [[defect.match]]
+  kinds = ["*", "Zero"]
+  out = "Error"
+  [[defect.match]]
+  msg = "*(::Zero{*"
+
+[[defect]]
+id = "infinity-method-gaps"
+title = "Infinity: ± with Zero/Infinity/numbers, -∞, ∞/n, complements and conversions are ambiguous or missing"
+source = "Grassmann.jl src/products.jl:379-477; DirectSum.jl src/DirectSum.jl:636-683"
+notes = "grassmann-types.md §4.9, §4.12 #22; grassmann-products.md §4.8"
+correct = "absorbing: ∞ ± x = ∞, -∞ = ∞ (Julia's x - ∞ = ∞ convention), linear maps of ∞ = ∞"
+policy = "skip"
+  [[defect.match]]
+  kinds = ["Infinity"]
+  out = "Error"
+  [[defect.match]]
+  kinds = ["Infinity", "*"]
+  out = "Error"
+  [[defect.match]]
+  kinds = ["*", "Infinity"]
+  out = "Error"
+
+# ---------------------------------------------------------------------------------------------
+# products (products suite)
+# ---------------------------------------------------------------------------------------------
+
+[[defect]]
+id = "pseudocouple-mul-diffB"
+title = "PseudoCouple * PseudoCouple with different B uses volume(b)*imaginary(a) for the last term (also Couple×PseudoCouple via the + bug)"
+source = "Grassmann.jl src/products.jl:584-586"
+notes = "grassmann-products.md App. A #2, #8"
+correct = "bilinear extension of the blade products"
+policy = "ref"
+  [[defect.match]]
+  suite = "products"
+  kinds = ["PseudoCouple|Couple", "PseudoCouple"]
+  [[defect.match]]
+  suite = "products"
+  kinds = ["PseudoCouple", "PseudoCouple|Couple"]
+  [[defect.match]]
+  suite = "products"
+  op = "veedot|antidot|cross"
+  kinds = ["Couple|PseudoCouple", "Couple|PseudoCouple"]
+
+[[defect]]
+id = "contractn-typo"
+title = "`contractn` typo: contraction(Couple, PseudoCouple) throws UndefVarError (and every op built on it: ⨼ << >> ⊛ antidot)"
+source = "Grassmann.jl src/products.jl:618"
+notes = "grassmann-products.md App. A #3; grassmann-algebra.md §4.16 #15"
+correct = "contraction(scalar(a), b) + contraction(imaginary(a), b), bilinear"
+policy = "ref"
+  [[defect.match]]
+  msg = "*contractn*"
+
+[[defect]]
+id = "vee-scalar-couple-B-unbound"
+title = "∨(TensorTerm{V,0}, Couple) and the reverse reference an unbound `B`"
+source = "Grassmann.jl src/products.jl:767-768"
+notes = "grassmann-products.md App. A #5; grassmann-algebra.md §4.16 #14"
+correct = "bilinear (a scalar only meets the pseudoscalar part)"
+policy = "ref"
+  [[defect.match]]
+  msg = "*`B` not defined*"
+
+[[defect]]
+id = "vee-pseudoscalar-couple"
+title = "I ∨ Couple and Couple ∨ I drop the scalar ∨ I term; Couple ∨ Couple with different B keeps only imaginary ∨ imaginary"
+source = "Grassmann.jl src/products.jl:771-783, :627"
+notes = "grassmann-products.md App. A #6, #7; grassmann-algebra.md §4.16 #13"
+correct = "bilinear: include scalar(a) ∨ b and a ∨ scalar(b) terms"
+policy = "ref"
+  [[defect.match]]
+  suite = "products"
+  op = "vee|veedot|antidot|cross"
+  kinds = ["Couple", "*"]
+  [[defect.match]]
+  suite = "products"
+  op = "vee|veedot|antidot|cross"
+  kinds = ["*", "Couple"]
+
+[[defect]]
+id = "chain0-times-mixed"
+title = "Chain{V,0} ⟑ Multivector/Spinor/CoSpinor (either order) throws UndefVarError `input` (also veedot of Chain{n} with mixed types)"
+source = "Grassmann.jl src/algebra.jl:1483 (`$input` must be `$$input`)"
+notes = "grassmann-products.md App. A #10; grassmann-algebra.md §4.16 #9"
+correct = "scalar multiplication"
+policy = "ref"
+  [[defect.match]]
+  msg = "*`input` not defined*"
+
+[[defect]]
+id = "conformal-blade-complement"
+title = "Conformal spaces: basis-level ! / complementleft / metric apply the null factors 2, ½ (and metric uses cl∘⋆) while Chain/Multivector-level maps do not"
+source = "DirectSum.jl src/operations.jl:339-381 vs Grassmann.jl src/products.jl:1324-1487, :1630-1815"
+notes = "grassmann-products.md §4.9, App. A #19; grassmann-algebra.md §4.9, §4.16 #25; grassmann-parity.md §8.6 #9"
+correct = "follow the Chain/Multivector level (plain complement, Gram outermorphism for metric)"
+policy = "ref"
+  [[defect.match]]
+  space = "CGA*"
+  op = "complementright|complementleft|hodge|complementlefthodge|metric"
+  kinds = ["One|Submanifold|Single"]
+  [[defect.match]]
+  space = "CGA*"
+  suite = "products"
+  op = "cross|veedot|antidot"
+
+[[defect]]
+id = "conformal-antimetric"
+title = "antimetric (cometric) on conformal / non-diagonal spaces calls the undefined `antimetric_term` or has no container method"
+source = "DirectSum.jl src/operations.jl:372; Grassmann.jl src/products.jl:1630-1815"
+notes = "grassmann-products.md App. A #20; grassmann-algebra.md §4.16 #24; directsum.md Q17; grassmann-parity.md §8.6 #5"
+correct = "Gram-complement outermorphism"
+policy = "skip"
+  [[defect.match]]
+  suite = "unary"
+  space = "CGA*"
+  op = "antimetric"
+
+[[defect]]
+id = "projective-blade-metric"
+title = "metric(b) is Zero for blades containing ∞ or ∅ in ∞-only / ∅-only spaces, while products (and container metric) treat them as ±1"
+source = "DirectSum.jl src/operations.jl:358-369"
+notes = "grassmann-parity.md §8.6 #10; grassmann-algebra.md §4.8"
+correct = "container behavior: coefficient × g(B)"
+policy = "ref"
+  [[defect.match]]
+  suite = "unary"
+  space = "INF*|ORG*"
+  op = "metric|antimetric"
+
+[[defect]]
+id = "tangent-container-complement"
+title = "Chain/Multivector complements in tangent spaces throw UndefVarError `args`"
+source = "Grassmann.jl src/products.jl:1340"
+notes = "grassmann-parity.md §8.6 #6"
+correct = "complement of the Multivector form"
+policy = "skip"
+  [[defect.match]]
+  msg = "*`args` not defined*"
+
+# ---------------------------------------------------------------------------------------------
+# unary maps and grade projections (unary suite)
+# ---------------------------------------------------------------------------------------------
+
+[[defect]]
+id = "antireverse-couple"
+title = "antireverse(Couple) flips only the imaginary part"
+source = "Grassmann.jl src/products.jl:1820-1822"
+notes = "grassmann-products.md App. A #9"
+correct = "flip the scalar part by parityreverse(n) as well (same as the Multivector path)"
+policy = "ref"
+  [[defect.match]]
+  suite = "unary"
+  op = "antireverse"
+  kinds = ["Couple|PseudoCouple"]
+
+[[defect]]
+id = "trivector-couple"
+title = "trivector(Couple) calls the undefined `imaginarya`"
+source = "Grassmann.jl src/multivectors.jl:1124"
+notes = "grassmann-types.md §4.12 #8; grassmann-products.md App. A #21; grassmann-algebra.md §4.16 #23"
+correct = "imaginary(z) if grade(B) == 3, else Zero"
+policy = "ref"
+  [[defect.match]]
+  msg = "*imaginarya*"
+
+[[defect]]
+id = "multivector-of-zero"
+title = "Multivector(::Zero) calls zeros(::Expr)"
+source = "Grassmann.jl src/multivectors.jl:269 (tvec returns an Expr)"
+notes = "grassmann-types.md §4.1, §4.12 #9"
+correct = "the zero Multivector"
+policy = "ref"
+  [[defect.match]]
+  msg = "*zeros(::Expr)*"
+
+[[defect]]
+id = "volume-scalar-chain"
+title = "volume(Chain{V,0}) returns the scalar value on the pseudoscalar (the length-1 Chain method ignores the grade)"
+source = "Grassmann.jl src/multivectors.jl:1130 (volume(t::Chain{V,G,T,1}) = Single{V,G,basis(V)}...)"
+notes = "found by the element oracle (unary suite, ref mismatch); grassmann-types.md §4.4"
+correct = "Zero (grade 0 ≠ n)"
+policy = "ref"
+  [[defect.match]]
+  suite = "unary"
+  op = "volume"
+  kinds = ["Chain:0"]
+
+# ---------------------------------------------------------------------------------------------
+# composite functions (composite suite)
+# ---------------------------------------------------------------------------------------------
+
+[[defect]]
+id = "couple-inv-hyperbolic"
+title = "inv / division of a Couple whose blade squares to +|B|² (grade ≡ 0,1 mod 4) uses the elliptic formula"
+source = "Grassmann.jl src/algebra.jl:553-638"
+notes = "grassmann-algebra.md §4.10.5, §4.16 #6"
+correct = "inv(c + dB) = (c - dB)/(c² - d²·B²) with B² = value(B⟑B)"
+policy = "skip"
+  [[defect.match]]
+  suite = "composite"
+  op = "inv|div"
+  kinds = ["Couple"]
+  when = "couple_rev_plus"
+  [[defect.match]]
+  suite = "composite"
+  op = "div"
+  kinds = ["*", "Couple"]
+  when = "couple_rev_plus"
+
+[[defect]]
+id = "term-power-period4"
+title = "blade powers use a period-4 cycle, wrong for null blades and non-unit DiagonalForm entries; negative powers return nothing / One"
+source = "Grassmann.jl src/algebra.jl:424-470"
+notes = "grassmann-algebra.md §4.11, §4.16 #4, #5"
+correct = "e^n = (e²)^⌊n/2⌋ e^(n mod 2); negative powers via inv"
+policy = "skip"
+  [[defect.match]]
+  suite = "composite"
+  op = "pow"
+  kinds = ["Single|Submanifold"]
+  when = "null_blade"
+
+[[defect]]
+id = "trig-mixed-op-undefined"
+title = "sin/cos/tan/sinh/cosh of Spinor, Multivector and some Couples throw UndefVarError `op`"
+source = "Grassmann.jl src/composite.jl:454-560 (generated trig series reference an unbound `op`)"
+notes = "abstracttensors-staticvectors.md §9.2 (excluded: Grassmann cos on Multivector)"
+correct = "the series (or exp-based) definition used for the graded case"
+policy = "skip"
+  [[defect.match]]
+  msg = "*`op` not defined*"
+
+[[defect]]
+id = "inv-mixed-undefined"
+title = "inv (and /, sqrt, log, tan that divide) of a Multivector/Spinor throws `inv(m) is undefined` unless (~m)⟑m is a scalar or a single grade"
+source = "Grassmann.jl src/algebra.jl:486-532"
+notes = "grassmann-algebra.md §4.10.3"
+correct = "a Julia limitation, not a wrong value: the port may compute the true inverse where it exists (e.g. 1 + ½I in ℝ⁴); such cases have no golden value"
+policy = "skip"
+  [[defect.match]]
+  msg = "inv(*) is undefined"
+
+[[defect]]
+id = "scalar-trig-hyperbolic"
+title = "sin/cos/tan of scalars in spaces with I² > 0 evaluate cosh/sinh (AbstractTensors defines them via I⟑t)"
+source = "AbstractTensors.jl src/AbstractTensors.jl (generic trig), port note §4.2"
+notes = "abstracttensors-staticvectors.md §8.4 B2"
+correct = "replicated for oracle agreement (the port may add a separate true-trig API)"
+policy = "replicate"
+  [[defect.match]]
+  suite = "composite"
+  op = "sin|cos|tan"
+  kinds = ["Single:0|Chain:0|One"]
+  when = "Isq_plus"
+
+# ---------------------------------------------------------------------------------------------
+# docs corpus (docs suite)
+# ---------------------------------------------------------------------------------------------
+
+[[defect]]
+id = "laplacian-not-callable"
+title = "𝒫 / subcomplex / χ(Δ(ω)) call a Laplacian, whose call method is commented out"
+source = "Grassmann.jl src/Grassmann.jl:258-260"
+notes = "grassmann-types.md §4.10, §4.12 #17; grassmann-docs.md §6.3 (algebra.md:1342)"
+correct = "the intended skeleton semantics, or drop the API"
+policy = "skip"
+  [[defect.match]]
+  suite = "docs"
+  msg = "*not callable*"
+
+[[defect]]
+id = "docs-dyadic-chain-ctor"
+title = "the dyadic-tensors docs' Chain{W,T}(matrix) / Chain{W,2}(matrix) constructors throw (binomial(::Int, ::Type), no convert); later statements of the block cascade"
+source = "Grassmann.jl src/multivectors.jl:68-107 (Chain constructors)"
+notes = "grassmann-docs.md §6.7 (dyadic-tensors.md, orphan page)"
+correct = "out of scope (orphan docs page); skip"
+policy = "skip"
+  [[defect.match]]
+  suite = "docs"
+  block = "dyadic-tensors.md:132*|Leech variant"
+  out = "Error"
+
+[[defect]]
+id = "mixedbasis-products"
+title = "products of vectors and covectors from @mixedbasis ℝ2 throw `cannot convert from ⟨11⟩ to ⟨++--⟩*`"
+source = "AbstractTensors.jl src/AbstractTensors.jl:244-265 (interop), DirectSum.jl src/operations.jl (dyadic ⊕)"
+notes = "grassmann-docs.md §6.8 (dual basis products); grassmann-products.md §4.14 (dyadic spaces out of scope)"
+correct = "out of scope in v1 (dyadic spaces)"
+policy = "skip"
+  [[defect.match]]
+  msg = "*cannot convert from*"
+
+[[defect]]
+id = "gdims-multivector"
+title = "gdims(::Multivector) has no method and gdims(m, g) hits an ambiguous Multivector(::Multivector) constructor"
+source = "Grassmann.jl src/multivectors.jl:1199-1233, :995-997"
+notes = "grassmann-docs.md §6.8 (dims, norms/metrics)"
+correct = "gdims(m, g) = binomial(n, g)"
+policy = "skip"
+  [[defect.match]]
+  msg = "*gdims(::Multivector*"
+  [[defect.match]]
+  msg = "*(::Multivector{*}) is ambiguous*"
+
+[[defect]]
+id = "symmetrize-permutations"
+title = "⊙ / ⊠ (symmetrized products) throw UndefVarError `permutations` (Combinatorics not imported)"
+source = "Grassmann.jl src/algebra.jl:294-309"
+notes = "grassmann-products.md App. A #14; grassmann-algebra.md §4.16 #1"
+correct = "symmetrize / antisymmetrize over S_k"
+policy = "skip"
+  [[defect.match]]
+  msg = "*`permutations` not defined*"
+
+[[defect]]
+id = "docs-unparseable"
+title = "probe inputs that are not valid Julia syntax (prefix `|a`)"
+source = "Julia parser"
+notes = "grassmann-docs.md §6.8 (ops wiring)"
+correct = "not a Grassmann behavior; skip"
+policy = "skip"
+  [[defect.match]]
+  suite = "docs"
+  msg = "ParseError*"
+
+[[defect]]
+id = "interop-product-unsupported"
+title = "geometric product across different spaces (ℝ² × ℝ³) throws `unsupported transformation` although the docs describe interop"
+source = "AbstractTensors.jl src/AbstractTensors.jl:244-265 (interop)"
+notes = "grassmann-docs.md §6.2 (design.md:172)"
+correct = "embed both operands into V ∪ W (the port requires equal spaces and an explicit embedding)"
+policy = "skip"
+  [[defect.match]]
+  suite = "docs"
+  msg = "*unsupported transformation*"
+
+# ---------------------------------------------------------------------------------------------
+# blade-level goldens (oracle/golden/blades/*.jsonl, read-only here)
+# ---------------------------------------------------------------------------------------------
+
+[[defect]]
+id = "c4neg-conformal-signature"
+title = "conformal spaces ignore signature bits beyond ∞/∅ in products (S\"∞∅+-\": v₂*v₂ = 1v)"
+source = "Grassmann.jl src/parity.jl:166-314 (metricdyad hard-codes +1)"
+notes = "grassmann-parity.md §0, §8.6 #1"
+correct = "the true Clifford product of the Gram form"
+policy = "skip"
+  [[defect.match]]
+  suite = "blades"
+  space = "C4neg"
+
+[[defect]]
+id = "metrictensor-dropped-terms"
+title = "general MetricTensor geometric product drops middle-grade terms"
+source = "Grassmann.jl src/parity.jl:165-313"
+notes = "grassmann-parity.md §0, §8.6 #2"
+correct = "Chevalley recursion on the Gram matrix"
+policy = "skip"
+  [[defect.match]]
+  suite = "blades"
+  space = "MT3"
+
+[[defect]]
+id = "cache-key-collision"
+title = "regressive/interior caches are keyed by (n, S, options) only, so tangent spaces reuse entries of plain spaces evaluated earlier in the same process"
+source = "Grassmann.jl src/parity.jl:323-439"
+notes = "grassmann-parity.md §4.13, §8.6 #4; this is why generate_all.jl runs every shard in a fresh process"
+correct = "no global caches; use the fresh-process values (golden/blades/dump_small.jsonl)"
+policy = "skip"
+  [[defect.match]]
+  suite = "blades"
+  file = "dump_all.jsonl"
+  space = "tan21|tan22|tanM"
+
+[[defect]]
+id = "stack-overflow-fallbacks"
+title = "generic fallbacks recurse forever when no same-space method exists (tangent Single×Single via loworder interop, contraction of non-elements such as a Tuple `ans`); dyadic+tangent derive_mul throws"
+source = "Grassmann.jl src/products.jl:29-75; AbstractTensors.jl generic fallbacks"
+notes = "grassmann-parity.md §8.6 #7, #8; abstracttensors-staticvectors.md §8.4 B7"
+correct = "a type error / explicit method in Lean"
+policy = "skip"
+  [[defect.match]]
+  msg = "StackOverflowError*"
+
+# ---------------------------------------------------------------------------------------------
+# documented, not exercised by any generated golden (several crash or hang Julia)
+# ---------------------------------------------------------------------------------------------
+
+[[defect]]
+id = "multivector-eq-term-crash"
+title = "Multivector == term reads past the end (2<<n) and can crash the process"
+source = "Grassmann.jl src/multivectors.jl:365-368"
+notes = "grassmann-types.md §4.6, §4.12 #3"
+correct = "bound 1<<n"
+policy = "skip"
+
+[[defect]]
+id = "number-eq-mixed"
+title = "Number == Multivector/Spinor throws UndefVarError `V`"
+source = "Grassmann.jl src/multivectors.jl:370-375, :640-647"
+notes = "grassmann-types.md §4.12 #4"
+correct = "n == m ⇔ scalar part equals n and the rest is zero"
+policy = "skip"
+
+[[defect]]
+id = "pseudocouple-eq-typos"
+title = "PseudoCouple ==/≈ typos compare the wrong components"
+source = "Grassmann.jl src/multivectors.jl:774, :795"
+notes = "grassmann-types.md §4.6, §4.12 #7"
+correct = "componentwise"
+policy = "skip"
+
+[[defect]]
+id = "multivector-getproperty"
+title = "m.v13 uses bladeindex instead of basisindex; m[::Submanifold] indexes a grade block"
+source = "Grassmann.jl src/multivectors.jl:336, :405"
+notes = "grassmann-types.md §4.3, §4.12 #1, #2"
+correct = "component at basisindex"
+policy = "skip"
+
+[[defect]]
+id = "cospinor-one-hang"
+title = "one(::CoSpinor) and Phasor{V}(::Complex) hang the Julia compiler"
+source = "Grassmann.jl src/multivectors.jl (no method; fallback recursion)"
+notes = "grassmann-types.md §4.1, §4.7, §4.12 #16"
+correct = "reject explicitly"
+policy = "skip"
+
+[[defect]]
+id = "spinor-n1"
+title = "Spinor display and Multivector(CoSpinor) / generated sandwich crash or throw for n = 1 (evens(a,b) with b < a, @inbounds OOB)"
+source = "Grassmann.jl src/composite.jl:898; src/multivectors.jl:589-615"
+notes = "grassmann-types.md §4.12 #14; grassmann-algebra.md §4.16 #26"
+correct = "handle empty ranges"
+policy = "skip"
+
+[[defect]]
+id = "large-n-codegen"
+title = "n ≥ 12 code paths: generated sandwich returns nothing, `$VECS`/`addpseudo` undefined, product_∧/∨ term branch typo, chain_src ternary"
+source = "Grassmann.jl src/algebra.jl:1422-1434, :1560-1790, :918, :1037; src/products.jl:1024, :1057, :1921, :1958; src/multivectors.jl:252"
+notes = "grassmann-products.md App. A #16-18; grassmann-algebra.md §4.16 #10, #29; grassmann-types.md §4.12 #10"
+correct = "loop implementations"
+policy = "skip"
+
+[[defect]]
+id = "misc-types"
+title = "Phasor(::Chain) uses undefined θ; widen(::Couple) misplaced paren; single(zero Chain) indexes nothing; isbundle undefined; stale exports; @basis binds v⃖ to a String"
+source = "Grassmann.jl src/multivectors.jl:1017, :831, :201-204, :219-222, :16; DirectSum.jl src/basis.jl:73"
+notes = "grassmann-types.md §4.12 #11-13, #15, #18, #19"
+correct = "see the note"
+policy = "skip"
+
+[[defect]]
+id = "name-parser-square-sign"
+title = "basis-name parser flips the sign for repeated indices with positive square (Λ(S\"+++\").v11 = -1v) and mishandles ∞∞/∅∅"
+source = "Leibniz.jl src/indices.jl:230-247; DirectSum.jl src/basis.jl:134-139"
+notes = "grassmann-types.md §4.11, §4.12 #20; directsum.md Q16"
+correct = "metric sign from the geometric product"
+policy = "skip"
+
+[[defect]]
+id = "parityseq-interleaved"
+title = "parityseq XORs only consecutive metric groups (wrong for ≥ 3 interleaved groups)"
+source = "Grassmann.jl src/parity.jl:158-160"
+notes = "grassmann-parity.md §8.6 #3"
+correct = "full sign of the group permutation"
+policy = "skip"
+
+[[defect]]
+id = "diagonalform-negzero"
+title = "DiagonalForm sign uses signbit, so a -0.0 entry counts as negative"
+source = "DirectSum.jl src/DirectSum.jl:384-389"
+notes = "grassmann-parity.md §8.6 #13"
+correct = "sign of the value"
+policy = "skip"
+
+[[defect]]
+id = "misc-products"
+title = "Zero/Number ambiguity, Number^Infinity builds a range, antidot_metric unbound g, ⊙/⊠ missing `permutations`, ⟂ undefined, ∨(Chain{V,1,<:Chain}) computes ∧"
+source = "Grassmann.jl src/products.jl:400, :473; src/algebra.jl:397, :294-309, :23, :189"
+notes = "grassmann-products.md App. A #11-15; grassmann-algebra.md §4.16 #1-3, #11"
+correct = "see the notes"
+policy = "skip"
+
+[[defect]]
+id = "abstracttensors-generic"
+title = "AbstractTensors generic-layer defects B1 (log(b,t) returns log(b)), B3-B7"
+source = "AbstractTensors.jl src/AbstractTensors.jl:330, :401 and others"
+notes = "abstracttensors-staticvectors.md §8.4"
+correct = "see the note (B2 is `scalar-trig-hyperbolic`)"
+policy = "skip"
+
+[[defect]]
+id = "staticvectors-generic"
+title = "StaticVectors defects B8-B22 (maximum/minimum(f,a), empty norm, N=0 map/diff, evenvalues ranges, FixedVector/indexing typos)"
+source = "StaticVectors.jl src/mapreduce.jl:66, :270-273; src/linalg.jl:90, :113; src/indexing.jl:27-30, :146, :269; src/FixedVector.jl:72"
+notes = "abstracttensors-staticvectors.md §8.4"
+correct = "total functions in Lean"
+policy = "skip"
+
+[[defect]]
+id = "directsum-quirks"
+title = "DirectSum space-layer quirks Q1-Q26 (string grammar, cache index DiagonalForm S, name/option caches, ⊕ with duals, lowerbits, isorigin, ...)"
+source = "DirectSum.jl src/*"
+notes = "directsum.md §8.3"
+correct = "see the quirk catalog"
+policy = "skip"

@@ -1,0 +1,95 @@
+### norms/metrics | fresh
+basis"3"
+A = Multivector{V}(1,2,3,4,5,6,7,8)
+norm(A)
+metric(A)
+mdims(A), gdims(A,2), tdims(A)
+a = 1v1+2v2+3v3
+abs(a), abs2(a), norm(a), unit(a)
+inv(a)
+a/a
+inv(1+v12)
+abs(1+v12)
+inv(2+v1)
+B = 1+2v1+3v12
+~B*B
+inv(B)
+B*inv(B)
+### signature displays | fresh
+S"∞∅+++"
+Submanifold(S"∞∅+++")
+S"∞+++"
+Submanifold(S"∞+++")
+S"+++"
+Submanifold(S"+++")
+V"+++"
+Submanifold(3)
+ℝ^3
+ℝ3
+D"1,1,1,0"
+D"0.3,2.4,1"
+S"∅+++"
+S"-+++"
+tangent(ℝ^3)
+tangent(ℝ^3,2,3)
+(ℝ^3)'
+ℝ^3⊕(ℝ^3)'
+Submanifold(ℝ^3⊕(ℝ^3)')
+### metric-weighted products | fresh
+@basis D"2,3,5"
+v1*v1, v2*v2, v3*v3
+v12*v12
+v1⋅v1
+⋆v1
+!v1
+hodge(v1)
+### dual basis products | fresh
+@mixedbasis ℝ2
+v1*w1
+w1*v1
+v1∧w1
+w1(v1)
+w1(v2)
+### dualbasis | fresh
+@dualbasis ℝ^3
+w1*w1
+w12
+### Grassmann complements n=4 | fresh
+basis"4"
+[!b for b in Λ(4).b]
+[⋆b for b in Λ(4).b]
+[complementleft(b) for b in Λ(4).b]
+### Minkowski | fresh
+@basis S"+---"
+[⋆b for b in Λ(V).b]
+[!b for b in Λ(V).b]
+[b*b for b in Λ(V).b]
+v1234*v1234
+### exp special cases | fresh
+basis"3"
+exp(0.5v1)
+exp(0.5v12)
+@basis S"-++"
+exp(0.5v1)
+exp(0.5v12)
+@basis S"∞∅+"
+exp(0.5v∞1)
+exp(0.5v∞∅)
+### products of ints | fresh
+basis"3"
+(1v1+2v2+3v3) * (4v1+5v2+6v3)
+(1v1+2v2+3v3) ∧ (4v1+5v2+6v3)
+(1v1+2v2+3v3) ⋅ (4v1+5v2+6v3)
+(1v1+2v2+3v3) × (4v1+5v2+6v3)
+(1v1+2v2+3v3) ∨ (4v12+5v13+6v23)
+v1 ∨ v23
+v23 ∨ v1
+v12 ∨ v13
+v12 > v1
+v1 < v12
+v12 >> v1
+v1 << v12
+v1 > v12
+v12 < v1
+(v1+v2) > v12
+v12 < (v1+v2)

@@ -1,0 +1,40 @@
+### sandwich scaling | fresh
+basis"3"
+v1⊘(3v1)
+(3v1)>>>v1
+v2⊘(3v1)
+v2⊘v1
+v1>>>v2
+inv(3v1)*v2*(3v1)
+exp(π/8*v12)
+exp(π/8*v12)^2
+2^v12
+v12^2
+(v1+v2)^3
+v12^-1
+### ops wiring | fresh
+basis"3"
+a = 1v1+2v2+3v3; b = 4v12+5v13+6v23
+a ⨼ b, a ⨽ b, a < b, a > b
+b ⨼ a, b ⨽ a, b < a, b > a
+a ⊛ a, a ∗ a
+b ∗ b
+|a
+a ⟑ b
+a ⊖ b
+a ⊙ b
+a ⊠ b
+a × (4v1+5v2+6v3)
+a ∥ 2a
+### grade selection call syntax | fresh
+basis"3"
+A = 1 + 2v1 + 3v12 + 4v123
+A(0), A(1), A(2), A(3)
+grade(A,1)
+A[1], A[2]
+value(A)
+### Λ index access | fresh
+Λ(3).v21, Λ(3).v32, Λ(3).v13, Λ(3).v321
+Λ(4).v4321
+Λ(3).b
+Λ(3)[3]

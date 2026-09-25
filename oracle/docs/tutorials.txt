@@ -1,0 +1,124 @@
+### quick-start.md:5 | fresh
+@basis ℝ^2
+v1*v2
+v1|v2
+v1∧v2
+### quick-start.md:15
+a = v1+v2
+n = v1
+-n*a/n
+### quick-start.md:23
+R = exp(π/4*v12)
+~R*v1*R
+### algebra-of-space.md:7 | fresh
+basis"3"
+### algebra-of-space.md:17
+G3 = Λ(3)
+### algebra-of-space.md:27
+@basis ℝ^3 E e
+e3, e123
+### algebra-of-space.md:36
+v1 * v2
+v1 | v2
+v1 ∧ v2
+v1 ∧ v2 ∧ v3
+### algebra-of-space.md:44
+θ = π/4
+R = cos(θ) + sin(θ)*v23
+R = exp(θ*v23)
+### algebra-of-space.md:50
+A = 1 + 2v1 + 3v12 + 4v123
+~A
+A(0)
+A(1)
+A(2)
+~A*A
+scalar(ans)
+abs2(A)
+scalar(ans)
+### algebra-of-space.md:74
+a = 1v1 + 2v2 + 3v3
+⋆a
+### algebra-of-space.md:82
+c = v1+v2+v3
+n = v1
+-n*c*n
+### algebra-of-space.md:88
+a = v1+v2+v3
+n = 3v1
+inv(n)*a*n
+n\a*n
+### algebra-of-space.md:100
+R = exp(π/4*v12)
+~R*v1*R
+### algebra-of-space.md:105
+R12(θ) = exp(θ/2*v12)
+R = R12(π/2)
+a = v1+v2+v3
+~R*a*R
+### algebra-of-space.md:116
+R_B(B) = exp(B/2)
+Rxy = R_B(π/4*v12)
+Ryz = R_B(π/5*v23)
+R_B(π/6*(v23+v12))
+### algebra-of-space.md:131
+R_factory(B) = (R = exp(B/2); a -> ~R*a*R)
+Rxy = R_factory(π/3*v12)
+Ryz = R_factory(π/3*v23)
+Rxz = R_factory(π/3*v13)
+R = R_factory(π/6*(v23+v12))
+R(a)
+Rxy(Ryz(Rxz(a)))
+### algebra-of-space.md:145
+R_seq(args...) = (R = prod(exp.(args./2)); a -> ~R*a*R)
+R = R_seq(π/2*v23, π/2*v12, v1)
+R(v1)
+### algebra-of-space.md:154
+function barycoords(p, a, b, c)
+  ab = b-a
+  ca = a-c
+  bc = c-b
+  A = -ab∧ca
+  (bc∧(p-b)/A, ca∧(p-c)/A, ab∧(p-a)/A)
+end
+barycoords(0.25v1+0.25v2, 0v1, 1v1, 1v2)
+### dyadic-tensors.md:83 | fresh
+@basis ℝ3
+T = Chain{V,1}(Chain(v1),v1+v2,v1+v3)
+barycenter(T) ∈ T, (v1+v2+v3) ∈ T
+barycenter(T)
+T\barycenter(T) == inv(T)⋅barycenter(T)
+T\barycenter(T)
+inv(T)
+T:T
+sqrt(T:T)
+### dyadic-tensors.md:104 | fresh
+Λ(ℝ3)
+Λ(ℝ3)'
+### dyadic-tensors.md:109
+@mixedbasis ℝ2
+w1+2w2
+ans(v1+v2)
+ℒ = (v1+2v2)∧(3w1+4w2)
+ℒ(v1+v2)
+L = [1,2] * [3,4]'; L * [1,1]
+### dyadic-tensors.md:12 (deterministic variant) | fresh
+basis"+-+++"
+M = Chain{V,1}(Chain{V,1}(2.0,1,0,0,0),Chain{V,1}(1.0,3,1,0,0),Chain{V,1}(0.0,1,4,1,0),Chain{V,1}(0.0,0,1,5,1),Chain{V,1}(0.0,0,0,1,6))
+M\(v1+2v2+3v3+4v4+5v5)
+### dyadic-tensors.md:132 Leech | fresh
+generator = [8 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0; 4 4 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0; 4 0 4 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0; 4 0 0 4 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0; 4 0 0 0 4 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0; 4 0 0 0 0 4 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0; 4 0 0 0 0 0 4 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0; 2 2 2 2 2 2 2 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0; 4 0 0 0 0 0 0 0 4 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0; 4 0 0 0 0 0 0 0 0 4 0 0 0 0 0 0 0 0 0 0 0 0 0 0; 4 0 0 0 0 0 0 0 0 0 4 0 0 0 0 0 0 0 0 0 0 0 0 0; 2 2 2 2 0 0 0 0 2 2 2 2 0 0 0 0 0 0 0 0 0 0 0 0; 4 0 0 0 0 0 0 0 0 0 0 0 4 0 0 0 0 0 0 0 0 0 0 0; 2 2 0 0 2 2 0 0 2 2 0 0 2 2 0 0 0 0 0 0 0 0 0 0; 2 0 2 0 2 0 2 0 2 0 2 0 2 0 2 0 0 0 0 0 0 0 0 0; 2 0 0 2 2 0 0 2 2 0 0 2 2 0 0 2 0 0 0 0 0 0 0 0; 4 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 4 0 0 0 0 0 0 0; 2 0 2 0 2 0 0 2 2 2 0 0 0 0 0 0 2 2 0 0 0 0 0 0; 2 0 0 2 2 2 0 0 2 0 2 0 0 0 0 0 2 0 2 0 0 0 0 0; 2 2 0 0 2 0 2 0 2 0 0 2 0 0 0 0 2 0 0 2 0 0 0 0; 0 2 2 2 2 0 0 0 2 0 0 0 2 0 0 0 2 0 0 0 2 0 0 0; 0 0 0 0 0 0 0 0 2 2 0 0 2 2 0 0 2 2 0 0 2 2 0 0; 0 0 0 0 0 0 0 0 2 0 2 0 2 0 2 0 2 0 2 0 2 0 2 0; -3 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1];
+E24,W24 = Λ(24), ℝ^24⊕(ℝ^24)';
+Leech = Chain{Submanifold(W24),Float64}(generator./sqrt(8));
+typeof(Leech)
+ndims(Manifold(Leech))
+Leech(E24.v1)
+Leech(E24.v1 + 2*E24.v2)
+ans⋅ans
+Leech(E24.v2 + E24.v5)
+ans⋅ans
+### design.md:172 interop | fresh
+a = Λ(ℝ^2).v1 + Λ(ℝ^2).v2
+b = Λ(ℝ^3).v3
+a ∧ b
+a * b

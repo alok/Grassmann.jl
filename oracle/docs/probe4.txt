@@ -1,0 +1,11 @@
+### dims | fresh
+basis"3"
+A = Multivector{V}(1,2,3,4,5,6,7,8)
+mdims(A)
+gdims(A,2)
+tdims(A)
+gdims(3,2)
+tdims(V)
+Phasor(2.0, π/3)
+∠(1.0,v12)
+complexify(Phasor(2.0,π/3))
