@@ -7,6 +7,7 @@ import MeshTopology.Simplex
 import MeshTopology.Element
 import MeshTopology.Lagrange
 import MeshTopology.Resample
+import MeshTopology.Proofs
 
 /-!
 # MeshTopology

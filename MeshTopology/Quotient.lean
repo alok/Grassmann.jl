@@ -255,6 +255,15 @@ where
     else found
   termination_by N - k
 
+/-- Julia `locate` (QT:337-350): the coordinate a ghost index `i` of an axis of size `n` takes
+on the target axis (size `s2`) of the face gluing. `low`: the ghost lies beyond the low face
+(`i < 2`); `targetLow`: the target face is a low face. Low → low reflects about `1`, low → high
+wraps (`1 ↦ s2`, `0 ↦ s2-1`), high → high reflects about `n`, high → low wraps (`n ↦ 1`,
+`n+1 ↦ 2`). -/
+@[inline] def ghostCoord (low targetLow : Bool) (i n s2 : Int) : Int :=
+  if low then (if targetLow then (i - 1).natAbs + 1 else s2 - (i - 1).natAbs)
+  else (if targetLow then i + 1 - n else s2 + n - i)
+
 /-- Julia `location`/`locate` (QT:337-361): resolve the ghost index `idx`, out of bounds on
 axis `a` only, through the gluing of the face it lies beyond. With `q11 = true` the high face of
 axis 5 of a 5-D topology uses `n₄` as its source size, as upstream does (Q11). -/
@@ -270,9 +279,7 @@ def resolveAt (m : QuotientTopology N) (a : Fin N) (idx : Vector Int N) (q11 : B
     let a2 := faceAxis pr
     let s2 : Int := m.size[a2]
     let n : Int := if q11 && N = 5 && a.1 = 4 then m.size[3]! else m.size[a]
-    let x : Int :=
-      if low then (if pr.1 % 2 = 0 then (i - 1).natAbs + 1 else s2 - (i - 1).natAbs)
-      else (if pr.1 % 2 = 1 then s2 + n - i else i + 1 - n)
+    let x : Int := ghostCoord low (pr.1 % 2 = 0) i n s2
     let t := g.maps.get (idx.eraseIdx a.1)
     (t.insertIdx a2.1 x (by have := a2.2; omega)).cast (by have := a.2; omega)
 

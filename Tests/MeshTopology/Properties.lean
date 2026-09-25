@@ -162,10 +162,60 @@ def simplexProps : TestM Unit := do
       check s!"{lbl} P{M} node ids within 1..totalnodes" (all.all fun v => 1 ≤ v && v ≤ L.totalNodes)
       check s!"{lbl} P{M} every node used" ((List.range L.totalNodes).all fun v => used[v + 1]!)
       check s!"{lbl} P{M} element size" (L.topology.all (·.size == lagrangeSimplex 3 M))
+    for m in [0, 1, 2, 3, 4] do
+      let L : LagrangeTriangles (m + 1) := .ofCorners t
+      check s!"{lbl} P{m + 1} typed getVec = get"
+        ((Array.range L.t.elements).all fun k => (L.getVec (k + 1)).toArray == L.get (k + 1))
+
+/-- Kuhn tetrahedra of an `nx × ny × nz` block with relabelled vertices and permuted elements. -/
+def randomTets (g : Rng) (nx ny nz : Nat) : Array (Vector Nat 4) × Rng := Id.run do
+  let id (i j k : Nat) : Nat := i + j * (nx + 1) + k * (nx + 1) * (ny + 1)
+  let n := (nx + 1) * (ny + 1) * (nz + 1)
+  let mut perm := (Array.range n).map (· + 1)
+  let mut g := g
+  for k in [0:n] do
+    let (r, g') := g.nat (n - k)
+    g := g'
+    perm := perm.swapIfInBounds k (k + r)
+  let mut out : Array (Vector Nat 4) := #[]
+  for k in [0:nz] do
+    for j in [0:ny] do
+      for i in [0:nx] do
+        for σ in [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]] do
+          let mut p := #[i, j, k]
+          let mut vs := #[id i j k]
+          for a in σ do
+            p := p.modify a (· + 1)
+            vs := vs.push (id p[0]! p[1]! p[2]!)
+          let (sh, g') := g.nat 4
+          g := g'
+          let ws := (Array.range 4).map fun q => perm[vs[(q + sh) % 4]!]!
+          out := out.push #v[ws[0]!, ws[1]!, ws[2]!, ws[3]!]
+  return (out, g)
+
+/-- Tetrahedral invariants: typed getters, node ranges, the oriented variant's conformity is in
+`Tests.MeshTopology.Lagrange`. -/
+def tetProps : TestM Unit := do
+  let mut g := Rng.ofSeed 0x7E7
+  for trial in [0:6] do
+    let (els, g') := randomTets g 2 2 (trial % 2 + 1)
+    g := g'
+    let t : SimplexTopology 4 := .ofElements els
+    let lbl := s!"random tets {trial}"
+    for m in [0, 1, 2, 3, 4] do
+      let L : LagrangeTetrahedra (m + 1) := .ofCorners t
+      check s!"{lbl} P{m + 1} typed getVec = get"
+        ((Array.range L.t.elements).all fun k => (L.getVec (k + 1)).toArray == L.get (k + 1))
+      let all := L.topology.flatMap id
+      check s!"{lbl} P{m + 1} node ids within 1..totalnodes" (all.all fun v => 1 ≤ v && v ≤ L.totalNodes)
+      let used := all.foldl (fun (acc : Array Bool) v => acc.set! v true)
+        (Array.replicate (L.totalNodes + 1) false)
+      check s!"{lbl} P{m + 1} every node used" ((List.range L.totalNodes).all fun v => used[v + 1]!)
 
 /-- Run all property tests. -/
 def run : TestM Unit := do
   quotientProps
   simplexProps
+  tetProps
 
 end Tests.MeshTopology.Properties
