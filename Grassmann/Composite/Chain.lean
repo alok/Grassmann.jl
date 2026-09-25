@@ -92,32 +92,55 @@ namespace Chain
 
 variable {G : Nat} [Kernels V]
 
-/-- The chain as the even half (its coefficients, re-indexed; meaningful for even `G`). -/
-@[inline] def evenHalf (c : Chain V G Float) : Half V false Float :=
-  ⟨convertLayout V.n (.chain G) (halfLayout false) c.v⟩
+/-- The chain's coefficients in layout `l` (`.even`/`.full` for an even `G`, `.odd`/`.full` for
+an odd one): the space's embedding kernel (the parity projection of the chain). -/
+@[inline] def embed (l : Layout) (c : Chain V G Float) : Values Float (l.size V.n) :=
+  Kernels.un (if G % 2 == 0 then .even else .odd) (.chain G) l c.v
 
-/-- `a + x·c` as a spinor (for even `G`). -/
+/-- The chain as the even half (meaningful for even `G`). -/
+@[inline] def evenHalf (c : Chain V G Float) : Half V false Float := ⟨c.embed (halfLayout false)⟩
+
+/-- `a + x·c` in layout `l` (`G > 0`: the scalar slot is free). -/
+@[inline] def affine (l : Layout) (a x : Float) (c : Chain V G Float) : Values Float (l.size V.n) :=
+  setFirst (Kernels.un (if G % 2 == 0 then .even else .odd) (.chain G) l (c.v.map (· * x))) a
+
+/-- `a + x·c` as a spinor (for even `G > 0`). -/
 @[inline] def spinorAffine (a x : Float) (c : Chain V G Float) : Half V false Float :=
-  Half.addScalar a (evenHalf (c * x))
+  ⟨affine (halfLayout false) a x c⟩
 
-/-- `a + x·c` as a multivector. -/
-@[inline] def mvAffine (a x : Float) (c : Chain V G Float) : Multivector V Float :=
-  Multivector.addScalar a (toMultivector (c * x))
+/-- `a + x·c` as a multivector (`G > 0`). -/
+@[inline] def mvAffine (a x : Float) (c : Chain V G Float) : Multivector V Float := ⟨affine .full a x c⟩
+
+/-- The chain as a multivector (the embedding kernel). -/
+@[inline] def embedMV (c : Chain V G Float) : Multivector V Float := ⟨c.embed .full⟩
+
+/-- The scalar `t⟑t` of a chain when it is structurally a scalar (no kernel): in a plain
+signature space the squares of vectors, pseudovectors, pseudoscalars and of every chain of a
+space of dimension ≤ 3 are scalars, `Σ cᵢ²·Bᵢ²`. -/
+@[inline] def sqScalarFast? (c : Chain V G Float) : Option Float :=
+  let s := plainNeg V
+  if s != notPlain && (G ≤ 1 || G + 1 ≥ V.n || V.n ≤ 3) then some (weightedSum (plainSq s) (.chain G) c.v)
+  else none
 
 /-- The closed form of Julia `exp(t::Chain)` (`src/composite.jl:148-156`): when `t⟑t` is
 (approximately) a scalar `h`, `exp t = a + x·t` with `(a, x) = (1, 1)` for `h = 0`,
 `(cos θ, sin θ/θ)` for `h < 0` and `(cosh θ, sinh θ/θ)` for `h > 0`,
 `θ = √|contraction(t, t)|`; `none` when the series is needed. -/
-def expClosed? (c : Chain V G Float) : Option (Float × Float) :=
-  let sq : Values Float ((halfLayout false).size V.n) :=
-    Kernels.bin .mul (.chain G) (.chain G) (halfLayout false) c.v c.v
-  let h := getD sq 0
-  if isScalarNorms sq.norm h then
+@[inline] def expClosed? (c : Chain V G Float) : Option (Float × Float) :=
+  let h? : Option Float := match sqScalarFast? c with
+    | some h => some h
+    | none =>
+      let sq : Values Float ((halfLayout false).size V.n) :=
+        Kernels.bin .mul (.chain G) (.chain G) (halfLayout false) c.v c.v
+      let h := getD sq 0
+      if isScalarNorms sq.norm h then some h else none
+  match h? with
+  | none => none
+  | some h =>
     if h == f0 then some (f1, f1)
     else
-      let θ := Float.sqrt (Float.abs (getD c.abs2.v 0))
+      let θ := Float.sqrt (Float.abs (abs2Sum (.chain G) c.v))
       if h < f0 then some (Float.cos θ, sinOver θ) else some (Float.cosh θ, sinhOver θ)
-  else none
 
 /-- Julia's 3D-PGA closed form of `exp` for a bivector of `⟨1,1,1,0⟩`
 (`src/composite.jl:142-147`): with `u = √|abs2(t)|` and `v = (t∧t)·(-½/u)` (a multiple of
@@ -139,7 +162,7 @@ def expPGA (c : Chain V G Float) : Half V false Float :=
     spin cu (-(w * su)) + Half.smul' bt (spin (f1 / u) (-(w / (u * u))))
 
 /-- Julia `exp(t::Chain)` for an even grade, as a spinor (`src/composite.jl:136-159`, `C:407`). -/
-def expEven (c : Chain V G Float) : Half V false Float :=
+@[inline] def expEven (c : Chain V G Float) : Half V false Float :=
   if G == 0 then Half.scalarF (F64.exp (getD c.v 0))
   else if isR301 V && G == 2 then expPGA c
   else match expClosed? c with
@@ -148,17 +171,20 @@ def expEven (c : Chain V G Float) : Half V false Float :=
 
 /-- Julia `exp(t::Chain)` (`src/composite.jl:136-159`, `C:407`): a `Spinor` for even `G`, a
 `Multivector` (`scalar + odd`) for odd `G`, returned as a multivector. -/
-def exp (c : Chain V G Float) : Multivector V Float :=
-  if G % 2 == 0 then Half.toMultivector (expEven c)
+@[inline] def exp (c : Chain V G Float) : Multivector V Float :=
+  if G == 0 then Multivector.scalar (F64.exp (getD c.v 0))
+  else if G % 2 == 0 && isR301 V && G == 2 then (expPGA c).toMV
   else match expClosed? c with
     | some (a, x) => mvAffine a x c
-    | none => Multivector.addScalar f1 (Multivector.expm1 (toMultivector c))
+    | none =>
+      if G % 2 == 0 then (Half.addScalar f1 (Half.expm1 (evenHalf c))).toMV
+      else Multivector.addScalar f1 (Multivector.expm1 (c.embedMV))
 
 /-- Julia `expm1(t::Chain) = expm1(multispin(t))` (`src/composite.jl:28-30`): the scalar
 `expm1` for `G = 0`, the generated series of the `Spinor`/`Multivector` otherwise. -/
 def expm1 (c : Chain V G Float) : Multivector V Float :=
   if G == 0 then Multivector.scalar (F64.expm1 (getD c.v 0))
-  else if G % 2 == 0 then Half.toMultivector (Half.expm1 (evenHalf c))
+  else if G % 2 == 0 then (Half.expm1 (evenHalf c)).toMV
   else Multivector.expm1 (toMultivector c)
 
 /-- Julia `log(t::Chain)`: the scalar `log` for `G = 0` (`C:407`), otherwise the generic

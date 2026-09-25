@@ -106,14 +106,13 @@ variable {V : TensorBundle}
 (`src/composite.jl:136-159`, `C:407`): `exp(c)` for the scalar blade; `1` for `c = 0`;
 `1 + cB` for a null blade; otherwise `cos θ + B·c·sin θ/θ` (`B² < 0`) or
 `cosh θ + B·c·sinh θ/θ` (`B² > 0`) with `θ = √|c²·abs2(B)|`. -/
-def Couple.expBlade (V : TensorBundle) (b : UInt64) (c : Float) : Couple V Float :=
+@[inline] def Couple.expBlade (V : TensorBundle) (b : UInt64) (c : Float) : Couple V Float :=
   if b == 0 then ⟨0, F64.exp c, f0⟩
   else if c == f0 then ⟨b, f1, f0⟩
-  else
-    let β := bladeSq V b
+  else withBladeSq V b fun β a2 =>
     if β == f0 then ⟨b, f1, c⟩
     else
-      let θ := Float.sqrt (Float.abs (c * c * bladeAbs2 V b))
+      let θ := Float.sqrt (Float.abs (c * c * a2))
       if β < f0 then ⟨b, Float.cos θ, c * sinOver θ⟩
       else ⟨b, Float.cosh θ, c * sinhOver θ⟩
 
@@ -136,13 +135,13 @@ namespace Couple
 
 /-- Julia `radius(z) = √(re² - im²·value(B ⟑ B))` (`src/multivectors.jl:912`); `NaN`
 where Julia throws `DomainError` (outside the light cone of a hyperbolic couple). -/
-def radius (z : Couple V Float) : Float :=
+@[inline] def radius (z : Couple V Float) : Float :=
   Float.sqrt (z.re * z.re - z.im * z.im * bladeSq V z.bits)
 
 /-- The coefficient of Julia's `angle(z)` (`src/composite.jl:619-627`): `atan(im, re)`
 when `B² = -1`, Grassmann's `atanh(im, re)` when `B² = +1`, and `NaN` otherwise (Julia:
 `error("Unsupported trigonometric angle")`). -/
-def angleCoef (z : Couple V Float) : Float :=
+@[inline] def angleCoef (z : Couple V Float) : Float :=
   let β := bladeSq V z.bits
   if β == -f1 then Float.atan2 z.im z.re
   else if β == f1 then atanh2 z.im z.re
@@ -166,37 +165,37 @@ def angleCoef (z : Couple V Float) : Float :=
 /-- Julia `exp(z::Couple{V,B})` (`src/composite.jl:99-110`): `eᵃ(cos θ + B sin θ·b/θ)`,
 `eᵃ(cosh θ + B sinh θ·b/θ)` or `eᵃ(1 + bB)` by the sign of `B²`, `θ = |b|√|abs2(B)|`
 (Julia's parabolic `eᵃ(1 + t)` and `θ = 0` NaN fixed). -/
-def exp (z : Couple V Float) : Couple V Float :=
-  let β := bladeSq V z.bits
+@[inline] def exp (z : Couple V Float) : Couple V Float :=
   let er := F64.exp z.re
-  if β == f0 then ⟨z.bits, er, er * z.im⟩
-  else
-    let θ := Float.sqrt (Float.abs (z.im * z.im * bladeAbs2 V z.bits))
-    if β < f0 then ⟨z.bits, er * Float.cos θ, er * (z.im * sinOver θ)⟩
-    else ⟨z.bits, er * Float.cosh θ, er * (z.im * sinhOver θ)⟩
+  withBladeSq V z.bits fun β a2 =>
+    if β == f0 then ⟨z.bits, er, er * z.im⟩
+    else
+      let θ := Float.sqrt (Float.abs (z.im * z.im * a2))
+      if β < f0 then ⟨z.bits, er * Float.cos θ, er * (z.im * sinOver θ)⟩
+      else ⟨z.bits, er * Float.cosh θ, er * (z.im * sinhOver θ)⟩
 
 /-- Julia `expm1(z::Couple)` (`src/composite.jl:31-51`): the complex `expm1` when
 `B² = -1`, otherwise Grassmann's generic series. -/
-def expm1 (z : Couple V Float) : Couple V Float :=
+@[inline] def expm1 (z : Couple V Float) : Couple V Float :=
   let β := z.blSq
   if β == -f1 then onBlade z.bits (ComplexF64.expm1 z.toComplex)
   else ofPair z.bits (BPair.expm1 β z.pair)
 
 /-- Julia `log(z::Couple)` (`src/composite.jl:365`): the complex `log` when `B² = -1`,
 otherwise `log(radius(z)) + angle(z)` (`NaN` where Julia throws). -/
-def log (z : Couple V Float) : Couple V Float :=
+@[inline] def log (z : Couple V Float) : Couple V Float :=
   if z.blSq == -f1 then onBlade z.bits (ComplexF64.log z.toComplex)
   else ⟨z.bits, F64.log z.radius, z.angleCoef⟩
 
 /-- Julia `log1p(z::Couple)` (`src/composite.jl:366`): the complex `log1p` when
 `B² = -1`, otherwise `log(1 + z)`. -/
-def log1p (z : Couple V Float) : Couple V Float :=
+@[inline] def log1p (z : Couple V Float) : Couple V Float :=
   if z.blSq == -f1 then onBlade z.bits (ComplexF64.log1p z.toComplex)
   else log ⟨z.bits, f1 + z.re, z.im⟩
 
 /-- Julia `sqrt(z::Couple)` (`src/composite.jl:442-445`): the complex `sqrt` when
 `B² = -1`, otherwise `√radius(z) · exp(angle(z)/2)`. -/
-def sqrt (z : Couple V Float) : Couple V Float :=
+@[inline] def sqrt (z : Couple V Float) : Couple V Float :=
   if z.blSq == -f1 then onBlade z.bits (ComplexF64.sqrt z.toComplex)
   else
     let e := expBlade V z.bits (z.angleCoef / f2)
@@ -206,7 +205,7 @@ def sqrt (z : Couple V Float) : Couple V Float :=
 /-- Julia `cbrt(z::Couple)` (`src/composite.jl:442-445`): the principal complex cube root
 when `B² = -1` (Julia has no `cbrt(::ComplexF64)`, a `MethodError`), otherwise
 `∛radius(z) · exp(angle(z)/3)`. -/
-def cbrt (z : Couple V Float) : Couple V Float :=
+@[inline] def cbrt (z : Couple V Float) : Couple V Float :=
   if z.blSq == -f1 then onBlade z.bits (complexCbrt z.toComplex)
   else
     let e := expBlade V z.bits (z.angleCoef / f3)
@@ -215,14 +214,14 @@ def cbrt (z : Couple V Float) : Couple V Float :=
 
 /-- Julia `cosh(z::Couple)` (`src/composite.jl:458-481`): the complex `cosh` when
 `B² = -1`, otherwise Grassmann's generic series. -/
-def cosh (z : Couple V Float) : Couple V Float :=
+@[inline] def cosh (z : Couple V Float) : Couple V Float :=
   let β := z.blSq
   if β == -f1 then onBlade z.bits (ComplexF64.cosh z.toComplex)
   else ofPair z.bits (BPair.cosh β z.pair)
 
 /-- Julia `sinh(z::Couple)` (`src/composite.jl:517-539`): the complex `sinh` when
 `B² = -1`, otherwise Grassmann's generic series. -/
-def sinh (z : Couple V Float) : Couple V Float :=
+@[inline] def sinh (z : Couple V Float) : Couple V Float :=
   let β := z.blSq
   if β == -f1 then onBlade z.bits (ComplexF64.sinh z.toComplex)
   else ofPair z.bits (BPair.sinh β z.pair)
@@ -231,7 +230,7 @@ def sinh (z : Couple V Float) : Couple V Float :=
 division when `B² = -1` (Julia's robust `ComplexF64` algorithm), otherwise
 `a ⟑ inv(b)` in the blade algebra with the correct inverse (Julia's hyperbolic formula is
 defect `couple-inv-hyperbolic`). The blade of `a` is kept; `b` must share it. -/
-def divSame (a b : Couple V Float) : Couple V Float :=
+@[inline] def divSame (a b : Couple V Float) : Couple V Float :=
   let β := a.blSq
   if β == -f1 then onBlade a.bits (ComplexF64.div a.toComplex b.toComplex)
   else ofPair a.bits (BPair.mul β a.pair (BPair.inv β b.pair))
@@ -307,7 +306,7 @@ variable {G : Nat}
 
 /-- Julia `Couple(t)` of a term (`src/multivectors.jl:699-704`): a scalar `c` becomes
 `c + 0·I` on the pseudoscalar, any other term `0 + c·B`. -/
-def toCouple (s : Single V G Float) : Couple V Float :=
+@[inline] def toCouple (s : Single V G Float) : Couple V Float :=
   if G == 0 then ⟨pseudoMask V, s.val, f0⟩ else ⟨s.bits, f0, s.val⟩
 
 /-- The term as an element of its blade algebra (`0 + cB`, or `c` for a scalar). -/
@@ -322,7 +321,7 @@ the math of Julia's PGA branch, which returns `NaN` for a single blade: port-not
 
 /-- Julia `expm1(t)` of a term (`C:27-51`): `expm1(c)` for a scalar, else Grassmann's
 generic series (the result is a couple on the term's blade). -/
-def expm1 (s : Single V G Float) : Couple V Float :=
+@[inline] def expm1 (s : Single V G Float) : Couple V Float :=
   if G == 0 then ⟨0, F64.expm1 s.val, f0⟩
   else Couple.ofPair s.bits (BPair.expm1 (bladeSq V s.bits) s.pair)
 
@@ -341,7 +340,7 @@ def log1p (s : Single V G Float) : Couple V Float :=
 
 /-- Julia `sqrt(t)` of a term (`src/composite.jl:436-451`): `Single(√c)` for a scalar,
 `0` for a zero term (`isscalar`), else `exp(log(t)/2)`. -/
-def sqrt (s : Single V G Float) : Couple V Float :=
+@[inline] def sqrt (s : Single V G Float) : Couple V Float :=
   if G == 0 then ⟨0, Float.sqrt s.val, f0⟩
   else if s.val == f0 then ⟨0, f0, f0⟩
   else
@@ -350,7 +349,7 @@ def sqrt (s : Single V G Float) : Couple V Float :=
 
 /-- Julia `cbrt(t)` of a term (`src/composite.jl:436-451`): `Single(∛c)` for a scalar, `0`
 for a zero term, else `exp(log(t)/3)`. -/
-def cbrt (s : Single V G Float) : Couple V Float :=
+@[inline] def cbrt (s : Single V G Float) : Couple V Float :=
   if G == 0 then ⟨0, F64.cbrt s.val, f0⟩
   else if s.val == f0 then ⟨0, f0, f0⟩
   else
@@ -360,12 +359,12 @@ def cbrt (s : Single V G Float) : Couple V Float :=
 /-- `cosh` of the scaled blade `c·e_b` as a scalar: `cosh(c)` (Julia's `TensorGraded{V,0}`
 method) for the scalar blade, otherwise Grassmann's generic series, whose partial sums
 never leave the scalars. -/
-def coshBlade (V : TensorBundle) (b : UInt64) (c : Float) : Float :=
+@[inline] def coshBlade (V : TensorBundle) (b : UInt64) (c : Float) : Float :=
   if b == 0 then Float.cosh c
   else (BPair.cosh (bladeSq V b) ⟨f0, c⟩).re
 
 /-- `sinh` of the scaled blade `c·e_b` as its coefficient on `e_b` (see `coshBlade`). -/
-def sinhBlade (V : TensorBundle) (b : UInt64) (c : Float) : Float :=
+@[inline] def sinhBlade (V : TensorBundle) (b : UInt64) (c : Float) : Float :=
   if b == 0 then Float.sinh c
   else (BPair.sinh (bladeSq V b) ⟨f0, c⟩).im
 
@@ -387,13 +386,13 @@ term is multiplication by its inverse `1/x`). -/
 again a term (the pseudoscalar contracts a blade to one blade in every metric); a scalar
 `t` becomes a pseudoscalar term, so in spaces with `I² = +1` this is `cosh` (quirk B2,
 replicated as DESIGN.md prescribes: oracle defect `scalar-trig-hyperbolic`). -/
-def cos (s : Single V G Float) : Single V 0 Float :=
+@[inline] def cos (s : Single V G Float) : Single V 0 Float :=
   let (σ, b') := bladeMul V (pseudoMask V) s.bits
   if σ == f0 then ⟨0, f1⟩ else ⟨0, coshBlade V b' (σ * s.val)⟩
 
 /-- Julia `sin(t) = sinh(I ⟑ t) / I` of a term (AbstractTensors `AT:408`): a term on the
 blade of `t` (right division by `I` is multiplication by `inv(I)`). -/
-def sin (s : Single V G Float) : Single V G Float :=
+@[inline] def sin (s : Single V G Float) : Single V G Float :=
   let i := pseudoMask V
   let (σ, b') := bladeMul V i s.bits
   if σ == f0 then ⟨s.bits, f0⟩
@@ -413,7 +412,7 @@ def sin (s : Single V G Float) : Single V G Float :=
 `cᵏ` Julia's `Float64^Int`. Julia's period-4 cycle agrees for `β = ±1`; for null blades,
 non-unit metric entries and negative `k` it is wrong (defect `term-power-period4`); here
 `k < 0` is `inv(t)^|k|`. -/
-def pow (s : Single V G Float) (k : Int) : Couple V Float :=
+@[inline] def pow (s : Single V G Float) (k : Int) : Couple V Float :=
   if k == 0 then ⟨0, f1, f0⟩
   else
     let b : UInt64 := if G == 0 then 0 else s.bits
@@ -494,14 +493,14 @@ namespace Phasor
 
 /-- Julia `complexify(z::Phasor) = amplitude(z) * exp(angle(z))` (`src/multivectors.jl:1031-1044`,
 the "simple" case of a real amplitude). -/
-def complexify (z : Phasor V Float) : Couple V Float :=
+@[inline] def complexify (z : Phasor V Float) : Couple V Float :=
   let e := z.angle.exp
   ⟨e.bits, z.amp * e.re, z.amp * e.im⟩
 
 /-- `exp(z)` of a phasor: with `complexify(z) = X + Y·B`, `exp(z) = eˣ ∠ Y·B`. Julia's
 `exp(::Phasor)` (`src/composite.jl:131-134`) computes `Phasor(exp(amp + re(exp θ)), im(exp θ))`,
 which is not the exponential (port-notes §8.3 item 11, fixed). -/
-def exp (z : Phasor V Float) : Phasor V Float :=
+@[inline] def exp (z : Phasor V Float) : Phasor V Float :=
   let c := z.complexify
   ⟨F64.exp c.re, ⟨c.bits, f0, c.im⟩⟩
 
@@ -512,7 +511,7 @@ def expm1 (z : Phasor V Float) : Couple V Float :=
   ⟨e.bits, e.re - f1, e.im⟩
 
 /-- Julia `log(z::Phasor) = log(amplitude(z)) + angle(z)` (`src/composite.jl:363`). -/
-def log (z : Phasor V Float) : Couple V Float :=
+@[inline] def log (z : Phasor V Float) : Couple V Float :=
   ⟨z.angle.bits, F64.log z.amp + z.angle.re, z.angle.im⟩
 
 /-- Julia `log1p(z::Phasor) = log(One(V) + z)` (`src/composite.jl:364`), where the sum
@@ -522,19 +521,19 @@ def log1p (z : Phasor V Float) : Couple V Float :=
   Couple.log ⟨c.bits, f1 + c.re, c.im⟩
 
 /-- Julia `sqrt(z::Phasor) = Phasor(√amplitude, angle/2)` (`src/composite.jl:446`). -/
-def sqrt (z : Phasor V Float) : Phasor V Float :=
+@[inline] def sqrt (z : Phasor V Float) : Phasor V Float :=
   ⟨Float.sqrt z.amp, ⟨z.angle.bits, z.angle.re / f2, z.angle.im / f2⟩⟩
 
 /-- Julia `cbrt(z::Phasor) = Phasor(∛amplitude, angle/3)` (`src/composite.jl:446`). -/
-def cbrt (z : Phasor V Float) : Phasor V Float :=
+@[inline] def cbrt (z : Phasor V Float) : Phasor V Float :=
   ⟨F64.cbrt z.amp, ⟨z.angle.bits, z.angle.re / f3, z.angle.im / f3⟩⟩
 
 /-- Julia `inv(z::Phasor) = Phasor(inv(amplitude), -angle)` (`src/algebra.jl:547-549`). -/
-def inv (z : Phasor V Float) : Phasor V Float :=
+@[inline] def inv (z : Phasor V Float) : Phasor V Float :=
   ⟨f1 / z.amp, ⟨z.angle.bits, -z.angle.re, -z.angle.im⟩⟩
 
 /-- Julia `z ^ n = Phasor(amplitude^n, n·angle)` (`src/algebra.jl:422-423`). -/
-def pow (z : Phasor V Float) (n : Int) : Phasor V Float :=
+@[inline] def pow (z : Phasor V Float) (n : Int) : Phasor V Float :=
   let k := Float.ofInt n
   ⟨F64.powInt z.amp n, ⟨z.angle.bits, k * z.angle.re, k * z.angle.im⟩⟩
 

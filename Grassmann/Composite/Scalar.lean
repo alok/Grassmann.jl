@@ -98,12 +98,22 @@ def atanh2 (y x : Float) : Float :=
 
 /-! ## Blades of a runtime mask -/
 
-/-- Whether `V` is a plain signature space (no null generators, tangent variables or
-dual/mixed structure): its blade products are signs of `e_{a xor b}` given by bit
-parities (DirectSum `mulSign`). -/
-@[inline] def plainSignature (V : TensorBundle) : Bool :=
-  (match V.metric with | .signature _ | .euclid => true | _ => false) &&
-    !V.hasinf && !V.hasorigin && V.diffvars == 0 && V.dyadmode == 0
+/-- The marker `plainNeg` returns for spaces that are not plain signature spaces. -/
+def notPlain : UInt64 := 0x8000000000000000
+
+/-- The negative-generator mask of a plain signature space (no null generators, tangent
+variables or dual/mixed structure; the Euclidean `Int` space has mask `0`), whose blade
+products are signs of `e_{a xor b}` given by bit parities (DirectSum `mulSign`); `notPlain`
+for every other space (their blade products go through DirectSum's exact rules). -/
+@[inline] def plainNeg (V : TensorBundle) : UInt64 :=
+  if V.hasinf || V.hasorigin || V.diffvars != 0 || V.dyadmode != 0 then notPlain
+  else match V.metric with
+    | .signature s => s
+    | .euclid => 0
+    | _ => notPlain
+
+/-- Whether `V` is a plain signature space (`plainNeg V ≠ notPlain`). -/
+@[inline] def plainSignature (V : TensorBundle) : Bool := plainNeg V != notPlain
 
 /-- The scalar coefficient of `e_a ⟑ e_b` when that product is a scalar multiple of
 `e_c` (the first scalar-valued term of DirectSum's exact product). -/
@@ -114,26 +124,57 @@ def productCoef (V : TensorBundle) (op : BinOp) (a b c : UInt64) : Float :=
     | none => f0
   | .error _ => nan
 
+/-- `-1.0`. -/
+def fm1 : Float := -f1
+
+/-- Population count as a `UInt64` (SWAR; no `Nat` arithmetic). -/
+@[inline] def popcount64 (x : UInt64) : UInt64 :=
+  let m1 : UInt64 := 0x5555555555555555
+  let m2 : UInt64 := 0x3333333333333333
+  let m4 : UInt64 := 0x0F0F0F0F0F0F0F0F
+  let h01 : UInt64 := 0x0101010101010101
+  let x := x - ((x >>> 1) &&& m1)
+  let x := (x &&& m2) + ((x >>> 2) &&& m2)
+  let x := (x + (x >>> 4)) &&& m4
+  (x * h01) >>> 56
+
+/-- Julia `parityreverse(grade(b))`: the reverse negates grades `≡ 2, 3 (mod 4)`. -/
+@[inline] def reverseOdd (b : UInt64) : Bool := (popcount64 b >>> 1) &&& 1 == 1
+
+/-- `e_b ⟑ e_b` in a plain signature space with negative mask `s`:
+`(-1)^(g(g-1)/2 + #(b ∧ s))`. -/
+@[inline] def plainSq (s b : UInt64) : Float :=
+  if reverseOdd b != parity (b &&& s) then fm1 else f1
+
+/-- `⟨~e_b ⟑ e_b⟩₀` in a plain signature space with negative mask `s`: `(-1)^#(b ∧ s)`. -/
+@[inline] def plainAbs2 (s b : UInt64) : Float := if parity (b &&& s) then fm1 else f1
+
+/-- `k (e_b ⟑ e_b) ⟨~e_b ⟑ e_b⟩₀`: both blade scalars from one test of the space (for the
+closed forms, which need the sign of the square and the blade norm). -/
+@[inline] def withBladeSq {β : Type} (V : TensorBundle) (b : UInt64) (k : Float → Float → β) : β :=
+  let s := plainNeg V
+  if s != notPlain then k (plainSq s b) (plainAbs2 s b)
+  else k (productCoef V .mul b b 0) (productCoef V .contraction b b 0)
+
 /-- Julia `value(B ⟑ B)` for a blade mask `b`: the scalar a blade squares to (every
 blade does, in every metric; `0` for a null blade). -/
 def bladeSq (V : TensorBundle) (b : UInt64) : Float :=
-  if plainSignature V then (if V.mulSign b b then -f1 else f1)
-  else productCoef V .mul b b 0
+  let s := plainNeg V
+  if s != notPlain then plainSq s b else productCoef V .mul b b 0
 
 /-- Julia `abs2_inv(B) = value(contraction(B, B)) = ⟨~B ⟑ B⟩₀` for a blade mask `b`
 (`src/algebra.jl:473`; `+1` for Euclidean blades). -/
 def bladeAbs2 (V : TensorBundle) (b : UInt64) : Float :=
-  if plainSignature V then
-    let s := if V.mulSign b b then -f1 else f1
-    if Leibniz.parityreverse (popcount b) then -s else s
-  else productCoef V .contraction b b 0
+  let s := plainNeg V
+  if s != notPlain then plainAbs2 s b else productCoef V .contraction b b 0
 
 /-- `e_a ⟑ e_b` as `(coefficient, blade)` when it is a single term (a pseudoscalar
 factor, a blade squared, blades of a diagonal metric); the coefficient is `0` when the
 product vanishes. For a product with several terms (non-diagonal metrics) only the
 first term is returned: callers use it where one term is guaranteed. -/
 def bladeMul (V : TensorBundle) (a b : UInt64) : Float × UInt64 :=
-  if plainSignature V then (if V.mulSign a b then -f1 else f1, a ^^^ b)
+  let s := plainNeg V
+  if s != notPlain then (if parityjoin s a b then -f1 else f1, a ^^^ b)
   else match V.terms₂ .mul a b with
     | .ok ts => match ts.find? (·.z == 0) with
       | some t => (F64.ofRat t.coef, t.bits)

@@ -43,29 +43,40 @@ variable [Kernels V]
 
 /-- Julia `radius(z::Quaternion) = value(scalar(abs(z)))` (`src/composite.jl:629`):
 `√⟨~z z⟩₀`. -/
-@[inline] def radius (s : Half V false Float) : Float := Float.sqrt (revScalar s s)
+@[inline] def radius (s : Half V false Float) : Float := Float.sqrt (abs2Sum (halfLayout false) s.v)
+
+/-- `contraction(b, b)` of the bivector part `b` of a quaternion (`n = 3`: the storage
+positions `1 … 3`): a loop in a plain signature space, the chain kernel otherwise. -/
+@[inline] def bivAbs2 (s : Half V false Float) : Float :=
+  let p := plainNeg V
+  if p != notPlain then
+    let (bs, o) := bladeTable V.n (halfLayout false)
+    weightedSumLoop (plainAbs2 p) bs o s.v 1 f0 (halfDim V.n false)
+  else getD s.bivectorPart.abs2.v 0
 
 /-- The coefficient `acos(⟨z⟩₀/r)/|b|` of Julia's `angle(z::Quaternion, r)`
 (`src/composite.jl:630-633`), `b` the bivector part, `|b| = √contraction(b, b)`; `0` for a
 positive real quaternion (Julia: `0/0`). -/
-def angleCoef (s : Half V false Float) (r : Float) : Float :=
+@[inline] def angleCoef (s : Half V false Float) (r : Float) : Float :=
   let θ := Float.acos (s.scalarValue / r)
-  let nb := Float.sqrt (getD s.bivectorPart.abs2.v 0)
+  let nb := Float.sqrt s.bivAbs2
   if nb == f0 && θ == f0 then f0 else θ / nb
 
 /-- Julia `angle(z::Quaternion) = (acos(⟨z⟩₀/r)/|b|)·b` as a bivector chain. -/
 @[inline] def angle (s : Half V false Float) : Chain V 2 Float :=
   s.bivectorPart * s.angleCoef s.radius
 
-/-- The polar `log(z::Quaternion) = log(r) + angle(z, r)` (`src/composite.jl:367`). -/
-def logPolar (s : Half V false Float) : Half V false Float :=
+/-- The polar `log(z::Quaternion) = log(r) + angle(z, r)` (`src/composite.jl:367`) of a
+quaternion (`n = 3`: the even storage is the scalar followed by the bivector). -/
+@[inline] def logPolar (s : Half V false Float) : Half V false Float :=
   let r := s.radius
-  addScalar (F64.log r) (Chain.evenHalf (s.bivectorPart * s.angleCoef r))
+  let k := s.angleCoef r
+  ⟨setFirst (s.v.map (· * k)) (F64.log r)⟩
 
 /-- Julia `log(t::Spinor)`: the polar form for Euclidean quaternions
 (`src/composite.jl:367`), otherwise `qlog((t - 1)/(t + 1))` (`C:369`); `none` where Julia
 throws. -/
-def log? (s : Half V false Float) : Option (Half V false Float) :=
+@[inline] def log? (s : Half V false Float) : Option (Half V false Float) :=
   if euclideanQuaternions V then some s.logPolar else s.logSeries?
 
 /-- Julia `log(t::Spinor)`; `NaN` coefficients where Julia throws. -/
@@ -82,11 +93,17 @@ def log1p? (s : Half V false Float) : Option (Half V false Float) :=
 /-- Julia `sqrt`/`cbrt` of a spinor (`src/composite.jl:436-445`): for Euclidean quaternions
 `qrt(radius(t))·exp(angle(t)/n)` (no scalar test); otherwise
 `isscalar(t) ? qrt(scalar(t)) : exp(log(t)/n)`; `none` where Julia throws. -/
-def root? (qrt : Float → Float) (n : Float) (s : Half V false Float) : Option (Half V false Float) :=
+@[inline] def root? (qrt : Float → Float) (n : Float) (s : Half V false Float) : Option (Half V false Float) :=
   if euclideanQuaternions V then
+    -- `angle(t)/n = (k·b)/n` is a bivector of `ℝ3`-like space: `exp` is its closed form
+    -- `cos θ + B·sin θ/θ`, `θ = √contraction(B, B)` (Julia `exp(t::Chain)`, `C:148-156`)
     let r := s.radius
-    let e := Chain.expEven (s.bivectorPart * (s.angleCoef r / n))
-    some ⟨e.v.map (qrt r * ·)⟩
+    let k := s.angleCoef r
+    let b : Half V false Float := ⟨s.v.map fun y => (y * k) / n⟩
+    let θ := Float.sqrt b.bivAbs2
+    let x := sinOver θ
+    let q := qrt r
+    some ⟨setFirst (b.v.map fun y => q * (y * x)) (q * Float.cos θ)⟩
   else if s.isScalar then some (scalarF (qrt s.scalarValue))
   else s.logSeries?.map fun l => exp (sdiv l n)
 

@@ -32,6 +32,52 @@ open DirectSum DirectSum.Bits StaticVectors AbstractTensors JuliaBase Composite
 
 variable {V : TensorBundle}
 
+namespace Composite
+
+/-- The storage of a spinor is never empty (the scalar is its first coefficient). -/
+theorem even_size_pos (n : Nat) : 0 < (halfLayout false).size n := by
+  simp only [halfLayout_false, Layout.size]
+  split
+  · omega
+  · exact Nat.two_pow_pos _
+
+/-- The blades of layout `l` as a table and an offset: position `i` of the layout is blade
+`table[offset + i]` (the memoized full or half tables, never copied). -/
+@[inline] def bladeTable (n : Nat) : Layout → Array UInt64 × Nat
+  | .chain g => (Leibniz.indexBasisAll n, Leibniz.binomsum n g)
+  | .even => (Leibniz.indexEven n, 0)
+  | .odd => (Leibniz.indexOdd n, 0)
+  | .full => (Leibniz.indexBasisAll n, 0)
+
+/-- The loop of `abs2Sum`: `Σ xᵢ²·w(bᵢ)` over the blades `bs[o + i]` of the layout. -/
+@[specialize] def weightedSumLoop {n : Nat} (w : UInt64 → Float) (bs : Array UInt64) (o : Nat)
+    (x : Values Float n) (i : Nat) (acc : Float) : Nat → Float
+  | 0 => acc
+  | fuel + 1 =>
+    if h : i < n then
+      let y := x.get ⟨i, h⟩
+      weightedSumLoop w bs o x (i + 1) (acc + y * y * w (bs[o + i]?.getD 0)) fuel
+    else acc
+
+/-- `Σ xᵢ²·w(bᵢ)` over the coefficients `x` stored in layout `l`. -/
+@[inline] def weightedSum (w : UInt64 → Float) (l : Layout) (x : Values Float (l.size V.n)) : Float :=
+  let (bs, o) := bladeTable V.n l
+  weightedSumLoop w bs o x 0 f0 (l.size V.n)
+
+/-- `⟨(~x) ⟑ x⟩₀` of coefficients `x` stored in layout `l`: in a plain signature space the
+cross terms vanish and it is `Σ xᵢ²·⟨~Bᵢ Bᵢ⟩₀` (a loop over the layout's blades, no
+allocation); otherwise the space's projecting kernel. -/
+@[inline] def abs2Sum [Kernels V] (l : Layout) (x : Values Float (l.size V.n)) : Float :=
+  let s := plainNeg V
+  if s != notPlain then weightedSum (plainAbs2 s) l x
+  else getD (Kernels.binProj .reverseMul l l (.chain 0) x x : Values Float _) 0
+
+/-- `x` with coefficient `0` replaced by `a` (the scalar slot of a spinor or multivector). -/
+@[inline] def setFirst {n : Nat} (x : Values Float n) (a : Float) : Values Float n :=
+  if h : 0 < n then x.set ⟨0, h⟩ a else x
+
+end Composite
+
 /-! ## Multivectors -/
 
 namespace Multivector
@@ -73,22 +119,19 @@ def expm1 (b : Multivector V Float) : Multivector V Float :=
 
 /-- Julia `exp(t::Multivector)` (`src/composite.jl:83-96`, parabolic defect fixed):
 the closed form when `m = t - scalar(t)` squares to a scalar, else `1 + expm1(t)`. -/
-def exp (t : Multivector V Float) : Multivector V Float :=
+@[inline] def exp (t : Multivector V Float) : Multivector V Float :=
   let s := t.scalarValue
   let m := t.dropScalar
   let sq := m * m
   if isScalarNorms sq.fnorm sq.scalarValue then
     let hint := sq.scalarValue
     let es := F64.exp s
-    if hint == f0 then addScalar es (es * m)
+    if hint == f0 then ⟨(m.v.map (es * ·)).set ⟨0, Nat.two_pow_pos V.n⟩ es⟩
     else
-      let θ := Float.sqrt (Float.abs (revScalar m m))
-      if hint < f0 then
-        let x := sinOver θ
-        ⟨(addScalar (Float.cos θ) (m * x)).v.map (es * ·)⟩
-      else
-        let x := sinhOver θ
-        ⟨(addScalar (Float.cosh θ) (m * x)).v.map (es * ·)⟩
+      let θ := Float.sqrt (Float.abs (abs2Sum .full m.v))
+      let c := if hint < f0 then Float.cos θ else Float.cosh θ
+      let x := if hint < f0 then sinOver θ else sinhOver θ
+      ⟨(m.v.map fun y => es * (y * x)).set ⟨0, Nat.two_pow_pos V.n⟩ (es * c)⟩
   else addScalar f1 (expm1 t)
 
 /-- The generated `cosh` series of Grassmann (`src/composite.jl:483-513`, which throws
@@ -164,7 +207,7 @@ def nan : Half V false Float := ⟨Values.replicate Composite.nan⟩
 
 /-- Julia `k + t` for a real `k` on a spinor. -/
 @[inline] def addScalar (k : Float) (s : Half V false Float) : Half V false Float :=
-  ⟨(Values.ofFn fun i => if i.1 = 0 then k + s.v.get i else s.v.get i)⟩
+  ⟨s.v.modify ⟨0, even_size_pos V.n⟩ (k + ·)⟩
 
 /-- Julia `norm(t)`. -/
 @[inline] def fnorm {p : Bool} (s : Half V p Float) : Float := s.v.norm
@@ -174,7 +217,7 @@ def nan : Half V false Float := ⟨Values.replicate Composite.nan⟩
 
 /-- `s` with its scalar coefficient replaced by `0`. -/
 @[inline] def dropScalar (s : Half V false Float) : Half V false Float :=
-  ⟨Values.ofFn fun i => if i.1 = 0 then f0 else s.v.get i⟩
+  ⟨s.v.set ⟨0, even_size_pos V.n⟩ f0⟩
 
 /-- The spinor `x·1`. -/
 @[inline] def scalarF (x : Float) : Half V false Float := Spinor.scalar x
@@ -196,6 +239,10 @@ variable [Kernels V]
 /-- Division of every coefficient by a real number. -/
 @[inline] def sdiv {p : Bool} (s : Half V p Float) (k : Float) : Half V p Float := ⟨s.v.map (· / k)⟩
 
+/-- The spinor as a multivector (the space's embedding kernel). -/
+@[inline] def toMV (s : Half V false Float) : Multivector V Float :=
+  ⟨Kernels.un .even (halfLayout false) .full s.v⟩
+
 /-- Julia's generated `expm1(b::Spinor)` (`src/composite.jl:54-81`). -/
 def expm1 (b : Half V false Float) : Half V false Float :=
   let nb := b.fnorm
@@ -204,18 +251,19 @@ def expm1 (b : Half V false Float) : Half V false Float :=
   else expm1Generated (· + ·) smul' sdiv fnorm b
 
 /-- Julia `exp(t::Spinor)` (`src/composite.jl:83-96`, parabolic defect fixed). -/
-def exp (t : Half V false Float) : Half V false Float :=
+@[inline] def exp (t : Half V false Float) : Half V false Float :=
   let s := t.scalarValue
   let m := t.dropScalar
   let sq := smul' m m
   if isScalarNorms sq.fnorm sq.scalarValue then
     let hint := sq.scalarValue
     let es := F64.exp s
-    if hint == f0 then addScalar es ⟨m.v.map (es * ·)⟩
+    if hint == f0 then ⟨(m.v.map (es * ·)).set ⟨0, even_size_pos V.n⟩ es⟩
     else
-      let θ := Float.sqrt (Float.abs (revScalar m m))
-      let (c, x) := if hint < f0 then (Float.cos θ, sinOver θ) else (Float.cosh θ, sinhOver θ)
-      ⟨(addScalar c ⟨m.v.map (· * x)⟩).v.map (es * ·)⟩
+      let θ := Float.sqrt (Float.abs (abs2Sum (halfLayout false) m.v))
+      let c := if hint < f0 then Float.cos θ else Float.cosh θ
+      let x := if hint < f0 then sinOver θ else sinhOver θ
+      ⟨(m.v.map fun y => es * (y * x)).set ⟨0, even_size_pos V.n⟩ (es * c)⟩
   else addScalar f1 (expm1 t)
 
 /-- The generated `cosh` of a spinor (`src/composite.jl:483-513`, completed). -/
