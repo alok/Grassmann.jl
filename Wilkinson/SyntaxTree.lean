@@ -60,6 +60,7 @@ where
 /-- Julia `SyntaxTree.sub(T, expr)`: convert every numeric literal to `T`,
 except a literal exponent of `^` (src/SyntaxTree.jl:50-71). -/
 def sub (T : NumType) : JExpr → JExpr
+  | .lit (.bigint v) => .lit (.bigint v)
   | .lit l => .lit (T.convert l)
   | .sym s => .sym s
   | .call "^" [b, .lit k] => .call "^" [sub T b, .lit k]
@@ -73,6 +74,7 @@ where
 
 /-- Absolute value of a literal. -/
 def Lit.abs : Lit → Lit
+  | .bigint v => .bigint v
   | .int v => .int v.natAbs
   | .f64 v => .f64 v.abs
   | .f32 v => .f32 v.abs
@@ -111,11 +113,13 @@ def logAbs : Lit → Float
   | .f64 v => JuliaMath.log v.abs
   | .f32 v => (JuliaMath.log32 v.abs).toFloat
   | .big v => (BigFloat.log v.abs).toFloat
+  | .bigint _ => 0
 
 /-- Julia `expravg(expr) = (cs, avg, cp, pavg)` (src/exprval.jl:9-38): the number
 of scalars, the average of their logarithms, the number of literal exponents and
 their average. -/
 def expravg : JExpr → Nat × Float × Nat × Float
+  | .lit (.bigint _) => finish 0 0 0 0
   | .lit l => finish 1 (logAbs l) 0 0
   | .sym _ => finish 0 0 0 0
   | .call "^" [b, .lit k] =>
@@ -125,6 +129,7 @@ def expravg : JExpr → Nat × Float × Nat × Float
       | .f64 v => v.abs
       | .f32 v => v.abs.toFloat
       | .big v => v.abs.toFloat
+      | .bigint v => Float.ofNat v.natAbs
     finish cst (0 + Float.ofNat cst * st) (1 + cpt) (0 + kabs + Float.ofNat cpt * pt)
   | .call _ args => combine (go args)
 where
@@ -144,6 +149,7 @@ where
 /-- Julia `exprdev(expr, val, cal)`: `Σ (log|v| - val)² / (cal - 1)` over *all*
 literals, exponents included (src/exprval.jl:46-56). -/
 def exprdev (val : Float) (cal : Nat) : JExpr → Float
+  | .lit (.bigint _) => 0
   | .lit l => let d := logAbs l - val; (d * d) / (Float.ofNat cal - 1)
   | .sym _ => 0
   | .call _ args => go 0.0 args

@@ -268,6 +268,7 @@ def litRat : Lit → Rat
   | .f64 v => Poly.decimalRat v
   | .f32 v => Poly.decimalRat v.toFloat
   | .big v => Poly.decimalRat v.toFloat
+  | .bigint n => n
 
 /-- Wilkinson's `polyfactors(x, a) = (x - a₁)(x - a₂)⋯(x - aₙ)`, REDUCE-simplified
 (src/Wilkinson.jl:26-27). -/

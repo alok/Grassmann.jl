@@ -36,6 +36,10 @@ inductive Lit where
   | f32 (v : Float32)
   /-- `BigFloat` literal (after `sub(BigFloat, …)`). -/
   | big (v : Big)
+  /-- An integer literal beyond `Int64`: Julia's parser makes it an
+  `@int128_str`/`@big_str` macro call (not a `Number`), which `SyntaxTree`
+  neither counts as a scalar nor converts. -/
+  | bigint (v : Int)
   deriving Inhabited, BEq
 
 /-- Julia `Expr` fragment: symbols, literals and operator calls. -/
@@ -55,6 +59,7 @@ def Lit.toJulia : Lit → String
   | .f64 v => F64.showString v
   | .f32 v => F32.showString v
   | .big v => F64.showString v.toFloat
+  | .bigint v => toString v
 
 /-- Negative literal test (`item isa Real && item < 0`). -/
 def Lit.isNeg : Lit → Bool
@@ -62,6 +67,7 @@ def Lit.isNeg : Lit → Bool
   | .f64 v => v < 0
   | .f32 v => v < 0
   | .big v => v.isNeg
+  | .bigint _ => false
 
 namespace JExpr
 
@@ -93,7 +99,7 @@ partial def render (e : JExpr) (ctx : Int) : String :=
     match op, args with
     -- scalar multiplication "2x"
     | "*", [.lit l, .sym s] =>
-      if (match l with | .int _ | .f64 _ | .f32 _ => true | .big _ => false) &&
+      if (match l with | .int _ | .f64 _ | .f32 _ => true | .big _ | .bigint _ => false) &&
          !(s.startsWith "e" || s.startsWith "E" || s.startsWith "f") then
         let body := showList [.lit l, .sym s] "" fp
         if fp ≤ ctx then "(" ++ body ++ ")" else body
@@ -132,7 +138,8 @@ instance : ToString JExpr := ⟨toJulia⟩
 /-! ## JSON codec (the golden files' encoding of Julia `Expr`s) -/
 
 open Lean in
-/-- Decode `{"sym": s}`, `{"int": "n"}`, `{"f64": "repr"}`, `{"call": op, "args": [...]}`. -/
+/-- Decode `{"sym": s}`, `{"int": "n"}`, `{"bigint": "n"}`, `{"f64": "repr"}`,
+`{"call": op, "args": [...]}`. -/
 partial def ofJson (j : Json) : Except String JExpr := do
   match j.getObjVal? "sym" with
   | .ok (.str s) => return .sym s
@@ -141,6 +148,11 @@ partial def ofJson (j : Json) : Except String JExpr := do
   | .ok (.str s) => match s.toInt? with
     | some n => return .int n
     | none => throw s!"bad int {s}"
+  | _ =>
+  match j.getObjVal? "bigint" with
+  | .ok (.str s) => match s.toInt? with
+    | some n => return .lit (.bigint n)
+    | none => throw s!"bad bigint {s}"
   | _ =>
   match j.getObjVal? "f64" with
   | .ok (.str s) =>

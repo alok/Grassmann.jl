@@ -13,13 +13,13 @@ factors a primitive integer polynomial into irreducibles over `ℤ`:
 
 1. content and the power of `x` are split off;
 2. Yun's square-free decomposition (over `ℚ`, made primitive);
-3. linear factors from the rational-root test (`p ∣ a₀`, `q ∣ aₙ`);
+3. linear factors from rational roots, found `p`-adically (roots mod a small
+   prime, Newton lifting, rational reconstruction), for coefficients of any size;
 4. Kronecker's method for factors of degree `2 … ⌊n/2⌋` (interpolation through
    divisors of the values at small integers).
 
-Steps 3 and 4 enumerate divisors, so they are bounded (coefficients up to about
-`10¹⁰`, at most `2·10⁶` Kronecker candidates); past the bounds the remaining
-factor is reported unsplit. The printed shapes REDUCE gives these objects are in
+Step 4 enumerates divisors, so it is bounded (values up to about `10¹⁰`, at most
+`2·10⁶` candidates); past the bounds the remaining factor is reported unsplit. The printed shapes REDUCE gives these objects are in
 `Wilkinson.Reduce`.
 -/
 
@@ -140,7 +140,7 @@ literals. `none` for anything else. -/
 def ofJExpr : JExpr → Option Poly
   | .sym "x" => some X
   | .sym _ => none
-  | .lit (.int n) => some (const n)
+  | .lit (.int n) | .lit (.bigint n) => some (const n)
   | .lit (.f64 v) => some (const (decimalRat v))
   | .lit _ => none
   | .call "+" args => (ofList args).map fun ps => ps.foldl (· + ·) zero
@@ -222,17 +222,119 @@ def divisors (n : Nat) : Option (List Nat) := do
   let fs ← primeFactors n
   return fs.foldl (fun ds (p, k) => ds.flatMap fun d => (List.range (k + 1)).map fun i => d * p ^ i) [1]
 
-/-- Rational roots `p/q` of a square-free primitive `a` with `a(0) ≠ 0`, as the
-primitive linear factors `q x - p` (`q > 0`). -/
-def linearFactors (a : Array Int) : Option (List (Array Int)) := do
-  let a0 := (a[0]?.getD 0).natAbs
-  let an := (a.back?.getD 0).natAbs
-  let ps ← divisors a0
-  let qs ← divisors an
-  let cands := qs.flatMap fun q => ps.flatMap fun p =>
-    if Nat.gcd p q == 1 then [((p : Int), q), (-(p : Int), q)] else []
-  return cands.filterMap fun (p, q) =>
-    if (Poly.ofZ a).eval ((p : Rat) / (q : Rat)) == 0 then some #[-p, (q : Int)] else none
+/-! ### Rational roots, `p`-adically
+
+A rational root `r/s` of a square-free `f` (`s ∣ lc f`, `r ∣ f(0)`) reduces to a
+simple root of `f mod p` for any prime `p ∤ lc f` at which `f` stays
+square-free. Such roots are found by trying all residues, lifted by Newton's
+iteration to `p^k > 2·|f(0)|·|lc f|`, and read back by rational reconstruction;
+each candidate is then checked exactly. Unlike divisor enumeration this works for
+coefficients of any size (a product of linear factors with 16-digit decimal
+roots, as Wilkinson's random experiments build, has 150-digit coefficients). -/
+
+/-- `x mod m` in `[0, m)`. -/
+@[inline] def emod (x : Int) (m : Nat) : Nat := (x % (m : Int)).toNat
+
+/-- Extended Euclid: `(g, u)` with `u·a ≡ g (mod m)`. -/
+def xgcd (a m : Int) : Int × Int :=
+  go a m 1 0 (m.natAbs + a.natAbs + 2)
+where
+  /-- Remainders `r₀, r₁` with Bezout coefficients of `a`. -/
+  go (r0 r1 s0 s1 : Int) : Nat → Int × Int
+    | 0 => (r0, s0)
+    | fuel + 1 => if r1 == 0 then (r0, s0) else
+      let q := r0 / r1
+      go r1 (r0 - q * r1) s1 (s0 - q * s1) fuel
+
+/-- Inverse of `a` modulo `m` (when `gcd(a, m) = 1`). -/
+def invMod (a : Int) (m : Nat) : Option Nat :=
+  let (g, u) := xgcd (emod a m) m
+  if g == 1 then some (emod u m) else none
+
+/-- Evaluate an integer polynomial at `t` modulo `m`. -/
+def evalMod (a : Array Int) (t : Nat) (m : Nat) : Nat :=
+  a.foldr (fun c acc => (acc * t + emod c m) % m) 0
+
+/-- Coefficients of the derivative. -/
+def derivZ (a : Array Int) : Array Int := (Array.range (a.size - 1)).map fun i => ((i + 1 : Nat) : Int) * a[i + 1]!
+
+/-- `gcd(f mod p, g mod p)` has positive degree (polynomial Euclid over `𝔽_p`). -/
+def sharesFactorMod (f g : Array Int) (p : Nat) : Bool :=
+  let red (a : Array Int) : Array Nat := trimN (a.map (emod · p))
+  let r := go (red f) (red g) (f.size + g.size + 2)
+  r.size > 1
+where
+  /-- Drop trailing zeros. -/
+  trimN (a : Array Nat) : Array Nat := (a.toList.reverse.dropWhile (· == 0)).reverse.toArray
+  /-- `a mod b` over `𝔽_p`. -/
+  modP (a b : Array Nat) : Array Nat :=
+    let inv := (invMod (b.back?.getD 1) p).getD 1
+    let rec loop (a : Array Nat) : Nat → Array Nat
+      | 0 => a
+      | fuel + 1 =>
+        if a.size < b.size || b.size == 0 then a else
+        let c := a.back?.getD 0 * inv % p
+        let k := a.size - b.size
+        let a := (Array.range a.size).map fun i =>
+          if i ≥ k && i - k < b.size then (a[i]! + p * p - c * b[i - k]! % p) % p else a[i]!
+        loop (trimN a) fuel
+    loop a (a.size + 1)
+  /-- Euclid. -/
+  go (a b : Array Nat) : Nat → Array Nat
+    | 0 => a
+    | fuel + 1 => if b.isEmpty then a else go b (modP a b) fuel
+
+/-- Rational reconstruction: `n/d ≡ r (mod m)` with `|n| ≤ N`, `0 < d ≤ D`. -/
+def ratRecon (r : Nat) (m : Nat) (N D : Nat) : Option (Int × Nat) :=
+  go (m : Int) (r : Int) 0 1 (m + 2)
+where
+  /-- Half-extended Euclid, stopped at the first remainder `≤ N`. -/
+  go (r0 r1 t0 t1 : Int) : Nat → Option (Int × Nat)
+    | 0 => none
+    | fuel + 1 =>
+      if r1.natAbs ≤ N then
+        if t1 == 0 || t1.natAbs > D then none
+        else some (if t1 < 0 then (-r1, t1.natAbs) else (r1, t1.natAbs))
+      else
+        let q := r0 / r1
+        go r1 (r0 - q * r1) t1 (t0 - q * t1) fuel
+
+/-- The primes used for the modular search. -/
+def smallPrimes : List Nat :=
+  (List.range 2000).filter fun n => n ≥ 101 && (List.range n).all fun d => d < 2 || d * d > n || n % d != 0
+
+/-- Newton lifting of a simple root `t mod m` of `a` (squaring the modulus each
+step) until the modulus exceeds `bound`: `(root, modulus)`. -/
+def liftRoot (a : Array Int) (t m bound : Nat) : Nat × Nat :=
+  go t m (Nat.log2 bound + 2)
+where
+  /-- Double the precision each step. -/
+  go (t m : Nat) : Nat → Nat × Nat
+    | 0 => (t, m)
+    | fuel + 1 =>
+      if m > bound then (t, m) else
+      let m2 := m * m
+      match invMod (evalMod (derivZ a) t m2) m2 with
+      | some inv => go ((t + m2 - evalMod a t m2 * inv % m2) % m2) m2 fuel
+      | none => (t, m)
+
+/-- Rational roots `r/s` of a square-free primitive `a` with `a(0) ≠ 0`, as the
+primitive linear factors `s x - r` (`s > 0`). -/
+def linearFactors (a : Array Int) : List (Array Int) :=
+  let lc := a.back?.getD 0
+  let a0 := a[0]?.getD 0
+  let da := derivZ a
+  match smallPrimes.find? (fun (p : Nat) => lc % (p : Int) != 0 && !sharesFactorMod a da p) with
+  | none => []
+  | some p =>
+    let bound := 2 * a0.natAbs * lc.natAbs + 1
+    let roots := (List.range p).filter fun t => evalMod a t p == 0
+    roots.filterMap fun t =>
+      let (r, m) := liftRoot a t p bound
+      match ratRecon r m a0.natAbs lc.natAbs with
+      | some (n, d) =>
+        if (Poly.ofZ a).eval ((n : Rat) / (d : Rat)) == 0 then some #[-n, (d : Int)] else none
+      | none => none
 
 /-- Lagrange interpolation through `(tᵢ, vᵢ)` over `ℚ`. -/
 def interpolate (pts : List (Int × Int)) : Poly :=
@@ -273,7 +375,7 @@ where
 /-- Split a square-free primitive factor into irreducibles (rational roots, then
 Kronecker for degrees `2 … ⌊n/2⌋`). -/
 def splitSquareFree (a : Array Int) : List (Array Int) :=
-  let lin := (linearFactors a).getD []
+  let lin := linearFactors a
   let rest := lin.foldl (fun r l => (divExact? r l).getD r) a
   lin ++ kron rest 2 (rest.size + 1)
 where

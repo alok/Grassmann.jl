@@ -96,7 +96,10 @@ where
 def numLit (text : String) (neg : Bool) : Except String JExpr :=
   if text.all Char.isDigit then
     match text.toNat? with
-    | some n => .ok (.int (if neg then -(n : Int) else n))
+    | some n =>
+      let v : Int := if neg then -(n : Int) else n
+      -- beyond `Int64` Julia's parser emits an `@int128_str`/`@big_str` macro call
+      .ok (if n ≥ 2 ^ 63 then .lit (.bigint v) else .int v)
     | none => .error s!"bad integer {text}"
   else
     let t := if text.startsWith "." then "0" ++ text else text
