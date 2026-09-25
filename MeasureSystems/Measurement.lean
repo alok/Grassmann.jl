@@ -95,6 +95,25 @@ def indep (val err : Float) (id : Nat) : Measurement :=
 /-- `get(x.der, tag, 0)`. -/
 @[inline] def derivative (x : Measurement) (t : MTag) : Float := x.der.get t
 
+/-- The largest tag this measurement depends on (`0` for an exact number). -/
+def maxTag (x : Measurement) : Nat := go x.der x.tag
+where
+  /-- Fold over the derivative list. -/
+  go : Ders → Nat → Nat
+    | .nil, m => m
+    | .cons t _ r, m => go r (max m t.tag)
+
+/-- The same measurement with every independent tag shifted by `off`: a fresh copy
+of the independent measurements it depends on (Julia creates new tags each time a
+literal `measurement("…")` is evaluated). -/
+def shiftTags (x : Measurement) (off : Nat) : Measurement :=
+  ⟨x.val, x.err, if x.tag == 0 then 0 else x.tag + off, go x.der⟩
+where
+  /-- Shift the derivative list. -/
+  go : Ders → Ders
+    | .nil => .nil
+    | .cons t d r => .cons { t with tag := t.tag + off } d (go r)
+
 /-- The derivative list of `result1`: `der·d` for every entry with a nonzero
 uncertainty, in reverse order (Julia's fold into a fresh list). -/
 def scaleDers (der : Float) : Ders → Ders → Ders
