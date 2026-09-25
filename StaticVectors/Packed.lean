@@ -106,9 +106,10 @@ reducible by the kernel, so `decide` works on small exact vectors. -/
   go n (Nat.le_refl n) (mkEmpty n)
 where
   /-- Push `f (n-k), …, f (n-1)` onto `acc`. -/
-  go : (k : Nat) → k ≤ n → Arr α → Arr α
+  @[specialize] go : (k : Nat) → k ≤ n → Arr α → Arr α
     | 0, _, acc => acc
     | k + 1, h, acc => go k (Nat.le_of_succ_le h) (push acc (f ⟨n - (k + 1), by omega⟩))
+
 
 theorem size_ofFn_go (n : Nat) (f : Fin n → α) :
     ∀ (k : Nat) (h : k ≤ n) (acc : Arr α), size (ofFn.go n f k h acc) = size acc + k
@@ -165,7 +166,7 @@ theorem get_ofFn_go (n : Nat) (f : Fin n → α) :
   go n (Nat.le_refl n) s (mkEmpty n)
 where
   /-- Emit the entries `n-k, …, n-1`, starting from state `s`. -/
-  go : (k : Nat) → k ≤ n → σ → Arr α → Arr α
+  @[specialize] go : (k : Nat) → k ≤ n → σ → Arr α → Arr α
     | 0, _, _, acc => acc
     | k + 1, h, s, acc =>
       let r := f s ⟨n - (k + 1), by omega⟩
@@ -187,7 +188,7 @@ theorem size_ofFnScan_go {σ : Type w} (n : Nat) (f : σ → Fin n → σ × α)
   go n (Nat.le_refl n) init
 where
   /-- Fold the indices `n-k, …, n-1` into `acc`. -/
-  go : (k : Nat) → k ≤ n → β → β
+  @[specialize] go : (k : Nat) → k ≤ n → β → β
     | 0, _, acc => acc
     | k + 1, h, acc => go k (Nat.le_of_succ_le h) (f acc ⟨n - (k + 1), by omega⟩)
 
@@ -196,7 +197,7 @@ where
   go n (Nat.le_refl n) init
 where
   /-- Fold the indices `k-1, …, 0` (from the right) into `acc`. -/
-  go : (k : Nat) → k ≤ n → β → β
+  @[specialize] go : (k : Nat) → k ≤ n → β → β
     | 0, _, acc => acc
     | k + 1, h, acc => go k (Nat.le_of_succ_le h) (f ⟨k, by omega⟩ acc)
 

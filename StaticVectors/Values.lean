@@ -79,27 +79,109 @@ def toArray (v : Values α n) : Array α :=
 /-- Convert to a list. -/
 def toList (v : Values α n) : List α := Packed.foldrFin n (fun i acc => v.get i :: acc) []
 
+/-! ### Elementwise loops
+
+`map`, `zipWith` and `foldl` are direct structural loops that take the
+vectors as ordinary arguments and are `@[specialize]`d on the element
+function, so at `Float` they compile to unboxed `FloatArray` loops (going
+through `ofFn` would call a closure and box every element). Each is proved
+equal to its `ofFn`/`foldlFin` form, which carries the lemmas. -/
+
+/-- The loop of `map`: pushes `f vᵢ` for `i = n-k, …, n-1`. -/
+@[specialize] def mapLoop {β : Type v} [Packed β] (f : α → β) (v : Values α n) :
+    (k : Nat) → k ≤ n → Arr β → Arr β
+  | 0, _, acc => acc
+  | k + 1, h, acc =>
+    mapLoop f v k (Nat.le_of_succ_le h) (Packed.push acc (f (v.get ⟨n - (k + 1), by omega⟩)))
+
+theorem mapLoop_eq {β : Type v} [Packed β] (f : α → β) (v : Values α n) :
+    ∀ (k : Nat) (h : k ≤ n) (acc : Arr β),
+      mapLoop f v k h acc = Packed.ofFn.go n (fun i => f (v.get i)) k h acc
+  | 0, _, _ => rfl
+  | k + 1, h, acc => by
+    simp only [mapLoop, Packed.ofFn.go]
+    exact mapLoop_eq f v k _ _
+
 /-- Elementwise map (Julia `map(f, v)`). -/
 @[inline] def map {β : Type v} [Packed β] (f : α → β) (v : Values α n) : Values β n :=
-  ofFn fun i => f (v.get i)
+  ⟨mapLoop f v n (Nat.le_refl n) (Packed.mkEmpty n), by
+    rw [mapLoop_eq]; exact size_ofFn n _⟩
+
+theorem map_eq_ofFn {β : Type v} [Packed β] (f : α → β) (v : Values α n) :
+    v.map f = ofFn fun i => f (v.get i) := by
+  simp only [map, ofFn, Packed.ofFn, mapLoop_eq]
 
 /-- Elementwise map with the index. -/
 @[inline] def mapIdx {β : Type v} [Packed β] (f : Fin n → α → β) (v : Values α n) : Values β n :=
   ofFn fun i => f i (v.get i)
 
+/-- The loop of `zipWith`. -/
+@[specialize] def zipLoop {β : Type v} {γ : Type w} [Packed β] [Packed γ] (f : α → β → γ)
+    (v : Values α n) (w : Values β n) : (k : Nat) → k ≤ n → Arr γ → Arr γ
+  | 0, _, acc => acc
+  | k + 1, h, acc =>
+    zipLoop f v w k (Nat.le_of_succ_le h)
+      (Packed.push acc (f (v.get ⟨n - (k + 1), by omega⟩) (w.get ⟨n - (k + 1), by omega⟩)))
+
+theorem zipLoop_eq {β : Type v} {γ : Type w} [Packed β] [Packed γ] (f : α → β → γ)
+    (v : Values α n) (w : Values β n) :
+    ∀ (k : Nat) (h : k ≤ n) (acc : Arr γ),
+      zipLoop f v w k h acc = Packed.ofFn.go n (fun i => f (v.get i) (w.get i)) k h acc
+  | 0, _, _ => rfl
+  | k + 1, h, acc => by
+    simp only [zipLoop, Packed.ofFn.go]
+    exact zipLoop_eq f v w k _ _
+
 /-- Elementwise binary map (Julia `map(f, a, b)`). -/
 @[inline] def zipWith {β : Type v} {γ : Type w} [Packed β] [Packed γ]
     (f : α → β → γ) (v : Values α n) (w : Values β n) : Values γ n :=
-  ofFn fun i => f (v.get i) (w.get i)
+  ⟨zipLoop f v w n (Nat.le_refl n) (Packed.mkEmpty n), by
+    rw [zipLoop_eq]; exact size_ofFn n _⟩
+
+theorem zipWith_eq_ofFn {β : Type v} {γ : Type w} [Packed β] [Packed γ]
+    (f : α → β → γ) (v : Values α n) (w : Values β n) :
+    zipWith f v w = ofFn fun i => f (v.get i) (w.get i) := by
+  simp only [zipWith, ofFn, Packed.ofFn, zipLoop_eq]
 
 /-- Elementwise ternary map (Julia `map(f, a, b, c)`). -/
 @[inline] def zipWith3 {β γ δ : Type u} [Packed β] [Packed γ] [Packed δ]
     (f : α → β → γ → δ) (a : Values α n) (b : Values β n) (c : Values γ n) : Values δ n :=
   ofFn fun i => f (a.get i) (b.get i) (c.get i)
 
+/-- The loop of `foldl`: folds the entries `n-k, …, n-1` into `acc`. -/
+@[specialize] def foldlLoop {β : Type v} (f : β → α → β) (v : Values α n) :
+    (k : Nat) → k ≤ n → β → β
+  | 0, _, acc => acc
+  | k + 1, h, acc => foldlLoop f v k (Nat.le_of_succ_le h) (f acc (v.get ⟨n - (k + 1), by omega⟩))
+
+theorem foldlLoop_eq {β : Type v} (f : β → α → β) (v : Values α n) :
+    ∀ (k : Nat) (h : k ≤ n) (acc : β),
+      foldlLoop f v k h acc = Packed.foldlFin.go n (fun acc i => f acc (v.get i)) k h acc
+  | 0, _, _ => rfl
+  | k + 1, h, acc => by
+    simp only [foldlLoop, Packed.foldlFin.go]
+    exact foldlLoop_eq f v k _ _
+
 /-- Left fold over the entries, `f (… (f init v₀) …) vₙ₋₁` (Julia `foldl(f, v; init)`). -/
 @[inline] def foldl {β : Type v} (f : β → α → β) (init : β) (v : Values α n) : β :=
-  Packed.foldlFin n (fun acc i => f acc (v.get i)) init
+  foldlLoop f v n (Nat.le_refl n) init
+
+theorem foldl_eq_foldlFin {β : Type v} (f : β → α → β) (init : β) (v : Values α n) :
+    v.foldl f init = Packed.foldlFin n (fun acc i => f acc (v.get i)) init := by
+  simp only [foldl, Packed.foldlFin, foldlLoop_eq]
+
+/-- The loop of a two-vector left fold: folds the pairs `n-k, …, n-1` into `acc`. -/
+@[specialize] def foldl₂Loop {β : Type v} {γ : Type w} [Packed β] (f : γ → α → β → γ)
+    (v : Values α n) (w : Values β n) : (k : Nat) → k ≤ n → γ → γ
+  | 0, _, acc => acc
+  | k + 1, h, acc =>
+    foldl₂Loop f v w k (Nat.le_of_succ_le h)
+      (f acc (v.get ⟨n - (k + 1), by omega⟩) (w.get ⟨n - (k + 1), by omega⟩))
+
+/-- Left fold over pairs of entries: `f (… (f init v₀ w₀) …) vₙ₋₁ wₙ₋₁`. -/
+@[inline] def foldl₂ {β : Type v} {γ : Type w} [Packed β] (f : γ → α → β → γ) (init : γ)
+    (v : Values α n) (w : Values β n) : γ :=
+  foldl₂Loop f v w n (Nat.le_refl n) init
 
 /-- Right fold over the entries, `f v₀ (… (f vₙ₋₁ init))`. -/
 @[inline] def foldr {β : Type v} (f : α → β → β) (init : β) (v : Values α n) : β :=
@@ -166,11 +248,11 @@ theorem ext {v w : Values α n} (h : ∀ i, v.get i = w.get i) : v = w := by
   subst this; rfl
 
 @[simp] theorem get_map {β : Type v} [Packed β] (f : α → β) (v : Values α n) (i : Fin n) :
-    (v.map f).get i = f (v.get i) := by simp [map]
+    (v.map f).get i = f (v.get i) := by simp [map_eq_ofFn]
 
 @[simp] theorem get_zipWith {β : Type v} {γ : Type w} [Packed β] [Packed γ]
     (f : α → β → γ) (v : Values α n) (w : Values β n) (i : Fin n) :
-    (zipWith f v w).get i = f (v.get i) (w.get i) := by simp [zipWith]
+    (zipWith f v w).get i = f (v.get i) (w.get i) := by simp [zipWith_eq_ofFn]
 
 @[simp] theorem get_replicate (x : α) (i : Fin n) : (replicate x : Values α n).get i = x := by
   simp [replicate]

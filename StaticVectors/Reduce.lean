@@ -26,18 +26,18 @@ variable {α : Type u} [Packed α] {n : Nat}
 @[inline] def reduce (op : α → α → α) (empty : α) (v : Values α n) : α :=
   match n, v with
   | 0, _ => empty
-  | k + 1, v => Packed.foldlFin k (fun acc i => op acc (v.get i.succ)) v.head
+  | k + 1, v => foldlLoop op v k (Nat.le_succ k) v.head
 
 /-- Julia `mapreduce(f, op, v)` without `init` (`SV/mapreduce.jl:113`):
 the fold starts from `f(v₁)`. -/
 @[inline] def mapReduce {β : Type v} (f : α → β) (op : β → β → β) (empty : β) (v : Values α n) : β :=
   match n, v with
   | 0, _ => empty
-  | k + 1, v => Packed.foldlFin k (fun acc i => op acc (f (v.get i.succ))) (f v.head)
+  | k + 1, v => foldlLoop (fun acc x => op acc (f x)) v k (Nat.le_succ k) (f v.head)
 
 /-- Julia `mapreduce(f, op, v; init)`: `op(…op(init, f(v₁))…, f(vₙ))`. -/
 @[inline] def mapFoldl {β : Type v} (f : α → β) (op : β → β → β) (init : β) (v : Values α n) : β :=
-  Packed.foldlFin n (fun acc i => op acc (f (v.get i))) init
+  v.foldl (fun acc x => op acc (f x)) init
 
 /-- Julia `sum(v)` (`SV/mapreduce.jl:242`): a left fold starting from `v₁`;
 `0` when empty. No widening, as in Julia. -/

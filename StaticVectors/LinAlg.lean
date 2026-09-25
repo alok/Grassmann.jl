@@ -37,7 +37,7 @@ when `n = 0`. -/
     (a : Values α n) (b : Values β n) : γ :=
   match n, a, b with
   | 0, _, _ => empty
-  | k + 1, a, b => Packed.foldlFin k (fun acc i => op acc (f (a.get i.succ) (b.get i.succ))) (f a.head b.head)
+  | k + 1, a, b => foldl₂Loop (fun acc x y => op acc (f x y)) a b k (Nat.le_succ k) (f a.head b.head)
 
 /-- Julia `dot(a, b)` (`SV/linalg.jl:59`): `∑ dot(aᵢ, bᵢ)`, a left fold from
 the first term, conjugating the left argument. Julia's `n = 0` value is
