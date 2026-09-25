@@ -40,6 +40,7 @@ norm `1`.
 -/
 import Grassmann.Dynamic.Equal
 import Grassmann.Dynamic.Fast
+import Grassmann.Algebra.Predicates
 import Grassmann.Notation
 
 namespace Grassmann
