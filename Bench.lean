@@ -5,6 +5,7 @@ import Bench.JuliaBase
 import Bench.StaticVectors
 import Bench.DirectSum
 import Bench.UnitSystems
+import Bench.Dendriform
 import Bench.MeshTopology
 import Bench.Fatou
 import Bench.Geophysics
