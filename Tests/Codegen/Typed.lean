@@ -9,7 +9,7 @@ Also `basis!`'s kernel emission: a non-standard space gets kernels (and the
 typed operations agree with the reference there too), and
 `basis! (kernels := false)` emits none.
 -/
-import Tests.Codegen.Common
+import Tests.Codegen.Diag
 
 open Grassmann DirectSum StaticVectors Grassmann.Kernel
 
@@ -116,6 +116,7 @@ def run : IO Tally := do
   t := checkTyped "basis! ⟨++-⟩" CodegenTests.BasisHook.V 19 t
   t := checkTyped "reference ⟨+--+⟩" CodegenTests.BasisOff.V 20 t
   t := checkTyped "grassmann_kernels (options) ⟨-+-⟩" S!"-+-" 21 t
+  t := checkTyped "grassmann_kernels ⟨1,2,-3⟩" D!"1,2,-3" 22 t
   return t
 
 end CodegenTests.Typed

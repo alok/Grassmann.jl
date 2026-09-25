@@ -16,6 +16,7 @@ time) equals `build` (the reference plan builder) on every specification, and
 the policy covers the shapes DESIGN.md §5.2 promises.
 -/
 import Tests.Codegen.Common
+import Tests.Codegen.Diag
 
 open Grassmann DirectSum StaticVectors AbstractTensors Grassmann.Kernel Grassmann.Kernel.Codegen
 
@@ -142,6 +143,9 @@ def run : IO Tally := do
   t := checkSandwiches "PGA3" PGA3 3 26 t
   t := checkSandwiches "CGA2" CGA2 3 27 t
   t := checkSandwiches "CGA3" CGA3 3 28 t
+  -- a diagonal metric (non-unit coefficients), generated in `Tests.Codegen.Typed`'s dependency
+  t := checkSpace "D⟨1,2,-3⟩" D!"1,2,-3" 3 9 t
+  t := checkSandwiches "D⟨1,2,-3⟩" D!"1,2,-3" 3 29 t
   return t
 
 end CodegenTests.Kernels
