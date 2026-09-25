@@ -100,6 +100,15 @@ example : (qk * qk : Cl (E3 R)) = -1 := by clifford
 example : (qi * qj * qk : Cl (E3 R)) = -1 := by clifford
 example : (qi * qj : Cl (E3 R)) = qk := by clifford
 
+/-! ## Powers and numerals (`Cl g` is a ring) -/
+
+example : (v₁ * v₂ : Cl (E3 R)) ^ 2 = -1 := by clifford
+example : (v₁ * v₂ : Cl (E3 R)) ^ 4 = 1 := by clifford
+example : (I₃ : Cl (E3 R)) ^ 2 = -1 := by clifford
+example (a b : R) : (a • v₁ + b • v₂ : Cl (E3 R)) ^ 2 = Cl.scalar (a ^ 2 + b ^ 2) := by clifford
+example : (2 : Cl (E3 R)) * v₁ = v₁ + v₁ := by clifford
+example (x : Cl (E3 R)) : x ^ 3 = x * x * x := by clifford
+
 /-! ## Rotors -/
 
 /-- A rotor `c + s v₁₂` with `c² + s² = 1` is normalized: `R R̃ = 1`. -/

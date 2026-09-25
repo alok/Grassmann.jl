@@ -65,6 +65,7 @@ partial def MExpr.quote : MExpr → Expr
   | .compl x => mkApp (mkConst ``MExpr.compl) x.quote
   | .complInv x => mkApp (mkConst ``MExpr.complInv) x.quote
   | .hodge x => mkApp (mkConst ``MExpr.hodge) x.quote
+  | .pow x k => mkApp2 (mkConst ``MExpr.pow) x.quote (mkNatLit k)
 
 /-- A list literal. -/
 def mkListLit (u : Level) (α : Expr) (xs : List Expr) : Expr :=
@@ -202,7 +203,12 @@ partial def reifyMV (e : Expr) (fuel : Nat := 16) : ReifyM MExpr := do
       match args[1]!.rawNatLit? with
       | some 0 => return .zero
       | some 1 => return .one
-      | _ => asVar
+      | some k => return .scalar (.int k)
+      | none => asVar
+    | ``HPow.hPow, 6 =>
+      match ← evalNatExpr? last with
+      | some k => return .pow (← reifyMV last2 fuel) k
+      | none => asVar
     | ``Zero.zero, 2 => return .zero
     | ``One.one, 2 => return .one
     | ``Cl.blade, 5 =>

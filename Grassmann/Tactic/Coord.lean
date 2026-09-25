@@ -404,6 +404,8 @@ inductive MExpr where
   | complInv (x : MExpr)
   /-- The Hodge star. -/
   | hodge (x : MExpr)
+  /-- A power with a literal exponent (`Cl.instRing`). -/
+  | pow (x : MExpr) (k : Nat)
   deriving Inhabited, Repr
 
 namespace MExpr
@@ -432,6 +434,7 @@ def denote (g : Fin n → R) (ρ : List R) (vs : List (Cl g)) : MExpr → Cl g
   | compl x => Cl.compl (denote g ρ vs x)
   | complInv x => Cl.complInv (denote g ρ vs x)
   | hodge x => Cl.hodge (denote g ρ vs x)
+  | pow x k => denote g ρ vs x ^ k
 
 end MExpr
 
@@ -461,6 +464,11 @@ def complD (n : Nat) (X : List Poly) : List Poly :=
 def complInvD (n : Nat) (X : List Poly) : List Poly :=
   dense n fun c => mulS (signP (sigma n c (notMask n c))) (at' X (notMask n c))
 
+/-- Dense powers: `X^k` by repeated multiplication on the right. -/
+def powD (n : Nat) (ms : List Poly) (X : List Poly) : Nat → List Poly
+  | 0 => dense n fun c => if c = 0 then int 1 else int 0
+  | k + 1 => twistD n (coefP ms n) (powD n ms X k) X
+
 /-- Dense coordinates of a multivector expression. -/
 def MExpr.eval (n : Nat) (ms : List Poly) : MExpr → List Poly
   | .var i => dense n (coeff i)
@@ -484,6 +492,7 @@ def MExpr.eval (n : Nat) (ms : List Poly) : MExpr → List Poly
   | .complInv x => complInvD n (eval n ms x)
   | .hodge x => let X := eval n ms x
       dense n fun c => mulS (mulS (signP (sigma n (notMask n c) c)) (metP ms n (notMask n c))) (at' X (notMask n c))
+  | .pow x k => powD n ms (eval n ms x) k
 
 variable {R : Type u} [CommRing R] {n : Nat} {g : Fin n → R} {ρ : List R} {vs : List (Cl g)}
 
@@ -639,6 +648,23 @@ theorem represents_eval {ms : List Poly} (hms : MetricOK g ρ vs ms) :
     · rw [ite_eq_left h, ite_eq_left h, ihx c hc]
     · rw [ite_eq_right h, ite_eq_right h]; rfl
   | compl x ihx => exact represents_compl ihx
+  | pow x k ihx =>
+    induction k with
+    | zero =>
+      intro c hc
+      simp only [MExpr.eval, powD]
+      rw [at'_dense hc]
+      show _ = if BitVec.ofNat n c = 0 then 1 else 0
+      have hiff : BitVec.ofNat n c = 0 ↔ c = 0 := by
+        constructor
+        · intro h; have := congrArg BitVec.toNat h; rwa [toNat_ofNat_lt' hc] at this
+        · intro h; subst h; rfl
+      by_cases h : c = 0
+      · rw [ite_eq_left h, ite_eq_left (hiff.mpr h)]; rfl
+      · rw [ite_eq_right h, ite_eq_right (fun e => h (hiff.mp e))]; rfl
+    | succ k ihk =>
+      have := represents_twist (fun a b ha hb => denote_coefP hms ha hb) ihk ihx
+      exact this
   | complInv x ihx => exact represents_complInv ihx
   | hodge x ihx =>
     intro c hc
@@ -649,8 +675,11 @@ theorem represents_eval {ms : List Poly} (hms : MetricOK g ρ vs ms) :
       * (MExpr.denote g ρ vs x).coeff (~~~(BitVec.ofNat n c))
     rw [not_ofNat hc, sign, mf, toNat_ofNat_lt' (notMask_lt hc), toNat_ofNat_lt' hc]
 
+theorem length_powD (ms X : List Poly) (k : Nat) : (powD n ms X k).length = 2 ^ n := by
+  cases k <;> simp [powD, twistD, length_dense]
+
 theorem length_eval (ms : List Poly) (x : MExpr) : (x.eval n ms).length = 2 ^ n := by
-  cases x <;> simp [MExpr.eval, twistD, complInvD, complD, length_dense]
+  cases x <;> simp [MExpr.eval, twistD, complInvD, complD, length_dense, length_powD]
 
 end Dense
 
