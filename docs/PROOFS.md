@@ -163,7 +163,10 @@ multiply-accumulate plans (`Grassmann.Kernel.build`, DESIGN.md §5.1).
 
 **Checked** by the kernel (`Grassmann.Proofs.Tables`), on every basis blade
 (pair), in `ℝ2`, `ℝ3`, `STA = S!"-+++"`, `PGA2 = D!"0,1,1"`,
-`PGA3 = D!"0,1,1,1"` and `D!"1,2,-3"`:
+`PGA3 = D!"0,1,1,1"` and `D!"1,2,-3"`. For `*`, `∧`, the involutions and the
+complements these are special cases of the general theorems above, kept as an
+independent check by evaluation; the plan, contraction and regressive checks
+are the only link for those operations:
 
 | check | spaces |
 |---|---|
@@ -226,9 +229,11 @@ generated kernels) are exercised; they are not proved.
   for all masks (`parity`, `prefixParity`, `reorderParity`, `popcount`,
   `lowestBit`, `ctz`, `sumIndices`); `pext`/`pdep` (used for subspace
   embeddings) are not.
-* The left complements (`complementleft`, `complementlefthodge`) and the
-  conformal complements (with the null factors `2`/`½`) are linked per space
-  (checked, tested), not in general.
+* The left complements (`complementleft`, `complementlefthodge`), the
+  conformal complements (with the null factors `2`/`½`) and the contraction and
+  regressive product outside the checked spaces are not linked in general;
+  `Tests/Grassmann/Props.lean` tests their algebraic laws, and
+  `Tests.Proofs.Model` tests `∨` and `⋅` against the spec up to `n = 7`.
 * The other contractions (`⨼`, `<<`, `>>`), `cross`, `veedot`, `antidot` and the
   sandwiches have no spec yet; `Tests/Grassmann/Props.lean` tests their
   algebraic laws. The regressive product is linked blade by blade, not yet
