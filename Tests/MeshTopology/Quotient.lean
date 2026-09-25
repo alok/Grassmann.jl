@@ -188,6 +188,13 @@ def run : TestM Unit := do
   let j ← readJson "oracle/golden/meshtopology/quotient.json"
   for c in ← gArr j "cases" do
     checkCase c
+  for c in ← gArr j "random" do
+    let name ← gStr c "name"
+    let some (fam, sizes) := parseName name | throw <| IO.userError s!"bad name {name}"
+    let ⟨_, m⟩ ← namedTopology fam sizes
+    checkJ s!"{name} table" (jquotient m) (← jField c "table")
+    checkGhosts name m c
+    checkJ s!"{name} elementfuns" (jgridN m.size m.elementfuns) (← jField c "elementfuns")
   for c in ← gArr j "defaults" do
     let name ← gStr c "name"
     match defaultTopology name with

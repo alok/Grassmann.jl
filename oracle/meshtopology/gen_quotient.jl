@@ -104,6 +104,21 @@ for s in ((3, 3, 4, 3, 5),), fam in FAM5
     push!(quot, qcase("$(fam)$s", M -> top(M, fam)(s...); samples = 400))
 end
 
+# random sizes 3..9 (odd and even half-turn lengths), random stencil lookups
+randomcases = Any[]
+for fam in FAM2, _ in 1:3
+    s = (rand(3:9), rand(3:9))
+    f = M -> top(M, fam)(s...)
+    push!(randomcases, Dict("name" => "$(fam)$s", "table" => both(M -> qtj(f(M))),
+        "ghostsamples" => ghostsamples(f, 120), "elementfuns" => both(M -> G(M.elementfuns(f(M))))))
+end
+for fam in FAM3, _ in 1:2
+    s = (rand(3:7), rand(3:7), rand(3:7))
+    f = M -> top(M, fam)(s...)
+    push!(randomcases, Dict("name" => "$(fam)$s", "table" => both(M -> qtj(f(M))),
+        "ghostsamples" => ghostsamples(f, 150), "elementfuns" => both(M -> G(M.elementfuns(f(M))))))
+end
+
 defaults = Any[]
 for (name, f) in (("Hopf()", M -> M.HopfTopology()), ("Open()", M -> M.OpenTopology()),
         ("Mirror()", M -> M.MirrorTopology()), ("Clamped()", M -> M.ClampedTopology()),
@@ -118,7 +133,7 @@ for (name, f) in (("Hopf()", M -> M.HopfTopology()), ("Open()", M -> M.OpenTopol
     push!(defaults, Dict("name" => name, "table" => both(M -> qtj(f(M))), "summary" => both(M -> summary(f(M)))))
 end
 
-writejson("quotient.json", Dict("cases" => quot, "defaults" => defaults))
+writejson("quotient.json", Dict("cases" => quot, "defaults" => defaults, "random" => randomcases))
 
 # ---------------------------------------------------------------- products of topologies
 T(M, s...) = M.TorusTopology(s...)
