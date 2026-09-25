@@ -132,3 +132,10 @@ Bind such constants to top-level `def`s (closed terms, evaluated once) and refer
   patterns as immediates but is not faster: the remaining cost is the out-of-line
   `lean_float_to_bits`/`lean_float_of_bits` calls (`bl` in the disassembly), five or so per `exp`.
   Unboxed `FloatArray` tables save two of them (7.3 → 6.6 ns).
+
+## Rule: `Nat.toFloat` is slow in hot loops (2026-09-24, LeanPlot recipes)
+
+`Nat.toFloat` goes through `Float.ofScientific` and GMP on every call. In hot loops, convert through
+`n.toUInt64.toFloat` (or keep a running Float counter). Float literals inside lambdas are also
+re-parsed on every call: bind them to top-level constants or use `JuliaBase`'s `f64!` macro. These
+two fixes alone halved some recipe kernels.

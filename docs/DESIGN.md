@@ -253,6 +253,14 @@ inductive TA (V : TensorBundle) (α) [Coeff α] where
 | reverse | prefix `~` | max | |
 | postfix `₊ ₋ ǂ ⁻¹` | postfix | max | `⁻¹` via `Inv` |
 
+**Opening namespaces:**
+* Downstream code should `open Grassmann` only. `Grassmann` redeclares the AbstractTensors
+  notation as scoped, so also opening `AbstractTensors` activates every operator twice and makes
+  it ambiguous.
+* Lean export aliases do not work as namespace prefixes. Dotted names such as
+  `TensorBundle.sig`, `Values.ofFn` or `Layout.chain` need `open DirectSum StaticVectors` (or full
+  qualification).
+
 **Porting rule:** when translating Julia expressions that mix `∧`/`∨` with
 `+`/`-`/`*`, parenthesize every wedge/vee operand. The oracle tests catch
 misparses.
