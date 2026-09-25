@@ -71,7 +71,19 @@ structure PlanKey where
   lc : Layout
   /-- Drop contributions outside `lc` (a grade projection) instead of failing. -/
   project : Bool := false
-  deriving DecidableEq, Hashable, Repr, Inhabited
+  deriving Repr, Inhabited
+
+/-- Key equality for the cache: the cheap fields first, the space last. -/
+instance : BEq PlanKey where
+  beq a b := a.op == b.op && a.la == b.la && a.lb == b.lb && a.lc == b.lc && a.project == b.project
+    && a.V.n == b.V.n && a.V == b.V
+
+/-- Key hash for the cache: the operation, layouts and dimension only (keys that
+differ only in the metric share a bucket and are told apart by `==`; a process
+holds few such spaces). Cheap to compute on every lookup. -/
+instance : Hashable PlanKey where
+  hash k := mixHash (hash k.V.n) (mixHash (hash k.op)
+    (mixHash (hash k.la) (mixHash (hash k.lb) (mixHash (hash k.lc) (hash k.project)))))
 
 /-! ## Container-level term semantics -/
 
@@ -145,19 +157,21 @@ def build (k : PlanKey) : Except String Plan := do
   let n := V.n
   let as := k.la.blades n
   let bs : Array UInt64 := match k.op with | .bin _ => k.lb.blades n | .un _ => #[0]
-  let mut p : Plan := {}
+  let mut rows : Array (Array (Nat × Nat × Rat)) := Array.replicate (k.lc.size n) #[]
+  let mut nested := 0
   for a in as, i in [0:as.size] do
     for b in bs, j in [0:bs.size] do
       let ts ← match k.op with
         | .bin op => binTermsC V op a b
         | .un op => unTermsC V op a
       for t in ts do
-        if t.z != 0 then p := { p with nested := p.nested + 1 }
+        if t.z != 0 then nested := nested + 1
         else if t.coef == 0 then pure ()
-        else if k.lc.contains n t.bits then p := p.push i j (k.lc.rank n t.bits) t.coef
+        else if k.lc.contains n t.bits then
+          rows := rows.modify (k.lc.rank n t.bits) (·.push (i, j, t.coef))
         else if !k.project then
           throw s!"{V.bladeLabel t.bits} lies outside the result layout {repr k.lc} of {repr k.op}"
-  return p
+  return Plan.ofRows rows nested
 
 private unsafe def planCacheImpl : IO.Ref (Std.HashMap PlanKey (Except String Plan)) :=
   unsafeBaseIO (IO.mkRef {})

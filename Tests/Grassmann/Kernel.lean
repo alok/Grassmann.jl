@@ -154,7 +154,7 @@ def run : IO Tally := do
     -- the cache returns the plan it built
     let k : Grassmann.Kernel.PlanKey := { V, op := .bin .mul, la := .full, lb := .full, lc := .full }
     let same := match Grassmann.Kernel.plan k, Grassmann.Kernel.build k with
-      | .ok p, .ok q => p.ia == q.ia && p.ib == q.ib && p.ic == q.ic && p.coef == q.coef
+      | .ok p, .ok q => p.entries == q.entries
       | _, _ => false
     t := t.check same s!"{nm}: cached plan ≠ built plan"
   -- dyadic spaces: complements fail with Julia's message; products still plan
