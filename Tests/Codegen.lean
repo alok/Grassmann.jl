@@ -26,7 +26,7 @@ def CodegenTests.Dispatch.run : IO Tally := do
      ("CGA2", CGA2, Dispatch.dispatchedCGA2), ("CGA3", CGA3, Dispatch.dispatchedCGA3)]
   let mut t : Tally := {}
   for (name, V, k) in counts do
-    let expected := (planAll V (Policy.default V.n)).size
+    let expected := (planAll V (Policy.default V.n)).size + (planSandwiches V).size
     t := t.check (k == expected && k > 0) s!"{name}: {k} dispatches verified, {expected} specifications"
   return t
 

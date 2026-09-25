@@ -75,9 +75,21 @@ syntax (name := verifyDispatch) "verify_kernel_dispatch " ident " : " term : com
               else canUnfoldDefault cfg info) (whnf e)
           return r.isAppOf kname
         unless ok do bad := bad.push s!"{fieldTag s.field} {opTag k.op} {layoutTag k.la} {layoutTag k.lb} {layoutTag k.lc}"
+      -- the fused sandwiches
+      let sinst ← synthInstance (mkApp (mkConst ``SandwichKernels) Ve)
+      let sps := planSandwiches V
+      for sp in sps do
+        let kname := sandwichName pre sp
+        let ok ← withLocalDeclD `r (vals sp.lr) fun r => withLocalDeclD `x (vals sp.lx) fun x => do
+          let f := if sp.shift then ``SandwichKernels.tsandwich else ``SandwichKernels.sandwich
+          let e := mkAppN (mkConst f) #[Ve, sinst, int, coeffInt, layoutExpr sp.lr, layoutExpr sp.lx, r, x]
+          let r ← withCanUnfoldPred (fun cfg info => if isKernel info.name then pure false
+              else canUnfoldDefault cfg info) (whnf e)
+          return r.isAppOf kname
+        unless ok do bad := bad.push s!"{if sp.shift then ">>>" else "⊘"} {layoutTag sp.lr} {layoutTag sp.lx}"
       unless bad.isEmpty do
-        throwError "{bad.size} of {assigned.size} specifications of {V} do not dispatch to their kernel: {bad.toList.take 20}"
-      return assigned.size
+        throwError "{bad.size} of {assigned.size + sps.size} specifications of {V} do not dispatch to their kernel: {bad.toList.take 20}"
+      return assigned.size + sps.size
     elabCommand (← `(/-- Number of kernel specifications whose dispatch was verified at compile time. -/
       def $name : Nat := $(quote count)))
   | _ => throwUnsupportedSyntax

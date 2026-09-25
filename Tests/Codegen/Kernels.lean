@@ -56,6 +56,35 @@ inputs of coefficient type `α` (generic: the instance is a run-time value here)
       t := t.check okF s!"{name} {describe pl.spec}: Float kernel ≠ reference"
   return t
 
+/-- Every fused sandwich of `V` through the instance against the two-kernel sandwich of the
+reference kernels (`sandwichCore` over `Kernels.reference`), `trials` random inputs each, at
+`Int` and at `Float`. -/
+@[nospecialize] def checkSandwiches (name : String) (V : TensorBundle) [SandwichKernels V] (trials : Nat)
+    (seed : Nat) (t : Tally) : Tally := Id.run do
+  let n := V.n
+  let mut t := t
+  let mut rng := Tests.Rng.ofSeed seed
+  let one {α : Type} [Coeff α] [BEq α] (rand : (k : Nat) → Tests.Gen (Values α k)) (sp : SandwichPlan) :
+      Tests.Gen Bool := do
+    let r ← rand (sp.lr.size n)
+    let x ← rand (sp.lx.size n)
+    let got := if sp.shift then SandwichKernels.tsandwich (V := V) sp.lr sp.lx r x
+      else SandwichKernels.sandwich (V := V) sp.lr sp.lx r x
+    let want := if sp.shift then @tsandwichTwo V α _ (Kernels.reference V) sp.lr sp.lx r x
+      else @sandwichTwo V α _ (Kernels.reference V) sp.lr sp.lx r x
+    return got.toArray == want.toArray
+  let sps := planSandwiches V
+  t := t.check (sps.size == 2 * (gradedLayouts n).length ^ 2) s!"{name}: {sps.size} fused sandwiches"
+  for sp in sps do
+    for _ in [0:trials] do
+      let (okI, r) := StateT.run (one randInt sp) rng
+      let (okF, r) := StateT.run (one randFloat sp) r
+      rng := r
+      let what := s!"{name} {if sp.shift then ">>>" else "⊘"} {layoutTag sp.lr} {layoutTag sp.lx}"
+      t := t.check okI s!"{what}: Int fused ≠ reference"
+      t := t.check okF s!"{what}: Float fused ≠ reference"
+  return t
+
 /-- `buildFrom` (blade tables) agrees with `build` on every specification of `V`. -/
 def checkPlans (name : String) (V : TensorBundle) (t : Tally) : Tally := Id.run do
   let mut t := t
@@ -105,6 +134,14 @@ def run : IO Tally := do
   t := checkSpace "PGA3" PGA3 3 6 t
   t := checkSpace "CGA2" CGA2 3 7 t
   t := checkSpace "CGA3" CGA3 2 8 t
+  t := checkSandwiches "ℝ2" ℝ2 4 21 t
+  t := checkSandwiches "ℝ3" ℝ3 4 22 t
+  t := checkSandwiches "ℝ4" ℝ4 3 23 t
+  t := checkSandwiches "STA" STA 3 24 t
+  t := checkSandwiches "PGA2" PGA2 4 25 t
+  t := checkSandwiches "PGA3" PGA3 3 26 t
+  t := checkSandwiches "CGA2" CGA2 3 27 t
+  t := checkSandwiches "CGA3" CGA3 3 28 t
   return t
 
 end CodegenTests.Kernels
