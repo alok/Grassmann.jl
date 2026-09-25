@@ -21,7 +21,7 @@ parts of `SyntaxTree.jl` (1.0.1) it relies on (`exprval`, `callcount`, `sub`,
 |---|---|---|
 | `Wilkinson.Expr` | Julia `Expr` | `JExpr`, `jl⟪ … ⟫` quotation, `string(::Expr)` |
 | `Wilkinson.BigFloat` | MPFR `BigFloat` | `BigFloat p`, correctly rounded `+ - * /`, `^n`, `log` |
-| `Wilkinson.Range` | `base/twiceprecision.jl` | `Float32` colon, `FloatSet` grids |
+| `Wilkinson.Range` | `base/twiceprecision.jl` | `FloatSet` grids (over `JuliaBase.colon`/`colon32`) |
 | `Wilkinson.Num` | Julia promotion | `JNum`: Int64/Rational/Float32/Float64/BigFloat |
 | `Wilkinson.SyntaxTree` | `SyntaxTree.jl` | `callcount`, `sub`, `abs`, `alg`, `exprval`, `eval` |
 | `Wilkinson.Analysis` | `src/Wilkinson.jl`, `src/polynomial.jl` | `stieltjes`, `simpson`, `Ω`, `exacterr`, `PolynomialComparison` |
