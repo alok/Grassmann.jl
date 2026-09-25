@@ -488,7 +488,7 @@ variable [Kernels V]
 /-- The shared iteration of `log_fast`/`logh_fast` on multivectors. -/
 @[inline] def logFastWith (expf : Multivector V Float → Multivector V Float) (t : Multivector V Float) :
     Option (Multivector V Float) :=
-  logFastLoop (· - ·) (· + ·) (fun m => f2 * m) (fun a b => b.inv?.map (a * ·)) fnorm expf t
+  logFastLoop (· - ·) (· + ·) (fun m => f2 * m) (fun a b => b.invFast?.map (a * ·)) fnorm expf t
     Multivector.zero f0 logFastCap
 
 /-- Julia `log_fast(t)` (`src/composite.jl:574-587`): Halley's iteration for `exp(y) = t`;
@@ -508,7 +508,7 @@ variable [Kernels V]
 /-- The shared iteration of `log_fast`/`logh_fast` on spinors. -/
 @[inline] def logFastWith (expf : Half V false Float → Half V false Float) (t : Half V false Float) :
     Option (Half V false Float) :=
-  logFastLoop (· - ·) (· + ·) (fun m => ⟨vmap (f2 * ·) m.v⟩) (fun a b => b.inv?.map (smul' a ·))
+  logFastLoop (· - ·) (· + ·) (fun m => ⟨vmap (f2 * ·) m.v⟩) (fun a b => b.invFast?.map (smul' a ·))
     fnorm expf t Half.zero f0 logFastCap
 
 /-- Julia `log_fast(t)` of a spinor (`src/composite.jl:574-587`), `none` where it fails. -/

@@ -55,9 +55,11 @@ theorem even_size_pos (n : Nat) : 0 < (halfLayout false).size n := by
     (x : Values Float n) (i : Nat) (acc : Float) : Nat → Float
   | 0 => acc
   | fuel + 1 =>
-    if h : i < n then
-      let y := x.get ⟨i, h⟩
-      weightedSumLoop w bs o x (i + 1) (acc + y * y * w (bs[o + i]?.getD 0)) fuel
+    -- bounded by the storage's size, not the type's `n` (a `Layout.size`, a `Nat` power
+    -- through GMP at run time for the even/odd/full layouts)
+    if h : i < Packed.size x.data then
+      let y := Packed.get x.data ⟨i, h⟩
+      weightedSumLoop w bs o x (i + 1) (acc + y * y * w (bs.getD (o + i) 0)) fuel
     else acc
 
 /-- `Σ xᵢ²·w(bᵢ)` over the coefficients `x` stored in layout `l` (the loop runs over the
@@ -116,9 +118,20 @@ def nan : Multivector V Float := ⟨constIn V .full Composite.nan⟩
 
 variable [Kernels V]
 
+/-- Julia `inv(m)` (`src/algebra.jl:486-532`, `Multivector.inv?`) with its common case, a
+scalar `(~m) ⟑ m`, on the storage (`vnorm`, `vmap`: no `Values` sized by the type, whose
+`2ⁿ` is a `Nat` power per call); the grade-by-grade fallback through `Multivector.inv?`.
+The same operations as `Multivector.inv?`, so the same values. -/
+@[specialize V] def invFast? (m : Multivector V Float) : Option (Multivector V Float) :=
+  let rm := ~m
+  let d := rm * m
+  let d0 := getD d.v 0
+  if F64.isapprox d0.abs (vnorm d.v) then some ⟨vmap (· / d0) rm.v⟩
+  else Multivector.inv? m
+
 /-- Julia `inv(m)` as a total function: `NaN` coefficients where Julia throws
 `inv(m) is undefined` (`src/algebra.jl:486-532`). -/
-@[inline] def invD (m : Multivector V Float) : Multivector V Float := (Multivector.inv? m).getD nan
+@[inline] def invD (m : Multivector V Float) : Multivector V Float := (invFast? m).getD nan
 
 /-- Julia's generated `expm1(b::Multivector)` (`src/composite.jl:54-81`): the scalar
 `expm1(s)` when `b` is (approximately) the scalar `s`, else the generated series. -/
@@ -169,14 +182,14 @@ else `1 + τ/2 + τ²/4! + …` with `τ = b⟑b`. -/
 /-- Julia `log(t) = qlog((t - 1)/(t + 1))` (`src/composite.jl:369`), or `none` where Julia
 throws (`inv(t + 1)` undefined). -/
 @[specialize V] def log? (t : Multivector V Float) : Option (Multivector V Float) :=
-  (addScalar f1 t).inv?.map fun i => qlog (addScalar (-f1) t * i)
+  (addScalar f1 t).invFast?.map fun i => qlog (addScalar (-f1) t * i)
 
 /-- Julia `log(t::Multivector)`; `NaN` coefficients where Julia throws. -/
 @[inline] def log (t : Multivector V Float) : Multivector V Float := (log? t).getD nan
 
 /-- Julia `log1p(t) = qlog(t/(t + 2))` (`src/composite.jl:370`), or `none`. -/
 @[specialize V] def log1p? (t : Multivector V Float) : Option (Multivector V Float) :=
-  (addScalar f2 t).inv?.map fun i => qlog (t * i)
+  (addScalar f2 t).invFast?.map fun i => qlog (t * i)
 
 /-- Julia `log1p(t::Multivector)`; `NaN` coefficients where Julia throws. -/
 @[inline] def log1p (t : Multivector V Float) : Multivector V Float := (log1p? t).getD nan
@@ -247,8 +260,17 @@ variable [Kernels V]
   getD (Kernels.binProj .reverseMul (halfLayout false) (halfLayout false) (.chain 0) a.v b.v :
     Values Float _) 0
 
+/-- Julia `inv(t::Spinor)` (`Half.inv?`) with its common case, a scalar `abs2(t) = (~t) ⟑ t`,
+on the storage (see `Multivector.invFast?`); the grade-by-grade fallback through `Half.inv?`. -/
+@[specialize V] def invFast? (s : Half V false Float) : Option (Half V false Float) :=
+  let rm := ~s
+  let d := s.abs2
+  let d0 := getD d.v 0
+  if F64.isapprox d0.abs (vnorm d.v) then some ⟨vmap (· / d0) rm.v⟩
+  else Half.inv? s
+
 /-- Julia `inv(s)` of a spinor as a total function (`NaN` where Julia throws). -/
-@[inline] def invD (s : Half V false Float) : Half V false Float := (Half.inv? s).getD nan
+@[inline] def invD (s : Half V false Float) : Half V false Float := (invFast? s).getD nan
 
 /-- Division of every coefficient by a real number (in place when not shared). -/
 @[inline] def sdiv {p : Bool} (s : Half V p Float) (k : Float) : Half V p Float := ⟨vmap (· / k) s.v⟩
@@ -316,11 +338,11 @@ taken without the kernel product (Julia's numeric `isscalar` test holds there). 
 /-- Julia's generic `log(t) = qlog((t - 1)/(t + 1))` on a spinor (`src/composite.jl:369`),
 or `none` where Julia throws. -/
 @[specialize V] def logSeries? (t : Half V false Float) : Option (Half V false Float) :=
-  (addScalar f1 t).inv?.map fun i => qlog (smul' (addScalar (-f1) t) i)
+  (addScalar f1 t).invFast?.map fun i => qlog (smul' (addScalar (-f1) t) i)
 
 /-- Julia's generic `log1p(t) = qlog(t/(t + 2))` on a spinor, or `none`. -/
 @[specialize V] def log1pSeries? (t : Half V false Float) : Option (Half V false Float) :=
-  (addScalar f2 t).inv?.map fun i => qlog (smul' t i)
+  (addScalar f2 t).invFast?.map fun i => qlog (smul' t i)
 
 /-- Julia `t ^ k` for a spinor (`src/algebra.jl:440-470`), `inv(t)^|k|` for `k < 0`. -/
 @[specialize V] def pow (t : Half V false Float) (k : Int) : Half V false Float :=
