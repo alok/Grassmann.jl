@@ -32,3 +32,32 @@ Conclusions baked into DESIGN.md:
 * Boxing costs ≈2×, so Float storage is `FloatArray`.
 * `for … break` with `let mut` Floats boxes every Float through `ForInStep`. Measured 8× slower on a
   Mandelbrot escape loop (446 ms vs 54 ms with a tail-recursive loop). Hot Float loops must be tail-recursive.
+
+## 2026-09-24: Julia's own scalar kernels (`JuliaBase.Math`, `lake exe bench math`)
+
+ns per call, 10⁷ calls over a sweep of arguments, results folded into an accumulator (Julia: the
+same loop, `@elapsed`, after warm-up).
+
+| function | libm (`Float.exp`, …) | `JuliaBase` (Julia's kernel in Lean) | Julia 1.13 |
+|---|---|---|---|
+| `exp` | 1.8 | 6.6 | 2.6 |
+| `log` | 2.0 | 8.2 | 3.1 |
+| `expm1` | — | 12.4 | 3.5 |
+| `log1p` | — | 9.3 | 3.3 |
+| `x^2.5` | 4.7 | 22.1 | 8.6 |
+| `x^7` (`pow_body`) | — | 9.0 | 2.9 |
+
+* **Float literals can cost microseconds.** `0.9394130628134757` elaborates to
+  `Float.ofScientific 9394130628134757 true 16`; the code generator normally hoists that into a
+  closed term, but after inlining into a branch where the `Bool` argument is already a variable
+  it leaves the call in place, and `Float.ofScientific` takes a bignum path for 17-digit mantissas
+  or exponents past `10^22`. The first port of the kernels ran `F64.log` at 3 µs (exp 180 ns);
+  decoding the constants at elaboration time (`f64!`/`f32!`, `JuliaBase.FloatLit`) brought it to
+  8 ns. Grep the generated C for `l_Float_ofScientific` outside `_init_` functions to find
+  others (`JuliaBase/Complex.lean` has about 50).
+* `Int`/`Nat` arithmetic with `2 ^ 64`-style constants cost ~40 ns per conversion; the kernels use
+  `Int64`/`UInt64` (`>>>` on `Int64` is arithmetic, as Julia's `>>`).
+* Turning off closed-term extraction (`compiler.extract_closed false`) inlines the `f64!` bit
+  patterns as immediates but is not faster: the remaining cost is the out-of-line
+  `lean_float_to_bits`/`lean_float_of_bits` calls (`bl` in the disassembly), five or so per `exp`.
+  Unboxed `FloatArray` tables save two of them (7.3 → 6.6 ns).

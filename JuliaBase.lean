@@ -1,5 +1,6 @@
 import JuliaBase.Num
 import JuliaBase.IEEE
+import JuliaBase.FloatLit
 import JuliaBase.Math
 import JuliaBase.Round
 import JuliaBase.Parse
@@ -30,6 +31,8 @@ verified bit for bit against the Julia 1.13 oracle (`Tests/JuliaBase/`).
   rational and decimal values (`ofDyadic`, `ofFraction`, `ofRat`, `ofDecimal`), the constants
   and neighbours of either format, Julia `exponent`, `eps(x)` (`F64.epsOf`, `F32.epsOf`) and
   `ulpDistance`.
+* `JuliaBase.FloatLit`: `f64! x` / `f32! x`, float literals decoded at elaboration time into
+  free bit casts (plain literals can be parsed through bignums at run time; `docs/PERF.md`).
 * `JuliaBase.Math` (tables in `JuliaBase.MathTables`): Julia's own pure-Julia kernels, bit for
   bit (Julia does not call `libm` for these): `exp`/`exp2`/`exp10`, `expm1`,
   `log`/`log2`/`log10`, `log1p`, `^(x, y)` and `^(x, n::Integer)` (`pow_body`), `literal_pow`
