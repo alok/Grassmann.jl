@@ -47,6 +47,11 @@ def ofList? (l : List α) : Option (Half V p α) := (Values.ofList? l).map (⟨�
 /-- Build from an array of the right length. -/
 def ofArray? (a : Array α) : Option (Half V p α) := (Values.ofArray? a).map (⟨·⟩)
 
+/-- Build from a list whose length `2ⁿ⁻¹` is checked at elaboration time (Julia
+`Spinor{V}(1,2,3,4)`; the literals `spinor![…]`, `cospinor![…]`). -/
+def ofList (l : List α) (h : l.length = halfDim V.n p := by decide) : Half V p α :=
+  ⟨Values.ofFn fun i => l[i.1]'(by have := i.2; omega)⟩
+
 /-- The zero half. -/
 @[inline] def zero : Half V p α := ⟨zeroValues _⟩
 

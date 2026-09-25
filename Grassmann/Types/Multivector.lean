@@ -32,6 +32,11 @@ def ofList? (l : List α) : Option (Multivector V α) := (Values.ofList? l).map 
 /-- Build from an array of length `2ⁿ`. -/
 def ofArray? (a : Array α) : Option (Multivector V α) := (Values.ofArray? a).map (⟨·⟩)
 
+/-- Build from a list whose length `2ⁿ` is checked at elaboration time (Julia
+`Multivector{V}(1,2,…,8)`; the literal `mv![…]`). -/
+def ofList (l : List α) (h : l.length = 2 ^ V.n := by decide) : Multivector V α :=
+  ⟨Values.ofFn fun i => l[i.1]'(by have := i.2; omega)⟩
+
 /-- The zero multivector (Julia `zero(Multivector{V,T})`, printed `0v⃖`). -/
 @[inline] def zero : Multivector V α := ⟨zeroValues _⟩
 
@@ -98,5 +103,34 @@ instance : AbstractTensors.TensorMixed (Multivector V α) TensorBundle V α wher
 instance : AbstractTensors.Value (Multivector V α) (Values α (2 ^ V.n)) := ⟨Multivector.v⟩
 
 end Multivector
+
+/-! ## Literals (Julia `Chain{V,1}(4,5,6)`, `Multivector{V}(1,…,8)`, `Spinor{V}(…)`)
+
+The space, grade and coefficient type come from the expected type; the length is checked
+at elaboration time (`decide`), so a wrong count is a type error instead of Julia's run-time
+`DimensionMismatch`:
+
+```lean
+open Grassmann
+def a : Chain ℝ3 1 Int := chain![1, 2, 3]
+def q : Spinor ℝ3 Int := spinor![1, 2, 3, 4]
+def m : Multivector ℝ3 Int := mv![1, 2, 3, 4, 5, 6, 7, 8]
+```
+-/
+
+/-- A chain literal `chain![x₁, …, xₖ]` (Julia `Chain{V,G}(x₁, …, xₖ)`), `k = binomial(n, G)`. -/
+scoped macro "chain![" xs:term,* "]" : term => `(Grassmann.Chain.ofList [$xs,*])
+
+/-- A multivector literal `mv![x₁, …, x₂ₙ]` (Julia `Multivector{V}(…)`), in Julia's storage
+order (grade-major, lexicographic within a grade). -/
+scoped macro "mv![" xs:term,* "]" : term => `(Grassmann.Multivector.ofList [$xs,*])
+
+/-- A spinor literal `spinor![…]` (Julia `Spinor{V}(…)`, the even grades in storage order). -/
+scoped macro "spinor![" xs:term,* "]" : term =>
+  `((Grassmann.Half.ofList [$xs,*] : Grassmann.Half _ false _))
+
+/-- A co-spinor literal `cospinor![…]` (Julia `CoSpinor{V}(…)`, the odd grades). -/
+scoped macro "cospinor![" xs:term,* "]" : term =>
+  `((Grassmann.Half.ofList [$xs,*] : Grassmann.Half _ true _))
 
 end Grassmann
