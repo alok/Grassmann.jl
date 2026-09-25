@@ -71,5 +71,26 @@ def run : TestM Unit := do
   let f3 := TensorField.tabulate3 g33 fun x y z => poly x + 10 * y + 100 * poly z
   checkAt "eval open3" (← jField c "open3") fun x => flatOf [f3.eval x]
   checkField "eval resample" (out (gx.resample #v[5, 4])) (← jField c "resample") (checkRange := false)
+  -- the axis-by-axis resampling has the bits of the point-by-point one
+  let bits {M F : Type} [FrameBundle M] [FlatFiber F] {m : M} (t : TensorField m F) : List UInt64 :=
+    t.data.toList.map Float.toBits
+  let sameResample {N : Nat} {P F : Type} [FlatFiber F] [LinearFiber F] {b : GridBundle N P}
+      (label : String) (t : TensorField b F) (n : Vector Nat N) : TestM Unit := do
+    let brk := TensorField.resampleBrackets b n
+    check s!"{label} inside" (brk.toArray.all (·.all (· != 0)))
+    checkEq s!"{label} = pointwise" (bits (t.resample n)) (bits (t.resamplePointwise n brk))
+  let g2 : GridBundle 2 (AffinePoint 2) := .ofSpace (.ofAxes #v[Axis.range 0 1 37, Axis.range (-1) 2 23])
+  let s2 := TensorField.tabulate2 g2 fun x y => Float.sin (3 * x) * Float.exp y + poly (x * y)
+  sameResample "resample scalar 37×23 → 50×17" s2 #v[50, 17]
+  sameResample "resample scalar 37×23 → 7×61" s2 #v[7, 61]
+  let v2 : TensorField g2 (Chain ℝ3 1 Float) := TensorField.tabulate2 g2 fun x y =>
+    Chain.ofFn fun i => #[Float.cos (x + y), y * x, poly y][i.1]!
+  sameResample "resample chain 37×23 → 29×41" v2 #v[29, 41]
+  let g3' : GridBundle 3 (AffinePoint 3) :=
+    .ofSpace (.ofAxes #v[Axis.range 0 2 9, Axis.linRange 0 3 7, Axis.range 0 1 5])
+  let s3 := TensorField.tabulate3 g3' fun x y z => poly x + Float.sin (10 * y) + 100 * poly z
+  sameResample "resample 3-D 9×7×5 → 13×4×8" s3 #v[13, 4, 8]
+  let s1 := TensorField.ofAxisFn (Axis.colon 0 0.1 3) fun x => Float.exp (-x) * poly x
+  sameResample "resample 1-D 31 → 100" s1 #v[100]
 
 end Tests.CartanTests.Eval

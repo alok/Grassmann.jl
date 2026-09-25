@@ -61,6 +61,55 @@ when the partner is a low face (Julia's odd `pf`), else reflect about the last p
 @[inline] def repositionHigh (partnerLow : Bool) (x : FloatArray) (t : Float) : Float :=
   if partnerLow then x.get! 0 - x.get! (x.size - 1) + t else 2 * x.get! (x.size - 1) - t
 
+/-- Julia `linterp(x, x₁, x₂, f₁, f₂)` on one float, `recip` selecting Grassmann's division
+`* (1/(x₂ - x₁))` (see `TensorField.linterpComp`). -/
+@[inline] def lin (recip : Bool) (x x1 x2 f1 f2 : Float) : Float :=
+  if recip then f1 + ((f2 - f1) * (x - x1)) * (f64! 1 / (x2 - x1))
+  else f1 + ((f2 - f1) * (x - x1)) / (x2 - x1)
+
+/-- One separable pass of a tensor-product resampling. `src` has the column-major layout
+`[inner][nOld][outer]` (`inner` floats per step of the middle axis, which has `nOld` points);
+the result has `[inner][nNew][outer]`, entry `(q, j, o)` interpolating along the middle axis at
+the new coordinate `xs[j]` between the old points `lo[j]` and `lo[j] + 1` (coordinates `old`).
+Interpolating the axes one after the other, the first first, performs exactly the operations of
+the corner nesting of `cellComp` (`linterp_y(linterp_x(f₁₁, f₂₁), linterp_x(f₁₂, f₂₂))`), since
+the inner interpolations of neighbouring cells are shared rather than recomputed. -/
+def resamplePass (recip : Bool) (inner nOld nNew outer : Nat) (lo : Array Nat)
+    (old xs src : FloatArray) : FloatArray :=
+  goO outer 0 (Flat.zeros (inner * nNew * outer))
+where
+  /-- The `inner` floats of one output step. -/
+  goQ (b1 b2 d : Nat) (x x1 x2 : Float) : (k q : Nat) → FloatArray → FloatArray
+    | 0, _, dst => dst
+    | k + 1, q, dst =>
+      goQ b1 b2 d x x1 x2 k (q + 1)
+        (dst.set! (d + q) (lin recip x x1 x2 (src.get! (b1 + q)) (src.get! (b2 + q))))
+  /-- The new points `j, …` of the middle axis in the outer block `o`. -/
+  goJ (o : Nat) : (k j : Nat) → FloatArray → FloatArray
+    | 0, _, dst => dst
+    | k + 1, j, dst =>
+      let l := lo[j]!
+      let b1 := (o * nOld + l) * inner
+      goJ o k (j + 1)
+        (goQ b1 (b1 + inner) ((o * nNew + j) * inner) (xs.get! j) (old.get! l) (old.get! (l + 1))
+          inner 0 dst)
+  /-- The outer blocks `o, …`. -/
+  goO : (k o : Nat) → FloatArray → FloatArray
+    | 0, _, dst => dst
+    | k + 1, o, dst => goO k (o + 1) (goJ o nNew 0 dst)
+
+/-- A multilinear resampling done axis by axis (`resamplePass`), the first axis first, for fibers
+of `w` floats on the flat data `src` over the old axes `old` (sizes `nOld`) onto the new axes
+`new`, whose points `j` of axis `a` lie in the old cells starting at `lo[a][j]`. -/
+def resampleFlat (recip : Bool) (w : Nat) (old new : Array FloatArray) (lo : Array (Array Nat))
+    (src : FloatArray) : FloatArray :=
+  let nOld := old.map (·.size)
+  let nNew := new.map (·.size)
+  let prod (xs : Array Nat) (i j : Nat) : Nat := (xs.extract i j).foldl (· * ·) 1
+  (List.range old.size).foldl (fun acc a =>
+    resamplePass recip (w * prod nNew 0 a) nOld[a]! nNew[a]! (prod nOld (a + 1) old.size) lo[a]!
+      old[a]! new[a]! acc) src
+
 end Interp
 
 namespace TensorField
@@ -143,19 +192,22 @@ where
 @[inline] def evalAt {b : GridBundle N P G} (t : TensorField b F) (p : AffinePoint N) : F :=
   t.eval (Vector.ofFn fun a => p.get! a)
 
-/-- Julia `resample(t, n)` (`Cartan.jl:220-224`): the field interpolated onto the resampled grid
-(`GridBundle.resample`). Julia's 1-D method is ambiguous and throws (B4); this is the intended
-evaluation at the new points. -/
-def resample [Inhabited G] {b : GridBundle N P G} (t : TensorField b F) (n : Vector Nat N) :
-    TensorField (b.resample n) F :=
+/-- The brackets of the new points of every axis in the old one (1-based lower corner as
+`Interp.searchpoints`; `0` = outside the old axis). -/
+def resampleBrackets [Inhabited G] (b : GridBundle N P G) (n : Vector Nat N) : Vector (Array Nat) N :=
   let s := (b.resample n).space
-  let st : Vector Nat N := Vector.ofFn fun a => MeshTopology.axisStride b.size a.1
-  -- the new points form a product: bracket every new coordinate once per axis (`0` = outside)
-  let brk : Vector (Array Nat) N := Vector.ofFn fun a =>
+  Vector.ofFn fun a =>
     let old := b.space.coords[a]
     (s.coords[a]).foldl (fun acc y =>
       let i := (Interp.searchpoints old y).1
       acc.push (if i == 0 || i == old.size then 0 else i)) #[]
+
+/-- `resample` point by point: the cell's corners interpolated, or `eval` (zero or repositioned
+through a glued face) outside the old grid. -/
+def resamplePointwise [Inhabited G] {b : GridBundle N P G} (t : TensorField b F) (n : Vector Nat N)
+    (brk : Vector (Array Nat) N) : TensorField (b.resample n) F :=
+  let s := (b.resample n).space
+  let st : Vector Nat N := Vector.ofFn fun a => MeshTopology.axisStride b.size a.1
   let ns := s.size
   ofFn _ fun k =>
     let j : Vector Nat N := Vector.ofFn fun a => k / MeshTopology.axisStride ns a.1 % ns[a]
@@ -165,6 +217,22 @@ def resample [Inhabited G] {b : GridBundle N P G} (t : TensorField b F) (n : Vec
       let idx := i.map (· - 1)
       FlatFiber.read (buildFlat (F := Float) (FlatFiber.width F) fun c => cellComp t x idx st c N 0) 0
     else t.eval x
+
+/-- Julia `resample(t, n)` (`Cartan.jl:220-224`): the field interpolated onto the resampled grid
+(`GridBundle.resample`). Julia's 1-D method is ambiguous and throws (B4); this is the intended
+evaluation at the new points. When every new point lies inside the old grid (the usual case: the
+same span, more or fewer points) the axes are interpolated one after the other
+(`Interp.resampleFlat`, the same operations as the corner nesting); otherwise point by point. -/
+def resample [Inhabited G] {b : GridBundle N P G} (t : TensorField b F) (n : Vector Nat N) :
+    TensorField (b.resample n) F :=
+  let brk := resampleBrackets b n
+  if brk.toArray.all (·.all (· != 0)) then
+    let data := Interp.resampleFlat (LinearFiber.recipDiv F) (FlatFiber.width F)
+      b.space.coords.toArray (b.resample n).space.coords.toArray (brk.toArray.map (·.map (· - 1)))
+      t.data
+    if h : data.size = FlatFiber.width F * card (b.resample n) then ⟨data, h, none⟩
+    else resamplePointwise t n brk
+  else resamplePointwise t n brk
 
 /-- Julia `leaf(m::RectangleMap, t::AbstractFloat, j = 2)` (`grid.jl:149-157`; `m(t)`): the leaf at
 the coordinate `x` of axis `j` (0-based, default the last), interpolated linearly between the two
