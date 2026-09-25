@@ -132,3 +132,83 @@ for (m, k) in Any[(6, 3), (8, 4), (5, 2), (10, 3), (4, 4)]
         "approx" => @safe(Grassmann.approx(0.75, Values(coef...)))))
 end
 save("vandermonde", Dict("meta" => meta, "ops" => vands, "fits" => fits))
+
+# ------------------------------------------------------------------------------------------
+# ↑/↓ (project/reject) and the versor fields (src/Grassmann.jl:164-228, 312-314)
+# ------------------------------------------------------------------------------------------
+dense(x) = enc(collect(value(Multivector(x))))
+updown = Any[]
+for sig in ["∞+++", "∅+++", "∞∅+++", "∞∅++", "+++", "∞++"]
+    V = Signature(sig)
+    n = mdims(V)
+    G = Λ(V)
+    for trial in 1:6
+        x = round.(randn(n) .* 1.5, digits = 3)
+        ω = Chain{V,1}(x...)
+        d = Dict{String,Any}("sig" => sig, "x" => enc(x))
+        d["up"] = try dense(↑(ω)) catch e; Dict("E" => errstr(e)) end
+        d["down"] = try dense(↓(ω)) catch e; Dict("E" => errstr(e)) end
+        d["downup"] = try dense(↓(↑(ω))) catch e; Dict("E" => errstr(e)) end
+        if hasinf(V) || hasorigin(V)
+            b = hasinf(V) ? G.v∞ : G.v∅
+            bc = Chain{V,1}(Values{n}([i == 1 ? 1.0 : 0.0 for i in 1:n]...))
+            d["upb"] = try dense(project(ω, bc)) catch e; Dict("E" => errstr(e)) end
+            d["downb"] = try dense(reject(ω, bc)) catch e; Dict("E" => errstr(e)) end
+            if hasinf(V) && hasorigin(V)
+                inf = Chain{V,1}(Values{n}([i == 1 ? 1.0 : 0.0 for i in 1:n]...))
+                org = Chain{V,1}(Values{n}([i == 2 ? 1.0 : 0.0 for i in 1:n]...))
+                d["uppm"] = try dense(project(ω, inf, org)) catch e; Dict("E" => errstr(e)) end
+                d["downpm"] = try dense(reject(ω, inf, org)) catch e; Dict("E" => errstr(e)) end
+            end
+        end
+        push!(updown, d)
+    end
+end
+# the README curves (Grassmann README.md:271-316): f(t) = ↓(exp(π*t*((3/7)*v12+v∞3))>>>↑(v1+v2+v3))
+curves = Any[]
+let V = S"∞+++", G = Λ(V)
+    v1, v2, v3, v12, vi, vi3 = G.v1, G.v2, G.v3, G.v12, G.v∞, G.v∞3
+    torus(t) = ↓(exp(π*t*((3/7)*v12+vi3))>>>↑(v1+v2+v3))
+    orbit2(t) = ↓(exp(t*vi*(sin(3t)*3v1+cos(2t)*7v2-sin(5t)*4v3)/2)>>>↑(v1+v2-v3))
+    orbit4(t) = ↓(exp(t*(v12+0.07vi*(sin(3t)*3v1+cos(2t)*7v2-sin(5t)*4v3)/2))>>>↑(v1+v2-v3))
+    for t in [0.0, 0.25, 0.5, -1.3, 2.0, 5.5]
+        push!(curves, Dict("curve" => "torus", "t" => enc(t), "out" => dense(torus(t))))
+        push!(curves, Dict("curve" => "orbit2", "t" => enc(t), "out" => dense(orbit2(t))))
+        push!(curves, Dict("curve" => "orbit4", "t" => enc(t), "out" => dense(orbit4(t))))
+    end
+end
+let V = S"∞∅+++", G = Λ(V)
+    v1, v2, v3, v12, vi3 = G.v1, G.v2, G.v3, G.v12, G.v∞3
+    helix(t) = ↓(exp(π*t*((3/7)*v12+vi3))>>>↑(v1+v2+v3))
+    for t in [0.0, 0.25, 0.5, -1.3, 2.0, 5.5]
+        push!(curves, Dict("curve" => "helix", "t" => enc(t), "out" => dense(helix(t))))
+    end
+end
+# chainfield / vectorfield of plane rotors and the orb versor (docs 42, 43)
+fields = Any[]
+let V = S"++", G = Λ(V)
+    for (name, t) in Any[("plane1", exp(π*G.v12/2)), ("plane3", exp((π/4)*G.v12/2)), ("plane4", G.v1*exp((π/4)*G.v12/2))]
+        F = chainfield(t)
+        for p in Any[(1.0, 0.0), (0.5, -0.25), (-1.2, 0.7)]
+            push!(fields, Dict("field" => name, "p" => enc(collect(p)), "out" => enc(collect(value(F(Chain{V,1}(p...)))))))
+        end
+    end
+end
+let V = S"+-", G = Λ(V)
+    for (name, t) in Any[("plane5", exp((π/8)*G.v12/2)), ("plane6", G.v1*exp((π/4)*G.v12/2))]
+        F = chainfield(t)
+        for p in Any[(1.0, 0.5), (-0.3, 0.2)]
+            push!(fields, Dict("field" => name, "p" => enc(collect(p)), "out" => enc(collect(value(F(Chain{V,1}(p...)))))))
+        end
+    end
+end
+let V = S"∞+++", G = Λ(V)
+    t = exp((π/4)*(G.v12+G.v∞3))
+    K = chainfield(t, V(2,3,4))
+    W = chainfield(t, V(2,3,4), V(1,2,3))
+    for p in Any[(0.5, 0.5, 0.5), (1.0, -0.5, 0.25), (-1.2, 0.3, 0.9)]
+        push!(fields, Dict("field" => "orb", "p" => enc(collect(p)), "out" => enc(collect(value(K(Chain{V(2,3,4),1}(p...)))))))
+        push!(fields, Dict("field" => "wave", "p" => enc(collect(p)), "out" => enc(collect(value(W(Chain{V(1,2,3),1}(p...)))))))
+    end
+end
+save("updown", Dict("meta" => meta, "cases" => updown, "curves" => curves, "fields" => fields))

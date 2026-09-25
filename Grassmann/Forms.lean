@@ -14,6 +14,7 @@ import Grassmann.Forms.Eval
 import Grassmann.Forms.Lie
 import Grassmann.Forms.Simplex
 import Grassmann.Forms.Fit
+import Grassmann.Fields
 
 /-!
 # Grassmann.Forms: linear algebra of Grassmann elements
@@ -47,6 +48,9 @@ Port of Grassmann.jl `src/forms.jl` (and the determinant/simplex part of
   `Forms.Roots` up to degree 4, the companion matrix's eigenvalues beyond).
 * `Grassmann.Forms.Fit`: `polynom`, `approx`, the least-squares Vandermonde fit
   `vandermonde(x, y, N)` and `vandermondeinterp`.
+* `Grassmann.Fields` (imported here): `points`, `chainfield`, `vectorfield`/`pointfield`,
+  the sampled curves and vector fields of versors, on the `↑`/`↓` maps of
+  `Grassmann.Composite.Project`.
 * `Grassmann.Forms.MatFun`: `exp`, `expm1` (Grassmann's Padé), `log`.
 * `Grassmann.Forms.Cayley`: `operator(t, G)`, `gradedoperator`, `metrictensor`,
   `metricextensor`, `antimetrictensor`, Cayley tables.
