@@ -51,6 +51,15 @@ def run : TestM Unit := do
   checkEq "TorusParameter(60,60) size" (BaseShape.shape T.base) [60, 60]
   checkEq "torus seam: first point = last point" (T.get 0).coords.toList.head! 0
   check "torus glued" T.immersion.isCompact
+  -- port notes §4.4, §4.14: `extend(0:0.5:1, 5) == 0.0:0.5:2.0`, `resample(0:0.5:2, 9)`
+  match (Axis.colon 0 0.5 1).extend 5 with
+  | some e => checkEq "extend(0:0.5:1, 5)" e.toFloatArray.toList (Axis.colon 0 0.5 2).toFloatArray.toList
+  | none => check "extend(0:0.5:1, 5)" false
+  checkEq "resample(0:0.5:2, 9)" ((Axis.colon 0 0.5 2).resample 9).toFloatArray.toList
+    [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
+  checkEq "show of a range axis" (toString (Axis.colon 0 0.5 2)) "0.0:0.5:2.0"
+  checkEq "show of a LinRange axis" (toString (Axis.linRange 0 1 5)) "LinRange{Float64}(0.0, 1.0, 5)"
+  checkEq "Global display" (MetricStore.induced.showGlobal 2) "Global{2}(InducedMetric())"
   let t' := (t.set 3 42).set 100 7
   checkEq "set replaces one fiber" t'.fiberArray.toList ((t.fiberArray.set! 3 42).toList)
   let v' := v.set 2 (Chain.ofFn fun _ => 5)
