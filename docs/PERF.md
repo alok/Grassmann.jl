@@ -400,7 +400,7 @@ agrees with Julia's.
 | `resample_a` | 500×500 | 129 ns | 18.1 ns | 21.8 ns | 0.83× |
 | `sum_s` | 1000000 | 0.57 ns | 0.556 ns | 0.0872 ns | 6.4× |
 | `supnorm_v` | 1000×1000 | 6.69 ns | 0.451 ns | 0.349 ns | 1.3× |
-| `torus` | 1000×1000 | 41.1 ns | 45.5 ns | 15.2 ns | 3× |
+| `torus` | 1000×1000 | 41.1 ns | 33.5 ns | 15.2 ns | 2.2× |
 | `eval_a` | 100000 | - | 114 ns | 23 ns | 4.9× |
 | `mesh_volumes` | 300×300 | - | 13.9 ns | 6.23 ns | 2.2× |
 | `mesh_gradienthat` | 300×300 | - | 605 ns | 1.64 µs | 0.37× |
@@ -425,7 +425,8 @@ What moved the numbers (each change keeps the results bit for bit, checked by te
   16 → 8.8 ns. The rest of `tabulate_chain3` (29 ns vs 9) is building the `Chain` fiber:
   `Packed.ofFn` at `Float` starts from a shared closed `mkEmpty n` (copied) and pushes each
   entry through the out-of-line `lean_float_array_push`, ~20 ns for three floats
-  (`tabulate2_chain3`, which builds no point, 23 ns vs 3.9). The same cost dominates `torus`.
+  (`tabulate2_chain3`, which builds no point, 23 ns vs 3.9). The same cost dominates `torus`,
+  whose points `map` now reads into the previous point's storage (`FlatFiber.readInto`): 45 → 33 ns.
 * **Ranges materialize without `Int` arithmetic.** `Axis.toFloatArray` of a `StepRangeLen` runs
   `stepLenGet`'s float operations with the index carried as a float (exact below `2^53`), and the
   1-D identity field shares the grid's materialized axis: `identity_range` 8.2 → 1.0 ns (Julia
