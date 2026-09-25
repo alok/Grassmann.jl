@@ -111,7 +111,7 @@ def contraction (a b : UInt64) : BladeResult :=
     if !t then .zero else
     let c := ts[0]?.map (·.1) |>.getD 0
     let g := ts.foldl (fun acc (_, x) => acc + x) 0
-    .withTangent V.diffvars z (if g == 1 then .blade c else .single g c)
+    V.nestTangent z (if g == 1 then .blade c else .single g c)
   else .ofTerms V.n ts
 
 /-- Julia `complementrighthodge` with Julia's product for `MetricTensor` spaces. -/

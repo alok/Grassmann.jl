@@ -65,15 +65,25 @@ def ofTerms (n : Nat) (t : Terms) : BladeResult :=
   | #[(b, c)] => single c b
   | t => sum t
 
-/-- Wrap `inner` with the repeated-tangent coefficient `e_z` when `z ≠ 0`. -/
-@[inline] def withTangent (diffvars : Nat) (z : UInt64) (inner : BladeResult) : BladeResult :=
-  if diffvars != 0 && z != 0 then nested z inner else inner
-
 end BladeResult
 
 namespace TensorBundle
 
 variable (V : TensorBundle)
+
+/-- Julia `Single{V}(getbasis(loworder(V),Z), d)` (`DirectSum.jl
+src/DirectSum.jl:476-487`): wrap a blade result `d` with the repeated-tangent
+coefficient `e_z` when `z ≠ 0`. Julia's `Single` constructor returns `𝟎` when
+`order(e_z) + order(d) > diffmode(V)`, with `order(e_B) = |B ∩ diffmask|`; the
+products `∧`/`*` never reach that case (their `diffcheck` already vanishes
+them), but `∨` and `⋅` do (`∂₁ ⋅ ∂₁ = 𝟎` when `μ = 1`). -/
+def nestTangent (z : UInt64) (inner : BladeResult) : BladeResult :=
+  if V.diffvars == 0 || z == 0 then inner else
+  let over := fun (b : UInt64) => popcount z + popcount (b &&& V.diffmask) > V.diffmode
+  match inner with
+  | .zero => .zero
+  | .blade b | .single _ b => if over b then .zero else .nested z inner
+  | r => .nested z r
 
 /-! ## Grade involutions (`DirectSum.jl src/generic.jl:220-234`) -/
 
@@ -145,7 +155,7 @@ def signbitGrade (g : Nat) : Array Bool := (indexBasis V.n g).map fun b => V.par
 def wedge (a b : UInt64) : BladeResult :=
   let (a', b', q, z) := V.symmetricmask a b
   if a' &&& b' != 0 || V.diffcheck a b then .zero
-  else .withTangent V.diffvars z (signed (V.parity a b) ((a' ^^^ b') ||| q))
+  else V.nestTangent z (signed (V.parity a b) ((a' ^^^ b') ||| q))
 
 /-! ## Geometric product -/
 
@@ -226,7 +236,7 @@ def mul (a b : UInt64) : BladeResult :=
     let (a', b', _, z) := V.symmetricmask a b
     let (c, d) := V.mulDiag a b
     let inner := if a' &&& b' == 0 then signed (c < 0) d else .single c d
-    .withTangent V.diffvars z inner
+    V.nestTangent z inner
   else
     let (a', b', q, _) := V.symmetricmask a b
     .ofTerms V.n ((cliffordProduct V.gram V.n a' b').map fun (k, c) => (k ||| q, c))
@@ -237,7 +247,7 @@ def mul (a b : UInt64) : BladeResult :=
 (metric-independent); bare blade when the sign is `+`. -/
 def vee (a b : UInt64) : BladeResult :=
   let (neg, c, t, z) := V.parityregressive a b
-  if !t then .zero else .withTangent V.diffvars z (signed neg c)
+  if !t then .zero else V.nestTangent z (signed neg c)
 
 /-! ## Interior product (`src/algebra.jl:209-223`) -/
 
@@ -251,7 +261,7 @@ def contraction (a b : UInt64) : BladeResult :=
     if !t then .zero else
     let c := ts[0]?.map (·.1) |>.getD 0
     let g := ts.foldl (fun acc (_, x) => acc + x) 0
-    .withTangent V.diffvars z (if g == 1 then .blade c else .single g c)
+    V.nestTangent z (if g == 1 then .blade c else .single g c)
   else .ofTerms V.n ts
 
 /-- Julia `a < b` / `a ⨼ b` = `contraction(b, a)`. -/
