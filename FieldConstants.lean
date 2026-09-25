@@ -2,6 +2,7 @@ import FieldConstants.Julia.Float
 import FieldConstants.Julia.Tables
 import FieldConstants.Julia.Math
 import FieldConstants.JNum
+import FieldConstants.Num
 
 /-!
 # FieldConstants
