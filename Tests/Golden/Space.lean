@@ -87,21 +87,25 @@ def spaceKeys : List String :=
    "hasinf", "hasorigin", "conformal", "isdiag", "dyadmode", "isdual", "diffvars", "diffmode",
    "Isq", "basis", "names"]
 
+/-- A required string field of a space descriptor. -/
 private def reqStr (j : Json) (k : String) : Except String String :=
   match j.getObjVal? k with
   | .ok (.str s) => .ok s
   | _ => .error s!"space.{k}: string expected"
 
+/-- A required natural-number field of a space descriptor. -/
 private def reqNat (j : Json) (k : String) : Except String Nat :=
   match (j.getObjValD k).getNat? with
   | .ok n => .ok n
   | _ => .error s!"space.{k}: natural number expected"
 
+/-- A required integer field of a space descriptor. -/
 private def reqInt (j : Json) (k : String) : Except String Int :=
   match (j.getObjValD k).getInt? with
   | .ok n => .ok n
   | _ => .error s!"space.{k}: integer expected"
 
+/-- A required Bool field of a space descriptor. -/
 private def reqBool (j : Json) (k : String) : Except String Bool :=
   match j.getObjVal? k with
   | .ok (.bool b) => .ok b

@@ -23,8 +23,40 @@ open Lean
 
 /-- The `kind` tag of an element object (schema §7). -/
 inductive Kind where
-  | zero | one | infinity | submanifold | single | chain | spinor | cospinor | multivector
-  | couple | pseudoCouple | phasor | number | bool | space | other | error
+  /-- `Zero{V}` (prints `𝟎`). -/
+  | zero
+  /-- `One{V}`, the unit blade (prints `v`). -/
+  | one
+  /-- `DirectSum.Infinity{V}` (prints `∞`). -/
+  | infinity
+  /-- A basis blade `Submanifold{V,G,B}` of grade ≥ 1. -/
+  | submanifold
+  /-- `Single{V,G,B,T}`: one coefficient on one blade. -/
+  | single
+  /-- `Chain{V,G,T}`: every blade of one grade. -/
+  | chain
+  /-- The even-grade part (`Spinor`, `Quaternion`, …). -/
+  | spinor
+  /-- The odd-grade part (`CoSpinor`). -/
+  | cospinor
+  /-- `Multivector{V,T}`: all `2ⁿ` blades. -/
+  | multivector
+  /-- `Couple{V,B,T}` = re + im·B. -/
+  | couple
+  /-- `PseudoCouple{V,B,T}` = re·B + im·I. -/
+  | pseudoCouple
+  /-- `Phasor{V,B,T}` = amplitude ∠ angle. -/
+  | phasor
+  /-- A plain Julia number. -/
+  | number
+  /-- A Julia `Bool`. -/
+  | bool
+  /-- A non-basis `Submanifold` used as a space (docs). -/
+  | space
+  /-- Anything else (tuples, operators, `Values`, …): compare `str` only. -/
+  | other
+  /-- Julia threw an exception. -/
+  | error
   deriving BEq, Repr, Inhabited, Hashable, DecidableEq
 
 namespace Kind
@@ -70,12 +102,16 @@ def isTerm : Kind → Bool
 
 end Kind
 
+/-- A kind prints as its JSON tag. -/
 instance : ToString Kind := ⟨Kind.name⟩
 
 /-- A JSON field that may be absent, `null`, or a value. -/
 inductive Field (α : Type) where
+  /-- The key is absent. -/
   | absent
+  /-- The key holds `null`. -/
   | null
+  /-- The key holds a value. -/
   | val (x : α)
   deriving BEq, Repr, Inhabited
 

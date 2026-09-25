@@ -92,6 +92,7 @@ structure Prepared where
   /-- The evaluator for one (shard, op). -/
   eval : Evaluator
 
+/-- The evaluator that implements nothing. -/
 instance : Inhabited Prepared := ⟨⟨fun _ _ => none⟩⟩
 
 /-- What an evaluator factory sees: one (shard, op) pair. -/
