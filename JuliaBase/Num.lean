@@ -124,8 +124,20 @@ def toIntTrunc (x : Float) : Int :=
 /-- Julia `round(Int, x)`: round half to even, then convert exactly. -/
 @[inline] def roundInt (x : Float) : Int := toIntTrunc (round x)
 
-/-- Julia `Float64(i::Integer)`: correctly rounded conversion. -/
-@[inline] def ofInt (i : Int) : Float := Float.ofInt i
+/-- Julia `Float64(i::Integer)`: correctly rounded conversion. An `Int` that fits in `Int64`
+(every Julia `Int`) converts with the inline `(double)(int64_t)` cast (`Int64.toFloat`, the
+same round-to-nearest conversion as Julia's `sitofp`); `Float.ofInt` goes through
+`Float.ofScientific` (a `2^53` bound, a table read and a division: tens of ns) and is kept
+only for the bignums beyond `Int64`. -/
+@[inline] def ofInt (i : Int) : Float :=
+  let j := i.toInt64
+  if j.toInt == i then j.toFloat else Float.ofInt i
+
+/-- Julia `Float64(n)` for a natural number: the inline `(double)(uint64_t)` cast when `n`
+fits in `UInt64`, else `Float.ofNat` (`Nat.toFloat` takes the `Float.ofScientific` path). -/
+@[inline] def ofNat (n : Nat) : Float :=
+  let j := n.toUInt64
+  if j.toNat == n then j.toFloat else Float.ofNat n
 
 /-- `(m * 2^d) mod y` computed in 11-bit chunks so nothing leaves `UInt64`
 (`r < y < 2^53`, so `r <<< 11 < 2^64`). `fuel ≥ d` guarantees completion. -/
