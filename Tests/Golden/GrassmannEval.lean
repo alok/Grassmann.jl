@@ -118,12 +118,84 @@ def arithEval : Evaluator := fun ctx args => do
     pure r.encode
   | _, _ => none
 
+/-! ## unary -/
+
+/-- The dynamic unary map of an oracle op key (schema §12), `none` if not a map
+evaluated here. -/
+def unaryOf? (op : String) : Option (UnTA V) :=
+  match op with
+  | "neg" => some fun x => TA.neg x
+  | "reverse" => some fun x => TA.reverse x
+  | "involute" => some fun x => TA.involute x
+  | "clifford" => some fun x => TA.clifford x
+  | "antireverse" => some fun x => TA.antireverse x
+  | "complementright" => some fun x => TA.complementright x
+  | "complementleft" => some fun x => TA.complementleft x
+  | "hodge" => some fun x => TA.hodge x
+  | "complementlefthodge" => some fun x => TA.complementlefthodge x
+  | "metric" => some fun x => TA.metric x
+  | "antimetric" => some fun x => TA.antimetric x
+  | "even" => some fun x => TA.even x
+  | "odd" => some fun x => TA.odd x
+  | "real" => some fun x => TA.realPart x
+  | "imag" => some fun x => TA.imagPart x
+  | "scalar" => some fun x => TA.scalar x
+  | "vector" => some fun x => TA.vector x
+  | "bivector" => some fun x => TA.bivector x
+  | "trivector" => some fun x => TA.trivector x
+  | "volume" => some fun x => TA.volume x
+  | "Multivector" => some fun x => TA.toMultiTA x
+  | _ =>
+    if op.startsWith "grade:" then
+      (op.drop 6).toString.toNat?.map fun k => fun x => TA.gradeProj k x
+    else none
+
+/-- `x'` (Julia `adjoint`): the element in the dual space with real coefficients
+unchanged (`src/products.jl:943-1070`); `Zero` and `∞` stay, and a `Couple` or
+`PseudoCouple`, which have no `adjoint` method, fall back to Julia's
+`adjoint(x::Number) = conj(x)`, i.e. the reverse in the same space. -/
+def AnyTA.adjoint (x : AnyTA V) : Option GoldenElem := do
+  let k := x.encode.kind
+  if k == .zero || k == .infinity then return x.encode
+  if k == .couple || k == .pseudoCouple then return (x.un fun y => TA.reverse y).encode
+  let W ← V.adjoint.toOption
+  let e ← match x with
+    | .int x => encodeTA <$> x.retarget W id
+    | .rat x => encodeTA <$> x.retarget W id
+    | .float x => encodeTA <$> x.retarget W id
+    | _ => none
+  pure { e with V := some W.showHandle }
+
+/-- `grassmann/unary`: the unary maps, the grade projections, `Multivector(a)` and `a'`. -/
+def unaryEval : Evaluator := fun ctx args => do
+  let V ← ctx.bundle?
+  let x ← AnyTA.decode V (← args[0]?)
+  if ctx.op == "adjoint" then x.adjoint
+  else match unaryOf? (V := V) ctx.op with
+    | some f => pure (x.un f).encode
+    | none => none
+
+/-- Julia defects that `defects.json` (and `Tests.Golden.Pending`) do not cover yet, on
+cases the dynamic layer computes correctly: the evaluator's expected failures until the
+oracle tags them (integrator requests). -/
+def unaryKnownIssues : Array KnownIssue := #[
+  { id := "grade0-couple-coefficient",
+    note := "Julia defect (extends the pending grade-couple-coefficient): grade(z::Couple, 0) " ++
+      "returns the bare number realvalue(z) (src/multivectors.jl:670) instead of the scalar part " ++
+      "Single{V}(realvalue(z)); the port returns the Single. Request: add grade:0 to the op glob " ++
+      "of grade-couple-coefficient (Tests/Golden/Pending.lean, then oracle/defects.toml)",
+    tables := #[{ suite := some (Glob.compile "unary"), op := some (Glob.compile "grade:0"),
+                  out := some (Glob.compile "Number"), kinds := some #[KindPat.compile "Couple"] }] }
+]
+
 /-! ## Registrations -/
 
 /-- The dynamic layer's registrations. -/
 def grassmannRegistrations : Array Registration := #[
   { name := "grassmann/construct", suite := "construct", op := "construct", eval := constructEval },
-  { name := "grassmann/arith", suite := "arith", op := "*", eval := arithEval }
+  { name := "grassmann/arith", suite := "arith", op := "*", eval := arithEval },
+  { name := "grassmann/unary", suite := "unary", op := "*", eval := unaryEval,
+    knownIssues := unaryKnownIssues }
 ]
 
 initialize
