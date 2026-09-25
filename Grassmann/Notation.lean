@@ -32,6 +32,14 @@ here as `scoped` notation of `Grassmann`, so that `open Grassmann` activates it:
 
 **Open `Grassmann` or `AbstractTensors`, not both**: the two namespaces declare
 the same notation, and with both open every operator is ambiguous.
+
+**Dotted names through the re-exports** (`TensorBundle.sig`, `Values.ofFn`,
+`Layout.chain`, `Coeff.zero`) need the original namespace opened as well
+(`open Grassmann DirectSum StaticVectors`): Lean resolves an `export` alias as a
+whole name, not as a namespace prefix (it reports "unknown constant"). The
+Grassmann namespaces themselves (`Chain.ofList?`, `Multivector.ofFn`, ...) and
+the undotted re-exports (`ℝ3`, `TensorBundle`, `Coeff`, `wedge`, ...) need nothing
+more.
 -/
 import AbstractTensors
 import DirectSum

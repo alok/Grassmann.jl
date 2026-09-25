@@ -36,9 +36,12 @@ algebra layer guarantee it never does) or dropping it (projecting mode, for the
 grade projections of the sandwich products). `plan` memoizes `build` in a
 process-global `IO.Ref (Std.HashMap PlanKey _)` read through `unsafeBaseIO`: it
 is referentially transparent (`plan = build`, `@[implemented_by]`), exactly like
-Julia's parity caches, and every plan is built once per process. At a call
-site whose space, operation and layouts are all closed terms the compiler
-hoists the lookup itself into a module-initialization constant.
+Julia's parity caches, and every plan is built once per process. A lookup
+costs about 50 ns (measured, Apple Silicon); at a call site whose space,
+operation and layouts are closed terms the compiler can hoist it into a
+module-initialization constant (it does for `ℝ3` multivector products, but not
+when a layout is computed from a parity inside a loop, as in the sandwich
+instances). Generated kernels (DESIGN.md §5.2) bypass the cache entirely.
 -/
 import Grassmann.Kernel.Plan
 import Std.Data.HashMap
