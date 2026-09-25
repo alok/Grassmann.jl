@@ -416,7 +416,7 @@ def showPre (g : Group B) : String := g.showWith B.text B.charNames B.unit
 /-- Julia `latexdims`/`latexgroup_pre` (`FieldAlgebra.jl:192-297`): the LaTeX
 monomial with `\cdot ` separators and the `\textbf{1}` identity (master branch). -/
 def latexPre (g : Group B) (names : Array String := B.latex) (charNames : Bool := B.charNames)
-    (glyph : String := "\\textbf{1}") : String := Id.run do
+    (glyph : String := "\\textbf{1}") (coefSep : Bool := true) : String := Id.run do
   let es := g.v.toExpos
   let mut out := ""
   for h : i in [0:es.size] do
@@ -433,7 +433,7 @@ def latexPre (g : Group B) (names : Array String := B.latex) (charNames : Bool :
         | .float x => (match makeint x with | .float y => specialPrintFloat y | j => j.toString)
         | k => k.showMakeint)
     else
-      out := out ++ (if iz then "" else "\\cdot ") ++ (match c with
+      out := out ++ (if iz || !coefSep then "" else "\\cdot ") ++ (match c with
         | .float x => (match makeint x with | .float y => specialPrintFloat y | j => j.toString)
         | k => k.showMakeint)
   return out
