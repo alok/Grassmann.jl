@@ -73,7 +73,7 @@ structure JKey where
 
 instance : BEq JKey where
   beq x y := x.op == y.op && x.a == y.a && x.b == y.b && x.lc == y.lc &&
-    x.outerFirst == y.outerFirst && x.V.n == y.V.n && x.V == y.V
+    x.outerFirst == y.outerFirst && x.V.n == y.V.n && Kernel.bundleEq x.V y.V
 
 instance : Hashable JKey where
   hash k := mixHash (hash k.V.n) (mixHash (hash k.op) (mixHash (hash k.a)
@@ -159,7 +159,7 @@ structure SKey where
 
 instance : BEq SKey where
   beq p q := p.y == q.y && p.x == q.x && p.mid == q.mid && p.G == q.G && p.V.n == q.V.n &&
-    p.V == q.V
+    Kernel.bundleEq p.V q.V
 
 instance : Hashable SKey where
   hash k := mixHash (hash k.V.n) (mixHash (hash k.y) (mixHash (hash k.x)
@@ -270,9 +270,20 @@ row is empty) or its runtime `0 + t₁ + ⋯`. -/
   else out
 termination_by k - c
 
+/-- The outputs `c, …, k-1`, written into `out` (the zero vector: inline stores instead of the
+out-of-line pushes of `rows`). -/
+@[specialize] def fill (pre : Bool) {k : Nat} (p : Plan) (ha : p.Aligned) (x y : Packed.Arr α) (c : Nat)
+    (out : Values α k) : Values α k :=
+  if hc : c < k then
+    let s := (p.rowStart[c]?.getD 0).toNat
+    let e := min (p.rowStart[c + 1]?.getD 0).toNat p.ia.size
+    fill pre p ha x y (c + 1) (out.set ⟨c, hc⟩ (row pre p ha x y s e (Nat.min_le_right _ _)))
+  else out
+termination_by k - c
+
 /-- Run a loop plan on raw operand storage into a length-`k` vector. -/
 @[specialize] def eval (pre : Bool) {k : Nat} (p : Plan) (x y : Packed.Arr α) : Values α k :=
-  if ha : p.Aligned then Plan.finish (rows pre p ha x y k 0 (Packed.mkEmpty k)) else zeroValues k
+  if ha : p.Aligned then fill pre p ha x y 0 (zeroValues k) else zeroValues k
 
 /-- The raw storage of a one-term operand. -/
 @[inline] def termArr (x : α) : Packed.Arr α := Packed.push (Packed.mkEmpty 1) x

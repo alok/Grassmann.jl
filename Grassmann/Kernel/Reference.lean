@@ -76,10 +76,18 @@ structure PlanKey where
   project : Bool := false
   deriving Repr, Inhabited
 
+/-- `bundleEq`'s run-time form: one pointer comparison when both spaces are the same object
+(the common case in a loop over one space), else the structural comparison. -/
+@[inline] unsafe def bundleEqImpl (a b : TensorBundle) : Bool :=
+  ptrAddrUnsafe a == ptrAddrUnsafe b || a == b
+
+/-- Equality of spaces for the plan caches (logically `a == b`; `bundleEqImpl` at run time). -/
+@[implemented_by bundleEqImpl] def bundleEq (a b : TensorBundle) : Bool := a == b
+
 /-- Key equality for the cache: the cheap fields first, the space last. -/
 instance : BEq PlanKey where
   beq a b := a.op == b.op && a.la == b.la && a.lb == b.lb && a.lc == b.lc && a.project == b.project
-    && a.V.n == b.V.n && a.V == b.V
+    && a.V.n == b.V.n && bundleEq a.V b.V
 
 /-- Key hash for the cache: the operation, layouts and dimension only (keys that
 differ only in the metric share a bucket and are told apart by `==`; a process

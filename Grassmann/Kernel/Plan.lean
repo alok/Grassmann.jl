@@ -16,9 +16,10 @@ general coefficients (diagonal metrics, conformal `½`) go through
 
 The interpreter follows DESIGN.md §2 rules 2-3: tail-recursive `USize` loops,
 one explicit accumulator of the coefficient type per output (an unboxed
-register at `α = Float`), `@[specialize]`d on the coefficient class; the result
-is pushed into a fresh packed buffer (`FloatArray` at `Float`) of the exact
-size, so there is no read-modify-write of the output.
+register at `α = Float`), `@[specialize]`d on the coefficient class; each result
+entry is written once into a copy of the zero vector of the exact size (inline stores; the
+first design pushed every entry through the out-of-line `lean_float_array_push`), so there is
+no read-modify-write of the output.
 
 Measured at `Float` (Apple M4 Max, compiled): the full product of two
 multivectors costs 186 ns in `ℝ3` (64 entries), 1.85 µs in `ℝ5` and 7.3 µs in
@@ -144,13 +145,35 @@ entries onto an empty buffer; the fallback is unreachable). -/
 @[inline] def finish {k : Nat} (res : Packed.Arr α) : Values α k :=
   if h : Packed.size res = k then ⟨res, h⟩ else zeroValues k
 
+/-- The outputs `c, …, k-1` of a binary plan, written into `out` (the zero vector: its first
+write copies it, the others are in place; an inline store per output where `rows₂` makes an
+out-of-line `push` call). -/
+@[specialize] def fill₂ {k : Nat} (p : Plan) (ha : p.Aligned) (x y : Packed.Arr α) (c : Nat)
+    (out : Values α k) : Values α k :=
+  if hc : c < k then
+    let s := (p.rowStart[c]?.getD 0).toNat
+    let e := min (p.rowStart[c + 1]?.getD 0).toNat p.ia.size
+    fill₂ p ha x y (c + 1) (out.set ⟨c, hc⟩ (row₂ p ha x y e (Nat.min_le_right _ _) s Coeff.zero))
+  else out
+termination_by k - c
+
+/-- The outputs `c, …, k-1` of a unary plan, written into `out`. -/
+@[specialize] def fill₁ {k : Nat} (p : Plan) (ha : p.Aligned) (x : Packed.Arr α) (c : Nat)
+    (out : Values α k) : Values α k :=
+  if hc : c < k then
+    let s := (p.rowStart[c]?.getD 0).toNat
+    let e := min (p.rowStart[c + 1]?.getD 0).toNat p.ia.size
+    fill₁ p ha x (c + 1) (out.set ⟨c, hc⟩ (row₁ p ha x e (Nat.min_le_right _ _) s Coeff.zero))
+  else out
+termination_by k - c
+
 /-- Run a binary plan: the result of `x ⊙ y` as a fresh length-`k` vector. -/
 @[specialize] def eval₂ {n m k : Nat} (p : Plan) (x : Values α n) (y : Values α m) : Values α k :=
-  if ha : p.Aligned then finish (rows₂ p ha x.data y.data k 0 (Packed.mkEmpty k)) else zeroValues k
+  if ha : p.Aligned then fill₂ p ha x.data y.data 0 (zeroValues k) else zeroValues k
 
 /-- Run a unary plan: the image of `x` as a fresh length-`k` vector. -/
 @[specialize] def eval₁ {n k : Nat} (p : Plan) (x : Values α n) : Values α k :=
-  if ha : p.Aligned then finish (rows₁ p ha x.data k 0 (Packed.mkEmpty k)) else zeroValues k
+  if ha : p.Aligned then fill₁ p ha x.data 0 (zeroValues k) else zeroValues k
 
 end Plan
 
