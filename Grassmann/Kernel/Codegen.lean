@@ -84,13 +84,15 @@ def generateKernels (t : Term) (V : TensorBundle) (pre : Name) (pol : Policy) : 
   let spaceId := mkIdent (`_root_ ++ pre ++ `space)
   elabCommand (← `(/-- The space of these generated kernels. -/ abbrev $spaceId : DirectSum.TensorBundle := $t))
   let planned := planAll V pol
+  let sps := planSandwiches V
+  let coefs ← emitCoefs pre (nonUnitCoefs (planned.map (·.plan) ++ sps.flatMap (·.plans)))
   let t1 ← IO.monoMsNow
   let valueId := mkIdent (`_root_ ++ pre ++ `spaceValue)
   elabCommand (← `(/-- The space of these generated kernels as a run-time constant (never inlined,
     so the fallback kernels read one shared value). -/ @[noinline] def $valueId : DirectSum.TensorBundle :=
       $(mkCIdent (pre ++ `space))))
-  let em ← emitSpace V (mkCIdent (pre ++ `space)) (mkCIdent (pre ++ `spaceValue)) pre planned
-  let sw ← emitSandwiches V (mkCIdent (pre ++ `space)) pre
+  let em ← emitSpace V (mkCIdent (pre ++ `space)) (mkCIdent (pre ++ `spaceValue)) pre planned coefs
+  let sw ← emitSandwiches V (mkCIdent (pre ++ `space)) pre sps coefs
   let t2 ← IO.monoMsNow
   modifyEnv (kernelRegistry.addEntry · (V, pre))
   trace[grassmann.codegen] "{V}: {em.kernels} kernels, {em.entries} entries, {sw} fused sandwiches; \

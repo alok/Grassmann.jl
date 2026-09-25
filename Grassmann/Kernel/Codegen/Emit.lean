@@ -93,13 +93,16 @@ structure Arith where
   mulI : Expr
   /-- `Neg α`. -/
   negI : Expr
+  /-- Generated constants `c : {α : Type} → [Coeff α] → α` for the non-unit coefficients. -/
+  coefs : Array (Rat × Name) := #[]
 
 namespace Arith
 
-/-- The arithmetic of `α` from its `Coeff` instance. -/
-def new (α inst : Expr) : Arith where
+/-- The arithmetic of `α` from its `Coeff` instance (`coefs`: the space's coefficient constants). -/
+def new (α inst : Expr) (coefs : Array (Rat × Name) := #[]) : Arith where
   α := α
   inst := inst
+  coefs := coefs
   P := mkApp2 (mkConst ``Coeff.packed) α inst
   addI := mkApp2 (mkConst ``instHAdd [0]) α (mkApp2 (mkConst ``Coeff.toAdd) α inst)
   subI := mkApp2 (mkConst ``instHSub [0]) α (mkApp2 (mkConst ``Coeff.toSub) α inst)
@@ -116,9 +119,13 @@ def mul (r : Arith) (a b : Expr) : Expr := mkApp6 (mkConst ``HMul.hMul [0, 0, 0]
 def neg (r : Arith) (a : Expr) : Expr := mkApp3 (mkConst ``Neg.neg [0]) r.α r.negI a
 /-- `Coeff.zero`. -/
 def zero (r : Arith) : Expr := mkApp2 (mkConst ``Coeff.zero) r.α r.inst
-/-- `Coeff.ofRat q`. -/
+/-- `Coeff.ofRat q`, through the space's coefficient constant for `q` when there is one (a
+closed constant at each coefficient type, where an inline `Coeff.ofRat` is recomputed on
+every call: at `Float`, `Float.ofInt num / Float.ofNat den`). -/
 def ofRat (r : Arith) (q : Rat) : Expr :=
-  mkApp3 (mkConst ``Coeff.ofRat) r.α r.inst (mkApp2 (mkConst ``mkRat) (toExpr q.num) (toExpr q.den))
+  match r.coefs.find? (·.1 == q) with
+  | some (_, c) => mkApp2 (mkConst c) r.α r.inst
+  | none => mkApp3 (mkConst ``Coeff.ofRat) r.α r.inst (mkApp2 (mkConst ``mkRat) (toExpr q.num) (toExpr q.den))
 /-- `Values α n`. -/
 def values (r : Arith) (n : Nat) : Expr := mkApp3 (mkConst ``Values [0]) r.α r.P (mkRawNatLit n)
 
@@ -175,10 +182,11 @@ def rowSum (r : Arith) (p : Plan) (c : Nat) (term : Nat → Expr) : Expr := Id.r
 
 /-- The type and value of the kernel of plan `p` from `Values α na (× Values α nb)` to
 `Values α nc` (`unary`: one operand). -/
-def kernelTerm (unary : Bool) (na nb nc : Nat) (p : Plan) : MetaM (Expr × Expr) := do
+def kernelTerm (unary : Bool) (na nb nc : Nat) (p : Plan) (coefs : Array (Rat × Name) := #[]) :
+    MetaM (Expr × Expr) := do
   withLocalDecl `α .implicit (mkSort Level.one) fun α => do
   withLocalDecl `inst .instImplicit (mkApp (mkConst ``Coeff) α) fun inst => do
-    let r := Arith.new α inst
+    let r := Arith.new α inst coefs
     withLocalDeclD `x (r.values na) fun x => do
       let body (y? : Option Expr) : MetaM (Expr × Expr) := do
         let args := #[α, inst, x] ++ y?.toArray
@@ -233,14 +241,41 @@ def compileKernels (names : Array Name) : CommandElabM Unit := do
 
 /-- Add the kernel `name` of plan `p` (not yet compiled), marked `@[specialize]`, with a
 docstring. -/
-def addKernel (name : Name) (doc : String) (unary : Bool) (na nb nc : Nat) (p : Plan) : MetaM Unit := do
-  let (type, value) ← kernelTerm unary na nb nc p
+def addKernel (name : Name) (doc : String) (unary : Bool) (na nb nc : Nat) (p : Plan)
+    (coefs : Array (Rat × Name) := #[]) : MetaM Unit := do
+  let (type, value) ← kernelTerm unary na nb nc p coefs
   addDecl <| .defnDecl {
     name, levelParams := [], type, value
     hints := .regular (getMaxHeight (← getEnv) value + 1)
     safety := .safe }
   modifyEnv fun env => (Compiler.specializeAttr.setParam env name #[]).toOption.getD env
   addDocStringCore name doc
+
+/-- The coefficients other than `±1` of some plans (diagonal metrics), without repetitions. -/
+def nonUnitCoefs (ps : Array Plan) : Array Rat := Id.run do
+  let mut out : Array Rat := #[]
+  for p in ps do
+    for h : t in [0:p.coef.size] do
+      let q := p.coef[t]
+      if q != 1 && q != -1 && !out.contains q then out := out.push q
+  return out
+
+/-- Declare one coefficient constant `<pre>.coef<i> {α} [Coeff α] : α := Coeff.ofRat q` per
+rational `q` (`@[noinline]`, so each coefficient type evaluates it once, as a closed constant
+of the specialized kernels). -/
+def emitCoefs (pre : Name) (qs : Array Rat) : CommandElabM (Array (Rat × Name)) := do
+  let mut out := #[]
+  for h : i in [0:qs.size] do
+    let q := qs[i]
+    let nm := pre ++ Name.mkSimple s!"coef{i}"
+    let num : Term := if q.num < 0 then Syntax.mkApp (mkCIdent ``Int.neg) #[quote q.num.natAbs] else quote q.num.natAbs
+    elabCommand (← `(command|
+      @[noinline, specialize] def $(mkIdent (`_root_ ++ nm)) {α : Type} [AbstractTensors.Coeff α] : α :=
+        AbstractTensors.Coeff.ofRat (mkRat $num $(quote q.den))))
+    addDocStringCore nm s!"The metric coefficient `{q}` of the generated kernels, as a constant of every \
+      coefficient type."
+    out := out.push (q, nm)
+  return out
 
 /-! ## Fallbacks
 
@@ -385,8 +420,8 @@ and the `Kernels` instance for the space `V` (a term denoting `space`, e.g. an `
 The fallbacks receive the space as `Vrt`, a `@[noinline]` constant: an `abbrev` of a
 structure literal is inlined by the compiler, and where a dispatch does not fold at a call
 site the literal was rebuilt (allocated) on every call before the branch. -/
-def emitSpace (space : TensorBundle) (V : Term) (Vrt : Term) (pre : Name) (planned : Array Planned) :
-    CommandElabM Emitted := do
+def emitSpace (space : TensorBundle) (V : Term) (Vrt : Term) (pre : Name) (planned : Array Planned)
+    (coefs : Array (Rat × Name) := #[]) : CommandElabM Emitted := do
   let n := space.n
   let mut em : Emitted := {}
   let mut names : Array Name := #[]
@@ -400,7 +435,7 @@ def emitSpace (space : TensorBundle) (V : Term) (Vrt : Term) (pre : Name) (plann
     let doc := s!"Generated kernel (DESIGN.md §5.2): `{opTag k.op}` of \
       {layoutDoc k.la}{if unary then "" else s!" × {layoutDoc k.lb}"} → {layoutDoc k.lc}\
       {if k.project then " (projected)" else ""} in `{space}`, {pl.plan.size} entries."
-    liftTermElabM <| addKernel nm doc unary (k.la.size n) (k.lb.size n) (k.lc.size n) pl.plan
+    liftTermElabM <| addKernel nm doc unary (k.la.size n) (k.lb.size n) (k.lc.size n) pl.plan coefs
     names := names.push nm
     em := { em with kernels := em.kernels + 1, entries := em.entries + pl.plan.size }
   compileKernels names

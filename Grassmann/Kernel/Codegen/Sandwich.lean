@@ -179,10 +179,11 @@ def planSandwiches (V : TensorBundle) : Array SandwichPlan := Id.run do
   return out
 
 /-- The type and value of a fused sandwich kernel `(r : Values α nr) (x : Values α nx) : Values α nx`. -/
-def sandwichTerm (nr nx nt : Nat) (sp : SandwichPlan) : MetaM (Expr × Expr) := do
+def sandwichTerm (nr nx nt : Nat) (sp : SandwichPlan) (coefs : Array (Rat × Name) := #[]) :
+    MetaM (Expr × Expr) := do
   withLocalDecl `α .implicit (mkSort Level.one) fun α => do
   withLocalDecl `inst .instImplicit (mkApp (mkConst ``Coeff) α) fun inst => do
-    let ar := Arith.new α inst
+    let ar := Arith.new α inst coefs
     withLocalDeclD `r (ar.values nr) fun r => do
     withLocalDeclD `x (ar.values nx) fun x => do
       let args := #[α, inst, r, x]
@@ -211,16 +212,19 @@ def sandwichTerm (nr nx nt : Nat) (sp : SandwichPlan) : MetaM (Expr × Expr) := 
 def sandwichName (pre : Name) (sp : SandwichPlan) : Name :=
   pre ++ Name.mkSimple s!"k_{if sp.shift then "tsandwich" else "sandwich"}_{layoutTag sp.lr}_{layoutTag sp.lx}"
 
-/-- Emit the fused sandwich kernels of `space` under `pre`, their dispatchers and the
+/-- The plans of a fused sandwich (for collecting its coefficients). -/
+def SandwichPlan.plans (sp : SandwichPlan) : Array Plan := #[sp.first, sp.second] ++ sp.conj.toArray
+
+/-- Emit the fused sandwich kernels `sps` of `space` under `pre`, their dispatchers and the
 `SandwichKernels` instance (`V` denotes the space). Returns the number of kernels. -/
-def emitSandwiches (space : TensorBundle) (V : Term) (pre : Name) : CommandElabM Nat := do
+def emitSandwiches (space : TensorBundle) (V : Term) (pre : Name) (sps : Array SandwichPlan)
+    (coefs : Array (Rat × Name) := #[]) : CommandElabM Nat := do
   let n := space.n
-  let sps := planSandwiches space
   if sps.isEmpty then return 0
   let mut names := #[]
   for sp in sps do
     let nm := sandwichName pre sp
-    let (type, value) ← liftTermElabM <| sandwichTerm (sp.lr.size n) (sp.lx.size n) (sp.lt.size n) sp
+    let (type, value) ← liftTermElabM <| sandwichTerm (sp.lr.size n) (sp.lx.size n) (sp.lt.size n) sp coefs
     liftCoreM <| addDecl <| .defnDecl {
       name := nm, levelParams := [], type, value
       hints := .regular (getMaxHeight (← getEnv) value + 1), safety := .safe }
