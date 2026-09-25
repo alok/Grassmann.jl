@@ -240,3 +240,12 @@ note = "Julia own kernels, bit-exact; the gap is out-of-line lean_float_to_bits/
 pattern = "geophysics/gravity"
 ratio = 3
 note = "Somigliana formula on JuliaBase sin/cos/sqrt: the same out-of-line float_to_bits calls as math/*."
+
+# Dynamic layer (Grassmann.TA) in ℝ3 against Julia elements in a Vector{Any}: the operator
+# instances take the generated kernels (DynKernels, Grassmann/Dynamic/Fast.lean), 0.4-1.0x of
+# Julia on 2026-09-25; the *_loops cases (Julia's loops, every space without DynKernels) are
+# Lean-only reference rows.
+[[budget]]
+pattern = "dynamic/*"
+ratio = 1.5
+note = "TA fast paths through the generated kernels (DynKernels); measured 0.39-0.97x of Julia's Vector{Any} dispatch."
