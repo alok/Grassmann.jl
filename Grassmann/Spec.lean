@@ -1,6 +1,9 @@
 import Grassmann.Spec.Sum
 import Grassmann.Spec.Twisted
 import Grassmann.Spec.Clifford
+import Grassmann.Spec.Exterior
+import Grassmann.Spec.Involution
+import Grassmann.Spec.Hodge
 
 /-!
 # Grassmann.Spec: a proved specification of the geometric algebra
@@ -17,6 +20,14 @@ data structures, with its laws proved in every dimension (docs/PROOFS.md):
   with the reordering sign and metric factors; `mul_assoc`, unit and
   distributive laws, `eᵢ² = gᵢ`, `eᵢeⱼ = -eⱼeᵢ`, the blade table
   `blade_mul_blade`.
+* `Grassmann.Spec.Exterior`: the exterior product (the zero-metric product),
+  its associativity, grades and projections, `isGrade_wedge` and graded
+  commutativity `wedge_comm` (`x ∧ y = (-1)^{pq} y ∧ x`);
+* `Grassmann.Spec.Involution`: reversion (`reverse_mul`: `~(xy) = ~y ~x`),
+  grade involution and Clifford conjugation;
+* `Grassmann.Spec.Hodge`: the right complement and the Hodge star
+  (`⋆x = ~x I`), `e_a ∧ !e_a = I`, and the double complements
+  `!!x = (-1)^{k(n-k)} x`, `⋆⋆x = (-1)^{k(n-k)} det(g) x`.
 
 `Grassmann.Proofs` links this model to the kernels of the implementation.
 -/
