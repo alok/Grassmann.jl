@@ -1,0 +1,28 @@
+# Julia defects met by the Cartan core goldens (oracle/cartan/gen.jl). The Lean port implements the
+# intended semantics; docs/port-notes/cartan-core.md §8.6 lists the rest (B1-B25).
+
+[cartan-xparameter-productspace]
+source = "Cartan.jl src/quotient.jl:61-72 (after the MeshTopology split, commit 07bc4ed)"
+behavior = "every multi-dimensional XParameter throws MethodError: no method matching XTopology(::ProductSpace)"
+port = "the pre-split chain XTopology(p::ProductSpace) = XTopology(PointArray(p)); the generator installs it as a shim"
+notes = "port notes B1"
+
+[cartan-wedgedot-metric-spinor-vector]
+source = "Cartan.jl src/Cartan.jl:387-394 (field * = Grassmann.wedgedot_metric)"
+behavior = "wedgedot_metric(q::Quaternion, v::Chain{V,1}, InducedMetric()) has the opposite sign of q*v (e.g. q = -v13, v = v3: q*v = -v1, wedgedot_metric gives +v1), so q*v on fields is wrong"
+port = "the fiber geometric product; golden field2d 'q*v' is fiber(q) .* fiber(v), 'q*v julia' records upstream"
+
+[cartan-literal-pow]
+source = "Julia lowering of t^-3 with a literal exponent (Base.literal_pow)"
+behavior = "b^(-3) with a literal exponent is inv(b)^3, which differs in the last bit from b^n with a runtime n"
+port = "TensorField.powInt is Julia's ^(x::Float64, n::Int) for a runtime n; the goldens use runtime exponents"
+
+[cartan-productspace-show-linrange]
+source = "Cartan.jl src/topology.jl:63"
+behavior = "show(::ProductSpace) of LinRange axes throws FieldError: type LinRange has no field step"
+port = "prints the step (stop - start)/(len - 1); port notes B7"
+
+[cartan-multivector-plus-spinor-field]
+source = "Grassmann/Cartan: Multivector(v) + q on fields"
+behavior = "StackOverflowError"
+port = "not generated; v + q (a Multivector field) is"
