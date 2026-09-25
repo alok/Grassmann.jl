@@ -12,7 +12,10 @@ every result summed into the checksum:
 
 * `n=k/T*x`, `n=k/T*U`, `n=k/det`, `n=k/inv`, `n=k/exp`, `n=k/adjugate`, `n=k/solve` (Julia
   `value(T) \ v`, Cramer's rule), `n=k/characteristic`, `n=k/eigvals`, `n=k/outermorphism`,
-  `n=k/O*M` (an outermorphism on a multivector);
+  `n=k/O*M` (an outermorphism on a multivector), `n=k/compound2` (`Λ²T`), `n=k/eigen` (values
+  and vectors; checksum `Σ re λ + Σ im λ + Σ |vᵢⱼ|`), `n=k/roots` (of the characteristic
+  polynomial: companion eigenvalues for `n ≥ 5`), `n=k/vandermonde` (of a point list),
+  `n=k/volume` (`|det T|/(n-1)!`);
 * `dyadic/A\b` and `dyadic/bundle A\b`: the one performance figure the Julia docs publish
   (`docs/src/tutorials/dyadic-tensors.md:54-75`): `A\(v1+2v2+3v3+4v4+5v5)` for a `5 × 5`
   operator (72 ns there) and over a bundle of 10 000 operators (0.81 ms there).
@@ -72,6 +75,14 @@ termination_by as.size - k
   | .real v => tot v
   | .complex v => v.toList.foldl (fun acc z => acc + z.re + z.im) 0
 
+/-- The eigen-decomposition's sign/phase-free checksum: `Σ re λ + Σ im λ + Σ |v_ij|` (the
+eigenvectors are unit columns whose sign or phase differs between LAPACK and EISPACK). -/
+def eigenSum {V : TensorBundle} : TensorOperator.EigenResult V → Float
+  | .real S => tot S.vals + S.vecs.mat.v.data.foldl (fun acc x => acc + x.abs) 0
+  | .complex S =>
+    S.vals.toList.foldl (fun acc z => acc + z.re + z.im) 0 +
+      S.vecs.mat.v.toList.foldl (fun acc z => acc + JuliaBase.F64.hypot z.re z.im) 0
+
 /-- The cases of `ℝⁿ` (inlined at each literal `n`, as user code at a fixed dimension). -/
 @[inline] def dimCases (n : Nat) (seed : UInt64) : BenchM Unit := do
   let p := s!"K={K}"
@@ -99,6 +110,13 @@ termination_by as.size - k
     sum1 (fun T => (T.outermorphism.blocks.foldl (fun acc b => acc + tot b.mat.v) 0)) (blackBox s Ts) 0 0
   bench (key "O*M") (ops := K) (param := p) fun s =>
     sum2 (fun O M => tot (O * M : Multivector _ Float).v) (blackBox s Os) Ms 0 0
+  bench (key "compound2") (ops := K) (param := p) fun s => sum1 (fun T => totOp (T.compound 2)) (blackBox s Ts) 0 0
+  bench (key "eigen") (ops := K) (param := p) fun s => sum1 (fun T => eigenSum T.eigen) (blackBox s Ts) 0 0
+  bench (key "roots") (ops := K) (param := p) fun s =>
+    sum1 (fun T => specSum (Forms.monicroots T.characteristic.v)) (blackBox s Ts) 0 0
+  bench (key "vandermonde") (ops := K) (param := p) fun s =>
+    sum1 (fun (x : Chain _ 1 Float) => totOp (Forms.vandermonde x.v)) (blackBox s xs) 0 0
+  bench (key "volume") (ops := K) (param := p) fun s => sum1 (fun T => T.volume) (blackBox s Ts) 0 0
 
 /-- The documented Cramer solve (`dyadic-tensors.md:54-75`): `A \ b` with
 `b = v1+2v2+3v3+4v4+5v5` for a ring of `5 × 5` operators, and over a bundle of 10 000. -/

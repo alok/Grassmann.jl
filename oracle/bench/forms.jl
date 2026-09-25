@@ -14,6 +14,7 @@ frm_tot(x::Multivector) = sum(value(x))
 frm_tot(x::TensorOperator) = sum(Matrix(x))
 frm_tot(x::Outermorphism) = sum(sum(Matrix(TensorOperator(b))) for b in value(x))
 frm_tot(x::Values) = sum(real, x) + sum(imag, x)
+frm_tot(x::Grassmann.Projector) = sum(real, value(x.λ)) + sum(imag, value(x.λ)) + sum(abs, Matrix(TensorOperator(x.v)))
 
 function frm_ops(n, xs, shift)
     V = Submanifold(n)
@@ -60,6 +61,12 @@ function frm_dim(ctx, n, seed)
     bench!(i -> frm_sum1(T -> value(eigvals(T)), blackbox(i, Ts)), ctx, key("eigvals"); ops = FK, param = p)
     bench!(i -> frm_sum1(outermorphism, blackbox(i, Ts)), ctx, key("outermorphism"); ops = FK, param = p)
     bench!(i -> frm_sum2((O, M) -> O * M, blackbox(i, Os), Ms), ctx, key("O*M"); ops = FK, param = p)
+    bench!(i -> frm_sum1(T -> compound(T, 2), blackbox(i, Ts)), ctx, key("compound2"); ops = FK, param = p)
+    bench!(i -> frm_sum1(eigen, blackbox(i, Ts)), ctx, key("eigen"); ops = FK, param = p)
+    bench!(i -> frm_sum1(T -> Grassmann.monicroots(value(Grassmann.characteristic(T))...), blackbox(i, Ts)),
+        ctx, key("roots"); ops = FK, param = p)
+    bench!(i -> frm_sum1(x -> Grassmann.vandermonde(value(x)), blackbox(i, xs)), ctx, key("vandermonde"); ops = FK, param = p)
+    bench!(i -> frm_sum1(T -> abs(value(det(T))[1]) / factorial(n - 1), blackbox(i, Ts)), ctx, key("volume"); ops = FK, param = p)
 end
 
 function frm_dyadic(ctx)

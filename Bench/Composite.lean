@@ -162,6 +162,14 @@ def casesScalar : BenchM Unit := do
     loopF (fun x => (let z := Couple.sqrt (⟨3, (f64! 1.0), x⟩ : Couple ℝ3 Float); z.re + z.im)) (blackBox s xs) 0 0
   bench "ℝ3/Couple.cosh" (ops := n) (param := p) fun s =>
     loopF (fun x => (let z := Couple.cosh (⟨1, (f64! 0.5), x⟩ : Couple ℝ3 Float); z.re + z.im)) (blackBox s xs) 0 0
+  bench "ℝ3/Couple.logFast" (ops := n) (param := p) fun s =>
+    loopF (fun x => (let z := (Couple.logFast (⟨3, (f64! 1.0), x⟩ : Couple ℝ3 Float)).getD ⟨3, z0, z0⟩; z.re + z.im))
+      (blackBox s xs) 0 0
+  bench "ℝ3/Couple.pow5" (ops := n) (param := p) fun s =>
+    loopF (fun x => (let z := Couple.pow (⟨3, (f64! 1.0), x⟩ : Couple ℝ3 Float) 5; z.re + z.im)) (blackBox s xs) 0 0
+  bench "ℝ3/Phasor.complexify" (ops := n) (param := p) fun s =>
+    loopF (fun x => (let z := Phasor.complexify (⟨(f64! 2.0), ⟨3, z0, x⟩⟩ : Phasor ℝ3 Float); z.re + z.im))
+      (blackBox s xs) 0 0
 
 /-- Bivector chains and quaternions of `ℝ3`. -/
 def casesEven : BenchM Unit := do
@@ -190,6 +198,8 @@ def casesDense : BenchM Unit := do
     loopF (fun x => tot (mvq (x + (f64! 0.1))).sqrt.v) (blackBox s xs) 0 0
   bench "ℝ3/Multivector.pow3" (ops := n) (param := p) fun s =>
     loopF (fun x => tot ((mvx x).pow 3).v) (blackBox s xs) 0 0
+  bench "ℝ3/Multivector.logFast" (ops := n) (param := p) fun s =>
+    loopF (fun x => tot ((mvq (x + (f64! 0.1))).logFast.getD Multivector.zero).v) (blackBox s xs) 0 0
   bench "PGA3/Chain.exp" (ops := n) (param := p) fun s =>
     loopF (fun x => tot (pgaBiv x).expEven.v) (blackBox s xs) 0 0
   bench "CGA3/Chain.exp" (ops := n) (param := p) fun s =>

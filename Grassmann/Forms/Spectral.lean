@@ -228,9 +228,14 @@ def eigenreal (X : Endomorphism V (.chain 1) Float) : Except String (SpectralOpe
 /-- Julia `eigen(X)` (`forms.jl:1428-1431`): real-typed when every eigenvalue is
 real, complex otherwise. -/
 def eigen (X : Endomorphism V (.chain 1) Float) : EigenResult V :=
-  match X.eigenreal with
-  | .ok S => .real S
-  | .error _ => .complex X.eigencomplex
+  -- one decomposition, read as real or complex (`eigenreal`/`eigencomplex` each run one)
+  let d := X.eigenDecomposition
+  let n := d.n
+  if d.real then
+    .real ⟨TensorOperator.ofFn fun i j => d.vre.get! (i.1 * n + j.1), Values.ofFn fun k => d.re.get! k.1⟩
+  else
+    .complex ⟨TensorOperator.ofFn fun i j => ⟨d.vre.get! (i.1 * n + j.1), d.vim.get! (i.1 * n + j.1)⟩,
+      Values.ofFn fun k => ⟨d.re.get! k.1, d.im.get! k.1⟩⟩
 
 /-- Julia `eigvecs(X)` (`forms.jl:1338-1348`): the eigenvectors as the columns of
 an operator (complex-typed). -/
