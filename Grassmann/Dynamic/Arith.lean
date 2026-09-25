@@ -323,7 +323,22 @@ def divScalar [Div α] (x : TA V α) (s : α) : TA V α :=
 /-- Julia `a - b = a + (-b)` (see the module docstring). -/
 @[inline] def sub (a b : TA V α) : TA V α := add a (neg b)
 
-instance : Add (TA V α) := ⟨add⟩
+/-- `a + b` with Julia's same-kind container sums inline (`Multivector + Multivector`,
+`Spinor + Spinor`, `CoSpinor + CoSpinor`: entrywise, specialized at the call site's
+coefficient type), everything else through the lattice `add`; the same function
+(`addF_eq`). -/
+@[inline] def addF (a b : TA V α) : TA V α :=
+  match a, b with
+  | multi m, multi w => multi (m + w)
+  | spinor s, spinor t => spinor (s + t)
+  | cospinor s, cospinor t => cospinor (s + t)
+  | _, _ => add a b
+
+/-- The inline sums are the lattice's. -/
+theorem addF_eq (a b : TA V α) : addF a b = add a b := by
+  cases a <;> cases b <;> rfl
+
+instance : Add (TA V α) := ⟨addF⟩
 instance : Sub (TA V α) := ⟨sub⟩
 instance : Neg (TA V α) := ⟨neg⟩
 instance : HMul α (TA V α) (TA V α) := ⟨smul⟩

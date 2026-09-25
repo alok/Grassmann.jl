@@ -39,6 +39,7 @@ basis blade throw (`UndefVarError(:V)` in `norm(::Submanifold)`); here a unit bl
 norm `1`.
 -/
 import Grassmann.Dynamic.Equal
+import Grassmann.Dynamic.Fast
 import Grassmann.Notation
 
 namespace Grassmann
@@ -92,16 +93,16 @@ instance : HSub α (TA V α) (TA V α) := ⟨numSub⟩
 
 section Unary
 
-variable [Kernels V]
+variable [Kernels V] [DynKernels V]
 
-instance : Reverse (TA V α) := ⟨reverse⟩
-instance : Involute (TA V α) := ⟨involute⟩
-instance : Clifford (TA V α) := ⟨clifford⟩
+instance : Reverse (TA V α) := ⟨reverseF⟩
+instance : Involute (TA V α) := ⟨involuteF⟩
+instance : Clifford (TA V α) := ⟨cliffordF⟩
 /-- Julia `conj(t)` (postfix `ǂ`): the reverse on tensors with real coefficients. -/
-instance : Conj (TA V α) := ⟨reverse⟩
-instance : Hodge (TA V α) (TA V α) := ⟨hodge⟩
-instance : ComplementRight (TA V α) (TA V α) := ⟨complementright⟩
-instance : ComplementLeft (TA V α) (TA V α) := ⟨complementleft⟩
+instance : Conj (TA V α) := ⟨reverseF⟩
+instance : Hodge (TA V α) (TA V α) := ⟨hodgeF⟩
+instance : ComplementRight (TA V α) (TA V α) := ⟨complementrightF⟩
+instance : ComplementLeft (TA V α) (TA V α) := ⟨complementleftF⟩
 instance : Even (TA V α) (TA V α) := ⟨even⟩
 instance : Odd (TA V α) (TA V α) := ⟨odd⟩
 instance : Volume (TA V α) (TA V α) := ⟨volume⟩
@@ -132,12 +133,12 @@ end Unary
 
 section Binary
 
-variable [Kernels V] {X : Type}
+variable [Kernels V] [DynKernels V] {X : Type}
 
-instance : WedgeDot (TA V α) (TA V α) (TA V α) := ⟨mul⟩
-instance : Wedge (TA V α) (TA V α) (TA V α) := ⟨wedge⟩
-instance : Vee (TA V α) (TA V α) (TA V α) := ⟨vee⟩
-instance : Contraction (TA V α) (TA V α) (TA V α) := ⟨contraction⟩
+instance : WedgeDot (TA V α) (TA V α) (TA V α) := ⟨mulF⟩
+instance : Wedge (TA V α) (TA V α) (TA V α) := ⟨wedgeF⟩
+instance : Vee (TA V α) (TA V α) (TA V α) := ⟨veeF⟩
+instance : Contraction (TA V α) (TA V α) (TA V α) := ⟨contractionF⟩
 instance : VeeDot (TA V α) (TA V α) (TA V α) := ⟨veedot⟩
 instance : Expansion (TA V α) (TA V α) (TA V α) := ⟨antidot⟩
 instance : Cross (TA V α) (TA V α) (TA V α) := ⟨cross⟩
@@ -148,18 +149,18 @@ instance : HShiftRight (TA V α) (TA V α) (TA V α) := ⟨tsandwich⟩
 /-- A static element or a basis blade next to a dynamic operand. -/
 @[inline] def lift [IntoTA X V α] (x : X) : TA V α := IntoTA.into x
 
-instance (priority := low) [IntoTA X V α] : HMul (TA V α) X (TA V α) := ⟨fun a b => mul a (lift b)⟩
-instance (priority := low) [IntoTA X V α] : HMul X (TA V α) (TA V α) := ⟨fun a b => mul (lift a) b⟩
-instance (priority := low) [IntoTA X V α] : WedgeDot (TA V α) X (TA V α) := ⟨fun a b => mul a (lift b)⟩
-instance (priority := low) [IntoTA X V α] : WedgeDot X (TA V α) (TA V α) := ⟨fun a b => mul (lift a) b⟩
-instance (priority := low) [IntoTA X V α] : Wedge (TA V α) X (TA V α) := ⟨fun a b => wedge a (lift b)⟩
-instance (priority := low) [IntoTA X V α] : Wedge X (TA V α) (TA V α) := ⟨fun a b => wedge (lift a) b⟩
-instance (priority := low) [IntoTA X V α] : Vee (TA V α) X (TA V α) := ⟨fun a b => vee a (lift b)⟩
-instance (priority := low) [IntoTA X V α] : Vee X (TA V α) (TA V α) := ⟨fun a b => vee (lift a) b⟩
+instance (priority := low) [IntoTA X V α] : HMul (TA V α) X (TA V α) := ⟨fun a b => mulF a (lift b)⟩
+instance (priority := low) [IntoTA X V α] : HMul X (TA V α) (TA V α) := ⟨fun a b => mulF (lift a) b⟩
+instance (priority := low) [IntoTA X V α] : WedgeDot (TA V α) X (TA V α) := ⟨fun a b => mulF a (lift b)⟩
+instance (priority := low) [IntoTA X V α] : WedgeDot X (TA V α) (TA V α) := ⟨fun a b => mulF (lift a) b⟩
+instance (priority := low) [IntoTA X V α] : Wedge (TA V α) X (TA V α) := ⟨fun a b => wedgeF a (lift b)⟩
+instance (priority := low) [IntoTA X V α] : Wedge X (TA V α) (TA V α) := ⟨fun a b => wedgeF (lift a) b⟩
+instance (priority := low) [IntoTA X V α] : Vee (TA V α) X (TA V α) := ⟨fun a b => veeF a (lift b)⟩
+instance (priority := low) [IntoTA X V α] : Vee X (TA V α) (TA V α) := ⟨fun a b => veeF (lift a) b⟩
 instance (priority := low) [IntoTA X V α] : Contraction (TA V α) X (TA V α) :=
-  ⟨fun a b => contraction a (lift b)⟩
+  ⟨fun a b => contractionF a (lift b)⟩
 instance (priority := low) [IntoTA X V α] : Contraction X (TA V α) (TA V α) :=
-  ⟨fun a b => contraction (lift a) b⟩
+  ⟨fun a b => contractionF (lift a) b⟩
 instance (priority := low) [IntoTA X V α] : Cross (TA V α) X (TA V α) := ⟨fun a b => cross a (lift b)⟩
 instance (priority := low) [IntoTA X V α] : Cross X (TA V α) (TA V α) := ⟨fun a b => cross (lift a) b⟩
 instance (priority := low) [IntoTA X V α] : Sandwich (TA V α) X (TA V α) :=
