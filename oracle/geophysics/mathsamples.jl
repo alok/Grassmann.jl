@@ -1,4 +1,4 @@
-# Large sweep of Julia's own elementary functions, to validate `Geophysics.JMath` bit for bit.
+# Large sweep of Julia's own elementary functions, to validate `JuliaBase.F64` (`JuliaBase.Trig`, `JuliaBase.Math`) bit for bit.
 #
 #   julia --startup-file=no oracle/geophysics/mathsamples.jl /tmp/geo_math.txt
 #   lake env lean --run oracle/geophysics/MathSweep.lean /tmp/geo_math.txt

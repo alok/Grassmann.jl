@@ -61,7 +61,7 @@ def planets : List (String × Planet) :=
 /-! ### Gases (`planets.jl:45-83`); reference viscosity and conductivity at 288.16 K -/
 
 /-- Julia's `NaN` Sutherland temperature (unknown). -/
-def nanT : JNum := .float JMath.nan
+def nanT : JNum := .float JuliaBase.F64.nan
 
 /-- Nitrogen `N₂`. -/
 def Nitrogen : MoleGas := DiatomicGas 28.013 2744e2 1.735e-5 107 25.11e-3 150
@@ -155,7 +155,7 @@ def US66 : Atmosphere 9 := .make
   (vals [-0e3, 11e3, 20.1e3, 32.2e3, 47.3e3, 52.4e3, 61.6e3, 80e3, 90e3])
 /-- US Standard Atmosphere 1976 (Metric; `±Inf` mark the elliptic and exponential layers). -/
 def US76 : Atmosphere 11 := .make
-  (vals [-6.5e-3, 0.0, 1e-3, 2.8e-3, 0e3, -2.8e-3, -2e-3, 0.0, -JMath.inf, 12e-3, JMath.inf])
+  (vals [-6.5e-3, 0.0, 1e-3, 2.8e-3, 0e3, -2.8e-3, -2e-3, 0.0, -JuliaBase.F64.inf, 12e-3, JuliaBase.F64.inf])
   (vals [-0e3, 11e3, 20e3, 32e3, 47e3, 51e3, 71e3, 86e3, 91e3, 110e3, 120e3])
 /-- US Standard Atmosphere 1922 (English: °R/ft and ft). -/
 def US22E : Atmosphere 2 := .make (vals [-3.5658e-3, 0e-3]) (vals [-0e3, 36.089e3]) Earth .English

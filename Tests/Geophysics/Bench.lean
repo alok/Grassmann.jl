@@ -29,7 +29,7 @@ def loopF (f : Float → Float) (hs : FloatArray) (i : Nat) (acc : Float) : Floa
   if h : i < hs.size then loopF f hs (i + 1) (acc + f (hs[i]'h)) else acc
 termination_by hs.size - i
 
-/-- `x^-5.25` with Julia's `^`. -/ def fPow (x : Float) : Float := JMath.pow x (-5.25)
+/-- `x^-5.25` with Julia's `^`. -/ def fPow (x : Float) : Float := JuliaBase.F64.pow x (-5.25)
 /-- `x^-5.25` with libm. -/ def fLibPow (x : Float) : Float := Float.pow x (-5.25)
 /-- Somigliana gravity on Earth. -/ def fGravity (ϕ : Float) : Float := Earth.gravity ϕ
 
@@ -52,9 +52,9 @@ def run : IO (Nat × Nat) := do
   for o in [Op.temperature, .pressure, .density, .sonicspeed, .viscosity, .kinematic] do
     time o.name n fun _ => loop C o hs 0 0.0
   let xs := grid n 0.5 1.0e-6
-  for (nm, f) in [("JMath.pow", fPow), ("libm pow", fLibPow), ("JMath.exp", JMath.exp),
-      ("libm exp", Float.exp), ("JMath.sin", JMath.sin), ("libm sin", Float.sin),
-      ("JMath.atan", JMath.atan)] do
+  for (nm, f) in [("F64.pow", fPow), ("libm pow", fLibPow), ("F64.exp", JuliaBase.F64.exp),
+      ("libm exp", Float.exp), ("F64.sin", JuliaBase.F64.sin), ("libm sin", Float.sin),
+      ("F64.atan", JuliaBase.F64.atan)] do
     time nm n fun _ => loopF f xs 0 0.0
   let ϕs := grid n 0.0 1.5e-6
   time "Earth.gravity ϕ" n fun _ => loopF fGravity ϕs 0 0.0
