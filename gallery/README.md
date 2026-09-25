@@ -36,6 +36,12 @@ open GrassmannPlot in
 | `GrassmannPlot.Arrows` | `arrows`/`arrows2d`/`arrows3d`, `scaledarrows`, `arrowsbundle`, `planes`, `spaces` and their scaled and bundle forms, `graylines` |
 | `GrassmannPlot.Stream` | `streamplot` of 2-D and 3-D grid fields (interpolated) and tangent-space streamplots `streamplot(M, m)` |
 | `GrassmannPlot.Volume` | `voxels` of volume grids |
+| `GrassmannPlot.Eval` | prepared 2-D/3-D grid evaluators (bit-identical with `TensorField.eval2/3`, allocation-free) |
+| `GrassmannPlot.Animate` | `variation`/`alteration`/`modification`: leaves overlaid, or one canvas per leaf (animation frames) |
+| `GrassmannPlot.Raster` | `raster` (ColorTypesExt): incidence counts of projective elements |
+
+`lake exe plotbench` times the hot paths against the Julia twin `oracle/gallery/bench.jl`
+(results in [`docs/gallery/perf.md`](../docs/gallery/perf.md)).
 
 The Julia side lives in `oracle/gallery/`: one script per figure renders
 `docs/gallery/julia/<name>.png` and dumps the plotted data to `oracle/gallery/data/<name>.json`
@@ -50,7 +56,7 @@ The Julia side lives in `oracle/gallery/`: one script per figure renders
 | `Gallery.Wilkinson` | Wilkinson.jl `plot(::PolynomialComparison)` |
 | `Gallery.Cartan.Fiber` | Cartan `fiber.md` sessions on the Cartan core: Riemann-sphere curves, bivector and conformal streamplots of grid fields, circle, sphere, torus tangent streamplot, Hopf fibration |
 | `Gallery.Cartan.PlotMd` | Cartan `plot.md`, the Makie gallery on TensorFields (arrows, contours, heatmaps, meshes, scatter, streamplots, surface, wireframe, voxels) |
-| `Gallery.Cartan.Recipes` | Cartan's own recipes: `scaledarrows` (fields and frames), `arrowsbundle`, `linegraph` |
+| `Gallery.Cartan.Recipes` | Cartan's own recipes: `scaledarrows` (fields and frames), `arrowsbundle`, `linegraph`, simplex meshes, `raster` |
 | `Gallery.ImageDiff` | pixel agreement of the Lean and Julia PNGs |
 | `Gallery.Index` | `docs/gallery/index.md` and the list of figures waiting for Cartan/Adapode |
 | `Gallery.Check`, `Gallery.Test` | the `lake test` driver: every figure's data checks and README spot values |

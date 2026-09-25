@@ -17,6 +17,7 @@ fields instead, with the same code paths:
 | `cartan-scaledarrows-frame` | `scaledarrows!(S, F)` of a two-column tangent frame (Julia `TensorOperator` fibers, here the column fields) |
 | `cartan-linegraph-polar`, `…-gridsize` | `linegraph!(xyz)` and `linegraph!(xyz, gridsize = (5, 7))` of the plot.md polar surface |
 | `cartan-simplex-mesh` | `mesh(t::ScalarMap)`, `wireframe!`, `scatter!`, `text!` of a triangulated square (`initmeshdata` P/E/T) |
+| `cartan-raster` | `raster(ga)` (ColorTypesExt) of the five lines of a pentagram |
 
 `planes`, `scaledplanes` (the non-mutating forms return `nothing` and draw every parallelogram
 in a figure of its own) and `planesbundle` (B4: undefined `M`) fail in Cartan 0.4.16; their
@@ -85,6 +86,15 @@ def square : SimplexBundle 3 (Chain ℝ3 1 Float) :=
 /-- Julia `TensorField(pt, [p[2]^2 - p[3]^2 for p in points(pt)])`. -/
 def squareF : TensorField square Float :=
   TensorField.tabulatePoint square fun p => let x := getD p.v 1; let y := getD p.v 2; x * x - y * y
+
+/-- The pentagram vertex `A(k) = Chain(1.0, 2.5cos(2πk/5 + π/2), 2.5sin(2πk/5 + π/2))`. -/
+def pentaVertex (k : Nat) : Chain ℝ3 1 Float :=
+  let θ := twoPiF * k.toUInt64.toFloat / 5 + halfPiF
+  Chain.ofFn fun i => if i.1 = 0 then 1 else if i.1 = 1 then f64! 2.5 * F64.cos θ else f64! 2.5 * F64.sin θ
+
+/-- Julia `ga = [A(k) ∧ A(k+2) for k in 0:4]`: the five lines of the pentagram. -/
+def pentagram : Array (Chain ℝ3 2 Float) :=
+  (Array.range 5).map fun k => (pentaVertex k ∧ pentaVertex (k + 2) : Chain ℝ3 (1 + 1) Float)
 
 /-- A lengthscale check. -/
 def lengthscaleCheck (lean julia : Float) : Check :=
@@ -164,6 +174,16 @@ def entries : List Entry := [
                  ptsChecks "wireframe" (itemPoints c 1) (jget j "wireframe") ++
                  ptsChecks "vertices (scatter)" (itemPoints c 2) (jget j "scatter") ++
                  #[eqCheck "vertex labels" texts ((jarr (jget j "text")).map jstr).toList] },
+  entry "cartan-raster" "raster: the incidence counts of the five lines of a pentagram"
+    "`A(k) = Chain(1.0, 2.5cos(2π*k/5+π/2), 2.5sin(2π*k/5+π/2)); raster([A(k) ∧ A(k+2) for k in 0:4])` (`ext/ColorTypesExt.jl:18-35`)"
+    fun j? => do
+      let counts := raster pentagram
+      let c := drawRaster (.ax2 (Axis2.new (aspect := .data) |>.mapStyle fun s => { s with backgroundcolor := RGBA.black })) counts
+      return { fig := c.figure
+               checks := withDump j? fun j =>
+                 #[eqCheck "pixels" counts.size (jfloats (jget j "counts")).size,
+                   closeCheck "incidence counts (every pixel)" counts (jfloats (jget j "counts")) 0,
+                   eqCheck "Σ counts" (sumFinite counts) (jfloat (jget j "sum"))] },
   entry "cartan-linegraph-polar" "linegraph of the polar surface: every grid line coloured by its speed"
     "`fig = Figure(); Axis3(fig[1,1]); linegraph!(xyz)` (`MakieExt.jl:627-660`, the surface of `plot.md:242-252`)"
     fun j? => do

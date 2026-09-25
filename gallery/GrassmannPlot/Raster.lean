@@ -28,7 +28,7 @@ def raster {V : TensorBundle} [Kernels V] {G : Nat} (ga : Array (Chain V G Float
   let n := ax.length
   let s := (ax.step?).getD 0
   let δ := Float.sqrt (s * s + s * s) / 2
-  buildFlat (F := Float) (n * n) fun k =>
+  Cartan.buildFlat (F := Float) (n * n) fun k =>
     let x := ax.get (k % n)
     let y := ax.get (k / n)
     let P : Chain V 1 Float := Chain.ofFn fun i => if i.1 = 0 then 1 else if i.1 = 1 then x else if i.1 = 2 then y else 0

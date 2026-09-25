@@ -102,8 +102,6 @@ def render (root : System.FilePath) (rows : Array (Entry × Array Check × Strin
     "and orbit images; four are above) and the 176² default-keyword sets: the Fatou port computes them " ++
     "(`Tests/Fatou/Catalog.lean`); maps with `exp`/`log`/complex powers need REDUCE's Newton forms " ++
     "written out.\n" ++
-    "* The `raster` point-set rasterization of ColorTypesExt (`plot-inventory.md` §4.10) has no " ++
-    "documented figure.\n" ++
     "* `planes`, `spaces`, `planesbundle`, `spacesbundle` of frames are in `GrassmannPlot.Arrows`, but " ++
     "Cartan 0.4.16's `planes`/`scaledplanes` return `nothing` after drawing every parallelogram in a " ++
     "figure of its own, and `planesbundle` reads an undefined `M` (B4), so there is no Julia render " ++
