@@ -66,6 +66,19 @@ example : (⟨0b11⟩ : Submanifold (ℝ^3) 2) ⊆ ℝ^3 := by decide
 #guard ((ℝ^3).sub [1, 3]).toSignature.toString == "⟨++⟩"
 #guard ((D!"1,-2,3").sub [2, 3]).toSignature.toString == "⟨-+⟩"
 
+-- blade restriction/embedding and covector evaluation (Julia `W(b)`, `w¹(v₁)`)
+#guard ((ℝ^4).sub [2, 4]).restrictBlade 0b1010 == some 0b11
+#guard ((ℝ^4).sub [2, 4]).restrictBlade 0b0010 == some 0b01
+#guard ((ℝ^4).sub [2, 4]).restrictBlade 0b0011 == none
+#guard ((ℝ^4).sub [2, 4]).embedBlade 0b11 == 0b1010
+#guard (TensorBundle.embedBlade (ℝ^4) (ℝ^2) 0b11).toOption == some 0b11
+#guard (TensorBundle.embedBlade ((ℝ^2) ⊕ (ℝ^2)′) (ℝ^2)′ 0b1).toOption == some 0b100
+#guard ((ℝ^2) ⊕ (ℝ^2)′).evaluate1 0b100 0b1 == some 1
+#guard ((ℝ^2) ⊕ (ℝ^2)′).evaluate1 0b100 0b10 == none
+#guard ((ℝ^2) ⊕ (ℝ^2)′).evaluate1 0b1 0b100 == none
+#guard ((S!"-+") ⊕ (S!"-+")′).evaluate1 0b100 0b1 == some (-1)
+#guard ((S!"-+") ⊕ (S!"-+")′).evaluate1 0b1000 0b10 == some 1
+
 /-! ## Runtime goldens -/
 
 /-- `(description, holds)` pairs. -/

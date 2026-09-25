@@ -426,7 +426,40 @@ def unionAny (a : SubSpace V) (b : SubSpace W) : Except String ((U : TensorBundl
   if (← subsetAny b a) then return ⟨V, a⟩
   if ma > 0 then b.oplus a else a.oplus b
 
+/-- Julia `W(b)` for a blade `b` of the parent space and the subspace `W ⊆ V`
+(`DirectSum.jl src/operations.jl:214-216`): the blade of `W` with the same generators
+(`pext` of the mask), or `none` (Julia's `Zero(W)`) when `b` has a generator outside `W`:
+`V(2,4)(v₂₄)` is the top blade of `W`, `V(2,4)(v₁₂) = 𝟎`. (Julia's `lowerbits` cache, Leibniz
+quirk Q1, can return another blade's mask; the port computes `pext`.) -/
+def restrictBlade (W : SubSpace V) (b : UInt64) : Option UInt64 :=
+  if b &&& ~~~W.mask == 0 then some (pext b W.mask) else none
+
+/-- The inverse of `restrictBlade`: a blade of the subspace `W` as a blade of its parent space
+(`pdep`, Leibniz `expandbits`). -/
+def embedBlade (W : SubSpace V) (b : UInt64) : UInt64 := pdep b W.mask
+
 end SubSpace
+
+namespace TensorBundle
+
+/-- Julia `W(b)` for a blade `b` of a space `V ⊆ W` (`DirectSum.jl src/operations.jl:217-228`):
+the blade of `W` with the same generators (`(ℝ^4)(v₁₂) = v₁₂` for a blade of `ℝ^2`), and for
+a dyadic `W = V ⊕ V'` the embedding `mixed` (`(ℝ^2 ⊕ (ℝ^2)')(w¹) = w¹`); Julia's errors
+otherwise (`V ⊄ W`, or both dyadic). -/
+def embedBlade (W V : TensorBundle) (b : UInt64) : Except String UInt64 := do
+  if !(← V.subset? W) then throw s!"cannot convert from {V} to {W}"
+  if W.isdyadic && !V.isdyadic then return V.mixed b
+  if !W.isdyadic && !V.isdyadic then return b
+  throw "arbitrary Manifold intersection not yet implemented."
+
+/-- Julia `evaluate1(V, A, B)` (`DirectSum.jl src/operations.jl:174-177`): the covector `A`
+applied to the vector `B` of a dyadic space (`w¹(v₁) = V[1]·1`): `none` (Julia `Zero`) unless
+`B` is `A` or `A`'s primal partner, else the metric of `B`'s generator. -/
+def evaluate1 (V : TensorBundle) (a b : UInt64) : Option Rat :=
+  let x := if V.isdyadic then shr a (V.n / 2) else a
+  if b != a && b != x then none else some (V.metricAt (ctz b + 1))
+
+end TensorBundle
 
 /-- Display of a subspace of any space. -/
 instance : ToString ((U : TensorBundle) × SubSpace U) := ⟨fun ⟨_, s⟩ => toString s⟩
