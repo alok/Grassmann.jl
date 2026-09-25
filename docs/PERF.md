@@ -676,3 +676,25 @@ Rules learned:
 * `@[inline]` on a small wrapper (`orbit f x = untilConverged f …`) is what lets a
   `@[specialize]` loop below it see the concrete map; without it the wrapper is compiled once
   with closure calls.
+
+## Adapode ODE integrators (2026-09-25)
+
+Whole `odesolve` calls, trajectory included; Lorenz `(10, 28, 8/3)` from `(10, 10, 10)`,
+`h = 2^-15`, `t ∈ [0, 2π]` (205 888 points). Suite `adapode` (`Bench/Adapode.lean`, twin
+`oracle/bench/adapode.jl`), checksums equal on every case. Measured by the porting agent on an
+Apple M4 Max under load (≈15% noise), best of 7:
+
+| integration | Julia (ms) | Lean in-place (ms) | Lean allocating (ms) | Lean/Julia |
+|---|---|---|---|---|
+| RK4, full trajectory | 340.9 | 21.3 | 27.4 | 0.063 |
+| RK4, final state only | 331.1 | 19.2 | — | 0.058 |
+| ABM4, full trajectory | 8.41 | 13.9 | 17.6 | 1.66 |
+| Heun, full trajectory | 3.03 | 6.63 | — | 2.19 |
+| Dormand–Prince adaptive, tol 10 (6433 pts) | 27.4 | 1.78 | 2.11 | 0.065 |
+| ABM4 adaptive, tol 10 (16146 pts) | 0.851 | 1.48 | — | 1.74 |
+| RK4, 10⁶ steps | 1623.7 | 105.5 | — | 0.065 |
+| multivector `x' = Bx` in ℝ3, RK4 | 342.1 | 47.2 | — | 0.14 |
+
+Julia's RK4 path allocates through Adapode's `butcher`, which explains its large times. Its Heun
+and ABM keep isbits Chains in registers, while the Lean steps read and write FloatArrays. The
+in-place Lean Lorenz loop allocates nothing per step (checked in the generated C).
