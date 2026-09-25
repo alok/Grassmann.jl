@@ -52,6 +52,16 @@ def muString (t : Tree) : String :=
   String.join (t.mu.map fun m =>
     if m.isEmpty then "∅" else "[" ++ ", ".intercalate (m.map toString) ++ "]")
 
+/-- Julia `TreeLoday(υ::BaseTree)` (DF/morphism.jl:167-175): the tree whose `μ` is the
+given position lists, if they describe a valid Loday name. -/
+def ofMu? (μ : List (List Nat)) : Option Tree :=
+  let d := μ.length
+  let label (p : Nat) : Nat :=
+    match μ.zipIdx.find? fun (ps, _) => ps.contains p with
+    | some (_, w) => d - w
+    | none => 0
+  ofName? ((List.range d).map fun p => label (p + 1))
+
 end Tree
 
 -- ΘMax(1..6) and the degree-3 tree integers of port-notes §6.4

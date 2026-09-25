@@ -291,9 +291,29 @@ def properties : TestM Unit := do
         check s!"Y{p} * Y{q} ≅ Y{p*q}" (sameRows (Grove.total p * Grove.total q)
           (Grove.total (p * q)))
 
+/-- The remaining conversions of DF/morphism.jl, against the port-notes §6.4 examples. -/
+def extras : TestM Unit := do
+  for d in [1, 2, 3, 4, 5] do
+    let Y := totalGrove d
+    check s!"TreeLoday∘TreeBase = id (Y{d})" (Y.trees.all fun t => Tree.ofMu? t.mu == some t)
+    check s!"treeindex(d, TI) (Y{d})" ((List.range Y.tis.size).all fun i =>
+      treeIndexOfInteger d Y.tis[i]! == i + 1)
+    checkEq s!"GroveError(Y{d})" (groveError Y.trees.toList) (List.replicate Y.trees.size 0)
+    check s!"GroveError(reversed Y{d}) ≠ 0" (d == 1 || groveError Y.trees.toList.reverse
+      != List.replicate Y.trees.size 0)
+  -- `TreeBase([1,2,3]).μ = [[3],[2],[1]]`, `grovebit(Grove(3,5)) = [1,0,1,0,0]`
+  checkEq "TreeBase([1,2,3])" ((Tree.ofName? [1, 2, 3]).map Tree.mu) (some [[3], [2], [1]])
+  checkEq "Grove(BitVector [1,0,1,0,0])"
+    ((SomeGrove.ofBits? [true, false, true, false, false]).map showGrove)
+    (some (showGrove ⟨3, Grove.ofIndex 3 5⟩))
+  checkEq "Grove(3,1) < Grove(3,2)" ((Grove.ofIndex 3 1).indexLt (Grove.ofIndex 3 2)) true
+  checkEq "treeindex([2,1,3])" ((Tree.ofName? [2, 1, 3]).map Tree.treeIndex) (some 2)
+  checkEq "PBTree(3,2)" ((treeOfIndex? 3 2).map Tree.name) (some [2, 1, 3])
+  checkEq "invalid name" (Tree.ofName? [1, 1, 3]).isNone true
+
 /-- Suite entry point for the `lake test` driver. -/
 def run : IO (Nat × Nat) := runSuite "Dendriform" do
   totalgroves; treeOps; poset; groveOps; degenerate; display; float16; intervalTools; misc
-  compositions; properties
+  compositions; properties; extras
 
 end Tests.Dendriform

@@ -157,6 +157,15 @@ def sort (g : Grove n) : Grove n :=
   ⟨g.rows.mergeSort fun s t => s.treeInteger ≤ t.treeInteger,
     fun t h => g.deg_rows t ((List.mergeSort_perm _ _).mem_iff.mp h)⟩
 
+/-- Julia `x < y` on groves (DF/morphism.jl:346): grove-index order. -/
+def indexLt {m : Nat} (x : Grove n) (y : Grove m) : Bool := x.index < y.index
+
+/-- Julia `x ≤ y` on groves (DF/morphism.jl:348): grove-index order. -/
+def indexLe {m : Nat} (x : Grove n) (y : Grove m) : Bool := x.index ≤ y.index
+
+/-- Julia `GroveError(g)` (DF/morphism.jl:60): zeros iff the rows are sorted. -/
+def error (g : Grove n) : List Int := groveError g.rows
+
 /-- Multiset equality, Julia `Grove == Grove` (DF/Dendriform.jl:147), across degrees. -/
 def Equiv (x : Grove a) (y : Grove b) : Prop := x.rows.Perm y.rows
 
@@ -253,6 +262,12 @@ end Grove
 
 /-- A grove whose degree is known only at runtime: Julia's `Grove` with its `degr` field. -/
 abbrev SomeGrove := (n : Nat) × Grove n
+
+/-- Julia `Grove(s::BitVector)` (DF/Dendriform.jl:127): the degree is recovered from the
+Catalan length of the bit vector (`CnInv`), `none` if it is not a Catalan number. -/
+def SomeGrove.ofBits? (bits : List Bool) : Option SomeGrove :=
+  (catalanInv? bits.length).map fun d =>
+    ⟨d, Grove.ofIndex d (bits.zipIdx.foldl (fun acc (b, i) => if b then acc ||| 2 ^ i else acc) 0)⟩
 
 /-! ## Julia's grove-level conventions -/
 

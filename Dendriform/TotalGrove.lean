@@ -137,4 +137,18 @@ def treeRationals (d : Nat) (treeshift : Bool := true) : List Rat :=
     let r : Rat := (θ : Rat) / (Tree.thetaMax d : Rat)
     if treeshift then r else 1 - r
 
+/-- Julia `treeindex(d, j)` (DF/morphism.jl:85): the tree index of the tree with tree
+integer `j` in degree `d` (0 if there is none; Julia throws). -/
+def treeIndexOfInteger (d j : Nat) : Nat :=
+  let Y := totalGrove d
+  let i := lowerBound Y.tis j 0 Y.tis.size
+  if Y.tis[i]? == some j then i + 1 else 0
+
+/-- Julia `GroveError(g)` (DF/morphism.jl:59-61): `[1:size] - sortperm(TreeInteger(g))`,
+all zeros iff the rows are in canonical order. -/
+def groveError (rows : List Tree) : List Int :=
+  let perm := (rows.zipIdx.toArray.qsort fun p q =>
+    p.1.treeInteger < q.1.treeInteger || (p.1.treeInteger == q.1.treeInteger && p.2 < q.2)).toList
+  (perm.zipIdx.map fun ((_, j), i) => (i : Int) - (j : Int))
+
 end Dendriform
