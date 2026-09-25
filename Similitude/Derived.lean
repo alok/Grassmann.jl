@@ -12,8 +12,8 @@ Dim.length` only typechecks because `T · LT⁻¹` reduces to `L`), and its valu
 Julia's exact group (`mile = 2⁵3⋅5⋅11 [ft] English`, `mile.to .Metric =
 ft⋅2⁵3⋅5⋅11 = 1609.344 [m] Metric`).
 
-Not ported: `neper`, `bel`, `decibel` (their dimension is a `LogGroup`, outside
-the typed `Dim`), and `rem`, which is `Base.rem` in Julia (an error).
+`neper`, `bel`, `decibel`, whose dimension is a `LogGroup`, are logarithmic
+quantities (`Similitude.LogQuantity`); `rem` is `Base.rem` in Julia (an error).
 -/
 
 namespace Similitude.Units

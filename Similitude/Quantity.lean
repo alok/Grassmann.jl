@@ -37,6 +37,8 @@ class QScalar (α : Type) extends Add α, Sub α, Mul α, Div α, Neg α, Inv α
   sqrt : α → α
   /-- Julia `cbrt` -/
   cbrt : α → α
+  /-- Julia `x^r` for a `Rational` exponent -/
+  rpow : α → Rat → α
   /-- an exact conversion factor as a value -/
   ofRatio : Scalar → α
   /-- Julia `print` -/
@@ -46,6 +48,7 @@ instance : QScalar Scalar where
   npow x n := x ^ (n : Int)
   sqrt := Scalar.sqrt
   cbrt := Scalar.cbrt
+  rpow := Scalar.qpow
   ofRatio := id
   jprint := Scalar.toString
 
@@ -54,6 +57,8 @@ instance : QScalar Float where
   npow x n := JNum.toFloat (FieldConstants.Num.plainLpow (.float x) n)
   sqrt := Float.sqrt
   cbrt := JuliaBase.F64.cbrt
+  -- Julia `^(x::AbstractFloat, y::Rational) = x^convert(T, y)` (`rational.jl`)
+  rpow x r := JuliaBase.F64.pow x (JuliaBase.IEEEFloat.ofRat Float r)
   ofRatio := Scalar.toFloat
   jprint := JuliaBase.F64.showString
 
@@ -68,6 +73,11 @@ abbrev Q (U : Sys) (d : Dim) := Quantity U d Scalar
 
 /-- Julia `U(v, d)`: the quantity `v` of dimension `d` in system `U`. -/
 @[inline] def _root_.UnitSystems.Sys.qty {α : Type} (U : Sys) (d : Dim) (v : α) : Quantity U d α := ⟨v⟩
+
+/-- `d^n` for an integer exponent `n` (reduces during unification, like `npow`). -/
+@[reducible] def _root_.UnitSystems.Dim.zpow (d : Dim) : Int → Dim
+  | .ofNat n => d ^ n
+  | .negSucc n => (d ^ (n + 1))⁻¹
 
 namespace Quantity
 
@@ -89,6 +99,37 @@ instance : HDiv (Quantity U d α) α (Quantity U d α) := ⟨fun a k => ⟨a.val
 
 /-- Julia `q^n` for a literal `n`: the dimension is raised to `n`. -/
 @[inline] def npow (a : Quantity U d α) (n : Nat) : Quantity U (d ^ n) α := ⟨QScalar.npow a.val n⟩
+
+/-- Julia `q^n` for a literal integer `n` (`literal_pow`: `inv(q)^(-n)` for a
+negative `n`; `dimension.jl:324-326`): the dimension is raised to `n`. -/
+@[inline] def zpow (a : Quantity U d α) (n : Int) : Quantity U (d.zpow n) α :=
+  if n ≥ 0 then ⟨QScalar.npow a.val n.toNat⟩ else ⟨QScalar.npow a.val⁻¹ (-n).toNat⟩
+
+/-- Julia `q^(p//k)` for a `Rational` exponent (`dimension.jl:326`): the value to
+the rational power, the dimension's `k`-th root to the `p` (exponents are
+twelfths, so the root must be exact: checked by `decide`). -/
+@[inline] def qpow (a : Quantity U d α) (p : Int) (k : Nat) (_h : d.HasRoot k := by decide) :
+    Quantity U ((d.root k).zpow p) α :=
+  ⟨QScalar.rpow a.val (mkRat p k)⟩
+
+/-- Julia `q + x` for a number `x` and a quantity that is dimensionless in its
+system (`dimension.jl:383-386`, the `Constant` method; the `Number` method of
+`:327-330` refers to an undefined `D`, a Julia defect). The side condition is
+decided by the kernel. -/
+@[inline] def addNum (q : Quantity U d α) (x : α)
+    (_h : U.hom.halfDim d = U.hom.halfDim Dim.one := by decide) : Quantity U d α := ⟨q.val + x⟩
+
+/-- Julia `x + q` for a dimensionless quantity. -/
+@[inline] def numAdd (x : α) (q : Quantity U d α)
+    (_h : U.hom.halfDim d = U.hom.halfDim Dim.one := by decide) : Quantity U d α := ⟨x + q.val⟩
+
+/-- Julia `q - x` for a dimensionless quantity. -/
+@[inline] def subNum (q : Quantity U d α) (x : α)
+    (_h : U.hom.halfDim d = U.hom.halfDim Dim.one := by decide) : Quantity U d α := ⟨q.val - x⟩
+
+/-- Julia `x - q` for a dimensionless quantity. -/
+@[inline] def numSub (x : α) (q : Quantity U d α)
+    (_h : U.hom.halfDim d = U.hom.halfDim Dim.one := by decide) : Quantity U d α := ⟨x - q.val⟩
 
 /-- Julia `sqrt(q)`: the dimension is halved; exponents are twelfths, so this is
 exact for any integral (or even-twelfths) dimension, checked by `decide`. -/
@@ -140,10 +181,25 @@ quantity. -/
 def Dimension {U : Sys} {d : Dim} {α : Type} (q : Quantity U d α) : USQGroup := q.dimensions
 
 /-- A `ConvertUnit` applies to quantities of its own source system and dimension
-(`dimension.jl:362-365`). -/
+(`dimension.jl:362-365`, `370-377`): the quantity in `S`, or the quantity itself
+when the factor is `ConvertUnit{U,U}`. -/
 instance {U S : Sys} {d : Dim} {α : Type} [QScalar α] :
     HMul (ConvertUnit U S d) (Quantity U d α) (Quantity S d α) :=
-  ⟨fun _ q => q.to S⟩
+  ⟨fun _ q => if U == S then ⟨q.val⟩ else q.to S⟩
+
+/-- Julia `q * c` for a `ConvertUnit{U,S}` of the quantity's dimension
+(`dimension.jl:362-363, 374-377`): the quantity in `S` (itself when `S = U`). -/
+instance {U S : Sys} {d : Dim} {α : Type} [QScalar α] :
+    HMul (Quantity U d α) (ConvertUnit U S d) (Quantity S d α) :=
+  ⟨fun q _ => if U == S then ⟨q.val⟩ else q.to S⟩
+
+/-- Julia `a / b` for quantities of two different systems (`dimension.jl:341`):
+the conversion factor `ConvertUnit{A,B}` of `a`'s dimension (Julia stores
+`(a.v/b.v)*dimensions(a)`, whose coefficient every use of the factor drops).
+Quantities of one system divide as quantities (the default-priority instance). -/
+instance (priority := low) {U S : Sys} {d₁ d₂ : Dim} {α : Type} :
+    HDiv (Quantity U d₁ α) (Quantity S d₂ α) (ConvertUnit U S d₁) :=
+  ⟨fun _ _ => ⟨⟩⟩
 
 /-- The natural unit of dimension `d` expressed in `U` (Julia `d(U)`,
 `dimension.jl:248`): `U(ratio(d, Natural, U), d)`. -/

@@ -213,6 +213,9 @@ instance : QScalar MValue where
   cbrt v := match v with
     | .exact s => .exact s.cbrt
     | .meas m => .meas m.cbrt
+  rpow v r := match v with
+    | .exact s => .exact (s.qpow r)
+    | .meas m => .meas (m.powRat r)
   ofRatio s := .exact s
   jprint := MValue.jprint
 

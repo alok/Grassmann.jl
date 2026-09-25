@@ -171,6 +171,21 @@ def inv (_ : ConvertUnit U S d) : ConvertUnit S U d := ⟨⟩
 
 instance : ToString (ConvertUnit U S d) := ⟨fun _ => showConvert d.toGroup.v U S⟩
 
+/-- Julia `a * b` of two factors between the same systems (`dimension.jl:265`). -/
+def mul {d₁ d₂ : Dim} (_ : ConvertUnit U S d₁) (_ : ConvertUnit U S d₂) : ConvertUnit U S (d₁ * d₂) := ⟨⟩
+
+/-- Julia `a / b` of two factors between the same systems (`dimension.jl:266`). -/
+def div {d₁ d₂ : Dim} (_ : ConvertUnit U S d₁) (_ : ConvertUnit U S d₂) : ConvertUnit U S (d₁ / d₂) := ⟨⟩
+
+instance {d₁ d₂ : Dim} : HMul (ConvertUnit U S d₁) (ConvertUnit U S d₂) (ConvertUnit U S (d₁ * d₂)) :=
+  ⟨mul⟩
+instance {d₁ d₂ : Dim} : HDiv (ConvertUnit U S d₁) (ConvertUnit U S d₂) (ConvertUnit U S (d₁ / d₂)) :=
+  ⟨div⟩
+
+/-- Julia `c^n` (`dimension.jl:263`, where Julia builds a malformed `Quantity{U,S}`;
+the intended factor of dimension `d^n`). -/
+def npow (_ : ConvertUnit U S d) (n : Nat) : ConvertUnit U S (d ^ n) := ⟨⟩
+
 end ConvertUnit
 
 /-- Julia `d(U, S)`: the conversion factor for dimension `d` from `U` to `S`. -/

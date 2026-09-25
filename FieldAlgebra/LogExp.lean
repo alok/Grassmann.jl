@@ -36,6 +36,13 @@ namespace LogBase
 /-- Julia `exp10(0.1)`, the decibel base. -/
 def dBValue : Float := 1.2589254117941673
 
+/-- The base `2` (`log2`, `exp2`). -/
+abbrev two : LogBase := num (.int 2)
+/-- The base `10` (`log10`, `exp10`). -/
+abbrev ten : LogBase := num (.int 10)
+/-- The decibel base `exp10(0.1)` (`logdb`, `dB`). -/
+abbrev dB : LogBase := num (.float dBValue)
+
 /-- Numeric value of the base. -/
 def toFloat : LogBase → Float
   | e => 2.718281828459045
