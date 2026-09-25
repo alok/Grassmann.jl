@@ -249,7 +249,7 @@ def ofSpace {N : Nat} (ps : ProductSpace N) : TensorField (GridBundle.ofSpace ps
 
 /-- Julia `TensorField(f, r)` (C14, `Cartan.jl:160`): the curve `f` sampled on `r` (Julia's
 default `r = -2π:0.0001:2π`). Julia applies `vector` to each value; here `f` returns the fiber. -/
-@[inline] def curve (f : Float → F) (r : Axis := Axis.colon (-2 * 3.141592653589793) 0.0001 (2 * 3.141592653589793)) :
+@[inline] def curve (f : Float → F) (r : Axis := Axis.colon (-twoPiF) (f64! 0.0001) twoPiF) :
     TensorField (GridBundle.ofAxis r) F := ofAxisFn r f
 
 /-- The identity field of a 1-D real grid (C13), recording the range for Julia's lazy range

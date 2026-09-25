@@ -30,6 +30,17 @@ namespace Cartan
 
 open JuliaBase
 
+/-! ## Constants (Julia's `Irrational` arithmetic, rounded as `Float64`) -/
+
+/-- Julia `Float64(π)`. -/
+def piF : Float := f64! 3.141592653589793
+/-- Julia `2π` (`Float64(2) * Float64(π)`, exact). -/
+def twoPiF : Float := f64! 6.283185307179586
+/-- Julia `4π`. -/
+def fourPiF : Float := f64! 12.566370614359172
+/-- Julia `π/2`. -/
+def halfPiF : Float := f64! 1.5707963267948966
+
 /-- A Julia 1-D coordinate vector (the element type of `ProductSpace.v`). -/
 inductive Axis where
   /-- `StepRangeLen{Float64, TwicePrecision, TwicePrecision}`: `a:s:b`, `range(a, b; length)`. -/
