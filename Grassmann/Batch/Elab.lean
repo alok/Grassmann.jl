@@ -38,8 +38,10 @@ def binderOf (xs : Array Expr) (leaf : Expr) : Option Nat :=
 
 /-- Compile the lambda `f` (binders of container types, a container-valued body) into a batch
 kernel `Batch X₁ → … → Batch Xₘ → Batch Y`, or with `into`, `Batch Y → Batch X₁ → … → Batch Y`
-(writing into the first argument's storage). -/
-def batchKernel (f : Expr) (into : Bool) : MetaM Expr := do
+(writing into the first argument's storage). `soa` reads and writes component-major arrays
+instead (component `j` of element `i` at `j·n + i`): not a `Batch` layout, only for the layout
+benchmark (`Bench.Grassmann.Batch`, docs/PERF.md). -/
+def batchKernel (f : Expr) (into : Bool) (soa : Bool := false) : MetaM Expr := do
   let f ← instantiateMVars f
   if f.hasMVar then throwError "batch%: the function has unassigned metavariables{indentExpr f}"
   lambdaTelescope f fun xs body => do
@@ -89,40 +91,47 @@ def batchKernel (f : Expr) (into : Bool) : MetaM Expr := do
       let datas := (bs.zip inTys).map fun (b, X) => mkApp2 (mkConst ``Grassmann.Batch.data) X b
       -- loop-invariant leaves and scalars, evaluated once
       let invIdx := (Array.range st.leaves.size).filter fun l => (leafBinder[l]!).isNone
-      let vals := #[n] ++ datas ++ invIdx.map (st.leaves[·]!.expr) ++ st.scalars
-      let tys := #[mkConst ``Nat] ++ datas.map (fun _ => floatArr) ++
-        invIdx.map (ar.values st.leaves[·]!.size) ++ st.scalars.map fun _ => ctx.α
-      let nms := #[`n] ++ (Array.range datas.size).map (fun j => Name.mkSimple s!"d{j}") ++
-        invIdx.map (fun l => Name.mkSimple s!"l{l}") ++
-        (Array.range st.scalars.size).map fun s => Name.mkSimple s!"s{s}"
-      let e ← bindLets nms tys vals fun vars => do
-        let nv := vars[0]!
-        let dv := vars.extract 1 (1 + datas.size)
-        let inv := vars.extract (1 + datas.size) (1 + datas.size + invIdx.size)
-        let scalarVar := vars.extract (1 + datas.size + invIdx.size) vars.size
+      let e ← bindLets #[`n] #[mkConst ``Nat] #[n] fun nvs => do
+       let nv := nvs[0]!
+       -- the operands, padded to the length the loop reads (themselves when well formed)
+       let padded ← (datas.zip (ins.map (·.2))).mapM fun (d, k) => do
+         return mkApp2 (mkConst ``Grassmann.Batch.pad) d (← mkAppM ``HMul.hMul #[nv, mkRawNatLit k])
+       let vals := padded ++ invIdx.map (st.leaves[·]!.expr) ++ st.scalars
+       let tys := datas.map (fun _ => floatArr) ++ invIdx.map (ar.values st.leaves[·]!.size) ++
+         st.scalars.map fun _ => ctx.α
+       let nms := (Array.range datas.size).map (fun j => Name.mkSimple s!"d{j}") ++
+         invIdx.map (fun l => Name.mkSimple s!"l{l}") ++
+         (Array.range st.scalars.size).map fun s => Name.mkSimple s!"s{s}"
+       bindLets nms tys vals fun vars => do
+        let dv := vars.extract 0 datas.size
+        let inv := vars.extract datas.size (datas.size + invIdx.size)
+        let scalarVar := vars.extract (datas.size + invIdx.size) vars.size
         let m ← mkAppM ``HMul.hMul #[nv, mkRawNatLit kY]
         let base := match outArg? with
           | some o => mkApp2 (mkConst ``Grassmann.Batch.data) Y o
           | none => mkApp (mkConst ``FloatArray.emptyWithCapacity) (mkRawNatLit 0)
         let out0 := mkApp2 (mkConst ``Grassmann.Batch.outputArray) base m
         -- the loop body `fun i out => …`: offsets, reads, the fused nodes, the writes
+        let nU := mkApp (mkConst ``Nat.toUSize) nv
         let loopBody ← withLocalDeclD `i usize fun i => withLocalDeclD `out floatArr fun out => do
-          let offs := (ins.map (·.2) |>.push kY).map fun k => usizeMul i (usizeLit k)
+          -- element-major: element `i` of an operand of width `k` starts at `i·k`, coefficient
+          -- `j` is at `i·k + j`; component-major (`soa`): coefficient `j` is at `j·n + i`
+          let offs := (ins.map (·.2) |>.push kY).map fun k => if soa then i else usizeMul i (usizeLit k)
+          let posAt (off : Expr) (j : Nat) : Expr :=
+            if soa then (if j == 0 then off else usizeAdd (usizeMul (usizeLit j) nU) off)
+            else if j == 0 then off else usizeAdd off (usizeLit j)
           let inner ← bindLets ((Array.range offs.size).map fun j => Name.mkSimple s!"o{j}")
               (offs.map fun _ => usize) offs fun ovs => do
             let read (l idx : Nat) : Option Expr :=
               match leafBinder[l]? with
               | some (some b) =>
-                let off := ovs[b]!
-                let pos := if idx == 0 then off else usizeAdd off (usizeLit idx)
-                some (mkApp2 (mkConst ``Grassmann.Batch.rd) dv[b]! pos)
+                some (mkApp2 (mkConst ``Grassmann.Batch.rdU) dv[b]! (posAt ovs[b]! idx))
               | _ => (invIdx.findIdx? (· == l)).map fun t => ar.get (st.leaves[l]!.size) inv[t]! idx
             bindNodes ar (Heads.of ar) st (st.g.reachable outs) read scalarVar outs fun os => do
               let offY := ovs[ovs.size - 1]!
               let mut acc := out
               for h : j in [0:os.size] do
-                let pos := if j == 0 then offY else usizeAdd offY (usizeLit j)
-                acc := mkApp3 (mkConst ``Grassmann.Batch.wr) acc pos os[j]
+                acc := mkApp3 (mkConst ``Grassmann.Batch.wrU) acc (posAt offY j) os[j]
               return acc
           mkLambdaFVars #[i, out] inner
         let res := mkApp4 (mkConst ``Grassmann.Batch.loop) loopBody nv (usizeLit 0) out0
