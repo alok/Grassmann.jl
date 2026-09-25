@@ -242,6 +242,13 @@ simp["sub_points"] = flatall(points(sub))
 simp["sub_size"] = collect(size(sub))
 simp["sub_field"] = encfield(TensorField(sub, [7.0, 8.0, 9.0, 10.0]))
 simp["elem2"] = sprint(show, tf[2])
+fp = sb ⊕ (0:0.5:1)
+simp["fiberproduct_size"] = collect(size(fp))
+simp["fiberproduct_points"] = flatall([point(fp[i, j]) for i in 1:size(fp)[1], j in 1:size(fp)[2]])
+simp["fiberproduct_elem"] = sprint(show, fp[2, 3])
+simp["timeparameter"] = flatall(fiber(TimeParameter(sb, 0:0.5:1)))
+simp["timeparameter_fixed"] = flatall(fiber(TimeParameter(sb, [2, 3, 4], 0:0.25:1)))
+simp["timeparameter_fixed_size"] = collect(size(TimeParameter(sb, [2, 3, 4], 0:0.25:1)))
 save("simplex", Dict("meta" => meta, "cases" => simp))
 
 # ---------- 8. display ----------

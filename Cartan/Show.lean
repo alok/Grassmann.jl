@@ -1,4 +1,5 @@
 import Cartan.Interp
+import Cartan.Product
 
 /-!
 # Display of fields and bases
@@ -23,6 +24,8 @@ instance {N : Nat} {P G : Type} : BaseShape (GridBundle N P G) := ⟨fun b => b.
 instance {n : Nat} {P G : Type} : BaseShape (SimplexBundle n P G) := ⟨fun b => [b.top.nodes]⟩
 instance {n : Nat} {P G : Type} : BaseShape (FaceBundle n P G) := ⟨fun b => [b.top.elements]⟩
 instance {P G : Type} [FlatFiber P] : BaseShape (PointCloud P G) := ⟨fun b => [b.size]⟩
+instance {M : Type} [FrameBundle M] : BaseShape (FiberProductBundle M) :=
+  ⟨fun b => [card b.space, b.axis.length]⟩
 
 /-- Julia's array-size prefix: `5-element` for vectors, `3×4` otherwise. -/
 def dimsString : List Nat → String

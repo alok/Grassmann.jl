@@ -44,6 +44,9 @@ structure LocalTensor (B F : Type) where
   fiber : F
   deriving BEq, Inhabited
 
+/-- Julia `Section = LocalTensor` (`topology.jl:433`). -/
+abbrev Section := LocalTensor
+
 /-- Julia `LocalPrincipal{M,G}` (`topology.jl:404-408`): a principal base value and group value. -/
 structure LocalPrincipal (M G : Type) where
   /-- Julia `principalbase(s)`. -/

@@ -48,6 +48,18 @@ def runMesh : TestM Unit := do
   check "simplex sub size" ([card sub] == size.toList) fun _ => s!"got {card sub}"
   checkField "simplex sub field" (out ((TensorField.ofArray? sub #[(7 : Float), 8, 9, 10]).get!)) (← jField c "sub_field")
   checkStr "simplex elem2" (toString (tf.localAt 1)) (← jField c "elem2")
+  let fp := FiberProductBundle.ofBase sb (Axis.colon 0 0.5 1)
+  let fsize ← (← jArr (← jField c "fiberproduct_size")).mapM jNat
+  check "fiberproduct size" (BaseShape.shape fp == fsize.toList) fun _ => s!"got {BaseShape.shape fp}"
+  checkFloats "fiberproduct points" (FrameBundle.pointsFlat fp) (← gFloats (← jField c "fiberproduct_points"))
+  checkStr "fiberproduct elem" (toString (FrameBundle.coordinate fp (1 + 2 * 5)))
+    (← jField c "fiberproduct_elem")
+  checkFloats "timeparameter" (timeParameter sb (Axis.colon 0 0.5 1)).data
+    (← gFloats (← jField c "timeparameter"))
+  let tpf := timeParameterOn sb #[2, 3, 4] (Axis.colon 0 0.25 1)
+  checkFloats "timeparameter fixed" tpf.data (← gFloats (← jField c "timeparameter_fixed"))
+  let tsize ← (← jArr (← jField c "timeparameter_fixed_size")).mapM jNat
+  check "timeparameter fixed size" (BaseShape.shape tpf.base == tsize.toList)
 
 /-- `ProductSpace(0:0.5:1, 0:1.0:2)`. -/
 def ps32 : ProductSpace 2 := .ofAxes #v[Axis.colon 0 0.5 1, Axis.colon 0 1 2]
