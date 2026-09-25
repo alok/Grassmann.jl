@@ -6,15 +6,16 @@ import Grassmann.Fuse
 
 Cases `grassmann/<space>/<op>` at `Float`, each over the `K = 1024` operands of a ring
 (`Bench.Grassmann.Common`), against the same loops in `oracle/bench/grassmann.jl`. The call
-sites are ordinary typed expressions (`a * b`, `v ⊘ R`, `~m`, ...) inside `spaceCases`, which is
-`@[inline]`: at each concrete space its `Kernels` dispatch folds to the generated kernels
-specialized at `Float`, exactly as in user code.
+sites are ordinary typed expressions (`a * b`, `v ⊘ R`, `~m`, ...) written at the concrete space
+by the `space_cases%` macro, so every size is a closed term and every operation compiles to its
+generated kernel specialized at `Float`, exactly as in user code.
 
 Groups (`CaseSet`): products and sandwiches; inner products (`⋅`, `⨼`, `∨`, `×`, `⊛`);
 norms and inverses (`abs2`, `norm`, `inv`, `/`, `\`); linear combinations (`+`, `-`, scalar
 multiples, mixed-kind promotion); unary maps (reverse, involutions, complements, grade
-projections); and two harness floors (the sum of an operand, and the sum of a fresh copy of
-one: the allocation every vector-valued Lean result pays, and a Julia isbits result does not).
+projections); display (Julia `repr`); the same expressions through `fused%` (keys `… [fused]`);
+and two harness floors (the sum of an operand, and the sum of a fresh copy of one: the
+allocation every vector-valued Lean result pays, and a Julia isbits result does not).
 -/
 
 namespace Bench.Grassmann
@@ -43,6 +44,8 @@ structure CaseSet where
   unary : Bool := true
   /-- The harness floors. -/
   floors : Bool := true
+  /-- Display (Julia `repr`; the check is the length of the string). -/
+  display : Bool := true
   /-- Fused expressions (`fused%`, `Grassmann.Fuse`), each keyed `<op> [fused]` next to its
   unfused case; the Julia twin times the same expression. -/
   fused : Bool := true
@@ -135,6 +138,11 @@ macro_rules
           total (complementRight a : Multivector $V Float).v) M p
         case1 (k "grade 2 of Multivector") (fun (a : Multivector $V Float) => total (gradePart a 2).v) M p
         case1 (k "even Multivector") (fun (a : Multivector $V Float) => total (even a : Spinor $V Float).v) M p
+      -- display (Julia `repr`)
+      if ($cs : CaseSet).display then
+        case1 (k "show Multivector") (fun (a : Multivector $V Float) => (toString a).length.toUInt64.toFloat) M p
+        case1 (k "show Spinor") (fun (x : Spinor $V Float) => (toString x).length.toUInt64.toFloat) S p
+        case1 (k "show Chain1") (fun (u : Chain $V 1 Float) => (toString u).length.toUInt64.toFloat) U p
       -- the same expressions through `fused%` (one kernel, one result allocation)
       if ($cs : CaseSet).fused then
         case2 (k "R*v*~R [fused]") (fun (R : Spinor $V Float) (v : Chain $V 1 Float) =>
@@ -143,6 +151,10 @@ macro_rules
           total (fused% (a × b : Chain $V (n - (1 + 1)) Float)).v) U W p
         case2 (k "Multivector⊛Multivector [fused]") (fun (a b : Multivector $V Float) =>
           total (fused% (a ⊛ b : Chain $V 0 Float)).v) M N p
+        case2 (k "scalar(Multivector*Multivector)") (fun (a b : Multivector $V Float) =>
+          scalarValue (a * b)) M N p
+        case2 (k "scalar(Multivector*Multivector) [fused]") (fun (a b : Multivector $V Float) =>
+          fused% (scalarValue (a * b))) M N p
         case1 (k "abs2 Multivector [fused]") (fun (a : Multivector $V Float) => total (fused% a.abs2).v) M p
         case2 (k "Spinor-Spinor [fused]") (fun (s t : Spinor $V Float) => total (fused% (s - t)).v) S T p
         case1 (k "2.5*Multivector [fused]") (fun (a : Multivector $V Float) => total (fused% (c25 * a)).v) M p

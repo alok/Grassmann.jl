@@ -63,6 +63,7 @@ Base.@kwdef struct GCaseSet
     unary::Bool = true
     floors::Bool = true
     fused::Bool = true
+    display::Bool = true
 end
 
 function gspace(ctx, label, V, seed, cs::GCaseSet = GCaseSet())
@@ -137,11 +138,18 @@ function gspace(ctx, label, V, seed, cs::GCaseSet = GCaseSet())
         gcase1(ctx, k("grade 2 of Multivector"), a -> a(2), M)
         gcase1(ctx, k("even Multivector"), even, M)
     end
+    if cs.display
+        gcase1(ctx, k("show Multivector"), a -> length(repr(a)), M)
+        gcase1(ctx, k("show Spinor"), a -> length(repr(a)), S)
+        gcase1(ctx, k("show Chain1"), a -> length(repr(a)), U)
+    end
     # the Lean `fused%` versions of these expressions; Julia evaluates the same expressions
     if cs.fused
         gcase2(ctx, k("R*v*~R [fused]"), (R, v) -> R * v * ~R, S, U)
         gcase2(ctx, k("Chain1×Chain1 [fused]"), ×, U, W)
         gcase2(ctx, k("Multivector⊛Multivector [fused]"), ⊛, M, N)
+        gcase2(ctx, k("scalar(Multivector*Multivector)"), (a, b) -> scalar(a * b), M, N)
+        gcase2(ctx, k("scalar(Multivector*Multivector) [fused]"), (a, b) -> scalar(a * b), M, N)
         gcase1(ctx, k("abs2 Multivector [fused]"), abs2, M)
         gcase2(ctx, k("Spinor-Spinor [fused]"), -, S, T)
         gcase1(ctx, k("2.5*Multivector [fused]"), a -> 2.5 * a, M)
@@ -159,7 +167,8 @@ function gspace(ctx, label, V, seed, cs::GCaseSet = GCaseSet())
 end
 
 "The case groups of the spaces other than ℝ3, STA, PGA3, CGA3 (Lean `coreCases`)."
-const GCORE = GCaseSet(inner = false, norms = false, linear = false, unary = false, fused = false, floors = false)
+const GCORE = GCaseSet(inner = false, norms = false, linear = false, unary = false, fused = false, floors = false,
+                       display = false)
 
 "Checksum of a result vector: the coefficient sums of its first and last elements (Lean `Batch.check`)."
 gbc(o) = gtotal(o[1]) + gtotal(o[end])
