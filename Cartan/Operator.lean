@@ -54,6 +54,8 @@ instance : FlatFiber (TensorOperator V ld W lc Float) where
   read a off := ⟨⟨FlatFiber.read a off⟩⟩
   push a T := FlatFiber.push a T.mat.v
   size_push a T := FlatFiber.size_push a T.mat.v
+  write a off T := FlatFiber.write a off T.mat.v
+  size_write a off T := FlatFiber.size_write a off T.mat.v
 
 instance : LinearFiber (TensorOperator V ld W lc Float) := ⟨true⟩
 
@@ -65,6 +67,13 @@ instance : LawfulFlatFiber (TensorOperator V ld W lc Float) where
     show (⟨⟨FlatFiber.read (FlatFiber.push a T.mat.v) off⟩⟩ : TensorOperator V ld W lc Float) =
       ⟨⟨FlatFiber.read a off⟩⟩
     rw [LawfulFlatFiber.read_push_lt a T.mat.v off h]
+  read_write_self a off T h := by
+    show (⟨⟨FlatFiber.read (FlatFiber.write a off T.mat.v) off⟩⟩ : TensorOperator V ld W lc Float) = T
+    rw [LawfulFlatFiber.read_write_self a off T.mat.v h]
+  read_write_other a off off' T h := by
+    show (⟨⟨FlatFiber.read (FlatFiber.write a off T.mat.v) off'⟩⟩ : TensorOperator V ld W lc Float) =
+      ⟨⟨FlatFiber.read a off'⟩⟩
+    rw [LawfulFlatFiber.read_write_other a off off' T.mat.v h]
 
 instance : ShowFiber (TensorOperator V ld W lc Float) := ⟨fun _ T => toString T⟩
 
@@ -78,6 +87,8 @@ instance : FlatFiber (DiagonalOperator V l Float) where
   read a off := ⟨FlatFiber.read a off⟩
   push a D := FlatFiber.push a D.d
   size_push a D := FlatFiber.size_push a D.d
+  write a off D := FlatFiber.write a off D.d
+  size_write a off D := FlatFiber.size_write a off D.d
 
 instance : LinearFiber (DiagonalOperator V l Float) := ⟨true⟩
 
@@ -89,6 +100,13 @@ instance : LawfulFlatFiber (DiagonalOperator V l Float) where
     show (⟨FlatFiber.read (FlatFiber.push a D.d) off⟩ : DiagonalOperator V l Float) =
       ⟨FlatFiber.read a off⟩
     rw [LawfulFlatFiber.read_push_lt a D.d off h]
+  read_write_self a off D h := by
+    show (⟨FlatFiber.read (FlatFiber.write a off D.d) off⟩ : DiagonalOperator V l Float) = D
+    rw [LawfulFlatFiber.read_write_self a off D.d h]
+  read_write_other a off off' D h := by
+    show (⟨FlatFiber.read (FlatFiber.write a off D.d) off'⟩ : DiagonalOperator V l Float) =
+      ⟨FlatFiber.read a off'⟩
+    rw [LawfulFlatFiber.read_write_other a off off' D.d h]
 
 instance : ShowFiber (DiagonalOperator V l Float) := ⟨fun _ D => toString D⟩
 
@@ -173,6 +191,8 @@ instance : FlatFiber (Couple V Float) where
   read a off := ⟨floatToBits (a.get! off), a.get! (off + 1), a.get! (off + 2)⟩
   push a z := ((a.push (bitsToFloat z.bits)).push z.re).push z.im
   size_push a z := by simp
+  write a off z := ((a.set! off (bitsToFloat z.bits)).set! (off + 1) z.re).set! (off + 2) z.im
+  size_write a off z := by simp
 
 /-- `PseudoCouple` fibers: `(blade, re, im)`. -/
 instance : FlatFiber (PseudoCouple V Float) where
@@ -180,6 +200,8 @@ instance : FlatFiber (PseudoCouple V Float) where
   read a off := ⟨floatToBits (a.get! off), a.get! (off + 1), a.get! (off + 2)⟩
   push a z := ((a.push (bitsToFloat z.bits)).push z.re).push z.im
   size_push a z := by simp
+  write a off z := ((a.set! off (bitsToFloat z.bits)).set! (off + 1) z.re).set! (off + 2) z.im
+  size_write a off z := by simp
 
 /-- `Phasor` fibers: `(amplitude, blade, re, im)` of the angle couple. -/
 instance : FlatFiber (Phasor V Float) where
@@ -187,6 +209,9 @@ instance : FlatFiber (Phasor V Float) where
   read a off := ⟨a.get! off, ⟨floatToBits (a.get! (off + 1)), a.get! (off + 2), a.get! (off + 3)⟩⟩
   push a z := (((a.push z.amp).push (bitsToFloat z.angle.bits)).push z.angle.re).push z.angle.im
   size_push a z := by simp
+  write a off z := (((a.set! off z.amp).set! (off + 1) (bitsToFloat z.angle.bits)).set! (off + 2)
+    z.angle.re).set! (off + 3) z.angle.im
+  size_write a off z := by simp
 
 /-- `Single` fibers: `(blade, value)`. -/
 instance : FlatFiber (Single V G Float) where
@@ -194,6 +219,8 @@ instance : FlatFiber (Single V G Float) where
   read a off := ⟨floatToBits (a.get! off), a.get! (off + 1)⟩
   push a s := (a.push (bitsToFloat s.bits)).push s.val
   size_push a s := by simp
+  write a off s := (a.set! off (bitsToFloat s.bits)).set! (off + 1) s.val
+  size_write a off s := by simp
 
 instance : ShowFiber (Couple V Float) := ⟨fun _ z => toString z⟩
 instance : ShowFiber (PseudoCouple V Float) := ⟨fun _ z => toString z⟩

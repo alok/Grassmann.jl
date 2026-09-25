@@ -67,9 +67,22 @@ variable {M : Type} [FrameBundle M] {m : M} {F F' F'' : Type}
 
 /-! ## Construction -/
 
-/-- The field `i ↦ f i` over `m` (`i` the 0-based linear index). All constructors reduce to it. -/
+/-- Write `f i, f (i+1), …, f (i+k-1)` at the offsets `off, off + w, …` (tail recursive). -/
+@[specialize] def fillLoop (f : Nat → F) : (k i off : Nat) → FloatArray → FloatArray
+  | 0, _, _, a => a
+  | k + 1, i, off, a => fillLoop f k (i + 1) (off + FlatFiber.width F) (FlatFiber.write a off (f i))
+
+@[simp] theorem size_fillLoop (f : Nat → F) : ∀ (k i off : Nat) (a : FloatArray),
+    (fillLoop f k i off a).size = a.size
+  | 0, _, _, _ => rfl
+  | k + 1, i, off, a => by rw [fillLoop, size_fillLoop f k (i + 1), FlatFiber.size_write]
+
+/-- The field `i ↦ f i` over `m` (`i` the 0-based linear index). All constructors reduce to it.
+The fibers are written into a preallocated buffer (`Cartan.Flat.zeros`, `FlatFiber.write`):
+no `FloatArray.push` per float. -/
 @[inline] def ofFn (m : M) (f : Nat → F) : TensorField m F :=
-  { data := buildFlat (card m) f, size_data := size_buildFlat _ _ }
+  { data := fillLoop f (card m) 0 0 (Flat.zeros (FlatFiber.width F * card m)),
+    size_data := by rw [size_fillLoop, Flat.size_zeros] }
 
 /-- Julia `TensorField(dom, x::Number)` (C12): the constant field. -/
 @[inline] def const (m : M) (x : F) : TensorField m F := ofFn m fun _ => x

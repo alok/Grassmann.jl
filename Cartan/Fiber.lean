@@ -1,4 +1,5 @@
 import Grassmann
+import Cartan.Flat
 
 /-!
 # Fibers: flat unboxed storage of field values
@@ -36,6 +37,34 @@ structure Induced where
 
 /-! ## Flat fibers -/
 
+/-- `FloatArray.set!` keeps the size. -/
+@[simp] theorem _root_.FloatArray.size_set!' (a : FloatArray) (i : Nat) (v : Float) :
+    (a.set! i v).size = a.size := by
+  cases a; simp [FloatArray.set!, FloatArray.size]
+
+/-- `(a.set! i x).get! i = x` in range. -/
+theorem _root_.FloatArray.get!_set!_self (a : FloatArray) (i : Nat) (x : Float) (h : i < a.size) :
+    (a.set! i x).get! i = x := by
+  cases a with | mk ds =>
+  simp only [FloatArray.size] at h
+  simp [FloatArray.set!, FloatArray.get!, Array.set!, h]
+
+/-- `set!` leaves the other entries alone. -/
+theorem _root_.FloatArray.get!_set!_ne (a : FloatArray) (i j : Nat) (x : Float) (h : i ≠ j) :
+    (a.set! i x).get! j = a.get! j := by
+  cases a with | mk ds =>
+  simp [FloatArray.set!, FloatArray.get!, Array.set!, getElem!_def, h]
+
+/-- `a[off + j] := src[j]` for `j ∈ [j₀, j₀ + k)` (in place once unshared; the default `write`). -/
+def writeFrom (src : FloatArray) (off : Nat) : (k j : Nat) → FloatArray → FloatArray
+  | 0, _, a => a
+  | k + 1, j, a => writeFrom src off k (j + 1) (a.set! (off + j) (src.get! j))
+
+@[simp] theorem size_writeFrom (src : FloatArray) (off : Nat) : ∀ (k j : Nat) (a : FloatArray),
+    (writeFrom src off k j a).size = a.size
+  | 0, _, _ => rfl
+  | k + 1, j, a => by rw [writeFrom, size_writeFrom src off k (j + 1), FloatArray.size_set!']
+
 /-- A fiber type whose elements are `width` consecutive `Float`s in a `FloatArray` (Julia: an
 isbits element type stored inline in `Array{F}`). -/
 class FlatFiber (F : Type) where
@@ -48,6 +77,16 @@ class FlatFiber (F : Type) where
   push : FloatArray → F → FloatArray
   /-- Pushing appends exactly `width` floats. -/
   size_push (a : FloatArray) (x : F) : (push a x).size = a.size + width
+  /-- Write the encoding of an element at `a[off], …` (destination passing: in place when the
+  array is exclusive, entries past the end dropped). Fields are built by writing into a
+  preallocated buffer (`TensorField.ofFn`), which avoids `FloatArray.push`, an out-of-line call
+  per float. The default goes through `push`; the instances here write directly. -/
+  write (a : FloatArray) (off : Nat) (x : F) : FloatArray :=
+    let s := push FloatArray.empty x
+    writeFrom s off s.size 0 a
+  /-- Writing keeps the size. -/
+  size_write (a : FloatArray) (off : Nat) (x : F) : (write a off x).size = a.size := by
+    intros; simp
 
 attribute [simp] FlatFiber.size_push
 
@@ -55,11 +94,6 @@ attribute [simp] FlatFiber.size_push
 @[simp] theorem _root_.FloatArray.size_push' (a : FloatArray) (x : Float) :
     (a.push x).size = a.size + 1 := by
   cases a; simp [FloatArray.push, FloatArray.size]
-
-/-- `FloatArray.set!` keeps the size. -/
-@[simp] theorem _root_.FloatArray.size_set!' (a : FloatArray) (i : Nat) (v : Float) :
-    (a.set! i v).size = a.size := by
-  cases a; simp [FloatArray.set!, FloatArray.size]
 
 /-- `+`, `-`, negation and scaling by a `Float` act componentwise on the flat encoding of `F`, so
 fields of `F` may add and scale their raw arrays. `recipDiv` records how Julia divides by a real
@@ -102,6 +136,8 @@ instance instFlatFiberFloat : FlatFiber Float where
   read a i := a.get! i
   push a x := a.push x
   size_push a x := by simp
+  write a off x := a.set! off x
+  size_write a off x := FloatArray.size_set!' a off x
 
 instance : LinearFiber Float := ⟨false⟩
 
@@ -111,6 +147,8 @@ instance : FlatFiber (Complex Float) where
   read a i := ⟨a.get! i, a.get! (i + 1)⟩
   push a z := (a.push z.re).push z.im
   size_push a z := by simp
+  write a off z := (a.set! off z.re).set! (off + 1) z.im
+  size_write a off z := by simp
 
 instance : LinearFiber (Complex Float) := ⟨false⟩
 
@@ -129,6 +167,18 @@ theorem size_pushValues {α : Type} [Packed α] [Inhabited α] [FlatFiber α] {n
   | k + 1, i, a => by
     rw [pushValues, size_pushValues v k (i + 1), FlatFiber.size_push, Nat.succ_mul]; omega
 
+/-- Write the entries `j, …, j+k-1` of `v` at `off + j·w` (element width `w`). -/
+@[specialize] def writeValues {α : Type} [Packed α] [Inhabited α] [FlatFiber α] {n : Nat}
+    (v : Values α n) (off : Nat) : (k j : Nat) → FloatArray → FloatArray
+  | 0, _, a => a
+  | k + 1, j, a => writeValues v off k (j + 1) (FlatFiber.write a (off + j * FlatFiber.width α) (v.get! j))
+
+@[simp] theorem size_writeValues {α : Type} [Packed α] [Inhabited α] [FlatFiber α] {n : Nat}
+    (v : Values α n) (off : Nat) : ∀ (k j : Nat) (a : FloatArray),
+      (writeValues v off k j a).size = a.size
+  | 0, _, _ => rfl
+  | k + 1, j, a => by rw [writeValues, size_writeValues v off k (j + 1), FlatFiber.size_write]
+
 /-- Decode `n` consecutive flat elements starting at `off`. -/
 @[inline] def readValues {α : Type} [Packed α] [FlatFiber α] (n : Nat) (a : FloatArray)
     (off : Nat) : Values α n :=
@@ -141,6 +191,8 @@ instance {α : Type} [Packed α] [Inhabited α] [FlatFiber α] {n : Nat} : FlatF
   read a off := readValues n a off
   push a v := pushValues v n 0 a
   size_push a v := size_pushValues v n 0 a
+  write a off v := writeValues v off n 0 a
+  size_write a off v := size_writeValues v off n 0 a
 
 /-- Static vectors divide entrywise (StaticVectors `v / s = map(c -> c/s)`), so as their entries do. -/
 instance {α : Type} [Packed α] [Inhabited α] [FlatFiber α] [LinearFiber α] {n : Nat} :
@@ -158,6 +210,8 @@ instance : FlatFiber (Chain V G α) where
   read a off := ⟨readValues _ a off⟩
   push a c := pushValues c.v _ 0 a
   size_push a c := size_pushValues c.v _ 0 a
+  write a off c := writeValues c.v off (Leibniz.binomial V.n G) 0 a
+  size_write a off c := size_writeValues c.v off (Leibniz.binomial V.n G) 0 a
 
 instance [LinearFiber α] : LinearFiber (Chain V G α) := ⟨true⟩
 
@@ -167,6 +221,8 @@ instance : FlatFiber (Half V p α) where
   read a off := ⟨readValues _ a off⟩
   push a h := pushValues h.v _ 0 a
   size_push a h := size_pushValues h.v _ 0 a
+  write a off h := writeValues h.v off (halfDim V.n p) 0 a
+  size_write a off h := size_writeValues h.v off (halfDim V.n p) 0 a
 
 instance [LinearFiber α] : LinearFiber (Half V p α) := ⟨true⟩
 
@@ -176,6 +232,8 @@ instance : FlatFiber (Multivector V α) where
   read a off := ⟨readValues _ a off⟩
   push a m := pushValues m.v _ 0 a
   size_push a m := size_pushValues m.v _ 0 a
+  write a off m := writeValues m.v off (2 ^ V.n) 0 a
+  size_write a off m := size_writeValues m.v off (2 ^ V.n) 0 a
 
 instance [LinearFiber α] : LinearFiber (Multivector V α) := ⟨true⟩
 

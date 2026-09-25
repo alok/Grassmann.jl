@@ -59,6 +59,8 @@ instance : FlatFiber (AffinePoint N) where
   read a off := ⟨FlatFiber.read a off⟩
   push a p := FlatFiber.push a p.coords
   size_push a p := FlatFiber.size_push a p.coords
+  write a off p := FlatFiber.write a off p.coords
+  size_write a off p := FlatFiber.size_write a off p.coords
 
 instance : LinearFiber (AffinePoint N) := ⟨true⟩
 
