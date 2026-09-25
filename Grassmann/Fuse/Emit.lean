@@ -65,17 +65,18 @@ partial def bindLets (names : Array Name) (tys vals : Array Expr) (k : Array Exp
       mkLetFVars #[x] (← bindLets names tys vals k (i + 1) (acc.push x))
   else k acc
 
-/-- The term of every live node of `g` (in topological order), given the terms of the leaves
-and scalars, as a `let` chain around `k (terms of outs)`. -/
+/-- The term of every live node of `g` (in topological order), given the reads of the leaf
+coefficients (`readInput leaf idx`) and the terms of the scalars, as a `let` chain around
+`k (terms of outs)`. -/
 partial def bindNodes (ar : Arith) (hd : Heads) (st : State) (live : Array Nat)
-    (leafVar : Array (Option Expr)) (scalarVar : Array Expr) (outs : Array Nat) (k : Array Expr → MetaM Expr)
-    (j : Nat := 0) (env : Std.HashMap Nat Expr := {}) : MetaM Expr := do
+    (readInput : Nat → Nat → Option Expr) (scalarVar : Array Expr) (outs : Array Nat)
+    (k : Array Expr → MetaM Expr) (j : Nat := 0) (env : Std.HashMap Nat Expr := {}) : MetaM Expr := do
   let g := st.g
   let val (i : Nat) : Expr := env.getD i ar.zero
   if h : j < live.size then
     let i := live[j]
     let term? : Option Expr := match g.get i with
-      | .input l idx => (leafVar[l]?.getD none).map fun lv => ar.get (st.leaves[l]!.size) lv idx
+      | .input l idx => readInput l idx
       | .scalar s => scalarVar[s]?
       | .const q => some (constExpr ar q)
       | .add a b => some (mkApp2 hd.add (val a) (val b))
@@ -84,12 +85,12 @@ partial def bindNodes (ar : Arith) (hd : Heads) (st : State) (live : Array Nat)
       | .neg a => some (mkApp hd.neg (val a))
       | .ext f args => some (mkAppN st.fns[f]! (args.map val)).headBeta
     match term?, g.get i with
-    | none, _ => bindNodes ar hd st live leafVar scalarVar outs k (j + 1) env
-    | some t, .const _ => bindNodes ar hd st live leafVar scalarVar outs k (j + 1) (env.insert i t)
-    | some t, .scalar _ => bindNodes ar hd st live leafVar scalarVar outs k (j + 1) (env.insert i t)
+    | none, _ => bindNodes ar hd st live readInput scalarVar outs k (j + 1) env
+    | some t, .const _ => bindNodes ar hd st live readInput scalarVar outs k (j + 1) (env.insert i t)
+    | some t, .scalar _ => bindNodes ar hd st live readInput scalarVar outs k (j + 1) (env.insert i t)
     | some t, _ =>
       withLetDecl (.mkSimple s!"t{i}") ar.α t fun x => do
-        mkLetFVars #[x] (← bindNodes ar hd st live leafVar scalarVar outs k (j + 1) (env.insert i x))
+        mkLetFVars #[x] (← bindNodes ar hd st live readInput scalarVar outs k (j + 1) (env.insert i x))
   else k (outs.map val)
 
 /-- Build the straight-line code computing the nodes `outs` of state `st` and hand the output
@@ -116,6 +117,8 @@ def emitWith (ctx : Ctx) (st : State) (outs : Array Nat)
     for h : t in [0:lIdx.size] do leafVar := leafVar.set! lIdx[t] (some vars[t]!)
     let mut scalarVar : Array Expr := Array.replicate st.scalars.size ar.zero
     for h : t in [0:sIdx.size] do scalarVar := scalarVar.set! sIdx[t] vars[lIdx.size + t]!
-    bindNodes ar (Heads.of ar) st live leafVar scalarVar outs (k ar · leafVar)
+    let read (l idx : Nat) : Option Expr :=
+      (leafVar[l]?.getD none).map fun lv => ar.get (st.leaves[l]!.size) lv idx
+    bindNodes ar (Heads.of ar) st live read scalarVar outs (k ar · leafVar)
 
 end Grassmann.Fuse
