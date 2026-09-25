@@ -115,37 +115,48 @@ def rowSrc (p : Plan) (c : Nat) (term : Nat → String) : String := Id.run do
       else s!"({acc} + {floatSrc (Coeff.ofRat (p.coef[t]!) : Float)} * {v})"
   return acc
 
-/-- Source of a binary field kernel `name a b out k oa ob oc` over `k` points: reads the operands
-at the word offsets `oa`, `ob` and writes the outputs at `oc` (into a preallocated buffer, no
-`push`; `Cartan.Flat.getU`/`putU`). -/
+/-- Source of a binary field kernel `name a b k oa ob oc ha hb hc out` over `k` points: reads the
+operands at the word offsets `oa`, `ob` and writes the outputs at `oc` into the buffer `out`. The
+offsets are proved in range (`ha`, `hb`, `hc`: `k` blocks fit; `Cartan.Flat.runBin` proves it
+once), so every access is an unchecked `uget`/`uset`. -/
 def binKernelSrc (name doc : String) (p : Plan) (wa wb wc : Nat) : String := Id.run do
   let as := (p.ia.map (·.toNat)).toList.eraseDups
   let bs := (p.ib.map (·.toNat)).toList.eraseDups
-  let mut body := ""
-  for j in as do body := body ++ s!"    let x{j} := Cartan.Flat.getU a (oa + {j})\n"
-  for j in bs do body := body ++ s!"    let y{j} := Cartan.Flat.getU b (ob + {j})\n"
+  let mut body := "    have ha' := Cartan.Flat.headLe ha\n    have hb' := Cartan.Flat.headLe hb\n" ++
+    "    have hc' := Cartan.Flat.headLe hc\n"
+  for j in as do
+    body := body ++ s!"    let x{j} := a.uget (oa + {j}) (Cartan.Flat.idxW ha' {j} (by decide))\n"
+  for j in bs do
+    body := body ++ s!"    let y{j} := b.uget (ob + {j}) (Cartan.Flat.idxW hb' {j} (by decide))\n"
   let mut writes := "out"
   for c in [0:p.outputs] do
     let r := rowSrc p c fun t => s!"x{p.ia[t]!.toNat} * y{p.ib[t]!.toNat}"
     body := body ++ s!"    let r{c} := {r}\n"
-    writes := s!"(Cartan.Flat.putU {writes} (oc + {c}) r{c})"
-  s!"/-- {doc} -/\ndef {name} (a b : FloatArray) : (k : Nat) → (oa ob oc : USize) → FloatArray → FloatArray\n" ++
-    s!"  | 0, _, _, _, out => out\n  | k + 1, oa, ob, oc, out =>\n{body}" ++
-    s!"    {name} a b k (oa + {wa}) (ob + {wb}) (oc + {wc}) {writes}"
+    writes := s!"({writes}.set (oc + {c}) r{c} (Cartan.Flat.idxW hc' {c} (by decide)))"
+  s!"/-- {doc} -/\ndef {name} \{p : Nat} (a b : FloatArray) : (k : Nat) → (oa ob oc : USize) →\n" ++
+    s!"    oa.toNat + {wa} * k ≤ a.size → ob.toNat + {wb} * k ≤ b.size → oc.toNat + {wc} * k ≤ p →\n" ++
+    "    Cartan.Flat.Buf p → Cartan.Flat.Buf p\n" ++
+    s!"  | 0, _, _, _, _, _, _, out => out\n  | k + 1, oa, ob, oc, ha, hb, hc, out =>\n{body}" ++
+    s!"    {name} a b k (oa + {wa}) (ob + {wb}) (oc + {wc}) (Cartan.Flat.tailLe ha) " ++
+    s!"(Cartan.Flat.tailLe hb) (Cartan.Flat.tailLe hc)\n      {writes}"
 
-/-- Source of a unary field kernel `name a out k oa oc`. -/
+/-- Source of a unary field kernel `name a k oa oc ha hc out` (see `binKernelSrc`). -/
 def unKernelSrc (name doc : String) (p : Plan) (wa wc : Nat) : String := Id.run do
   let as := (p.ia.map (·.toNat)).toList.eraseDups
-  let mut body := ""
-  for j in as do body := body ++ s!"    let x{j} := Cartan.Flat.getU a (oa + {j})\n"
+  let mut body := "    have ha' := Cartan.Flat.headLe ha\n    have hc' := Cartan.Flat.headLe hc\n"
+  for j in as do
+    body := body ++ s!"    let x{j} := a.uget (oa + {j}) (Cartan.Flat.idxW ha' {j} (by decide))\n"
   let mut writes := "out"
   for c in [0:p.outputs] do
     let r := rowSrc p c fun t => s!"x{p.ia[t]!.toNat}"
     body := body ++ s!"    let r{c} := {r}\n"
-    writes := s!"(Cartan.Flat.putU {writes} (oc + {c}) r{c})"
-  s!"/-- {doc} -/\ndef {name} (a : FloatArray) : (k : Nat) → (oa oc : USize) → FloatArray → FloatArray\n" ++
-    s!"  | 0, _, _, out => out\n  | k + 1, oa, oc, out =>\n{body}" ++
-    s!"    {name} a k (oa + {wa}) (oc + {wc}) {writes}"
+    writes := s!"({writes}.set (oc + {c}) r{c} (Cartan.Flat.idxW hc' {c} (by decide)))"
+  s!"/-- {doc} -/\ndef {name} \{p : Nat} (a : FloatArray) : (k : Nat) → (oa oc : USize) →\n" ++
+    s!"    oa.toNat + {wa} * k ≤ a.size → oc.toNat + {wc} * k ≤ p →\n" ++
+    "    Cartan.Flat.Buf p → Cartan.Flat.Buf p\n" ++
+    s!"  | 0, _, _, _, _, out => out\n  | k + 1, oa, oc, ha, hc, out =>\n{body}" ++
+    s!"    {name} a k (oa + {wa}) (oc + {wc}) (Cartan.Flat.tailLe ha) (Cartan.Flat.tailLe hc)\n" ++
+    s!"      {writes}"
 
 /-- Elaborate one command given as source text. -/
 def elabSrc (src : String) : CommandElabM Unit := do
@@ -176,7 +187,7 @@ syntax (name := cartanFieldKernels) "cartan_field_kernels " (num)+ : command
         let doc := s!"Generated field kernel: `{reprStr op}` of `{reprStr la}` × `{reprStr lb}` into `{reprStr lc}` in ℝ^{n}."
         elabSrc (binKernelSrc name doc p (la.size n) (lb.size n) (lc.size n))
         bArms := bArms.push
-          s!"    | {binSrc op}, {layoutSrc la}, {layoutSrc lb}, {layoutSrc lc} => some fun a b k => {name} a b k 0 0 0 (Cartan.Flat.zeros (k * {lc.size n}))"
+          s!"    | {binSrc op}, {layoutSrc la}, {layoutSrc lb}, {layoutSrc lc} => some fun a b k => Cartan.Flat.runBin {la.size n} {lb.size n} {lc.size n} a b k fun ha hb hc out => {name} a b k 0 0 0 ha hb hc out"
     for (op, la, lc) in unKeys n do
       match build { V, op := .un op, la, lb := la, lc } with
       | .error _ => pure ()
@@ -187,7 +198,7 @@ syntax (name := cartanFieldKernels) "cartan_field_kernels " (num)+ : command
         let doc := s!"Generated field kernel: `{reprStr op}` of `{reprStr la}` into `{reprStr lc}` in ℝ^{n}."
         elabSrc (unKernelSrc name doc p (la.size n) (lc.size n))
         uArms := uArms.push
-          s!"    | {unSrc op}, {layoutSrc la}, {layoutSrc lc} => some fun a k => {name} a k 0 0 (Cartan.Flat.zeros (k * {lc.size n}))"
+          s!"    | {unSrc op}, {layoutSrc la}, {layoutSrc lc} => some fun a k => Cartan.Flat.runUn {la.size n} {lc.size n} a k fun ha hc out => {name} a k 0 0 ha hc out"
     binArms := binArms.push
       (s!"  if V == TensorBundle.euclidean {n} then\n    match op, la, lb, lc with\n" ++
         "\n".intercalate bArms.toList ++ "\n    | _, _, _, _ => none\n  else")

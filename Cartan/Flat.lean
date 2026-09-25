@@ -55,6 +55,21 @@ theorem toNat_add_le (i : USize) (j : Nat) : (i + USize.ofNat j).toNat ≤ i.toN
 theorem idx {n : Nat} {i : USize} {j : Nat} (h : i.toNat + j < n) : (i + USize.ofNat j).toNat < n :=
   Nat.lt_of_le_of_lt (toNat_add_le i j) h
 
+/-- The first block of `k + 1` blocks of width `w` from `o` is in range. -/
+theorem headLe {n : Nat} {o : USize} {w k : Nat} (h : o.toNat + w * (k + 1) ≤ n) :
+    o.toNat + w ≤ n := by
+  rw [Nat.mul_succ] at h; omega
+
+/-- The other `k` blocks start at `o + w`. -/
+theorem tailLe {n : Nat} {o : USize} {w k : Nat} (h : o.toNat + w * (k + 1) ≤ n) :
+    (o + USize.ofNat w).toNat + w * k ≤ n :=
+  Nat.le_trans (Nat.add_le_add_right (toNat_add_le o w) _) (by rw [Nat.mul_succ] at h; omega)
+
+/-- Entry `j < w` of an in-range block of width `w` at `o`. -/
+theorem idxW {n : Nat} {o : USize} {w : Nat} (h : o.toNat + w ≤ n) (j : Nat) (hj : j < w) :
+    (o + USize.ofNat j).toNat < n :=
+  idx (by omega)
+
 /-! ## Sized buffers -/
 
 /-- A `FloatArray` of length `n` (the proof is erased: at run time this is the array). -/
@@ -401,6 +416,27 @@ else `min` (Julia `minimum(norm, …)`), by `extStep`. -/
 end Cartan.Flat
 
 namespace Cartan.Flat
+
+/-! ## Running generated kernels -/
+
+/-- Run a generated binary field kernel over `k` points (`wa`, `wb`, `wc` floats each) from
+offset `0`, writing into `zeros (wc * k)`; the offsets are proved in range once here, so the
+kernel reads and writes without bounds checks. `zeros` if an operand is too short. -/
+@[inline] def runBin (wa wb wc : Nat) (a b : FloatArray) (k : Nat)
+    (kern : (0 : USize).toNat + wa * k ≤ a.size → (0 : USize).toNat + wb * k ≤ b.size →
+      (0 : USize).toNat + wc * k ≤ wc * k → Buf (wc * k) → Buf (wc * k)) : FloatArray :=
+  if ha : wa * k ≤ a.size then
+    if hb : wb * k ≤ b.size then
+      (kern (by simpa using ha) (by simpa using hb) (by simp) (zerosBuf (wc * k))).1
+    else zeros (wc * k)
+  else zeros (wc * k)
+
+/-- Run a generated unary field kernel over `k` points (see `runBin`). -/
+@[inline] def runUn (wa wc : Nat) (a : FloatArray) (k : Nat)
+    (kern : (0 : USize).toNat + wa * k ≤ a.size → (0 : USize).toNat + wc * k ≤ wc * k →
+      Buf (wc * k) → Buf (wc * k)) : FloatArray :=
+  if ha : wa * k ≤ a.size then (kern (by simpa using ha) (by simp) (zerosBuf (wc * k))).1
+  else zeros (wc * k)
 
 /-! ## Checked word-indexed access (for generated code, where indices are not proved) -/
 
