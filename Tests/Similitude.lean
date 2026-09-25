@@ -2,6 +2,7 @@ import Tests.Similitude.Constants
 import Tests.Similitude.Homs
 import Tests.Similitude.Ratios
 import Tests.Similitude.Quantities
+import Tests.Similitude.Derived
 
 /-!
 # Similitude test aggregator
@@ -19,7 +20,7 @@ def run : IO (Nat × Nat) := do
   IO.println "Similitude"
   let mut pass := 0
   let mut fail := 0
-  for suite in [constantsSuite, homsSuite, unifiedSuite, ratiosSuite, systemConstantsSuite, quantitySuite] do
+  for suite in [constantsSuite, homsSuite, unifiedSuite, ratiosSuite, systemConstantsSuite, quantitySuite, derivedSuite] do
     let (p, f) ← (← suite).report
     pass := pass + p
     fail := fail + f
