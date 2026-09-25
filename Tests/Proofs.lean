@@ -6,11 +6,14 @@ The proofs suite (docs/PROOFS.md):
 * `Tests.Proofs.Model`: the compiled implementation against the run-time
   specification model on random inputs in spaces beyond the `decide` range;
 * `Tests.Proofs.TacticExamples`: the `clifford` tactic on the identities of
-  docs/TACTICS.md (compile-time).
+  docs/TACTICS.md (compile-time);
+* `Tests.Proofs.GrindExamples`: `grind` and `grind [grassmann]` on abstract
+  multivector identities (compile-time).
 -/
 import Tests.Proofs.Axioms
 import Tests.Proofs.Model
 import Tests.Proofs.TacticExamples
+import Tests.Proofs.GrindExamples
 
 /-- Run the proofs suite; returns `(passed, failed)`. -/
 def Tests.Proofs.runAll : IO (Nat × Nat) := Tests.Proofs.run
