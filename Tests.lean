@@ -12,3 +12,5 @@ import Tests.FieldAlgebra
 import Tests.UnitSystems
 import Tests.Similitude
 import Tests.MeasureSystems
+import Tests.MeshTopology
+import Tests.Fatou
