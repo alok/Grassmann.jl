@@ -481,8 +481,9 @@ end Analytic
 
 /-! ## Reductions -/
 
-/-- Julia `sum(v::Vector{Float64})`, bit for bit (`JuliaBase.F64.sum`). -/
-@[inline] def sumFloats (a : FloatArray) : Float := F64.sum a
+/-- Julia `sum(v::Vector{Float64})`, bit for bit (`JuliaBase.F64.sum`'s algorithm with unchecked
+reads, `Flat.sumJulia`). -/
+@[inline] def sumFloats (a : FloatArray) : Float := Flat.sumJulia a
 
 /-- One block of Julia's pairwise `prod(::Vector{Float64})` (`base/reduce.jl:252-277`), as LLVM
 vectorizes the `@simd` loop on aarch64: `v = a[i0] * a[i0+1]`, then 2 lanes × 4 accumulators over

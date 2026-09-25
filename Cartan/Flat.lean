@@ -495,6 +495,77 @@ extremum of the squared norms `sᵢ` (and a `NaN` stays a `NaN`). -/
     extStep isMax init (Float.sqrt s)
   else init
 
+/-! ## Julia's pairwise `sum` without bounds checks -/
+
+/-- The vector loop of Julia's `@simd` block sum over `k` groups of 8 from `b` (2 lanes × 4
+accumulators, `JuliaBase.F64.sumBlock.vec`), every read proved in range. -/
+def sumVec {n : Nat} (a : Buf n) :
+    (k : Nat) → (b : USize) → b.toNat + 8 * k ≤ n →
+      Float → Float → Float → Float → Float → Float → Float → Float → Float
+  | 0, _, _, a00, a01, a10, a11, a20, a21, a30, a31 =>
+    let b0 := ((a00 + a10) + a20) + a30
+    let b1 := ((a01 + a11) + a21) + a31
+    b0 + b1
+  | k + 1, b, hb, a00, a01, a10, a11, a20, a21, a30, a31 =>
+    have e8 : (b + 8).toNat ≤ b.toNat + 8 := toNat_add_le b 8
+    sumVec a k (b + 8) (by omega)
+      (a00 + a.get b (by omega)) (a01 + a.get (b + 1) (idx (j := 1) (by omega)))
+      (a10 + a.get (b + 2) (idx (j := 2) (by omega))) (a11 + a.get (b + 3) (idx (j := 3) (by omega)))
+      (a20 + a.get (b + 4) (idx (j := 4) (by omega))) (a21 + a.get (b + 5) (idx (j := 5) (by omega)))
+      (a30 + a.get (b + 6) (idx (j := 6) (by omega))) (a31 + a.get (b + 7) (idx (j := 7) (by omega)))
+
+/-- `s + a[i] + a[i+1] + …` over `k` entries (left to right). -/
+def sumSeq {n : Nat} (a : Buf n) : (k : Nat) → (i : USize) → i.toNat + k ≤ n → Float → Float
+  | 0, _, _, s => s
+  | k + 1, i, hi, s =>
+    have e1 : (i + 1).toNat ≤ i.toNat + 1 := toNat_add_le i 1
+    sumSeq a k (i + 1) (by omega) (s + a.get i (by omega))
+
+/-- One block `a[i0 … i1]` (`i1 ≥ i0 + 1`, inside `a`) of Julia's pairwise `sum`, as LLVM
+vectorizes it on aarch64 (`JuliaBase.F64.sumBlock`): `a[i0] + a[i0+1]`, then groups of 8 into
+2 lanes × 4 accumulators (the start in lane 0 of the first), combined, then the scalar tail. -/
+def sumBlockU {n : Nat} (a : Buf n) (i0 i1 : Nat) : Float :=
+  if h : i1 < n ∧ i0 + 1 ≤ i1 ∧ i1 < USize.size then
+    have hs : ∀ j, j ≤ i1 → (USize.ofNat j).toNat = j := fun j hj =>
+      USize.toNat_ofNat_of_lt (by omega)
+    let v := a.get (USize.ofNat i0) (by rw [hs i0 (by omega)]; omega) +
+      a.get (USize.ofNat (i0 + 1)) (by rw [hs (i0 + 1) (by omega)]; omega)
+    let r0 := i0 + 2
+    let m := i1 + 1 - r0
+    let nv := m / 8
+    let z := f64! -0.0
+    let s := if hnv : nv = 0 then v else
+      if hr : r0 ≤ i1 then
+        sumVec a nv (USize.ofNat r0) (by rw [hs r0 hr]; omega) v z z z z z z z
+      else v
+    let t0 := r0 + 8 * nv
+    if ht : t0 ≤ i1 then sumSeq a (m - 8 * nv) (USize.ofNat t0) (by rw [hs t0 ht]; omega) s else s
+  else JuliaBase.F64.sumBlock a.1 i0 i1
+
+/-- The pairwise recursion of Julia's `sum` (`JuliaBase.F64.sum.impl`) over `sumBlockU`. -/
+def sumImpl {n : Nat} (a : Buf n) (i0 i1 : Nat) : Nat → Float
+  | 0 => sumBlockU a i0 i1
+  | fuel + 1 =>
+    if i0 == i1 then a.1.get! i0
+    else if i1 - i0 < 1024 then sumBlockU a i0 i1
+    else
+      let imid := i0 + (i1 - i0) / 2
+      sumImpl a i0 imid fuel + sumImpl a (imid + 1) i1 fuel
+
+/-- Julia `sum(v::Vector{Float64})` bit for bit on aarch64: `JuliaBase.F64.sum`'s algorithm
+(`base/reduce.jl:252-277, 428-448`: fewer than 16 elements left to right, else pairwise down to
+blocks below 1024 summed as the `@simd` loop's 2 × 4 accumulators) with every read unchecked
+(proved in range). -/
+def sumJulia (a : FloatArray) : Float :=
+  let n := a.size
+  let b : Buf n := ⟨a, rfl⟩
+  if h0 : n = 0 then f64! 0.0
+  else if h1 : n = 1 then a.get! 0
+  else if h : n < 16 ∧ 2 < USize.size then
+    have h2 : (USize.ofNat 2).toNat = 2 := USize.toNat_ofNat_of_lt h.2
+    sumSeq b (n - 2) (USize.ofNat 2) (by rw [h2]; omega) (a.get! 0 + a.get! 1)
+  else sumImpl b 0 (n - 1) n
+
 end Cartan.Flat
 
 namespace Cartan.Flat

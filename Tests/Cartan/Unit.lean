@@ -1,4 +1,5 @@
 import Tests.Cartan.Common
+import Tests.Cartan.Solve
 import Cartan.Aliases
 
 /-!
@@ -105,5 +106,12 @@ def run : TestM Unit := do
   let ⟨b', w⟩ : AnyField (GridBundle 2 (AffinePoint 2)) (Chain ℝ3 1 Float) := ⟨g, v⟩
   checkEq "AnyField keeps its base" (card b') 20
   checkEq "AnyField keeps its field" (w.get 3).v.toList (v.get 3).v.toList
+  -- the unchecked pairwise sum is JuliaBase's (Julia's) bit for bit, at every block boundary
+  let xs := Tests.CartanTests.SolveTests.randFloats 70000 0x5eed (-1) 1
+  let sizes := (List.range 40) ++ [63, 64, 65, 1023, 1024, 1025, 1031, 2047, 2048, 2049, 4097,
+    10000, 65536, 65537, 70000]
+  check "Flat.sumJulia = F64.sum" (sizes.all fun k =>
+    let a : FloatArray := ⟨xs.data.extract 0 k⟩
+    (Flat.sumJulia a).toBits == (F64.sum a).toBits)
 
 end Tests.CartanTests.Unit
