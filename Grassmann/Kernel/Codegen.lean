@@ -75,7 +75,11 @@ def generateKernels (t : Term) (V : TensorBundle) (pre : Name) (pol : Policy) : 
   elabCommand (← `(/-- The space of these generated kernels. -/ abbrev $spaceId : DirectSum.TensorBundle := $t))
   let planned := planAll V pol
   let t1 ← IO.monoMsNow
-  let em ← emitSpace V (mkCIdent (pre ++ `space)) pre planned
+  let valueId := mkIdent (`_root_ ++ pre ++ `spaceValue)
+  elabCommand (← `(/-- The space of these generated kernels as a run-time constant (never inlined,
+    so the fallback kernels read one shared value). -/ @[noinline] def $valueId : DirectSum.TensorBundle :=
+      $(mkCIdent (pre ++ `space))))
+  let em ← emitSpace V (mkCIdent (pre ++ `space)) (mkCIdent (pre ++ `spaceValue)) pre planned
   let t2 ← IO.monoMsNow
   modifyEnv (kernelRegistry.addEntry · (V, pre))
   trace[grassmann.codegen] "{V}: {em.kernels} kernels, {em.entries} entries; plans {t1 - t0} ms, \

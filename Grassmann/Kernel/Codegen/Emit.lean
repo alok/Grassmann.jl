@@ -9,15 +9,20 @@ elaboration time, the core term of a straight-line kernel
 def k {α : Type} [Coeff α] (x : Values α na) (y : Values α nb) : Values α nc :=
   let x₀ := x.get ⟨0, _⟩; …; let y₀ := y.get ⟨0, _⟩; …           -- each used input once
   let o₀ := x₀ * y₀ - x₁ * y₁ + …; …                             -- one sum per output
-  ⟨push (… (push (mkEmpty nc) o₀) …) o_{nc-1}, _⟩                  -- packed storage
+  (base.set ⟨0, _⟩ o₀).set ⟨1, _⟩ o₁ …                           -- packed storage
 ```
 
 directly as an `Expr` (no elaboration of arithmetic syntax, so emission costs
 little beyond the compiler's own work) and adds it with `addDecl`, marked
-`@[specialize]`. Reads are unchecked (`Fin` literals with kernel-checked bounds
-proofs), and the output size is proved by a chain of `size_push_succ`, so the
-compiled kernel has no bounds checks, no branches and no loop: at `α = Float`
-it specializes to unboxed loads, multiply-adds and `FloatArray.push`es.
+`@[specialize]`. Reads and writes are unchecked (`Fin` literals with
+kernel-checked bounds proofs), so the compiled kernel has no bounds checks, no
+branches and no loop: at `α = Float` it specializes to unboxed loads,
+multiply-adds and stores. `base` is an operand of the output's size when there
+is one (so `m := m * n` or `m := ~m` on an exclusive `m` allocates nothing) and
+otherwise the zero vector (a closed constant at each coefficient type): the first
+write copies it once, the others are in place. Measured at `Float` (ℝ3
+`Multivector*Multivector`, docs/PERF.md): 21 ns with a `FloatArray.push` chain
+(one runtime call per output), 14 ns with the writes.
 
 Each output sums its entries **in the reference order** (`Plan.row₂`), so a
 generated kernel agrees with the reference kernel bit for bit up to the sign of
@@ -43,12 +48,6 @@ namespace Grassmann.Kernel.Codegen
 
 open Lean Meta Elab Command
 open DirectSum StaticVectors AbstractTensors
-
-/-- One step of the output-size proof of a generated kernel: pushing onto an
-array of size `k` gives size `k + 1`. -/
-theorem size_push_succ {α : Type} [Packed α] {a : Packed.Arr α} {k : Nat} (x : α)
-    (h : Packed.size a = k) : Packed.size (Packed.push a x) = k + 1 := by
-  rw [Packed.size_push, h]
 
 /-! ## Names -/
 
@@ -133,16 +132,19 @@ def get (r : Arith) (n : Nat) (v : Expr) (i : Nat) : Expr :=
   mkApp5 (mkConst ``Values.get [0]) r.α r.P (mkRawNatLit n) v
     (mkApp3 (mkConst ``Fin.mk) (mkRawNatLit n) (mkRawNatLit i) (ltProof i n))
 
-/-- `⟨push (… (push (mkEmpty n) o₀) …) oₙ₋₁, proof⟩ : Values α n`. -/
-def pack (r : Arith) (os : Array Expr) : Expr := Id.run do
+/-- `base.set ⟨0, _⟩ o₀ |>.set ⟨1, _⟩ o₁ …` for `base : Values α n`, `n = os.size`: the
+outputs written into `base` (in place when `base` is exclusive; otherwise its first write
+copies it once). -/
+def packSet (r : Arith) (base : Expr) (os : Array Expr) : Expr := Id.run do
   let n := os.size
-  let mut arr := mkApp3 (mkConst ``Packed.mkEmpty [0]) r.α r.P (mkRawNatLit n)
-  let mut prf := mkApp3 (mkConst ``Packed.size_mkEmpty [0]) r.α r.P (mkRawNatLit n)
+  let mut v := base
   for h : i in [0:n] do
-    let o := os[i]
-    prf := mkApp6 (mkConst ``size_push_succ) r.α r.P arr (mkRawNatLit i) o prf
-    arr := mkApp4 (mkConst ``Packed.push [0]) r.α r.P arr o
-  return mkApp5 (mkConst ``Values.mk [0]) r.α r.P (mkRawNatLit n) arr prf
+    v := mkApp6 (mkConst ``Values.set [0]) r.α r.P (mkRawNatLit n) v
+      (mkApp3 (mkConst ``Fin.mk) (mkRawNatLit n) (mkRawNatLit i) (ltProof i n)) os[i]
+  return v
+
+/-- The zero vector `zeroValues n : Values α n`. -/
+def zeros (r : Arith) (n : Nat) : Expr := mkApp3 (mkConst ``Grassmann.zeroValues) r.α r.inst (mkRawNatLit n)
 
 end Arith
 
@@ -207,7 +209,12 @@ def kernelTerm (unary : Bool) (na nb nc : Nat) (p : Plan) : MetaM (Expr × Expr)
             if unary then a else r.mul a reads[slotY[p.ib[t]!.toNat]!]!
           let outs := (Array.range nc).map fun c => rowSum r p c term
           withLets ((Array.range nc).map fun c => .mkSimple s!"o{c}") α outs fun os => do
-            let e ← mkLetFVars (reads ++ os) (r.pack os)
+            -- write the outputs into an operand of the output's size (in place when the
+            -- caller hands over an exclusive operand), else into a copy of the zero vector
+            let base := if na == nc then x else match y? with
+              | some y => if nb == nc then y else r.zeros nc
+              | none => r.zeros nc
+            let e ← mkLetFVars (reads ++ os) (r.packSet base os)
             return (← mkForallFVars args (r.values nc), ← mkLambdaFVars args e)
       if unary then body none
       else withLocalDeclD `y (r.values nb) fun y => body (some y)
@@ -286,6 +293,7 @@ def fallbackOf : Field → Ident
 each emitted kernel an alternative, the reference kernel the fallback. -/
 def emitOpDispatch (V : Term) (nLit : Term) (name : Ident) (field : Field) (op : KOp)
     (ks : Array (Spec × Name)) : CommandElabM Unit := do
+  -- `V` is the space's run-time value (an opaque constant, see `emitSpace`)
   let (la, lb, lc, x, y) := (mkIdent `la, mkIdent `lb, mkIdent `lc, mkIdent `x, mkIdent `y)
   let o := opStx op
   let fb := fallbackOf field
@@ -361,8 +369,11 @@ def assignKernels (pre : Name) (planned : Array Planned) : Array (Planned × Nam
   return out
 
 /-- Emit and compile every kernel of `planned` under the prefix `pre`, then the dispatchers
-and the `Kernels` instance for the space `V` (a term denoting `space`, e.g. an `abbrev`). -/
-def emitSpace (space : TensorBundle) (V : Term) (pre : Name) (planned : Array Planned) :
+and the `Kernels` instance for the space `V` (a term denoting `space`, e.g. an `abbrev`).
+The fallbacks receive the space as `Vrt`, a `@[noinline]` constant: an `abbrev` of a
+structure literal is inlined by the compiler, and where a dispatch does not fold at a call
+site the literal was rebuilt (allocated) on every call before the branch. -/
+def emitSpace (space : TensorBundle) (V : Term) (Vrt : Term) (pre : Name) (planned : Array Planned) :
     CommandElabM Emitted := do
   let n := space.n
   let mut em : Emitted := {}
@@ -380,7 +391,13 @@ def emitSpace (space : TensorBundle) (V : Term) (pre : Name) (planned : Array Pl
     liftTermElabM <| addKernel nm doc unary (k.la.size n) (k.lb.size n) (k.lc.size n) pl.plan
     names := names.push nm
     em := { em with kernels := em.kernels + 1, entries := em.entries + pl.plan.size }
-  liftCoreM <| compileDecls names
+  -- compile in small batches without a heartbeat limit (a whole space in one batch exceeds
+  -- the default budget in the compiler's checks)
+  let batch := 32
+  for i in [0:(names.size + batch - 1) / batch] do
+    let chunk := names.extract (i * batch) ((i + 1) * batch)
+    liftCoreM <| withTheReader Core.Context (fun ctx => { ctx with maxHeartbeats := 0 }) <|
+      compileDecls chunk
   -- group by field and operation, in first-appearance order
   let mut groups : Array (Field × KOp × Array (Spec × Name)) := #[]
   for (s, nm) in assigned do
@@ -395,11 +412,11 @@ def emitSpace (space : TensorBundle) (V : Term) (pre : Name) (planned : Array Pl
     let mut ops : Array (KOp × Ident) := #[]
     for (_, op, ks) in groups.filter (·.1 == field) do
       let nm := pre ++ Name.mkSimple s!"{fieldTag field}_{opTag op}"
-      emitOpDispatch V nLit (mkIdent (`_root_ ++ nm)) field op ks
+      emitOpDispatch Vrt nLit (mkIdent (`_root_ ++ nm)) field op ks
       addDocStringCore nm s!"Generated dispatch of `{opTag op}` ({fieldTag field}) in `{space}` over \
         {ks.size} layout triples; other triples use the reference kernel."
       ops := ops.push (op, mkCIdent nm)
-    values := values.push (← fieldValue V field ops)
+    values := values.push (← fieldValue Vrt field ops)
   -- the instance
   let instId := mkIdent (`_root_ ++ pre ++ `instKernels)
   elabCommand (← `(command|
