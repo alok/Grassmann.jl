@@ -1,14 +1,14 @@
-import Geophysics.JuliaMath
+import JuliaBase
 
 /-!
-Compare `Geophysics.JMath` with a sweep written by `oracle/geophysics/mathsamples.jl`:
+Compare Julia's own elementary functions in `JuliaBase` (`JuliaBase.F64.sin`, …) with a sweep written by `oracle/geophysics/mathsamples.jl`:
 
     lake env lean --run oracle/geophysics/MathSweep.lean /tmp/geo_math.txt
 
 Prints the mismatch count per function (all zero is required).
 -/
 
-open Geophysics
+open JuliaBase
 
 /-- Count mismatches per function name. -/
 def main (args : List String) : IO Unit := do
@@ -24,12 +24,12 @@ def main (args : List String) : IO Unit := do
     let x := v 1
     let checks : List (String × Float × Float) :=
       match ws[0]! with
-      | "exp" => [("exp", JMath.exp x, v 2)]
-      | "pow" => [("pow", JMath.pow x (v 2), v 3)]
-      | "trig" => [("sin", JMath.sin x, v 2), ("cos", JMath.cos x, v 3), ("tan", JMath.tan x, v 4)]
-      | "atan" => [("atan", JMath.atan x, v 2)]
-      | "arc" => [("asin", JMath.asin x, v 2), ("atanh", JMath.atanh x, v 3),
-                  ("log1p", JMath.log1p x, v 4)]
+      | "exp" => [("exp", F64.exp x, v 2)]
+      | "pow" => [("pow", F64.pow x (v 2), v 3)]
+      | "trig" => [("sin", F64.sin x, v 2), ("cos", F64.cos x, v 3), ("tan", F64.tan x, v 4)]
+      | "atan" => [("atan", F64.atan x, v 2)]
+      | "arc" => [("asin", F64.asin x, v 2), ("atanh", F64.atanh x, v 3),
+                  ("log1p", F64.log1p x, v 4)]
       | _ => []
     for (nm, got, want) in checks do
       let k := (names.findIdx? (· == nm)).getD names.size

@@ -1,4 +1,3 @@
-import Geophysics.JuliaMath
 import Geophysics.Units
 import Geophysics.Planet
 import Geophysics.Gas
@@ -23,7 +22,7 @@ Similitude ports. See `docs/port-notes/applied-misc.md` §1.1–§6.5.
 | `Data` | `planets.jl` | 13 bodies, 11 gases and 5 mixtures, 14 tables, 14 standard weathers |
 | `Show` | `show`/`display` | Julia's printed forms |
 | `Typed` | (Similitude branch) | the same API on `Similitude.Quantity U d Float`, dimensions derived from the formulas |
-| `Units`, `JuliaMath`, `Lit` | UnitSystems, `Base.Math` | unit factors, Julia's own `sin/…/^`, bit-constant literals |
+| `Units` | UnitSystems | unit factors (Julia's own `sin/…/^` and the `f64!` literals come from `JuliaBase`) |
 
 Every value agrees with Julia bit for bit (679 602 oracle checks in
 `Tests/Geophysics`), including the Julia-specific quirks the port notes list;

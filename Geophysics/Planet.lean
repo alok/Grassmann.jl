@@ -1,5 +1,4 @@
 import Geophysics.Units
-import Geophysics.JuliaMath
 
 /-!
 # Planet ellipsoids and normal gravity
@@ -20,7 +19,7 @@ Julia's integer promotion for every value involved.
 
 Every function follows Julia's operation order (`x^2` is `x*x`, n-ary `*` folds
 left, `2f` binds tighter than `*`) and uses Julia's own elementary functions
-(`Geophysics.JMath`), so results agree with Julia bit for bit. Functions taking a
+(`JuliaBase.F64.sin`, …), so results agree with Julia bit for bit. Functions taking a
 unit system `U` return values in `U` (default `Metric`), exactly as Julia does.
 Julia's dispatch-overloaded names become distinct Lean names:
 
@@ -92,7 +91,7 @@ def halfπ : Float := 1.5707963267948966
 
 namespace Planet
 
-open JMath
+open JuliaBase.F64 (sin cos tan atan asin atanh)
 
 variable (P : Planet)
 
@@ -399,7 +398,7 @@ variable (P : Planet)
 def gravityAt (h θ : Float) (U : Sys := .Metric) : Float :=
   let gp := P.gravityPole U
   let gp0 := earthPoleNorm
-  let s := JMath.sin θ
+  let s := JuliaBase.F64.sin θ
   P.gravityNorm h θ U * (1.0 + ((gp - gp0) / (3.0 * gp)) * (s * s))
 
 end Planet

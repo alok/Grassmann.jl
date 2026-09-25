@@ -4,38 +4,38 @@ import Tests.Geophysics.Common
 # Julia elementary functions and unit factors
 
 `math.json` samples Julia's own `sin/cos/tan/atan/asin/atanh/log1p/exp/^`
-(`Geophysics.JMath` must match bit for bit); `units.json` holds the UnitSystems
+(`JuliaBase.F64.sin`, … must match bit for bit); `units.json` holds the UnitSystems
 constants behind `Geophysics.Units` for five systems.
 -/
 
 namespace Tests.GeophysicsTests
 
-open Lean Tests.Units Geophysics UnitSystems
+open Lean Tests.Units Geophysics UnitSystems JuliaBase
 
 /-- `math.json`: Julia's elementary functions. -/
 def mathSuite : IO Tally := do
   let j ← load "math"
-  let mut t := Tally.new "math (JMath vs Julia)"
+  let mut t := Tally.new "math (JuliaBase vs Julia)"
   for r in arr (fld j "trig") do
     let x := float1 (idx r 0)
-    t := t.f (JMath.sin x) (idx r 1) fun _ => s!"sin {fmt x}"
-    t := t.f (JMath.cos x) (idx r 2) fun _ => s!"cos {fmt x}"
-    t := t.f (JMath.tan x) (idx r 3) fun _ => s!"tan {fmt x}"
+    t := t.f (F64.sin x) (idx r 1) fun _ => s!"sin {fmt x}"
+    t := t.f (F64.cos x) (idx r 2) fun _ => s!"cos {fmt x}"
+    t := t.f (F64.tan x) (idx r 3) fun _ => s!"tan {fmt x}"
   for r in arr (fld j "atan") do
     let x := float1 (idx r 0)
-    t := t.f (JMath.atan x) (idx r 1) fun _ => s!"atan {fmt x}"
+    t := t.f (F64.atan x) (idx r 1) fun _ => s!"atan {fmt x}"
   for r in arr (fld j "arc") do
     let x := float1 (idx r 0)
-    t := t.f (JMath.asin x) (idx r 1) fun _ => s!"asin {fmt x}"
-    t := t.f (JMath.atanh x) (idx r 2) fun _ => s!"atanh {fmt x}"
-    t := t.f (JMath.log1p x) (idx r 3) fun _ => s!"log1p {fmt x}"
+    t := t.f (F64.asin x) (idx r 1) fun _ => s!"asin {fmt x}"
+    t := t.f (F64.atanh x) (idx r 2) fun _ => s!"atanh {fmt x}"
+    t := t.f (F64.log1p x) (idx r 3) fun _ => s!"log1p {fmt x}"
   for r in arr (fld j "exp") do
     let x := float1 (idx r 0)
-    t := t.f (JMath.exp x) (idx r 1) fun _ => s!"exp {fmt x}"
+    t := t.f (F64.exp x) (idx r 1) fun _ => s!"exp {fmt x}"
   for r in arr (fld j "pow") do
     let x := float1 (idx r 0)
     let y := float1 (idx r 1)
-    t := t.f (JMath.pow x y) (idx r 2) fun _ => s!"pow {fmt x} {fmt y}"
+    t := t.f (F64.pow x y) (idx r 2) fun _ => s!"pow {fmt x} {fmt y}"
   return t
 
 /-- `units.json`: the constants of `Geophysics.Units` against UnitSystems.jl. -/

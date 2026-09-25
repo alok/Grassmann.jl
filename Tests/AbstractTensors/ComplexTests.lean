@@ -2,10 +2,9 @@
 Oracle tests for `JuliaBase.ComplexF64` (Julia `Base` on `ComplexF64`) and
 the scalar helpers `F64.expm1`, `F64.log1p`, `F64.hypot`.
 
-Pure arithmetic (`*`, `/`, `inv`, `abs = hypot`, `sqrt`), the real `expm1`/`log1p` and the
-real part of the complex `log` (Julia's own kernels, `JuliaBase.Math`) must agree bitwise;
-functions that call the trigonometric `libm` (Julia uses its own port) are compared to a few
-ulps, measured on each component against the magnitude of the result.
+Everything must agree bitwise: every real function the `ComplexF64` algorithms call is
+Julia's own kernel (`JuliaBase.Math`, `JuliaBase.Trig`, `JuliaBase.Hyperbolic`), never the
+platform `libm`.
 -/
 import AbstractTensors
 import Tests.AbstractTensors.Harness
@@ -38,16 +37,8 @@ def unary : String → Option (Complex Float → Complex Float)
   | "atanh" => some ComplexF64.atanh
   | _ => none
 
-/-- Functions expected to match Julia bit for bit (no `libm` calls). -/
-def exactUnary : List String := ["inv", "abs", "sqrt"]
-
-/-- Component-wise closeness to `k` ulps, or to `k·eps` of the result's
-magnitude (a component far below the magnitude has meaningless ulps). -/
-def cclose (k : Nat) (got want : Complex Float) : Bool :=
-  let scale := F64.max (F64.hypot want.re want.im) (F64.hypot got.re got.im)
-  let comp (x y : Float) := ulpClose k x y ||
-    (x.isFinite && y.isFinite && (x - y).abs ≤ Float.ofNat k * F64.eps * scale)
-  comp got.re want.re && comp got.im want.im
+/-- Bitwise equality of both components (NaNs equal). -/
+def sameC (got want : Complex Float) : Bool := same got.re want.re && same got.im want.im
 
 /-- Render a complex value for failure messages. -/
 def showC (z : Complex Float) : String := s!"{showF z.re} + {showF z.im}im"
@@ -61,9 +52,7 @@ def suite : TestM Unit := do
       let z : Complex Float := ⟨fb re, fb im⟩
       let got := f z
       let want : Complex Float := ⟨fb rre, fb rim⟩
-      let ok := if exactUnary.contains name then same got.re want.re && same got.im want.im
-        else cclose 8 got want
-      check ok fun _ => s!"complex {name}({showC z}): got {showC got}, want {showC want}"
+      check (sameC got want) fun _ => s!"complex {name}({showC z}): got {showC got}, want {showC want}"
       -- `log(z)`'s real part is `log1p`/`log` of the modulus only: Julia's kernels, bitwise
       if name == "log" then
         check (same got.re want.re) fun _ => s!"complex log({showC z}).re: got {showF got.re}, want {showF want.re}"
@@ -72,9 +61,9 @@ def suite : TestM Unit := do
     let b : Complex Float := ⟨fb bre, fb bim⟩
     let want : Complex Float := ⟨fb rre, fb rim⟩
     let (got, ok) := match name with
-      | "div" => let g := ComplexF64.div a b; (g, same g.re want.re && same g.im want.im)
-      | "mul" => let g := a * b; (g, same g.re want.re && same g.im want.im)
-      | _ => let g := ComplexF64.pow a b; (g, cclose 16 g want)
+      | "div" => let g := ComplexF64.div a b; (g, sameC g want)
+      | "mul" => let g := a * b; (g, sameC g want)
+      | _ => let g := ComplexF64.pow a b; (g, sameC g want)
     check ok fun _ => s!"complex {name}({showC a}, {showC b}): got {showC got}, want {showC want}"
   for (name, x, r) in Golden.floatBase do
     let got := if name == "expm1" then F64.expm1 (fb x) else F64.log1p (fb x)

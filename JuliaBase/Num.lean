@@ -1,3 +1,5 @@
+import JuliaBase.FloatLit
+
 /-
 Julia `Base` numeric semantics for `Float` (Julia `Float64`), `Float32` and `Int`.
 
@@ -57,6 +59,15 @@ def inf : Float := Float.ofBits 0x7FF0000000000000
 /-- Julia `iszero(x)`: `x == 0` (true for both signed zeros). -/
 @[inline] def iszero (x : Float) : Bool := x == 0
 
+/-- Julia `isnan(x)`: `x != x`, inline (Lean's `Float.isNaN` is an out-of-line runtime call). -/
+@[inline] def isnan (x : Float) : Bool := x != x
+
+/-- Julia `isinf(x)`: `|x| == Inf`, inline (Lean's `Float.isInf` is an out-of-line call). -/
+@[inline] def isinf (x : Float) : Bool := x.abs == inf
+
+/-- Julia `isfinite(x)`: `|x| < Inf` (false for `NaN`), inline (unlike `Float.isFinite`). -/
+@[inline] def isfinite (x : Float) : Bool := x.abs < inf
+
 /-- Julia `nextfloat(x::Float64)` (float.jl): the next representable value toward `+Inf`.
 `NaN` and `Inf` map to themselves; `-0.0` and `0.0` both go to `5.0e-324`. -/
 def nextfloat (x : Float) : Float :=
@@ -74,15 +85,20 @@ def prevfloat (x : Float) : Float :=
     if x == 0 then Float.ofBits (signMask ||| 1)
     else if signbit x then Float.ofBits (b + 1) else Float.ofBits (b - 1)
 
+/-- `2^52`: every `Float64` of at least this magnitude is an integer. -/
+def two52 : Float := Float.ofBits 0x4330000000000000
+
 /-- Julia `round(x)` = `round(x, RoundNearest)` = LLVM `rint` (float.jl:466): round half to
-even, keeping the sign of zero (`round(-0.4) == -0.0`). -/
-def round (x : Float) : Float :=
+even, keeping the sign of zero (`round(-0.4) == -0.0`). Inline and free of bit casts (it sits
+on the argument reduction of `sin`/`cos`). -/
+@[inline] def round (x : Float) : Float :=
   let a := x.abs
-  if !(a < maxintfloat / 2) then x  -- NaN, Inf, or already an integer (|x| ≥ 2^52)
+  if !(a < two52) then x  -- NaN, Inf, or already an integer (|x| ≥ 2^52)
   else
-    -- adding and subtracting 2^52 rounds to an integer in the current (nearest-even) mode
-    let two52 : Float := Float.ofBits 0x4330000000000000
-    copysign ((a + two52) - two52) x
+    -- adding and subtracting 2^52 rounds to an integer in the current (nearest-even) mode;
+    -- the sign of `x` is `copysign`'s, and `round(±0) = ±0`
+    let r := (a + two52) - two52
+    if x < f64! 0.0 then -r else if x > f64! 0.0 then r else x
 
 /-- Julia `trunc(x)` (round toward zero). -/
 def trunc (x : Float) : Float :=
@@ -381,6 +397,15 @@ def nan : Float32 := Float32.ofBits 0x7FC00000
 
 /-- Julia `Inf32`. -/
 def inf : Float32 := Float32.ofBits 0x7F800000
+
+/-- Julia `isnan(x::Float32)`: `x != x`, inline. -/
+@[inline] def isnan (x : Float32) : Bool := x != x
+
+/-- Julia `isinf(x::Float32)`: `|x| == Inf32`, inline. -/
+@[inline] def isinf (x : Float32) : Bool := x.abs == inf
+
+/-- Julia `isfinite(x::Float32)`: `|x| < Inf32`, inline. -/
+@[inline] def isfinite (x : Float32) : Bool := x.abs < inf
 
 /-- Julia `nextfloat(x::Float32)`: the next representable value toward `+Inf` (`NaN` and
 `Inf32` map to themselves, both zeros go to `1.0f-45`). -/

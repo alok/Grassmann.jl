@@ -405,7 +405,7 @@
     {"op":"adjoint","a":11,"out":{"kind":"Couple","T":"Int64","bits":1,"dense":["-1","1","0","0"],"str":"-1 + 1v₁"}},
     {"op":"Multivector","a":11,"out":{"kind":"Multivector","T":"Int64","dense":["-1","1","0","0"],"str":"-1 + 1v₁"}},
     {"op":"grade:0","a":11,"out":{"kind":"Number","T":"Int64","value":"-1","str":"-1"}},
-    {"op":"grade:1","a":11,"out":{"kind":"Number","T":"Int64","value":"1","str":"1"}},
+    {"op":"grade:1","a":11,"out":{"kind":"Number","T":"Int64","value":"1","str":"1"},"defects":["grade-couple-coefficient"]},
     {"op":"grade:2","a":11,"out":{"kind":"Zero","T":"Int64","grade":0,"dense":["0","0","0","0"],"str":"𝟎"}},
     {"op":"neg","a":12,"out":{"kind":"Couple","T":"Int64","bits":3,"dense":["3","0","0","3"],"str":"3 + 3v₁₂"}},
     {"op":"reverse","a":12,"out":{"kind":"Couple","T":"Int64","bits":3,"dense":["-3","0","0","3"],"str":"-3 + 3v₁₂"}},
@@ -433,7 +433,7 @@
     {"op":"Multivector","a":12,"out":{"kind":"Multivector","T":"Int64","dense":["-3","0","0","-3"],"str":"-3 - 3v₁₂"}},
     {"op":"grade:0","a":12,"out":{"kind":"Number","T":"Int64","value":"-3","str":"-3"}},
     {"op":"grade:1","a":12,"out":{"kind":"Zero","T":"Int64","grade":0,"dense":["0","0","0","0"],"str":"𝟎"}},
-    {"op":"grade:2","a":12,"out":{"kind":"Number","T":"Int64","value":"-3","str":"-3"}},
+    {"op":"grade:2","a":12,"out":{"kind":"Number","T":"Int64","value":"-3","str":"-3"},"defects":["grade-couple-coefficient"]},
     {"op":"neg","a":13,"out":{"kind":"PseudoCouple","T":"Int64","bits":1,"dense":["0","-1","0","3"],"str":"-1v₁ + 3v₁₂"}},
     {"op":"reverse","a":13,"out":{"kind":"PseudoCouple","T":"Int64","bits":1,"dense":["0","1","0","3"],"str":"1v₁ + 3v₁₂"}},
     {"op":"involute","a":13,"out":{"kind":"PseudoCouple","T":"Int64","bits":1,"dense":["0","-1","0","-3"],"str":"-1v₁ - 3v₁₂"}},
@@ -459,8 +459,8 @@
     {"op":"adjoint","a":13,"out":{"kind":"PseudoCouple","T":"Int64","bits":1,"dense":["0","1","0","3"],"str":"1v₁ + 3v₁₂"}},
     {"op":"Multivector","a":13,"out":{"kind":"Multivector","T":"Int64","dense":["0","1","0","-3"],"str":"0 + 1v₁ - 3v₁₂"}},
     {"op":"grade:0","a":13,"out":{"kind":"Zero","T":"Int64","grade":0,"dense":["0","0","0","0"],"str":"𝟎"}},
-    {"op":"grade:1","a":13,"out":{"kind":"Number","T":"Int64","value":"1","str":"1"}},
-    {"op":"grade:2","a":13,"out":{"kind":"Number","T":"Int64","value":"-3","str":"-3"}},
+    {"op":"grade:1","a":13,"out":{"kind":"Number","T":"Int64","value":"1","str":"1"},"defects":["grade-couple-coefficient"]},
+    {"op":"grade:2","a":13,"out":{"kind":"Number","T":"Int64","value":"-3","str":"-3"},"defects":["grade-couple-coefficient"]},
     {"op":"neg","a":14,"out":{"kind":"Spinor","T":"Int64","dense":["-2","0","0","-3"],"str":"-2 - 3v₁₂"}},
     {"op":"reverse","a":14,"out":{"kind":"Spinor","T":"Int64","dense":["2","0","0","-3"],"str":"2 - 3v₁₂"}},
     {"op":"involute","a":14,"out":{"kind":"Spinor","T":"Int64","dense":["2","0","0","3"],"str":"2 + 3v₁₂"}},
@@ -602,6 +602,6 @@
     "errors": 14,
     "ref_mismatch": 8,
     "unexplained": 0,
-    "defects": {"antimetric-couple-scalar":3,"antireverse-couple":2,"grade-projection-above-n":3,"infinity-method-gaps":6,"multivector-of-zero":1,"volume-scalar-chain":1,"zero-method-gaps":5}
+    "defects": {"antimetric-couple-scalar":3,"antireverse-couple":2,"grade-couple-coefficient":4,"grade-projection-above-n":3,"infinity-method-gaps":6,"multivector-of-zero":1,"volume-scalar-chain":1,"zero-method-gaps":5}
   }
 }

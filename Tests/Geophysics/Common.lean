@@ -95,10 +95,10 @@ end Tally
 
 /-- Decode a golden float array (non-floats become `NaN`). -/
 def floats (j : Json) : FloatArray :=
-  (arr j).foldl (fun acc x => acc.push (match gold x with | .val v => v | _ => JMath.nan)) .empty
+  (arr j).foldl (fun acc x => acc.push (match gold x with | .val v => v | _ => JuliaBase.F64.nan)) .empty
 
 /-- A golden float (`NaN` if it is not one). -/
-def float1 (j : Json) : Float := match gold j with | .val v => v | _ => JMath.nan
+def float1 (j : Json) : Float := match gold j with | .val v => v | _ => JuliaBase.F64.nan
 
 /-- Julia system names used by the goldens. -/
 def sysOf (s : String) : Sys := (Sys.ofName? s).getD .Metric
