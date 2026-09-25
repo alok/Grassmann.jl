@@ -651,6 +651,29 @@ that it is computed once for a literal system. -/
 
 end Sys
 
+/-- Julia `unitname(U)`/`show(U)` of any system (`UnitSystems.jl:186-187`,
+`initdata.jl:169-171`): the name of the named system with the same Julia type,
+otherwise `Unknown`. -/
+def UnitSystem.unitname (U : UnitSystem Num) : String :=
+  match Sys.ofSystem? U with
+  | some s => s.name
+  | none => "Unknown"
+
+section rescale
+variable {α : Type} [UnitAlg α]
+
+/-- Julia's callable system `(U::UnitSystem)(JK, Js, ms, Hm, kg)`
+(`UnitSystems.jl:205-221`): rescale the entropy, action, speed, permeability and
+mass units by the factors (the molar mass, luminous efficacy, angle,
+rationalization, gravity and coupling are kept), and the Lorentz constant by
+`inv(ms)` unless it is one. `Metric(1.0, 1.0, 1.0, 1.0, 1.0)` is an `Unknown`
+system: its parameters are plain numbers. -/
+def UnitSystem.rescale (U : UnitSystem α) (JK Js ms Hm kg : α) : UnitSystem α :=
+  { U with kB := U.kB * JK, ħ := U.ħ * Js, c := U.c * ms, μ₀ := U.μ₀ * Hm, mₑ := U.mₑ * kg,
+           αL := if UnitAlg.isOne U.αL then U.αL else U.αL / ms }
+
+end rescale
+
 namespace Conv
 
 /-- Julia `q(U, S)` for any two systems: named systems (recognised by their

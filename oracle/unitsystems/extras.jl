@@ -43,6 +43,25 @@ for i in 1:20
         push!(cons, Dict("ctor" => "RankineSystem", "base" => string(base), "args" => a[1:3], "out" => slots(US.RankineSystem(B, map(FC.Constant, a[1:3])...))))
     end
 end
+# rescaled systems `U(JK, Js, ms, Hm, kg)` (`UnitSystems.jl:205-221`) and their names
+resc = Any[]
+for (base, args) in ((:Metric, (1.0, 1.0, 1.0, 1.0, 1.0)), (:Metric, (1, 1, 1, 1, 1)),
+                     (:English, (2.0, 0.5, 3.0, 1.0, 0.25)), (:Gauss, (1.5, 2.0, 0.5, 4.0, 1.0)),
+                     (:SI2019, (1.0, 2.0, 1.0, 1.0, 1.0)), (:Planck, (2, 3, 5, 7, 11)))
+    R = sys(base)(args...)
+    push!(resc, Dict("base" => string(base), "args" => [enc(a) for a in args], "out" => slots(R),
+        "name" => sprint(show, R)))
+end
+# the conversion helpers of `kinematic.jl:20-41`, `thermodynamic.jl:32-39` (port notes §6.4)
+helpers = Any[]
+for (f, x) in ((:kilograms, 1), (:kilograms, 2.5), (:slugs, 1), (:slugs, 3.0), (:feet, 1), (:feet, 0.3048),
+               (:meters, 1), (:meters, 5.0), (:moles, 6.02214076e23), (:molecules, 2.0))
+    push!(helpers, [string(f), enc(x), tryenc(() -> getfield(US, f)(x)), ""])
+end
+for (f, x, s) in ((:kilograms, 1.0, :Metric), (:feet, 1.0, :English), (:meters, 2.0, :Metric),
+                  (:slugs, 1.0, :English), (:moles, 1e24, :English), (:molecules, 1.0, :English))
+    push!(helpers, [string(f), enc(x), tryenc(() -> getfield(US, f)(x, sys(s))), string(s)])
+end
 writejson(joinpath(OUT, "extras.json"), Dict("julia" => string(VERSION), "coupling" => cslots,
-    "coupled" => coupled, "constructors" => cons))
+    "coupled" => coupled, "constructors" => cons, "rescale" => resc, "helpers" => helpers))
 println("wrote extras.json")

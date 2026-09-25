@@ -78,6 +78,33 @@ def constructorsSuite : IO (Suite × Suite) := do
     | some U =>
       for (i, x, g) in (List.range 11).zip ((params U).zip (arr (fld r "out")).toList) |>.map (fun (i, x, g) => (i, x, g)) do
         (s, e) := checkNum s e x (gnum g) fun _ => s!"{ctor}({str (fld r "base")}) slot {i}"
+  -- rescaled systems and their names
+  for r in arr (fld j "rescale") do
+    let a := (arr (fld r "args")).map plainOf
+    let B := (sysOf! (str (fld r "base"))).sys Num
+    let U := B.rescale a[0]! a[1]! a[2]! a[3]! a[4]!
+    for (i, x, g) in (List.range 11).zip ((params U).zip (arr (fld r "out")).toList) |>.map (fun (i, x, g) => (i, x, g)) do
+      (s, e) := checkNum s e x (gnum g) fun _ => s!"rescale {str (fld r "base")} slot {i}"
+    s := s.check (U.unitname == str (fld r "name")) fun _ => s!"rescale name {U.unitname}"
+  for (u : Sys) in Sys.all do
+    s := s.check ((u.sys Num).unitname == u.name) fun _ => s!"unitname {u.name}"
+  -- conversion helpers
+  for r in arr (fld j "helpers") do
+    let f := str (idx r 0)
+    let x := plainOf (idx r 1)
+    let sn := str (idx r 3)
+    let U? : Option (UnitSystem Num) := if sn == "" then none else some ((sysOf! sn).sys Num)
+    let got : Option Num := match f, U? with
+      | "kilograms", none => some (kilograms x) | "kilograms", some U => some (kilograms x U)
+      | "slugs", none => some (slugs x) | "slugs", some U => some (slugs x U)
+      | "feet", none => some (feet x) | "feet", some U => some (feet x U)
+      | "meters", none => some (meters x) | "meters", some U => some (meters x U)
+      | "moles", none => some (moles x) | "moles", some U => some (moles x U)
+      | "molecules", none => some (molecules x) | "molecules", some U => some (molecules x U)
+      | _, _ => none
+    match got with
+    | some y => (s, e) := checkNum s e y (gnum (idx r 2)) fun _ => s!"{f}({x}, {sn})"
+    | none => s := s.check false fun _ => s!"unknown helper {f}"
   return (s, e)
 
 end Tests.UnitSystemsTests
