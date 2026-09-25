@@ -124,6 +124,11 @@ def implMul (V : TensorBundle) {g : Fin n → Rat} (x y : Cl g) : Cl g :=
 def implWedge (V : TensorBundle) {g : Fin n → Rat} (x y : Cl g) : Cl g :=
   bilin (fun a b => ofTerms g (V.terms₂ .wedge (mask a) (mask b))) x y
 
+/-- The implementation's contraction `⋅` (bilinear extension of
+`TensorBundle.terms₂ .contraction`). -/
+def implContract (V : TensorBundle) {g : Fin n → Rat} (x y : Cl g) : Cl g :=
+  bilin (fun a b => ofTerms g (V.terms₂ .contraction (mask a) (mask b))) x y
+
 /-- The implementation's blade table for `op` agrees with the twisting function
 `k` on every pair of `n`-bit blades. -/
 def TableAgrees (V : TensorBundle) (op : BinOp) (k : BitVec n → BitVec n → Rat) : Prop :=
@@ -140,6 +145,13 @@ theorem implMul_eq_mul (hn : n ≤ 64) {V : TensorBundle} {g : Fin n → Rat} (h
 the spec exterior product on all multivectors. -/
 theorem implWedge_eq_wedge (hn : n ≤ 64) {V : TensorBundle} {g : Fin n → Rat} (h : TableAgrees V .wedge (wcoef (n := n)))
     (x y : Cl g) : implWedge V x y = Cl.wedge x y := by
+  ext c
+  exact congrFun (bilin_eq_twist (fun a b => ofTerms_of_matches hn (h a b)) x y) c
+
+/-- A contraction table that agrees with the spec on basis blades gives the spec
+contraction on all multivectors. -/
+theorem implContract_eq_contract (hn : n ≤ 64) {V : TensorBundle} {g : Fin n → Rat}
+    (h : TableAgrees V .contraction (ccoef g)) (x y : Cl g) : implContract V x y = Cl.contract x y := by
   ext c
   exact congrFun (bilin_eq_twist (fun a b => ofTerms_of_matches hn (h a b)) x y) c
 

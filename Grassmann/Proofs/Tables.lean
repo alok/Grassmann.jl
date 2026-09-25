@@ -162,4 +162,33 @@ theorem D123_mul_plan : planEntries D!"1,2,-3" .mul = specPlan 3 (coef gD123) :=
 theorem D123_mul (x y : Cl gD123) : implMul D!"1,2,-3" x y = x * y :=
   implMul_eq_mul (by decide) D123_mul_table x y
 
+/-! ## Contraction and regressive product -/
+
+theorem R2_contraction_table : TableAgrees ℝ2 .contraction (ccoef (gEuclid 2)) := by
+  unfold TableAgrees; decide +kernel
+theorem R3_contraction_table : TableAgrees ℝ3 .contraction (ccoef (gEuclid 3)) := by
+  unfold TableAgrees; decide +kernel
+theorem STA_contraction_table : TableAgrees STA .contraction (ccoef gSTA) := by
+  unfold TableAgrees; decide +kernel
+theorem PGA2_contraction_table : TableAgrees PGA2 .contraction (ccoef (gPGA 3)) := by
+  unfold TableAgrees; decide +kernel
+theorem PGA3_contraction_table : TableAgrees PGA3 .contraction (ccoef (gPGA 4)) := by
+  unfold TableAgrees; decide +kernel
+theorem D123_contraction_table : TableAgrees D!"1,2,-3" .contraction (ccoef gD123) := by
+  unfold TableAgrees; decide +kernel
+
+/-- `ℝ3`: the implementation's contraction `⋅` is the spec contraction `⟨~y x⟩`
+on all multivectors. -/
+theorem R3_contract (x y : Cl (gEuclid 3)) : implContract ℝ3 x y = Cl.contract x y :=
+  implContract_eq_contract (by decide) R3_contraction_table x y
+
+/-- `STA`: the implementation's contraction is the spec contraction. -/
+theorem STA_contract (x y : Cl gSTA) : implContract STA x y = Cl.contract x y :=
+  implContract_eq_contract (by decide) STA_contraction_table x y
+
+/-- `PGA3`: the implementation's contraction is the spec contraction (degenerate
+factors included). -/
+theorem PGA3_contract (x y : Cl (gPGA 4)) : implContract PGA3 x y = Cl.contract x y :=
+  implContract_eq_contract (by decide) PGA3_contraction_table x y
+
 end Grassmann.Proofs

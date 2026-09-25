@@ -124,6 +124,9 @@ negative or zero entries) and every commutative ring `R`:
 | `Cl.compl_compl` | `!!x = (-1)^{k(n-k)} x` for a `k`-vector |
 | `Cl.hodge_eq_reverse_mul` | `⋆x = ~x · I` (Julia's definition for general metrics agrees with the diagonal formula) |
 | `Cl.hodge_hodge` | `⋆⋆x = (-1)^{k(n-k)} det(g) x` for a `k`-vector |
+| `Cl.contract_eq_proj` | Julia's contraction is `x ⋅ y = ⟨~y x⟩_{p-q}` for a `p`-vector `x` and a `q`-vector `y`, `q ≤ p` |
+| `Cl.contract_of_vector` | on vectors, `u ⋅ v = B(u, v)` |
+| `Cl.compl_vee`, `Cl.vee_assoc` | the regressive product is the De Morgan dual `!(x ∨ y) = !x ∧ !y`, and it is associative |
 
 ## 3. Link: `Grassmann.Proofs`
 
@@ -137,7 +140,7 @@ multiply-accumulate plans (`Grassmann.Kernel.build`, DESIGN.md §5.1).
 | theorem | statement |
 |---|---|
 | `bilin_eq_twist` | the bilinear extension of any blade rule `e_a ⋆ e_b = k(a,b) e_{a⊕b}` is the twisted convolution with `k` |
-| `implMul_eq_mul`, `implWedge_eq_wedge` | so a geometric (exterior) product table that agrees with the spec on basis blades gives the spec product on **all** multivectors |
+| `implMul_eq_mul`, `implWedge_eq_wedge`, `implContract_eq_contract` | so a geometric (exterior, contraction) table that agrees with the spec on basis blades gives the spec product on **all** multivectors |
 | `mulSign_eq_coef` | for every space and every `n ≤ 64`, `(-1)^{TensorBundle.mulSign a b}` is the spec coefficient of the signature metric `V.sigBits`, on every pair of blades |
 
 **Checked** by the kernel (`Grassmann.Proofs.Tables`), on every basis blade
@@ -151,6 +154,8 @@ multiply-accumulate plans (`Grassmann.Kernel.build`, DESIGN.md §5.1).
 | `terms₂ .wedge` is the spec exterior product (`*_wedge_table`), hence `implWedge V x y = x ∧ y` | `ℝ2`, `ℝ3`, `STA`, `PGA3` |
 | reversion, grade involution, right complement and Hodge star, at blade level (`terms₁`) and at the container level the reference kernels use (`Grassmann.Kernel.unTermsC`) (`*_unary`) | all six |
 | the reference kernel's `Multivector × Multivector` plan (`Grassmann.Kernel.build`) is exactly the spec table in Julia's storage order (`*_mul_plan`, `R3_wedge_plan`) | `ℝ2`, `ℝ3`, `STA`, `PGA3`, `D!"1,2,-3"` |
+| `terms₂ .contraction` is the spec contraction (`*_contraction_table`), hence `implContract V x y = x ⋅ y` (`R3_contract`, `STA_contract`, `PGA3_contract`) | all six |
+| `terms₂ .vee` is the spec regressive product on every pair of blades (`*_vee_table`, `Grassmann.Proofs.Regressive`) | `ℝ2`, `ℝ3`, `STA`, `PGA3`, `D!"1,2,-3"` |
 
 Negative controls (a wrong metric, a flipped complement sign, a wrong plan)
 make these checks fail, so they are not vacuous.
@@ -185,7 +190,7 @@ evaluated at run time, in spaces beyond the `decide` range:
 
 | test | inputs |
 |---|---|
-| full `Multivector` products `*`, `∧`, and `~`, `involute`, `!`, `⋆` | random integer multivectors in `E5`, `M5 = S!"-++++"`, `S33 = S!"++-+--"`, `PGA4 = D!"0,1,1,1,1"`, `D5 = D!"1,2,-3,5,-1"`, `E6`, `E7` |
+| full `Multivector` products `*`, `∧`, `∨`, `⋅`, and `~`, `involute`, `!`, `⋆` | random integer multivectors in `E5`, `M5 = S!"-++++"`, `S33 = S!"++-+--"`, `PGA4 = D!"0,1,1,1,1"`, `D5 = D!"1,2,-3,5,-1"`, `E6`, `E7` |
 | every typed `Chain G × Chain H` product (the typed kernels and their even/odd result plans) | the same spaces, every grade pair |
 | `Bits.reorderParity` against `reorderParitySpec 64` | 2000 random mask pairs (the equality is proved; this checks the compiled code) |
 | `ConfTable` | exhaustive, `S!"∞∅+"`, `CGA2`, `CGA3` |
@@ -207,9 +212,10 @@ generated kernels) are exercised; they are not proved.
 * `DiagonalForm` products in general dimension go through `metricProduct`, so
   they are checked (`PGA*`, `D!"1,2,-3"`) and tested (`PGA4`, `D5`), not
   proved; signature spaces are proved through `mulSign_eq_coef`.
-* The regressive product `∨`, the contractions `⋅ ⨼ ⨽`, `cross` and the
+* The other contractions (`⨼`, `<<`, `>>`), `cross`, `veedot`, `antidot` and the
   sandwiches have no spec yet; `Tests/Grassmann/Props.lean` tests their
-  algebraic laws.
+  algebraic laws. The regressive product is linked blade by blade, not yet
+  lifted to all multivectors (the spec side is not a plain twisted product).
 * Tangent (`∂`), dyadic and `MetricTensor` spaces are outside the diagonal
   model.
 * Mathlib's `CliffordAlgebra` bridge (DESIGN.md §8.5) belongs in `bridge/`.
@@ -220,6 +226,7 @@ generated kernels) are exercised; they are not proved.
 lake build DirectSum.Proofs Grassmann.Spec Grassmann.Proofs Tests.Proofs
 ```
 
-About 20 s for the kernel checks in `Grassmann.Proofs.Tables`; everything else
-builds in seconds. The run-time suite is `Tests.Proofs.runAll : IO (Nat × Nat)`,
-about 2500 checks.
+About 25 s for the kernel checks in `Grassmann.Proofs.Tables` and 6 s for
+`Grassmann.Proofs.Regressive` (they build in parallel); everything else builds
+in seconds. The run-time suite is `Tests.Proofs.runAll : IO (Nat × Nat)`,
+about 2600 checks, 5 s compiled.

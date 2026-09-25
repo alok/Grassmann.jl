@@ -8,7 +8,8 @@ with the specification `Grassmann.Spec.Cl` evaluated at run time, on random
 integer multivectors in larger spaces (`n = 5 … 7`, Euclidean, Lorentzian,
 split, degenerate and general diagonal metrics):
 
-* the geometric and exterior products of full multivectors;
+* the geometric, exterior and regressive products and the contraction of full
+  multivectors;
 * every `Chain G × Chain H` geometric product (the typed kernels, whose plans
   land in the even/odd halves);
 * reversion, grade involution, right complement and Hodge star;
@@ -106,6 +107,8 @@ def fullChecks (s : TestSpace) (trials : Nat) : Tests.Gen Tally := do
     let tag := s!"{s.name} trial {k}"
     t := t.check (agrees (x * y) (sx * sy)) s!"{tag}: x * y ≠ spec"
     t := t.check (agrees ((x ∧ y : Multivector V Int)) (Cl.wedge sx sy)) s!"{tag}: x ∧ y ≠ spec"
+    t := t.check (agrees ((x ∨ y : Multivector V Int)) (Cl.vee sx sy)) s!"{tag}: x ∨ y ≠ spec"
+    t := t.check (agrees ((x ⋅ y : Multivector V Int)) (Cl.contract sx sy)) s!"{tag}: x ⋅ y ≠ spec"
     t := t.check (agrees x.reverse (Cl.reverse sx)) s!"{tag}: ~x ≠ spec"
     t := t.check (agrees x.involute (Cl.involute sx)) s!"{tag}: involute x ≠ spec"
     t := t.check (agrees x.complementright (Cl.compl sx)) s!"{tag}: !x ≠ spec"

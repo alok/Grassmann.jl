@@ -297,6 +297,28 @@ theorem bitCount_xor_add (n a b : Nat) :
     simp only [bitCount_succ, Nat.testBit_xor, Nat.testBit_and]
     cases a.testBit n <;> cases b.testBit n <;> simp [Bool.toNat] <;> omega
 
+/-- `|a ∧ b| = |b|` exactly when `b ⊆ a` (below the width). -/
+theorem bitCount_and_eq_iff (n a b : Nat) :
+    bitCount n (a &&& b) = bitCount n b ↔ ∀ i < n, b.testBit i = true → a.testBit i = true := by
+  induction n with
+  | zero => simp
+  | succ n ih =>
+    have hle : bitCount n (a &&& b) ≤ bitCount n b := by
+      rw [bitCount_and_comm]; exact bitCount_and_le_left n b a
+    simp only [bitCount_succ, Nat.testBit_and]
+    constructor
+    · intro h i hi hb
+      rcases Nat.lt_or_eq_of_le (Nat.le_of_lt_succ hi) with hi' | hi'
+      · have : bitCount n (a &&& b) = bitCount n b := by
+          cases ha : a.testBit n <;> cases hb : b.testBit n <;> simp [ha, hb, Bool.toNat] at h <;> omega
+        exact (ih.mp this) i hi' hb
+      · subst hi'
+        cases ha : a.testBit i <;> simp [ha, hb, Bool.toNat] at h ⊢; omega
+    · intro h
+      have h' := ih.mpr fun i hi => h i (by omega)
+      have hn := h n (by omega)
+      cases ha : a.testBit n <;> cases hb : b.testBit n <;> simp_all [Bool.toNat]
+
 /-- The complement of a blade in `n` generators has the complementary grade. -/
 theorem bitCount_xor_allOnes (n x : Nat) : bitCount n (x ^^^ (2 ^ n - 1)) + bitCount n x = n := by
   have key : ∀ m ≤ n, bitCount m (x ^^^ (2 ^ n - 1)) + bitCount m x = m := by

@@ -5,6 +5,7 @@ import Grassmann.Spec.Exterior
 import Grassmann.Spec.Involution
 import Grassmann.Spec.Hodge
 import Grassmann.Spec.Vector
+import Grassmann.Spec.Contraction
 
 /-!
 # Grassmann.Spec: a proved specification of the geometric algebra
@@ -31,7 +32,9 @@ data structures, with its laws proved in every dimension (docs/PROOFS.md):
   `!!x = (-1)^{k(n-k)} x`, `⋆⋆x = (-1)^{k(n-k)} det(g) x`;
 * `Grassmann.Spec.Vector`: the Clifford relation `v² = q(v)` for vectors,
   `uv = B(u,v) + u ∧ v` and `uv + vu = 2B(u,v)`, over every commutative ring
-  (characteristic 2 included).
+  (characteristic 2 included);
+* `Grassmann.Spec.Contraction`: Julia's contraction `x ⋅ y = ⟨~y x⟩_{p-q}` and
+  the regressive product `∨` (De Morgan dual of `∧`, associative).
 
 `Grassmann.Proofs` links this model to the kernels of the implementation.
 -/

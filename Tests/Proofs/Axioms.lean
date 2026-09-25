@@ -47,3 +47,9 @@ import Grassmann.Proofs
 
 /-- info: 'Grassmann.Spec.Cl.mul_self_of_vector' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Grassmann.Spec.Cl.mul_self_of_vector
+
+/-- info: 'Grassmann.Spec.Cl.contract_eq_proj' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Spec.Cl.contract_eq_proj
+
+/-- info: 'Grassmann.Spec.Cl.vee_assoc' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Spec.Cl.vee_assoc
