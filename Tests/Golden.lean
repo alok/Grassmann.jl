@@ -36,8 +36,10 @@ holds the float-golden helpers of the AbstractAnalysis and Wilkinson suites
 there.
 
 `Tests.Golden.run` loads every suite end to end (about 129k cases), validates every schema
-invariant, re-derives every defect tag, and runs every registered evaluator. Set
-`GOLDEN_SUITES=products,unary` to restrict the suites.
+invariant, re-derives every defect tag, and runs every registered evaluator. Environment switches:
+`GOLDEN_SUITES=products,unary` restricts the suites, `GOLDEN_SHARDS=E3,CGA3` the shards,
+`GOLDEN_MAX_FAILURES=n` sets how many failure messages are kept per suite (25),
+`GOLDEN_VERBOSE` times every shard, and `GOLDEN_SHOW_KNOWN` reports known issues as failures.
 -/
 
 namespace Tests.ElementOracle
@@ -52,6 +54,8 @@ def runWith (extra : Array Registration) (suites : List String := elementSuites)
     IO.eprintln s!"  [golden] cannot load defects.json: {e}"
     return (0, 1)
   let regs := builtinRegistrations ++ extra
+  -- `GOLDEN_SHOW_KNOWN` reports known issues as ordinary failures (to see their details)
+  let regs := if (← IO.getEnv "GOLDEN_SHOW_KNOWN").isSome then regs.map ({ · with knownIssues := #[] }) else regs
   -- a pending defect that reached defects.json should be deleted from Tests.Golden.Pending
   for d in pendingDefects.entries do
     if (defects.policy? d.id).isSome then
