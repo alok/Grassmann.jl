@@ -75,6 +75,11 @@ namespace CodegenTests.BasisOff
 basis! (kernels := false) S!"+--+"
 end CodegenTests.BasisOff
 
+namespace CodegenTests.Options
+-- a policy override: no dense families, and no kernel above 8 entries
+grassmann_kernels (dense := false) (maxEntries := 8) S!"-+-"
+end CodegenTests.Options
+
 open Lean Elab Command in
 run_cmd do
   let env ← getEnv
@@ -84,6 +89,16 @@ run_cmd do
     throwError "basis! (kernels := false) emitted kernels"
   unless (Grassmann.Kernel.Codegen.registered? env ℝ3) == some `Grassmann.Kernel.Gen.ℝ3 do
     throwError "ℝ3 is not registered with its pre-generated kernels"
+  let pre := Name.mkSimple (toString S!"-+-")
+  let opt := `CodegenTests.Options ++ pre
+  unless (Grassmann.Kernel.Codegen.registered? env S!"-+-") == some opt do
+    throwError "grassmann_kernels (options) S!\"-+-\" is not registered under {opt}"
+  -- `(maxEntries := 8)` drops the 64-entry multivector product, `(dense := false)` the dense
+  -- families; the 6-entry vector wedge and the 8-entry reverse stay
+  if env.contains (opt ++ `k_bin_mul_f_f_f) || env.contains (opt ++ `k_bin_wedge_f_c1_f) then
+    throwError "grassmann_kernels (options) emitted a dense or oversized kernel"
+  unless env.contains (opt ++ `k_bin_wedge_c1_c1_c2) && env.contains (opt ++ `k_un_reverse_f_f) do
+    throwError "grassmann_kernels (options) omitted a small kernel"
 
 namespace CodegenTests.Typed
 
@@ -100,6 +115,7 @@ def run : IO Tally := do
   t := checkTyped "CGA3" CGA3 18 t
   t := checkTyped "basis! ⟨++-⟩" CodegenTests.BasisHook.V 19 t
   t := checkTyped "reference ⟨+--+⟩" CodegenTests.BasisOff.V 20 t
+  t := checkTyped "grassmann_kernels (options) ⟨-+-⟩" S!"-+-" 21 t
   return t
 
 end CodegenTests.Typed

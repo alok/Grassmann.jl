@@ -6,7 +6,10 @@ kernel the emission policy selects (`Grassmann.Kernel.Codegen.Plans`), emits eac
 as a straight-line `@[specialize]` definition generic over `[Coeff α]`
 (`Grassmann.Kernel.Codegen.Emit`), and declares a `Kernels V` instance whose
 dispatch covers those shapes and falls back to the reference kernels for the
-rest. `basis!` runs it for spaces with at most 6 generators
+rest. For spaces without tangent generators it also emits the fused sandwich
+kernels of `x ⊘ R` and `R >>> x` and a `SandwichKernels V` instance
+(`Grassmann.Kernel.Codegen.Sandwich`). `basis!` runs it for spaces with at most
+6 generators
 (`Grassmann.Basis`; opt out with `basis! (kernels := false) V` or
 `set_option grassmann.basis.kernels false`).
 
@@ -18,8 +21,8 @@ end MyKernels
 
 The declarations go to `<current namespace>.<name>`, where `<name>` is the
 identifier `V` if it is one (`grassmann_kernels ℝ3` → `….ℝ3`) and the display of
-the space otherwise; the instance is `<prefix>.instKernels` and has default
-priority, so it wins over the low-priority `Kernels.reference` (and a later
+the space otherwise; the instances are `<prefix>.instKernels` and
+`<prefix>.instSandwichKernels` and have default priority, so it wins over the low-priority `Kernels.reference` (and a later
 user instance of the same space wins over it). A process-wide registry
 (`kernelRegistry`) records the spaces that have kernels; a second
 `grassmann_kernels`/`basis!` for a registered space does nothing.
@@ -33,6 +36,13 @@ families, `maxEntries` caps the size of a single kernel.
 
 Tracing: `set_option trace.grassmann.codegen true` reports the kernel count, the
 entry count and the time of each stage.
+
+Cost (docs/PERF.md): the eight standard spaces take 52 s of CPU to elaborate and
+39 s to compile as C (14 s and 11 s wall on 16 cores); `CGA3`, the largest, has 876
+kernels with 30 944 multiply-accumulate entries plus 128 fused sandwiches. At
+`Float` the kernels match Julia's `@generated` products where the arithmetic
+dominates (`Multivector*Multivector` of STA, PGA3, CGA3) and are 10× faster than
+the reference kernels; small operations are bound by the allocation of their result.
 -/
 import Grassmann.Kernel.Codegen.Sandwich
 import Lean.Meta.Eval

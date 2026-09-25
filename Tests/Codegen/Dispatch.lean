@@ -144,4 +144,11 @@ example : (Kernels.bin (V := PGA3) (α := Int) .contraction (.chain 1) (.chain 1
 example : (Kernels.bin (V := CGA3) (α := Int) .mul (.chain 1) (.chain 1) .even
     ⟨#[1, 0, 0, 0, 0], rfl⟩ ⟨#[0, 1, 0, 0, 0], rfl⟩).toList.take 2 = [-1, 1] := by decide
 
+/-- Fused sandwiches in `ℝ3`: with `R = 1 + e₁₂` (spinor storage `1, e₁₂, e₁₃, e₂₃`),
+`e₁ ⊘ R = (~R) e₁ R = 2e₂` and `R >>> e₁ = R e₁ ~R = -2e₂`. -/
+example : (SandwichKernels.sandwich (V := ℝ3) (α := Int) .even (.chain 1)
+    ⟨#[1, 1, 0, 0], rfl⟩ ⟨#[1, 0, 0], rfl⟩).toList = [0, 2, 0] := by decide
+example : (SandwichKernels.tsandwich (V := ℝ3) (α := Int) .even (.chain 1)
+    ⟨#[1, 1, 0, 0], rfl⟩ ⟨#[1, 0, 0], rfl⟩).toList = [0, -2, 0] := by decide
+
 end CodegenTests.Dispatch
