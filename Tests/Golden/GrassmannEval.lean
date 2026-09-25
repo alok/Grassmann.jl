@@ -1,0 +1,308 @@
+import Tests.Golden.GrassmannDynamic
+
+/-!
+# Golden evaluators of the dynamic layer
+
+Registrations of `Grassmann.TA` with the element-oracle harness (`Tests.Golden.Registry`):
+
+| name | suite / ops | computes | compares |
+|---|---|---|---|
+| `grassmann/construct` | construct | the element from `(kind, grade, bits, T, native)` | kind, `T`, dense, `str`, `compact_str` |
+| `grassmann/arith` | arith: `add sub neg mul div rdiv` | Julia's `+ - *` lattice and scalar actions (`TA.add`, `TA.addNum`, `TA.smul`, …) | kind, `T`, `grade`/`bits`, dense, `str` |
+
+Everything is compared exactly (floats bitwise). Importing this module registers the
+evaluators (the test driver must import it); `grassmannRegistrations` lists them for
+`Tests.ElementOracle.runWith`.
+-/
+
+namespace Tests.ElementOracle.Dyn
+
+open Grassmann DirectSum AbstractTensors JuliaBase
+
+variable {V : TensorBundle}
+
+/-! ## construct -/
+
+/-- `grassmann/construct`: build the element and print it. -/
+def constructEval : Evaluator := fun ctx args => do
+  let V ← ctx.bundle?
+  let x ← AnyTA.decode V (← args[0]?)
+  pure x.encode
+
+/-! ## arith -/
+
+/-- A number converted to coefficient type `T`, applied to an element of that type. -/
+def AnyTA.withNum (T : CoeffType) (x : AnyTA V) (n : AnyNum)
+    (f : {α : Type} → [Coeff α] → [JuliaShow α] → [OracleScalar α] → TA V α → α → TA V α) :
+    Option (AnyTA V) := do
+  match ← x.promoteTo T, ← (n.toTA V).promoteTo T with
+  | .int x, .int (.single _ k) => pure (.int (f x k))
+  | .rat x, .rat (.single _ k) => pure (.rat (f x k))
+  | .float x, .float (.single _ k) => pure (.float (f x k))
+  | _, _ => none
+
+/-- Negate an operand in its own coefficient type. -/
+def DynOperand.neg : DynOperand V → DynOperand V
+  | .elem x => .elem (x.un TA.neg)
+  | .num (.int k) => .num (.int (-k))
+  | .num (.float f) => .num (.float (-f))
+  | .num (.rat q) => .num (.rat (-q))
+
+/-- A term (`Zero`, `One`, a blade or a `Single`). -/
+def AnyTA.isTerm (x : AnyTA V) : Bool :=
+  match x.encode.kind with
+  | .zero | .one | .submanifold | .single => true
+  | _ => false
+
+/-- A dense container result (`Chain`, `Spinor`, `CoSpinor`, `Multivector`). -/
+def AnyTA.isContainer (x : AnyTA V) : Bool :=
+  match x.encode.kind with
+  | .chain | .spinor | .cospinor | .multivector => true
+  | _ => false
+
+/-- Promote an operand's coefficients to `T`. -/
+def DynOperand.promoteTo (T : CoeffType) : DynOperand V → Option (DynOperand V)
+  | .elem x => .elem <$> x.promoteTo T
+  | .num (.int k) => match T with
+    | .float64 => some (.num (.float (Float.ofInt k)))
+    | .rational => some (.num (.rat k))
+    | _ => some (.num (.int k))
+  | .num n => some (.num n)
+
+/-- Julia's `x / n` result type: integer division promotes to `Float64`. -/
+def divType (T : CoeffType) : CoeffType :=
+  match T with
+  | .int64 | .bool => .float64
+  | t => t
+
+/-- `grassmann/arith`: `a + b`, `a - b` (with numbers: `x ± n`, `n ± x`), `-a`, `n * x`,
+`x * n`, `x / n`, `x // n`. -/
+def arithEval : Evaluator := fun ctx args => do
+  let V ← ctx.bundle?
+  let a ← DynOperand.decode V (← args[0]?)
+  match ctx.op, args[1]? with
+  | "neg", none => match a with
+    | .elem x => pure (x.un TA.neg).encode
+    | .num _ => none
+  | op, some be =>
+    let b ← DynOperand.decode V be
+    let T ← CoeffType.promote a.T b.T
+    -- Julia's `a - b` mostly negates `b` in its own coefficient type (`-value(b)`, then
+    -- the container converts: `0.5 - 0v₁ = 0.5 + 0.0v₁`); the term-term container
+    -- branches (`src/algebra.jl:760-779`, `$bop(value(b,$t))`) convert first.
+    let isTerm := fun (o : DynOperand V) => match o with
+      | .num _ => true
+      | .elem x => x.isTerm
+    let sum := fun (b : DynOperand V) => match a, b with
+      | .elem x, .elem y => x.bin T TA.add y
+      | .elem x, .num n => x.withNum T n TA.addNum
+      | .num n, .elem y => y.withNum T n fun y k => TA.numAdd k y
+      | _, _ => none
+    let r ← match op, a, b with
+      | "add", _, _ => sum b
+      | "sub", _, _ => do
+        let pre ← sum b.neg
+        if isTerm a && isTerm b && pre.isContainer then (b.promoteTo T).bind (sum ·.neg) else pure pre
+      | "mul", .num n, .elem y => y.withNum T n fun y k => TA.smul k y
+      | "mul", .elem x, .num n => x.withNum T n TA.mulScalar
+      | "div", .elem x, .num n => do
+        match ← x.withNum (divType T) n fun x _ => x, ← (n.toTA V).promoteTo (divType T) with
+        | .float x, .float (.single _ k) => pure (.float (TA.divScalar x k))
+        | .rat x, .rat (.single _ k) => pure (.rat (TA.divScalar x k))
+        | _, _ => none
+      | "rdiv", .elem x, .num n => do
+        match ← x.promoteTo .rational, ← (n.toTA V).promoteTo .rational with
+        | .rat x, .rat (.single _ k) => pure (.rat (TA.divScalar x k))
+        | _, _ => none
+      | _, _, _ => none
+    pure r.encode
+  | _, _ => none
+
+/-! ## unary -/
+
+/-- The dynamic unary map of an oracle op key (schema §12), `none` if not a map
+evaluated here. -/
+def unaryOf? (op : String) : Option (UnTA V) :=
+  match op with
+  | "neg" => some fun x => TA.neg x
+  | "reverse" => some fun x => TA.reverse x
+  | "involute" => some fun x => TA.involute x
+  | "clifford" => some fun x => TA.clifford x
+  | "antireverse" => some fun x => TA.antireverse x
+  | "hodge" => some fun x => TA.hodge x
+  | "complementlefthodge" => some fun x => TA.complementlefthodge x
+  | "metric" => some fun x => TA.metric x
+  | "antimetric" => some fun x => TA.antimetric x
+  | "even" => some fun x => TA.even x
+  | "odd" => some fun x => TA.odd x
+  | "real" => some fun x => TA.realPart x
+  | "imag" => some fun x => TA.imagPart x
+  | "scalar" => some fun x => TA.scalar x
+  | "vector" => some fun x => TA.vector x
+  | "bivector" => some fun x => TA.bivector x
+  | "trivector" => some fun x => TA.trivector x
+  | "volume" => some fun x => TA.volume x
+  | "Multivector" => some fun x => TA.toMultiTA x
+  | _ =>
+    if op.startsWith "grade:" then
+      (op.drop 6).toString.toNat?.map fun k => fun x => TA.gradeProj k x
+    else none
+
+/-- `x'` (Julia `adjoint`): the element in the dual space with real coefficients
+unchanged (`src/products.jl:943-1070`); `Zero` and `∞` stay, and a `Couple` or
+`PseudoCouple`, which have no `adjoint` method, fall back to Julia's
+`adjoint(x::Number) = conj(x)`, i.e. the reverse in the same space. -/
+def AnyTA.adjoint (x : AnyTA V) : Option GoldenElem := do
+  let k := x.encode.kind
+  if k == .zero || k == .infinity then return x.encode
+  if k == .couple || k == .pseudoCouple then return (x.un fun y => TA.reverse y).encode
+  let W ← V.adjoint.toOption
+  let e ← match x with
+    | .int x => encodeTA <$> x.retarget W id
+    | .rat x => encodeTA <$> x.retarget W id
+    | .float x => encodeTA <$> x.retarget W id
+    | _ => none
+  pure { e with V := some W.showHandle }
+
+/-- Julia `abs2(x)` (`TA.abs2`) for the coefficient types with a Julia `abs2`/`norm`. -/
+def AnyTA.abs2 : AnyTA V → Option (AnyTA V)
+  | .int t => some (.int (TA.abs2 t))
+  | .rat t => some (.rat (TA.abs2 t))
+  | .float t => some (.float (TA.abs2 t))
+  | .cfloat t => some (.cfloat (TA.abs2 t))
+  | _ => none
+
+/-- Julia `norm(x)` (`TA.norm`), a `Float64`; integer and rational complex coefficients
+are converted to `Complex{Float64}` first (exact for the oracle's small entries). -/
+def AnyTA.norm (x : AnyTA V) : Option Float :=
+  let direct : AnyTA V → Option Float := fun
+    | .int t => some t.norm
+    | .rat t => some t.norm
+    | .float t => some t.norm
+    | .cfloat t => some t.norm
+    | _ => none
+  match x with
+  | .bool _ => (x.promoteTo .int64).bind direct
+  | .cint _ | .crat _ => (x.promoteTo (.complex .float64)).bind direct
+  | _ => direct x
+
+/-- A `Float64` Number result (`str` is Julia's `show`). -/
+def floatNumber (x : Float) : GoldenElem :=
+  { kind := .number, T := some .float64, value := some (.float ((FloatArray.emptyWithCapacity 1).push x)),
+    str := .val (JuliaShow.showIO false x) }
+
+/-- `grassmann/unary`: the unary maps, the grade projections, `Multivector(a)` and `a'`. -/
+def unaryEval : Evaluator := fun ctx args => do
+  let V ← ctx.bundle?
+  let x ← AnyTA.decode V (← args[0]?)
+  if ctx.op == "adjoint" then x.adjoint
+  else if ctx.op == "abs2" then AnyTA.encode <$> x.abs2
+  else if ctx.op == "norm" then floatNumber <$> x.norm
+  else if ctx.op == "complementright" then pure (x.complement fun y => TA.complementright y).encode
+  else if ctx.op == "complementleft" then pure (x.complement fun y => TA.complementleft y).encode
+  else match unaryOf? (V := V) ctx.op with
+    | some f => pure (x.un f).encode
+    | none => none
+
+/-- Julia defects that `defects.json` (and `Tests.Golden.Pending`) do not cover yet, on
+cases the dynamic layer computes correctly: the evaluator's expected failures until the
+oracle tags them (integrator requests). -/
+def unaryKnownIssues : Array KnownIssue := #[
+  { id := "grade0-couple-coefficient",
+    note := "Julia defect (extends the pending grade-couple-coefficient): grade(z::Couple, 0) " ++
+      "returns the bare number realvalue(z) (src/multivectors.jl:670) instead of the scalar part " ++
+      "Single{V}(realvalue(z)); the port returns the Single. Request: add grade:0 to the op glob " ++
+      "of grade-couple-coefficient (Tests/Golden/Pending.lean, then oracle/defects.toml)",
+    tables := #[{ suite := some (Glob.compile "unary"), op := some (Glob.compile "grade:0"),
+                  out := some (Glob.compile "Number"), kinds := some #[KindPat.compile "Couple"] }] }
+]
+
+/-! ## products -/
+
+/-- The dynamic core product of an oracle op key (schema §12) whose operands enter
+unchanged (the derived products that first map an operand are `productsEval`'s). -/
+def productOf? (op : String) : Option (BinTA V) :=
+  match op with
+  | "mul" => some fun a b => TA.mul a b
+  | "wedge" => some fun a b => TA.wedge a b
+  | "vee" => some fun a b => TA.vee a b
+  | "contraction" => some fun a b => TA.contraction a b
+  | "lcontraction" => some fun a b => TA.lcontraction a b
+  | "scalarprod" => some fun a b => TA.scalarprod a b
+  | "cross" => some fun a b => TA.cross a b
+  | _ => none
+
+/-- `grassmann/products`: the 14 binary products over every ordered pair. Julia's derived
+products map an operand before the core product (AbstractTensors
+`src/AbstractTensors.jl:257-261`, Grassmann `src/algebra.jl:313-396`), in the operand's own
+coefficient type (`~a` of an `Int64` chain keeps `0`, not `-0.0`); the maps here run
+before the promotion likewise. -/
+def productsEval : Evaluator := fun ctx args => do
+  let V ← ctx.bundle?
+  let a ← AnyTA.decode V (← args[0]?)
+  let b ← AnyTA.decode V (← args[1]?)
+  let T ← CoeffType.promote a.T b.T
+  let rev := fun (x : AnyTA V) => x.un fun y => TA.reverse y
+  let cr := fun (x : AnyTA V) => x.complement fun y => TA.complementright y
+  let cl := fun (x : AnyTA V) => x.complement fun y => TA.complementleft y
+  let bin := fun (x y : AnyTA V) (f : BinTA V) => do x.bin (← CoeffType.promote x.T y.T) f y
+  let r ← match ctx.op with
+    | "lshift" => bin b (rev a) fun x y => TA.contraction x y
+    | "rshift" => bin (rev a) b fun x y => TA.contraction x y
+    | "revmul" => bin (rev a) b fun x y => TA.mul x y
+    | "veedot" => cl <$> bin (cr a) (cr b) fun x y => TA.mul x y
+    | "antidot" => cl <$> bin (cr a) (cr b) fun x y => TA.contraction x y
+    | "sandwich" =>
+      AnyTA.nary T (fun xs => TA.sandwichWith xs[0]! xs[1]! xs[2]! xs[3]! xs[4]!)
+        #[a, b, rev b, b.un fun y => TA.involute y, b.un fun y => TA.clifford y]
+    | "tsandwich" =>
+      AnyTA.nary T (fun xs => TA.tsandwichWith xs[0]! xs[1]! xs[2]!)
+        #[a, a.un fun y => TA.clifford y, b]
+    | op => (productOf? (V := V) op).bind fun f => a.bin T f b
+  pure r.encode
+
+/-- A products match table (`kinds`: one pattern per operand). -/
+def productsTable (op : String) (kinds : Array String := #[]) (space : String := "*") : MatchTable :=
+  { suite := some (Glob.compile "products"), space := some (Glob.compile space),
+    op := some (Glob.compile op),
+    kinds := if kinds.isEmpty then none else some (kinds.map KindPat.compile) }
+
+/-- Expected failures of the products evaluator: `Float` cases of Julia defects whose
+correct values differ from the expectation only in the sign of zero. -/
+def productsKnownIssues : Array KnownIssue := #[
+  { id := "ref-zero-sign",
+    note := "policy-ref defects (conformal-blade-complement, subamnifold-typo, " ++
+      "conformal-generated-sandwich, tsandwich-submanifold-chain-sign, chain0-times-mixed) with " ++
+      "Float64 operands: the oracle's ref vectors are dense accumulations from zero and do not " ++
+      "define the sign of zero; the port's values follow Julia's generated loops and differ from " ++
+      "the ref only in zero signs; where the ref equals Julia's value numerically (y >>> x with a " ++
+      "null blade y: both are zero) the oracle stores no ref and the harness compares with " ++
+      "Julia's out, whose zeros carry the defect's sign. Request: compare ref vectors, and " ++
+      "ref-policy cases without a stored ref, modulo the sign of zero (Tests/Golden/Compare.lean " ++
+      "compareWithRef, Tests/Golden/Runner.lean evalCase; the reference evaluator already does)",
+    tables := #[productsTable "antidot|veedot" (space := "CGA*"),
+      productsTable "cross|wedge" #["PseudoCouple", "Multivector"],
+      productsTable "cross|wedge" #["Multivector", "PseudoCouple"],
+      productsTable "sandwich" #["Chain", "Single"],
+      productsTable "tsandwich" #["Single", "Chain"],
+      productsTable "tsandwich" #["Submanifold", "Chain"],
+      productsTable "mul|revmul" #["Chain:0", "Multivector"],
+      productsTable "mul|revmul" #["Multivector", "Chain:0"]] }
+]
+
+/-! ## Registrations -/
+
+/-- The dynamic layer's registrations. -/
+def grassmannRegistrations : Array Registration := #[
+  { name := "grassmann/construct", suite := "construct", op := "construct", eval := constructEval },
+  { name := "grassmann/arith", suite := "arith", op := "*", eval := arithEval },
+  { name := "grassmann/unary", suite := "unary", op := "*", eval := unaryEval,
+    knownIssues := unaryKnownIssues },
+  { name := "grassmann/products", suite := "products", op := "*", eval := productsEval,
+    knownIssues := productsKnownIssues }
+]
+
+initialize
+  for r in grassmannRegistrations do register r
+
+end Tests.ElementOracle.Dyn
