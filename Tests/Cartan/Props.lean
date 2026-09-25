@@ -167,8 +167,29 @@ def misc : TestM Unit := do
   check "range tag dropped by t + 1" ((tf + (1 : Float)).range?.isNone)
   check "range tag kept by t + t" ((tf + tf).range?.isSome)
 
+/-- `supnorm`/`infnorm` (one root after the extremum of the squared norms) against the
+extremum of the norms field (a root per point), for a field of width `w`, with and without a
+`NaN` fiber. -/
+def extrema {F : Type} [FlatFiber F] [FiberNorm F] (label : String) (t : TensorField g F) :
+    TestM Unit := do
+  let ext (isMax : Bool) (u : TensorField g F) : Float :=
+    u.norm.data.foldl (fun acc x => Flat.extStep isMax acc x)
+      (if isMax then Float.ofBits 0xFFF0000000000000 else Float.ofBits 0x7FF0000000000000)
+  let same (l : String) (x y : Float) : TestM Unit :=
+    check l (x.toBits == y.toBits || (x.isNaN && y.isNaN)) fun _ => s!"{x} vs {y}"
+  same s!"supnorm {label}" t.supnorm (ext true t)
+  same s!"infnorm {label}" t.infnorm (ext false t)
+  let tn := (TensorField.ofFlat? g (t.data.set! 7 ((0 : Float) / 0))).get!
+  same s!"supnorm {label} with NaN" tn.supnorm (ext true tn)
+  same s!"infnorm {label} with NaN" tn.infnorm (ext false tn)
+
 /-- Run the property tests. -/
 def run : TestM Unit := do
+  extrema "Float" (randField (F := Float) g 800)
+  extrema "ℝ2 vector" (randField (F := Chain ℝ2 1 Float) g 801)
+  extrema "ℝ3 vector" (randField (F := Chain ℝ3 1 Float) g 802)
+  extrema "ℝ2 multivector" (randField (F := Multivector ℝ2 Float) g 803)
+  extrema "ℝ5 vector" (randField (F := Chain ℝ5 1 Float) g 804)
   for (G, H) in [(0, 1), (1, 1), (1, 2), (2, 1), (2, 2), (3, 1), (1, 3), (2, 3)] do
     productsChain ℝ3 G H (100 + 10 * G + H)
     productsChain ℝ4 G H (200 + 10 * G + H)

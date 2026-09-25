@@ -332,6 +332,30 @@ StaticVectors' `norm`). -/
   let x := a.get o (by omega)
   Float.sqrt (x * x)
 
+/-- Point `j < 4` of a block of four points of width `w` at `o`. -/
+theorem quadPt {n : Nat} {o : USize} {w k : Nat} (h : o.toNat + 4 * w * (k + 1) ≤ n) (j : Nat)
+    (hj : j < 4) : (o + USize.ofNat (j * w)).toNat + w ≤ n := by
+  have h1 := toNat_add_le o (j * w)
+  have h2 : j * w + w ≤ 4 * w := by
+    rw [← Nat.succ_mul]; exact Nat.mul_le_mul_right _ hj
+  rw [Nat.mul_succ] at h
+  omega
+
+/-- The blocks after the first start at `o + 4w`. -/
+theorem quadNext {n : Nat} {o : USize} {w k : Nat} (h : o.toNat + 4 * w * (k + 1) ≤ n) :
+    (o + USize.ofNat (4 * w)).toNat + 4 * w * k ≤ n := by
+  have h1 := toNat_add_le o (4 * w)
+  rw [Nat.mul_succ] at h
+  omega
+
+/-- The `m % 4` leading points and then the blocks of four fill `w * m` floats. -/
+theorem quadSplit (w m : Nat) :
+    (USize.ofNat (w * (m % 4))).toNat + 4 * w * (m / 4) ≤ w * m := by
+  have h1 : (USize.ofNat (w * (m % 4))).toNat ≤ w * (m % 4) := USize.toNat_ofNat_le
+  have h2 : w * (m % 4) + 4 * w * (m / 4) = w * m := by
+    rw [Nat.mul_comm 4 w, Nat.mul_assoc, ← Nat.mul_add, Nat.mod_add_div]
+  omega
+
 /-- The norms of `k` fibers (`w` floats each) of `a` from offset `o`, written to `out` from `p`. -/
 @[specialize] def normLoop {n m : Nat} (w : Nat) (nrm : (a : Buf n) → (o : USize) → o.toNat + w ≤ n → Float)
     (a : Buf n) :
@@ -344,7 +368,8 @@ StaticVectors' `norm`). -/
       (Nat.le_trans (Nat.add_le_add_right (toNat_add_le p 1) _) (by omega))
       (Nat.le_trans (Nat.add_le_add_right (toNat_add_le o w) _) (by omega))
 
-/-- `normLoop` over all `m` points of `a` with the per-point norm `nrm`. -/
+/-- `normLoop` over all `m` points of `a` with the per-point norm `nrm` (unrolling it gains
+nothing: the loop is bound by the throughput of `√`). -/
 @[inline] def normsRun (w m : Nat) (a : FloatArray) (h : a.size = w * m)
     (nrm : (a' : Buf a.size) → (o : USize) → o.toNat + w ≤ a.size → Float) : FloatArray :=
   (normLoop (n := a.size) (m := m) w nrm ⟨a, rfl⟩ m (zerosBuf m) 0 0 (by simp) (by simp [h])).1
@@ -397,20 +422,77 @@ else `min` (Julia `minimum(norm, …)`), by `extStep`. -/
       (Nat.le_trans (Nat.add_le_add_right (toNat_add_le o w) _) (by omega))
       (extStep isMax acc x)
 
-/-- `extLoop` over all `m` points of `a` with the per-point norm `nrm`. -/
+/-- `extLoop` four points at a time into four accumulators (independent chains of compares);
+`extStep` folds them back. The extremum is the same (a `NaN` in any chain wins), so is the
+result, but for which `NaN` it is. -/
+@[specialize] def extLoop4 {n : Nat} (isMax : Bool) (w : Nat)
+    (nrm : (a : Buf n) → (o : USize) → o.toNat + w ≤ n → Float) (a : Buf n)
+    (s1 s2 s3 s4 : USize) (h1 : s1 = USize.ofNat (1 * w)) (h2 : s2 = USize.ofNat (2 * w))
+    (h3 : s3 = USize.ofNat (3 * w)) (h4 : s4 = USize.ofNat (4 * w)) :
+    (k : Nat) → (o : USize) → o.toNat + 4 * w * k ≤ n → Float → Float → Float → Float → Float
+  | 0, _, _, c0, c1, c2, c3 => extStep isMax (extStep isMax (extStep isMax c0 c1) c2) c3
+  | k + 1, o, ho, c0, c1, c2, c3 =>
+    let x0 := nrm a o (by have := quadPt ho 0 (by decide); simpa using this)
+    let x1 := nrm a (o + s1) (h1 ▸ quadPt ho 1 (by decide))
+    let x2 := nrm a (o + s2) (h2 ▸ quadPt ho 2 (by decide))
+    let x3 := nrm a (o + s3) (h3 ▸ quadPt ho 3 (by decide))
+    extLoop4 isMax w nrm a s1 s2 s3 s4 h1 h2 h3 h4 k (o + s4) (h4 ▸ quadNext ho)
+      (extStep isMax c0 x0) (extStep isMax c1 x1) (extStep isMax c2 x2) (extStep isMax c3 x3)
+
+/-- `extLoop` over all `m` points of `a` with the per-point norm `nrm`: the first `m % 4` one by
+one, the rest four at a time (`extLoop4`). -/
 @[inline] def extRun (isMax : Bool) (w m : Nat) (a : FloatArray) (h : a.size = w * m) (init : Float)
     (nrm : (a' : Buf a.size) → (o : USize) → o.toNat + w ≤ a.size → Float) : Float :=
-  extLoop (n := a.size) isMax w nrm ⟨a, rfl⟩ m 0 (by simp [h]) init
+  let head := extLoop (n := a.size) isMax w nrm ⟨a, rfl⟩ (m % 4) 0
+    (by simp only [USize.toNat_zero, Nat.zero_add, h]; exact Nat.mul_le_mul_left _ (Nat.mod_le _ _))
+    init
+  extLoop4 (n := a.size) isMax w nrm ⟨a, rfl⟩ _ _ _ _ rfl rfl rfl rfl (m / 4)
+    (USize.ofNat (w * (m % 4))) (by rw [h]; exact quadSplit w m) head init init init
+
+/-- `x₀² + … + x_{w-1}²` of the fiber at offset `o` (the sum under the root of `normAt`). -/
+@[inline] def sqAt {n : Nat} (w : Nat) (a : Buf n) (o : USize) (h : o.toNat + w ≤ n) : Float :=
+  if hw : w = 0 then f64! 0 else
+  let x0 := a.get o (by omega)
+  sumSq w a o h (w - 1) (x0 * x0) (by omega)
+
+/-- `sqAt` for `w = 1, …, 4`, unrolled (the sums of `norm1`, …, `norm4`). -/
+@[inline] def sq1 {n : Nat} (a : Buf n) (o : USize) (h : o.toNat + 1 ≤ n) : Float :=
+  let x := a.get o (by omega)
+  x * x
+
+@[inline, inherit_doc sq1] def sq2 {n : Nat} (a : Buf n) (o : USize) (h : o.toNat + 2 ≤ n) : Float :=
+  let x0 := a.get o (by omega)
+  let x1 := a.get (o + 1) (idx (j := 1) (by omega))
+  x0 * x0 + x1 * x1
+
+@[inline, inherit_doc sq1] def sq3 {n : Nat} (a : Buf n) (o : USize) (h : o.toNat + 3 ≤ n) : Float :=
+  let x0 := a.get o (by omega)
+  let x1 := a.get (o + 1) (idx (j := 1) (by omega))
+  let x2 := a.get (o + 2) (idx (j := 2) (by omega))
+  x0 * x0 + x1 * x1 + x2 * x2
+
+@[inline, inherit_doc sq1] def sq4 {n : Nat} (a : Buf n) (o : USize) (h : o.toNat + 4 ≤ n) : Float :=
+  let x0 := a.get o (by omega)
+  let x1 := a.get (o + 1) (idx (j := 1) (by omega))
+  let x2 := a.get (o + 2) (idx (j := 2) (by omega))
+  let x3 := a.get (o + 3) (idx (j := 3) (by omega))
+  x0 * x0 + x1 * x1 + x2 * x2 + x3 * x3
 
 /-- The largest (`isMax`) or smallest norm of the `m` fibers of width `w` of `a`, starting from
-`init` (Julia `maximum(norm, v; init)`); `init` if the sizes disagree. -/
+`init` (Julia `maximum(norm, v; init)`); `init` if the sizes disagree. The root is taken once:
+`√` is correctly rounded, hence monotone, so the extremum of the norms `√sᵢ` is `√` of the
+extremum of the squared norms `sᵢ` (and a `NaN` stays a `NaN`). -/
 @[inline] def normExtremum (isMax : Bool) (w m : Nat) (a : FloatArray) (init : Float) : Float :=
   if h : a.size = w * m then
-    if hw : w = 1 then extRun isMax w m a h init fun b o ho => norm1 b o (hw ▸ ho)
-    else if hw : w = 2 then extRun isMax w m a h init fun b o ho => norm2 b o (hw ▸ ho)
-    else if hw : w = 3 then extRun isMax w m a h init fun b o ho => norm3 b o (hw ▸ ho)
-    else if hw : w = 4 then extRun isMax w m a h init fun b o ho => norm4 b o (hw ▸ ho)
-    else extRun isMax w m a h init fun b o ho => normAt w b o ho
+    if m = 0 then init else
+    let start := if isMax then Float.ofBits 0xFFF0000000000000 else Float.ofBits 0x7FF0000000000000
+    let s :=
+      if hw : w = 1 then extRun isMax w m a h start fun b o ho => sq1 b o (hw ▸ ho)
+      else if hw : w = 2 then extRun isMax w m a h start fun b o ho => sq2 b o (hw ▸ ho)
+      else if hw : w = 3 then extRun isMax w m a h start fun b o ho => sq3 b o (hw ▸ ho)
+      else if hw : w = 4 then extRun isMax w m a h start fun b o ho => sq4 b o (hw ▸ ho)
+      else extRun isMax w m a h start fun b o ho => sqAt w b o ho
+    extStep isMax init (Float.sqrt s)
   else init
 
 end Cartan.Flat
