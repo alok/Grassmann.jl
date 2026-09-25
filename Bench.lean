@@ -6,6 +6,7 @@ import Bench.StaticVectors
 import Bench.DirectSum
 import Bench.UnitSystems
 import Bench.Dendriform
+import Bench.Wilkinson
 import Bench.MeshTopology
 import Bench.Fatou
 import Bench.Geophysics
