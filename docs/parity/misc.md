@@ -199,7 +199,7 @@ docs/perf/latest.md) and, for AbstractAnalysis, by the temporary cases recorded 
 | `orbit`, `orbiterror`, `orbithold`, `FixedCycle` | `orbit`, `orbitN`, `orbitError`, `orbitNTrace`, `orbitHold`, `FixedCycle.run/withLen` | DONE | the metric defaults to the state's `Metric.dist` (Julia's `supnorm`) | – |
 | `derivative`, `derivative2` | same (Float) | DONE | oracle | – |
 | performance: `Semimagma` membership | `magmaHashed`/`groupHashed` (hash side index), `isGroupHashed` (index Cayley table), `@[csimp]` allocation-free scans | DONE | S₆ closure 64 ms (Julia 2.59 s, linear port 3.17 s); `isgroup(S₅)` 4.4 ms (Julia 78 ms; generic 336 ms) | – |
-| performance: `Limit` loops (`sum(x)[1e-10]` 0.13 ms in Julia) | `Limit (Indexed Float) Float`, `@[inline]` `orbit`/`sum`/`limitEps` | PARTIAL | measured (docs/PERF.md 2026-09-25): `orbit(cos, 1.0)` 0.96 µs (Julia 0.75 µs); `sum(x)[1e-10]` 4.8 ms, 37× Julia: the `Indexed Float` state is a heap object with a boxed `Float` per step. Needs a scalar fast path for sums | S |
+| performance: `Limit` loops (`sum(x)[1e-10]` 0.13 ms in Julia) | `Limit (Indexed Float) Float`, `@[inline]` `orbit`/`sum`/`limitEps`, cell-reusing `untilConverged` | DONE | measured (docs/PERF.md 2026-09-25): `orbit(cos, 1.0)` 0.95 µs (Julia 0.75 µs); `sum(x)[1e-10]` 0.58 ms (4.5×; one boxed `Float` per step) with the map converting through `UInt64`, 4.3 ms when the map uses `Float.ofNat` | – |
 
 ## 6. Wilkinson.jl (exports `PolynomialAnalysis PolynomialComparison plot factor expand horner polyfactors polyexpand polyhorner`) + SyntaxTree parts
 
@@ -306,8 +306,8 @@ Computed from the status column of the tables above (one row per symbol or symbo
 
 | status | rows |
 |---|---|
-| DONE | 171 |
-| PARTIAL | 6 |
+| DONE | 172 |
+| PARTIAL | 5 |
 | MISSING | 3 |
 | IN_PROGRESS | 0 |
 | SKIP | 14 |

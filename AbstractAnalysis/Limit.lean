@@ -105,30 +105,33 @@ Julia loops forever when the tolerance is never met. -/
 def maxIter : Nat := 100000000
 
 /-- The loop of `limit(L, ϵ)` / `orbit(f, x, ϵ)`: step until the residual drops
-to `ϵ`, returning `(state, previous state, count, residual, trace)`. -/
+to `ϵ`, returning `(state, count, residual, trace)`. The value of the current state is read
+before stepping, so the state is dead when `F` consumes it and a step that rebuilds the same
+structure (`Indexed`) reuses its cell. -/
 @[specialize] def untilConverged (F : S → S) (value : S → V) (dist : V → V → Float) (ϵ : Float)
-    (trace : Bool) : S → S → Nat → Float → FloatArray → Nat → S × S × Nat × Float × FloatArray
-  | x0, xn, n, change, out, 0 => (x0, xn, n, change, out)
-  | x0, xn, n, change, out, fuel + 1 =>
+    (trace : Bool) : S → Nat → Float → FloatArray → Nat → S × Nat × Float × FloatArray
+  | xn, n, change, out, 0 => (xn, n, change, out)
+  | xn, n, change, out, fuel + 1 =>
     if change > ϵ then
+      let v := value xn
       let xn' := F xn
-      let c := dist (value xn') (value xn)
-      untilConverged F value dist ϵ trace xn xn' (n + 1) c (if trace then out.push c else out) fuel
-    else (x0, xn, n, change, out)
+      let c := dist (value xn') v
+      untilConverged F value dist ϵ trace xn' (n + 1) c (if trace then out.push c else out) fuel
+    else (xn, n, change, out)
 
 /-- Julia `limit(L, ϵ, Val(print))` (src/metric.jl:467-484). **Quirk #25,
 reproduced:** the result's `v0` is the *old final state* and its length is
 `old length + iterations + 1`. Also returns the residual trace. -/
 def limitEpsTrace (L : Limit S V) (ϵ : Float) : Limit S V × FloatArray :=
   let x := L.v
-  let (_, xn, n, change, out) := untilConverged L.step L.value L.dist ϵ true x x 1 (5 * ϵ) {} maxIter
+  let (xn, n, change, out) := untilConverged L.step L.value L.dist ϵ true x 1 (5 * ϵ) {} maxIter
   (⟨x, xn, n + L.n, change, L.step, L.value, L.dist⟩, out)
 
 /-- Julia `limit(L, ϵ)` / `L[ϵ]`. Inlined, so that a limit built in place (`x.sum.limitEps ϵ`)
 specializes `untilConverged` on its step and metric. -/
 @[inline] def limitEps (L : Limit S V) (ϵ : Float) : Limit S V :=
   let x := L.v
-  let (_, xn, n, change, _) := untilConverged L.step L.value L.dist ϵ false x x 1 (5 * ϵ) {} maxIter
+  let (xn, n, change, _) := untilConverged L.step L.value L.dist ϵ false x 1 (5 * ϵ) {} maxIter
   ⟨x, xn, n + L.n, change, L.step, L.value, L.dist⟩
 
 /-- Julia `collect(L)`: the values `x_1 … x_n`, re-derived by iterating from
@@ -349,13 +352,13 @@ without a `Metric` instance (Cartan's tensor fields) pass their own `d`. -/
 `d(x_{k+1}, x_k) ≤ ϵ`. -/
 @[inline] def orbit {S : Type} (f : S → S) (x : S) (ϵ : Float := 5 * 2.220446049250313e-16)
     (d : S → S → Float := by exact AbstractAnalysis.Metric.dist) : Limit S S :=
-  let (_, xn, n, change, _) := Limit.untilConverged f id d ϵ false x x 1 (5 * ϵ) {} Limit.maxIter
+  let (xn, n, change, _) := Limit.untilConverged f id d ϵ false x 1 (5 * ϵ) {} Limit.maxIter
   ⟨x, xn, n, change, f, id, d⟩
 
 /-- Julia `orbiterror(f, x, ϵ, d = supnorm)`: the orbit plus its residual trace. -/
 @[inline] def orbitError {S : Type} (f : S → S) (x : S) (ϵ : Float := 5 * 2.220446049250313e-16)
     (d : S → S → Float := by exact AbstractAnalysis.Metric.dist) : Limit S S × FloatArray :=
-  let (_, xn, n, change, out) := Limit.untilConverged f id d ϵ true x x 1 (5 * ϵ) {} Limit.maxIter
+  let (xn, n, change, out) := Limit.untilConverged f id d ϵ true x 1 (5 * ϵ) {} Limit.maxIter
   (⟨x, xn, n, change, f, id, d⟩, out)
 
 /-- Julia `orbit(f, x, k::Int, d = supnorm)`: exactly `k` steps, length `k + 1`. -/
