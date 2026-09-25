@@ -1,4 +1,4 @@
-import Tests.Similitude.Common
+import Tests.Similitude.Constants
 
 /-!
 # Similitude: quotients `U/~`
@@ -38,6 +38,23 @@ def extrasSuite : IO Suite := do
     for (b, w) in bases.zip (arr (idx r 2)).toList do
       let got := toString (naturalUnit U b)
       s := s.check (got == str w) fun _ => s!"naturalunits({U.name}) {b}: got {got}, want {str w}"
+  return s
+
+/-- LaTeX of dimension images (16 systems × 131 quantities) and of named constants. -/
+def latexSuite : IO Suite := do
+  let j ← loadJson "similitude/latex.json"
+  let mut s : Suite := { name := "LaTeX" }
+  for r in arr (fld j "dims") do
+    let U := sysOf! (str (idx r 0))
+    for w in arr (idx r 1) do
+      let some q := Conv.ofName? (str (idx w 0)) | s := s.check false fun _ => "unknown quantity"
+      let got := U.latexDim q.dim.toGroup.v
+      s := s.check (got == str (idx w 1)) fun _ => s!"{U.name} {q.name}: got {got}, want {str (idx w 1)}"
+  for r in arr (fld j "constants") do
+    let nm := str (idx r 0)
+    match namedConstants.lookup nm with
+    | some (.grp g) => s := s.check (g.latex == str (idx r 1)) fun _ => s!"{nm}: got {g.latex}, want {str (idx r 1)}"
+    | _ => s := s.check false fun _ => s!"no group constant {nm}"
   return s
 
 end Tests.SimilitudeTests

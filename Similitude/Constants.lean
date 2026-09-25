@@ -178,6 +178,11 @@ end Consts
 /-- Constants print with their value: `kB⋅NA = 8.31446261815324` (`dimension.jl:211`). -/
 instance : GroupProduct constantsBasis := ⟨fun g => some (JuliaBase.F64.showString (Consts.product g))⟩
 
+/-- FieldAlgebra's `showlatex(g)` for a constant (`FieldAlgebra.jl:247-291`):
+the LaTeX monomial and ` = ` its value (`\hbar\cdot \text{c}^{-1}… = 9.1… \times 10^{-31}`). -/
+def Consts.latex (g : Consts) : String :=
+  g.latexPre ++ " = " ++ specialPrintFloat (Consts.product g)
+
 /-- Julia `===` of two coefficients: same kind and same value (bits for floats). -/
 def coefIdent : Coef → Coef → Bool
   | .int a, .int b => a == b

@@ -67,8 +67,12 @@ def latexDims (sys : String) (img : Exps 11) : String :=
   match unitLatex.find? sys img with
   | some s => s
   | none =>
-    let (_, chars, latex) := dimText sys
-    (Group.mk' img (.int 1) : USQGroup).latexPre latex chars "\\mathbb{1}"
+    -- LaTeX names are strings, so `latexdims` always separates with `\cdot `
+    (Group.mk' img (.int 1) : USQGroup).latexPre (dimText sys).2.2 false "\\mathbb{1}"
+
+/-- How system `U` typesets a dimension `d` (Julia `latexgroup(io, U(d), U)`). -/
+def _root_.UnitSystems.Sys.latexDim (U : Sys) (d : Exps 11) : String :=
+  latexDims U.name (U.hom.apply d)
 
 /-- The image of a USQ exponent vector under a system (`U(d)`). -/
 def _root_.UnitSystems.Sys.image (U : Sys) (d : Exps 11) : Exps 11 := U.hom.apply d
