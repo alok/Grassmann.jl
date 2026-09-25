@@ -11,6 +11,7 @@ import DirectSum.Blade
 import DirectSum.Names
 import DirectSum.Derived
 import DirectSum.Ops
+import DirectSum.Proofs
 
 /-!
 # DirectSum: the space and basis-blade layer

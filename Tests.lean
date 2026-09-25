@@ -17,3 +17,4 @@ import Tests.Fatou
 import Tests.Grassmann
 import Tests.Golden
 import Tests.Geophysics
+import Tests.Proofs
