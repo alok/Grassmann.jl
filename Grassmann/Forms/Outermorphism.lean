@@ -111,35 +111,61 @@ the `1 × 1` identity for `g = 0` and zero beyond `min(n, m)`. -/
 /-- The grade-1 map (Julia `O.v[1]`). -/
 @[inline] def base (O : Outermorphism V W α) : Simplex V W α := O.block 1
 
+/-- Whether layout `l` stores grade `g` (`Forms.layoutGrades` as a predicate). -/
+@[inline] def storesGrade (g : Nat) : Layout → Bool
+  | .chain h => g == h
+  | .even => g % 2 == 0
+  | .odd => g % 2 == 1
+  | .full => true
+
+/-- `Layout.size n l` with shifts instead of `Nat` powers (a GMP computation per call at run
+time in DirectSum's `Layout.size`). -/
+@[inline] def layoutSize (n : Nat) : Layout → Nat
+  | .chain g => Layout.size n (.chain g)
+  | .even => if n == 0 then 1 else 1 <<< (n - 1)
+  | .odd => if n == 0 then 0 else 1 <<< (n - 1)
+  | .full => 1 <<< n
+
+theorem layoutSize_eq (n : Nat) (l : Layout) : layoutSize n l = l.size n := by
+  cases l <;> simp [layoutSize, Layout.size, Nat.shiftLeft_eq]
+
+/-- Push `rg` zeros. -/
+@[specialize] def pushZeros (rg : Nat) (out : Packed.Arr α) : Packed.Arr α :=
+  Mat.pushLoop (fun _ => Coeff.zero) rg 0 out
+
+/-- The grades `g, …, m` of `applyValues`: the codomain grades stored in `l`, the domain block
+of grade `g` at `off` (the sizes of the domain's lower stored grades). -/
+@[specialize] def applyLoop (O : Outermorphism V W α) (l : Layout) (xd : Packed.Arr α) (k n m : Nat) :
+    (g off : Nat) → Packed.Arr α → (fuel : Nat) → Packed.Arr α
+  | _, _, out, 0 => out
+  | g, off, out, fuel + 1 =>
+    if g > m then out
+    else if !storesGrade g l then applyLoop O l xd k n m (g + 1) off out fuel
+    else
+      let inDom := g ≤ n
+      let off' := if inDom then off + Leibniz.choose n g else off
+      let rg := Leibniz.choose m g
+      let out :=
+        if g = 0 then Packed.push out (Mat.rd xd off)
+        else if g ≤ k && inDom then
+          match O.blocks[g - 1]? with
+          | some b =>
+            let a := b.mat.v.data
+            Mat.pushLoop (fun i => Mat.sdot0 id a xd b.rows 1 b.cols i off) rg 0 out
+          | none => pushZeros rg out
+        else pushZeros rg out
+      applyLoop O l xd k n m (g + 1) off' out fuel
+
 /-- The image of a coefficient vector stored in layout `l` (Julia `contraction(O, x)`,
 `forms.jl:1050-1073`): the scalar part is kept, grade `g ≤ k` goes through
-`Λᵍ F`, higher grades of the codomain are zero. -/
+`Λᵍ F`, higher grades of the codomain are zero. One tail-recursive pass over the grades,
+no intermediate lists; the result size is checked with `layoutSize` (shifts). -/
 @[specialize] def applyValues (O : Outermorphism V W α) (l : Layout) (x : Values α (l.size V.n)) :
     Values α (l.size W.n) :=
-  let k := O.depth
-  let n := V.n
   let m := W.n
-  let xd := x.data
-  -- the codomain grades in storage order; the domain block of grade `g` starts at
-  -- `off` = the sizes of the domain layout's lower grades
-  let grades := Forms.layoutGrades m l
-  let domGrades := Forms.layoutGrades n l
-  let res := grades.foldl (fun (acc : Packed.Arr α × Nat) g =>
-    let (out, off) := acc
-    let inDom := domGrades.contains g
-    let off' := if inDom then off + Leibniz.choose n g else off
-    let rg := Leibniz.choose m g
-    if g = 0 then (Packed.push out (Mat.rd xd off), off')
-    else if g ≤ k && inDom then
-      match O.blocks[g - 1]? with
-      | some b =>
-        let a := b.mat.v.data
-        let r := b.rows
-        let c := b.cols
-        (Mat.pushLoop (fun i => Mat.sdot0 id a xd r 1 c i off) rg 0 out, off')
-      | none => (Mat.pushLoop (fun _ => Coeff.zero) rg 0 out, off')
-    else (Mat.pushLoop (fun _ => Coeff.zero) rg 0 out, off')) (Packed.mkEmpty (l.size m), 0)
-  Mat.finish res.1
+  let res := applyLoop O l x.data O.depth V.n m 0 0 (Packed.mkEmpty (layoutSize m l)) (m + 1)
+  if h : Packed.size res = layoutSize m l then ⟨res, h.trans (layoutSize_eq m l)⟩
+  else zeroValues _
 
 /-- Julia `O(x) = O ⋅ x` for any element of the domain algebra (`forms.jl:723,
 1050-1073`): a `Chain` of grade `g` goes to a `Chain` of grade `g`, a `Spinor`
