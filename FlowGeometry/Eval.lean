@@ -1,5 +1,6 @@
 import FlowGeometry.Types
 import FlowGeometry.Solve
+import Std.Data.HashMap
 
 /-!
 # Evaluating the analytic profiles
@@ -375,6 +376,22 @@ def slope (e : Eval) (x : Float) : Float :=
 
 end Eval
 
+/-- The digit pair `MP` of Julia's `string(n, pad = 2)` (`profiles.jl:204-205`) as `10M + P`. -/
+def naca4Index (n : Nat) : Nat :=
+  let ds := Nat.toDigits 10 n
+  let ds := if ds.length < 2 then '0' :: ds else ds
+  (ds[0]!.toNat - '0'.toNat) * 10 + (ds[1]!.toNat - '0'.toNat)
+
+/-- The `NACA4` evaluation data of the digits `M`, `P`. -/
+def naca4Eval (M P : Nat) : Eval :=
+  let (m, p) := (M.toUInt64.toFloat / 100, P.toUInt64.toFloat / 10)
+  let (f, r) := naca4Coeffs m p
+  .naca4 p f[0]! f[1]! f[2]! r[0]! r[1]! r[2]!
+
+/-- The `NACA4` camber lines of all 100 digit pairs, fitted once when the module is initialized
+(Julia folds `naca4(n)` into the code at compile time; here a camber costs a table read). -/
+def naca4Table : Array Eval := (Array.range 100).map fun k => naca4Eval (k / 10) (k % 10)
+
 /-- Julia `36π` = `Float64(36) * Float64(π)`. -/
 def thirtySixPi : Float := 36 * f64! 3.141592653589793
 
@@ -427,6 +444,44 @@ def slopesOn (e : Eval) (xs : FloatArray) : FloatArray :=
 
 end Eval
 
+/-! ## Fit cache
+
+Julia folds the `Thickness` 5×5 solve into the code (`@generated`, `profiles.jl:147-148`) and
+constant-propagates the two 4×4 solves of `Modified` for literal type parameters, so sampling a
+profile costs only its evaluations. The port computes each fit once per process and parameter set,
+in a process-global table read through `unsafeBaseIO` (the pattern of the Grassmann plan cache,
+`Grassmann/Kernel/Reference.lean`): logically `cachedFit k f = f ()`. -/
+
+/-- The parameters a fit depends on: the family and the bit patterns of its three numbers. -/
+structure FitKey where
+  /-- `0` = `Thickness`, `1` = `Modified` -/
+  kind : UInt8
+  /-- first parameter's bits -/
+  a : UInt64
+  /-- second parameter's bits -/
+  b : UInt64
+  /-- third parameter's bits -/
+  c : UInt64
+  deriving BEq, Hashable
+
+private unsafe def fitCacheImpl : IO.Ref (Std.HashMap FitKey Eval) := unsafeBaseIO (IO.mkRef {})
+
+/-- The process-global fit cache. -/
+@[implemented_by fitCacheImpl]
+private opaque fitCache : IO.Ref (Std.HashMap FitKey Eval)
+
+private unsafe def cachedFitImpl (k : FitKey) (f : Unit → Eval) : Eval := unsafeBaseIO do
+  match (← fitCache.get).get? k with
+  | some e => return e
+  | none =>
+    let e := f ()
+    fitCache.modify (·.insert k e)
+    return e
+
+/-- The fit `f ()` of the parameters `k`, computed once per process (logically `f ()`). -/
+@[implemented_by cachedFitImpl]
+def cachedFit (k : FitKey) (f : Unit → Eval) : Eval := f ()
+
 /-- Precompute a profile's coefficients (Julia's `@pure`/`@generated` folding). `UpperArc` and
 `LowerArc` are not callable in Julia: `Eval.none`. -/
 def Profile.eval : Profile → Eval
@@ -439,16 +494,15 @@ def Profile.eval : Profile → Eval
     let a := clarky (te.toFloat / 100)
     .poly5 (5 * (t.toFloat / 100)) a[0]! a[1]! a[2]! a[3]! a[4]!
   | .thickness t x te _ =>
-    let a := clarky5 (te.toFloat / 100) (x.toFloat / 10)
-    .poly5 (5 * (t.toFloat / 100)) a[0]! a[1]! a[2]! a[3]! a[4]!
+    cachedFit ⟨0, t.toFloat.toBits, x.toFloat.toBits, te.toFloat.toBits⟩ fun _ =>
+      let a := clarky5 (te.toFloat / 100) (x.toFloat / 10)
+      .poly5 (5 * (t.toFloat / 100)) a[0]! a[1]! a[2]! a[3]! a[4]!
   | .modified t m te _ =>
-    let (t, i, p, te) := modifiedParams t m te
-    let (a, d) := modifiedCoeffs t i p te
-    .modified (5 * t) p a[0]! a[1]! a[2]! a[3]! d[0]! d[1]! d[2]! d[3]!
-  | .naca4 n _ =>
-    let (m, p) := naca4Decode n
-    let (f, r) := naca4Coeffs m p
-    .naca4 p f[0]! f[1]! f[2]! r[0]! r[1]! r[2]!
+    cachedFit ⟨1, t.toFloat.toBits, m.toFloat.toBits, te.toFloat.toBits⟩ fun _ =>
+      let (t, i, p, te) := modifiedParams t m te
+      let (a, d) := modifiedCoeffs t i p te
+      .modified (5 * t) p a[0]! a[1]! a[2]! a[3]! d[0]! d[1]! d[2]! d[3]!
+  | .naca4 n _ => naca4Table[naca4Index n]!
   | .naca5 n _ =>
     (match naca5Decode n with
       | some (mk1, r, k) => .naca5 mk1 r k
