@@ -168,6 +168,9 @@ macro_rules
           total (fused% (gradePart a 2)).v) M p
         case1 (k "even Multivector [fused]") (fun (a : Multivector $V Float) =>
           total (fused% (even a : Spinor $V Float)).v) M p
+        bench (k "reverse in place (m := ~m) [fused]") (ops := ringSize) (param := p) fun s =>
+          let m := M[s % ringSize]!
+          total (iterate (fun (a : Multivector $V Float) => fused% (~a)) m ringSize).v
         if ($cs : CaseSet).inverses then
           case1 (k "inv Chain1 [fused]") (fun (u : Chain $V 1 Float) => total (fused% u⁻¹).v) U p
           case2 (k "Chain1/Chain1 [fused]") (fun (a b : Chain $V 1 Float) =>

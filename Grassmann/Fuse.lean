@@ -110,11 +110,20 @@ def fuseExpr (e : Expr) : MetaM Expr := do
     | none => return os[0]!
     | some (ctor, params) =>
       let nc := os.size
-      -- write into a leaf of the output's length (in place when it is exclusive), else a copy
-      -- of the zero vector
-      let base := (leafVar.zip st.leaves).findSome? (fun (v?, lf) => if lf.size == nc then v? else none)
-        |>.getD (ar.zeros nc)
-      return mkApp (mkAppN ctor params) (ar.packSet base os)
+      -- write into a leaf of the output's length (in place when it is exclusive), else into a
+      -- copy of the zero vector; a coefficient the leaf already holds (`~m` keeps grades 0
+      -- and 1) is not written again
+      let baseLeaf := (Array.range st.leaves.size).find? fun l =>
+        (leafVar[l]?.getD none).isSome && st.leaves[l]!.size == nc
+      let (base, keep) := match baseLeaf with
+        | some l => ((leafVar[l]!).get!, fun (j : Nat) => st.g.get (outs[j]!) == Node.input l j)
+        | none => (ar.zeros nc, fun (j : Nat) => st.g.get (outs[j]!) == Node.const 0)
+      let mut v := base
+      for h : j in [0:nc] do
+        unless keep j do
+          v := mkApp6 (mkConst ``StaticVectors.Values.set [0]) ar.α ar.P (mkRawNatLit nc) v
+            (mkApp3 (mkConst ``Fin.mk) (mkRawNatLit nc) (mkRawNatLit j) (Arith.ltProof j nc)) os[j]
+      return mkApp (mkAppN ctor params) v
   let t1 ← IO.monoMsNow
   trace[grassmann.fuse] "fused {st.kernels} kernel calls: {(st.g.reachable outs).size} nodes, \
     {st.g.opCount outs} operations, {st.leaves.size} leaves, {st.scalars.size} scalars ({t1 - t0} ms)"

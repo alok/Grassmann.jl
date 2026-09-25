@@ -158,6 +158,7 @@ function gspace(ctx, label, V, seed, cs::GCaseSet = GCaseSet())
         gcase2(ctx, k("Chain1+Chain2 [fused]"), +, U, C)
         gcase1(ctx, k("grade 2 of Multivector [fused]"), a -> a(2), M)
         gcase1(ctx, k("even Multivector [fused]"), even, M)
+        bench!(i -> giterate(~, M[(i % GK) + 1], GK), ctx, k("reverse in place (m := ~m) [fused]"); ops = GK, param = "K=$GK")
         if cs.inverses
             gcase1(ctx, k("inv Chain1 [fused]"), inv, U)
             gcase2(ctx, k("Chain1/Chain1 [fused]"), /, U, W)
