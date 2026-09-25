@@ -7,7 +7,8 @@
 #   * deterministic seeded generators of sample elements (`lattice_samples`, ...);
 #   * the defect matcher driven by oracle/defects.toml (`DefectTable`, `tag_defects!`).
 #
-# The JSON schema produced here is documented in oracle/README.md; keep the two in sync.
+# The JSON schema produced here is specified in docs/port-notes/oracle-schema.md (checked by
+# oracle/validate.py); keep them in sync.
 
 using Grassmann, DirectSum, Leibniz, AbstractTensors, StaticVectors
 using LinearAlgebra, Random, TOML
@@ -277,7 +278,7 @@ tname(::Type{Rational{T}}) where {T} = "Rational{" * tname(T) * "}"
 tname(T::Type) = string(T)
 tname(x) = string(x)
 
-"The oracle kind tag of a value (see README: element kinds)."
+"The oracle kind tag of a value (docs/port-notes/oracle-schema.md §7)."
 function kindof(x)
     x isa Zero && return "Zero"
     x isa DirectSum.Infinity && return "Infinity"
@@ -386,14 +387,13 @@ function todense(x)
                 d[Leibniz.basisindex(n, B)] = v[idx(n, B)]
             end
         end
-    elseif k == "Couple"
-        B = blade_bits(x)
-        d[1] += realvalue(x)
-        d[Leibniz.basisindex(n, B)] += imagvalue(x)
-    elseif k == "PseudoCouple"
-        B = blade_bits(x)
-        d[Leibniz.basisindex(n, B)] += realvalue(x)
-        d[1 << n] += imagvalue(x)
+    elseif k == "Couple" || k == "PseudoCouple"
+        # assign (not `+=`) so a stored -0.0 keeps its sign; only a degenerate B (B = 1 for a
+        # Couple, B = I for a PseudoCouple) puts both parts on one blade, which then holds the sum
+        iB = Leibniz.basisindex(n, blade_bits(x))
+        i1, i2 = k == "Couple" ? (1, iB) : (iB, 1 << n)
+        d[i1] = realvalue(x)
+        d[i2] = i1 == i2 ? d[i1] + imagvalue(x) : imagvalue(x)
     end
     return d
 end
@@ -421,7 +421,7 @@ end
 """
     encode(x; vshow, compact=false, native=false, typestr=false)
 
-Encode a Julia value as an oracle element object (README: "Element encoding").
+Encode a Julia value as an oracle element object (docs/port-notes/oracle-schema.md §7).
 `vshow` is the `show` string of the shard's space; `"V"` is emitted only when the element's
 space differs from it.
 """
@@ -685,7 +685,7 @@ function kindmatch(pat::AbstractString, a, topgrade::Int)
     return false
 end
 
-"Named predicates usable in `when = ...` (documented in oracle/README.md)."
+"Named predicates usable in `when = ...` (docs/port-notes/oracle-schema.md §10)."
 function whenmatch(name::AbstractString, args, sp)
     n = sp === nothing ? 0 : sp["n"]
     bitsof(a) = get(a, "bits", nothing)
@@ -712,6 +712,15 @@ function whenmatch(name::AbstractString, args, sp)
             xor((b & 1) != 0, (b & 2) != 0) && return true
         end
         return false
+    elseif name == "mixed_parity_first"
+        # the first operand is a Couple with odd B, or a PseudoCouple whose B parity differs from
+        # n's: not parity-homogeneous, so Julia's sandwich falls back to multispin
+        isempty(args) && return false
+        a = args[1]
+        k = get(a, "kind", "")
+        k in ("Couple", "PseudoCouple") || return false
+        odd = isodd(count_ones(UInt(a["bits"])))
+        return k == "Couple" ? odd : odd != isodd(n)
     elseif name == "Isq_plus"
         # the pseudoscalar squares to a positive scalar (AT's scalar trig functions become hyperbolic)
         isq = sp === nothing ? nothing : get(sp, "Isq", nothing)

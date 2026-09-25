@@ -12,7 +12,9 @@
 # Every shard runs in a fresh `julia` process (oracle/run_suite.jl) using this process's active
 # project, writing oracle/golden/<suite>/<shard>.json. Afterwards each suite manifest
 # oracle/golden/<suite>.json is rewritten from the shard files, which are re-read with JSON.jl
-# as validation. Exits non-zero if any shard failed.
+# as validation, and oracle/golden/defects.json is rewritten from oracle/defects.toml. Exits
+# non-zero if any shard failed. The output format is specified in
+# docs/port-notes/oracle-schema.md.
 
 include(joinpath(@__DIR__, "common.jl"))
 import JSON
@@ -131,6 +133,38 @@ function write_manifest(suite, shards)
     return tot
 end
 
+"""
+Write oracle/golden/defects.json: the defect table of oracle/defects.toml as JSON, so consumers
+(the Lean tests) get every id's `policy` without a TOML parser. Entry keys are emitted in a fixed
+order; `match` tables keep their fields (`kinds` as an array, everything else a string).
+"""
+function write_defects_json()
+    t = TOML.parsefile(joinpath(ORACLE_DIR, "defects.toml"))
+    fieldorder = ("suite", "space", "op", "kinds", "when", "out", "msg", "block", "input", "file")
+    entries = Obj[]
+    for d in get(t, "defect", Any[])
+        e = Obj("id" => d["id"], "policy" => get(d, "policy", "skip"))
+        for k in ("title", "source", "notes", "correct")
+            haskey(d, k) && (e[k] = d[k])
+        end
+        ms = Obj[]
+        for m in get(d, "match", Any[])
+            unknown = setdiff(keys(m), fieldorder)
+            isempty(unknown) || error("defect $(d["id"]): unknown match field(s) $(join(unknown, ", "))")
+            push!(ms, Obj((k => (k == "kinds" ? Any[m[k]...] : m[k]) for k in fieldorder if haskey(m, k))...))
+        end
+        e["match"] = ms
+        push!(entries, e)
+    end
+    ids = [e["id"] for e in entries]
+    allunique(ids) || error("duplicate defect ids in defects.toml")
+    path = joinpath(GOLDEN_DIR, "defects.json")
+    write_golden(path, Obj("meta" => Obj("schema" => SCHEMA_VERSION, "generator" => "oracle/defects.toml"),
+                           "defects" => entries))
+    JSON.parsefile(path)
+    return length(entries)
+end
+
 function main(args)
     njobs, timeout, listonly, retagonly, targets = parse_args(args)
     wanted = Dict{String,Union{Nothing,Vector{String}}}()
@@ -195,6 +229,7 @@ function main(args)
             println(stderr, "manifest golden/$s.json NOT written (missing shards)")
         end
     end
+    println(stderr, "defects golden/defects.json: $(write_defects_json()) entries")
     println(stderr, "done in $(round(time() - t0; digits = 1)) s; $(length(failed)) failed shard(s)")
     for (s, sh) in failed
         println(stderr, "  FAILED $s/$sh: log at $(results[(s, sh)][3])")

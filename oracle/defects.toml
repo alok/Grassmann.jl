@@ -27,7 +27,7 @@
 #                         the output kind, `block`/`input`/`file` apply to the docs/blades suites)
 #              kinds    : one pattern per operand, each `Kind` or `Kind:g` (g an integer or `n` =
 #                         the space's top grade) with `|` alternatives, or `*`
-#              when     : a named predicate (oracle/README.md "Defect predicates")
+#              when     : a named predicate (docs/port-notes/oracle-schema.md §10)
 # Entries without match tables are documented defects that no generated golden exercises
 # (kept so the list is complete; several of them crash or hang Julia and are avoided on purpose).
 
@@ -201,6 +201,31 @@ policy = "ref"
   [[defect.match]]
   suite = "products"
   msg = "*::Tuple{Expr*"
+
+[[defect]]
+id = "tsandwich-submanifold-chain-sign"
+title = "y >>> x with a basis blade y (Submanifold) and a Chain x drops clifford's sign: it returns y⟑x⟑y instead of y⟑x⟑clifford(y), wrong when grade(y) ≡ 1, 2 (mod 4)"
+source = "Grassmann.jl src/algebra.jl:359 (>>>(b::TensorGraded, a::TensorGraded) = product_sandwich(a,b,true)); src/algebra.jl:1692 (swap = true: the first pass skips `par`) and :1722-1725 (the second pass applies `par` for a Single b only, not for a Submanifold b)"
+notes = "found by the element oracle (products suite, ref mismatch); grassmann-products.md §4.6. Single >>> Chain and Submanifold >>> term are correct"
+correct = "y⟑x⟑clifford(y) projected onto grade(x), as for a Single y"
+policy = "ref"
+  [[defect.match]]
+  suite = "products"
+  op = "tsandwich"
+  kinds = ["Submanifold:1|Submanifold:2|Submanifold:5|Submanifold:6|Submanifold:9|Submanifold:10", "Chain"]
+
+[[defect]]
+id = "tsandwich-mixed-parity-swap"
+title = "y >>> x with a Couple y of odd B, or a PseudoCouple y whose B parity differs from n's, swaps the operands: the multispin fallback returns x >>> multispin(y)"
+source = "Grassmann.jl src/algebra.jl:1749, :1751 (product_sandwich(a, b, swap = true) emits `>>>(a, multispin(b))` where `>>>(multispin(b), a)` is meant; ⊘ with swap = false is right); reached from src/algebra.jl:353, :357-358"
+notes = "found by the element oracle (products suite, ref mismatch); grassmann-products.md §4.6"
+correct = "multispin(y) ⟑ x ⟑ clifford(multispin(y)), unprojected (a Multivector)"
+policy = "ref"
+  [[defect.match]]
+  suite = "products"
+  op = "tsandwich"
+  kinds = ["Couple|PseudoCouple", "One|Submanifold|Single|Chain|Couple"]
+  when = "mixed_parity_first"
 
 [[defect]]
 id = "conformal-antimetric"
