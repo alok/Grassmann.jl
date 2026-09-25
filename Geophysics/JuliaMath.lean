@@ -13,13 +13,17 @@ arguments (measured on 10⁵ samples: `tan` 39 %, `asin` 9 %, `atan` 7 %, `cos`
 This module ports those functions with Julia's operation order so the port agrees
 with the oracle bit for bit.
 
-**`muladd` fuses.** Julia lowers `muladd` (and `@horner`/`evalpoly`, which are
-built from it) to a `contract`-flagged multiply and add, and LLVM contracts that
-pair into one FMA on aarch64 whenever the product has no other use. Every
-`muladd` below is therefore an `Float.fma` (`ma`); a plain `a*b + c` in Julia
-source stays unfused here too. This was established against 7·10⁵ oracle
-samples (`oracle/geophysics/mathsamples.jl`): the unfused model mismatches
-Julia's `exp` on 1 input in 5000, the fused one on none.
+**`muladd` fuses, mostly.** Julia lowers `muladd` (and `@horner`/`evalpoly`,
+which are built from it) to a `contract`-flagged multiply and add, which LLVM
+contracts into one FMA on aarch64. Every `muladd` below is therefore a
+`Float.fma` (`ma`), and a plain `a*b + c` in Julia source stays unfused. Two
+sites compile unfused in Julia's system image and are unfused here: the final
+`muladd(x, y, err)` of `pow_body(x, n::Integer)` (its product is shared with the
+other branch of an `ifelse`) and the outermost `muladd` of `sin_kernel`'s first
+polynomial. The model was fitted and validated on 1.4·10⁶ oracle samples
+(`oracle/geophysics/mathsamples.jl`, `MathSweep.lean`): every other combination
+mismatches Julia somewhere (all-unfused `exp` on 1 input in 5000, all-fused
+`pow` on 22 % of integer exponents), this one nowhere.
 
 `FieldConstants.Julia` already ports `exp`/`log`/`^` with unfused `muladd`;
 those agree with Julia except for rare last-bit cases, which is why Geophysics
@@ -458,7 +462,7 @@ def ds1 : Float := -1.66666666666666324348e-01
 @[inline] def sinKernel (y : Float) : Float :=
   let y2 := y * y
   let y4 := y2 * y2
-  let r := ma y2 (ma y2 ds4 ds3) ds2 + y2 * y4 * ma y2 ds6 ds5
+  let r := (y2 * ma y2 ds4 ds3 + ds2) + y2 * y4 * ma y2 ds6 ds5
   let y3 := y2 * y
   y + y3 * (ds1 + y2 * r)
 
@@ -466,7 +470,7 @@ def ds1 : Float := -1.66666666666666324348e-01
 @[inline] def sinKernelDD (y : DD) : Float :=
   let y2 := y.hi * y.hi
   let y4 := y2 * y2
-  let r := ma y2 (ma y2 ds4 ds3) ds2 + y2 * y4 * ma y2 ds6 ds5
+  let r := (y2 * ma y2 ds4 ds3 + ds2) + y2 * y4 * ma y2 ds6 ds5
   let y3 := y2 * y.hi
   y.hi - ((y2 * (0.5 * y.lo - y3 * r) - y.lo) - y3 * ds1)
 
