@@ -5,7 +5,8 @@ connects to the code that runs. This covers DESIGN.md §8 targets 3 and 4 (the
 reordering-sign cocycle and associativity for diagonal metrics over any
 `Lean.Grind.CommRing`; graded commutativity of `∧`, `~(ab) = ~b ~a`, and the
 Hodge double complement), plus a link from those theorems to the
-implementation.
+implementation, and the proof automation built on the model (the `clifford`
+tactic and the `grind` extension; docs/TACTICS.md).
 
 All of it is core Lean only: no mathlib, no `sorry`, no custom `axiom`, no
 `native_decide`, no `bv_decide` (it relies on `Lean.ofReduceBool`, the same
@@ -13,13 +14,14 @@ trust as `native_decide`). Every theorem depends only on `propext`,
 `Classical.choice` and `Quot.sound`; `Tests/Proofs/Axioms.lean` pins this with
 `#guard_msgs` on the flagship theorems, so a regression fails the build.
 
-## The three layers
+## The layers
 
 | layer | module | what it is about |
 |---|---|---|
 | bit level | `DirectSum.Proofs` | the sign rules on bitmask blades, for every width, and the `UInt64` kernels |
 | specification | `Grassmann.Spec` | a small model of the Clifford algebra `Cl(g)` of a diagonal metric, with its laws |
 | link | `Grassmann.Proofs` | the implementation's blade rules and plans against the model |
+| automation | `Grassmann.Tactic` | `clifford` (coordinates in a concrete space, by reflection) and `grind [grassmann]` |
 
 Tests: `Tests.Proofs` (`Tests/Proofs.lean`, run with `Tests.Proofs.runAll`)
 compares the compiled implementation with the model at run time.
@@ -139,6 +141,14 @@ negative or zero entries) and every commutative ring `R`:
 | `Cl.contract_eq_proj` | Julia's contraction is `x ⋅ y = ⟨~y x⟩_{p-q}` for a `p`-vector `x` and a `q`-vector `y`, `q ≤ p` |
 | `Cl.contract_of_vector` | on vectors, `u ⋅ v = B(u, v)` |
 | `Cl.compl_vee`, `Cl.vee_assoc` | the regressive product is the De Morgan dual `!(x ∨ y) = !x ∧ !y`, and it is associative |
+| `Cl.instRing` | `Cl g` is a `Lean.Grind.Ring` (numerals `0`, `1`, `k` from one `OfNat` family, integer casts, powers), so `grind` normalizes multivector expressions |
+| `Cl.reverse_neg`, `…_smul`, `…_scalar`, `…_gen`, `Cl.involute_*`, `Cl.proj_reverse`, `Cl.reverse_of_isGrade` | the involutions on the basic operations and on homogeneous elements (`ẽᵢ = eᵢ`, `êᵢ = -eᵢ`, `⟨x̃⟩ₖ = (-1)^{k(k-1)/2}⟨x⟩ₖ`) |
+| `Cl.IsGrade.add`, `.neg`, `.sub`, `.smul`, `Cl.isGrade_scalar` | grades are closed under the linear operations |
+| `Cl.wedge_comm_of_even`, `Cl.wedge_comm_of_odd` | graded commutativity split by the parity of `pq` |
+| `Cl.reverse_sandwich`, `Cl.sandwich_mul`, `Cl.sandwich_scalar` | `~(R x R̃) = R x̃ R̃`; with `R̃ R = 1`, `(R x R̃)(R y R̃) = R x y R̃`; with `R R̃ = 1`, scalars are fixed |
+| `Cl.sandwich_sq_of_vector` | a unit versor is an isometry on vectors: `(R v R̃)² = B(v,v)` |
+| `Cl.proj_sandwich_of_even` | for even `R` and a vector `v`, `R v R̃` has no part of grade `k ≢ 1 (mod 4)` (rings without 2-torsion; no normalization needed) |
+| `Cl.isGrade_sandwich_of_even` | hence, in dimension `≤ 4`, **the sandwich of a vector by an even element is a vector** |
 
 ## 3. Link: `Grassmann.Proofs`
 
@@ -160,6 +170,25 @@ multiply-accumulate plans (`Grassmann.Kernel.build`, DESIGN.md §5.1).
 | `IsFlatSpace.gradeOf_mask`, `implReverse_eq_reverse`, `implInvolute_eq_involute` | in every flat space of dimension `≤ 64` the implementation's grade (a SWAR popcount) is the grade, and its reversion and grade involution are the spec's on all multivectors |
 | `IsPlainSpace.terms_complementright`, `IsPlainSpace.terms_hodge`, `implCompl_eq_compl`, `implHodge_eq_hodge` | in every plain space (no `∞`/`∅`, no tangent variables, not dyadic) of dimension `≤ 64`, the implementation's right complement and Hodge star (blade rules and the container rules of the reference kernels) are the spec's on all multivectors; with the spec theorems, the implementation satisfies `!!x = (-1)^{k(n-k)} x` and `⋆⋆x = (-1)^{k(n-k)} det(g) x` (`implCompl_implCompl`, `implHodge_implHodge`; `R7_hodge`, `PGA4_hodge` instantiate it) |
 | `IsFlatSpace.terms_wedge`, `implWedge_eq_wedge_of_flat` | in every space without a conformal pair or tangent variables (any metric: signatures, `DiagonalForm`s including degenerate ones, `MetricTensor`s) and every width `≤ 64`, the implementation's exterior product is the spec exterior product on all multivectors (`PGA4_wedge` instantiates it) |
+
+**Transported** (`Grassmann.Proofs.Transport`): rewriting along the link
+theorems states the laws for the implementation's operations, in whole
+families of spaces at once:
+
+| theorem | statement | spaces |
+|---|---|---|
+| `implMul_assoc_of_signature`, `implMul_one_of_signature` | the implementation's geometric product is associative and unital | every plain signature space, `n ≤ 64` |
+| `implReverse_implMul_of_signature`, `implInvolute_implMul_of_signature` | its reversion reverses products; its grade involution preserves them | the same |
+| `implMul_self_of_signature` | vectors square to their quadratic form | the same |
+| `isGrade_implSandwich_of_signature` | the sandwich of a vector by an even element (implementation product and reversion) is a vector | the same, `n ≤ 4` |
+| `implMul_assoc_of_diag` | the geometric product is associative | every `DiagonalForm` space (degenerate included) |
+| `implWedge_assoc_of_flat`, `implWedge_comm_of_flat` | the exterior product is associative and graded commutative | every flat space (any metric, `MetricTensor`s included) |
+| `CGA2_mul_assoc`, `CGA3_mul_assoc` | the conformal product is associative | `CGA2`, `CGA3` (below) |
+
+These are statements about the blade rules extended (bi)linearly, which is
+what the reference kernels compute; between them and the typed containers
+(`Multivector V α * Multivector V α`) sits the plan interpreter, which is
+tested, not proved (see "Not covered").
 
 **Checked** by the kernel (`Grassmann.Proofs.Tables`), on every basis blade
 (pair), in `ℝ2`, `ℝ3`, `STA = S!"-+++"`, `PGA2 = D!"0,1,1"`,
@@ -211,7 +240,23 @@ the kernel evaluating the 1024 `CGA3` Chevalley products themselves (the
 literal `ConfTable` statement, without the fast check, takes 24 s for `CGA2`
 alone).
 
-## 4. Tests: `Tests/Proofs`
+## 4. Automation: `Grassmann.Tactic`
+
+docs/TACTICS.md is the user guide; what is proved:
+
+| theorem | statement | status |
+|---|---|---|
+| `Grassmann.Tactic.eq_of_coords` | two multivector expressions (`MExpr`, over any commutative ring, any metric, any dimension) whose dense coordinate polynomials (`MExpr.eval`, built from the spec's sign and metric functions) agree are equal | proved |
+| `Grassmann.Tactic.coords_of_eq` | the converse (used to turn multivector hypotheses into coordinate hypotheses) | proved |
+| `represents_eval` | coordinate `c` of `MExpr.eval` denotes the coefficient of blade `c`, for every operation the tactic understands (products, `∧`, `⋅`, `∨`, involutions, projections, complements, Hodge star, powers) | proved |
+
+The `clifford` tactic applies `eq_of_coords`; the kernel re-checks, by
+evaluating `MExpr.eval`, that the stated coordinate equations are the
+coordinates, and `grind` proves each one. The `grassmann` lemma set and the
+involution normalization rules (`Grassmann.Spec.Grind`) are tags on the
+theorems of §2.
+
+## 5. Tests: `Tests/Proofs`
 
 `Tests.Proofs.Model` runs the compiled implementation against the spec model
 evaluated at run time, in spaces beyond the `decide` range:
@@ -228,7 +273,13 @@ This is where the plan interpreter (`Grassmann.Kernel.Plan.eval₂`) and
 whatever kernel the `Kernels` instance dispatches to (including future
 generated kernels) are exercised; they are not proved.
 
-`Tests.Proofs.Axioms` is the compile-time axiom audit.
+`Tests.Proofs.Axioms` is the compile-time axiom audit. Two more compile-time
+suites exercise the automation: `Tests.Proofs.TacticExamples` (40 `clifford`
+identities: the Clifford relation, triple product, Lagrange, cross product,
+Jacobi for bivectors and for opaque multivectors, quaternions, rotors and
+sandwiches in ℝ³, STA, a symbolic metric, PGA, ℝ⁵) and
+`Tests.Proofs.GrindExamples` (29 `grind`/`grind [grassmann]` identities in
+every dimension).
 
 ## Not covered (yet)
 
@@ -242,21 +293,32 @@ generated kernels) are exercised; they are not proved.
   `Tests/Grassmann/Props.lean` tests their algebraic laws, and
   `Tests.Proofs.Model` tests `∨` and `⋅` against the spec up to `n = 7`.
 * The other contractions (`⨼`, `<<`, `>>`), `cross`, `veedot`, `antidot` and the
-  sandwiches have no spec yet; `Tests/Grassmann/Props.lean` tests their
-  algebraic laws. The regressive product is linked blade by blade, not yet
+  implementation's sandwich operators have no spec yet (the spec has the
+  sandwich laws of `R x R̃` built from its products, §2);
+  `Tests/Grassmann/Props.lean` tests their algebraic laws. The regressive product is linked blade by blade, not yet
   lifted to all multivectors (the spec side is not a plain twisted product).
 * Tangent (`∂`), dyadic and `MetricTensor` spaces are outside the diagonal
   model (the exterior product excepted: it is metric-independent, and
   `implWedge_eq_wedge_of_flat` covers `MetricTensor` spaces too).
+* The plan interpreter (`Grassmann.Kernel.Plan.eval₂`) and the typed
+  containers: the transported laws of §3 are about the blade rules extended
+  (bi)linearly, the plans are checked to be the spec tables in the small
+  spaces, and the interpreter is tested; a proof of `eval₂` would carry every
+  §3 theorem to `Multivector V α`.
+* Grade preservation of sandwiches beyond dimension 4 needs versors (products
+  of vectors): for a general even `R` the grade-5 part of `R v R̃` can survive
+  (`R = 1 + e₁₂₃₄`, `v = e₅` gives `2 e₅ + 2 I`, checked by `clifford` in
+  `Tests.Proofs.TacticExamples`).
 * Mathlib's `CliffordAlgebra` bridge (DESIGN.md §8.5) belongs in `bridge/`.
 
 ## Building and running
 
 ```
-lake build DirectSum.Proofs Grassmann.Spec Grassmann.Proofs Tests.Proofs
+lake build DirectSum.Proofs Grassmann.Spec Grassmann.Proofs Grassmann.Tactic Tests.Proofs
 ```
 
-About 25 s for the kernel checks in `Grassmann.Proofs.Tables` and 6 s for
-`Grassmann.Proofs.Regressive` (they build in parallel); everything else builds
+About 25 s for the kernel checks in `Grassmann.Proofs.Tables`, 18 s for
+`Grassmann.Proofs.Conformal` and 6 s for `Grassmann.Proofs.Regressive` (they
+build in parallel); the tactic examples take about 10 s, everything else builds
 in seconds. The run-time suite is `Tests.Proofs.runAll : IO (Nat × Nat)`,
 about 2600 checks, 5 s compiled.

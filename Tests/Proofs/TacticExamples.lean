@@ -184,6 +184,14 @@ example : (Cl.gen 0 * Cl.gen 0 : Cl (fun i : Fin 4 => if i.1 = 0 then (0 : R) el
 example (x y : Cl (fun _ : Fin 5 => (1 : R))) : Cl.reverse (x * y) = Cl.reverse y * Cl.reverse x := by
   clifford
 
+/-- Grade preservation of sandwiches (`Cl.isGrade_sandwich_of_even`) stops at
+dimension 4: in `ℝ⁵` the even element `1 + e₁₂₃₄` sandwiches `e₅` to
+`2 e₅ + 2 I`. -/
+example : Cl.proj 5 ((1 + Cl.gen 0 * Cl.gen 1 * Cl.gen 2 * Cl.gen 3) * Cl.gen 4
+      * Cl.reverse (1 + Cl.gen 0 * Cl.gen 1 * Cl.gen 2 * Cl.gen 3) : Cl (fun _ : Fin 5 => (1 : R)))
+    = (2 : R) • Cl.pseudoscalar := by
+  clifford
+
 /-- The rational spaces of `Grassmann.Proofs.Tables` work too. -/
 example (x : Cl (fun _ : Fin 2 => (1 : Rat))) : x * 1 = x := by clifford
 
