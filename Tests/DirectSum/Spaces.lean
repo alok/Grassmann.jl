@@ -97,6 +97,19 @@ def checkSpace (t : Tally) (r : Json) : Tally := Id.run do
     let subs := (jArr r "subspaces").map jShow
     for (s, b) in subs.zipIdx do
       t := t.check (V.showSub b.toUInt64 == s) s!"{nm}: subspace {b} `{V.showSub b.toUInt64}` vs `{s}`"
+    match (r.getObjValD "basis_show").getStr? with
+    | .ok s =>
+      -- Julia's `getalgebra` cache ignores the naming scheme (quirk Q5): a
+      -- scheme-2 space can get the cached scheme-1 basis of the same space
+      if V.showBasis != s && V.name != 1 && ({ V with name := 1 } : TensorBundle).showBasis == s then
+        t := t.defect "DirectSum Q5 getalgebra cache ignores the naming scheme"
+      else t := t.check (V.showBasis == s) s!"{nm}: Λ `{V.showBasis}` vs `{s}`"
+    | .error _ => pure ()
+    match r.getObjValD "collect_show" with
+    | .str s => t := t.check (V.showCollect == s) s!"{nm}: collect `{V.showCollect}` vs `{s}`"
+    | .null => pure ()
+    -- Julia raises a BoundsError for dyadic tangent subspaces (directsum.md §5.4)
+    | _ => t := t.defect "DirectSum Q19 dyadic-tangent subspace display (Julia BoundsError)"
     return t
 
 /-- String grammars: `S!`, `D!`, `V!` parsers against Julia's constructors. -/
@@ -117,6 +130,10 @@ def checkParse (t : Tally) (j : Json) : Tally := Id.run do
     let s := jStr r "input"
     t := t.check (showOrErr (TensorBundle.parseBundle s) == jShow (r.getObjValD "show"))
       s!"V\"{s}\": `{showOrErr (TensorBundle.parseBundle s)}`"
+  for r in jArr j "sparse" do
+    match build (r.getObjValD "spec") with
+    | .ok V => t := t.check (V.showBasis == jStr r "show") s!"sparse `{V.showBasis}` vs `{jStr r "show"}`"
+    | .error e => t := t.bad s!"sparse recipe: {e}"
   for r in jArr j "powers" do
     let e := jStr r "expr"
     let mine := match e with

@@ -98,6 +98,9 @@ for (name, (V, spec)) in SPACES
     elseif V isa Int && n <= 5
         rec["subspaces"] = [@safe(repr(Submanifold{V,count_ones(UInt(b)),UInt(b)}())) for b in 0:(1<<n)-1]
     end
+    # Λ(V) segfaults for options ≥ 12 (quirk Q5); collect(Int) is fill(n)
+    DirectSum.options(V isa Int ? Signature(V) : V) < 12 && (rec["basis_show"] = @safe(repr(Λ(V))))
+    V isa Int || (rec["collect_show"] = @safe(repr(collect(V))))
     push!(spaces, rec)
 end
 
@@ -155,6 +158,8 @@ pdep = Any[]
 for (N, Sm) in ((6, 0b101101), (5, 0b10110), (8, 0b11011010)), B in 0:(1<<count_ones(Sm))-1
     push!(pdep, Dict("N" => N, "S" => Sm, "B" => B, "expandbits" => u(Leibniz.expandbits(N, UInt(Sm), UInt(B)))))
 end
+sparse = [Dict("spec" => spec, "show" => @safe(repr(Λ(V)))) for (V, spec) in (
+    I(9), I(22), I(23), I(62), osum(R(5), adj(R(5))), osum(R(7), adj(R(7))), osum(R(14), adj(R(14))), R(12))]
 powers = [Dict("expr" => e, "show" => @safe(repr(v))) for (e, v) in (
     "R^0" => (ℝ^1)^0, "R^5" => (ℝ^1)^5, "(R^2)^3" => (ℝ^2)^3, "(R')^2" => ((ℝ^1)')^2)]
 
@@ -162,5 +167,5 @@ open(ARGS[1], "w") do io
     JSON.print(io, Dict("spaces" => spaces, "signature_parse" => sigparse, "diagonal_parse" => diagparse,
         "bundle_parse" => vparse, "index_tables" => tabs, "index_spots" => spots, "printindex" => printidx,
         "printindices_62" => pi62, "complement" => compl, "grade_parities" => parities,
-        "expandbits" => pdep, "powers" => powers))
+        "expandbits" => pdep, "powers" => powers, "sparse" => sparse))
 end

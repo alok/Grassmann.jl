@@ -121,6 +121,20 @@ def options : Nat :=
   (if V.hasinf then 1 else 0) + (if V.hasorigin then 2 else 0) + (if V.isdual then 4 else 0)
     + (if V.isdyadic then 8 else 0) + (if V.polymode then 0 else 16)
 
+/-- Decode a Julia options integer into the option fields (Julia `_hasinf`,
+`_hasorigin`, `_dyadmode`, `_polymode`, `DirectSum.jl src/generic.jl:37-40`).
+As in Julia, `m % 16 ∈ 12..15` decodes to a plain space (quirk Q24). -/
+def withOptions (m : Nat) : TensorBundle :=
+  let r := m % 16
+  { V with hasinf := r ∈ [1, 3, 5, 7, 9, 11], hasorigin := r ∈ [2, 3, 6, 7, 10, 11],
+           dyadmode := if 8 ≤ r && r ≤ 11 then -1 else if 4 ≤ r && r ≤ 7 then 1 else 0,
+           polymode := m &&& 16 == 0 }
+
+/-- Encoding and decoding the options integer round-trip on every valid code. -/
+theorem options_withOptions :
+    ∀ m < 32, m % 16 < 12 → ((sig 3).withOptions m).options = m := by
+  decide +kernel
+
 /-- Number of tangent slots: `ν` per side (`2ν` for dyadic spaces). -/
 @[inline] def tangentSlots : Nat := (if V.isdyadic then 2 else 1) * V.diffvars
 
@@ -132,15 +146,21 @@ the number of non-tangent generators. -/
 tangent spaces, `Leibniz.jl src/generic.jl:11`). -/
 @[inline] def pseudograde : Int := -((V.tangentSlots : Nat) : Int)
 
-/-- Julia `diffmask(V)` as a pair `(∂ block, ϵ block)` (`Leibniz.jl src/generic.jl:70-80`);
-the second component is 0 unless the space is dyadic. -/
-def diffmaskPair : UInt64 × UInt64 :=
-  let d := V.diffvars
-  if V.isdyadic then (shl (lowMask d) (V.n - 2 * d), shl (lowMask d) (V.n - d))
-  else (shl (lowMask d) (V.n - d), 0)
+/-- The `∂` block of Julia `diffmask(V)` (`Leibniz.jl src/generic.jl:70-80`): the
+top `ν` generators, or for a dyadic space the `ν` generators below the `ϵ` block. -/
+@[inline] def diffmaskV : UInt64 :=
+  shl (lowMask V.diffvars) (V.n - (if V.isdyadic then 2 else 1) * V.diffvars)
 
-/-- All tangent bits (the OR of both `diffmask` blocks). -/
-@[inline] def diffmask : UInt64 := V.diffmaskPair.1 ||| V.diffmaskPair.2
+/-- The `ϵ` block of Julia `diffmask(V)` (0 unless the space is dyadic). -/
+@[inline] def diffmaskW : UInt64 :=
+  if V.isdyadic then shl (lowMask V.diffvars) (V.n - V.diffvars) else 0
+
+/-- Julia `diffmask(V)` as a pair `(∂ block, ϵ block)`; the second component is
+0 unless the space is dyadic. -/
+def diffmaskPair : UInt64 × UInt64 := (V.diffmaskV, V.diffmaskW)
+
+/-- All tangent bits (the OR of both `diffmask` blocks); allocation-free. -/
+@[inline] def diffmask : UInt64 := V.diffmaskV ||| V.diffmaskW
 
 /-- Julia `isdiag`: `Int` and `DiagonalForm` are diagonal, a `Signature` is
 unless it is conformal, a `MetricTensor` never is (`DirectSum.jl src/generic.jl:66-68`). -/

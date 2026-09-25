@@ -182,6 +182,27 @@ protected def toString : String :=
 
 instance : ToString TensorBundle := ⟨TensorBundle.toString⟩
 
+/-- Julia `show(Λ(V))` (`DirectSum.jl src/basis.jl:195-202, 345-347, 373-376`):
+`DirectSum.Basis{V,2ⁿ}(v, v₁, …)` listing every blade for `n ≤ 8`,
+`DirectSum.SparseBasis{V,2ⁿ}(v, ..., v₁₂…)` for `8 < n ≤ 22`, and
+`DirectSum.ExtendedBasis{…}` beyond (or for dyadic spaces with `n > 16`). -/
+def showBasis : String :=
+  let size := toString (2 ^ V.n)
+  let extended := V.n > 22 || (V.isdyadic && V.n > 16)
+  if V.n ≤ 8 && !extended then
+    "DirectSum.Basis{" ++ V.showHandle ++ "," ++ size ++ "}("
+      ++ ", ".intercalate ((Leibniz.indexBasisAll V.n).map (V.bladeLabel ·)).toList ++ ")"
+  else
+    (if extended then "DirectSum.ExtendedBasis{" else "DirectSum.SparseBasis{") ++ V.showHandle ++ ","
+      ++ size ++ "}(" ++ V.bladeLabel 0 ++ ", ..., " ++ V.bladeLabel (lowMask V.n) ++ ")"
+
+/-- Julia `show(collect(V))` for a bare `Signature`/`DiagonalForm`
+(`DirectSum.jl src/basis.jl:183`): the basis of *subspaces*,
+`DirectSum.Basis{⟨-+++⟩,16}(⟨____⟩, ⟨-___⟩, …)`. -/
+def showCollect : String :=
+  "DirectSum.Basis{" ++ V.toString ++ "," ++ toString (2 ^ V.n) ++ "}("
+    ++ ", ".intercalate ((Leibniz.indexBasisAll V.n).map (V.showSub ·)).toList ++ ")"
+
 /-! ## Basis terms -/
 
 /-- Julia `showvalue` of `c · e_b` (`Leibniz.jl src/indices.jl:195-203`) for a

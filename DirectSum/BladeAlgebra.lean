@@ -114,6 +114,30 @@ def reverseChainSign (g : Nat) (b : UInt64) : Bool :=
 def antireverseChainSign (g : Nat) (b : UInt64) : Bool :=
   if V.diffvars == 0 then parityreverse (V.n - g) else parityreverse (V.pseudogradeOf b)
 
+/-! ## Grade projections of a blade (`DirectSum.jl src/operations.jl:387-402`)
+
+These use the type-level grade `G = popcount b` (tangent bits included). -/
+
+/-- Julia `even(b)`: `b` if `G` is even, else `𝟎`. -/
+def evenPart (b : UInt64) : BladeResult := if parityinvolute (popcount b) then .zero else .blade b
+
+/-- Julia `odd(b)`: `b` if `G` is odd, else `𝟎`. -/
+def oddPart (b : UInt64) : BladeResult := if parityinvolute (popcount b) then .blade b else .zero
+
+/-- Julia `real(b)`: `b` if the reverse keeps it, else `𝟎`. -/
+def realPart (b : UInt64) : BladeResult := if parityreverse (popcount b) then .zero else .blade b
+
+/-- Julia `imag(b)`: `b` if the reverse negates it, else `𝟎`. -/
+def imagPart (b : UInt64) : BladeResult := if parityreverse (popcount b) then .blade b else .zero
+
+/-- Julia `signbit(V)` (`src/parity.jl:441-446`): for every blade in basis order,
+whether `e_b e_b` picks up a minus sign under the view-A metric (conformal
+metrics count as 0, so only the reordering sign remains). -/
+def signbit : Array Bool := (indexBasisAll V.n).map fun b => V.parity b b
+
+/-- Julia `signbit(V,G)`: the grade-`G` part of `signbit`. -/
+def signbitGrade (g : Nat) : Array Bool := (indexBasis V.n g).map fun b => V.parity b b
+
 /-! ## Exterior product (`src/algebra.jl:127-147`) -/
 
 /-- Julia `a ∧ b`: `𝟎` if the blades share a generator (or `diffcheck`), else
