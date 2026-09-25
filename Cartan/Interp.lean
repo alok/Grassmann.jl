@@ -147,6 +147,39 @@ def resample [Inhabited G] {b : GridBundle N P G} (t : TensorField b F) (n : Vec
   let s := (b.resample n).space
   ofFn _ fun k => t.eval (Vector.ofFn fun a => (s.point k).get! a)
 
+/-- Julia `leaf(m::RectangleMap, t::AbstractFloat, j = 2)` (`grid.jl:149-157`; `m(t)`): the leaf at
+the coordinate `x` of axis `j` (0-based, default the last), interpolated linearly between the two
+bracketing leaves (`linterp` on the fiber arrays), as a field over the other axis (Julia
+`TensorField(x, …)`: an open interval with real points). Coordinates outside the axis give the
+bracket at its end, where Julia throws. -/
+def leafInterp {b : GridBundle 2 P G} (t : TensorField b F) (x : Float) (j : Fin 2 := 1) :
+    TensorField (GridBundle.ofAxis (b.space.axis (otherAxis2 j))) F :=
+  let p := b.space.coords[j]
+  let (i, _) := Interp.searchpoints p x
+  let i := if i == 0 then 1 else if i ≥ p.size then p.size - 1 else i
+  let w := FlatFiber.width F
+  let n0 := b.size[0]
+  -- the linear index of point `k` of the leaf at the 0-based index `l` of axis `j`
+  let lin (l k : Nat) : Nat := if j.1 = 1 then k + n0 * l else l + n0 * k
+  ofFn _ fun k =>
+    FlatFiber.read (buildFlat (F := Float) w fun c =>
+      linterpComp (F := F) x (p.get! (i - 1)) (p.get! i)
+        (t.data.get! (lin (i - 1) k * w + c)) (t.data.get! (lin i k * w + c))) 0
+
+/-- Julia `orbit(f, x, n)` (`Cartan.jl:516-525`): the iterates `x, f(x), f(f(x)), …` of a field map,
+one per entry of `n`, stacked along a new last axis `n` of the base (Julia's field over
+`base(x) ⊕ n`; the lazily extensible `SequenceArray` storage is not modelled). -/
+def orbit {b : GridBundle N P G} (f : TensorField b F → TensorField b F) (x : TensorField b F)
+    (n : Axis) : TensorField (b.pushAxis n) F :=
+  let its := go n.length x #[]
+  let c := card b
+  ofFn _ fun k => (its[k / c]?.getD x).get (k % c)
+where
+  /-- The first `k` iterates starting from `y`. -/
+  go : Nat → TensorField b F → Array (TensorField b F) → Array (TensorField b F)
+    | 0, _, acc => acc
+    | k + 1, y, acc => go k (f y) (acc.push y)
+
 end TensorField
 
 end Cartan

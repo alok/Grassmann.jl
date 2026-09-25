@@ -36,11 +36,6 @@ open Grassmann DirectSum StaticVectors AbstractTensors JuliaBase MeshTopology
 
 /-! ## Flat loops -/
 
-/-- `FloatArray.set!` keeps the size. -/
-@[simp] theorem _root_.FloatArray.size_set!' (a : FloatArray) (i : Nat) (v : Float) :
-    (a.set! i v).size = a.size := by
-  cases a; simp [FloatArray.set!, FloatArray.size]
-
 /-- `out[j] := f a[j] b[j]` for `j ∈ [i, i+k)` (tail recursive; `out` is written in place once
 unshared). -/
 @[specialize] def zipFloatsLoop (f : Float → Float → Float) (a b : FloatArray) :

@@ -86,6 +86,12 @@ def run : TestM Unit := do
   checkField "slices a3[:,3,:]" (out (a3.slice #v[0, 2] #v[0, 2, 0])) (← jField c "a3[:,3,:]")
   checkField "slices a3[:,:,1]" (out (a3.slice #v[0, 1] #v[0, 0, 0])) (← jField c "a3[:,:,1]")
   checkField "slices a3[:,2,1]" (out (a3.sliceLine 0 #v[0, 1, 0])) (← jField c "a3[:,2,1]")
+  checkField "slices leaf(aa,0.3)" (out (aa.leafInterp 0.3)) (← jField c "leaf(aa,0.3)")
+  checkField "slices leaf(aa,1.7,1)" (out (aa.leafInterp 1.7 0)) (← jField c "leaf(aa,1.7,1)")
+  let p0 := TensorField.ofAxisFn (Axis.colon 0 0.5 1.5) fun x => x * x / 7 - x / 3
+  let ob := TensorField.orbit (fun x => x / (2 : Float) + (1 : Float)) p0
+    (Axis.ofArray [(0 : Float), 0.5, 1, 1.5].toFloatArray)
+  checkField "slices orbit" (out ob) (← jField c "orbit")
   let ex := aa.extract 1
   let jx ← jField c "extract(aa,2)"
   checkFloat "slices extract base" ex.base (← jField jx "base")

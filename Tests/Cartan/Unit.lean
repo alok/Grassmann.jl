@@ -51,6 +51,11 @@ def run : TestM Unit := do
   checkEq "TorusParameter(60,60) size" (BaseShape.shape T.base) [60, 60]
   checkEq "torus seam: first point = last point" (T.get 0).coords.toList.head! 0
   check "torus glued" T.immersion.isCompact
+  let t' := (t.set 3 42).set 100 7
+  checkEq "set replaces one fiber" t'.fiberArray.toList ((t.fiberArray.set! 3 42).toList)
+  let v' := v.set 2 (Chain.ofFn fun _ => 5)
+  checkEq "set on a chain field" (v'.get 2).v.toList [5, 5, 5]
+  checkEq "set keeps the other fibers" (v'.get 3).v.toList (v.get 3).v.toList
   let ⟨b', w⟩ : AnyField (GridBundle 2 (AffinePoint 2)) (Chain ℝ3 1 Float) := ⟨g, v⟩
   checkEq "AnyField keeps its base" (card b') 20
   checkEq "AnyField keeps its field" (w.get 3).v.toList (v.get 3).v.toList

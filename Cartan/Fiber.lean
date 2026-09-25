@@ -56,6 +56,11 @@ attribute [simp] FlatFiber.size_push
     (a.push x).size = a.size + 1 := by
   cases a; simp [FloatArray.push, FloatArray.size]
 
+/-- `FloatArray.set!` keeps the size. -/
+@[simp] theorem _root_.FloatArray.size_set!' (a : FloatArray) (i : Nat) (v : Float) :
+    (a.set! i v).size = a.size := by
+  cases a; simp [FloatArray.set!, FloatArray.size]
+
 /-- `+`, `-`, negation and scaling by a `Float` act componentwise on the flat encoding of `F`, so
 fields of `F` may add and scale their raw arrays. `recipDiv` records how Julia divides by a real
 `s`: Grassmann elements as `x * (1/s)` (Grassmann `src/algebra.jl:704`, `a/b = a*(1/b)` for

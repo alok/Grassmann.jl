@@ -105,6 +105,23 @@ def fiberArray (t : TensorField m F) : Array F := (Array.range (card m)).map t.g
 /-- The underlying flat fiber data (Julia `fiber(t)` as a flat array). -/
 @[inline] def fiberFlat (t : TensorField m F) : FloatArray := t.data
 
+/-- Write `src[j]` at `base + j` for `j ∈ [j₀, j₀+k)` (in place once unshared). -/
+def writeLoop (src : FloatArray) (base : Nat) : (k j : Nat) → FloatArray → FloatArray
+  | 0, _, out => out
+  | k + 1, j, out => writeLoop src base k (j + 1) (out.set! (base + j) (src.get! j))
+
+theorem size_writeLoop (src : FloatArray) (base : Nat) : ∀ (k j : Nat) (out : FloatArray),
+    (writeLoop src base k j out).size = out.size
+  | 0, _, _ => rfl
+  | k + 1, j, out => by rw [writeLoop, size_writeLoop src base k (j + 1), FloatArray.size_set!']
+
+/-- Julia `t[i+1] = x` (`setindex!`, `Cartan.jl:231-248`): the field with the fiber at `i` replaced
+(in place when the fibers are not shared; out-of-range indices leave the field unchanged). -/
+def set (t : TensorField m F) (i : Nat) (x : F) : TensorField m F :=
+  let w := FlatFiber.width F
+  ⟨writeLoop (FlatFiber.push FloatArray.empty x) (i * w) w 0 t.data,
+    by rw [size_writeLoop]; exact t.size_data, none⟩
+
 /-- The same fibers with the range tag dropped. -/
 @[inline] def eager (t : TensorField m F) : TensorField m F := { t with range? := none }
 
