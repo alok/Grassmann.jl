@@ -146,6 +146,9 @@ structure Define where
   /-- the real map `x ↦ F(x, 0)` for the cobweb plot (`src/orbitplot.jl:20`). Julia evaluates
   it with real arithmetic, which can round differently from the complex map. -/
   real : Float → Float := fun x => (F ⟨x, 0⟩ ⟨0, 0⟩).re
+  /-- Julia `string(E)` when the set was defined from an expression (`Fatou.Symbolic`); used by
+  `Define.basinOf` to derive the basin LaTeX as Julia's `basin(K, j)` does -/
+  expr : Option String := none
 
 /-! ## Defaults -/
 
