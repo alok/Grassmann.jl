@@ -162,13 +162,6 @@ theorem foldlLoop_eq {β : Type v} (f : β → α → β) (v : Values α n) :
     simp only [foldlLoop, Packed.foldlFin.go]
     exact foldlLoop_eq f v k _ _
 
-/-- Left fold over the entries, `f (… (f init v₀) …) vₙ₋₁` (Julia `foldl(f, v; init)`). -/
-@[inline] def foldl {β : Type v} (f : β → α → β) (init : β) (v : Values α n) : β :=
-  foldlLoop f v n (Nat.le_refl n) init
-
-theorem foldl_eq_foldlFin {β : Type v} (f : β → α → β) (init : β) (v : Values α n) :
-    v.foldl f init = Packed.foldlFin n (fun acc i => f acc (v.get i)) init := by
-  simp only [foldl, Packed.foldlFin, foldlLoop_eq]
 
 /-- The loop of a two-vector left fold: folds the pairs `n-k, …, n-1` into `acc`. -/
 @[specialize] def foldl₂Loop {β : Type v} {γ : Type w} [Packed β] (f : γ → α → β → γ)
@@ -178,10 +171,238 @@ theorem foldl_eq_foldlFin {β : Type v} (f : β → α → β) (init : β) (v : 
     foldl₂Loop f v w k (Nat.le_of_succ_le h)
       (f acc (v.get ⟨n - (k + 1), by omega⟩) (w.get ⟨n - (k + 1), by omega⟩))
 
-/-- Left fold over pairs of entries: `f (… (f init v₀ w₀) …) vₙ₋₁ wₙ₋₁`. -/
+
+/-! ### In-place updates, unrolled at small sizes
+
+Julia's `Values{N,Float64}` results live in registers; here every vector result is a packed
+array. The element-preserving operations (`+ -`, scalar `* /`, negation, `normalize`, `cross`)
+therefore write their results into their first operand with `Packed.set`: when that operand is
+unshared (an accumulator, a temporary) nothing is allocated, and otherwise the runtime copies it
+once (one allocation and a `memcpy`, instead of an empty array and one out-of-line `push` per
+entry). Sizes `1 … 4` are unrolled: at a literal `n` the size dispatch folds away and the
+operation is straight-line code (docs/PERF.md, StaticVectors). -/
+
+/-- Replace entry `j` of `a` by `g j aⱼ`. -/
+@[inline] def upd (g : Fin n → α → α) (a : Arr α) (ha : size a = n) (j : Nat) (hj : j < n) : Arr α :=
+  Packed.set a ⟨j, ha ▸ hj⟩ (g ⟨j, hj⟩ (Packed.get a ⟨j, ha ▸ hj⟩))
+
+theorem size_upd (g : Fin n → α → α) (a : Arr α) (ha : size a = n) (j : Nat) (hj : j < n) :
+    size (upd g a ha j hj) = n := by simp [upd, ha]
+
+theorem get_upd (g : Fin n → α → α) (a : Arr α) (ha : size a = n) (j : Nat) (hj : j < n) (i : Nat)
+    (hi : i < size (upd g a ha j hj)) :
+    Packed.get (upd g a ha j hj) ⟨i, hi⟩ =
+      if j = i then g ⟨j, hj⟩ (Packed.get a ⟨j, ha ▸ hj⟩)
+      else Packed.get a ⟨i, by rw [size_upd] at hi; rw [ha]; exact hi⟩ :=
+  Packed.get_set a _ _ i hi
+
+/-- `upd` at the indices `n-k, …, n-1`, ascending. -/
+@[specialize] def updLoop (g : Fin n → α → α) : (k : Nat) → k ≤ n → (a : Arr α) → size a = n → Arr α
+  | 0, _, a, _ => a
+  | k + 1, hk, a, ha =>
+    updLoop g k (Nat.le_of_succ_le hk) (upd g a ha (n - (k + 1)) (by omega)) (size_upd ..)
+
+theorem size_updLoop (g : Fin n → α → α) :
+    ∀ (k : Nat) (hk : k ≤ n) (a : Arr α) (ha : size a = n), size (updLoop g k hk a ha) = n
+  | 0, _, _, ha => ha
+  | k + 1, _, _, _ => size_updLoop g k _ _ (size_upd ..)
+
+theorem get_updLoop (g : Fin n → α → α) :
+    ∀ (k : Nat) (hk : k ≤ n) (a : Arr α) (ha : size a = n) (i : Nat)
+      (hi : i < size (updLoop g k hk a ha)),
+      Packed.get (updLoop g k hk a ha) ⟨i, hi⟩ =
+        if n - k ≤ i then g ⟨i, by rw [size_updLoop] at hi; exact hi⟩
+          (Packed.get a ⟨i, by rw [size_updLoop] at hi; rw [ha]; exact hi⟩)
+        else Packed.get a ⟨i, by rw [size_updLoop] at hi; rw [ha]; exact hi⟩
+  | 0, _, a, ha, i, hi => by
+    have : ¬ (n - 0 ≤ i) := by rw [size_updLoop] at hi; omega
+    simp only [updLoop, this, ite_false]
+  | k + 1, hk, a, ha, i, hi => by
+    simp only [updLoop]
+    rw [get_updLoop g k _ _ _ i hi, get_upd]
+    by_cases h1 : n - k ≤ i
+    · have h2 : n - (k + 1) ≠ i := by omega
+      have h3 : n - (k + 1) ≤ i := by omega
+      simp [h1, h2, h3]
+    · by_cases h2 : n - (k + 1) = i
+      · subst h2; simp [h1]
+      · have h3 : ¬ (n - (k + 1) ≤ i) := by omega
+        simp [h1, h2, h3]
+
+/-- `upd` at every index, unrolled for `n ≤ 4`. -/
+@[inline] def updAll : (n : Nat) → (g : Fin n → α → α) → (a : Arr α) → size a = n → Arr α
+  | 1, g, a, ha => upd g a ha 0 (by decide)
+  | 2, g, a, ha => upd g (upd g a ha 0 (by decide)) (size_upd ..) 1 (by decide)
+  | 3, g, a, ha =>
+    upd g (upd g (upd g a ha 0 (by decide)) (size_upd ..) 1 (by decide)) (size_upd ..) 2 (by decide)
+  | 4, g, a, ha =>
+    upd g (upd g (upd g (upd g a ha 0 (by decide)) (size_upd ..) 1 (by decide)) (size_upd ..) 2
+      (by decide)) (size_upd ..) 3 (by decide)
+  | n, g, a, ha => updLoop g n (Nat.le_refl n) a ha
+
+theorem updAll_eq : ∀ (n : Nat) (g : Fin n → α → α) (a : Arr α) (ha : size a = n),
+    updAll n g a ha = updLoop g n (Nat.le_refl n) a ha
+  | 0, _, _, _ => rfl
+  | 1, _, _, _ => rfl
+  | 2, _, _, _ => rfl
+  | 3, _, _, _ => rfl
+  | 4, _, _, _ => rfl
+  | _ + 5, _, _, _ => rfl
+
+/-- `v` with every entry `vᵢ` replaced by `g i vᵢ`, written into `v`'s storage (no allocation
+when `v` is unshared). -/
+@[inline] def updateAll (g : Fin n → α → α) (v : Values α n) : Values α n :=
+  ⟨updAll n g v.data v.size_eq, by rw [updAll_eq]; exact size_updLoop ..⟩
+
+/-- Equal arrays have equal entries (for rewriting under the size proof). -/
+theorem get_congr_arr {a b : Arr α} (h : a = b) (i : Nat) (hi : i < size a) (hi' : i < size b) :
+    Packed.get a ⟨i, hi⟩ = Packed.get b ⟨i, hi'⟩ := by subst h; rfl
+
+@[simp] theorem get_updateAll (g : Fin n → α → α) (v : Values α n) (i : Fin n) :
+    (updateAll g v).get i = g i (v.get i) := by
+  have hi : i.1 < size (updLoop g n (Nat.le_refl n) v.data v.size_eq) := by
+    rw [size_updLoop]; exact i.2
+  have h := get_congr_arr (updAll_eq n g v.data v.size_eq) i.1
+    (by rw [updAll_eq]; exact hi) hi
+  rw [get_updLoop] at h
+  simp only [Nat.sub_self, Nat.zero_le, ite_true] at h
+  exact h
+
+/-- Elementwise map within one type (Julia `map(f, v)`), in place when `v` is unshared. -/
+@[inline] def mapSelf (f : α → α) (v : Values α n) : Values α n := updateAll (fun _ x => f x) v
+
+/-- Replace entry `j` of `a` by `f aⱼ wⱼ` (`upd` with the closure written out, so that the
+compiler inlines `f` instead of lifting a closure over `w`). -/
+@[inline] def zipUpd (f : α → α → α) (w : Values α n) (a : Arr α) (ha : size a = n) (j : Nat)
+    (hj : j < n) : Arr α :=
+  Packed.set a ⟨j, ha ▸ hj⟩ (f (Packed.get a ⟨j, ha ▸ hj⟩) (w.get ⟨j, hj⟩))
+
+theorem size_zipUpd (f : α → α → α) (w : Values α n) (a : Arr α) (ha : size a = n) (j : Nat)
+    (hj : j < n) : size (zipUpd f w a ha j hj) = n := by simp [zipUpd, ha]
+
+/-- `zipUpd` at every index, unrolled for `n ≤ 4`; `updAll` with `g i x = f x wᵢ`. -/
+@[inline] def zipAll : (n : Nat) → (f : α → α → α) → Values α n → (a : Arr α) → size a = n → Arr α
+  | 1, f, w, a, ha => zipUpd f w a ha 0 (by decide)
+  | 2, f, w, a, ha => zipUpd f w (zipUpd f w a ha 0 (by decide)) (size_zipUpd ..) 1 (by decide)
+  | 3, f, w, a, ha =>
+    zipUpd f w (zipUpd f w (zipUpd f w a ha 0 (by decide)) (size_zipUpd ..) 1 (by decide)) (size_zipUpd ..) 2
+      (by decide)
+  | 4, f, w, a, ha =>
+    zipUpd f w (zipUpd f w (zipUpd f w (zipUpd f w a ha 0 (by decide)) (size_zipUpd ..) 1 (by decide))
+      (size_zipUpd ..) 2 (by decide)) (size_zipUpd ..) 3 (by decide)
+  | n, f, w, a, ha => updLoop (fun i x => f x (w.get i)) n (Nat.le_refl n) a ha
+
+theorem zipAll_eq : ∀ (n : Nat) (f : α → α → α) (w : Values α n) (a : Arr α) (ha : size a = n),
+    zipAll n f w a ha = updAll n (fun i x => f x (w.get i)) a ha
+  | 0, _, _, _, _ => rfl
+  | 1, _, _, _, _ => rfl
+  | 2, _, _, _, _ => rfl
+  | 3, _, _, _, _ => rfl
+  | 4, _, _, _, _ => rfl
+  | _ + 5, _, _, _, _ => rfl
+
+/-- Replace entry `j` of `a` by `f b aⱼ` (a map with one captured value `b`, written out so the
+compiler inlines `f`). -/
+@[inline] def withUpd {β : Type v} (f : β → α → α) (b : β) (a : Arr α) (ha : size a = n) (j : Nat)
+    (hj : j < n) : Arr α :=
+  Packed.set a ⟨j, ha ▸ hj⟩ (f b (Packed.get a ⟨j, ha ▸ hj⟩))
+
+theorem size_withUpd {β : Type v} (f : β → α → α) (b : β) (a : Arr α) (ha : size a = n) (j : Nat)
+    (hj : j < n) : size (withUpd f b a ha j hj) = n := by simp [withUpd, ha]
+
+/-- `withUpd` at every index, unrolled for `n ≤ 4`; `updAll` with `g i x = f b x`. -/
+@[inline] def withAll {β : Type v} : (n : Nat) → (f : β → α → α) → β → (a : Arr α) → size a = n → Arr α
+  | 1, f, b, a, ha => withUpd f b a ha 0 (by decide)
+  | 2, f, b, a, ha => withUpd f b (withUpd f b a ha 0 (by decide)) (size_withUpd ..) 1 (by decide)
+  | 3, f, b, a, ha =>
+    withUpd f b (withUpd f b (withUpd f b a ha 0 (by decide)) (size_withUpd ..) 1 (by decide))
+      (size_withUpd ..) 2 (by decide)
+  | 4, f, b, a, ha =>
+    withUpd f b (withUpd f b (withUpd f b (withUpd f b a ha 0 (by decide)) (size_withUpd ..) 1
+      (by decide)) (size_withUpd ..) 2 (by decide)) (size_withUpd ..) 3 (by decide)
+  | n, f, b, a, ha => updLoop (fun _ x => f b x) n (Nat.le_refl n) a ha
+
+theorem withAll_eq {β : Type v} : ∀ (n : Nat) (f : β → α → α) (b : β) (a : Arr α) (ha : size a = n),
+    withAll n f b a ha = updAll n (fun _ x => f b x) a ha
+  | 0, _, _, _, _ => rfl
+  | 1, _, _, _, _ => rfl
+  | 2, _, _, _, _ => rfl
+  | 3, _, _, _, _ => rfl
+  | 4, _, _, _, _ => rfl
+  | _ + 5, _, _, _, _ => rfl
+
+/-- `vᵢ ↦ f b vᵢ` for one captured value `b` (scalar multiples, `normalize`), written into `v`'s
+storage (in place when `v` is unshared). -/
+@[inline] def mapWith {β : Type v} (f : β → α → α) (b : β) (v : Values α n) : Values α n :=
+  ⟨withAll n f b v.data v.size_eq, by rw [withAll_eq, updAll_eq]; exact size_updLoop ..⟩
+
+theorem mapWith_eq_updateAll {β : Type v} (f : β → α → α) (b : β) (v : Values α n) :
+    mapWith f b v = updateAll (fun _ x => f b x) v := by
+  simp only [mapWith, updateAll, withAll_eq]
+
+@[simp] theorem get_mapWith {β : Type v} (f : β → α → α) (b : β) (v : Values α n) (i : Fin n) :
+    (mapWith f b v).get i = f b (v.get i) := by
+  rw [mapWith_eq_updateAll, get_updateAll]
+
+/-- Elementwise binary map into the first operand (Julia `map(f, v, w)`), in place when `v` is
+unshared. -/
+@[inline] def zipSelf (f : α → α → α) (v w : Values α n) : Values α n :=
+  ⟨zipAll n f w v.data v.size_eq, by rw [zipAll_eq, updAll_eq]; exact size_updLoop ..⟩
+
+theorem zipSelf_eq_updateAll (f : α → α → α) (v w : Values α n) :
+    zipSelf f v w = updateAll (fun i x => f x (w.get i)) v := by
+  simp only [zipSelf, updateAll, zipAll_eq]
+
+/-- Left fold over the entries, unrolled for `n ≤ 4` (the same left-to-right order). -/
+@[inline] def foldlAll {β : Type v} : (n : Nat) → (f : β → α → β) → Values α n → β → β
+  | 1, f, v, init => f init (v.get ⟨0, by decide⟩)
+  | 2, f, v, init => f (f init (v.get ⟨0, by decide⟩)) (v.get ⟨1, by decide⟩)
+  | 3, f, v, init => f (f (f init (v.get ⟨0, by decide⟩)) (v.get ⟨1, by decide⟩)) (v.get ⟨2, by decide⟩)
+  | 4, f, v, init => f (f (f (f init (v.get ⟨0, by decide⟩)) (v.get ⟨1, by decide⟩)) (v.get ⟨2, by decide⟩)) (v.get ⟨3, by decide⟩)
+  | n, f, v, init => foldlLoop f v n (Nat.le_refl n) init
+
+theorem foldlAll_eq {β : Type v} : ∀ (n : Nat) (f : β → α → β) (v : Values α n) (init : β),
+    foldlAll n f v init = foldlLoop f v n (Nat.le_refl n) init
+  | 0, _, _, _ => rfl
+  | 1, _, _, _ => rfl
+  | 2, _, _, _ => rfl
+  | 3, _, _, _ => rfl
+  | 4, _, _, _ => rfl
+  | _ + 5, _, _, _ => rfl
+
+/-- Left fold over pairs of entries, unrolled for `n ≤ 4`. -/
+@[inline] def foldl₂All {β : Type v} {γ : Type w} [Packed β] :
+    (n : Nat) → (f : γ → α → β → γ) → Values α n → Values β n → γ → γ
+  | 1, f, v, w, init => f init (v.get ⟨0, by decide⟩) (w.get ⟨0, by decide⟩)
+  | 2, f, v, w, init => f (f init (v.get ⟨0, by decide⟩) (w.get ⟨0, by decide⟩)) (v.get ⟨1, by decide⟩) (w.get ⟨1, by decide⟩)
+  | 3, f, v, w, init => f (f (f init (v.get ⟨0, by decide⟩) (w.get ⟨0, by decide⟩)) (v.get ⟨1, by decide⟩) (w.get ⟨1, by decide⟩)) (v.get ⟨2, by decide⟩) (w.get ⟨2, by decide⟩)
+  | 4, f, v, w, init =>
+    f (f (f (f init (v.get ⟨0, by decide⟩) (w.get ⟨0, by decide⟩)) (v.get ⟨1, by decide⟩) (w.get ⟨1, by decide⟩)) (v.get ⟨2, by decide⟩) (w.get ⟨2, by decide⟩)) (v.get ⟨3, by decide⟩) (w.get ⟨3, by decide⟩)
+  | n, f, v, w, init => foldl₂Loop f v w n (Nat.le_refl n) init
+
+theorem foldl₂All_eq {β : Type v} {γ : Type w} [Packed β] :
+    ∀ (n : Nat) (f : γ → α → β → γ) (v : Values α n) (w : Values β n) (init : γ),
+      foldl₂All n f v w init = foldl₂Loop f v w n (Nat.le_refl n) init
+  | 0, _, _, _, _ => rfl
+  | 1, _, _, _, _ => rfl
+  | 2, _, _, _, _ => rfl
+  | 3, _, _, _, _ => rfl
+  | 4, _, _, _, _ => rfl
+  | _ + 5, _, _, _, _ => rfl
+
+/-- Left fold over the entries, `f (… (f init v₀) …) vₙ₋₁` (Julia `foldl(f, v; init)`),
+unrolled for `n ≤ 4`. -/
+@[inline] def foldl {β : Type v} (f : β → α → β) (init : β) (v : Values α n) : β :=
+  foldlAll n f v init
+
+theorem foldl_eq_foldlFin {β : Type v} (f : β → α → β) (init : β) (v : Values α n) :
+    v.foldl f init = Packed.foldlFin n (fun acc i => f acc (v.get i)) init := by
+  simp only [foldl, foldlAll_eq, Packed.foldlFin, foldlLoop_eq]
+
+/-- Left fold over pairs of entries: `f (… (f init v₀ w₀) …) vₙ₋₁ wₙ₋₁`, unrolled for `n ≤ 4`. -/
 @[inline] def foldl₂ {β : Type v} {γ : Type w} [Packed β] (f : γ → α → β → γ) (init : γ)
     (v : Values α n) (w : Values β n) : γ :=
-  foldl₂Loop f v w n (Nat.le_refl n) init
+  foldl₂All n f v w init
 
 /-- Right fold over the entries, `f v₀ (… (f vₙ₋₁ init))`. -/
 @[inline] def foldr {β : Type v} (f : α → β → β) (init : β) (v : Values α n) : β :=
@@ -275,41 +496,55 @@ theorem get_append_right {m : Nat} (v : Values α n) (w : Values α m) (i : Fin 
 
 /-! ## Pointwise arithmetic (`SV/linalg.jl`) -/
 
-/-- Julia `a + b` (`SV/linalg.jl:14`). -/
-instance [Add α] : Add (Values α n) := ⟨zipWith (· + ·)⟩
-/-- Julia `a - b`. -/
-instance [Sub α] : Sub (Values α n) := ⟨zipWith (· - ·)⟩
-/-- Julia `-a` (`SV/linalg.jl:9`). -/
-instance [Neg α] : Neg (Values α n) := ⟨map (- ·)⟩
+/-- Julia `a + b` (`SV/linalg.jl:14`); written into `a` (in place when `a` is unshared). -/
+instance [Add α] : Add (Values α n) := ⟨zipSelf (· + ·)⟩
+/-- Julia `a - b`; written into `a`. -/
+instance [Sub α] : Sub (Values α n) := ⟨zipSelf (· - ·)⟩
+/-- Julia `-a` (`SV/linalg.jl:9`); in place when `a` is unshared. -/
+instance [Neg α] : Neg (Values α n) := ⟨mapSelf (- ·)⟩
 instance [OfNat α 0] : Zero (Values α n) := ⟨replicate 0⟩
 /-- Julia `s * a = map(c -> s*c, a)` (`SV/linalg.jl:31`): the scalar stays on
 the left, which matters for non-commutative entries. -/
-instance [Mul α] : HMul α (Values α n) (Values α n) := ⟨fun a v => v.map (a * ·)⟩
+instance [Mul α] : HMul α (Values α n) (Values α n) := ⟨fun a v => mapWith (fun a x => a * x) a v⟩
 /-- Julia `a * s = map(c -> c*s, a)` (`SV/linalg.jl:32`). -/
-instance [Mul α] : HMul (Values α n) α (Values α n) := ⟨fun v a => v.map (· * a)⟩
+instance [Mul α] : HMul (Values α n) α (Values α n) := ⟨fun v a => mapWith (fun a x => x * a) a v⟩
 /-- Julia `a / s`: true division of every entry (`SV/linalg.jl:45`). -/
-instance [Div α] : HDiv (Values α n) α (Values α n) := ⟨fun v a => v.map (· / a)⟩
+instance [Div α] : HDiv (Values α n) α (Values α n) := ⟨fun v a => mapWith (fun a x => x / a) a v⟩
 
 /-- Julia `s \ a = map(c -> s \ c, a)` (`SV/linalg.jl:46`), i.e. `c / s` for
 commutative scalars. -/
-@[inline] def leftDiv [Div α] (s : α) (v : Values α n) : Values α n := v.map (· / s)
+@[inline] def leftDiv [Div α] (s : α) (v : Values α n) : Values α n :=
+  mapWith (fun s x => x / s) s v
 
 /-- Julia `muladd(s, a, b)` elementwise (`SV/linalg.jl:54`). Unfused here;
 Julia may contract to an FMA (at most 1 ulp apart). -/
 @[inline] def muladd [Mul α] [Add α] (s : α) (a b : Values α n) : Values α n :=
-  zipWith (fun x y => s * x + y) a b
+  zipSelf (fun x y => s * x + y) a b
+
+@[simp] theorem get_mapSelf (f : α → α) (v : Values α n) (i : Fin n) :
+    (v.mapSelf f).get i = f (v.get i) := get_updateAll _ _ _
+
+@[simp] theorem get_zipSelf (f : α → α → α) (v w : Values α n) (i : Fin n) :
+    (zipSelf f v w).get i = f (v.get i) (w.get i) := by
+  rw [zipSelf_eq_updateAll, get_updateAll]
+
+theorem mapSelf_eq_map (f : α → α) (v : Values α n) : v.mapSelf f = v.map f :=
+  ext fun i => by simp
+
+theorem zipSelf_eq_zipWith (f : α → α → α) (v w : Values α n) : zipSelf f v w = zipWith f v w :=
+  ext fun i => by simp
 
 @[simp] theorem get_add [Add α] (v w : Values α n) (i : Fin n) : (v + w).get i = v.get i + w.get i :=
-  get_zipWith _ _ _ _
+  get_zipSelf _ _ _ _
 
 @[simp] theorem get_sub [Sub α] (v w : Values α n) (i : Fin n) : (v - w).get i = v.get i - w.get i :=
-  get_zipWith _ _ _ _
+  get_zipSelf _ _ _ _
 
 @[simp] theorem get_neg [Neg α] (v : Values α n) (i : Fin n) : (-v).get i = -v.get i :=
-  get_map _ _ _
+  get_mapSelf _ _ _
 
 @[simp] theorem get_smul [Mul α] (s : α) (v : Values α n) (i : Fin n) : (s * v).get i = s * v.get i :=
-  get_map _ _ _
+  get_mapWith _ _ _ _
 
 /-! ## Equality, printing -/
 

@@ -48,6 +48,9 @@ class Packed (α : Type u) where
     get (push a x) ⟨size a, by rw [size_push]; exact Nat.lt_succ_self _⟩ = x
   /-- Arrays are determined by their size and elements. -/
   ext (a b : Arr) (h : size a = size b) (hget : ∀ i : Fin (size a), get a i = get b ⟨i.1, h ▸ i.2⟩) : a = b
+  /-- Writing changes exactly the written element. -/
+  get_set (a : Arr) (i : Fin (size a)) (x : α) (j : Nat) (hj : j < size (set a i x)) :
+    get (set a i x) ⟨j, hj⟩ = if i.1 = j then x else get a ⟨j, by rw [size_set] at hj; exact hj⟩
 
 attribute [simp] Packed.size_mkEmpty Packed.size_push Packed.size_set
 
@@ -65,6 +68,7 @@ instance (priority := low) instPackedArray {α : Type u} : Packed α where
   get_push_lt a x i h := Array.getElem_push_lt h
   get_push_size _ _ := Array.getElem_push_eq
   ext a b h hget := Array.ext h fun i h₁ h₂ => hget ⟨i, h₁⟩
+  get_set a i x j hj := Array.getElem_set i.2 hj
 
 /-- `Float` packs unboxed into a `FloatArray`. -/
 instance instPackedFloat : Packed Float where
@@ -90,6 +94,9 @@ instance instPackedFloat : Packed Float where
     cases b with | mk b =>
     congr 1
     exact Array.ext h fun i h₁ h₂ => hget ⟨i, h₁⟩
+  get_set a i x j hj := by
+    cases a with | mk a =>
+    exact Array.getElem_set i.2 hj
 
 namespace Packed
 

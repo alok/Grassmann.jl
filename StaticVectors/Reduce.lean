@@ -26,6 +26,11 @@ variable {α : Type u} [Packed α] {n : Nat}
 @[inline] def reduce (op : α → α → α) (empty : α) (v : Values α n) : α :=
   match n, v with
   | 0, _ => empty
+  -- unrolled small sizes (the same left fold)
+  | 1, v => v.get 0
+  | 2, v => op (v.get ⟨0, by decide⟩) (v.get ⟨1, by decide⟩)
+  | 3, v => op (op (v.get ⟨0, by decide⟩) (v.get ⟨1, by decide⟩)) (v.get ⟨2, by decide⟩)
+  | 4, v => op (op (op (v.get ⟨0, by decide⟩) (v.get ⟨1, by decide⟩)) (v.get ⟨2, by decide⟩)) (v.get ⟨3, by decide⟩)
   | k + 1, v => foldlLoop op v k (Nat.le_succ k) v.head
 
 /-- Julia `mapreduce(f, op, v)` without `init` (`SV/mapreduce.jl:113`):
@@ -33,6 +38,11 @@ the fold starts from `f(v₁)`. -/
 @[inline] def mapReduce {β : Type v} (f : α → β) (op : β → β → β) (empty : β) (v : Values α n) : β :=
   match n, v with
   | 0, _ => empty
+  -- unrolled small sizes (the same left fold)
+  | 1, v => f (v.get ⟨0, by decide⟩)
+  | 2, v => op (f (v.get ⟨0, by decide⟩)) (f (v.get ⟨1, by decide⟩))
+  | 3, v => op (op (f (v.get ⟨0, by decide⟩)) (f (v.get ⟨1, by decide⟩))) (f (v.get ⟨2, by decide⟩))
+  | 4, v => op (op (op (f (v.get ⟨0, by decide⟩)) (f (v.get ⟨1, by decide⟩))) (f (v.get ⟨2, by decide⟩))) (f (v.get ⟨3, by decide⟩))
   | k + 1, v => foldlLoop (fun acc x => op acc (f x)) v k (Nat.le_succ k) (f v.head)
 
 /-- Julia `mapreduce(f, op, v; init)`: `op(…op(init, f(v₁))…, f(vₙ))`. -/
