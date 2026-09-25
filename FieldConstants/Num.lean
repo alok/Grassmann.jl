@@ -55,9 +55,10 @@ instance : BEq Num := ⟨fun a b => a.v == b.v⟩
 
 /-- `Constant * Constant` is closed, anything else is plain. -/
 def mul (a b : Num) : Num := ⟨a.v * b.v, a.const && b.const⟩
-/-- `a / b`: closed for two constants, otherwise `a*inv(b)`. -/
+/-- `a / b`: one rounding for two constants or two plain numbers, `a*inv(b)`
+(two roundings) when exactly one operand is a `Constant`. -/
 def div (a b : Num) : Num :=
-  if a.const && b.const then ⟨a.v / b.v, true⟩
+  if a.const == b.const then ⟨a.v / b.v, a.const⟩
   else ⟨a.v * b.v.inv, false⟩
 /-- `a + b` (closed for two constants). -/
 def add (a b : Num) : Num := ⟨a.v + b.v, a.const && b.const⟩

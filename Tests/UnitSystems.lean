@@ -2,6 +2,7 @@ import Tests.UnitSystems.Common
 import Tests.UnitSystems.Systems
 import Tests.UnitSystems.Scalars
 import Tests.UnitSystems.Display
+import Tests.UnitSystems.Extras
 
 /-!
 # UnitSystems test aggregator
@@ -20,7 +21,8 @@ def run : IO (Nat × Nat) := do
   IO.println "UnitSystems"
   let mut pass := 0
   let mut fail := 0
-  for suite in [systemsSuite, displaySuite, constantsSuite, scalarsSuite, conversionsSuite] do
+  for suite in [systemsSuite, displaySuite, constantsSuite, scalarsSuite, conversionsSuite,
+      couplingSuite, constructorsSuite] do
     let (s, e) ← suite
     let (p, f) ← s.report
     let (p', f') ← e.report
