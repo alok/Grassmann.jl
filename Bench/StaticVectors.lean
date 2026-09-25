@@ -53,8 +53,10 @@ def addAll {k : Nat} (as : Array (Values Float k)) : Float :=
 /-- First component of `2.5 a`. -/
 @[inline] def scale1 {k : Nat} (a : Values Float (k + 1)) : Float := (Values.map (· * 2.5) a).get 0
 
-/-- Cases at dimension `k + 1`. -/
-def dimCases (k : Nat) (m : Nat) : BenchM Unit := do
+/-- Cases at dimension `k + 1`. Inlined at each literal `k`, so every operation is compiled for
+a static length (as Julia's `Values{3,Float64}` is); with a runtime `k` the operations run as
+generic loops through closures, about 2× slower still. -/
+@[inline] def dimCases (k : Nat) (m : Nat) : BenchM Unit := do
   let d := k + 1
   let p := s!"{m}×{d}"
   let as := vecs d m (randFloats (d * m) 0xA11CE (-1) 1)

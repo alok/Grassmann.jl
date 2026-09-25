@@ -68,6 +68,7 @@ def main() -> int:
     ap.add_argument("--guard", action="store_true")
     ap.add_argument("--no-record", action="store_true")
     ap.add_argument("--no-latest", action="store_true")
+    ap.add_argument("--note", default="", help="note recorded with the run (compare.py --note)")
     a = ap.parse_args()
 
     a.out.mkdir(parents=True, exist_ok=True)
@@ -114,7 +115,7 @@ def main() -> int:
     for j in julia_jsons:
         cmp += ["--julia", str(j)]
     cmp += (["--guard"] if a.guard else []) + (["--no-record"] if a.no_record else []) + \
-        (["--no-latest"] if a.no_latest else [])
+        (["--no-latest"] if a.no_latest else []) + (["--note", a.note] if a.note else [])
     return run(cmp)
 
 
