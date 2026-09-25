@@ -193,7 +193,9 @@ instance : Neg (Outermorphism V W α) := ⟨fun a => a.map (- ·)⟩
 /-- Julia `a * O` scales every compound by `a` (`forms.jl:1110-1115`). -/
 instance : HMul α (Outermorphism V W α) (Outermorphism V W α) := ⟨fun s O => O.map (s * ·)⟩
 instance : HMul (Outermorphism V W α) α (Outermorphism V W α) := ⟨fun O s => O.map (· * s)⟩
-instance [Div α] : HDiv (Outermorphism V W α) α (Outermorphism V W α) := ⟨fun O s => O.map (· / s)⟩
+/-- Julia `O / s`: every compound times `1/s` (`forms.jl:1112`, through the reciprocal). -/
+instance [Div α] : HDiv (Outermorphism V W α) α (Outermorphism V W α) :=
+  ⟨fun O s => let r := Coeff.one / s; O.map (· * r)⟩
 /-- Julia `a == b` (master `forms.jl:755`). -/
 instance [BEq α] : BEq (Outermorphism V W α) := ⟨fun a b => a.blocks == b.blocks⟩
 instance : Inhabited (Outermorphism V W α) := ⟨⟨#[]⟩⟩

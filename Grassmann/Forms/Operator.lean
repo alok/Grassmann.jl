@@ -250,8 +250,10 @@ instance : Sub (TensorOperator V ld W lc α) := ⟨fun A B => ⟨A.mat - B.mat�
 instance : Neg (TensorOperator V ld W lc α) := ⟨fun A => ⟨-A.mat⟩⟩
 instance : HMul α (TensorOperator V ld W lc α) (TensorOperator V ld W lc α) := ⟨fun s A => ⟨s * A.mat⟩⟩
 instance : HMul (TensorOperator V ld W lc α) α (TensorOperator V ld W lc α) := ⟨fun A s => ⟨A.mat * s⟩⟩
+/-- Julia `T / s = T * (1/s)` (Grassmann divides a tensor by a number through the
+reciprocal, `algebra.jl:704-706`, so `T/10` has the entries `7 * 0.1`). -/
 instance [Div α] : HDiv (TensorOperator V ld W lc α) α (TensorOperator V ld W lc α) :=
-  ⟨fun A s => ⟨A.mat / s⟩⟩
+  ⟨fun A s => let r := Coeff.one / s; ⟨A.mat * r⟩⟩
 instance : Inhabited (TensorOperator V ld W lc α) := ⟨zero⟩
 /-- Julia `a == b` on operators: equality of the nested values (master
 `forms.jl:658`; `StackOverflowError` in 0.8.46). -/

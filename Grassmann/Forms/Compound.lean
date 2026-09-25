@@ -179,17 +179,27 @@ def adjugate (T : Simplex V W α) : Simplex W V α :=
 /-- Julia `cofactor(T) = transpose(adjugate(T))` (`composite.jl:805-812`). -/
 @[inline] def cofactor (T : Simplex V W α) : Simplex V W α := T.adjugate.transpose
 
+/-- Julia's Cramer determinant `dt = t₁ ∧ yₙ₋₁` (`_inv`, `composite.jl:758`): the
+top coefficient of `t₁ ∧ (t₂ ∧ … ∧ tₙ)` (associated as Julia's suffix wedges,
+so it can differ in the last bit from `det`, the left fold). -/
+def cramerDet (T : Simplex V W α) : α :=
+  let (xs, ys) := T.prefixSuffix
+  let m := V.n
+  if m ≤ 1 then T.det
+  else ((wedgeRaw W.n 1 (m - 1) xs[0]! ys[m - 2]!)[0]?).getD Coeff.zero
+
 /-- The inverse of a square grade-1 operator by Cramer's rule (Julia `inv`,
-`composite.jl:761-772`): `adjugate / det`, each entry divided by the determinant
-(Julia divides the numerators `valᵢ / det` before taking the complement: the
-same values). For one column, `v ↦ v/|v|²` (Julia `inv(t[1])` as a row). -/
+`composite.jl:761-772`): the adjugate times `1/dt`, Julia's `dt = t₁ ∧ yₙ₋₁`
+(Julia computes `!(valᵢ / dt)`, and a tensor divided by a number is multiplied
+by its reciprocal, `algebra.jl:704-706`). For one column, `c / c²` (Julia
+`inv(t[1]) = ~t/abs2(t)` as a row). -/
 def invSquare [Div α] (T : Simplex V W α) : Simplex W V α :=
   if V.n = 1 then
     let c := T.entry 0 0
     TensorOperator.ofFn fun _ _ => c / (c * c)
   else
-    let d := T.det
-    T.adjugate.map (· / d)
+    let r := Coeff.one / T.cramerDet
+    T.adjugate.map (· * r)
 
 /-- Checked write of raw packed storage (a no-op out of range). -/
 @[inline] def wr (a : Packed.Arr α) (i : Nat) (x : α) : Packed.Arr α :=
@@ -253,8 +263,10 @@ def inv [Div α] (T : Simplex V W α) : Simplex W V α :=
     let g : Endomorphism W (.chain 1) α := T.comp tt
     tt.comp (g.invSquare (W := W))
 
-/-- Julia `invdet(T) = (inv(T), det(T))` (`composite.jl:774-785`, `forms.jl:602-605`). -/
-@[inline] def invdet [Div α] (T : Simplex V W α) : Simplex W V α × α := (T.inv, T.det)
+/-- Julia `invdet(T) = (inv(T), det(T))` (`composite.jl:774-785`, `forms.jl:602-605`),
+the determinant as Julia's `!(t₁ ∧ yₙ₋₁)`. -/
+@[inline] def invdet [Div α] (T : Simplex V W α) : Simplex W V α × α :=
+  (T.inv, if V.n = W.n then T.cramerDet else T.det)
 
 /-- Julia `T \ v` (`composite.jl:722-732`): solve `T c = v` by Cramer's rule
 (numerators `x_{i-1} ∧ v ∧ y_{n-i}` over `det`) for a square operator; the

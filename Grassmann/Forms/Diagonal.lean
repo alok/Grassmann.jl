@@ -100,7 +100,9 @@ instance : Sub (DiagonalOperator V l α) := ⟨fun a b => ⟨a.d - b.d⟩⟩
 instance : Neg (DiagonalOperator V l α) := ⟨fun a => ⟨-a.d⟩⟩
 instance : HMul α (DiagonalOperator V l α) (DiagonalOperator V l α) := ⟨fun s D => ⟨D.d.map (s * ·)⟩⟩
 instance : HMul (DiagonalOperator V l α) α (DiagonalOperator V l α) := ⟨fun D s => ⟨D.d.map (· * s)⟩⟩
-instance [Div α] : HDiv (DiagonalOperator V l α) α (DiagonalOperator V l α) := ⟨fun D s => ⟨D.d.map (· / s)⟩⟩
+/-- Julia `D / s = D * (1/s)` (through the reciprocal, `algebra.jl:704-706`). -/
+instance [Div α] : HDiv (DiagonalOperator V l α) α (DiagonalOperator V l α) :=
+  ⟨fun D s => let r := Coeff.one / s; ⟨D.d.map (· * r)⟩⟩
 /-- Julia `a == b` (master `forms.jl:506`). -/
 instance [BEq α] : BEq (DiagonalOperator V l α) := ⟨fun a b => a.d == b.d⟩
 instance : Inhabited (DiagonalOperator V l α) := ⟨⟨zeroValues _⟩⟩
