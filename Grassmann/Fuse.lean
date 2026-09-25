@@ -126,6 +126,8 @@ def fuseExpr (e : Expr) : MetaM Expr := do
 a single result allocation (see the module documentation). -/
 syntax (name := fusedStx) "fused% " term : term
 
+/-- Elaborate `fused% e`: elaborate `e`, fuse it (`fuseExpr`) and check that the fused term has
+`e`'s type. -/
 @[term_elab fusedStx] def elabFused : TermElab := fun stx expected? => do
   match stx with
   | `(fused% $t) =>

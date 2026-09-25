@@ -154,10 +154,12 @@ def elabBatch (into : Bool) (t : Syntax) : Term.TermElabM Expr := do
   check r
   return r
 
+/-- Elaborate `batch% f`. -/
 @[term_elab batchStx] def elabBatchStx : Term.TermElab := fun stx _ => match stx with
   | `(batch% $t) => elabBatch false t
   | _ => throwUnsupportedSyntax
 
+/-- Elaborate `batchInto% f`. -/
 @[term_elab batchIntoStx] def elabBatchIntoStx : Term.TermElab := fun stx _ => match stx with
   | `(batchInto% $t) => elabBatch true t
   | _ => throwUnsupportedSyntax

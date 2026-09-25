@@ -39,6 +39,7 @@ that compare the two layouts on the same operations. -/
 syntax (name := batchSoAStx) "batchSoA% " term : term
 
 open Lean Elab in
+/-- Elaborate `batchSoA% f` (component-major `batch%`). -/
 @[term_elab batchSoAStx] def elabBatchSoA : Term.TermElab := fun stx _ => match stx with
   | `(batchSoA% $t) => do
     let f ← Term.elabTerm t none
