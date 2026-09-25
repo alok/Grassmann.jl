@@ -38,7 +38,7 @@ namespace JNum
 
 /-- The value as a `Float64` (Julia `float(x)`). -/
 @[inline] def toFloat : JNum → Float
-  | int n => Float.ofInt n.toInt
+  | int n => n.toFloat
   | float x => x
 
 /-- Is this an `Int64` payload? -/
@@ -79,7 +79,7 @@ def mul : JNum → JNum → JNum := lift2 (· * ·) (· * ·)
 /-- Julia `/`: always `Float64`. -/
 def div (a b : JNum) : JNum := float (a.toFloat / b.toFloat)
 /-- Julia `inv`: always `Float64`. -/
-def inv (a : JNum) : JNum := float (1.0 / a.toFloat)
+def inv (a : JNum) : JNum := float (f64! 1.0 / a.toFloat)
 /-- Julia unary `-`. -/
 def neg : JNum → JNum
   | int a => int (-a)
@@ -153,7 +153,7 @@ def isZero : JNum → Bool
 def isApproxUnit (y x : JNum) : Bool :=
   let a := y.toFloat
   let b := x.toFloat
-  a == b || (a.isFinite && b.isFinite && (a - b).abs ≤ 8.161992717227193e-15 * max a.abs b.abs)
+  a == b || (a.isFinite && b.isFinite && (a - b).abs ≤ f64! 8.161992717227193e-15 * max a.abs b.abs)
 
 /-- Julia `UnitSystems.unit(x, y=1) = isapprox(y, x, rtol=eps()^0.9) ? y : x`:
 snap a conversion factor that is within `8.2e-15` of `y` to exactly `y`. -/
