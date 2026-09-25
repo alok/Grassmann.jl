@@ -228,7 +228,11 @@ def powTerm (b : UInt64) (x : α) (unit : Bool) (i : Nat) : TA V α :=
 /-- Julia `t ^ i` for a natural exponent (module docstring). -/
 def powNat (t : TA V α) (i : Nat) : TA V α :=
   if _h1 : i = 1 then t
-  else if _h0 : i = 0 then one
+  else if _h0 : i = 0 then
+    -- `Couple{V,B}(Complex(t)^0) = 1 + 0·B` when `B² = -1`, else `One`
+    match t with
+    | couple b .. => if bladeSq V b == -1 then couple b Coeff.one Coeff.zero else one
+    | _ => one
   else match t with
     | zero => zero
     | infinity => infinity

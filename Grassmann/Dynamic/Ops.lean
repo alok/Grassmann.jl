@@ -188,8 +188,9 @@ instance [Div α] : AntiSymProd (TA V α) (TA V α) (TA V α) := ⟨antisymprod�
 @[inline] def cosandwich (x R : TA V α) : TA V α :=
   complementleft (sandwich (complementright x) (complementright R))
 
-/-- Julia `antisandwich(x, R) = complementleft(complementright(R) >>> complementright(x))`. -/
-@[inline] def antisandwich (x R : TA V α) : TA V α :=
+/-- Julia `antisandwich(R, x) = complementleft(complementright(R) >>> complementright(x))`
+(AbstractTensors `src/AbstractTensors.jl:568`; the versor comes first, as in `>>>`). -/
+@[inline] def antisandwich (R x : TA V α) : TA V α :=
   complementleft (tsandwich (complementright R) (complementright x))
 
 /-- Julia `codot` (= `antidot`, `expansion`). -/
