@@ -584,6 +584,18 @@ def ratio (o : Op) (h : Float) (U : Sys := W.units) : Float := (W.column U).rati
 /-- Julia `<op>ratio(h, W, U, S) = <op>ratio(length(h, U, S), W, U)`. -/
 def ratioFrom (o : Op) (h : Float) (U S : Sys) : Float := W.ratio o (convert .length h U S) U
 
+/-- Julia `pressure(hG, T, i, W, U)` with an explicit temperature (`Geophysics.jl:736`). -/
+def pressureT (hG T : Float) (i : Fin n) (U : Sys := W.units) : Float :=
+  (W.column U).pressureT hG T i
+/-- Julia `density(hG, T, i, W, U)` with an explicit temperature (`Geophysics.jl:752`). -/
+def densityT (hG T : Float) (i : Fin n) (U : Sys := W.units) : Float :=
+  (W.column U).densityT hG T i
+/-- Julia `kinematic(hG, T, i, W, U) = viscosity(T, fluid(W), U)/density(hG, T, i, W, U)`
+(`Geophysics.jl:770`). -/
+def kinematicT (hG T : Float) (i : Fin n) (U : Sys := W.units) : Float :=
+  let C := W.column U
+  W.fluid.viscosityU C.u T / C.densityT hG T i
+
 /-- Julia `(W::Weather)(hG, i)` (`Geophysics.jl:551-554`): the fluid state at a
 geopotential altitude in layer `i`, in `W`'s units. -/
 def stateAt (hG : Float) (i : Fin n) : FluidState :=

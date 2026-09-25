@@ -442,6 +442,20 @@ def fractions : Mole → FloatArray
   | .gas _ => .empty
   | .mix m => m.fractions
 
+/-- The vibrational data `f G U` of a gas, empty for a mixture (a Julia error). -/
+@[inline] def vib (f : MoleGas → Units → FloatArray) (U : Sys) : Mole → FloatArray
+  | .gas g => f g (Units.of U)
+  | .mix _ => .empty
+
+/-- `wavenumber(G, U)`: the vibrational wavenumbers in `U` (`chemistry.jl:199-202`). -/
+def wavenumber (U : Sys := .Metric) : FloatArray := G.vib MoleGas.wavenumber U
+/-- `wavelength(G, U) = inv.(wavenumber(G, U))` (`chemistry.jl:209`). -/
+def wavelength (U : Sys := .Metric) : FloatArray := G.vib MoleGas.wavelength U
+/-- `frequency(G, U) = wavenumber(G, U).*lightspeed(U)` (`chemistry.jl:216`). -/
+def frequency (U : Sys := .Metric) : FloatArray := G.vib MoleGas.frequency U
+/-- `vibration(G, U)`: the vibrational temperatures (`chemistry.jl:223`). -/
+def vibration (U : Sys := .Metric) : FloatArray := G.vib MoleGas.vibration U
+
 /-! The `UnitSystems.Constants` forwarded by `chemistry.jl:56-60`: `op(G, U) = op(U)`. -/
 
 /-- `lightspeed(G, U)` -/

@@ -233,6 +233,10 @@ def Earth1976English : Weather 7 := US76E.weather 518.67 2116.2
 `STDATM`/`GEOUNITS`, `planets.jl:143-164`). -/
 def Standard : Weather 11 := Earth1959
 
+/-- Julia `gage(P, P0 = pressure())`: gauge pressure relative to the standard sea
+level (`Geophysics.jl:32`). -/
+def gage (P : Float) (P0 : Float := Standard.sea .pressure) : Float := P - P0
+
 /-- A weather of any layer count. -/
 abbrev AnyWeather := Σ n, Weather n
 

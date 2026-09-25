@@ -88,6 +88,16 @@ def typedSuite : IO Tally := do
   t := t.ok (match standard "1976" true with | .ok ⟨7, _⟩ => true | _ => false)
     fun _ => "standard 1976 english"
   t := t.ok (match standard "2000" with | .error _ => true | _ => false) fun _ => "standard 2000"
+  -- explicit-temperature primitives agree with the layer-level operations
+  for h in [0.0, 5000.0, 30000.0, 150000.0] do
+    let hG := W.altgeopotent h
+    let i := W.layer hG
+    let T := W.opAt .temperature hG i
+    t := t.ok (sameBits (W.pressureT hG T i) (W.opAt .pressure hG i)) fun _ => s!"pressureT {h}"
+    t := t.ok (sameBits (W.densityT hG T i) (W.opAt .density hG i)) fun _ => s!"densityT {h}"
+    t := t.ok (sameBits (W.kinematicT hG T i) (W.opAt .kinematic hG i)) fun _ => s!"kinematicT {h}"
+  t := t.ok (gage 101325.0 == 0.0) fun _ => "gage(atm) == 0"
+  t := t.ok (((N2 : Mole).wavenumber).toList == [274400.0]) fun _ => "wavenumber(N2)"
   -- converting a weather to another system and back reproduces the tables to rounding
   let back := (Earth1959.toUnits .English).toUnits .Metric
   for i in List.finRange 11 do
