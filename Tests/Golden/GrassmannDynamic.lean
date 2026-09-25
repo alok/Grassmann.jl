@@ -309,6 +309,49 @@ def AnyTA.un (f : UnTA V) : AnyTA V → AnyTA V
   | .int x => .int (f x) | .rat x => .rat (f x) | .float x => .float (f x) | .bool x => .bool (f x)
   | .cint x => .cint (f x) | .crat x => .crat (f x) | .cfloat x => .cfloat (f x)
 
+/-- An operation on several dynamic elements of one coefficient type. -/
+abbrev NaryTA (V : TensorBundle) :=
+  {α : Type} → [Coeff α] → [JuliaShow α] → [OracleScalar α] → Array (TA V α) → TA V α
+
+/-- Apply an operation on several elements after promoting them all to type `T`. -/
+def AnyTA.nary (T : CoeffType) (f : NaryTA V) (xs : Array (AnyTA V)) : Option (AnyTA V) := do
+  let ys ← xs.mapM (·.promoteTo T)
+  match T with
+  | .int64 => .int <$> (f <$> ys.mapM fun | .int x => some x | _ => none)
+  | .rational => .rat <$> (f <$> ys.mapM fun | .rat x => some x | _ => none)
+  | .float64 => .float <$> (f <$> ys.mapM fun | .float x => some x | _ => none)
+  | .complex .int64 => .cint <$> (f <$> ys.mapM fun | .cint x => some x | _ => none)
+  | .complex .rational => .crat <$> (f <$> ys.mapM fun | .crat x => some x | _ => none)
+  | .complex .float64 => .cfloat <$> (f <$> ys.mapM fun | .cfloat x => some x | _ => none)
+  | _ => none
+
+/-- The blade of a term, `Couple` or `PseudoCouple`. -/
+def AnyTA.blade? (x : AnyTA V) : Option UInt64 :=
+  let f := fun {α : Type} [Coeff α] (t : TA V α) => match t with
+    | .blade b | .single b _ | .couple b .. | .pseudo b .. => some b
+    | .one => some 0
+    | _ => none
+  match x with
+  | .int t => f t | .rat t => f t | .float t => f t | .bool t => f t
+  | .cint t => f t | .crat t => f t | .cfloat t => f t
+
+/-- The `Float64` version of the coefficient type (`Complex{Float64}` for complex types). -/
+def AnyTA.toFloat (x : AnyTA V) : Option (AnyTA V) :=
+  match x with
+  | .bool _ => (x.promoteTo .int64).bind (·.promoteTo .float64)
+  | .cint _ | .crat _ | .cfloat _ => x.promoteTo (.complex .float64)
+  | _ => x.promoteTo .float64
+
+/-- Julia's term `complementright`/`complementleft` in a conformal space scales a blade
+holding `∅` but not `∞` by `v/2` (Leibniz `src/generic.jl:214-219`, `parityrightnull`),
+so an integer or rational coefficient comes back `Float64`; `Couple`/`PseudoCouple`
+complements go through their `B` term. Apply the complement `f` with that promotion. -/
+def AnyTA.complement (f : UnTA V) (x : AnyTA V) : AnyTA V :=
+  let halves := V.hasconformal && match x.blade? with
+    | some b => DirectSum.Bits.popcount (b &&& 3) == 1 && b &&& 1 == 0
+    | none => false
+  if halves then ((x.toFloat).getD x).un f else x.un f
+
 /-- A number as a dynamic scalar term `n·One(V)` (Julia `n*One(V)`, a `Single`). -/
 def AnyNum.toTA (V : TensorBundle) : AnyNum → AnyTA V
   | .int k => .int (.single 0 k)

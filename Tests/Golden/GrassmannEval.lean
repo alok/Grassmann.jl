@@ -129,8 +129,6 @@ def unaryOf? (op : String) : Option (UnTA V) :=
   | "involute" => some fun x => TA.involute x
   | "clifford" => some fun x => TA.clifford x
   | "antireverse" => some fun x => TA.antireverse x
-  | "complementright" => some fun x => TA.complementright x
-  | "complementleft" => some fun x => TA.complementleft x
   | "hodge" => some fun x => TA.hodge x
   | "complementlefthodge" => some fun x => TA.complementlefthodge x
   | "metric" => some fun x => TA.metric x
@@ -171,6 +169,8 @@ def unaryEval : Evaluator := fun ctx args => do
   let V ← ctx.bundle?
   let x ← AnyTA.decode V (← args[0]?)
   if ctx.op == "adjoint" then x.adjoint
+  else if ctx.op == "complementright" then pure (x.complement fun y => TA.complementright y).encode
+  else if ctx.op == "complementleft" then pure (x.complement fun y => TA.complementleft y).encode
   else match unaryOf? (V := V) ctx.op with
     | some f => pure (x.un f).encode
     | none => none
@@ -190,7 +190,8 @@ def unaryKnownIssues : Array KnownIssue := #[
 
 /-! ## products -/
 
-/-- The dynamic binary product of an oracle op key (schema §12). -/
+/-- The dynamic core product of an oracle op key (schema §12) whose operands enter
+unchanged (the derived products that first map an operand are `productsEval`'s). -/
 def productOf? (op : String) : Option (BinTA V) :=
   match op with
   | "mul" => some fun a b => TA.mul a b
@@ -198,26 +199,54 @@ def productOf? (op : String) : Option (BinTA V) :=
   | "vee" => some fun a b => TA.vee a b
   | "contraction" => some fun a b => TA.contraction a b
   | "lcontraction" => some fun a b => TA.lcontraction a b
-  | "lshift" => some fun a b => TA.lshift a b
-  | "rshift" => some fun a b => TA.rshift a b
-  | "revmul" => some fun a b => TA.revmul a b
   | "scalarprod" => some fun a b => TA.scalarprod a b
   | "cross" => some fun a b => TA.cross a b
-  | "sandwich" => some fun a b => TA.sandwich a b
-  | "tsandwich" => some fun a b => TA.tsandwich a b
-  | "veedot" => some fun a b => TA.veedot a b
-  | "antidot" => some fun a b => TA.antidot a b
   | _ => none
 
-/-- `grassmann/products`: the 14 binary products over every ordered pair. -/
+/-- `grassmann/products`: the 14 binary products over every ordered pair. Julia's derived
+products map an operand before the core product (AbstractTensors
+`src/AbstractTensors.jl:257-261`, Grassmann `src/algebra.jl:313-396`), in the operand's own
+coefficient type (`~a` of an `Int64` chain keeps `0`, not `-0.0`); the maps here run
+before the promotion likewise. -/
 def productsEval : Evaluator := fun ctx args => do
   let V ← ctx.bundle?
   let a ← AnyTA.decode V (← args[0]?)
   let b ← AnyTA.decode V (← args[1]?)
   let T ← CoeffType.promote a.T b.T
-  match productOf? (V := V) ctx.op with
-  | some f => (← a.bin T f b).encode
-  | none => none
+  let rev := fun (x : AnyTA V) => x.un fun y => TA.reverse y
+  let cr := fun (x : AnyTA V) => x.complement fun y => TA.complementright y
+  let cl := fun (x : AnyTA V) => x.complement fun y => TA.complementleft y
+  let bin := fun (x y : AnyTA V) (f : BinTA V) => do x.bin (← CoeffType.promote x.T y.T) f y
+  let r ← match ctx.op with
+    | "lshift" => bin b (rev a) fun x y => TA.contraction x y
+    | "rshift" => bin (rev a) b fun x y => TA.contraction x y
+    | "revmul" => bin (rev a) b fun x y => TA.mul x y
+    | "veedot" => cl <$> bin (cr a) (cr b) fun x y => TA.mul x y
+    | "antidot" => cl <$> bin (cr a) (cr b) fun x y => TA.contraction x y
+    | "sandwich" =>
+      AnyTA.nary T (fun xs => TA.sandwichWith xs[0]! xs[1]! xs[2]! xs[3]! xs[4]!)
+        #[a, b, rev b, b.un fun y => TA.involute y, b.un fun y => TA.clifford y]
+    | "tsandwich" =>
+      AnyTA.nary T (fun xs => TA.tsandwichWith xs[0]! xs[1]! xs[2]!)
+        #[a, a.un fun y => TA.clifford y, b]
+    | op => (productOf? (V := V) op).bind fun f => a.bin T f b
+  pure r.encode
+
+/-- Expected failures of the products evaluator on cases whose Julia value is wrong only in
+the sign of zero. -/
+def productsKnownIssues : Array KnownIssue := #[
+  { id := "tsandwich-submanifold-chain-sign-zero",
+    note := "defect tsandwich-submanifold-chain-sign (policy ref) with a null blade y (v₁ in " ++
+      "PGA3): Julia's y⟑x⟑y and the correct y⟑x⟑clifford(y) are both zero, so the oracle stores " ++
+      "no ref and the harness compares with Julia's out, whose zeros carry the defective sign. " ++
+      "Request: compare ref-policy cases without a stored ref modulo the sign of zero " ++
+      "(Tests/Golden/Runner.lean evalCase)",
+    tables := #[{ suite := some (Glob.compile "products"), space := some (Glob.compile "PGA*"),
+                  op := some (Glob.compile "tsandwich"),
+                  kinds := some #[KindPat.compile
+                    "Submanifold:1|Submanifold:2|Submanifold:5|Submanifold:6|Submanifold:9|Submanifold:10",
+                    KindPat.compile "Chain"] }] }
+]
 
 /-! ## Registrations -/
 
@@ -227,7 +256,8 @@ def grassmannRegistrations : Array Registration := #[
   { name := "grassmann/arith", suite := "arith", op := "*", eval := arithEval },
   { name := "grassmann/unary", suite := "unary", op := "*", eval := unaryEval,
     knownIssues := unaryKnownIssues },
-  { name := "grassmann/products", suite := "products", op := "*", eval := productsEval }
+  { name := "grassmann/products", suite := "products", op := "*", eval := productsEval,
+    knownIssues := productsKnownIssues }
 ]
 
 initialize
