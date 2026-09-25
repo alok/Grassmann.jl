@@ -21,35 +21,36 @@ open StaticVectors UnitSystems FieldConstants
 /-! ### Planets (`planets.jl:26-38`) -/
 
 /-- The Sun. -/
-def Sun : Planet := ⟨.float 0.00005, .float 696342e3, .float (25.38 * 24.0 * 3600.0),
-  .float 1.32712440018e20⟩
+def Sun : Planet := .of (.float 0.00005) (.float 696342e3) (.float (25.38 * 24.0 * 3600.0))
+  (.float 1.32712440018e20)
 /-- Mercury (a sphere: `f` is the integer `0`). -/
-def Mercury : Planet := ⟨0, .float 2439.7e3, .float (1407.5 * 3600.0), .float 2.2032e13⟩
+def Mercury : Planet := .of 0 (.float 2439.7e3) (.float (1407.5 * 3600.0)) (.float 2.2032e13)
 /-- Venus (a sphere; retrograde rotation). -/
-def Venus : Planet := ⟨0, .float 6051.8e3, .float (-243.025 * 24.0 * 3600.0), .float 3.24859e14⟩
+def Venus : Planet := .of 0 (.float 6051.8e3) (.float (-243.025 * 24.0 * 3600.0))
+  (.float 3.24859e14)
 /-- The Moon. -/
-def Moon : Planet := ⟨.float 0.0012, .float 1738.1e3, .float (27.321661 * 24.0 * 3600.0),
-  .float 4.9048695e12⟩
+def Moon : Planet := .of (.float 0.0012) (.float 1738.1e3) (.float (27.321661 * 24.0 * 3600.0))
+  (.float 4.9048695e12)
 /-- Mars. -/
-def Mars : Planet := ⟨.float 0.00589, .float 3396.2e3, .float (1.025957 * 24.0 * 3600.0),
-  .float 4.282837e13⟩
+def Mars : Planet := .of (.float 0.00589) (.float 3396.2e3) (.float (1.025957 * 24.0 * 3600.0))
+  (.float 4.282837e13)
 /-- Jupiter. -/
-def Jupiter : Planet := ⟨.float 0.06487, .float 71492e3, .float (9.925 * 3600.0),
-  .float 1.26686534e17⟩
+def Jupiter : Planet := .of (.float 0.06487) (.float 71492e3) (.float (9.925 * 3600.0))
+  (.float 1.26686534e17)
 /-- Saturn (its period is the integer `38018`). -/
-def Saturn : Planet := ⟨.float 0.09796, .float 60268e3, 38018, .float 3.7931187e16⟩
+def Saturn : Planet := .of (.float 0.09796) (.float 60268e3) 38018 (.float 3.7931187e16)
 /-- Uranus (retrograde rotation). -/
-def Uranus : Planet := ⟨.float 0.02293, .float 25559e3, .float (-0.71833 * 24.0 * 3600.0),
-  .float 5.793939e15⟩
+def Uranus : Planet := .of (.float 0.02293) (.float 25559e3) (.float (-0.71833 * 24.0 * 3600.0))
+  (.float 5.793939e15)
 /-- Neptune. -/
-def Neptune : Planet := ⟨.float 0.01708, .float 24764e3, .float (16.11 * 3600.0),
-  .float 6.836529e15⟩
+def Neptune : Planet := .of (.float 0.01708) (.float 24764e3) (.float (16.11 * 3600.0))
+  (.float 6.836529e15)
 /-- Pluto (a sphere). -/
-def Pluto : Planet := ⟨0, .float 1188.3e3, .float (6.38723 * 24.0 * 3600.0), .float 8.71e11⟩
+def Pluto : Planet := .of 0 (.float 1188.3e3) (.float (6.38723 * 24.0 * 3600.0)) (.float 8.71e11)
 /-- Ceres (a sphere). -/
-def Ceres : Planet := ⟨0, .float 469.73e3, .float (9.074170 * 3600.0), .float 6.26325e10⟩
+def Ceres : Planet := .of 0 (.float 469.73e3) (.float (9.074170 * 3600.0)) (.float 6.26325e10)
 /-- Eris (a sphere). -/
-def Eris : Planet := ⟨0, .float 1163e3, .float (349.44 * 3600.0), .float 1.108e12⟩
+def Eris : Planet := .of 0 (.float 1163e3) (.float (349.44 * 3600.0)) (.float 1.108e12)
 
 /-- All bodies with their Julia names, in `planets.jl` order. -/
 def planets : List (String × Planet) :=

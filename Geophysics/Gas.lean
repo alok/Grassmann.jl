@@ -59,18 +59,22 @@ structure MoleGas where
   /-- Sutherland viscosity prefactor -/
   μ : Float
   /-- Sutherland viscosity temperature [K] -/
-  Tμ : JNum
+  Tμ : Float
   /-- Sutherland conductivity prefactor -/
   k : Float
   /-- Sutherland conductivity temperature [K] -/
-  Tk : JNum
+  Tk : Float
+  /-- `Tμ` as Julia holds it (an `Int` such as `107`, or a `Float64`), for printing -/
+  TμJ : JNum
+  /-- `Tk` as Julia holds it, for printing -/
+  TkJ : JNum
   deriving Inhabited
 
 /-- Julia `viscond(μ0, Tμ, k0, Tk, T0 = 288.16)` (`chemistry.jl:104-109`): the
 Sutherland prefactors `μ0*sqrt(Tμ)*(T0 + Tμ)/(2T0^1.5)` from reference values at `T0`. -/
 def viscond (μ0 : Float) (Tμ : JNum) (k0 : Float) (Tk : JNum) (T0 : Float := 288.16) :
     Float × Float :=
-  let t1 := 2.0 * pow T0 1.5
+  let t1 := (f64% 2.0) * pow T0 (f64% 1.5)
   let tμ := Tμ.toFloat
   let tk := Tk.toFloat
   (μ0 * Float.sqrt tμ * (T0 + tμ) / t1, k0 * Float.sqrt tk * (T0 + tk) / t1)
@@ -79,37 +83,37 @@ def viscond (μ0 : Float) (Tμ : JNum) (k0 : Float) (Tk : JNum) (T0 : Float := 2
 def AtomicGas (M μ0 : Float) (Tμ : JNum) (k0 : Float) (Tk : JNum) (T0 : Float := 288.16) :
     MoleGas :=
   let (μ, k) := viscond μ0 Tμ k0 Tk T0
-  ⟨.atomic, M, μ, Tμ, k, Tk⟩
+  ⟨.atomic, M, μ, Tμ.toFloat, k, Tk.toFloat, Tμ, Tk⟩
 
 /-- Julia `DiatomicGas(M, ν, μ0, Tμ, k0, Tk, T0 = 288.16)` (`chemistry.jl:177-180`). -/
 def DiatomicGas (M ν μ0 : Float) (Tμ : JNum) (k0 : Float) (Tk : JNum) (T0 : Float := 288.16) :
     MoleGas :=
   let (μ, k) := viscond μ0 Tμ k0 Tk T0
-  ⟨.diatomic ν, M, μ, Tμ, k, Tk⟩
+  ⟨.diatomic ν, M, μ, Tμ.toFloat, k, Tk.toFloat, Tμ, Tk⟩
 
 /-- Julia `TriatomicGas(M, ν1, ν2, μ0, Tμ, k0, Tk, T0 = 288.16)` (`chemistry.jl:181-184`). -/
 def TriatomicGas (M ν₁ ν₂ μ0 : Float) (Tμ : JNum) (k0 : Float) (Tk : JNum)
     (T0 : Float := 288.16) : MoleGas :=
   let (μ, k) := viscond μ0 Tμ k0 Tk T0
-  ⟨.triatomic ν₁ ν₂, M, μ, Tμ, k, Tk⟩
+  ⟨.triatomic ν₁ ν₂, M, μ, Tμ.toFloat, k, Tk.toFloat, Tμ, Tk⟩
 
 /-- Julia `PentatomicGas(M, μ0, Tμ, k0, Tk, T0 = 288.16)` (`chemistry.jl:185-188`). -/
 def PentatomicGas (M μ0 : Float) (Tμ : JNum) (k0 : Float) (Tk : JNum) (T0 : Float := 288.16) :
     MoleGas :=
   let (μ, k) := viscond μ0 Tμ k0 Tk T0
-  ⟨.pentatomic, M, μ, Tμ, k, Tk⟩
+  ⟨.pentatomic, M, μ, Tμ.toFloat, k, Tk.toFloat, Tμ, Tk⟩
 
 /-- Julia `SutherlandGas(M, cᵥ, μ0, Tμ, k0, Tk, T0 = 288.16)` (`chemistry.jl:189-192`). -/
 def SutherlandGas (M : Float) (cv : JNum) (μ0 : Float) (Tμ : JNum) (k0 : Float) (Tk : JNum)
     (T0 : Float := 288.16) : MoleGas :=
   let (μ, k) := viscond μ0 Tμ k0 Tk T0
-  ⟨.sutherland cv, M, μ, Tμ, k, Tk⟩
+  ⟨.sutherland cv, M, μ, Tμ.toFloat, k, Tk.toFloat, Tμ, Tk⟩
 
 /-- Julia `vibration(x::AbstractFloat) = x^2*eˣ/(eˣ - 1)^2`, the Einstein function
 (`chemistry.jl:224`); it overflows to `NaN` for `x ≳ 710` exactly as in Julia. -/
 def einstein (x : Float) : Float :=
   let e := exp x
-  x * x * e / ((e - 1.0) * (e - 1.0))
+  x * x * e / ((e - (f64% 1.0)) * (e - (f64% 1.0)))
 
 /-- The per-constituent quantities a mixture averages (`chemistry.jl:266-271`). -/
 inductive Property where
@@ -140,13 +144,13 @@ variable (G : MoleGas) (U : Units)
 
 /-- `gasconstant(G, U) = universal(U)/molarmass(G, U)` (`chemistry.jl:54`; a
 `Constant` over a `Float64`, i.e. `universal(U)*inv(molarmass)`). -/
-@[inline] def gasconstant : Float := U.universal * (1.0 / G.molarmass U)
+@[inline] def gasconstant : Float := U.universal * ((f64% 1.0) / G.molarmass U)
 
 /-- `sutherlandviscosity(G, U) = Tμ*temperature(Metric, U)` (`chemistry.jl:79`). -/
-@[inline] def sutherlandviscosity : Float := G.Tμ.toFloat * U.temperatureM
+@[inline] def sutherlandviscosity : Float := G.Tμ * U.temperatureM
 
 /-- `sutherlandconductivity(G, U) = Tk*temperature(Metric, U)` (`chemistry.jl:90`). -/
-@[inline] def sutherlandconductivity : Float := G.Tk.toFloat * U.temperatureM
+@[inline] def sutherlandconductivity : Float := G.Tk * U.temperatureM
 
 /-- `viscosity(G, U) = μ*viscosity(Metric, U)` (`chemistry.jl:78`). -/
 @[inline] def viscosityParam : Float := G.μ * U.viscosityM
@@ -156,7 +160,7 @@ variable (G : MoleGas) (U : Units)
 
 /-- The Sutherland law `((2μ)/sqrt(Tμ))*(sqrt(T)/(1 + Tμ/T))` (`chemistry.jl:96-102`). -/
 @[inline] def sutherland (c ts T : Float) : Float :=
-  ((2.0 * c) / Float.sqrt ts) * (Float.sqrt T / (1.0 + ts / T))
+  (((f64% 2.0) * c) / Float.sqrt ts) * (Float.sqrt T / ((f64% 1.0) + ts / T))
 
 /-- `viscosity(T, G, U)`: dynamic viscosity by Sutherland's law (`chemistry.jl:96-102`). -/
 def viscosity (T : Float) : Float := sutherland (G.viscosityParam U) (G.sutherlandviscosity U) T
@@ -174,7 +178,7 @@ def wavenumber : FloatArray :=
   | _ => .empty
 
 /-- `wavelength(G, U) = inv.(wavenumber(G, U))` (`chemistry.jl:209`). -/
-def wavelength : FloatArray := (G.wavenumber U).foldl (fun acc x => acc.push (1.0 / x)) .empty
+def wavelength : FloatArray := (G.wavenumber U).foldl (fun acc x => acc.push ((f64% 1.0) / x)) .empty
 
 /-- `frequency(G, U) = wavenumber(G, U).*lightspeed(U)` (`chemistry.jl:216`). -/
 def frequency : FloatArray := (G.wavenumber U).foldl (fun acc x => acc.push (x * U.lightspeed)) .empty
@@ -187,10 +191,10 @@ def vibration : FloatArray := (G.frequency U).foldl (fun acc x => acc.push (x * 
 def heatvolume (T : Float) : Float :=
   let R := G.gasconstant U
   match G.kind with
-  | .atomic => 1.5 * R
-  | .diatomic ν => R * (2.5 + einstein (ν * U.wavenumberM * U.lightspeed * U.vibration / T))
+  | .atomic => (f64% 1.5) * R
+  | .diatomic ν => R * ((f64% 2.5) + einstein (ν * U.wavenumberM * U.lightspeed * U.vibration / T))
   | .triatomic ν₁ ν₂ =>
-    R * (2.5 + einstein (ν₁ * U.wavenumberM * U.lightspeed * U.vibration / T) +
+    R * ((f64% 2.5) + einstein (ν₁ * U.wavenumberM * U.lightspeed * U.vibration / T) +
       einstein (ν₂ * U.wavenumberM * U.lightspeed * U.vibration / T))
   | .pentatomic => JMath.nan
   | .sutherland cv => convert .specificentropy cv.toFloat U.sys .Metric
@@ -238,8 +242,8 @@ inductive Parts where
 end
 
 instance : Inhabited Mole := ⟨.gas default⟩
-instance : Inhabited Parts := ⟨.one 1.0 default⟩
-instance : Inhabited Mixture := ⟨.mk 0.0 default⟩
+instance : Inhabited Parts := ⟨.one (f64% 1.0) default⟩
+instance : Inhabited Mixture := ⟨.mk (f64% 0.0) default⟩
 instance : Coe MoleGas Mole := ⟨.gas⟩
 instance : Coe Mixture Mole := ⟨.mix⟩
 
@@ -350,7 +354,7 @@ def molarmass (U : Sys := .Metric) : Float := (Units.of U).molar * G.relativemas
 def molecularmass (U : Sys := .Metric) : Float := G.molarmass U * (Units.of U).avogadroInv
 
 /-- `gasconstant(G, U) = universal(U)/molarmass(G, U)` (`chemistry.jl:54`). -/
-def gasconstantU (U : Units) : Float := U.universal * (1.0 / (U.molar * G.relativemass))
+def gasconstantU (U : Units) : Float := U.universal * ((f64% 1.0) / (U.molar * G.relativemass))
 
 /-- `gasconstant(G, U)`: the specific gas constant (`chemistry.jl:54`). -/
 def gasconstant (U : Sys := .Metric) : Float := G.gasconstantU (Units.of U)
@@ -368,7 +372,7 @@ def heatpressureU (U : Units) (T : Float) : Float := G.eval .heatpressure U T
 `heatpressure/heatvolume` for a mixture (`chemistry.jl:264`). -/
 def heatratioU (U : Units) (T : Float) : Float :=
   match G with
-  | .gas g => g.gasconstant U / g.heatvolume U T + 1.0
+  | .gas g => g.gasconstant U / g.heatvolume U T + (f64% 1.0)
   | .mix _ => G.heatpressureU U T / G.heatvolumeU U T
 
 /-- `specificenergy(T, G, U) = heatvolume(T, G, U)*T` (`chemistry.jl:134`). -/
@@ -378,7 +382,7 @@ def specificenergyU (U : Units) (T : Float) : Float := G.heatvolumeU U T * T
 def specificenthalpyU (U : Units) (T : Float) : Float := G.heatpressureU U T * T
 
 /-- `freedom(T, G, U) = heatvolume(T, G, U)*(2/gasconstant(G, U))` (`chemistry.jl:148`). -/
-def freedomU (U : Units) (T : Float) : Float := G.heatvolumeU U T * (2.0 / G.gasconstantU U)
+def freedomU (U : Units) (T : Float) : Float := G.heatvolumeU U T * ((f64% 2.0) / G.gasconstantU U)
 
 /-- `prandtl(T, G, U) = gravity(U)*viscosity*heatpressure/thermalconductivity`
 (`chemistry.jl:155`). -/
@@ -414,16 +418,16 @@ def sonicspeed (T : Float) (U : Sys := .Metric) : Float := G.sonicspeedU (Units.
 
 /-- `viscosity(G, U)`: the converted Sutherland prefactor, fraction-averaged for a
 mixture (`chemistry.jl:78, 269-271`). -/
-def viscosityParam (U : Sys := .Metric) : Float := G.eval .viscosityParam (Units.of U) 0.0
+def viscosityParam (U : Sys := .Metric) : Float := G.eval .viscosityParam (Units.of U) (f64% 0.0)
 /-- `thermalconductivity(G, U)`: the converted prefactor. -/
 def conductivityParam (U : Sys := .Metric) : Float :=
-  G.eval .conductivityParam (Units.of U) 0.0
+  G.eval .conductivityParam (Units.of U) (f64% 0.0)
 /-- `sutherlandviscosity(G, U)`: the Sutherland temperature of viscosity. -/
 def sutherlandviscosity (U : Sys := .Metric) : Float :=
-  G.eval .sutherlandViscosity (Units.of U) 0.0
+  G.eval .sutherlandViscosity (Units.of U) (f64% 0.0)
 /-- `sutherlandconductivity(G, U)`: the Sutherland temperature of conductivity. -/
 def sutherlandconductivity (U : Sys := .Metric) : Float :=
-  G.eval .sutherlandConductivity (Units.of U) 0.0
+  G.eval .sutherlandConductivity (Units.of U) (f64% 0.0)
 
 /-- `heatratio(G, U)` at the reference temperature `temperature(288.16, U, Metric)`
 (`chemistry.jl:111-113`). -/
@@ -529,7 +533,7 @@ def specificenthalpy (U : Sys := F.units) : Float :=
 /-- `density(F, U) = (pressure/temperature)/gasconstant` (`chemistry.jl:395`). -/
 def density (U : Sys := F.units) : Float := F.pressure U / F.temperature U / F.gasconstant U
 /-- `specificvolume(F, U) = inv(density(F, U))` (`chemistry.jl:402`). -/
-def specificvolume (U : Sys := F.units) : Float := 1.0 / F.density U
+def specificvolume (U : Sys := F.units) : Float := (f64% 1.0) / F.density U
 /-- `kinematic(F, U) = viscosity/density` (`chemistry.jl:409`). -/
 def kinematic (U : Sys := F.units) : Float := F.viscosity U / F.density U
 /-- `heatcapacity(F, U) = heatpressure*density` (`chemistry.jl:416`). -/

@@ -43,14 +43,42 @@ open FieldConstants UnitSystems
 `Geophysics.jl:74-75`). The fields are Julia's type parameters as given to the
 constructor (`Quantity` is the identity in Geophysics). -/
 structure Planet where
-  /-- flattening `f` (the integer `0` for spheres) -/
-  f : JNum
+  /-- raw constructor; use `Planet.of`, which fills the cached constants -/
+  private raw ::
+  /-- flattening `f` -/
+  f : Float
   /-- semimajor axis `a` [m] -/
-  a : JNum
+  a : Float
   /-- sidereal rotation period `t` [s]; negative for retrograde rotation -/
-  t : JNum
+  t : Float
   /-- standard gravitational parameter `GM` [m³ s⁻²] -/
-  Gm : JNum
+  Gm : Float
+  /-- `f` as Julia holds it (the integer `0` for spheres) -/
+  fJ : JNum
+  /-- `a` as Julia holds it -/
+  aJ : JNum
+  /-- `t` as Julia holds it (Saturn's is the integer `38018`) -/
+  tJ : JNum
+  /-- `Gm` as Julia holds it -/
+  GmJ : JNum
+  /-- cached `eccentricity(P)` (Julia folds the `@pure` planet constants at compile time) -/
+  ecc : Float := 0.0
+  /-- cached `eccentricity2(P)` -/
+  ecc2 : Float := 0.0
+  /-- cached `aspectratio(P)` -/
+  aspect : Float := 0.0
+  /-- cached Metric `oblateness(P)` -/
+  obl : Float := 0.0
+  /-- cached `q0(P)` -/
+  q0v : Float := 0.0
+  /-- cached `q01(P)` -/
+  q01v : Float := 0.0
+  /-- cached `dynamicformfactor(P)` -/
+  j2 : Float := 0.0
+  /-- cached Metric `_gravity(0, P)` (normal gravity at the equator) -/
+  geM : Float := 0.0
+  /-- cached Metric `_gravity(π/2, P)` (normal gravity at the pole) -/
+  gpM : Float := 0.0
   deriving Inhabited
 
 /-- `Float64(π)`. -/
@@ -70,22 +98,22 @@ variable (P : Planet)
 
 /-- Julia's `Planet{0}` dispatch: the flattening is the integer literal `0`. -/
 def isSphere : Bool :=
-  match P.f with
+  match P.fJ with
   | .int n => n == 0
   | .float _ => false
 
 /-- `flattening(P) = f` (`Geophysics.jl:88`). -/
-@[inline] def flattening : Float := P.f.toFloat
+@[inline] def flattening : Float := P.f
 
 /-- `semimajor(P, U) = a*length(Metric, U)` (`Geophysics.jl:100`). -/
-def semimajor (U : Sys := .Metric) : Float := P.a.toFloat * (Units.of U).lengthM
+def semimajor (U : Sys := .Metric) : Float := P.a * (Units.of U).lengthM
 
 /-- `period(P, U) = t*time(Metric, U)` (`Geophysics.jl:112`). -/
-def period (U : Sys := .Metric) : Float := P.t.toFloat * (Units.of U).timeM
+def period (U : Sys := .Metric) : Float := P.t * (Units.of U).timeM
 
 /-- `gravitation(P, U) = Gm/(length(U,Metric)*specificenergy(U,Metric))`
 (`Geophysics.jl:124-125`); `gravitation(P) = Gm` is the Metric case. -/
-def gravitation (U : Sys := .Metric) : Float := P.Gm.toFloat * (Units.of U).gravitationInv
+def gravitation (U : Sys := .Metric) : Float := P.Gm * (Units.of U).gravitationInv
 
 /-- `mass(P, U) = gravitation(P, U)/gravitation(U)` (`Geophysics.jl:137`). -/
 def mass (U : Sys := .Metric) : Float := P.gravitation U * (Units.of U).newtonInv
@@ -108,18 +136,27 @@ def meanradius (U : Sys := .Metric) : Float := P.radiusFast (asin (Float.sqrt (1
 /-- `semiminor(P, U) = radius_fast(π/2, P, U)` (`Geophysics.jl:176`). -/
 def semiminor (U : Sys := .Metric) : Float := P.radiusFast halfπ U
 
-/-- `eccentricity(P) = sqrt(f*(2 - f))` (`Geophysics.jl:188`). -/
-def eccentricity : Float := let f := P.flattening; Float.sqrt (f * (2.0 - f))
+/-- The formula of `eccentricity(P) = sqrt(f*(2 - f))` (`Geophysics.jl:188`). -/
+def eccentricityRaw : Float := let f := P.flattening; Float.sqrt (f * (2.0 - f))
+
+/-- `eccentricity(P) = sqrt(f*(2 - f))` (`Geophysics.jl:188`; cached). -/
+@[inline] def eccentricity : Float := P.ecc
+
+/-- The formula of `eccentricity2(P) = eccentricity(P)/(1 - f)` (`Geophysics.jl:200`). -/
+def eccentricity2Raw : Float := P.eccentricity / (1.0 - P.flattening)
 
 /-- `eccentricity2(P) = eccentricity(P)/(1 - f)`, the second eccentricity `e′`
-(`Geophysics.jl:200`). -/
-def eccentricity2 : Float := P.eccentricity / (1.0 - P.flattening)
+(`Geophysics.jl:200`; cached). -/
+@[inline] def eccentricity2 : Float := P.ecc2
 
 /-- `lineareccentricity(P, U) = semimajor(P, U)*eccentricity(P)` (`Geophysics.jl:207`). -/
 def lineareccentricity (U : Sys := .Metric) : Float := P.semimajor U * P.eccentricity
 
-/-- `aspectratio(P) = semiminor(P)/semimajor(P)` (`Geophysics.jl:219`). -/
-def aspectratio : Float := P.semiminor / P.semimajor
+/-- The formula of `aspectratio(P) = semiminor(P)/semimajor(P)` (`Geophysics.jl:219`). -/
+def aspectratioRaw : Float := P.semiminor / P.semimajor
+
+/-- `aspectratio(P) = semiminor(P)/semimajor(P)` (`Geophysics.jl:219`; cached). -/
+@[inline] def aspectratio : Float := P.aspect
 
 /-- `authalicradius(P, U) = sqrt((a^2 + b^2*atanh(e)/e)/2)` (`Geophysics.jl:221`). -/
 def authalicradius (U : Sys := .Metric) : Float :=
@@ -155,7 +192,8 @@ the radius at geodetic latitude `ϕ` (`Geophysics.jl:275-278`). -/
 def radiusgeodetic (ϕ : Float) (U : Sys := .Metric) : Float :=
   let f := P.flattening
   let a := P.semimajor U
-  a * ((1.0 - f / 2.0 * (1.0 - cos (2.0 * ϕ))) + 5.0 * (f * f) / 16.0 * (1.0 - cos (4.0 * ϕ)))
+  a * ((1.0 - f / 2.0 * (1.0 - cos (2.0 * ϕ))) +
+    5.0 * (f * f) / 16.0 * (1.0 - cos (4.0 * ϕ)))
 
 /-- `deflection(h, ϕ, P, U) = f*sin(2ϕ)*(1 - f/2 - h/radiusgeodetic(ϕ, P, U))`: the
 angle between the geodetic and geocentric latitudes at altitude `h`
@@ -200,20 +238,27 @@ def oblatenessAt (θ : Float) (U : Sys := .Metric) : Float :=
   P.centripetalRadial θ U / P.gravitySpherical U * (Units.of U).gcInv
 
 /-- `oblateness(P, U) = oblateness(π/2, P, U)`, Hirvonen's `m = ω²a²b/GM`
-(`Geophysics.jl:325`). -/
-def oblateness (U : Sys := .Metric) : Float := P.oblatenessAt halfπ U
+(`Geophysics.jl:325`; the Metric value is cached). -/
+def oblateness (U : Sys := .Metric) : Float :=
+  if U == .Metric then P.obl else P.oblatenessAt halfπ U
 
-/-- `q0(P) = ((1 + 3/e′^2)*atan(e′) - 3/e′)/2`, or `1` for a sphere
+/-- `q0(P)` (cached). -/
+@[inline] def q0 : Float := P.q0v
+
+/-- `q01(P)` (cached). -/
+@[inline] def q01 : Float := P.q01v
+
+/-- The formula of `q0(P) = ((1 + 3/e′^2)*atan(e′) - 3/e′)/2`, or `1` for a sphere
 (`Geophysics.jl:328, 334`). -/
-def q0 : Float :=
+def q0Raw : Float :=
   if P.isSphere then 1.0
   else
     let e2 := P.eccentricity2
     ((1.0 + 3.0 / (e2 * e2)) * atan e2 - 3.0 / e2) / 2.0
 
-/-- `q01(P) = 3((1 + 1/e′^2)*(1 - atan(e′)/e′)) - 1`, or `1` for a sphere
-(`Geophysics.jl:329, 335`). -/
-def q01 : Float :=
+/-- The formula of `q01(P) = 3((1 + 1/e′^2)*(1 - atan(e′)/e′)) - 1`, or `1` for a
+sphere (`Geophysics.jl:329, 335`). -/
+def q01Raw : Float :=
   if P.isSphere then 1.0
   else
     let e2 := P.eccentricity2
@@ -236,13 +281,17 @@ def q1 (u : Float) (U : Sys := .Metric) : Float :=
     let i := 1.0 / e
     3.0 * ((1.0 + i * i) * (1.0 - atan e / e)) - 1.0
 
-/-- `dynamicformfactor(P) = (1 - 2m*e′/15q0)*f*(2 - f)/3`, the second dynamic form
-factor `J₂` (`Geophysics.jl:349-350`); `0` for a sphere. -/
-def dynamicformfactor : Float :=
+/-- `dynamicformfactor(P)`, `J₂` (cached). -/
+@[inline] def dynamicformfactor : Float := P.j2
+
+/-- The formula of `dynamicformfactor(P) = (1 - 2m*e′/15q0)*f*(2 - f)/3`, the second
+dynamic form factor `J₂` (`Geophysics.jl:349-350`); `0` for a sphere. -/
+def dynamicformfactorRaw : Float :=
   if P.isSphere then 0.0
   else
     let f := P.flattening
-    (1.0 - 2.0 * P.oblateness * P.eccentricity2 / (15.0 * P.q0)) * f * (2.0 - f) / 3.0
+    (1.0 - 2.0 * P.oblateness * P.eccentricity2 / (15.0 * P.q0)) * f * (2.0 - f) /
+      3.0
 
 /-- `secondzonalharmonic(P) = -J₂/sqrt(5)`, the normalized `C̄₂₀`
 (`Geophysics.jl:362`). For a sphere Julia divides the integer `-0 = 0`, giving `+0.0`. -/
@@ -264,16 +313,25 @@ def gravityNormal (ϕ : Float) (U : Sys := .Metric) : Float :=
   let g := P.gravitation U / (a * Float.sqrt (x * x + y * y))
   g * ((1.0 + q) * (sβ * sβ) + (1.0 - m - q / 2.0) * (cβ * cβ))
 
+/-- `_gravity(0, P, U)`: normal gravity at the equator (cached for Metric). -/
+def gravityEquator (U : Sys := .Metric) : Float :=
+  if U == .Metric then P.geM else P.gravityNormal 0.0 U
+
+/-- `_gravity(π/2, P, U)`: normal gravity at the pole (cached for Metric). -/
+def gravityPole (U : Sys := .Metric) : Float :=
+  if U == .Metric then P.gpM else P.gravityNormal halfπ U
+
 /-- Julia `gravity(ϕ, P, U)`: Somigliana's normal gravity at geodetic latitude `ϕ`
 (`Geophysics.jl:387-390`). At the standard latitude `1.0111032235724π/4` it is
 `9.80665` exactly on Earth. -/
 def gravity (ϕ : Float) (U : Sys := .Metric) : Float :=
   let s := sin ϕ
   let sϕ2 := s * s
-  let ge := P.gravityNormal 0.0 U
-  let gp := P.gravityNormal halfπ U
+  let ge := P.gravityEquator U
+  let gp := P.gravityPole U
   let f := P.flattening
-  ge * ((1.0 + (P.aspectratio * (gp / ge) - 1.0) * sϕ2) / Float.sqrt (1.0 - (f * (2.0 - f)) * sϕ2))
+  ge * ((1.0 + (P.aspectratio * (gp / ge) - 1.0) * sϕ2) /
+    Float.sqrt (1.0 - (f * (2.0 - f)) * sϕ2))
 
 /-- The altitude factor of `gravitygeodetic`, `2*(1 + f + m - 2f*sin(ϕ)^2)`. -/
 def geodeticSlope (ϕ : Float) : Float :=
@@ -309,9 +367,26 @@ def gravityNorm (h θ : Float) (U : Sys := .Metric) : Float :=
 
 end Planet
 
+/-- Julia `Planet(f, a, t, Gm)` (`Geophysics.jl:75`) from Julia payloads, with the
+derived constants that Julia folds at compile time computed once. -/
+def Planet.of (f a t Gm : JNum) : Planet :=
+  let p : Planet := { f := f.toFloat, a := a.toFloat, t := t.toFloat, Gm := Gm.toFloat,
+                      fJ := f, aJ := a, tJ := t, GmJ := Gm }
+  let p := { p with ecc := p.eccentricityRaw }
+  let p := { p with ecc2 := p.eccentricity2Raw, aspect := p.aspectratioRaw,
+                    obl := p.oblatenessAt halfπ .Metric }
+  let p := { p with q0v := p.q0Raw, q01v := p.q01Raw }
+  let p := { p with j2 := p.dynamicformfactorRaw }
+  { p with geM := p.gravityNormal 0.0 .Metric, gpM := p.gravityNormal halfπ .Metric }
+
 /-- Earth, the WGS 84 spheroid (`Geophysics.jl:76`, `planets.jl:29`). -/
-def Earth : Planet := ⟨.float (1.0 / 298.257223563), .float 6378137.0, .float 86164.098903691,
-  .float 3.986004418e14⟩
+def Earth : Planet :=
+  .of (.float (1.0 / 298.257223563)) (.float 6378137.0) (.float 86164.098903691)
+    (.float 3.986004418e14)
+
+/-- `_gravity(0, π/2)`: the component norm at the pole on Earth in Metric (a constant
+of `gravity(h, θ, P, U)`). -/
+def earthPoleNorm : Float := Earth.gravityNorm 0.0 halfπ
 
 namespace Planet
 
@@ -322,8 +397,8 @@ variable (P : Planet)
 (the component norm at `h = 0`, `θ = π/2` on **Earth** in Metric, as written in
 `Geophysics.jl:422-425`). -/
 def gravityAt (h θ : Float) (U : Sys := .Metric) : Float :=
-  let gp := P.gravityNormal halfπ U
-  let gp0 := Earth.gravityNorm 0.0 halfπ
+  let gp := P.gravityPole U
+  let gp0 := earthPoleNorm
   let s := JMath.sin θ
   P.gravityNorm h θ U * (1.0 + ((gp - gp0) / (3.0 * gp)) * (s * s))
 

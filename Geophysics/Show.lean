@@ -31,7 +31,7 @@ def showVals {n : Nat} (v : Values Float n) : String :=
   "[" ++ ", ".intercalate (v.toList.map showF) ++ "]"
 
 /-- Julia `show(io, P::Planet)`: `Planet{f, a, t, Gm}()`. -/
-def Planet.jshow (P : Planet) : String := s!"Planet\{{P.f}, {P.a}, {P.t}, {P.Gm}}()"
+def Planet.jshow (P : Planet) : String := s!"Planet\{{P.fJ}, {P.aJ}, {P.tJ}, {P.GmJ}}()"
 
 namespace MoleGas
 
@@ -49,7 +49,7 @@ def gastext (G : MoleGas) : String :=
 
 /-- Julia `show(io, G::MoleGas)` (`chemistry.jl:94`). -/
 def jshow (G : MoleGas) : String :=
-  s!"{G.gastext}μ={showF G.μ},Tμ={G.Tμ},k={showF G.k},Tk={G.Tk}}"
+  s!"{G.gastext}μ={showF G.μ},Tμ={G.TμJ},k={showF G.k},Tk={G.TkJ}}"
 
 end MoleGas
 

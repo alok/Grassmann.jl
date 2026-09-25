@@ -45,7 +45,7 @@ open StaticVectors UnitSystems FieldConstants JMath
 
 /-- The standard latitude `1.0111032235724π/4` of every preset (`planets.jl:133`),
 at which Earth's Somigliana gravity is exactly `9.80665`. -/
-def stdLatitude : Float := 1.0111032235724 * π₀ / 4.0
+def stdLatitude : Float := (f64% 1.0111032235724) * π₀ / (f64% 4.0)
 
 /-- A `Values Float` literal from a list, with its length as the index. -/
 def vals (l : List Float) : Values Float l.length := Values.ofFn fun i => l[i.1]
@@ -75,13 +75,13 @@ variable {n : Nat}
 /-- Julia `Atmosphere{P,U}(a, h)` (`Geophysics.jl:451-453`): `m` is zero. -/
 def make (a h : Values Float n) (P : Planet := Earth) (U : Sys := .Metric)
     (pos : 0 < n := by decide) : Atmosphere n :=
-  ⟨a, h, Values.replicate 0.0, P, U, pos⟩
+  ⟨a, h, Values.replicate (f64% 0.0), P, U, pos⟩
 
 /-- Julia `(U::UnitSystem)(A::Atmosphere)` (`Geophysics.jl:454`): the table converted
 to `U` (`lapserate.(a, U, S)`, `length.(h, U, S)`; `m` reset to zero). -/
 def toUnits (A : Atmosphere n) (U : Sys) : Atmosphere n :=
   ⟨A.a.map (convert .lapserate · U A.units), A.h.map (convert .length · U A.units),
-   Values.replicate 0.0, A.planet, U, A.pos⟩
+   Values.replicate (f64% 0.0), A.planet, U, A.pos⟩
 
 end Atmosphere
 
@@ -147,21 +147,21 @@ def step (A : Atmosphere n) (gR : Float) (s : IntegrationState) (i : Nat) (hi : 
   let Δh := hi' - A.h.get ⟨i - 1, hp⟩
   let (Ti, Tc, ha) :=
     if aPrev.isInf then
-      let Tz := 0.0
-      let Tc := (A.a.get ⟨i, hi⟩ * Δh * Tz + s.T * s.T - Tz * Tz) / (hi' * Δh + 2.0 * s.T - 2.0 * Tz)
+      let Tz := (f64% 0.0)
+      let Tc := (A.a.get ⟨i, hi⟩ * Δh * Tz + s.T * s.T - Tz * Tz) / (hi' * Δh + (f64% 2.0) * s.T - (f64% 2.0) * Tz)
       let d1 := s.T - Tc
       let d2 := Tz - Tc
       let ha := Δh * (s.T - Tc) / Float.sqrt (d1 * d1 - d2 * d2)
       let x := Δh / ha
-      (Tc + (s.T - Tc) * Float.sqrt (1.0 - x * x), Tc, ha)
+      (Tc + (s.T - Tc) * Float.sqrt ((f64% 1.0) - x * x), Tc, ha)
     else (s.T + aPrev * Δh, s.Tc, s.ha)
-  if aPrev == 0.0 then
+  if aPrev == (f64% 0.0) then
     let v := exp (gR * Δh / Ti)
     ⟨Ti, s.p * v, s.rho * v, Tc, ha⟩
   else
     let t := Ti / s.T
     let gRa := gR / aPrev
-    ⟨Ti, s.p * pow t gRa, s.rho * pow t (gRa - 1.0), Tc, ha⟩
+    ⟨Ti, s.p * pow t gRa, s.rho * pow t (gRa - (f64% 1.0)), Tc, ha⟩
 
 /-- The states at every layer base, in order. -/
 def states (A : Atmosphere n) (gR : Float) (s₀ : IntegrationState) : Array IntegrationState :=
@@ -184,7 +184,7 @@ def integrate (A : Atmosphere n) (F : FluidState) (ϕ : Float) : WeatherData n :
   let p0 := F.pressure U
   let R := F.gasconstant U
   let g := A.planet.gravity ϕ U
-  let s₀ : IntegrationState := ⟨T0, p0, p0 / (R * T0), 0.0, 0.0⟩
+  let s₀ : IntegrationState := ⟨T0, p0, p0 / (R * T0), (f64% 0.0), (f64% 0.0)⟩
   let st := states A (-g / R) s₀
   let last := st.back?.getD s₀
   { atm := A, phi := ϕ, fluid := F.fluid
@@ -307,14 +307,14 @@ def temperatureAt (hG : Float) (i : Fin n) : Float :=
   let h0 := C.h.get i
   if a0.isInf then
     let Δh := hG - h0
-    if a0 < 0.0 then
+    if a0 < (f64% 0.0) then
       let x := Δh / C.ha
-      C.Tc + (T0 - C.Tc) * Float.sqrt (1.0 - x * x)
+      C.Tc + (T0 - C.Tc) * Float.sqrt ((f64% 1.0) - x * x)
     else
       let r := radius1976
       let ξ := Δh * ((r + h0) / (r + hG))
-      1000.0 - (1000.0 - T0) * exp ((-0.012 / (1000.0 - T0)) * ξ)
-  else if a0 == 0.0 then T0 else T0 + a0 * (hG - h0)
+      (f64% 1000.0) - ((f64% 1000.0) - T0) * exp ((-(f64% 0.012) / ((f64% 1000.0) - T0)) * ξ)
+  else if a0 == (f64% 0.0) then T0 else T0 + a0 * (hG - h0)
 
 /-- Whether Julia's `temperature(hG, i, W, U)` throws: in the 1976 elliptic layer
 the argument of `sqrt(1 - (Δh/ha)^2)` is negative (a `DomainError`). Every
@@ -322,20 +322,20 @@ operation computes the temperature first, so all of them throw; Lean returns
 `NaN` for all of them (otherwise `NaN^0 = 1` would let a pressure through). -/
 def domainError (hG : Float) (i : Fin n) : Bool :=
   let a0 := C.a.get i
-  a0.isInf && a0 < 0.0 &&
+  a0.isInf && a0 < (f64% 0.0) &&
     (let x := (hG - C.h.get i) / C.ha
-     1.0 - x * x < 0.0)
+     (f64% 1.0) - x * x < (f64% 0.0))
 
 /-- Julia `pressure(hG, T, i, W, U)` (`Geophysics.jl:736-744`). -/
 def pressureT (hG T : Float) (i : Fin n) : Float :=
   let a := C.a.get i
-  C.p.get i * (if a == 0.0 then exp (C.gR * (hG - C.h.get i) / T) else pow (T / C.T.get i) (C.gR / a))
+  C.p.get i * (if a == (f64% 0.0) then exp (C.gR * (hG - C.h.get i) / T) else pow (T / C.T.get i) (C.gR / a))
 
 /-- Julia `density(hG, T, i, W, U)` (`Geophysics.jl:752-761`). -/
 def densityT (hG T : Float) (i : Fin n) : Float :=
   let a := C.a.get i
   C.rho.get i *
-    (if a == 0.0 then exp (C.gR * (hG - C.h.get i) / T) else pow (T / C.T.get i) (C.gR / a - 1.0))
+    (if a == (f64% 0.0) then exp (C.gR * (hG - C.h.get i) / T) else pow (T / C.T.get i) (C.gR / a - (f64% 1.0)))
 
 /-- Julia `gravity(h, W, U)` (`Geophysics.jl:633-639`): inverse-square below
 `0.007·radius(W)`, `gravitygeodetic` above. -/
@@ -345,7 +345,7 @@ def gravity (h : Float) : Float :=
     C.g * (C.r * C.r) / (rh * rh)
   else
     let ha := h / C.semimajor
-    C.g * ((1.0 - C.slope * ha) + 3.0 * (ha * ha))
+    C.g * (((f64% 1.0) - C.slope * ha) + (f64% 3.0) * (ha * ha))
 
 /-- Julia `altgeopotent(h, W, U) = (h/altabs(h, W, U))*radius(W, U)`
 (`Geophysics.jl:617`): geopotential altitude of a geometric altitude. -/
@@ -366,17 +366,17 @@ def opAt (o : Op) (hG : Float) (i : Fin n) : Float :=
   | .pressure => C.pressureT hG T i
   | .density => C.densityT hG T i
   | .specificweight => C.densityT hG T i * C.gravity hG
-  | .specificvolume => 1.0 / C.densityT hG T i
+  | .specificvolume => (f64% 1.0) / C.densityT hG T i
   | .specificimpedance => C.densityT hG T i * F.sonicspeedU U T
   | .thermaldiffusivity => F.thermalconductivityU U T / F.heatpressureU U T / C.densityT hG T i
   | .intensity =>
     let a := C.a.get i
     let p := C.p.get i
-    let v := if a == 0.0 then exp (C.gR * (hG - C.h.get i) / T)
+    let v := if a == (f64% 0.0) then exp (C.gR * (hG - C.h.get i) / T)
       else
         let t := T / C.T.get i
         let gRa := C.gR / a
-        pow t (2.0 * gRa) / pow t (gRa - 1.0)
+        pow t ((f64% 2.0) * gRa) / pow t (gRa - (f64% 1.0))
     p * p / C.rho.get i * v / F.sonicspeedU U T
   | .heatcapacity => F.heatpressureU U T * C.densityT hG T i
   | .kinematic => F.viscosityU U T / C.densityT hG T i
@@ -421,10 +421,10 @@ def build (D : WeatherData n) (U : Sys) : Column n :=
   let cP := (factor .pressure S U).toFloat
   let cR := (factor .density S U).toFloat
   let toW :=
-    if S == U then 1.0
+    if S == U then (f64% 1.0)
     else
       let q := factor .length S U
-      if q.v.isOne then 1.0 else q.inv.toFloat
+      if q.v.isOne then (f64% 1.0) else q.inv.toFloat
   let g := P.gravity D.phi U
   let R := D.fluid.gasconstant U
   let core : Column n :=
@@ -432,10 +432,10 @@ def build (D : WeatherData n) (U : Sys) : Column n :=
       T := D.T.map (· * cT), a := D.atm.a.map (· * cA), h := D.atm.h.map (· * cH)
       p := D.p.map (· * cP), rho := D.rho.map (· * cR), hW := D.atm.h, pos := D.atm.pos
       toW := toW, g := g, R := R, gR := -g / R
-      r := P.radiusgeodetic D.phi U, rSwitch := 0.007 * P.radiusgeodetic D.phi S
+      r := P.radiusgeodetic D.phi U, rSwitch := (f64% 0.007) * P.radiusgeodetic D.phi S
       semimajor := P.semimajor U, slope := P.geodeticSlope D.phi
       Tc := D.Tc, ha := D.ha, fluid := D.fluid, sea := .empty }
-  { core with sea := Op.all.foldl (fun acc o => acc.push (core.eval o 0.0)) .empty }
+  { core with sea := Op.all.foldl (fun acc o => acc.push (core.eval o (f64% 0.0))) .empty }
 
 end Column
 
@@ -533,7 +533,7 @@ def altgeopotentFrom (h : Float) (U S : Sys) : Float :=
 /-- Julia `altgeometric(hG, W, U) = r/(r/hG - 1)` (`Geophysics.jl:625`). -/
 def altgeometric (hG : Float) (U : Sys := W.units) : Float :=
   let r := W.radius U
-  r / (r / hG - 1.0)
+  r / (r / hG - (f64% 1.0))
 /-- Julia `altgeometric(hG, W, U, S) = altgeometric(hG*length(S, U), W, U)`. -/
 def altgeometricFrom (hG : Float) (U S : Sys) : Float :=
   W.altgeometric (hG * (factor .length S U).toFloat) U
@@ -549,7 +549,7 @@ def geopotential (h : Float) (U : Sys := W.units) : Float := (W.column U).geopot
 def geopotentialFrom (h : Float) (U S : Sys) : Float :=
   W.geopotential (h * (factor .length S U).toFloat) U
 /-- Julia `geopotential(W, U = Metric) = geopotential(0, W, U)`. -/
-def geopotentialSea (U : Sys := .Metric) : Float := W.geopotential 0.0 U
+def geopotentialSea (U : Sys := .Metric) : Float := W.geopotential (f64% 0.0) U
 
 /-- Julia `op(hG, i, W, U)`: operation `o` at geopotential altitude `hG` in layer `i`. -/
 def opAt (o : Op) (hG : Float) (i : Fin n) (U : Sys := W.units) : Float :=
