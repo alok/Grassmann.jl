@@ -123,6 +123,13 @@ instance instArrowsGrid [LinearFiber F] {b : GridBundle N P G} : MakiePlot .arro
 
 end Arrows
 
+/-- Julia `arrows(t::TensorField{…,<:SimplexBundle}) = arrows(Point.(↓(Manifold(base(t))).(points(t))), Point.(fiber(t)))`
+(`MakieExt.jl:596-597`): arrows from the Euclidean mesh vertices along the fibers. -/
+instance instArrowsSimplex {n : Nat} {P G F : Type} [Inhabited G] [FlatFiber P] [FlatFiber F] {b : SimplexBundle n P G} :
+    MakiePlot .arrows (TensorField b F) where
+  plot c t a := drawArrowsDim c (dimOfWidth (FlatFiber.width F)) (submeshPoints b) (Field.fiberPoints t) a
+  dim _ := dimOfWidth (FlatFiber.width F)
+
 /-! ## Arrows along an embedding: `arrows(M, t)`, `scaledarrows`, `arrowsbundle` -/
 
 section Embedded

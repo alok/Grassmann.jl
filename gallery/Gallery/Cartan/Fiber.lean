@@ -128,8 +128,7 @@ def hopf := Parameter.hopfDefault.map stereohopf
 
 /-- Julia `alteration!(hs, wireframe, wireframe!)`: the seven leaves `leaf(hs, i, 1)` as
 wireframes on one axis. -/
-def hopfCanvas : Canvas :=
-  (List.range 7).foldl (fun c i => c.wireframe (hopf.leafAt i 0)) (Canvas.fresh 3)
+def hopfCanvas : Canvas := overlay3 .wireframe .alteration (Canvas.fresh 3) hopf
 
 /-! ## C17: a tangent-space streamplot on the torus -/
 

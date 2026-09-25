@@ -199,19 +199,33 @@ instance instWireframeGridBundle : MakiePlot .wireframe (GridBundle 2 P G) where
 
 variable {n : Nat} {P : Type} [FlatFiber P]
 
+/-- The segments between the Euclidean end points (Julia `pointpair.(…, ↓(Manifold(e)))`) of
+2-vertex elements (full vertex ids). -/
+def edgeSegments (m : SimplexBundle n P G) (es : Array (Vector Nat 2)) : Pts3 :=
+  let pos := cloudPoints m
+  let pt (v : Nat) : Vec3 := pos.get! (v - 1)
+  let (xs, ys, zs) := es.foldl (init := (FloatArray.empty, FloatArray.empty, FloatArray.empty))
+    fun (xs, ys, zs) e =>
+      let p := pt e[0]
+      let q := pt e[1]
+      ((xs.push p.x).push q.x, (ys.push p.y).push q.y, (zs.push p.z).push q.z)
+  Pts3.ofArrays xs ys zs
+
+/-- The edges of a simplex mesh: its elements when they are edges (`sdims = 2`), else
+`edges(e)` (MeshTopology `edges`). -/
+def meshEdges (m : SimplexBundle n P G) : Array (Vector Nat 2) :=
+  if h : n = 2 then (h ▸ m.top).topology else m.top.edges.topology
+
 /-- Julia `wireframe(t::SimplexBundle) = linesegments(edges(t))` (`MakieExt.jl:810`, `:799-806`):
 the segments between the (Euclidean) end points of every mesh edge. -/
 instance instWireframeSimplex : MakiePlot .wireframe (SimplexBundle n P G) where
-  plot c m a :=
-    let pos := cloudPoints m
-    let es := m.top.edges.topology
-    let pt (v : Nat) : Vec3 := pos.get! (v - 1)
-    let (xs, ys, zs) := es.foldl (init := (FloatArray.empty, FloatArray.empty, FloatArray.empty))
-      fun (xs, ys, zs) e =>
-        let p := pt e[0]
-        let q := pt e[1]
-        ((xs.push p.x).push q.x, (ys.push p.y).push q.y, (zs.push p.z).push q.z)
-    c.drawSegments (Pts3.ofArrays xs ys zs) a.color a
+  plot c m a := c.drawSegments (edgeSegments m m.top.edges.topology) a.color a
+  dim _ := dimOfWidth (FlatFiber.width P - 1)
+
+/-- Julia `linesegments(e::SimplexBundle)` (`MakieExt.jl:799-802`): the edge elements as
+segments between their Euclidean end points, or `linesegments(edges(e))` for higher simplices. -/
+instance instSegmentsSimplex : MakiePlot .linesegments (SimplexBundle n P G) where
+  plot c m a := c.drawSegments (edgeSegments m (meshEdges m)) a.color a
   dim _ := dimOfWidth (FlatFiber.width P - 1)
 
 end Wireframe

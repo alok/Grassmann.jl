@@ -7,3 +7,4 @@ import GrassmannPlot.Surfaces
 import GrassmannPlot.Arrows
 import GrassmannPlot.Stream
 import GrassmannPlot.Volume
+import GrassmannPlot.Animate
