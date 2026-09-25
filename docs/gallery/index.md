@@ -3,9 +3,12 @@
 Every figure of the Julia ecosystem that the Lean port can compute today, rendered with [LeanPlot](https://github.com/alok/LeanPlot) (left) next to the Julia/CairoMakie original (right, same data, same figure size). Regenerate with
 
 ```
-cd gallery && lake exe gallery --docs            # Lean renders, data checks, this page
 julia --startup-file=no --project=oracle oracle/gallery/run_all.jl   # Julia renders and data dumps
+cd gallery && lake exe gallery --docs   # Lean renders (gallery/out/*.png, *.svg), data checks, this page
+cd gallery && lake test                 # the data checks alone
 ```
+
+`gallery/` is a Lake package of its own (it requires the root package and LeanPlot `f141f59`); both sides render at one pixel per unit of the same figure size.
 
 The data column compares the numbers behind each plot with the Julia dump (`oracle/gallery/data/<name>.json`): iteration counts of the fractals, curve samples, streamlines, graph edges and error curves. Images are compared by eye (DESIGN.md §0: plot data numerically, images visually).
 
@@ -85,5 +88,10 @@ From the ranked inventory in `docs/port-notes/plot-inventory.md` §6-§7.
 | W1–W4 | NACA airfoils, double arc, wing surface, Rakich C-mesh (FlowGeometry) | FlowGeometry port |
 | D1 | Tamari associahedron coloured by grove sums (Dendriform README) | external gist, not in the repositories |
 | G10 | `vandermonde` terminal plot (`ext/UnicodePlotsExt.jl`) | UnicodePlots-style terminal backend (API only, no documented call) |
+
+## Reproducible now, not yet in the gallery
+
+* The Fatou wiki gallery (`docs/port-notes/fatou.md` §6.4: about 40 Newton, Julia-set and orbit images with ColorSchemes/PyPlot colormaps) and the 176² default-keyword sets: the Fatou port computes all of them (`Tests/Fatou/Catalog.lean`).
+* The `raster` point-set rasterization of ColorTypesExt (`plot-inventory.md` §4.10) has no documented figure.
 
 Videos (21 YouTube talks) and LaTeX formula images (Fatou basins, Dendriform) are out of scope (`plot-inventory.md` §1).

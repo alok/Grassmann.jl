@@ -68,8 +68,11 @@ def render (root : System.FilePath) (rows : Array (Entry × Array Check × Strin
   s := s ++ "Every figure of the Julia ecosystem that the Lean port can compute today, rendered with " ++
     "[LeanPlot](https://github.com/alok/LeanPlot) (left) next to the Julia/CairoMakie original " ++
     "(right, same data, same figure size). Regenerate with\n\n" ++
-    "```\ncd gallery && lake exe gallery --docs            # Lean renders, data checks, this page\n" ++
-    "julia --startup-file=no --project=oracle oracle/gallery/run_all.jl   # Julia renders and data dumps\n```\n\n" ++
+    "```\njulia --startup-file=no --project=oracle oracle/gallery/run_all.jl   # Julia renders and data dumps\n" ++
+    "cd gallery && lake exe gallery --docs   # Lean renders (gallery/out/*.png, *.svg), data checks, this page\n" ++
+    "cd gallery && lake test                 # the data checks alone\n```\n\n" ++
+    "`gallery/` is a Lake package of its own (it requires the root package and LeanPlot " ++
+    "`f141f59`); both sides render at one pixel per unit of the same figure size.\n\n" ++
     "The data column compares the numbers behind each plot with the Julia dump " ++
     "(`oracle/gallery/data/<name>.json`): iteration counts of the fractals, curve samples, " ++
     "streamlines, graph edges and error curves. Images are compared by eye (DESIGN.md §0: " ++
@@ -92,6 +95,12 @@ def render (root : System.FilePath) (rows : Array (Entry × Array Check × Strin
     "| id | figure | waits for |\n|---|---|---|\n"
   for p in pending do
     s := s ++ s!"| {p.id} | {cell p.what} | {cell p.needs} |\n"
+  s := s ++ "\n## Reproducible now, not yet in the gallery\n\n" ++
+    "* The Fatou wiki gallery (`docs/port-notes/fatou.md` §6.4: about 40 Newton, Julia-set and orbit " ++
+    "images with ColorSchemes/PyPlot colormaps) and the 176² default-keyword sets: the Fatou port " ++
+    "computes all of them (`Tests/Fatou/Catalog.lean`).\n" ++
+    "* The `raster` point-set rasterization of ColorTypesExt (`plot-inventory.md` §4.10) has no " ++
+    "documented figure.\n"
   s := s ++ "\nVideos (21 YouTube talks) and LaTeX formula images (Fatou basins, Dendriform) are " ++
     "out of scope (`plot-inventory.md` §1).\n"
   return s
