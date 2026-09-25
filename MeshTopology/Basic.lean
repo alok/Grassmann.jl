@@ -209,13 +209,15 @@ def verticesOf (ids : Array Nat) : IdxVec := Id.run do
 
 /-- Julia `verticesinv(n, ind)` (MT:444-451): the inverse of the vertex list `ind` as a
 length-`n` vector (`out[ind[k]] = k`, `0` elsewhere). `OneTo` inputs pass through unchanged, as
-does everything when `isc` (the topology is a cover). -/
+does everything when `isc` (the topology is a cover). Ids outside `1..n` (a `BoundsError` in
+Julia) are skipped. -/
 def verticesInv (n : Nat) (ind : IdxVec) (isc : Bool := false) : IdxVec :=
   if isc then ind else
   match ind with
   | .oneTo _ => ind
   | .arr a => .arr <| (a.foldl (fun (acc : Array Nat × Nat) v =>
-      (acc.1.set! (v - 1) (acc.2 + 1), acc.2 + 1)) (Array.replicate n 0, 0)).1
+      (if 0 < v && v ≤ n then acc.1.set! (v - 1) (acc.2 + 1) else acc.1, acc.2 + 1))
+      (Array.replicate n 0, 0)).1
 
 /-! ## Column-major indexing -/
 

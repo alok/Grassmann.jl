@@ -5,6 +5,7 @@ import MeshTopology.Grid
 import MeshTopology.Sparse
 import MeshTopology.Simplex
 import MeshTopology.Element
+import MeshTopology.Lagrange
 
 /-!
 # MeshTopology
