@@ -15,12 +15,14 @@ with its module and read as a plain global.
 
 `f64! x` and `f32! x` therefore decode the literal while elaborating (with the same
 `Float.ofScientific`/`Float32.ofScientific`, so the value is identical) and elaborate to a
-module-level constant `M._f64.x<bits>` (`M` the current module), declared on first use and holding
+module-level constant `JuliaBase.FloatLit.lit.M.f64.x<bits>` (`M` the current module, so that two
+modules never declare the same name), declared on first use and holding
 `Float.ofBits <bits>` (resp. `Float32.ofBits`). They also accept natural-number literals
 (`f64! 2` is `2.0`) and a leading minus sign (`f64! -0.5`; write that rather than `-f64! 0.5`,
 whose negation would again be a closed term). Julia's kernels (`JuliaBase.Math`,
 `JuliaBase.Trig`, `JuliaBase.Hyperbolic`) and every hot path of the port write their constants
-this way; see `docs/PERF.md` for the measured effect. This is the port's one literal macro (Geophysics' former `f64%` is gone).
+this way; see `docs/PERF.md` for the measured effect. This is the port's one literal macro
+(Geophysics' former `f64%` is gone).
 -/
 
 open Lean Elab Term Meta
@@ -46,10 +48,12 @@ def literal? (x : Syntax) : Option (Nat × Bool × Nat) :=
 /-- Hexadecimal digits of a natural number (lowercase, at least one digit). -/
 def hex (n : Nat) : String := String.ofList (Nat.toDigits 16 n)
 
-/-- The module-level constant `M.«_f64».«x<bits>»` holding `ofBits bits`, declared and compiled on
-first use in the current module. -/
+/-- The module-level constant `JuliaBase.FloatLit.lit.<module>.<tag>.x<bits>` holding
+`ofBits bits`, declared and compiled on first use in the current module (outside every namespace
+of the module itself, which may be a structure's). -/
 def litConst (tag : String) (ty ofBits : Name) (bits : Expr) (bitsNat : Nat) : TermElabM Expr := do
-  let name := (← getMainModule) ++ Name.mkSimple ("_" ++ tag) ++ Name.mkSimple ("x" ++ hex bitsNat)
+  let name := `JuliaBase.FloatLit.lit ++ (← getMainModule) ++ Name.mkSimple tag ++
+    Name.mkSimple ("x" ++ hex bitsNat)
   unless (← getEnv).contains name do
     let decl := Declaration.defnDecl {
       name, levelParams := [], type := mkConst ty, value := mkApp (mkConst ofBits) bits,
