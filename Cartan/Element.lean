@@ -474,6 +474,62 @@ def submesh (m : SimplexBundle n (HPoint V) G) : Array (Array Float) :=
 
 end MeshData
 
+/-! ### Crouzeix-Raviart interpolation (`element.jl:561-590`) -/
+
+section CR
+
+variable {V : TensorBundle} {G : Type}
+
+/-- Julia `invmap(t, v)`: the local index (0-based) of vertex `v` in the triangle `t` (`2` when
+it is not among the first two). -/
+@[inline] def invmap (t : Vector Nat 3) (v : Nat) : Nat := if v == t[0] then 0 else if v == t[1] then 1 else 2
+
+/-- Julia `findmissing(n)`: the local index (0-based) of a triangle missing from the pair `n`. -/
+@[inline] def findmissing (a b : Nat) : Nat :=
+  if a != 0 && b != 0 then 0 else if a != 1 && b != 1 then 1 else 2
+
+/-- Julia `interpCR(pt, dt, ed, m)` (`element.jl:568-588`): the piecewise-linear discontinuous
+field whose value at the midpoint of every edge of every triangle is the Crouzeix-Raviart
+degree of freedom `m[e]` of that edge (1-based edge ids of `ed`; `ei` gives each triangle's
+three edges): each edge adds `m[e]` at its two endpoints and subtracts it at the opposite vertex,
+node by node of the discontinuous topology `dt`. -/
+def interpCRWith (pt : SimplexBundle 3 (HPoint V) G) (dt : DiscontinuousTopology 3)
+    (ed : SimplexTopology 2) (ei : SimplexTopology 3) (m : FloatArray) :
+    TensorField (DiscontinuousBundle.mk pt.cloud dt) Float :=
+  let b := (List.range dt.elements).foldl (fun b k =>
+    let dk := dt.get (k + 1)
+    let tk := pt.top.get (k + 1)
+    let nk := ei.get (k + 1)
+    (List.range 3).foldl (fun b j =>
+      let e := ed.get nk[j]!
+      let i0 := invmap tk e[0]
+      let i1 := invmap tk e[1]
+      let mj := m.get! (nk[j]! - 1)
+      let b := b.set! (dk[i0]! - 1) (b.get! (dk[i0]! - 1) + mj)
+      let b := b.set! (dk[i1]! - 1) (b.get! (dk[i1]! - 1) + mj)
+      let o := dk[findmissing i0 i1]! - 1
+      b.set! o (b.get! o - mj)) b) (Flat.zeros dt.totalNodes)
+  TensorField.ofFn _ fun i => b.get! i
+
+/-- Julia `interpCR(pt, m)` (`element.jl:566-567`): `interpCRWith` over the edges of `pt` and its
+discontinuous topology; `m` holds one value per edge of `edges(pt)`. -/
+def interpCR (pt : SimplexBundle 3 (HPoint V) G) (m : FloatArray) :
+    TensorField pt.discontinuous Float :=
+  let ed := pt.top.edges
+  interpCRWith pt pt.top.discontinuous ed (pt.top.edgesIndicesWith ed) m
+
+/-- Julia `interpCR(pt, crfun)` (`element.jl:561-565`): the degrees of freedom `crfun` at the edge
+midpoints (the points of `edgesindices(pt, FaceBundle(edges(pt)))`). -/
+def interpCRFn (pt : SimplexBundle 3 (HPoint V) G) (f : HPoint V → Float) :
+    TensorField pt.discontinuous Float :=
+  let ed := pt.top.edges
+  let mid (e : Nat) : HPoint V :=
+    let v := ed.get (e + 1)
+    Chain.ofFn fun c => (pt.coord v[0] c.1 + pt.coord v[1] c.1) / 2
+  interpCR pt ⟨(Array.range ed.elements).map fun e => f (mid e)⟩
+
+end CR
+
 end SimplexBundle
 
 /-! ## Face fields: norms and markers (§4.8) -/

@@ -107,6 +107,12 @@ def restrict {b : SimplexBundle n P G} (t : TensorField b F) (top : SimplexTopol
     if j == 0 then FlatFiber.read (buildFlat (F := Float) (FlatFiber.width F) fun _ => 0) 0
     else t.get (j - 1)
 
+/-- Julia `discontinuous(t::SimplexMap)` (`Cartan.jl:604-605`): the field over the discontinuous
+bundle of its base, node `i` carrying the fiber of its vertex (`view(fiber(t), vertices(m))`). -/
+def discontinuous {b : SimplexBundle n P G} (t : TensorField b F) : TensorField b.discontinuous F :=
+  let vinv := b.top.vinv
+  ofFn _ fun i => t.get (vinv.get (b.discontinuous.image i - 1) - 1)
+
 /-- Julia `discontinuous(t::SimplexMap)` (`Cartan.jl:604-605`) as a disconnected mesh: every element
 gets its own copies of its vertices (`view(fiber(t), vertices(m))`, the per-element vertex
 values), and the element `e` uses the nodes `N e, …, N e + N - 1`. -/

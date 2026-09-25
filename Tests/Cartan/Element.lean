@@ -90,6 +90,55 @@ def runMeshData : TestM Unit := do
   checkBundle "meshdata initmeshdata3 e" e3 (← jField i3 "e")
   checkEq "meshdata submesh t3" (bits t3.submesh) (← matOf (← jField i3 "submesh_t"))
 
+/-- Julia `gridmesh(a, b)` of `discontinuous.jl`: the unit square in `2ab` triangles. -/
+def gridMesh (a b : Nat) : SimplexBundle 3 (HPoint ℝ3) :=
+  let pts : Array (HPoint ℝ3) := (Array.range ((a + 1) * (b + 1))).map fun k =>
+    let i := k % (a + 1)
+    let j := k / (a + 1)
+    Chain.ofFn fun c => if c.1 = 0 then 1 else if c.1 = 1 then Float.ofNat i / Float.ofNat a
+      else Float.ofNat j / Float.ofNat b
+  let node (i j : Nat) : Nat := 1 + i + (a + 1) * j
+  let els := (Array.range (a * b)).flatMap fun q =>
+    let i := q % a
+    let j := q / a
+    #[#v[node i j, node (i + 1) j, node (i + 1) (j + 1)], #v[node i j, node (i + 1) (j + 1), node i (j + 1)]]
+  SimplexBundle.ofPoints pts els
+
+/-- Crouzeix-Raviart interpolation and discontinuous fields on one mesh. -/
+def runDiscCase (name : String) (pt : SimplexBundle 3 (HPoint ℝ3)) (c : Json) : TestM Unit := do
+  let lists (j : Json) : TestM (List (List Nat)) := do
+    return (← (← jArr j).mapM jNats).toList.map (·.toList)
+  let ed := pt.top.edges
+  let ei := pt.top.edgesIndicesWith ed
+  checkEq s!"cr {name} edges" (ed.topology.toList.map (·.toList)) (← lists (← jField c "edges"))
+  checkEq s!"cr {name} edgesindices" (ei.topology.toList.map (·.toList))
+    (← lists (← jField c "edgesindices"))
+  let vals ← gFloats (← jField c "crvalues")
+  let r := SimplexBundle.interpCR pt vals
+  let jr ← jField c "interpCR"
+  checkFloats s!"cr {name} interpCR" r.data (← gFloats (← jField jr "fiber"))
+  checkEq s!"cr {name} interpCR elements" (pt.discontinuous.top.topology.toList.map (·.toList))
+    (← lists (← jField jr "elements"))
+  checkEq s!"cr {name} interpCR vertices" pt.discontinuous.top.verts.toArray.toList
+    (← jNats (← jField jr "vertices")).toList
+  checkEq s!"cr {name} interpCR nodes" pt.discontinuous.top.totalNodes (← jNat (← jField jr "nodes"))
+  let t : TensorField pt Float := TensorField.ofFn pt fun k => Float.ofNat ((k + 1) * (k + 1)) / 7
+  let d := t.discontinuous
+  let jd ← jField c "discontinuous"
+  checkFloats s!"cr {name} discontinuous" d.data (← gFloats (← jField jd "fiber"))
+  checkFloats s!"cr {name} discontinuous points"
+    (flatChains ((Array.range (card pt.discontinuous)).map (Coordinates.point pt.discontinuous)))
+    (← gFloats (← jField jd "points"))
+
+/-- The discontinuous-bundle goldens (`discontinuous.json`). -/
+def runDiscontinuous : TestM Unit := do
+  let g ← load "element/discontinuous"
+  let pts : Array (HPoint ℝ3) := #[#[0, 0], #[1, 0], #[1, 1], #[0, 1], #[0.5, 0.5]].map fun x =>
+    Chain.ofFn fun c => if c.1 = 0 then 1 else x[c.1 - 1]!
+  let square := SimplexBundle.ofPoints pts #[#v[1, 2, 5], #v[2, 3, 5], #v[3, 4, 5], #v[4, 1, 5]]
+  runDiscCase "square" square (← jField g "square")
+  runDiscCase "grid" (gridMesh 3 2) (← jField g "grid")
+
 /-- The checks of one mesh. -/
 def runCase (n : Nat) (V : TensorBundle) (name : String) (c : Json) (flipB3 : Bool := false) :
     TestM Unit := do
@@ -160,6 +209,7 @@ def runCase (n : Nat) (V : TensorBundle) (name : String) (c : Json) (flipB3 : Bo
 /-- Run the finite-element checks. -/
 def run : TestM Unit := do
   runMeshData
+  runDiscontinuous
   let g ← load "element/fem"
   runCase 3 ℝ3 "two" (← jField g "two")
   runCase 3 ℝ3 "grid" (← jField g "grid")

@@ -374,6 +374,32 @@ instance [FlatFiber P] [Inhabited G] : Coordinates (PointCloud P G) P G where
 
 end PointCloud
 
+/-- Julia `DiscontinuousBundle` = `SimplexBundle{N,C,PA,<:DiscontinuousTopology}` (`fiber.jl:534`):
+a point cloud with a `DiscontinuousTopology`, whose points are the discontinuous nodes (`N` per
+element), node `i` sitting at the cloud point `getimage(t, i)` (Julia `vertices(t)`). Fields over
+it may jump across element boundaries (Crouzeix-Raviart interpolants, DG solutions). -/
+structure DiscontinuousBundle (n : Nat) (P : Type) (G : Type := Induced) where
+  /-- Julia `fullcoordinates(m)`. -/
+  cloud : PointCloud P G
+  /-- Julia `immersion(m)`. -/
+  top : DiscontinuousTopology n
+
+namespace DiscontinuousBundle
+
+variable {n : Nat} {P G : Type}
+
+/-- The cloud point (1-based) of node `i` (0-based). -/
+@[inline] def image (m : DiscontinuousBundle n P G) (i : Nat) : Nat := m.top.getImage (i + 1)
+
+instance : FrameBundle (DiscontinuousBundle n P G) := ⟨fun m => m.top.nodes⟩
+
+/-- Julia `m[i]`: the coordinate of the cloud point of node `i`. -/
+instance [FlatFiber P] [Inhabited G] : Coordinates (DiscontinuousBundle n P G) P G where
+  point m i := m.cloud.get (m.image i - 1)
+  metricAt m i := m.cloud.metric.get (m.image i - 1)
+
+end DiscontinuousBundle
+
 /-- Julia `SimplexBundle{N}` (`fiber.jl:572-667`): a point cloud with a `SimplexTopology` of
 `n`-vertex elements; its points (and the fields over it) are the topology's vertices (Julia
 `size(m) = size(vertices(m))`, the whole cloud when the topology covers it). Julia's type
@@ -423,7 +449,15 @@ def refine (m : SimplexBundle n P G) : SimplexBundle n P G := ⟨m.cloud, m.top.
 def elementPoints [FlatFiber P] (m : SimplexBundle n P G) (e : Nat) : Vector P n :=
   (m.top.get (e + 1)).map fun v => m.cloud.get (v - 1)
 
+/-- Julia `discontinuous(m)` (`Cartan.jl:603`, MeshTopology's `discontinuous`): the same points
+with the discontinuous topology of `m` (every element its own nodes). -/
+def discontinuous (m : SimplexBundle n P G) : DiscontinuousBundle n P G := ⟨m.cloud, m.top.discontinuous⟩
+
 end SimplexBundle
+
+/-- Julia `continuous(m)`: the same points with the continuous topology. -/
+def DiscontinuousBundle.continuous {n : Nat} {P G : Type} (m : DiscontinuousBundle n P G) :
+    SimplexBundle n P G := ⟨m.cloud, m.top.t⟩
 
 /-- Julia `FaceBundle{N}` (`fiber.jl:686-742`): the same data as a `SimplexBundle`, but its
 points are the elements, located at their centroids. -/
