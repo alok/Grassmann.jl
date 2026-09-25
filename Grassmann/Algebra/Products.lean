@@ -177,43 +177,42 @@ instance (priority := low) {X' Y' Z' Z : Type} [DenseLayout X V α] [ComplementR
 
 section Sandwich
 
+/-- The core of `x ⊘ R = (~R) ⟑ x ⟑ involute(R)` on dense operands, restricted to
+layout `lc` (`lt` holds `(~R) ⟑ x`): two kernel calls, `(~R) ⟑ x` as one
+`reverseMul` plan and the second product projected. When `R`'s parity is static
+(`rOdd`) and the space has no tangent generators, `involute(R) = ±R` and the sign
+is applied to the (smaller) result instead of evaluating `involute`. -/
+@[inline] def sandwichCore (lr lx lt lc : Layout) (rOdd : Option Bool) (r : Values α (lr.size V.n))
+    (x : Values α (lx.size V.n)) : Values α (lc.size V.n) :=
+  let t := Kernels.bin .reverseMul lr lx lt r x
+  match rOdd with
+  | some odd =>
+    if V.diffvars == 0 then
+      let res := Kernels.binProj .mul lt lr lc t r
+      if odd then -res else res
+    else Kernels.binProj .mul lt lr lc t (Kernels.un .involute lr lr r)
+  | none => Kernels.binProj .mul lt lr lc t (Kernels.un .involute lr lr r)
+
 /-- `x ⊘ R = (~R) ⟑ x ⟑ involute(R)` projected onto the grade of `x`. -/
 instance [AsChain X V G α] [AsChain Y V H α] : Sandwich X Y (Chain V G α) :=
-  ⟨fun x R =>
-    let r := (AsChain.toChain R).v
-    let lt := halfLayout ((H + G) % 2 == 1)
-    let t := Kernels.bin .mul (.chain H) (.chain G) lt (Kernels.un .reverse (.chain H) (.chain H) r)
-      (AsChain.toChain x).v
-    ⟨Kernels.binProj .mul lt (.chain H) (.chain G) t (Kernels.un .involute (.chain H) (.chain H) r)⟩⟩
+  ⟨fun x R => ⟨sandwichCore (.chain H) (.chain G) (halfLayout ((H + G) % 2 == 1)) (.chain G)
+    (some (H % 2 == 1)) (AsChain.toChain R).v (AsChain.toChain x).v⟩⟩
 
 instance [AsChain X V G α] : Sandwich X (Half V q α) (Chain V G α) :=
-  ⟨fun x R =>
-    let lq := halfLayout q
-    let lt := halfLayout (q ^^ (G % 2 == 1))
-    let t := Kernels.bin .mul lq (.chain G) lt (Kernels.un .reverse lq lq R.v) (AsChain.toChain x).v
-    ⟨Kernels.binProj .mul lt lq (.chain G) t (Kernels.un .involute lq lq R.v)⟩⟩
+  ⟨fun x R => ⟨sandwichCore (halfLayout q) (.chain G) (halfLayout (q ^^ (G % 2 == 1))) (.chain G)
+    (some q) R.v (AsChain.toChain x).v⟩⟩
 
 instance [AsChain Y V H α] : Sandwich (Half V p α) Y (Half V p α) :=
-  ⟨fun x R =>
-    let r := (AsChain.toChain R).v
-    let lt := halfLayout (p ^^ (H % 2 == 1))
-    let t := Kernels.bin .mul (.chain H) (halfLayout p) lt (Kernels.un .reverse (.chain H) (.chain H) r) x.v
-    ⟨Kernels.binProj .mul lt (.chain H) (halfLayout p) t
-      (Kernels.un .involute (.chain H) (.chain H) r)⟩⟩
+  ⟨fun x R => ⟨sandwichCore (.chain H) (halfLayout p) (halfLayout (p ^^ (H % 2 == 1))) (halfLayout p)
+    (some (H % 2 == 1)) (AsChain.toChain R).v x.v⟩⟩
 
 instance : Sandwich (Half V p α) (Half V q α) (Half V p α) :=
-  ⟨fun x R =>
-    let lq := halfLayout q
-    let lt := halfLayout (q ^^ p)
-    let t := Kernels.bin .mul lq (halfLayout p) lt (Kernels.un .reverse lq lq R.v) x.v
-    ⟨Kernels.binProj .mul lt lq (halfLayout p) t (Kernels.un .involute lq lq R.v)⟩⟩
+  ⟨fun x R => ⟨sandwichCore (halfLayout q) (halfLayout p) (halfLayout (q ^^ p)) (halfLayout p)
+    (some q) R.v x.v⟩⟩
 
 instance (priority := low) [DenseLayout X V α] [DenseLayout Y V α] : Sandwich X Y (Multivector V α) :=
-  ⟨fun x R =>
-    let ly := layoutOf Y
-    let r := DenseLayout.values R
-    let t := Kernels.bin .mul ly (layoutOf X) .full (Kernels.un .reverse ly ly r) (DenseLayout.values x)
-    ⟨Kernels.bin .mul .full ly .full t (Kernels.un .involute ly ly r)⟩⟩
+  ⟨fun x R => ⟨sandwichCore (layoutOf Y) (layoutOf X) .full .full none
+    (DenseLayout.values R) (DenseLayout.values x)⟩⟩
 
 /-- `R >>> x = R ⟑ x ⟑ clifford(R)` projected onto the grade of `x`
 (Julia `>>>`, `src/algebra.jl:351-385`). -/
@@ -286,10 +285,7 @@ instance : VersorKind (PseudoCouple V α) := ⟨false, fun z => popcount z.bits 
 
 /-- The full `(~R) ⟑ x ⟑ involute(R)` of dense operands. -/
 @[inline] def sandwichFull [DenseLayout X V α] [DenseLayout Y V α] (x : X) (R : Y) : Multivector V α :=
-  let ly := layoutOf Y
-  let r := DenseLayout.values R
-  let t := Kernels.bin .mul ly (layoutOf X) .full (Kernels.un .reverse ly ly r) (DenseLayout.values x)
-  ⟨Kernels.bin .mul .full ly .full t (Kernels.un .involute ly ly r)⟩
+  ⟨sandwichCore (layoutOf Y) (layoutOf X) .full .full none (DenseLayout.values R) (DenseLayout.values x)⟩
 
 /-- The full `R ⟑ x ⟑ clifford(R)` of dense operands. -/
 @[inline] def tsandwichFull [DenseLayout X V α] [DenseLayout Y V α] (R : Y) (x : X) : Multivector V α :=
