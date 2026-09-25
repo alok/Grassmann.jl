@@ -15,6 +15,10 @@ import Grassmann.Algebra.Products
 import Grassmann.Algebra.Norms
 import Grassmann.Notation
 import Grassmann.Basis
+import Grassmann.Dynamic
+import Grassmann.Composite
+import Grassmann.Forms
+import Grassmann.Spec
 
 /-!
 # Grassmann: ⟨Grassmann-Clifford-Hodge⟩ differential geometric algebra

@@ -94,11 +94,11 @@ variable {G : Nat} [Kernels V]
 
 /-- The chain's coefficients in layout `l` (`.even`/`.full` for an even `G`, `.odd`/`.full` for
 an odd one): the space's embedding kernel (the parity projection of the chain). -/
-@[inline] def embed (l : Layout) (c : Chain V G Float) : Values Float (l.size V.n) :=
+@[inline] def embedLayout (l : Layout) (c : Chain V G Float) : Values Float (l.size V.n) :=
   Kernels.un (if G % 2 == 0 then .even else .odd) (.chain G) l c.v
 
 /-- The chain as the even half (meaningful for even `G`). -/
-@[inline] def evenHalf (c : Chain V G Float) : Half V false Float := ⟨c.embed (halfLayout false)⟩
+@[inline] def evenHalf (c : Chain V G Float) : Half V false Float := ⟨c.embedLayout (halfLayout false)⟩
 
 /-- `a + x·c` in layout `l` (`G > 0`: the scalar slot is free). -/
 @[inline] def affine (l : Layout) (a x : Float) (c : Chain V G Float) : Values Float (l.size V.n) :=
@@ -112,7 +112,7 @@ an odd one): the space's embedding kernel (the parity projection of the chain). 
 @[inline] def mvAffine (a x : Float) (c : Chain V G Float) : Multivector V Float := ⟨affine .full a x c⟩
 
 /-- The chain as a multivector (the embedding kernel). -/
-@[inline] def embedMV (c : Chain V G Float) : Multivector V Float := ⟨c.embed .full⟩
+@[inline] def embedMV (c : Chain V G Float) : Multivector V Float := ⟨c.embedLayout .full⟩
 
 /-- The scalar `t⟑t` of a chain when it is structurally a scalar (no kernel): in a plain
 signature space the squares of vectors, pseudovectors, pseudoscalars and of every chain of a
