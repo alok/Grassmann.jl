@@ -28,7 +28,7 @@ bit for bit, whereas unfusing every `muladd` (the earlier FieldConstants port) m
 decimal literals of 17 digits are parsed through bignums at run time whenever the code generator
 fails to hoist them, which made `F64.log` cost about 3 µs. Integer plumbing is `Int64`/`UInt64`
 (never `Int`/`Nat` powers of two), and the tables are unboxed `FloatArray`s. What remains is the
-out-of-line `Float.toBits`/`ofBits` runtime calls; `docs/PERF.md` has the numbers (about 2.5×
+out-of-line `Float.toBits`/`ofBits` runtime calls; `docs/PERF.md` has the numbers (2.5-3.5×
 Julia's own kernels, 3-5× the platform `libm`).
 
 Julia throws a `DomainError` for `log` of a negative number and for a negative base with a
