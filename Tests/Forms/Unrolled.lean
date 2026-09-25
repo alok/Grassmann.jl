@@ -7,7 +7,8 @@ import Tests.Forms.Common
 **bit-identical** to the generic algorithms it was generated from (`detGeneric`,
 `invSquareGeneric`, `adjugateGeneric`, `solveGeneric`): for random `Float` operators of
 `n = 2 … 6` (including exact zeros, negative zeros and integers), every coefficient of
-`det`, `inv`, `adjugate` and `solve` is compared by its bits (NaNs identified). The Julia
+`det`, `inv`, `adjugate`, `solve`, `characteristic` and of the `5 × 5`, `6 × 6` products
+`A x`, `A B` (`Grassmann.Forms.UnrolledMat`) is compared by its bits (NaNs identified). The Julia
 goldens of `forms/exact` and `forms/float` then cover the generated forms too.
 -/
 
@@ -58,8 +59,13 @@ def check (n : Nat) (t : Tally) (seed : UInt64) : Tally := Id.run do
   t := t.ok (same T.det T.detGeneric) (w s!"det {T.det} vs {T.detGeneric}")
   t := t.ok (sameAll T.adjugate.mat.v.data T.adjugateGeneric.mat.v.data) (w "adjugate")
   t := t.ok (sameAll (T.solve v).v.data (T.solveGeneric v).v.data) (w "solve")
-  if n ≥ 5 then
+  if n ≥ 3 then
     t := t.ok (sameAll T.invSquare.mat.v.data T.invSquareGeneric.mat.v.data) (w "inv")
+    t := t.ok (sameAll T.characteristic.v.data T.characteristicGeneric.v.data) (w "characteristic")
+  if n ≥ 5 then
+    let U : Endomorphism V (.chain 1) Float := TensorOperator.ofFn fun i j => xs[i.1 * n + j.1]!
+    t := t.ok (sameAll (T.mat.mulVec v.v).data (T.mat.mulVecGeneric v.v).data) (w "A x")
+    t := t.ok (sameAll (T.mat.mul U.mat).v.data (T.mat.mulGeneric U.mat).v.data) (w "A B")
   return t
 
 /-- Run the suite. -/

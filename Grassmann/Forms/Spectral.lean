@@ -99,7 +99,7 @@ def rowMajor {W : TensorBundle} {ld lc : Layout} (X : TensorOperator V ld W lc F
 /-- Julia `characteristic(X)` (`forms.jl:1445-1462`): the monic characteristic
 polynomial's lower coefficients `(c₀, …, c_{n-1})`, by Julia's closed forms for
 `n ≤ 4` and `characteristicExact` beyond. -/
-@[specialize] def characteristic [Div α] (X : Endomorphism V (.chain 1) α) : Chain V 1 α :=
+@[specialize] def characteristicGeneric [Div α] (X : Endomorphism V (.chain 1) α) : Chain V 1 α :=
   let n := V.n
   let c := fun (l : List α) => (⟨Values.ofFn fun i => l[i.1]?.getD Coeff.zero⟩ : Chain V 1 α)
   if n = 1 then c [-X.entry 0 0]
@@ -118,6 +118,17 @@ polynomial's lower coefficients `(c₀, …, c_{n-1})`, by Julia's closed forms 
     let a1 := (a3 * (a32 - Coeff.ofInt 3 * trX2) + Coeff.ofInt 2 * (X2.comp X).tr) / Coeff.ofInt (-6)
     c [a0, a1, a2, -a3]
   else X.characteristicExact
+
+/-- Julia `characteristic(X)`: the generated straight-line forms for `3 ≤ n ≤ 6`
+(`Grassmann.Forms.Unrolled`, bit-identical to `characteristicGeneric`: the closed forms for
+`n ≤ 4`, the traces of the compounds beyond), `characteristicGeneric` otherwise. -/
+@[specialize] def characteristic [Div α] (X : Endomorphism V (.chain 1) α) : Chain V 1 α :=
+  let a := X.mat.v.data
+  if V.n = 3 then ⟨Mat.finish (Unrolled.characteristic3 a)⟩
+  else if V.n = 4 then ⟨Mat.finish (Unrolled.characteristic4 a)⟩
+  else if V.n = 5 then ⟨Mat.finish (Unrolled.characteristic5 a)⟩
+  else if V.n = 6 then ⟨Mat.finish (Unrolled.characteristic6 a)⟩
+  else X.characteristicGeneric
 
 /-- Julia `characteristic(X, m)` (`forms.jl:1464-1498`): the coefficient
 `c_{m-1}` (1-based `m`). -/

@@ -21,6 +21,7 @@ left. The loops are tail-recursive with explicit accumulators and are
 `Float` they compile to unboxed `FloatArray` code.
 -/
 import Grassmann.Types.Dims
+import Grassmann.Forms.UnrolledMat
 
 namespace Grassmann.Forms
 
@@ -260,8 +261,15 @@ the others added left to right). -/
     if r = 3 then finish (mulVec3 a xd)
     else if r = 2 then finish (mulVec2 a xd)
     else if r = 4 then finish (mulVec4 a xd)
+    else if r = 5 then finish (UnrolledMat.mulVec5 a xd)
+    else if r = 6 then finish (UnrolledMat.mulVec6 a xd)
     else finish (pushLoop (fun i => sdot0 id a xd r 1 c i 0) r 0 (Packed.mkEmpty r))
   else finish (pushLoop (fun i => sdot0 id a xd r 1 c i 0) r 0 (Packed.mkEmpty r))
+
+/-- `A x` by the strided dots (Julia's order), for any shape: the algorithm the unrolled
+forms are generated from. -/
+@[inline] def mulVecGeneric (A : Mat r c α) (x : Values α c) : Values α r :=
+  finish (pushLoop (fun i => sdot0 id A.v.data x.data r 1 c i 0) r 0 (Packed.mkEmpty r))
 
 /-- Row-vector times matrix, `out[j] = Σ_i f(x[i]) A[i,j]` (Julia
 `contraction(a::Chain, b::Chain{V,G,<:Chain})` = `value(a) ⋅ value(col_j)`,
@@ -280,8 +288,15 @@ the others added left to right). -/
     if r = 3 then ⟨finish (mul3 a b)⟩
     else if r = 2 then ⟨finish (mul2 a b)⟩
     else if r = 4 then ⟨finish (mul4 a b)⟩
+    else if r = 5 then ⟨finish (UnrolledMat.mul5 a b)⟩
+    else if r = 6 then ⟨finish (UnrolledMat.mul6 a b)⟩
     else ⟨finish (fillCols (fun i j => sdot0 id a b r 1 c i (j * c)) r k 0 (Packed.mkEmpty (r * k)))⟩
   else ⟨finish (fillCols (fun i j => sdot0 id a b r 1 c i (j * c)) r k 0 (Packed.mkEmpty (r * k)))⟩
+
+/-- `A B` by the strided dots (Julia's order), for any shapes: the algorithm the unrolled
+forms are generated from. -/
+@[inline] def mulGeneric (A : Mat r c α) (B : Mat c k α) : Mat r k α :=
+  ⟨finish (fillCols (fun i j => sdot0 id A.v.data B.v.data r 1 c i (j * c)) r k 0 (Packed.mkEmpty (r * k)))⟩
 
 /-- `Σᵢ xᵢ yᵢ` without conjugation, a left fold from the first product. -/
 @[inline] def dotPlain {n : Nat} (x y : Values α n) : α := sdot0 id x.data y.data 1 1 n 0 0
