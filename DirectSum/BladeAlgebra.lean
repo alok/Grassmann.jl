@@ -161,6 +161,26 @@ def mulDiag (a b : UInt64) : Rat × UInt64 :=
   let d := (a' ^^^ b') ||| q
   if a' &&& b' == 0 then (if V.parity a b then -1 else 1, d) else (V.parityinner a' b', d)
 
+/-- Sign skeleton of the diagonal geometric product for a *runtime* diagonal
+metric (Grassmann `mul_metric` / `wedgedot_metric`, grassmann-parity.md §4.5.4):
+`e_a e_b = (-1)^neg · Π_{i ∈ shared} gᵢ · e_bits`, where `neg` is the pure
+reordering sign (tangent bits excluded) and the metric enters only through the
+shared generators. Sign decisions are static; `gᵢ` is supplied at run time.
+Returns `none` when the tangent order vanishes the product. -/
+def mulSkeleton (a b : UInt64) : Option (Bool × UInt64 × UInt64) :=
+  if V.istangent && V.diffcheck a b then none else
+  let (a', b', q, _) := V.symmetricmask a b
+  some (reorderParity a' b', a' &&& b', (a' ^^^ b') ||| q)
+
+/-- Sign skeleton of the diagonal contraction `e_a ⋅ e_b` for a runtime diagonal
+metric: `(-1)^neg · Π_{i ∈ b} gᵢ · e_bits` (Julia `contraction_metric`), or
+`none` when it vanishes. -/
+def contractionSkeleton (a b : UInt64) : Option (Bool × UInt64 × UInt64) :=
+  let (a', b', q, _) := V.symmetricmask a b
+  if V.diffcheck a' b' then none else
+  let (p, c, t, _) := V.parityregressive a' (complement V.n b' V.diffvars) true
+  if t then some (p != parityrightRaw (sumIndices b') (popcount b'), b', c ||| q) else none
+
 /-! ### Chevalley product (any symmetric bilinear form) -/
 
 /-- `e_i ⌋ X` for generator `i` (0-based) under Gram matrix `g`. -/
