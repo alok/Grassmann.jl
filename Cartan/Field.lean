@@ -67,22 +67,10 @@ variable {M : Type} [FrameBundle M] {m : M} {F F' F'' : Type}
 
 /-! ## Construction -/
 
-/-- Write `f i, f (i+1), …, f (i+k-1)` at the offsets `off, off + w, …` (tail recursive). -/
-@[specialize] def fillLoop (f : Nat → F) : (k i off : Nat) → FloatArray → FloatArray
-  | 0, _, _, a => a
-  | k + 1, i, off, a => fillLoop f k (i + 1) (off + FlatFiber.width F) (FlatFiber.write a off (f i))
-
-@[simp] theorem size_fillLoop (f : Nat → F) : ∀ (k i off : Nat) (a : FloatArray),
-    (fillLoop f k i off a).size = a.size
-  | 0, _, _, _ => rfl
-  | k + 1, i, off, a => by rw [fillLoop, size_fillLoop f k (i + 1), FlatFiber.size_write]
-
 /-- The field `i ↦ f i` over `m` (`i` the 0-based linear index). All constructors reduce to it.
-The fibers are written into a preallocated buffer (`Cartan.Flat.zeros`, `FlatFiber.write`):
-no `FloatArray.push` per float. -/
+The fibers are written into a preallocated buffer (`buildFlat`). -/
 @[inline] def ofFn (m : M) (f : Nat → F) : TensorField m F :=
-  { data := fillLoop f (card m) 0 0 (Flat.zeros (FlatFiber.width F * card m)),
-    size_data := by rw [size_fillLoop, Flat.size_zeros] }
+  { data := buildFlat (card m) f, size_data := size_buildFlat _ _ }
 
 /-- Julia `TensorField(dom, x::Number)` (C12): the constant field. -/
 @[inline] def const (m : M) (x : F) : TensorField m F := ofFn m fun _ => x
@@ -215,7 +203,7 @@ theorem pointsData_eq (m : M) (f : P → F) : pointsData m f =
 /-- `tabulatePoint` is `ofFn` of the points. -/
 theorem tabulatePoint_eq (m : M) (f : P → F) :
     tabulatePoint m f = ofFn m fun i => f (Coordinates.point m i) := by
-  simp only [tabulatePoint, ofFn, pointsData_eq]
+  simp only [tabulatePoint, ofFn, pointsData_eq, buildFlat]
 
 /-- Julia `TensorField(dom)` for a frame bundle (C13 → C5): the identity field, whose fibers are
 the base points. -/
@@ -295,10 +283,19 @@ namespace TensorField
 
 variable {F : Type} [FlatFiber F]
 
+/-- The identity field of a 1-D real grid (C13), recording the range for Julia's lazy range
+arithmetic when the points are a range. The fibers are the grid's points, i.e. its materialized
+axis, which the field shares (no copy). -/
+def identity1 {G : Type} (b : GridBundle 1 Float G) : TensorField b Float :=
+  let a := b.space.axes[0]
+  let c := b.space.coords[0]
+  let r := if a.isRange then some a else none
+  if h : c.size = FlatFiber.width Float * card b then { data := c, size_data := h, range? := r }
+  else { ofFn b fun k => c.get! k with range? := r }
+
 /-- Julia `TensorField(r)` for a 1-D coordinate vector (C13): the identity field of an open
 interval with real points. Its fibers *are* the range (lazy in Julia), recorded in `range?`. -/
-def ofAxis (a : Axis) : TensorField (GridBundle.ofAxis a) Float :=
-  { ofFn (GridBundle.ofAxis a) a.get with range? := if a.isRange then some a else none }
+def ofAxis (a : Axis) : TensorField (GridBundle.ofAxis a) Float := identity1 (GridBundle.ofAxis a)
 
 /-- Julia `TensorField(r, fun)` for a 1-D vector (C10): `fun` sees the real points. -/
 @[inline] def ofAxisFn (a : Axis) (f : Float → F) : TensorField (GridBundle.ofAxis a) F :=
@@ -342,11 +339,6 @@ default `r = -2π:0.0001:2π`). Julia applies `vector` to each value; here `f` r
 @[inline] def curve (f : Float → F) (r : Axis := Axis.colon (-twoPiF) (f64! 0.0001) twoPiF) :
     TensorField (GridBundle.ofAxis r) F := ofAxisFn r f
 
-/-- The identity field of a 1-D real grid (C13), recording the range for Julia's lazy range
-arithmetic when the points are a range. -/
-def identity1 {G : Type} (b : GridBundle 1 Float G) : TensorField b Float :=
-  let a := b.space.axes[0]
-  { ofFn b a.get with range? := if a.isRange then some a else none }
 
 /-- Julia `TensorField(a::TensorField, b::TensorField)` (C6, `Cartan.jl:115`): a new 1-D grid whose
 points are the values of the real field `a`, carrying the fibers of `b` (the reparametrization

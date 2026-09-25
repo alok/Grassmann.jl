@@ -124,30 +124,23 @@ theorem read_buildLoop (f : Nat → F) (base : Nat) : ∀ (k i : Nat) (acc : Flo
     · exact read_buildLoop f base k (i + 1) _ j
         (by rw [FlatFiber.size_push, hs, Nat.succ_mul, Nat.add_assoc]) (by omega) (by omega)
 
-/-- The element `j < n` of `buildFlat n f` is `f j`. -/
-theorem read_buildFlat (n : Nat) (f : Nat → F) (j : Nat) (h : j < n) :
-    (FlatFiber.read (buildFlat n f) (j * FlatFiber.width F) : F) = f j := by
-  have := read_buildLoop f 0 n 0 (FloatArray.emptyWithCapacity (n * FlatFiber.width F)) j
-    (by simp [FloatArray.emptyWithCapacity, FloatArray.size]) (Nat.zero_le _) (by omega)
-  simpa [buildFlat] using this
-
 /-- Writing more fibers above an element leaves it unchanged. -/
 theorem read_fillLoop_below (f : Nat → F) : ∀ (k i off : Nat) (a : FloatArray) (off' : Nat),
     off' + FlatFiber.width F ≤ off →
-      (FlatFiber.read (TensorField.fillLoop f k i off a) off' : F) = FlatFiber.read a off'
+      (FlatFiber.read (fillLoop f k i off a) off' : F) = FlatFiber.read a off'
   | 0, _, _, _, _, _ => rfl
   | k + 1, i, off, a, off', h => by
-    rw [TensorField.fillLoop, read_fillLoop_below f k (i + 1) _ _ off' (by omega),
+    rw [fillLoop, read_fillLoop_below f k (i + 1) _ _ off' (by omega),
       LawfulFlatFiber.read_write_other a off off' _ (Or.inr h)]
 
 /-- The element `j` of a filled array is `f j` (element `i` written at `i·w`). -/
 theorem read_fillLoop (f : Nat → F) : ∀ (k i : Nat) (a : FloatArray) (j : Nat),
     (i + k) * FlatFiber.width F ≤ a.size → i ≤ j → j < i + k →
-      (FlatFiber.read (TensorField.fillLoop f k i (i * FlatFiber.width F) a)
+      (FlatFiber.read (fillLoop f k i (i * FlatFiber.width F) a)
         (j * FlatFiber.width F) : F) = f j
   | 0, _, _, _, _, h1, h2 => absurd h2 (by omega)
   | k + 1, i, a, j, hs, h1, h2 => by
-    rw [TensorField.fillLoop]
+    rw [fillLoop]
     by_cases hij : i = j
     · subst hij
       have hle : (i + 1) * FlatFiber.width F ≤ (i + (k + 1)) * FlatFiber.width F :=
@@ -159,6 +152,15 @@ theorem read_fillLoop (f : Nat → F) : ∀ (k i : Nat) (a : FloatArray) (j : Na
         (by rw [FlatFiber.size_write, show i + 1 + k = i + (k + 1) by omega]; exact hs)
         (by omega) (by omega)
       rwa [Nat.add_mul, Nat.one_mul] at this
+
+/-- The element `j < n` of `buildFlat n f` is `f j`. -/
+theorem read_buildFlat (n : Nat) (f : Nat → F) (j : Nat) (h : j < n) :
+    (FlatFiber.read (buildFlat n f) (j * FlatFiber.width F) : F) = f j := by
+  have := read_fillLoop f n 0 (Flat.zeros (FlatFiber.width F * n)) j
+    (by rw [Flat.size_zeros, Nat.zero_add, Nat.mul_comm]; exact Nat.le_refl _) (Nat.zero_le _)
+    (by omega)
+  rw [Nat.zero_mul] at this
+  exact this
 
 end Build
 
@@ -349,11 +351,8 @@ variable {M : Type} [FrameBundle M] {m : M} {F F' F'' : Type}
 
 /-- The fibers of a field built from a function. -/
 @[simp] theorem get_ofFn [LawfulFlatFiber F] (f : Nat → F) (i : Nat) (h : i < card m) :
-    (ofFn m f).get i = f i := by
-  have := read_fillLoop f (card m) 0 (Flat.zeros (FlatFiber.width F * card m)) i
-    (by rw [Flat.size_zeros, Nat.zero_add, Nat.mul_comm]; exact Nat.le_refl _) (Nat.zero_le _) (by omega)
-  rw [Nat.zero_mul] at this
-  exact this
+    (ofFn m f).get i = f i :=
+  read_buildFlat (card m) f i h
 
 /-- Julia `broadcast(f, t)` applies `f` at every point. -/
 @[simp] theorem get_map [LawfulFlatFiber F'] (f : F → F') (t : TensorField m F) (i : Nat)

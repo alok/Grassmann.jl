@@ -135,14 +135,25 @@ theorem size_buildLoop {F : Type} [FlatFiber F] (f : Nat → F) : ∀ (k i : Nat
   | k + 1, i, a => by
     rw [buildLoop, size_buildLoop f k (i + 1), FlatFiber.size_push, Nat.succ_mul]; omega
 
-/-- The flat encoding of `f 0, …, f (n-1)`. -/
+/-- Write `f i, f (i+1), …, f (i+k-1)` at the offsets `off, off + w, …` (tail recursive). -/
+@[specialize] def fillLoop {F : Type} [FlatFiber F] (f : Nat → F) :
+    (k i off : Nat) → FloatArray → FloatArray
+  | 0, _, _, a => a
+  | k + 1, i, off, a => fillLoop f k (i + 1) (off + FlatFiber.width F) (FlatFiber.write a off (f i))
+
+@[simp] theorem size_fillLoop {F : Type} [FlatFiber F] (f : Nat → F) :
+    ∀ (k i off : Nat) (a : FloatArray), (fillLoop f k i off a).size = a.size
+  | 0, _, _, _ => rfl
+  | k + 1, i, off, a => by rw [fillLoop, size_fillLoop f k (i + 1), FlatFiber.size_write]
+
+/-- The flat encoding of `f 0, …, f (n-1)`, written into a zero buffer (`Cartan.Flat.zeros`,
+`FlatFiber.write`): no `FloatArray.push`, an out-of-line call per float. -/
 @[inline] def buildFlat {F : Type} [FlatFiber F] (n : Nat) (f : Nat → F) : FloatArray :=
-  buildLoop f n 0 (FloatArray.emptyWithCapacity (n * FlatFiber.width F))
+  fillLoop f n 0 0 (Flat.zeros (FlatFiber.width F * n))
 
 @[simp] theorem size_buildFlat {F : Type} [FlatFiber F] (n : Nat) (f : Nat → F) :
     (buildFlat n f).size = FlatFiber.width F * n := by
-  rw [buildFlat, size_buildLoop, Nat.mul_comm]
-  exact Nat.zero_add _
+  rw [buildFlat, size_fillLoop, Flat.size_zeros]
 
 /-- `Float` fibers: one float each. -/
 instance instFlatFiberFloat : FlatFiber Float where

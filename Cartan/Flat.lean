@@ -82,7 +82,7 @@ def zerosSlow (n : Nat) : FloatArray := ⟨Array.replicate n 0⟩
 @[simp] theorem size_zerosSlow (n : Nat) : (zerosSlow n).size = n := by
   simp [zerosSlow, FloatArray.size]
 
-/-- Sizes below this are built directly (pushing a few floats is cheaper than the cache). -/
+/-- Sizes below this come from a table built once (a lookup is cheaper than the cache). -/
 def zerosCacheMin : Nat := 64
 
 /-- Number of sizes the zero cache keeps (most recently used first). -/
@@ -94,8 +94,11 @@ private unsafe def zerosCacheImpl : IO.Ref (Array FloatArray) := unsafeBaseIO (I
 @[implemented_by zerosCacheImpl]
 private opaque zerosCache : IO.Ref (Array FloatArray)
 
+/-- The zero arrays of the sizes below `zerosCacheMin`, built once (at initialization). -/
+private def smallZeros : Array FloatArray := (Array.range zerosCacheMin).map zerosSlow
+
 private unsafe def zerosImpl (n : Nat) : FloatArray :=
-  if n < zerosCacheMin then zerosSlow n else unsafeBaseIO do
+  if n < zerosCacheMin then smallZeros[n]! else unsafeBaseIO do
   let c ← zerosCache.get
   match c.findIdx? (·.size == n) with
   | some i =>

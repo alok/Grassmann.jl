@@ -136,14 +136,37 @@ def isRange : Axis → Bool
 /-- Julia `widths(r) = r[end] - r[1]` (`topology.jl:117`). -/
 def width (a : Axis) : Float := a.last - a.first
 
+/-- `out[j] := stepLenGet r j` for `j ∈ [i, n)`, with the index float `u = j + 1 - offset` carried
+along (exact below `2^53`) and `add12` spelled out on two floats: the operations of `stepLenGet`,
+so the same bits, without its `Int` arithmetic or the `TwicePrecision` pair. -/
+def stepLenFill {n : Nat} (r : StepRangeLen) (out : Flat.Buf n) (i : USize) (u : Float) :
+    Flat.Buf n :=
+  if hi : i < out.1.usize then
+    have h := out.2 ▸ Flat.lt_size_of_lt_usize hi
+    let sHi := u * r.step.hi
+    let sLo := u * r.step.lo
+    let a := r.ref.hi
+    let swap := sHi.abs > a.abs
+    let big := if swap then sHi else a
+    let small := if swap then a else sHi
+    let xh := big + small
+    let xl := (big - xh) + small
+    stepLenFill r (out.set i (xh + (xl + (sLo + r.ref.lo))) h) (i + 1) (u + 1)
+  else out
+termination_by n - i.toNat
+decreasing_by rw [Flat.toNat_succ hi]; omega
+
 /-- Julia `collect(r)`, packed. -/
 def toFloatArray (a : Axis) : FloatArray :=
   match a with
   | explicit xs => xs
+  | stepLen r => (stepLenFill r (Flat.zerosBuf r.len) 0 (intToFloat (1 - r.offset))).1
   | _ => buildFlat a.length a.get
 
 @[simp] theorem size_toFloatArray (a : Axis) : a.toFloatArray.size = a.length := by
-  cases a <;> simp [toFloatArray, length, FlatFiber.width]
+  cases a
+  case stepLen r => exact (stepLenFill r (Flat.zerosBuf r.len) 0 _).2
+  all_goals simp [toFloatArray, length, FlatFiber.width]
 
 /-- Julia `r == s` for vectors: same length and equal elements. -/
 def eqv (a b : Axis) : Bool :=

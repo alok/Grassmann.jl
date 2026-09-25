@@ -57,6 +57,12 @@ def run : TestM Unit := do
   | none => check "extend(0:0.5:1, 5)" false
   checkEq "resample(0:0.5:2, 9)" ((Axis.colon 0 0.5 2).resample 9).toFloatArray.toList
     [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
+  -- the materialized range (`stepLenFill`) has the bits of `r[i]` element by element
+  for a in [Axis.colon 0 0.1 1, Axis.colon (-1) 0.1 1, Axis.colon 1 (-0.3) (-2),
+      Axis.colon 0.1 0.2 5.3, Axis.range 0 10 1000, Axis.range (-piF) piF 61,
+      Axis.range 0 twoPiF 100, Axis.range 0.001 1000 777] do
+    checkEq s!"collect({a}) bits" (a.toFloatArray.toList.map Float.toBits)
+      ((buildFlat a.length a.get).toList.map Float.toBits)
   checkEq "show of a range axis" (toString (Axis.colon 0 0.5 2)) "0.0:0.5:2.0"
   checkEq "show of a LinRange axis" (toString (Axis.linRange 0 1 5)) "LinRange{Float64}(0.0, 1.0, 5)"
   checkEq "Global display" (MetricStore.induced.showGlobal 2) "Global{2}(InducedMetric())"
