@@ -352,9 +352,10 @@ namespace Chain
 
 variable {G : Nat} [Kernels V]
 
-/-- Julia `abs(t) = sqrt(abs2(t))` of a chain with `abs2(t) = contraction(t, t)` (`AT:435-439`),
-the square root of a (metric) scalar. -/
-@[inline] def abs (c : Chain V G Float) : Float := Float.sqrt (getD c.abs2.v 0)
+/-- The value of Julia `abs(t) = sqrt(abs2(t))` of a chain with `abs2(t) = contraction(t, t)`
+(`AT:435-439`), the square root of a (metric) scalar, as a `Float` (`Chain.abs` in
+`Grassmann.Composite.Norm` is the scalar element Julia returns). -/
+@[inline] def absF (c : Chain V G Float) : Float := Float.sqrt (getD c.abs2.v 0)
 
 /-- AbstractTensors `co f(t) = complementleft(f(complementright(t)))` for a function of chains
 with multivector values (`AT:500-505`). -/
@@ -387,7 +388,7 @@ def coinv (c : Chain V G Float) : Chain V (V.n - (V.n - G)) Float := c.complemen
 /-- `coabs(t) = pseudoabs(t)` of a chain: `abs` of the complement on the pseudoscalar
 (`pseudoabs(3v₁ + 4v₂) = 5.0v₁₂₃` in `ℝ3`). -/
 def coabs (c : Chain V G Float) : Chain V (V.n - 0) Float :=
-  (Chain.scalar c.complementright.abs : Chain V 0 Float).complementleft
+  (Chain.scalar c.complementright.absF : Chain V 0 Float).complementleft
 /-- `coabs2(t) = pseudoabs2(t)` of a chain. -/
 def coabs2 (c : Chain V G Float) : Chain V (V.n - 0) Float :=
   c.complementright.abs2.complementleft

@@ -8,6 +8,7 @@ import Tests.Forms.Props
 import Tests.Forms.Types
 import Tests.Forms.Parity
 import Tests.Forms.UpDown
+import Tests.Forms.Norms
 
 /-!
 # Forms test aggregator
@@ -27,6 +28,7 @@ elements (`Grassmann.Forms`): the Julia goldens in `oracle/golden/forms/`
 | `forms/types` | static result types and the worked examples through the notation |
 | `forms/parity` | roots of any degree, `eigvecs`/`eigvecsreal`, Vandermonde operators and fits |
 | `forms/updown` | `↑`/`↓` (project/reject) in every kind of space, the README curves, `chainfield` |
+| `forms/norms` | `abs`, `unit`, `unitize`, `unitnorm`, `geomabs` per element kind (Julia's kinds) |
 -/
 
 namespace Tests.Forms
@@ -38,7 +40,7 @@ def run : IO (Nat × Nat) := do
   IO.println "Forms"
   let suites : List (IO Tally) :=
     [Exact.suite, FloatSuite.suite, SpectralSuite.suite, DiagSuite.suite, GeometrySuite.suite,
-     Props.suite, Types.suite, Parity.suite, UpDown.suite]
+     Props.suite, Types.suite, Parity.suite, UpDown.suite, Norms.suite]
   let mut pass := 0
   let mut fail := 0
   for suite in suites do

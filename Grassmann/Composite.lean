@@ -5,6 +5,7 @@ import Grassmann.Composite.Dense
 import Grassmann.Composite.Chain
 import Grassmann.Composite.Spinor
 import Grassmann.Composite.Ring
+import Grassmann.Composite.Norm
 import Grassmann.Composite.Project
 
 /-!

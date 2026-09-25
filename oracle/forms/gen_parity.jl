@@ -212,3 +212,33 @@ let V = S"∞+++", G = Λ(V)
     end
 end
 save("updown", Dict("meta" => meta, "cases" => updown, "curves" => curves, "fields" => fields))
+
+# ------------------------------------------------------------------------------------------
+# abs, unit, unitize, unitnorm, geomabs per element kind (AbstractTensors AT:435-480)
+# ------------------------------------------------------------------------------------------
+norms = Any[]
+kindof(x) = string(nameof(typeof(x)))
+for sig in ["+++", "-+++", "++++", "++-"]
+    V = Signature(sig)
+    n = mdims(V)
+    G = Λ(V)
+    for trial in 1:3
+        r() = round(randn() * 2, digits = 3)
+        els = Any[
+            ("chain1", Chain{V,1}([r() for _ in 1:n]...)),
+            ("chain2", Chain{V,2}([r() for _ in 1:binomial(n, 2)]...)),
+            ("single", r() * Grassmann.DirectSum.getbasis(V, 3)),
+            ("couple", Couple{V,Grassmann.DirectSum.getbasis(V,3)}(r(), r())),
+            ("spinor", Spinor{V}(Values([r() for _ in 1:2^(n-1)]...))),
+            ("cospinor", CoSpinor{V}(Values([r() for _ in 1:2^(n-1)]...)))]
+        for (kind, x) in els
+            d = Dict{String,Any}("sig" => sig, "kind" => kind, "in" => dense(x))
+            for (name, f) in (("abs", abs), ("unit", unit), ("unitize", Grassmann.unitize),
+                    ("unitnorm", unitnorm), ("geomabs", Grassmann.geomabs))
+                d[name] = try (y = f(x); Dict("kind" => kindof(y), "dense" => dense(y))) catch e; Dict("E" => errstr(e)) end
+            end
+            push!(norms, d)
+        end
+    end
+end
+save("norms", Dict("meta" => meta, "cases" => norms))
