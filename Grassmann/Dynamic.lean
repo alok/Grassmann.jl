@@ -4,6 +4,7 @@ import Grassmann.Dynamic.Show
 import Grassmann.Dynamic.Loops
 import Grassmann.Dynamic.Unary
 import Grassmann.Dynamic.Products
+import Grassmann.Dynamic.Norms
 import Grassmann.Dynamic.Layout
 import Grassmann.Dynamic.Laws
 
@@ -24,6 +25,7 @@ compute the entries with the static layer's kernels.
 | `Grassmann.Dynamic.Loops` | Julia's generated product, sandwich and metric loops, bit for bit (summation order and the sign of zero) |
 | `Grassmann.Dynamic.Unary` | involutions, complements, metrics, parity/reality parts, grade projections |
 | `Grassmann.Dynamic.Products` | `⟑ ∧ ∨ contraction` with Julia's result kinds, the derived products, sandwiches |
+| `Grassmann.Dynamic.Norms` | `abs2`, `norm`, `isscalar` with Julia's kinds |
 | `Grassmann.Dynamic.Layout` | `LayoutInv n`: the index-table round trips the proofs use (kernel-checked, `n ≤ 8`) |
 | `Grassmann.Dynamic.Laws` | `toDense_add`, `toDense_neg`, `toDense_sub`, `toDense_smul` over any `LawfulCoeff` |
 -/
