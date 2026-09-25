@@ -127,13 +127,23 @@ def log1p? (t : Multivector V Float) : Option (Multivector V Float) :=
 /-- Julia `log1p(t::Multivector)`; `NaN` coefficients where Julia throws. -/
 @[inline] def log1p (t : Multivector V Float) : Multivector V Float := (log1p? t).getD nan
 
-/-- Julia `sqrt(t) = isscalar(t) ? sqrt(scalar(t)) : exp(log(t)/2)` (`src/composite.jl:438`). -/
-def sqrt (t : Multivector V Float) : Multivector V Float :=
-  if t.isScalar then Multivector.scalar (Float.sqrt t.scalarValue) else exp (log t / f2)
+/-- Julia `sqrt(t) = isscalar(t) ? sqrt(scalar(t)) : exp(log(t)/2)` (`src/composite.jl:438`),
+or `none` where Julia throws. -/
+def sqrt? (t : Multivector V Float) : Option (Multivector V Float) :=
+  if t.isScalar then some (Multivector.scalar (Float.sqrt t.scalarValue))
+  else (log? t).map fun l => exp (l / f2)
 
-/-- Julia `cbrt(t) = isscalar(t) ? cbrt(scalar(t)) : exp(log(t)/3)` (`src/composite.jl:438`). -/
-def cbrt (t : Multivector V Float) : Multivector V Float :=
-  if t.isScalar then Multivector.scalar (F64.cbrt t.scalarValue) else exp (log t / f3)
+/-- Julia `sqrt(t::Multivector)`; `NaN` coefficients where Julia throws. -/
+@[inline] def sqrt (t : Multivector V Float) : Multivector V Float := (sqrt? t).getD nan
+
+/-- Julia `cbrt(t) = isscalar(t) ? cbrt(scalar(t)) : exp(log(t)/3)` (`src/composite.jl:438`),
+or `none` where Julia throws. -/
+def cbrt? (t : Multivector V Float) : Option (Multivector V Float) :=
+  if t.isScalar then some (Multivector.scalar (F64.cbrt t.scalarValue))
+  else (log? t).map fun l => exp (l / f3)
+
+/-- Julia `cbrt(t::Multivector)`; `NaN` coefficients where Julia throws. -/
+@[inline] def cbrt (t : Multivector V Float) : Multivector V Float := (cbrt? t).getD nan
 
 /-- Julia `t ^ k` for a multivector (`src/algebra.jl:440-470`): Julia's repeated and binary
 multiplication, and `inv(t)^|k|` for `k < 0` (Julia returns `One` there). -/

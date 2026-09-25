@@ -181,23 +181,26 @@ def log1p? (c : Chain V G Float) : Option (Multivector V Float) :=
 @[inline] def log1p (c : Chain V G Float) : Multivector V Float := c.log1p?.getD Multivector.nan
 
 /-- Julia `sqrt`/`cbrt` of a chain (`src/composite.jl:436-451`): the scalar root for
-`G = 0` (`qrtScalar`), `0` for the zero chain (`isscalar`), else `exp(log(t)/n)`. -/
-def root (qrtScalar : Float → Float) (n : Float) (c : Chain V G Float) : Multivector V Float :=
-  if G == 0 then Multivector.scalar (qrtScalar (getD c.v 0))
-  else if isScalarNorms c.v.norm f0 then Multivector.scalar (qrtScalar f0)
+`G = 0` (`qrtScalar`), `0` for the zero chain (`isscalar`), else `exp(log(t)/n)`; `none`
+where Julia throws (the logarithm's `inv` undefined). -/
+def root? (qrtScalar : Float → Float) (n : Float) (c : Chain V G Float) : Option (Multivector V Float) :=
+  if G == 0 then some (Multivector.scalar (qrtScalar (getD c.v 0)))
+  else if isScalarNorms c.v.norm f0 then some (Multivector.scalar (qrtScalar f0))
   else if G % 2 == 0 then
-    match Half.logSeries? (evenHalf c) with
-    | some l => Half.toMultivector (Half.exp (Half.sdiv l n))
-    | none => Multivector.nan
-  else match Multivector.log? (toMultivector c) with
-    | some l => Multivector.exp (l / n)
-    | none => Multivector.nan
+    (Half.logSeries? (evenHalf c)).map fun l => Half.toMultivector (Half.exp (Half.sdiv l n))
+  else (Multivector.log? (toMultivector c)).map fun l => Multivector.exp (l / n)
 
-/-- Julia `sqrt(t::Chain)`. -/
-@[inline] def sqrt (c : Chain V G Float) : Multivector V Float := root Float.sqrt f2 c
+/-- Julia `sqrt(t::Chain)`, or `none` where Julia throws. -/
+@[inline] def sqrt? (c : Chain V G Float) : Option (Multivector V Float) := root? Float.sqrt f2 c
 
-/-- Julia `cbrt(t::Chain)`. -/
-@[inline] def cbrt (c : Chain V G Float) : Multivector V Float := root F64.cbrt f3 c
+/-- Julia `sqrt(t::Chain)`; `NaN` coefficients where Julia throws. -/
+@[inline] def sqrt (c : Chain V G Float) : Multivector V Float := c.sqrt?.getD Multivector.nan
+
+/-- Julia `cbrt(t::Chain)`, or `none` where Julia throws. -/
+@[inline] def cbrt? (c : Chain V G Float) : Option (Multivector V Float) := root? F64.cbrt f3 c
+
+/-- Julia `cbrt(t::Chain)`; `NaN` coefficients where Julia throws. -/
+@[inline] def cbrt (c : Chain V G Float) : Multivector V Float := c.cbrt?.getD Multivector.nan
 
 /-- Julia `cosh(t::Chain)`: `cosh(c₀)` for `G = 0` (`C:456`), otherwise the generic series
 (`C:458-481`); a spinor. -/

@@ -81,22 +81,26 @@ def log1p? (s : Half V false Float) : Option (Half V false Float) :=
 
 /-- Julia `sqrt`/`cbrt` of a spinor (`src/composite.jl:436-445`): for Euclidean quaternions
 `qrt(radius(t))·exp(angle(t)/n)` (no scalar test); otherwise
-`isscalar(t) ? qrt(scalar(t)) : exp(log(t)/n)`. -/
-def root (qrt : Float → Float) (n : Float) (s : Half V false Float) : Half V false Float :=
+`isscalar(t) ? qrt(scalar(t)) : exp(log(t)/n)`; `none` where Julia throws. -/
+def root? (qrt : Float → Float) (n : Float) (s : Half V false Float) : Option (Half V false Float) :=
   if euclideanQuaternions V then
     let r := s.radius
     let e := Chain.expEven (s.bivectorPart * (s.angleCoef r / n))
-    ⟨e.v.map (qrt r * ·)⟩
-  else if s.isScalar then scalarF (qrt s.scalarValue)
-  else match s.logSeries? with
-    | some l => exp (sdiv l n)
-    | none => nan
+    some ⟨e.v.map (qrt r * ·)⟩
+  else if s.isScalar then some (scalarF (qrt s.scalarValue))
+  else s.logSeries?.map fun l => exp (sdiv l n)
 
-/-- Julia `sqrt(t::Spinor)`. -/
-@[inline] def sqrt (s : Half V false Float) : Half V false Float := root Float.sqrt f2 s
+/-- Julia `sqrt(t::Spinor)`, or `none` where Julia throws. -/
+@[inline] def sqrt? (s : Half V false Float) : Option (Half V false Float) := root? Float.sqrt f2 s
 
-/-- Julia `cbrt(t::Spinor)`. -/
-@[inline] def cbrt (s : Half V false Float) : Half V false Float := root F64.cbrt f3 s
+/-- Julia `sqrt(t::Spinor)`; `NaN` coefficients where Julia throws. -/
+@[inline] def sqrt (s : Half V false Float) : Half V false Float := s.sqrt?.getD nan
+
+/-- Julia `cbrt(t::Spinor)`, or `none` where Julia throws. -/
+@[inline] def cbrt? (s : Half V false Float) : Option (Half V false Float) := root? F64.cbrt f3 s
+
+/-- Julia `cbrt(t::Spinor)`; `NaN` coefficients where Julia throws. -/
+@[inline] def cbrt (s : Half V false Float) : Half V false Float := s.cbrt?.getD nan
 
 /-- `tanh t = sinh t / cosh t` (AbstractTensors `AT:419`) on a spinor. -/
 def tanh (s : Half V false Float) : Half V false Float := smul' s.sinh (invD s.cosh)
