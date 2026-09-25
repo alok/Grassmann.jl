@@ -12,7 +12,7 @@ fi
 conf=$(git diff --name-only --diff-filter=U || true)
 for f in $conf; do
   case "$f" in
-    docs/PERF.md|docs/perf/history.jsonl)
+    docs/PERF.md|docs/perf/history.jsonl|docs/perf/budgets.toml|docs/perf/latest.md)
       python3 - "$f" <<'PY'
 import sys
 p=sys.argv[1]; lines=open(p).read().split('\n')
