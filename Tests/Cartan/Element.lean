@@ -139,6 +139,52 @@ def runDiscontinuous : TestM Unit := do
   runDiscCase "square" square (← jField g "square")
   runDiscCase "grid" (gridMesh 3 2) (← jField g "grid")
 
+/-- Lagrange node coordinates (`lagrange.json`) and the fixed edge layout. -/
+def runLagrange : TestM Unit := do
+  let g ← load "element/lagrange"
+  let lists (j : Json) : TestM (List (List Nat)) := do
+    return (← (← jArr j).mapM jNats).toList.map (·.toList)
+  let grid := gridMesh 3 2
+  let corners : Array (Array Float) := #[#[0, 0, 0], #[1, 0, 0], #[0, 1, 0], #[1, 1, 0], #[0, 0, 1],
+    #[1, 0, 1], #[0, 1, 1], #[1, 1, 1]]
+  let cubePts : Array (HPoint ℝ4) :=
+    corners.map fun x => Chain.ofFn fun c => if c.1 = 0 then 1 else x[c.1 - 1]!
+  let cube := SimplexBundle.ofPoints cubePts
+    #[#v[1, 2, 4, 8], #v[1, 4, 3, 8], #v[1, 3, 7, 8], #v[1, 7, 5, 8], #v[1, 5, 6, 8], #v[1, 6, 2, 8]]
+  let tri (M : Nat) : TestM Unit := do
+    let lt : LagrangeTriangles M := .ofCorners grid.top
+    let b := LagrangeBundle.triangles grid.cloud lt
+    let j ← jField g s!"tri{M}"
+    checkFloats s!"lagrange tri{M} points" b.cloud.points (← gFloats (← jField j "points"))
+    checkEq s!"lagrange tri{M} topology" (lt.topology.toList.map (·.toList)) (← lists (← jField j "topology"))
+    checkEq s!"lagrange tri{M} nodes" lt.totalNodes (← jNat (← jField j "nodes"))
+  let tet (M : Nat) : TestM Unit := do
+    let lt : LagrangeTetrahedra M := .ofCorners cube.top
+    let b := LagrangeBundle.tetrahedra cube.cloud lt
+    let j ← jField g s!"tet{M}"
+    checkFloats s!"lagrange tet{M} points" b.cloud.points (← gFloats (← jField j "points"))
+    checkEq s!"lagrange tet{M} topology" (lt.topology.toList.map (·.toList)) (← lists (← jField j "topology"))
+    checkEq s!"lagrange tet{M} nodes" lt.totalNodes (← jNat (← jField j "nodes"))
+  for M in [2, 3, 4] do
+    tri M
+    tet M
+  -- edges (no golden: Julia's `LagrangeBundle!` of edges reads an undefined `pt`): node `x + 2`
+  -- of segment `[cᵢ, cⱼ]` at `cᵢ + x(cⱼ - cᵢ)/M`
+  let xs : Array Float := #[0, 0.3, 0.7, 1]
+  let line := SimplexBundle.ofPoints (xs.map SimplexBundle.hp1) #[#v[1, 2], #v[2, 3], #v[3, 4]]
+  for M in [2, 3, 4] do
+    let le : LagrangeEdges M := .ofCorners line.top
+    let b := LagrangeBundle.edges line.cloud le
+    let want := le.topology.foldl (fun (ok : Bool) ed =>
+      let xi := xs[ed[0]! - 1]!
+      let xj := xs[ed[1]! - 1]!
+      (List.range (M - 1)).foldl (fun ok x =>
+        let v := ed[x + 2]!
+        let exp := if M = 2 then (xi + xj) * (1 / 2)
+          else xi + Float.ofNat (x + 1) * ((xj - xi) * (1 / Float.ofNat M))
+        ok && b.cloud.points.get! ((v - 1) * 2 + 1) == exp && b.cloud.points.get! ((v - 1) * 2) == 1) ok) true
+    check s!"lagrange edges{M} layout" want
+
 /-- The checks of one mesh. -/
 def runCase (n : Nat) (V : TensorBundle) (name : String) (c : Json) (flipB3 : Bool := false) :
     TestM Unit := do
@@ -210,6 +256,7 @@ def runCase (n : Nat) (V : TensorBundle) (name : String) (c : Json) (flipB3 : Bo
 def run : TestM Unit := do
   runMeshData
   runDiscontinuous
+  runLagrange
   let g ← load "element/fem"
   runCase 3 ℝ3 "two" (← jField g "two")
   runCase 3 ℝ3 "grid" (← jField g "grid")
