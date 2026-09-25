@@ -23,7 +23,7 @@ section StaticTypes
 
 variable (a b : Chain ℝ3 1 Int) (B : Chain ℝ3 2 Int) (T : Chain ℝ3 3 Int)
   (s : Spinor ℝ3 Int) (o : CoSpinor ℝ3 Int) (m : Multivector ℝ3 Int)
-  (x y : Single ℝ3 1 Int) (e₁ e₂ : Submanifold ℝ3 1) (z : Couple ℝ3 Int)
+  (x y : Single ℝ3 1 Int) (e₁ e₂ : Submanifold ℝ3 1) (e₁₂ : Submanifold ℝ3 2) (z : Couple ℝ3 Int)
 
 example : Spinor ℝ3 Int := a * b
 example : CoSpinor ℝ3 Int := a * B
@@ -56,6 +56,8 @@ example : Chain ℝ3 1 Int := x + y
 example : Chain ℝ3 1 Int := x + a
 example : Chain ℝ3 1 Int := e₁ + e₂
 example : Couple ℝ3 Int := e₁ * e₂
+example : Spinor ℝ3 Int := e₁₂ * e₁₂
+example : CoSpinor ℝ3 Int := e₁₂ * e₁
 example : Single ℝ3 1 Int := (3 : Int) * e₁
 example : Multivector ℝ3 Int := z + a
 example : Multivector ℝ3 Int := z * s

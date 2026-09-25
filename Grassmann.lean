@@ -47,8 +47,8 @@ types, the coefficient classes and the operator notation
 
 ```lean
 open Grassmann
-def a : Chain ℝ3 1 Rat := (Chain.ofList? [1, 2, 3]).get!
-def b : Chain ℝ3 1 Rat := (Chain.ofList? [4, 5, 6]).get!
+def a : Chain ℝ3 1 Int := (Chain.ofList? [1, 2, 3]).get!
+def b : Chain ℝ3 1 Int := (Chain.ofList? [4, 5, 6]).get!
 #eval toString (a * b)   -- "32 - 3v₁₂ - 6v₁₃ - 3v₂₃"   (a Spinor)
 #eval toString (a ∧ b)   -- "-3v₁₂ - 6v₁₃ - 3v₂₃"       (a Chain ℝ3 2)
 ```

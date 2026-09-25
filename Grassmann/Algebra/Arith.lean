@@ -135,8 +135,8 @@ instance [Div α] : HDiv (PseudoCouple V α) α (PseudoCouple V α) :=
   ⟨fun z s => ⟨z.bits, z.re / s, z.im / s⟩⟩
 
 /-- Julia `x * b` for a scalar and a unit blade: a `Single` (`DirectSum.jl src/DirectSum.jl:519-529`). -/
-instance : HMul α (Submanifold V G) (Single V G α) := ⟨fun s b => ⟨b.bits, s⟩⟩
-instance : HMul (Submanifold V G) α (Single V G α) := ⟨fun b s => ⟨b.bits, s⟩⟩
-instance : HSMul α (Submanifold V G) (Single V G α) := ⟨fun s b => ⟨b.bits, s⟩⟩
+instance {β : Type} [Coeff β] : HMul β (Submanifold V G) (Single V G β) := ⟨fun s b => ⟨b.bits, s⟩⟩
+instance {β : Type} [Coeff β] : HMul (Submanifold V G) β (Single V G β) := ⟨fun b s => ⟨b.bits, s⟩⟩
+instance {β : Type} [Coeff β] : HSMul β (Submanifold V G) (Single V G β) := ⟨fun s b => ⟨b.bits, s⟩⟩
 
 end Grassmann
