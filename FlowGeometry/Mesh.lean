@@ -175,7 +175,8 @@ def rakichColumn (x y s κ : FloatArray) (yEnd : Float) (JL xk : Nat) : Nat → 
   | yk, m + 1, acc =>
     let sk := s.get! xk
     let v := if sk != 0 then rakich (κ.get! xk) (yk + 1) sk yEnd JL else y.get! yk
-    rakichColumn x y s κ yEnd JL xk (yk + 1) m (((acc.push 1).push (x.get! xk)).push v)
+    let q := 3 * (xk * JL + yk)
+    rakichColumn x y s κ yEnd JL xk (yk + 1) m (((acc.set! q 1).set! (q + 1) (x.get! xk)).set! (q + 2) v)
 
 /-- The points `k = 1 … n·JL` of `rakichpoints`, column by column from station `xk`. -/
 def rakichFill (x y s κ : FloatArray) (yEnd : Float) (JL : Nat) : Nat → Nat → FloatArray → FloatArray
@@ -196,7 +197,7 @@ def rakichpoints (T : Num := 6) (m : Nat := 21) (D : Float := 50) (n : Nat := 51
   let s := floatsOfFn x.size fun i => e.value ((x.get! i - 0) / 1) * 1
   let κ := floatsOfFn s.size fun i => let k := s.get! i; if k != 0 then rakichNewton (D - k) JL (t / 10) else 0
   let yEnd := y.get! (y.size - 1)
-  ⟨rakichFill x y s κ yEnd JL 0 n (FloatArray.emptyWithCapacity (3 * (n * JL))), .induced, 0⟩
+  ⟨rakichFill x y s κ yEnd JL 0 n (zeros (3 * (n * JL))), .induced, 0⟩
 
 /-- Julia `initrakich(P = CircularArc{6,61}(), D = 50, n = 101, JL = 51)` (`FlowGeometry.jl:139-142`):
 the triangulated C-mesh and its boundary loop over the same points. -/
@@ -453,30 +454,31 @@ abbrev wingBase (a : Airfoil) : GridBundle 2 (AffinePoint 2) :=
 /-- Append rows `k … np-1` of one wing column: `(o1[k], o2, s·Y[k])` (`Y` the imaginary parts of
 an interleaved surface; `s = 0` with `zero` for the middle column), where `o1` is the range
 `x .+ a .* int` of Julia's lazy broadcasts, evaluated in place (`rangeAt`). -/
-def wingColumn (o1 : Axis) (o2 s : Float) (Y : FloatArray) (zero : Bool) (k : Nat) :
+def wingColumn (o1 : Axis) (o2 s : Float) (Y : FloatArray) (zero : Bool) (k q : Nat) :
     Nat → FloatArray → FloatArray
   | 0, acc => acc
   | m + 1, acc =>
     let z := if zero then 0 else s * Y.get! (2 * k + 1)
-    wingColumn o1 o2 s Y zero (k + 1) m (((acc.push (o1.get k)).push o2).push z)
+    wingColumn o1 o2 s Y zero (k + 1) (q + 3) m (((acc.set! q (o1.get k)).set! (q + 1) o2).set! (q + 2) z)
 
 /-- `wingColumn` for a `TwicePrecision` range `o1` (the usual case), its elements computed with a
 running index offset `u` as in `rangeFill` (bit-identical to `Axis.get`). -/
-def wingColumnRange (r : StepRangeLen) (u : Float) (o2 s : Float) (Y : FloatArray) (zero : Bool) (k : Nat) :
+def wingColumnRange (r : StepRangeLen) (u : Float) (o2 s : Float) (Y : FloatArray) (zero : Bool) (k q : Nat) :
     Nat → FloatArray → FloatArray
   | 0, acc => acc
   | m + 1, acc =>
     let z := if zero then 0 else s * Y.get! (2 * k + 1)
     let x := TwicePrecision.add12 r.ref.hi (u * r.step.hi)
     let e := x.hi + (x.lo + (u * r.step.lo + r.ref.lo))
-    wingColumnRange r (u + f64! 1.0) o2 s Y zero (k + 1) m (((acc.push e).push o2).push z)
+    wingColumnRange r (u + f64! 1.0) o2 s Y zero (k + 1) (q + 3) m
+      (((acc.set! q e).set! (q + 1) o2).set! (q + 2) z)
 
-/-- One wing column, with the fast loop for a range. -/
-@[inline] def wingCol (o1 : Axis) (o2 s : Float) (Y : FloatArray) (zero : Bool) (np : Nat) (acc : FloatArray) :
-    FloatArray :=
+/-- One wing column, written from position `q` on, with the fast loop for a range. -/
+@[inline] def wingCol (o1 : Axis) (o2 s : Float) (Y : FloatArray) (zero : Bool) (np q : Nat)
+    (acc : FloatArray) : FloatArray :=
   match o1 with
-  | .stepLen r => wingColumnRange r (Axis.intToFloat (1 - r.offset)) o2 s Y zero 0 np acc
-  | _ => wingColumn o1 o2 s Y zero 0 np acc
+  | .stepLen r => wingColumnRange r (Axis.intToFloat (1 - r.offset)) o2 s Y zero 0 q np acc
+  | _ => wingColumn o1 o2 s Y zero 0 q np acc
 
 /-- Julia `wing(N, λ = 0.7, σ = 0.5)` (`FlowGeometry.jl:195-217`): a swept (`σ`), tapered (`taper`,
 Julia's `λ`) wing built from the airfoil's surfaces, an `np × (2np-1)` grid of points `(x, y, z)`:
@@ -490,15 +492,15 @@ def wing (a : Airfoil) (taper : Float := f64! 0.7) (σ : Float := f64! 0.5) :
   let np := U.size / 2
   let rint (i : Nat) : Float := xs.get! (np - 1 - i)
   let column (c : Nat) (acc : FloatArray) : FloatArray :=
+    let q := 3 * np * c
     if c + 1 < np then
-      wingCol (affineAxis (σ * xs.get! c) (taper + (1 - taper) * rint c) int) (xs.get! c) (rint c) U false np acc
+      wingCol (affineAxis (σ * xs.get! c) (taper + (1 - taper) * rint c) int) (xs.get! c) (rint c) U false np q acc
     else if c + 1 == np then
-      wingCol (affineAxis (σ * xs.get! c) (taper * rint c) int) (xs.get! c) 0 U true np acc
+      wingCol (affineAxis (σ * xs.get! c) (taper * rint c) int) (xs.get! c) 0 U true np q acc
     else
       let i := c - np + 1
-      wingCol (affineAxis (σ * rint i) (taper + (1 - taper) * xs.get! i) int) (rint i) (xs.get! i) L false np acc
-  let data := (List.range (2 * np - 1)).foldl (fun acc c => column c acc)
-    (FloatArray.emptyWithCapacity (3 * np * (2 * np - 1)))
+      wingCol (affineAxis (σ * rint i) (taper + (1 - taper) * xs.get! i) int) (rint i) (xs.get! i) L false np q acc
+  let data := (List.range (2 * np - 1)).foldl (fun acc c => column c acc) (zeros (3 * np * (2 * np - 1)))
   fieldOf (wingBase a) data
 
 /-! ## MATLAB geometry description -/

@@ -115,16 +115,16 @@ def gradient1 (xs ys : FloatArray) : FloatArray :=
 index offset `u = i + 1 - offset` kept as a running `Float` (exact for any realistic length), so
 the loop does no `Int` arithmetic; bit-identical to `StepRangeLen.get`
 (`base/twiceprecision.jl:477-483`). -/
-def rangeFill (r : StepRangeLen) (u : Float) : Nat → FloatArray → FloatArray
+def rangeFill (r : StepRangeLen) (u : Float) (i : Nat) : Nat → FloatArray → FloatArray
   | 0, acc => acc
   | k + 1, acc =>
     let x := TwicePrecision.add12 r.ref.hi (u * r.step.hi)
-    rangeFill r (u + f64! 1.0) k (acc.push (x.hi + (x.lo + (u * r.step.lo + r.ref.lo))))
+    rangeFill r (u + f64! 1.0) (i + 1) k (acc.set! i (x.hi + (x.lo + (u * r.step.lo + r.ref.lo))))
 
 /-- Julia `collect(r)` of a coordinate vector, with the fast loop for `TwicePrecision` ranges. -/
 def axisValues (a : Axis) : FloatArray :=
   match a with
-  | .stepLen r => rangeFill r (Axis.intToFloat (1 - r.offset)) r.len (FloatArray.emptyWithCapacity r.len)
+  | .stepLen r => rangeFill r (Axis.intToFloat (1 - r.offset)) 0 r.len (zeros r.len)
   | _ => a.toFloatArray
 
 /-- Julia `GridBundle(PointArray(0, r))` of a 1-D coordinate vector: the open interval with real

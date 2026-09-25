@@ -66,15 +66,20 @@ def rem10 : Num → Num
 
 end Num
 
-/-- The fill loop of `floatsOfFn`: `f i, …, f (i+k-1)` appended (a top-level `@[specialize]`
-function, so that call sites get a loop with `f` inlined: a `where` helper is not specialized and
-would box every `Float` through a closure). -/
+/-- `n` zeros. `FloatArray.mk` of a replicated boxed `0.0` costs about 0.8 ns per entry, against
+2.2 ns for a `FloatArray.push` (an out-of-line runtime call with capacity and exclusivity checks):
+output arrays of known size are allocated this way and filled with `set!` (docs/PERF.md). -/
+@[inline] def zeros (n : Nat) : FloatArray := FloatArray.mk (Array.replicate n 0)
+
+/-- The fill loop of `floatsOfFn`: entries `i, …, i+k-1` of `acc` set to `f i, …` (a top-level
+`@[specialize]` function, so that call sites get a loop with `f` inlined: a `where` helper is not
+specialized and would box every `Float` through a closure). -/
 @[specialize] def floatsOfFnLoop (f : Nat → Float) : Nat → Nat → FloatArray → FloatArray
   | 0, _, acc => acc
-  | k + 1, i, acc => floatsOfFnLoop f k (i + 1) (acc.push (f i))
+  | k + 1, i, acc => floatsOfFnLoop f k (i + 1) (acc.set! i (f i))
 
 /-- `f 0, …, f (n-1)` packed. -/
 @[inline] def floatsOfFn (n : Nat) (f : Nat → Float) : FloatArray :=
-  floatsOfFnLoop f n 0 (FloatArray.emptyWithCapacity n)
+  floatsOfFnLoop f n 0 (zeros n)
 
 end FlowGeometry

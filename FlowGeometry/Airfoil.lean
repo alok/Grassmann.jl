@@ -51,13 +51,13 @@ samples: `upper = z + r`, `lower = z - r` with the camber `c·yc`, its slope `dy
 (`dyc ≡ 0`, so `θ = 0`). -/
 def americanSurfaces (slope : Bool) (xs yc dyc yt : FloatArray) (c : Float) (n : Nat) :
     FloatArray × FloatArray :=
-  go n 0 (FloatArray.emptyWithCapacity (2 * n)) (FloatArray.emptyWithCapacity (2 * n))
+  go n 0 (zeros (2 * n)) (zeros (2 * n))
 where
   /-- the fill loop -/
   go : Nat → Nat → FloatArray → FloatArray → FloatArray × FloatArray
     | 0, _, u, l => (u, l)
     | k + 1, i, u, l =>
-      if k == 0 then ((u.push 1).push 0, (l.push 1).push 0)
+      if k == 0 then ((u.set! (2 * i) 1).set! (2 * i + 1) 0, (l.set! (2 * i) 1).set! (2 * i + 1) 0)
       else
         let x := xs.get! i
         let cy := c * yc.get! i
@@ -67,24 +67,26 @@ where
           let rre := t * (zeroOf co - s)
           let rim := t * (zeroOf s + co)
           let zre := x + zeroOf cy
-          go k (i + 1) ((u.push (zre + rre)).push (cy + rim)) ((l.push (zre - rre)).push (cy - rim))
+          go k (i + 1) ((u.set! (2 * i) (zre + rre)).set! (2 * i + 1) (cy + rim))
+            ((l.set! (2 * i) (zre - rre)).set! (2 * i + 1) (cy - rim))
 
 /-- The profile-form surfaces `x ± y·(c·im)` (`airfoils.jl:37`, `upper(interval(z,c,x0),
 profile(z)*(c*im))`), `(upper, lower)`, interleaved, last sample `1 + 0im`. -/
 def profileSurfaces (xs ys : FloatArray) (c : Float) (n : Nat) : FloatArray × FloatArray :=
-  go (zeroOf c) n 0 (FloatArray.emptyWithCapacity (2 * n)) (FloatArray.emptyWithCapacity (2 * n))
+  go (zeroOf c) n 0 (zeros (2 * n)) (zeros (2 * n))
 where
   /-- the fill loop -/
   go (c0 : Float) : Nat → Nat → FloatArray → FloatArray → FloatArray × FloatArray
     | 0, _, u, l => (u, l)
     | k + 1, i, u, l =>
-      if k == 0 then ((u.push 1).push 0, (l.push 1).push 0)
+      if k == 0 then ((u.set! (2 * i) 1).set! (2 * i + 1) 0, (l.set! (2 * i) 1).set! (2 * i + 1) 0)
       else
         let y := ys.get! i
         let wre := y * c0
         let wim := y * c
         let x := xs.get! i
-        go c0 k (i + 1) ((u.push (x + wre)).push wim) ((l.push (x - wre)).push (-wim))
+        go c0 k (i + 1) ((u.set! (2 * i) (x + wre)).set! (2 * i + 1) wim)
+          ((l.set! (2 * i) (x - wre)).set! (2 * i + 1) (-wim))
 
 /-- The elements of an axis. -/
 @[inline] def axisData (a : Axis) : FloatArray := axisValues a
@@ -295,17 +297,17 @@ without its duplicated trailing edge (`[U; reverse(L)[2:end]]`). -/
 def outlineOf (ul : FloatArray × FloatArray) : FloatArray :=
   let (u, l) := ul
   let nl := l.size / 2
-  let out := copyInto u 0 u.size (FloatArray.emptyWithCapacity (u.size + l.size - 2))
-  goL l out (nl - 1)
+  let out := copyInto u 0 u.size (zeros (u.size + l.size - 2))
+  goL l u.size out (nl - 1)
 where
-  /-- append `src[i, i+k)` -/
+  /-- copy `src[i, i+k)` to the same positions -/
   copyInto (src : FloatArray) (i : Nat) : Nat → FloatArray → FloatArray
     | 0, acc => acc
-    | k + 1, acc => copyInto src (i + 1) k (acc.push (src.get! i))
-  /-- append the lower points `j-1, …, 0` -/
-  goL (l : FloatArray) (acc : FloatArray) : Nat → FloatArray
+    | k + 1, acc => copyInto src (i + 1) k (acc.set! i (src.get! i))
+  /-- write the lower points `j-1, …, 0` from position `o` on -/
+  goL (l : FloatArray) (o : Nat) (acc : FloatArray) : Nat → FloatArray
     | 0 => acc
-    | j + 1 => goL l ((acc.push (l.get! (2 * j))).push (l.get! (2 * j + 1))) j
+    | j + 1 => goL l (o + 2) ((acc.set! o (l.get! (2 * j))).set! (o + 1) (l.get! (2 * j + 1))) j
 
 /-- The closed outline, interleaved (Julia `fiber(complex(N))`). -/
 def outlineData (a : Airfoil) : FloatArray := outlineOf (a.surfaces 1 0)
@@ -316,12 +318,13 @@ def complex (a : Airfoil) : TensorField a.outlineBase (Complex Float) := fieldOf
 
 /-- The first `n` samples of an interleaved complex vector as homogeneous points `(1, x, y)`. -/
 def homogeneous (z : FloatArray) (n : Nat) : FloatArray :=
-  go 0 (FloatArray.emptyWithCapacity (3 * n)) n
+  go 0 (zeros (3 * n)) n
 where
   /-- the loop -/
   go (i : Nat) (acc : FloatArray) : Nat → FloatArray
     | 0 => acc
-    | k + 1 => go (i + 1) (((acc.push 1).push (z.get! (2 * i))).push (z.get! (2 * i + 1))) k
+    | k + 1 =>
+      go (i + 1) (((acc.set! (3 * i) 1).set! (3 * i + 1) (z.get! (2 * i))).set! (3 * i + 2) (z.get! (2 * i + 1))) k
 
 /-- Julia `points(N::Airfoil)` (`airfoils.jl:60-63`): the `2P-2` distinct outline points as
 homogeneous `(1, x, y)`. -/
@@ -391,7 +394,7 @@ def complexOn (j : Joukowski) (θv : FloatArray) : FloatArray :=
   let F := j.f.toFloat - gre
   let G : Float := match j.g with | .int n => Float.ofInt (-n) | .float g => -g
   let b2 := match j.b with | .int n => Float.ofInt (n * n) | .float b => b * b
-  go θv R F G b2 θv.size 0 (FloatArray.emptyWithCapacity (2 * θv.size))
+  go θv R F G b2 θv.size 0 (zeros (2 * θv.size))
 where
   /-- the loop over the angles -/
   go (θs : FloatArray) (R F G b2 : Float) : Nat → Nat → FloatArray → FloatArray
@@ -400,7 +403,7 @@ where
       F64.sincosK (θs.get! i) fun s c =>
         let z : Complex Float := ⟨R * c - F, R * s - G⟩
         let w := ComplexF64.inv z
-        go θs R F G b2 k (i + 1) ((acc.push (z.re + b2 * w.re)).push (z.im + b2 * w.im))
+        go θs R F G b2 k (i + 1) ((acc.set! (2 * i) (z.re + b2 * w.re)).set! (2 * i + 1) (z.im + b2 * w.im))
 
 /-- Julia `complex(::Joukowski)` (`airfoils.jl:179-183`): `w = z + b²/z` for
 `z = R·cis(θ) - (f - g·im)`, with Julia's mixed `Int`/`Float64` complex arithmetic and its
