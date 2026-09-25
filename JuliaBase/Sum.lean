@@ -28,7 +28,7 @@ def sumBlock (a : FloatArray) (i0 i1 : Nat) : Float :=
   let r0 := i0 + 2
   let m := i1 + 1 - r0
   let nvec := m / 8 * 8
-  let s := if nvec == 0 then v else vec 0 v (-f64! 0.0) (-f64! 0.0) (-f64! 0.0) (-f64! 0.0) (-f64! 0.0) (-f64! 0.0) (-f64! 0.0) (nvec / 8)
+  let s := if nvec == 0 then v else vec 0 v (f64! -0.0) (f64! -0.0) (f64! -0.0) (f64! -0.0) (f64! -0.0) (f64! -0.0) (f64! -0.0) (nvec / 8)
   tail (r0 + nvec) s (m - nvec)
 where
   /-- The vector loop over groups of 8. -/

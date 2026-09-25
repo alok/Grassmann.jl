@@ -136,15 +136,13 @@ namespace ComplexF64
 @[inline] def angle (z : Complex Float) : Float := F64.atan2 z.im z.re
 
 /-- Julia `isfinite(z::Complex)`. -/
-@[inline] def isFinite (z : Complex Float) : Bool := z.re.isFinite && z.im.isFinite
+@[inline] def isFinite (z : Complex Float) : Bool := F64.isfinite z.re && F64.isfinite z.im
 
 /-- Julia `isnan(z::Complex)`. -/
-@[inline] def isNaN (z : Complex Float) : Bool := z.re.isNaN || z.im.isNaN
+@[inline] def isNaN (z : Complex Float) : Bool := F64.isnan z.re || F64.isnan z.im
 
 /-- Julia `cis(ϕ) = cos ϕ + i sin ϕ` (complex.jl:577), from one `sincos`. -/
-@[inline] def cis (ϕ : Float) : Complex Float :=
-  let (s, c) := F64.sincos ϕ
-  ⟨c, s⟩
+@[inline] def cis (ϕ : Float) : Complex Float := F64.sincosK ϕ fun s c => ⟨c, s⟩
 
 /-! ### Division and inverse -/
 
@@ -220,8 +218,8 @@ free of `Float.ofScientific` calls (`docs/PERF.md`). -/
   let absc := c.abs
   let absd := d.abs
   let cd := if absc ≥ absd then absc else absd
-  if c.isInf || d.isInf then
-    if isFinite z then ⟨f64! 0.0 * F64.sign a * F64.sign c, (-f64! 0.0) * F64.sign b * F64.sign d⟩
+  if F64.isinf c || F64.isinf d then
+    if isFinite z then ⟨f64! 0.0 * F64.sign a * F64.sign c, (f64! -0.0) * F64.sign b * F64.sign d⟩
     else ⟨F64.nan, F64.nan⟩
   else if ab ≥ halfov || ab ≤ twounϵ || cd ≥ halfov || cd ≤ twounϵ then scalingCdiv a b c d ab cd
   else cdiv a b c d (f64! 1.0)  -- the unscaled path; multiplying by 1.0 is exact
@@ -260,7 +258,7 @@ inversion outside it. Inlined, with hoisted constants. -/
   if invLo ≤ cd && cd ≤ invHi then
     let m := Float.fma cd cd (dc * dc)
     ⟨c / m, -d / m⟩
-  else if c.isInf || d.isInf then ⟨F64.copysign (f64! 0.0) c, F64.flipsign (-f64! 0.0) d⟩
+  else if F64.isinf c || F64.isinf d then ⟨F64.copysign (f64! 0.0) c, F64.flipsign (f64! -0.0) d⟩
   else scaledInv c d absc absd cd
 
 /-- `z⁻¹` on `ComplexF64` is Julia's robust inverse. -/
@@ -284,8 +282,8 @@ def ssqsTiny : Float := Float.ofBits 1 / (f64! 2.0 * (F64.eps * F64.eps))
 when the sum over/underflows. -/
 def ssqs (x y : Float) : Float × Int :=
   let ρ := x * x + y * y
-  if !ρ.isFinite && (x.isInf || y.isInf) then (F64.inf, 0)
-  else if ρ.isInf || (ρ == f64! 0.0 && (x != f64! 0.0 || y != f64! 0.0)) || ρ < ssqsTiny then
+  if !F64.isfinite ρ && (F64.isinf x || F64.isinf y) then (F64.inf, 0)
+  else if F64.isinf ρ || (ρ == f64! 0.0 && (x != f64! 0.0 || y != f64! 0.0)) || ρ < ssqsTiny then
     let m := F64.max x.abs y.abs
     let k := if m == f64! 0.0 then 0 else F64.exponent m
     let xk := F64.ldexp x (-k)
@@ -301,11 +299,11 @@ def sqrt (z : Complex Float) : Complex Float :=
   if x == f64! 0.0 && y == f64! 0.0 then ⟨f64! 0.0, y⟩
   else
     let (ρ, k) := ssqs x y
-    let ρ := if x.isFinite then F64.ldexp x.abs (-k) + ρ.sqrt else ρ
+    let ρ := if F64.isfinite x then F64.ldexp x.abs (-k) + ρ.sqrt else ρ
     let (ρ, k) := if JInt.isodd k then (ρ, (k - 1) / 2) else (ρ + ρ, k / 2 - 1)
     let ρ := F64.ldexp ρ.sqrt k
     if ρ != f64! 0.0 then
-      let η := if y.isFinite then (y / ρ) / f64! 2.0 else y
+      let η := if F64.isfinite y then (y / ρ) / f64! 2.0 else y
       if x < f64! 0.0 then ⟨η.abs, F64.copysign ρ y⟩ else ⟨ρ, η⟩
     else ⟨ρ, y⟩
 
@@ -327,52 +325,48 @@ def log (z : Complex Float) : Complex Float :=
 def exp (z : Complex Float) : Complex Float :=
   let zr := z.re
   let zi := z.im
-  if zr.isNaN then ⟨zr, if zi == f64! 0.0 then zi else zr⟩
-  else if !zi.isFinite then
+  if F64.isnan zr then ⟨zr, if zi == f64! 0.0 then zi else zr⟩
+  else if !F64.isfinite zi then
     if zr == F64.inf then ⟨-zr, F64.nan⟩
-    else if zr == -F64.inf then ⟨-f64! 0.0, F64.copysign (f64! 0.0) zi⟩
+    else if zr == -F64.inf then ⟨f64! -0.0, F64.copysign (f64! 0.0) zi⟩
     else ⟨F64.nan, F64.nan⟩
   else
     let er := F64.exp zr
     if zi == f64! 0.0 then ⟨er, zi⟩
-    else
-      let (s, c) := F64.sincos zi
-      ⟨er * c, er * s⟩
+    else F64.sincosK zi fun s c => ⟨er * c, er * s⟩
 
 /-- Julia `expm1(z::Complex)` (complex.jl:717). -/
 def expm1 (z : Complex Float) : Complex Float :=
   let zr := z.re
   let zi := z.im
-  if zr.isNaN then ⟨zr, if zi == f64! 0.0 then zi else zr⟩
-  else if !zi.isFinite then
+  if F64.isnan zr then ⟨zr, if zi == f64! 0.0 then zi else zr⟩
+  else if !F64.isfinite zi then
     if zr == F64.inf then ⟨-zr, F64.nan⟩
-    else if zr == -F64.inf then ⟨-f64! 1.0, F64.copysign (f64! 0.0) zi⟩
+    else if zr == -F64.inf then ⟨f64! -1.0, F64.copysign (f64! 0.0) zi⟩
     else ⟨F64.nan, F64.nan⟩
   else
     let erm1 := F64.expm1 zr
     if zi == f64! 0.0 then ⟨erm1, zi⟩
     else
       let er := erm1 + f64! 1.0
-      if er.isFinite then
+      if F64.isfinite er then
         let s := F64.sin (f64! 0.5 * zi)
         ⟨erm1 - f64! 2.0 * er * (s * s), er * F64.sin zi⟩
-      else
-        let (s, c) := F64.sincos zi
-        ⟨er * c, er * s⟩
+      else F64.sincosK zi fun s c => ⟨er * c, er * s⟩
 
 /-- Julia `log1p(z::Complex)` (complex.jl:747). -/
 def log1p (z : Complex Float) : Complex Float :=
   let zr := z.re
   let zi := z.im
-  if zr.isFinite then
-    if zi.isInf then log z
+  if F64.isfinite zr then
+    if F64.isinf zi then log z
     else
       let u : Complex Float := f64! 1.0 + z
       if u.re == f64! 1.0 && u.im == f64! 0.0 then z
       else if u.re ≤ f64! 0.0 then log u
       else log u * div z (u - f64! 1.0)
-  else if zr.isNaN then ⟨zr, zr⟩
-  else if zi.isFinite then ⟨F64.inf, F64.copysign (if zr > f64! 0.0 then f64! 0.0 else F64.pi) zi⟩
+  else if F64.isnan zr then ⟨zr, zr⟩
+  else if F64.isfinite zi then ⟨F64.inf, F64.copysign (if zr > f64! 0.0 then f64! 0.0 else F64.pi) zi⟩
   else ⟨F64.inf, F64.nan⟩
 
 /-! ### Trigonometric and hyperbolic functions -/
@@ -388,24 +382,26 @@ def sin (z : Complex Float) : Complex Float :=
   let zr := z.re
   let zi := z.im
   if zr == f64! 0.0 then ⟨zr, F64.sinh zi⟩
-  else if !zr.isFinite then
-    if zi == f64! 0.0 || zi.isInf then ⟨F64.nan, zi⟩ else ⟨F64.nan, F64.nan⟩
+  else if !F64.isfinite zr then
+    if zi == f64! 0.0 || F64.isinf zi then ⟨F64.nan, zi⟩ else ⟨F64.nan, F64.nan⟩
   else
-    let (s, c) := F64.sincos zr
-    ⟨s * F64.cosh zi, c * F64.sinh zi⟩
+    let ch := F64.cosh zi
+    let sh := F64.sinh zi
+    F64.sincosK zr fun s c => ⟨s * ch, c * sh⟩
 
 /-- Julia `cos(z::Complex)` (complex.jl:905). -/
 def cos (z : Complex Float) : Complex Float :=
   let zr := z.re
   let zi := z.im
-  if zr == f64! 0.0 then ⟨F64.cosh zi, if zi.isNaN then zr else -(F64.flipsign zr zi)⟩
-  else if !zr.isFinite then
-    if zi == f64! 0.0 then ⟨F64.nan, if zr.isNaN then f64! 0.0 else -(F64.flipsign zi zr)⟩
-    else if zi.isInf then ⟨F64.inf, F64.nan⟩
+  if zr == f64! 0.0 then ⟨F64.cosh zi, if F64.isnan zi then zr else -(F64.flipsign zr zi)⟩
+  else if !F64.isfinite zr then
+    if zi == f64! 0.0 then ⟨F64.nan, if F64.isnan zr then f64! 0.0 else -(F64.flipsign zi zr)⟩
+    else if F64.isinf zi then ⟨F64.inf, F64.nan⟩
     else ⟨F64.nan, F64.nan⟩
   else
-    let (s, c) := F64.sincos zr
-    ⟨c * F64.cosh zi, -s * F64.sinh zi⟩
+    let ch := F64.cosh zi
+    let sh := F64.sinh zi
+    F64.sincosK zr fun s c => ⟨c * ch, -s * sh⟩
 
 /-- Julia `sinh(z) = i⁻¹ sin(iz)` computed by swapping parts (complex.jl:973). -/
 def sinh (z : Complex Float) : Complex Float :=
@@ -423,16 +419,16 @@ def asinhFloatmax : Float := F64.asinh F64.floatmax
 def tanh (z : Complex Float) : Complex Float :=
   let ξ := z.re
   let η := z.im
-  if ξ.isNaN && η == f64! 0.0 then ⟨ξ, η⟩
+  if F64.isnan ξ && η == f64! 0.0 then ⟨ξ, η⟩
   else if f64! 4.0 * ξ.abs > asinhFloatmax then
     ⟨F64.copysign (f64! 1.0) ξ,
-      F64.copysign (f64! 0.0) (η * (if η.isFinite then F64.sin (f64! 2.0 * η.abs) else f64! 1.0))⟩
+      F64.copysign (f64! 0.0) (η * (if F64.isfinite η then F64.sin (f64! 2.0 * η.abs) else f64! 1.0))⟩
   else
     let t := F64.tan η
     let β := f64! 1.0 + t * t
     let s := F64.sinh ξ
     let ρ := (f64! 1.0 + s * s).sqrt
-    if t.isInf then ⟨ρ / s, f64! 1.0 / t⟩
+    if F64.isinf t then ⟨ρ / s, f64! 1.0 / t⟩
     else (⟨β * ρ * s, t⟩ : Complex Float) / (f64! 1.0 + β * s * s)
 
 /-- Julia `tan(z) = -i tanh(iz)` (complex.jl:925). -/
@@ -444,12 +440,12 @@ def tan (z : Complex Float) : Complex Float :=
 def asin (z : Complex Float) : Complex Float :=
   let zr := z.re
   let zi := z.im
-  if zr.isInf && zi.isInf then ⟨F64.copysign quarterPi zr, zi⟩
-  else if zi.isNaN && zr.isInf then ⟨zi, F64.inf⟩
+  if F64.isinf zr && F64.isinf zi then ⟨F64.copysign quarterPi zr, zi⟩
+  else if F64.isnan zi && F64.isinf zr then ⟨zi, F64.inf⟩
   else
     let ξ :=
       if zr == f64! 0.0 then zr
-      else if !zr.isFinite then halfPi * F64.sign zr
+      else if !F64.isfinite zr then halfPi * F64.sign zr
       else F64.atan2 zr (sqrt (f64! 1.0 - z) * sqrt (f64! 1.0 + z)).re
     let η := F64.asinh
       (F64.copysign (sqrt (Complex.conj (f64! 1.0 - z)) * sqrt (f64! 1.0 + z)).im zi)
@@ -459,9 +455,9 @@ def asin (z : Complex Float) : Complex Float :=
 def acos (z : Complex Float) : Complex Float :=
   let zr := z.re
   let zi := z.im
-  if zr.isNaN then (if zi.isInf then ⟨zr, -zi⟩ else ⟨zr, zr⟩)
-  else if zi.isNaN then
-    if zr.isInf then ⟨zi, zr.abs⟩
+  if F64.isnan zr then (if F64.isinf zi then ⟨zr, -zi⟩ else ⟨zr, zr⟩)
+  else if F64.isnan zi then
+    if F64.isinf zr then ⟨zi, zr.abs⟩
     else if zr == f64! 0.0 then ⟨halfPi, zi⟩
     else ⟨zi, zi⟩
   else if zr == f64! 0.0 && zi == f64! 0.0 then ⟨halfPi, -zi⟩
@@ -470,7 +466,7 @@ def acos (z : Complex Float) : Complex Float :=
   else
     let ξ := f64! 2.0 * F64.atan2 (sqrt (f64! 1.0 - z)).re (sqrt (f64! 1.0 + z)).re
     let η := F64.asinh (sqrt (Complex.conj (f64! 1.0 + z)) * sqrt (f64! 1.0 - z)).im
-    let ξ := if zr.isInf && zi.isInf then ξ - quarterPi * F64.sign zr else ξ
+    let ξ := if F64.isinf zr && F64.isinf zi then ξ - quarterPi * F64.sign zr else ξ
     ⟨ξ, η⟩
 
 /-- Julia `asinh(z) = -i asin(iz)` by part swapping (complex.jl:1006). -/
@@ -482,13 +478,13 @@ def asinh (z : Complex Float) : Complex Float :=
 def acosh (z : Complex Float) : Complex Float :=
   let zr := z.re
   let zi := z.im
-  if zr.isNaN || zi.isNaN then
-    if zr.isInf || zi.isInf then ⟨F64.inf, F64.nan⟩ else ⟨F64.nan, F64.nan⟩
+  if F64.isnan zr || F64.isnan zi then
+    if F64.isinf zr || F64.isinf zi then ⟨F64.inf, F64.nan⟩ else ⟨F64.nan, F64.nan⟩
   else if zr == -F64.inf && zi.toBits == F64.signMask then ⟨F64.inf, -F64.pi⟩
   else
     let ξ := F64.asinh (sqrt (Complex.conj (z - f64! 1.0)) * sqrt (z + f64! 1.0)).re
     let η := f64! 2.0 * F64.atan2 (sqrt (z - f64! 1.0)).im (sqrt (z + f64! 1.0)).re
-    let η := if zr.isInf && zi.isInf then η - quarterPi * F64.sign zi * F64.sign zr else η
+    let η := if F64.isinf zr && F64.isinf zi then η - quarterPi * F64.sign zi * F64.sign zr else η
     ⟨ξ, η⟩
 
 /-- `sqrt(floatmax(Float64))/4`, the overflow threshold of `atanh` (complex.jl:1034). -/
@@ -501,9 +497,9 @@ def atanh (z : Complex Float) : Complex Float :=
   let ax := x.abs
   let ay := y.abs
   if ax > atanhBig || ay > atanhBig then
-    if y.isNaN then
-      if x.isInf then ⟨F64.copysign (f64! 0.0) x, y⟩ else ⟨(inv z).re, y⟩
-    else if y.isInf then ⟨F64.copysign (f64! 0.0) x, F64.copysign halfPi y⟩
+    if F64.isnan y then
+      if F64.isinf x then ⟨F64.copysign (f64! 0.0) x, y⟩ else ⟨(inv z).re, y⟩
+    else if F64.isinf y then ⟨F64.copysign (f64! 0.0) x, F64.copysign halfPi y⟩
     else ⟨(inv z).re, F64.copysign halfPi y⟩
   else
     let β := F64.copysign (f64! 1.0) x
@@ -531,7 +527,7 @@ Lean NaN has no observable sign (`Float.toBits` canonicalizes NaNs, as Float's l
 identifies them), so every Lean NaN behaves as Julia's positive `NaN` and `-NaN` would read as
 positive too; that one case is written out. -/
 def atan (z : Complex Float) : Complex Float :=
-  if z.im.isNaN && z.re.isInf then ⟨F64.copysign halfPi z.re, f64! 0.0⟩
+  if F64.isnan z.im && F64.isinf z.re then ⟨F64.copysign halfPi z.re, f64! 0.0⟩
   else
     let w := atanh ⟨-z.im, z.re⟩
     ⟨w.im, -w.re⟩
@@ -563,7 +559,7 @@ def pow (z p : Complex Float) : Complex Float :=
       else if zr > f64! 0.0 then ⟨F64.pow zr pr, F64.flipsign z.im pr⟩
       else
         let rp := F64.pow (-zr) pr
-        if pr.isFinite then
+        if F64.isfinite pr then
           rp * (⟨F64.cospi pr, F64.flipsign (F64.sinpi pr) z.im⟩ : Complex Float)
         else if rp == f64! 0.0 then ⟨f64! 0.0, f64! 0.0⟩ else ⟨F64.nan, F64.nan⟩
     else finish (F64.pow (abs z) pr) (pr * angle z)
@@ -583,7 +579,7 @@ def pow (z p : Complex Float) : Complex Float :=
 where
   /-- `rᵖ · cis(ϕ)` with Julia's non-finite-phase handling. -/
   finish (rp ϕ : Float) : Complex Float :=
-    if ϕ.isFinite then rp * cis ϕ
+    if F64.isfinite ϕ then rp * cis ϕ
     else if rp == f64! 0.0 then ⟨f64! 0.0, f64! 0.0⟩ else ⟨F64.nan, F64.nan⟩
 
 end ComplexF64
@@ -603,9 +599,9 @@ def div (z w : Complex Float32) : Complex Float32 :=
   let b := z.im.toFloat
   let c := w.re.toFloat
   let d := w.im.toFloat
-  if c.isInf || d.isInf then
-    if z.re.isFinite && z.im.isFinite then
-      ⟨f32! 0.0 * F32.sign z.re * F32.sign w.re, (-f32! 0.0) * F32.sign z.im * F32.sign w.im⟩
+  if F64.isinf c || F64.isinf d then
+    if F32.isfinite z.re && F32.isfinite z.im then
+      ⟨f32! 0.0 * F32.sign z.re * F32.sign w.re, (f32! -0.0) * F32.sign z.im * F32.sign w.im⟩
     else ⟨Float32.ofBits 0x7FC00000, Float32.ofBits 0x7FC00000⟩
   else
     let mag := f64! 1.0 / Float.fma c c (d * d)
@@ -619,8 +615,8 @@ instance : Div (Complex Float32) := ⟨div⟩
 def inv (w : Complex Float32) : Complex Float32 :=
   let c := w.re.toFloat
   let d := w.im.toFloat
-  if c.isInf || d.isInf then
-    ⟨F32.copysign (f32! 0.0) w.re, if F32.signbit w.im then f32! 0.0 else -f32! 0.0⟩
+  if F64.isinf c || F64.isinf d then
+    ⟨F32.copysign (f32! 0.0) w.re, if F32.signbit w.im then f32! 0.0 else f32! -0.0⟩
   else
     let mag := f64! 1.0 / Float.fma c c (d * d)
     ⟨(c * mag).toFloat32, (-d * mag).toFloat32⟩

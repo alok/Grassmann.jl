@@ -328,7 +328,7 @@ variable {n : Nat} (C : Column n)
     else
       let r := radius1976
       let ξ := Δh * ((r + h0) / (r + hG))
-      (f64! 1000.0) - ((f64! 1000.0) - T0) * exp ((-(f64! 0.012) / ((f64! 1000.0) - T0)) * ξ)
+      (f64! 1000.0) - ((f64! 1000.0) - T0) * exp (((f64! -0.012) / ((f64! 1000.0) - T0)) * ξ)
   else if a0 == (f64! 0.0) then T0 else T0 + a0 * (hG - h0)
 
 /-- Whether Julia's `temperature(hG, i, W, U)` throws: in the 1976 elliptic layer

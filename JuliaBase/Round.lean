@@ -32,7 +32,7 @@ def roundDigitsFinite (x : Float) (d : Int) : Float :=
     let y := round (x / step) * step
     if y.isFinite then y
     else if x > 0 then f64! 0.0
-    else if x < 0 then -f64! 0.0
+    else if x < 0 then f64! -0.0
     else x
 
 /-- Julia `round(x::Float64, digits = d)` (floatfuncs.jl:48): `x` itself if it is not
