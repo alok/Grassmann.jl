@@ -180,4 +180,9 @@ theorem usqMap_eq_usqToConst :
 def _root_.UnitSystems.Dim.toGroup (d : Dim) : USQGroup :=
   Group.mk' (.exact (Vector.ofFn fun i => d.toRats.getD i.1 0)) (.int 1)
 
+/-- The exponents of a doubled `HalfDim` (UnitSystems' exponent model) as an
+exact USQ vector. -/
+def _root_.UnitSystems.HalfDim.toExps (h : HalfDim) : Exps 11 :=
+  .exact (Vector.ofFn fun i => mkRat (h.toList.getD i.1 0) 2)
+
 end Similitude
