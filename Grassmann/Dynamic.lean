@@ -7,6 +7,7 @@ import Grassmann.Dynamic.Products
 import Grassmann.Dynamic.Norms
 import Grassmann.Dynamic.Layout
 import Grassmann.Dynamic.Laws
+import Grassmann.Dynamic.Equal
 
 /-!
 # The dynamic, Julia-exact element layer (`Grassmann.TA`)
@@ -27,5 +28,6 @@ compute the entries with the static layer's kernels.
 | `Grassmann.Dynamic.Products` | `⟑ ∧ ∨ contraction` with Julia's result kinds, the derived products, sandwiches |
 | `Grassmann.Dynamic.Norms` | `abs2`, `norm`, `isscalar` with Julia's kinds |
 | `Grassmann.Dynamic.Layout` | `LayoutInv n`: the index-table round trips the proofs use (kernel-checked, `n ≤ 8`) |
+| `Grassmann.Dynamic.Equal` | Julia's `==` (`equal`), coefficientwise `denseEq` and its correctness |
 | `Grassmann.Dynamic.Laws` | `toDense_add`, `toDense_neg`, `toDense_sub`, `toDense_smul` over any `LawfulCoeff` |
 -/
