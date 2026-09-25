@@ -27,7 +27,7 @@ Allocation counts, nondeterministic in Julia, are reported as `0`.
 
 namespace Wilkinson
 
-open AbstractAnalysis JuliaBase SyntaxTree
+open JuliaBase SyntaxTree
 
 /-- Element `i` of a grid as a Julia number of the grid's element type. -/
 def FloatSet.num (s : FloatSet) (i : Nat) : JNum :=

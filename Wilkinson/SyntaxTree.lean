@@ -18,7 +18,7 @@ depends on them:
 
 namespace Wilkinson
 
-open AbstractAnalysis
+open JuliaBase
 
 namespace NumType
 

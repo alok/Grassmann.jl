@@ -1,25 +1,31 @@
+import JuliaBase.Num
+
 /-!
 # Exact IEEE-754 toolkit, generic over the format
 
-Julia's float printing, `isapprox` and the `Float64` constants come from
-`JuliaBase` (`F64.showString`, `F32.showString`, `F64.isapprox`, `F64.eps`, …).
-This module holds what `JuliaBase` does not provide, all generic over
-`Float`/`Float32` through the `IEEEFloat` class:
+Julia's float printing, `isapprox` and the `Float64` constants are in `JuliaBase.Num` and
+`JuliaBase.Float` (`F64.showString`, `F32.showString`, `F64.isapprox`, `F64.eps`, …). This
+module holds the exact, format-generic part of Julia `Base`'s float model, generic over
+`Float`/`Float32` through the `IEEEFloat` class (Julia's `Base.IEEEFloat`):
 
 * exact decoding `x = ±m·2^e` (`decode`) and the exact rational value (`toRat?`);
-* correctly rounded conversion *from* exact values: `ofDyadic`, `ofFraction`,
-  `ofRat` (Julia `Float64(::Rational)`, `Float32(::BigFloat)`), assembled through
-  Lean's IEEE model (`Float.Model.UnpackedFloat.round`), so rounding is right by
-  construction;
-* the `Float32` constants and neighbours (`eps`, `floatmax`, `floatmin`,
-  `maxintfloat`, `inf`, `nan`, `nextFloat`, `prevFloat`), which for `Float` agree
-  with `JuliaBase.F64` (checked in `Tests/AbstractAnalysis/Props.lean`);
-* Julia `exponent`, `eps(x)` (`ulp`) and an ulp distance for tolerant tests.
+* correctly rounded conversion *from* exact values: `ofDyadic`, `ofFraction`, `ofRat`,
+  `ofDecimal` (Julia `Float64(::Rational{BigInt})`, `Float32(::BigFloat)`, and the
+  decimal-to-binary step of `parse(Float64, s)`), assembled through Lean's IEEE model
+  (`Float.Model.UnpackedFloat.round`), so rounding is right by construction. (For
+  `Rational{Int64}` Julia divides the two converted parts, `F64.ofRat`, which is the same
+  value whenever both parts are below `2^53`.)
+* the constants and neighbours (`eps`, `floatmax`, `floatmin`, `maxintfloat`, `inf`, `nan`,
+  `nextFloat`, `prevFloat`), which for `Float` agree with `JuliaBase.F64` and for `Float32`
+  with `JuliaBase.F32` (checked in `Tests/JuliaBase/IEEE.lean`);
+* Julia `exponent`, `eps(x)` (`ulp`; `F64.epsOf`, `F32.epsOf`) and an ulp distance for
+  tolerant tests.
 
-The API is format-generic so that it can move into `JuliaBase` unchanged.
+Everything here goes through `Nat` arithmetic: exact and simple, not fast. Hot loops use the
+bit-level `F64`/`F32` functions instead.
 -/
 
-namespace AbstractAnalysis
+namespace JuliaBase
 
 open Float.Model (Format)
 open Float.Model.UnpackedFloat (Sign)
@@ -188,6 +194,25 @@ def ulpDistance (x y : F) : Nat :=
     else (toBitsNat z : Int)
   (key x - key y).natAbs
 
+/-- Correctly rounded value of `±d · 10^e`, signed zero included (the decimal-to-binary
+conversion of Julia's `parse(Float64, s)`, which calls a correctly rounding `strtod`).
+Exponents far outside the binary range short-circuit to `±Inf`/`±0` without building
+`10^e`: `d · 10^e ≥ 10^e > 10^330` overflows and `d · 10^e < 10^(e + ⌊(log₂ d + 1)/3⌋ + 1)
+< 10^-330` underflows, in both `Float64` and `Float32`. -/
+def ofDecimal (F : Type) [IEEEFloat F] (neg : Bool) (d : Nat) (e : Int) : F :=
+  let n : Int := if neg then -(d : Int) else d
+  if d = 0 then assemble F neg 0 0
+  else if e > 330 then assemble F neg (expMax F) 0
+  else if e + ((Nat.log2 d + 1) / 3 : Nat) + 1 < -330 then assemble F neg 0 0
+  else if e ≥ 0 then ofFraction F (n * 10 ^ e.toNat) 1 else ofFraction F n (10 ^ (-e).toNat)
+
 end IEEEFloat
 
-end AbstractAnalysis
+/-- Julia `eps(x::Float64)`: the spacing of floats at `x` (`eps(floatmax()) = 2^971`,
+`eps(0.0) = 5.0e-324`, `NaN` for `Inf`/`NaN`). -/
+@[inline] def F64.epsOf (x : Float) : Float := IEEEFloat.ulp x
+
+/-- Julia `eps(x::Float32)`. -/
+@[inline] def F32.epsOf (x : Float32) : Float32 := IEEEFloat.ulp x
+
+end JuliaBase

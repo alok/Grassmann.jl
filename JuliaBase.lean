@@ -1,4 +1,5 @@
 import JuliaBase.Num
+import JuliaBase.IEEE
 import JuliaBase.Ryu
 import JuliaBase.Float
 import JuliaBase.Complex
@@ -19,6 +20,11 @@ verified bit for bit against the Julia 1.13 oracle (`Tests/JuliaBase/`).
   constants, `isodd`, `power_by_squaring`, and the oracle comparator `F64.ulpDist`. This is
   the one home of Julia's scalar semantics: `StaticVectors` and `AbstractTensors` build on
   it rather than keeping copies.
+* `JuliaBase.IEEE`: the exact, format-generic IEEE-754 toolkit (`IEEEFloat` over `Float` and
+  `Float32`): exact decoding (`decode`, `toRat?`), correctly rounded conversion from dyadic,
+  rational and decimal values (`ofDyadic`, `ofFraction`, `ofRat`, `ofDecimal`), the constants
+  and neighbours of either format, Julia `exponent`, `eps(x)` (`F64.epsOf`, `F32.epsOf`) and
+  `ulpDistance`.
 * `JuliaBase.Ryu`: Ryu shortest round-trip digits (`reduce_shortest`) for `Float64` and
   `Float32`, including the compact 6-significant-digit reduction.
 * `JuliaBase.Float`: `writeShortest` (Julia `Ryu.writeshortest` with all its keyword options),

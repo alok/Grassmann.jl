@@ -1,10 +1,14 @@
 # Oracle generator for the JuliaBase test suites.
 #
 #   julia --startup-file=no --project=oracle Tests/JuliaBase/gen_golden.jl golden Tests/JuliaBase
-#       writes the committed goldens (float_show.json, num.json, range.json, show.json)
+#       writes the committed goldens (float_show.json, num.json, range.json, show.json, math.json)
+#   julia --startup-file=no --project=oracle Tests/JuliaBase/gen_golden.jl math Tests/JuliaBase
+#       rewrites only math.json (it has its own seed)
 #   julia --startup-file=no --project=oracle Tests/JuliaBase/gen_golden.jl fuzz PREFIX N SEED
-#       writes large TSV fuzz files PREFIX_{f64,f32,num,range}.tsv (not committed); run them with
-#       Tests.JuliaBase.fuzzAll (see Tests/JuliaBase.lean).
+#       writes large TSV fuzz files PREFIX_{f64,f32,opts,num,range,math}.tsv (not committed); run
+#       them with Tests.JuliaBase.fuzzAll (see Tests/JuliaBase.lean)
+#   julia --startup-file=no --project=oracle Tests/JuliaBase/gen_golden.jl fuzzmath PREFIX N SEED
+#       writes only PREFIX_math.tsv
 #
 # Floats are exchanged as the hex of their bit pattern so they round-trip exactly.
 
@@ -244,6 +248,259 @@ function show_cases()
           "pcompact" => sprint(print, v; context = :compact => true)) for (id, v) in SHOW_VALUES]
 end
 
+# ---------------------------------------------------------------- Julia's own math (math.json)
+#
+# Julia's pure-Julia kernels (base/special/{exp,log,pow}.jl, intfuncs.jl, reduce.jl, parse,
+# floatfuncs.jl rounding) and the exact IEEE toolkit. Rows are tagged by the first field:
+#   u64/u32   name x r        exp exp2 exp10 log log2 log10 log1p expm1 (Float64 / Float32)
+#   powf64/powf32  x y r      x^y, same float type
+#   powi64/powi32  x n r      x^n, n::Int
+#   lit64/lit32    x k r      Base.literal_pow(^, x, Val(k))
+#   pbs64          x p r      Base.power_by_squaring(x, p)
+#   sum            n xs... r  sum(::Vector{Float64}) of explicit values
+#   sumgen         n seed r   sum of the Wilkinson generator vector (see sumvec)
+#   parse          s r|ERR    tryparse(Float64, s)
+#   rdig/rsig      x d r      round(x, digits = d) / round(x, sigdigits = d)
+#   hidigit        x h        Base.hidigit(x, 10)
+#   eps64/eps32    x r        eps(x)
+#   exponent64/32  x e        exponent(x)
+#   rat64/rat32    p q r      p/q correctly rounded (Float64(BigFloat(p)/BigFloat(q)) at 4096 bits)
+#   colon32        a st b xs  collect(a:st:b) for Float32
+#   f16            p q bits str   Float16(p//q) correctly rounded, and string(Float16) of it
+
+hex16(x::Float16) = string(reinterpret(UInt16, x), base = 16)
+
+const EXPLIM = Dict("exp" => (709.7827128933841, -745.1332191019412, 708.3964185322641),
+                    "exp2" => (1024.0, -1075.0, 1022.0),
+                    "exp10" => (308.25471555991675, -323.60724533877976, 307.6526555685887),
+                    "expm1" => (709.7827128933845, -37.42994775023705, 0.22314355131420976))
+const EXPLIM32 = Dict("exp" => (88.72284f0, -103.97208f0, 87.33655f0),
+                      "exp2" => (128f0, -150f0, 126.00001f0),
+                      "exp10" => (38.53184f0, -45.1545f0, 37.92978f0),
+                      "expm1" => (88.72284f0, -17.32868f0, 0.22314355f0))
+const UNARY = Dict("exp" => exp, "exp2" => exp2, "exp10" => exp10, "log" => log, "log2" => log2,
+                   "log10" => log10, "log1p" => log1p, "expm1" => expm1)
+const UNAMES = sort(collect(keys(UNARY)))
+
+function exp_arg(rng, name)
+    mx, mn, sub = EXPLIM[name]
+    k = rand(rng, 1:9)
+    k == 1 && return (2rand(rng) - 1) * 1.05 * max(-mn, mx)
+    k == 2 && return (2rand(rng) - 1) * 50.0
+    k == 3 && return (2rand(rng) - 1)
+    k == 4 && return nudge(rand(rng, (mx, mn, sub, -sub, -0.2876820724517809)), rand(rng, -40:40))
+    k == 5 && return (2rand(rng) - 1) * 10.0^rand(rng, -20:0)
+    k == 6 && return rand(rng, (0.0, -0.0, Inf, -Inf, NaN, 1.0, -1.0, 0.5, 2.0, 10.0, 1e-300, 5e-324))
+    k == 7 && return Float64(rand(rng, -1100:1100)) / rand(rng, (1, 2, 4, 256, 512))
+    k == 8 && return (2rand(rng) - 1) * 0.3
+    return operand(rng)
+end
+
+function log_arg(rng, name)
+    if name == "log1p"
+        k = rand(rng, 1:7)
+        k == 1 && return (2rand(rng) - 1) * 10.0^rand(rng, -20:-1)
+        k == 2 && return nudge(rand(rng, (1.1102230246251565e-16, -1.1102230246251565e-16, -0.06058693718652422,
+                                         0.06449445891785943, -1.0, 0.0)), rand(rng, -5:5))
+        k == 3 && return rand(rng) * 2 - 1
+        k == 4 && return exp(rand(rng) * 1400 - 700)
+        k == 5 && return rand(rng, (0.0, -0.0, Inf, NaN, 1.0, -0.5, 1e-310, -1.0))
+        k == 6 && return -rand(rng)
+        return abs(operand(rng))
+    end
+    k = rand(rng, 1:8)
+    k <= 2 && return reinterpret(Float64, rand(rng, UInt64) >> 1)
+    k == 3 && return 1 + (2rand(rng) - 1) * 0.1
+    k == 4 && return nudge(rand(rng, (0.9394130628134757, 1.0644944589178595, 1.0, floatmin(), 5e-324, floatmax())),
+                           rand(rng, -5:5))
+    k == 5 && return exp(rand(rng) * 1400 - 700)
+    k == 6 && return rand(rng, (0.0, -0.0, Inf, NaN, 1.0, 2.0, 10.0, 0.5, 1e-310))
+    k == 7 && return Float64(rand(rng, 1:10^6)) / rand(rng, (1, 10, 1000))
+    return abs(operand(rng))
+end
+
+unary_arg(rng, name) = name in ("exp", "exp2", "exp10", "expm1") ? exp_arg(rng, name) : log_arg(rng, name)
+
+function unary32_arg(rng, name)
+    if name in ("exp", "exp2", "exp10", "expm1")
+        mx, mn, sub = EXPLIM32[name]
+        k = rand(rng, 1:5)
+        k == 1 && return Float32((2rand(rng) - 1) * 1.05 * max(-mn, mx))
+        k == 2 && return nudge(rand(rng, (mx, mn, sub, -sub, -0.2876821f0)), rand(rng, -40:40))
+        k == 3 && return Float32((2rand(rng) - 1) * 10.0^rand(rng, -10:0))
+        k == 4 && return rand(rng, (0f0, -0f0, Inf32, -Inf32, NaN32, 1f0, -1f0))
+        return sample32(rng)
+    end
+    x = Float32(log_arg(rng, name))
+    rand(rng) < 0.2 && (x = abs(sample32(rng)))
+    rand(rng) < 0.1 && (x = nudge(rand(rng, (0.939413f0, 1.0644945f0, 1f0, -0.06058694f0, 0.06449446f0,
+                                            5.9604645f-8, floatmin(Float32))), rand(rng, -3:3)))
+    return x
+end
+
+function pow_base(rng)
+    k = rand(rng, 1:9)
+    k <= 2 && return exp(rand(rng) * 60 - 30)
+    k == 3 && return Float64(rand(rng, 2:43)) * rand(rng, (1, -1))
+    k == 4 && return 1 + (2rand(rng) - 1) * 10.0^rand(rng, -16:-1)
+    k == 5 && return rand(rng, (0.0, -0.0, Inf, -Inf, NaN, 1.0, -1.0, 5e-324, 1e-310, floatmax()))
+    k == 6 && return -exp(rand(rng) * 20 - 10)
+    k == 7 && return exp(rand(rng) * 1400 - 700)
+    return operand(rng)
+end
+
+function pow_exp(rng)
+    k = rand(rng, 1:9)
+    k <= 2 && return rand(rng, (0.5, -0.5, 1.5, -1.5, 2.5, 1/3, -1/3, 0.25, 3.5, -2.5, 0.1, 0.9))
+    k == 3 && return Float64(rand(rng, -40:40))
+    k == 4 && return (2rand(rng) - 1) * 10
+    k == 5 && return Float64(rand(rng, (-1, 1)) * rand(rng, 24577:10^7))
+    k == 6 && return rand(rng, (0.0, -0.0, Inf, -Inf, NaN, 1e20, -1e20, 7e18, 1e300))
+    k == 7 && return (2rand(rng) - 1) * 10.0^rand(rng, 2:6)
+    k == 8 && return Float64(rand(rng, -5000:30000)) + rand(rng, (0.0, 0.5))
+    return operand(rng)
+end
+
+function pow_int(rng)
+    k = rand(rng, 1:6)
+    k <= 3 && return rand(rng, -40:40)
+    k == 4 && return rand(rng, -5000:30000)
+    k == 5 && return rand(rng, (-1, 1)) * rand(rng, 24577:10^9)
+    return rand(rng, (-1, 1)) * rand(rng, 2^52:2^62)
+end
+
+# the Wilkinson sum vector: integers scaled by powers of two (Lean rebuilds it exactly)
+sumvec(n, s) = [Float64(Int64((UInt64(i) * 0x9E3779B1 + UInt64(s)) % UInt64(2)^32) - 2^31) *
+                2.0^(Int((UInt64(i) * UInt64(s) + 7) % 61) - 91) for i in 1:n]
+
+function parse_str(rng)
+    k = rand(rng, 1:6)
+    if k <= 3
+        d = join(rand(rng, '0':'9', rand(rng, 1:25)))
+        return string(rand(rng) < 0.3 ? "-" : "", d[1:min(end, rand(rng, 1:length(d)))], ".", d, "e",
+                      rand(rng, -340:320))
+    elseif k == 4
+        return repr(sample64(rng))
+    elseif k == 5
+        return string(rand(rng, 0:10^rand(rng, 1:18)))
+    else
+        return rand(rng, ("0", "-0", "1", "+1.5", ".5", "5.", "-.5e-3", "1E+2", "inf", "-Inf", "NaN", "Infinity",
+                          "-infinity", "nan", "1e", ".", "e5", "", "1.5.2", "--1", "1e-400", "1e400", "2e-324",
+                          "2.4703282292062328e-324", "2.4703282292062327e-324", "  3.25  ", "4.9e-324",
+                          "1.7976931348623158e308", "1.7976931348623159e308", "0.1", "0.30000000000000004"))
+    end
+end
+
+rat_part(rng) = rand(rng) < 0.5 ? BigInt(rand(rng, 1:10^6)) : rand(rng, BigInt(1):BigInt(2)^rand(rng, 1:1100))
+exactquot(::Type{T}, p, q) where {T} = setprecision(BigFloat, 4096) do
+    T(BigFloat(p) / BigFloat(q))
+end
+
+function colon32_case(rng)
+    a = Float32(rand(rng, (0, 0.1, 0.5, 1, -3, 100, 1e-3, -1.5, 0.2, 2, 5)) + rand(rng, (0, 0, 0.25, -0.7, 1/3)))
+    st = Float32(rand(rng, (0.1, 0.2, 0.25, 0.5, 1/3, 1, 7.5, 1e-3, -0.1, -0.5, 0.7, 0.3)))
+    b = a + st * Float32(rand(rng, 0:60)) * (rand(rng) < 0.8 ? 1f0 : 0.97f0)
+    r = try a:st:b catch; return nothing end
+    ["colon32", hex(a), hex(st), hex(b), join((hex(x) for x in r), ",")]
+end
+
+function math_case(rng)
+    k = rand(rng, 1:20)
+    if k <= 5
+        name = rand(rng, UNAMES)
+        x = unary_arg(rng, name)
+        r = try UNARY[name](x) catch; return nothing end
+        return ["u64", name, hex(x), hex(r)]
+    elseif k <= 7
+        name = rand(rng, UNAMES)
+        x = unary32_arg(rng, name)
+        r = try UNARY[name](x) catch; return nothing end
+        return ["u32", name, hex(x), hex(r)]
+    elseif k <= 9
+        x, y = pow_base(rng), pow_exp(rng)
+        r = try x^y catch; return nothing end
+        return ["powf64", hex(x), hex(y), hex(r)]
+    elseif k == 10
+        x, n = pow_base(rng), pow_int(rng)
+        r = try x^n catch; return nothing end
+        return ["powi64", hex(x), string(n), hex(r)]
+    elseif k == 11
+        x, y = Float32(pow_base(rng)), Float32(pow_exp(rng))
+        r = try x^y catch; return nothing end
+        return ["powf32", hex(x), hex(y), hex(r)]
+    elseif k == 12
+        x, n = Float32(pow_base(rng)), pow_int(rng)
+        r = try x^n catch; return nothing end
+        return ["powi32", hex(x), string(n), hex(r)]
+    elseif k == 13
+        f32 = rand(rng, Bool)
+        x = f32 ? Float32(pow_base(rng)) : pow_base(rng)
+        p = rand(rng, -4:12)
+        r = Base.literal_pow(^, x, Val(p))
+        return [f32 ? "lit32" : "lit64", hex(x), string(p), hex(r)]
+    elseif k == 14
+        x, p = pow_base(rng), rand(rng) < 0.8 ? rand(rng, 0:70) : rand(rng, 71:5000)
+        return ["pbs64", hex(x), string(p), hex(Base.power_by_squaring(x, p))]
+    elseif k == 15
+        if rand(rng, Bool)
+            n = rand(rng) < 0.7 ? rand(rng, 0:70) : rand(rng, 71:300)
+            v = Float64[rand(rng) < 0.9 ? (2rand(rng) - 1) * 2.0^rand(rng, -40:40) : operand(rng) for _ in 1:n]
+            return vcat(["sum", string(n)], hex.(v), [hex(sum(v))])
+        else
+            n, s = rand(rng, 1:5000), rand(rng, UInt32)
+            return ["sumgen", string(n), string(Int(s)), hex(sum(sumvec(n, s)))]
+        end
+    elseif k == 16
+        s = parse_str(rng)
+        r = tryparse(Float64, s)
+        return ["parse", s, r === nothing ? "ERR" : hex(r)]
+    elseif k == 17
+        x = rand(rng) < 0.8 ? exp10(rand(rng) * 40 - 20) * rand(rng, (1, -1)) : operand(rng)
+        if rand(rng, Bool)
+            d = rand(rng) < 0.9 ? rand(rng, -10:20) : rand(rng, (-320, -309, -308, 300, 308, 309, 320, 400))
+            return ["rdig", hex(x), string(d), hex(round(x, digits = d))]
+        elseif rand(rng, Bool)
+            n = rand(rng, 1:17)
+            return ["rsig", hex(x), string(n), hex(round(x, sigdigits = n))]
+        else
+            isfinite(x) || (x = 1.0)
+            return ["hidigit", hex(x), string(Base.hidigit(x, 10))]
+        end
+    elseif k == 18
+        j = rand(rng, 1:5)
+        if j == 1
+            x = rand(rng) < 0.3 ? sample64(rng) : operand(rng)
+            return ["eps64", hex(x), hex(eps(x))]
+        elseif j == 2
+            x = sample32(rng)
+            return ["eps32", hex(x), hex(eps(x))]
+        elseif j == 3
+            x = rand(rng, Bool) ? sample64(rng) : Float64(sample32(rng))
+            (isfinite(x) && x != 0) || (x = 1.0)
+            return rand(rng, Bool) ? ["exponent64", hex(x), string(exponent(x))] :
+                   (y = Float32(x); (isfinite(y) && y != 0) || (y = 1f0); ["exponent32", hex(y), string(exponent(y))])
+        else
+            p, q = rat_part(rng) * rand(rng, (1, -1)), rat_part(rng)
+            rand(rng) < 0.05 && (p = big(0))
+            f32 = j == 5
+            r = f32 ? exactquot(Float32, p, q) : exactquot(Float64, p, q)
+            return [f32 ? "rat32" : "rat64", string(p), string(q), hex(r)]
+        end
+    elseif k == 19
+        return colon32_case(rng)
+    else
+        p, q = rand(rng) < 0.5 ? (rand(rng, 0:10^5), rand(rng, 1:10^5)) : (100 * rand(rng, 0:40), 2^rand(rng, 1:45) - 1)
+        x = exactquot(Float16, p, q)
+        return ["f16", string(p), string(q), hex16(x), string(x)]
+    end
+end
+
+math_rows(rng, n) = (rows = Any[]; while length(rows) < n; c = math_case(rng); c === nothing || push!(rows, c); end; rows)
+
+# `string(x)` of every nonnegative finite Float16, in bit order (x = reinterpret(Float16, i - 1)):
+# Float16 printing is checked exhaustively
+f16all() = [string(reinterpret(Float16, u)) for u in UInt16(0):UInt16(0x7bff)]
+
 # ---------------------------------------------------------------- drivers
 
 function golden(dir)
@@ -279,6 +536,16 @@ function golden(dir)
     end
     open(joinpath(dir, "show.json"), "w") do io
         JSON.print(io, Dict("meta" => Dict("julia" => string(VERSION)), "cases" => show_cases()))
+    end
+    math_golden(dir)
+end
+
+# math.json has its own seed so the older goldens keep their random streams
+function math_golden(dir)
+    rng = Random.Xoshiro(20260925)
+    open(joinpath(dir, "math.json"), "w") do io
+        JSON.print(io, Dict("meta" => Dict("julia" => string(VERSION), "seed" => 20260925),
+            "cases" => math_rows(rng, 6000), "float16" => f16all()))
     end
 end
 
@@ -319,12 +586,26 @@ function fuzz(prefix, n, seed)
             m += 1
         end
     end
+    math_fuzz(prefix, n, seed)
+end
+
+function math_fuzz(prefix, n, seed)
+    rng = Random.Xoshiro(seed + 1)
+    open(prefix * "_math.tsv", "w") do io
+        for row in math_rows(rng, n)
+            println(io, join(row, '\t'))
+        end
+    end
 end
 
 if ARGS[1] == "golden"
     golden(ARGS[2])
+elseif ARGS[1] == "math"
+    math_golden(ARGS[2])
 elseif ARGS[1] == "fuzz"
     fuzz(ARGS[2], parse(Int, ARGS[3]), parse(Int, ARGS[4]))
+elseif ARGS[1] == "fuzzmath"
+    math_fuzz(ARGS[2], parse(Int, ARGS[3]), parse(Int, ARGS[4]))
 else
-    error("usage: gen_golden.jl golden DIR | fuzz PREFIX N SEED")
+    error("usage: gen_golden.jl golden DIR | math DIR | fuzz PREFIX N SEED | fuzzmath PREFIX N SEED")
 end

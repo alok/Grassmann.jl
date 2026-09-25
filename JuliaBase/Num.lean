@@ -396,6 +396,41 @@ namespace F32
 @[inline] def copysign (x y : Float32) : Float32 :=
   Float32.ofBits ((x.toBits &&& 0x7FFFFFFF) ||| (y.toBits &&& 0x80000000))
 
+/-- Julia `eps(Float32)` = `2^-23`. -/
+def eps : Float32 := Float32.ofBits 0x34000000
+
+/-- Julia `floatmin(Float32)` = `2^-126`, the smallest positive normal number. -/
+def floatmin : Float32 := Float32.ofBits 0x00800000
+
+/-- Julia `floatmax(Float32)` = `3.4028235f38`. -/
+def floatmax : Float32 := Float32.ofBits 0x7F7FFFFF
+
+/-- Julia `maxintfloat(Float32)` = `2^24`. -/
+def maxintfloat : Float32 := Float32.ofBits 0x4B800000
+
+/-- Julia `NaN32`. -/
+def nan : Float32 := Float32.ofBits 0x7FC00000
+
+/-- Julia `Inf32`. -/
+def inf : Float32 := Float32.ofBits 0x7F800000
+
+/-- Julia `nextfloat(x::Float32)`: the next representable value toward `+Inf` (`NaN` and
+`Inf32` map to themselves, both zeros go to `1.0f-45`). -/
+def nextfloat (x : Float32) : Float32 :=
+  if x.isNaN || x == inf then x
+  else
+    let b := x.toBits
+    if x == 0 then Float32.ofBits 1
+    else if signbit x then Float32.ofBits (b - 1) else Float32.ofBits (b + 1)
+
+/-- Julia `prevfloat(x::Float32)`: the next representable value toward `-Inf`. -/
+def prevfloat (x : Float32) : Float32 :=
+  if x.isNaN || x == -inf then x
+  else
+    let b := x.toBits
+    if x == 0 then Float32.ofBits 0x80000001
+    else if signbit x then Float32.ofBits (b + 1) else Float32.ofBits (b - 1)
+
 /-- Julia `max(x::Float32, y::Float32)`: NaN-propagating, `-0f0 < 0f0`. -/
 @[inline] def max (x y : Float32) : Float32 :=
   if x.isNaN then x

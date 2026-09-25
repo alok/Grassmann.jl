@@ -24,7 +24,7 @@ as `@int128_str`/`@big_str` literals, which `SyntaxTree.sub` leaves unconverted.
 
 namespace Wilkinson
 
-open AbstractAnalysis
+open JuliaBase
 
 /-- A Julia number of one of the types Wilkinson evaluates in. -/
 inductive JNum where

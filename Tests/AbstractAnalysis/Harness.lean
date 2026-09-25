@@ -1,5 +1,5 @@
 import Lean.Data.Json
-import AbstractAnalysis.IEEE
+import JuliaBase.IEEE
 import JuliaBase.Float
 
 /-!
@@ -45,7 +45,7 @@ relative tolerance `rtol`. -/
 def checkFloat (name : String) (got expected : Float) (rtol : Float := 0) (ulps : Nat := 0) : TestM Unit :=
   let ok := sameFloat got expected ||
     (got.isFinite && expected.isFinite &&
-      (AbstractAnalysis.IEEEFloat.ulpDistance got expected ≤ ulps ||
+      (JuliaBase.IEEEFloat.ulpDistance got expected ≤ ulps ||
        (got - expected).abs ≤ rtol * max got.abs expected.abs))
   check name ok s!"got {JuliaBase.F64.showString got}, expected {JuliaBase.F64.showString expected}"
 
