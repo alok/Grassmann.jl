@@ -14,6 +14,9 @@ open Lean Tests.Small Tests.CartanTests JuliaBase FlowGeometry Grassmann DirectS
 
 namespace Tests.FlowGeometryTests.Meshes
 
+/-- A `FloatArray` from a list. -/
+def fa (xs : List Float) : FloatArray := xs.foldl FloatArray.push .empty
+
 /-- Elements as arrays of ids. -/
 def els {n : Nat} (xs : Array (Vector Nat n)) : Array (Array Nat) := xs.map (·.toArray)
 
@@ -260,9 +263,21 @@ def runAngles : TestM Unit := do
     | .stepLen a, .stepLen b => check s!"angles {n}" (sameRange a b)
     | _, _ => check s!"angles {n}" false fun _ => "not a range"
 
+/-- `grid1` is Cartan's `GridBundle.ofAxis` with faster coordinates: same axes, same
+coordinates bit for bit, same topology size. -/
+def runGrids : TestM Unit := do
+  let axes : List Cartan.Axis := [FlowGeometry.interval 150, FlowGeometry.interval 9 2 1,
+    doubleinterval (FlowGeometry.interval 150), Joukowski.angles 149, .explicit (fa [0.1, 0.5, 0.3])]
+  for a in axes do
+    let g := grid1 a
+    let h := Cartan.GridBundle.ofAxis a
+    check s!"grid1 {a}" (g == h && (g.space.coords[0].toList.zip h.space.coords[0].toList).all
+      (fun (x, y) => x.toBits == y.toBits) && g.space.coords[0].size == h.space.coords[0].size)
+
 /-- Run the mesh checks. -/
 def run : TestM Unit := do
   runRanges
+  runGrids
   runAngles
   runKernels
   let m ← jField (← load "mesh") "mesh"

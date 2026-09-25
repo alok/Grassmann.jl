@@ -194,7 +194,7 @@ def sampledDirectly : Profile → Bool
   | _ => true
 
 /-- The 1-D grid of `profile(p)` (Julia `base(profile(p))`). -/
-abbrev base (p : Profile) : GridBundle 1 Float := GridBundle.ofAxis p.baseAxis
+abbrev base (p : Profile) : GridBundle 1 Float := grid1 p.baseAxis
 
 /-- Julia `profile(p)` (`profiles.jl:28-31`): the profile sampled over `interval(p)`. -/
 def field (p : Profile) : TensorField p.base Float :=
@@ -245,9 +245,9 @@ end Profile
 namespace Airfoil
 
 /-- The grid of `upper(a)`. -/
-abbrev upperBase (a : Airfoil) : GridBundle 1 Float := GridBundle.ofAxis a.upperAxis
+abbrev upperBase (a : Airfoil) : GridBundle 1 Float := grid1 a.upperAxis
 /-- The grid of `lower(a)`. -/
-abbrev lowerBase (a : Airfoil) : GridBundle 1 Float := GridBundle.ofAxis a.lowerAxis
+abbrev lowerBase (a : Airfoil) : GridBundle 1 Float := grid1 a.lowerAxis
 
 /-- Julia `upper(a, c = 1, x0 = 0)`: the upper surface `x + iy`, LE to TE, the last point forced
 to `1 + 0im` (`airfoils.jl:47`). -/
@@ -288,7 +288,7 @@ def outlineAxis (a : Airfoil) : Axis :=
 
 /-- The grid of `complex(N)`: the outline axis with the 1-D torus gluing (Julia
 `TorusTopology(TensorField(doubleinterval(interval(N)), …))`, `airfoils.jl:58`). -/
-abbrev outlineBase (a : Airfoil) : GridBundle 1 Float := (GridBundle.ofAxis a.outlineAxis).torus
+abbrev outlineBase (a : Airfoil) : GridBundle 1 Float := (grid1 a.outlineAxis).torus
 
 /-- The closed outline of the surfaces `(U, L)`, interleaved: `U` LE → TE, then `L` TE → LE
 without its duplicated trailing edge (`[U; reverse(L)[2:end]]`). -/
@@ -381,7 +381,7 @@ def angles (n : Nat) : Axis :=
 def interval (j : Joukowski) : Axis := angles (2 * j.p - 1)
 
 /-- The (open) grid of `complex(j)`. -/
-abbrev base (j : Joukowski) : GridBundle 1 Float := GridBundle.ofAxis j.interval
+abbrev base (j : Joukowski) : GridBundle 1 Float := grid1 j.interval
 
 /-- The Joukowski map at the angles `θv`. -/
 def complexOn (j : Joukowski) (θv : FloatArray) : FloatArray :=

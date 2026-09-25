@@ -127,6 +127,14 @@ def axisValues (a : Axis) : FloatArray :=
   | .stepLen r => rangeFill r (Axis.intToFloat (1 - r.offset)) r.len (FloatArray.emptyWithCapacity r.len)
   | _ => a.toFloatArray
 
+/-- Julia `GridBundle(PointArray(0, r))` of a 1-D coordinate vector: the open interval with real
+points, as `Cartan.GridBundle.ofAxis a`, with the coordinates materialized by `axisValues` (the
+same elements, several times faster than the generic `Axis.toFloatArray`; the tests compare the
+two bases). -/
+def grid1 (a : Axis) : GridBundle 1 Float :=
+  let ps : ProductSpace 1 := ⟨#v[a], #v[axisValues a]⟩
+  ⟨ps, MeshTopology.QuotientTopology.openTop ps.size, .induced, 0, rfl⟩
+
 /-- A field with the given flat fibers (no copy when the length is right, which the callers
 guarantee; otherwise the fibers are read with zero padding). -/
 def fieldOf {M : Type} [FrameBundle M] {F : Type} [FlatFiber F] (m : M) (data : FloatArray) :
