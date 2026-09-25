@@ -28,13 +28,35 @@ grassmann-types.md §4.8). Coefficients are `Float` (Julia `Float64`).
 | `Multivector V` | `Multivector V` | `Multivector V` | `Multivector V` (+ the whole AbstractTensors family) | `Multivector V` |
 | `Phasor V` | `exp`, `sqrt`, `cbrt`: `Phasor`; `log`, `log1p`, `expm1`: `Couple` | — | — | `Phasor V` |
 
-Also: `Couple.radius`/`angle`/`polarize`/`vectorize`/`complexify`/`divSame`/`powf`,
-`Phasor.complexify`/`inv`/`powf`, the quaternion `Half.radius`/`angle` and
-`Spinor.quatvalue`, `rpow b t = b ^ t`, Grassmann's two-argument hyperbolic
-arctangent `Composite.atanh2`, and `TensorRing` instances for `Multivector V Float`
-(every space) and `Spinor V Float` (even-dimensional spaces, `EvenDim V`) through
-which `AbstractTensors.Generic` supplies `tanh`, `asinh`, `acos`, `sinc`, `log10`,
-`coexp`, `geomabs`, … (exposed as `Multivector.tanh`, …).
+Also:
+
+* inverse functions: `asinh`, `acosh`, `atanh`, `acoth` of terms and couples (couples) and
+  spinors (spinors); `asin`, `atan` of terms (pseudo-couples, Julia's closed forms);
+  `tanh`/`coth`, `exph`, `exp2`/`exp10`/`log2`/`log10` where they close;
+* powers: integer `pow` everywhere, `rpow b t = b ^ t` (AbstractTensors), `powf t x =
+  exp(x·log t)` for couples, spinors, multivectors and phasors;
+* `logFast`/`loghFast` (Julia `log_fast`/`logh_fast`, Halley's iteration, capped: `none`
+  where Julia loops forever) for couples, spinors and multivectors;
+* `Couple.radius`/`angle`/`polarize`/`vectorize`/`complexify`/`divSame`,
+  `Phasor.complexify`/`inv`/`eval`/`angleOn` (Julia `∠`), the quaternion
+  `Half.radius`/`angle` and `Spinor.quatvalue`, `Chain.complexify`/`polarize`,
+  Grassmann's two-argument hyperbolic arctangent `Composite.atanh2`;
+* the `co`/`pseudo` family on chains (`Chain.coexp`, `coabs`, `coinv`, …) and, through
+  `AbstractTensors.Generic`, on multivectors;
+* `TensorRing` instances for `Multivector V Float` (every space) and `Spinor V Float`
+  (even-dimensional spaces, `EvenDim V`), through which `AbstractTensors.Generic`
+  supplies `tanh`, `asinh`, `acos`, `sinc`, `log10`, `coexp`, `geomabs`, … (exposed as
+  `Multivector.tanh`, …).
+
+## Performance
+
+The closed forms of terms and couples are `@[inline]`: at a call site with a literal space
+they compile to straight-line code (`Couple.exp` 8 ns vs Julia 13 ns in `ℝ3`). The
+closed forms of chains and quaternions cost one or two kernel products and a few
+`Values` allocations (≈150-250 ns vs Julia's 15-80 ns: Julia keeps everything in
+registers); the series paths are bounded by the plan kernels (a dense `ℝ3` `exp` by
+series ≈4.6 µs vs 1.2 µs). `Tests/Composite/Bench.lean` has the numbers and the Julia
+loops.
 
 ## Semantics
 
