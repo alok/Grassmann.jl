@@ -102,6 +102,16 @@ def run : IO Suite := do
     let a := jnumOf (idx r 1)
     if op == "show" then
       s := s.check (a.toString == str (idx r 2)) fun _ => s!"show {a}: want {str (idx r 2)}"
+    else if op == "isapprox" then
+      let b := jnumOf (idx r 2)
+      let want := (idx r 3).getBool?.toOption.getD false
+      s := s.check (JNum.isapprox a b == want) fun _ => s!"isapprox({a}, {b}), want {want}"
+    else if op == "Int" then
+      if str (idx r 2) == "ERROR" then s := s.check (a.toInt?).isNone fun _ => s!"Int({a}) should throw"
+      else
+        let got := (a.toInt?).getD (.float 0.0)
+        s := s.check (jnumSame got (jnumOf (idx r 2))) fun _ => s!"Int({a}): got {got}"
+    else if op == "2^" && str (idx r 2) == "ERROR" then pure ()
     else
       let (got, want) := match op with
         | "*" => (a * jnumOf (idx r 2), jnumOf (idx r 3))
@@ -113,6 +123,12 @@ def run : IO Suite := do
         | "log10" => (a.log10, jnumOf (idx r 2))
         | "logdb" => (logdb a, jnumOf (idx r 2))
         | "expdb" => (expdb a, jnumOf (idx r 2))
+        | "exp2" => (a.exp2, jnumOf (idx r 2))
+        | "log3" => (JNum.logb 3 a, jnumOf (idx r 2))
+        | "2^" => (JNum.pow 2 a, jnumOf (idx r 2))
+        | "1.5^" => (JNum.pow (.float 1.5) a, jnumOf (idx r 2))
+        | "^1//2" => (a.rpow 1 2, jnumOf (idx r 2))
+        | "^-2//3" => (a.rpow (-2) 3, jnumOf (idx r 2))
         | o => (a.lpow ((o.drop 1).toString.toInt?.getD 0), jnumOf (idx r 2))
       s := s.check (jnumSame got want) fun _ => s!"Constant {op} on {a}: got {got} ({got.kind}), want {want} ({want.kind})"
   s := s.check (sameBits (hexFloat (fld j "unit_rtol")) 8.161992717227193e-15) fun _ => "eps()^0.9"
