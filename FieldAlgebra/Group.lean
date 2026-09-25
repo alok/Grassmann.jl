@@ -176,9 +176,19 @@ def get (e : Exps n) (i : Fin n) : Expo :=
 /-- Entry as a `Float64`. -/
 def getFloat (e : Exps n) (i : Fin n) : Float := (e.get i).toFloat
 
+/-- All entries with the vector's element type (the `Int`/`Rational` decision is
+made once, unlike repeated `get`). -/
+def toExpos (e : Exps n) : Array Expo :=
+  match e with
+  | exact v =>
+    if v.all (·.den == 1) then v.toArray.map (.int ·.num) else v.toArray.map .rat
+  | float v => v.1.toList.toArray.map .float
+
 /-- Is every exponent zero (Julia `iszero(norm(v))`)? -/
 def allZero (e : Exps n) : Bool :=
-  (List.finRange n).all fun i => (e.get i).isZero
+  match e with
+  | exact v => v.all (· == 0)
+  | float v => v.1.toList.all (· == 0.0)
 
 /-- Is this a `Float64` vector? -/
 def isFloat : Exps n → Bool
@@ -304,14 +314,13 @@ def ofInts (xs : List Int) (c : Coef := .int 1) : Group B :=
 exponent as `name^e`; with `String` names a `⋅` follows an exponent of exactly
 one when more factors follow. -/
 def printDims (v : Exps B.n) (names : Array String) (charNames : Bool) : String := Id.run do
+  let es := v.toExpos
   let mut out := ""
-  let idxs := List.finRange B.n
-  for i in idxs do
-    let e := v.get i
-    out := out ++ printExpoBased (names[i.1]?.getD "") e.makeint
+  for h : i in [0:es.size] do
+    let e := es[i]
+    out := out ++ printExpoBased (names[i]?.getD "") e.makeint
     if !charNames && e.isOne then
-      let rest := idxs.filter (·.1 > i.1)
-      if rest.any (fun j => !(v.get j).isZero) then out := out ++ "⋅"
+      if (es.extract (i + 1) es.size).any (!·.isZero) then out := out ++ "⋅"
   return out
 
 /-- Julia `showgroup_pre2` (`FieldAlgebra.jl:431-446`): the identity glyph and
@@ -334,14 +343,13 @@ def showPre (g : Group B) : String := g.showWith B.text B.charNames B.unit
 monomial with `\cdot ` separators and the `\textbf{1}` identity (master branch). -/
 def latexPre (g : Group B) (names : Array String := B.latex) (charNames : Bool := B.charNames)
     (glyph : String := "\\textbf{1}") : String := Id.run do
+  let es := g.v.toExpos
   let mut out := ""
-  let idxs := List.finRange B.n
-  for i in idxs do
-    let e := g.v.get i
-    out := out ++ latexpoBased (names[i.1]?.getD "") e.makeint
+  for h : i in [0:es.size] do
+    let e := es[i]
+    out := out ++ latexpoBased (names[i]?.getD "") e.makeint
     if !charNames && e.isOne then
-      let rest := idxs.filter (·.1 > i.1)
-      if rest.any (fun j => !(g.v.get j).isZero) then out := out ++ "\\cdot "
+      if (es.extract (i + 1) es.size).any (!·.isZero) then out := out ++ "\\cdot "
   let iz := g.v.allZero
   let c := g.c
   if iz && (c.isOne || c.abs.toFloat < 1.0) then out := out ++ glyph

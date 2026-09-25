@@ -108,10 +108,10 @@ def gen (i : Nat) (h : i < 44 := by decide) : Consts := Group.gen ⟨i, h⟩
 /-- Julia `product(g)` for the constants group (`FieldAlgebra.jl:717-734`):
 `((kB^e₁·NA^e₂)·…·τ^e₃₇) · (((2.0^e₃₈·3.0^e₃₉)·…·43.0^e₄₄) · c)`. -/
 def product (g : Consts) : Float :=
-  let idx := List.finRange 44
-  let term (i : Fin 44) : Float := (genValues[i.1]!).pow (g.v.get i)
-  let nonint := (idx.take 37).map term
-  let ints := (idx.drop 37).map term
+  let es := g.v.toExpos
+  let term (i : Nat) : Float := (genValues[i]!).pow (es[i]!)
+  let nonint := (List.range 37).map term
+  let ints := (List.range' 37 7).map term
   let foldl1 : List Float → Float
     | [] => 1.0
     | x :: xs => xs.foldl (· * ·) x

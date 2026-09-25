@@ -45,15 +45,34 @@ def Scalar.powExpo (x : Scalar) : Expo → Scalar
 
 /-- `ratio_calc(e, U, S)` for constant exponents `e`, from the eleven constant ratios. -/
 def ratioOf (cr : Array Scalar) (e : Exps 11) : Scalar :=
-  let terms := (List.finRange 11).map fun k => (cr[k.1]?.getD (.ofInt 1)).powExpo (e.get k)
+  let es := e.toExpos
+  let terms := (List.range 11).map fun k => (cr[k]?.getD (.ofInt 1)).powExpo (es[k]!)
   match terms with
   | [] => .ofInt 1
   | t :: ts => ts.foldl (· * ·) t
 
+/-- Is the ratio of each base dimension between the two systems exactly one?
+(Julia's `isone(ratio(usqᵢ, U, S))`, used by `convertdim`.) -/
+def baseOnes (cr : Array Scalar) : Array Bool :=
+  (List.finRange 11).toArray.map fun i => (ratioOf cr (usqMap.apply (Exps.unit i))).isOne
+
+/-- Per ordered pair of systems: the eleven constant ratios and the base-ratio
+flags, computed on first use and cached (`Thunk`), so repeated conversions
+between two systems do the group arithmetic once. -/
+def pairTable : Array (Thunk (Array Scalar × Array Bool)) :=
+  let sys := Sys.all.toArray
+  (List.range (sys.size * sys.size)).toArray.map fun k => Thunk.mk fun _ =>
+    let cr := constRatios (sys[k / sys.size]!).consts (sys[k % sys.size]!).consts
+    (cr, baseOnes cr)
+
+/-- The cached constant ratios and base flags of a pair of systems. -/
+def pairData (U S : Sys) : Array Scalar × Array Bool :=
+  (pairTable[U.ctorIdx * Sys.all.length + S.ctorIdx]!).get
+
 /-- Julia `ratio(d, U, S)`: the exact factor converting a quantity of USQ
 dimension `d` from `U` to `S`. -/
 def ratio (d : Exps 11) (U S : Sys) : Scalar :=
-  ratioOf (constRatios U.consts S.consts) (usqMap.apply d)
+  ratioOf (pairData U S).1 (usqMap.apply d)
 
 /-- Would Julia throw computing `x^e`? Raising an `Int` (or a group with an `Int`
 coefficient other than `±1`) to a negative runtime power is a `DomainError`
@@ -65,16 +84,16 @@ def Scalar.powThrows : Scalar → Expo → Bool
 
 /-- `ratio`, or `none` where Julia throws a `DomainError` (`Scalar.powThrows`). -/
 def ratio? (d : Exps 11) (U S : Sys) : Option Scalar :=
-  let cr := constRatios U.consts S.consts
+  let cr := (pairData U S).1
   let e := usqMap.apply d
   if (List.finRange 11).any fun k => (cr[k.1]?.getD (.ofInt 1)).powThrows (e.get k) then none
   else some (ratioOf cr e)
 
 /-- Julia `convertdim(d, U, S)` (`dimension.jl:231-234`): drop the base
-dimensions whose own ratio between `U` and `S` is exactly one (for display). -/
-def convertDim (cr : Array Scalar) (d : Exps 11) : Exps 11 :=
-  let keep (i : Fin 11) : Bool :=
-    !(ratioOf cr (usqMap.apply (Exps.unit i))).isOne
+dimensions whose own ratio between `U` and `S` is exactly one (for display);
+`ones` are the flags of `baseOnes`. -/
+def convertDim (ones : Array Bool) (d : Exps 11) : Exps 11 :=
+  let keep (i : Fin 11) : Bool := !(ones[i.1]?.getD false)
   match d with
   | .exact v => .exact (Vector.ofFn fun i => if keep i then v[i] else 0)
   | .float v => .float (FVec.ofFn fun i => if keep i then v.get i else 0.0)
@@ -82,8 +101,8 @@ def convertDim (cr : Array Scalar) (d : Exps 11) : Exps 11 :=
 /-- Julia `show(io, ::ConvertUnit{U,S})` for a dimension `d` (`dimension.jl:236-243`):
 `ratio [S-units]/[U-units] U -> S`. -/
 def showConvert (d : Exps 11) (U S : Sys) : String :=
-  let cr := constRatios U.consts S.consts
-  let d' := convertDim cr d
+  let (cr, ones) := pairData U S
+  let d' := convertDim ones d
   s!"{ratioOf cr (usqMap.apply d)} [{S.showDim d'}]/[{U.showDim d'}] {U.name} -> {S.name}"
 
 /-- A conversion factor between two unit systems for quantities of dimension `d`

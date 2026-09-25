@@ -17,12 +17,10 @@ open FieldAlgebra UnitSystems
 /-- Julia `quotient(U)`: the classes of convertible quantities with equal image
 under `U`, keyed by that image, in order of first appearance. -/
 def quotient (U : Sys) : List (USQGroup × List Conv) :=
-  let img (q : Conv) : Exps 11 := U.image q.dim.toGroup.v
-  let classes := Conv.all.foldl (fun (acc : Array (USQGroup × List Conv)) q =>
+  let imgs : List (Conv × Exps 11) := Conv.all.map fun q => (q, U.image q.dim.toGroup.v)
+  let classes := imgs.foldl (fun (acc : Array (USQGroup × List Conv)) (q, i) =>
     if acc.any (·.2.contains q) then acc
-    else
-      let i := img q
-      acc.push (Group.mk' i (.int 1), Conv.all.filter fun r => (img r).beq i)) #[]
+    else acc.push (Group.mk' i (.int 1), (imgs.filter fun (_, j) => j.beq i).map (·.1))) #[]
   classes.toList
 
 /-- Julia `printquotient(U)`: one line per class, `    key => q (dim), …`. -/

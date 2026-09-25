@@ -104,14 +104,15 @@ primes and the coefficient, all in `Float64`; then, if any measured generator
 has a nonzero exponent, times the left-folded product of all 13 measured powers
 in `Measurement` arithmetic. -/
 def productM (g : Consts) : MNum :=
-  let term (i : Fin 44) : Float := (genValues[i.1]!).pow (g.v.get i)
+  let all := g.v.toExpos
+  let term (i : Nat) : Float := (genValues[i]!).pow (all[i]!)
   let foldl1 : List Float → Float
     | [] => 1.0
     | x :: xs => xs.foldl (· * ·) x
-  let nonint := ((List.finRange 44).take 37).filter (!measuredIdx.contains ·.1) |>.map term
-  let ints := ((List.finRange 44).drop 37).map term
+  let nonint := ((List.range 37).filter (!measuredIdx.contains ·)).map term
+  let ints := (List.range' 37 7).map term
   let out := foldl1 nonint * (foldl1 ints * g.c.toFloat)
-  let es := measuredIdx.filterMap fun i => if h : i < 44 then some (g.v.get ⟨i, h⟩) else none
+  let es := measuredIdx.map fun i => all[i]!
   if es.all (·.isZero) then .float out
   else
     let pw (m : Measurement) : Expo → Measurement
@@ -222,8 +223,8 @@ def measured {U : Sys} {d : Dim} (q : Q U d) : Quantity U d MValue := ⟨.exact 
 /-- MeasureSystems' `show(io, ::ConvertUnit)`: as Similitude's, with the ratio
 printed with uncertainty. -/
 def showConvertM (d : Exps 11) (U S : Sys) : String :=
-  let cr := constRatios U.consts S.consts
-  let d' := convertDim cr d
+  let (cr, ones) := pairData U S
+  let d' := convertDim ones d
   let r := ratioOf cr (usqMap.apply d)
   s!"{(MValue.exact r).jprint} [{S.showDim d'}]/[{U.showDim d'}] {U.name} -> {S.name}"
 

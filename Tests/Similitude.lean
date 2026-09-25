@@ -22,7 +22,10 @@ def run : IO (Nat × Nat) := do
   let mut pass := 0
   let mut fail := 0
   for suite in [constantsSuite, homsSuite, unifiedSuite, ratiosSuite, systemConstantsSuite, quantitySuite, derivedSuite, quotientSuite] do
-    let (p, f) ← (← suite).report
+    let t0 ← IO.monoMsNow
+    let st ← suite
+    let t1 ← IO.monoMsNow
+    let (p, f) ← ({ st with name := s!"{st.name} ({t1 - t0} ms)" } : Suite).report
     pass := pass + p
     fail := fail + f
   return (pass, fail)
