@@ -4,6 +4,7 @@ import Tests.Cartan.Field1d
 import Tests.Cartan.Grids
 import Tests.Cartan.Slices
 import Tests.Cartan.Mesh
+import Tests.Cartan.Props
 
 /-!
 Cartan test aggregator.
@@ -24,5 +25,6 @@ def run : IO (Nat × Nat) := runSuite "Cartan" do
   Tests.CartanTests.Grids.run
   Tests.CartanTests.Slices.run
   Tests.CartanTests.Mesh.run
+  Tests.CartanTests.Props.run
 
 end Tests.Cartan

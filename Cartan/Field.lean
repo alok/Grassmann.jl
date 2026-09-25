@@ -250,6 +250,29 @@ def ofSpace {N : Nat} (ps : ProductSpace N) : TensorField (GridBundle.ofSpace ps
     TensorField (GridBundle.ofSpace ps) F :=
   tabulatePoint (GridBundle.ofSpace ps) f
 
+/-- `tabulatePoint` on a 1-D grid with `f` of the coordinate (no point is built). -/
+@[inline] def tabulate1 {P G : Type} (b : GridBundle 1 P G) (f : Float → F) : TensorField b F :=
+  let c0 := b.space.coords[0]
+  ofFn b fun k => f (c0.get! k)
+
+/-- `tabulatePoint` on a 2-D grid with `f` of the two coordinates (Julia
+`(x -> f(x[1], x[2])).(g)` without building the points). -/
+@[inline] def tabulate2 {P G : Type} (b : GridBundle 2 P G) (f : Float → Float → F) : TensorField b F :=
+  let c0 := b.space.coords[0]
+  let c1 := b.space.coords[1]
+  let n0 := c0.size
+  ofFn b fun k => f (c0.get! (k % n0)) (c1.get! (k / n0))
+
+/-- `tabulatePoint` on a 3-D grid with `f` of the three coordinates. -/
+@[inline] def tabulate3 {P G : Type} (b : GridBundle 3 P G) (f : Float → Float → Float → F) :
+    TensorField b F :=
+  let c0 := b.space.coords[0]
+  let c1 := b.space.coords[1]
+  let c2 := b.space.coords[2]
+  let n0 := c0.size
+  let n01 := n0 * c1.size
+  ofFn b fun k => f (c0.get! (k % n0)) (c1.get! (k / n0 % c1.size)) (c2.get! (k / n01))
+
 /-- Julia `TensorField(f, r)` (C14, `Cartan.jl:160`): the curve `f` sampled on `r` (Julia's
 default `r = -2π:0.0001:2π`). Julia applies `vector` to each value; here `f` returns the fiber. -/
 @[inline] def curve (f : Float → F) (r : Axis := Axis.colon (-twoPiF) (f64! 0.0001) twoPiF) :
