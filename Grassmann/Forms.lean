@@ -86,5 +86,5 @@ Measured (Apple M4 Max, compiled, `Float`, ns per call; Julia 1.13 with Grassman
 | `O * M` (outermorphism on a multivector) | 290 | 2.7 | 400 | 2.0 | 1550 | 89 |
 | `outermorphism(T)` | 2600 | 410 | 6900 | 1400 | 52000 | 34500 |
 
-Every result allocates a fresh `FloatArray` (about 10 ns of each small-size figure).
+Every result allocates a fresh `FloatArray`; Julia's results live on the stack.
 -/

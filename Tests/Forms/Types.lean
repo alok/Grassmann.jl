@@ -98,6 +98,21 @@ def suite : IO Tally := do
     t := t.ok ((v - 3.5).abs < 1e-12) fun _ => s!"interpolate: {v}"
     t := t.ok ((S.volume - 3).abs < 1e-12) fun _ => s!"volume: {S.volume}"
   | none => t := t.ok false fun _ => "affinehull"
+  -- spectral operators: `S = eigen([2 1; 1 2])` (Julia: `S(1v₁) = 2.0v₁ + 1.0v₂`, `tr(S) = 4.0`,
+  -- `Chain(S) = (2.0v₁+1.0v₂)v₁ + (1.0v₁+2.0v₂)v₂`, `inv(S).λ = (1.0, 0.333333)`)
+  let S2 : Endomorphism (En 2) (.chain 1) Float := endo (En 2) [[2, 1], [1, 2]]
+  match S2.eigen with
+  | .real S =>
+    let y : Chain (En 2) 1 Float := S * (chainOf (En 2) 1 [1.0, 0.0])
+    t := t.ok ((getD y.v 0 - 2).abs < 1e-12 && (getD y.v 1 - 1).abs < 1e-12) fun _ => s!"S(v₁) = {y}"
+    t := t.ok ((S.tr - 4).abs < 1e-12) fun _ => "tr(S)"
+    t := t.ok (toString S.toOperator == "(2.0v₁+1.0v₂)v₁ + (1.0v₁+2.0v₂)v₂") fun _ => s!"Chain(S) = {S.toOperator}"
+    t := t.ok (toString (⟨S.inv.vals⟩ : Chain (En 2) 1 Float) == "1.0v₁ + 0.333333v₂") fun _ => "inv(S)"
+    t := t.ok (toString (⟨S.exp.vals⟩ : Chain (En 2) 1 Float) == "2.71828v₁ + 20.0855v₂") fun _ => "exp(S)"
+  | .complex _ => t := t.ok false fun _ => "eigen([2 1; 1 2]) is real"
+  -- the outermorphism on a couple: `O(1 + 2v₁₂) = 1 + 2 Λ²T[:, v₁₂]`
+  let z : Couple ℝ3 Int := ⟨3, 1, 2⟩
+  t := t.ok (toString (O.applyCouple z) == "1 - 6v₁₂ - 12v₁₃ - 6v₂₃") fun _ => s!"O(1+2v₁₂) = {O.applyCouple z}"
   return t
 
 end Tests.FormsTests.Types
