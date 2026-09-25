@@ -36,6 +36,20 @@ variable {V : TensorBundle} {G : Nat} {p : Bool} {α : Type} [Coeff α] {X : Typ
 /-- The scalar coefficient of any element (Julia `value(scalar(t))`). -/
 @[inline] def scalarValue [DenseLayout X V α] (x : X) : α := getD (gradePart x 0).v 0
 
+/-- Julia `isapprox(a, b; atol, rtol)` of two elements of the same space
+(`AbstractTensors.jl:229-232`, and `src/multivectors.jl:1103-1105` for
+multivectors and halves): finite norms and
+`norm(a - b) ≤ max(atol, rtol·max(norm a, norm b))` on the dense coefficients,
+with `rtol = rtoldefault(α)` (`√eps` for floats, `0` for exact types) unless
+`atol > 0`. Chains of one grade compare componentwise instead (`Chain.isapprox`). -/
+def isapprox {Y : Type} [JNorm α] [JApprox α] [DenseLayout X V α] [DenseLayout Y V α] (a : X) (b : Y)
+    (atol : Float := 0) (rtol : Float := if atol > 0 then 0 else JApprox.rtolDefault (α := α)) : Bool :=
+  let x := toMultivector a
+  let y := toMultivector b
+  let nx := x.v.norm
+  let ny := y.v.norm
+  nx.isFinite && ny.isFinite && (x - y).v.norm ≤ F64.max atol (rtol * F64.max nx ny)
+
 variable [Kernels V]
 
 namespace Chain

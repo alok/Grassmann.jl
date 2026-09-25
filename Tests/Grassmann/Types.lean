@@ -162,6 +162,11 @@ def run : IO Tally := do
   let c0 : Chain E3 1 Float := Chain.ofFn fun _ => 0
   let ce : Chain E3 1 Float := Chain.ofFn fun i => if i.1 = 0 then 1.0e-20 else 0
   t := t.check (!c0.isapprox ce && c0.isapprox c0) "Chain isapprox"
+  -- isapprox: norm-based for multivectors (and across element types)
+  let mf : Multivector E3 Float := Multivector.ofFn fun i => Float.ofNat i.1
+  let mf' : Multivector E3 Float := Multivector.ofFn fun i => Float.ofNat i.1 + 1.0e-12
+  t := t.check (Grassmann.isapprox mf mf' && !Grassmann.isapprox mf (mf + mf)
+    && Grassmann.isapprox (toMultivector ce) c0 (atol := 1.0e-15)) "norm-based isapprox"
   -- equality
   t := t.check (decide (a = a) && !decide (a = b) && a == a) "DecidableEq/BEq"
   return t
