@@ -1,4 +1,4 @@
-import Cartan.Slice
+import Cartan.Interp
 
 /-!
 # Display of fields and bases

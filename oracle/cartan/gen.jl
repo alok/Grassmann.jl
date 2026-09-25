@@ -268,3 +268,34 @@ disp["pointwise metric tfm[2]"] = sshow(tfm[2])
 disp["T[1]"] = sshow(TorusParameter(4, 5)[1]); disp["T[7]"] = sshow(TorusParameter(4, 5)[7])
 disp["sb[2]"] = sshow(sb[2])
 save("display", Dict("meta" => meta, "cases" => disp))
+
+# ---------- 9. evaluation (multilinear interpolation, grid.jl:98-456) ----------
+# Polynomial fibers keep every value bit-exact (no libm); coordinates probe the interior, the
+# nodes, both ends, repositioning through glued faces and NaN.
+ev = Dict{String,Any}()
+poly(x) = x * x / 7 - x / 3
+hxs(xs) = [hx(x) for x in xs]
+xs1 = [-0.7, -0.5, 0.0, 0.3, 1.25, 2.999, 3.0, 3.2, 7.0, 13.0, NaN]
+p1 = TensorField(0:0.5:3, poly)
+ev["open1"] = Dict("x" => hxs(xs1), "v" => hxs([p1(x) for x in xs1]))
+for (nm, P) in (("torus1", TorusParameter), ("mirror1", MirrorParameter), ("clamped1", ClampedParameter))
+    f = poly.(fiber(P(9)))
+    local tf = TensorField(base(P(9)), f)
+    ev[nm] = Dict("x" => hxs(xs1), "v" => hxs([tf(x) for x in xs1]))
+end
+g3 = TensorField(ProductSpace(0:0.5:1, 0:0.5:1))
+gx = (x -> x[1] + 10x[2]).(g3)
+pts2 = [(0.25, 0.75), (1.5, 0.5), (1.0, 1.0), (0.0, 0.0), (0.5, 0.25), (0.1, 0.9), (-0.1, 0.5), (NaN, 0.0)]
+ev["open2"] = Dict("x" => [hxs(p) for p in pts2], "v" => [hx(gx(p...)) for p in pts2])
+T2 = TorusParameter(7, 9)
+fT = (x -> poly(x[1]) + 2poly(x[2])).(T2)
+ptsT = [(1.0, 2.0), (-0.5, 1.0), (7.0, 3.0), (2.0, -1.0), (2.0, 7.5), (-1.0, -1.0), (6.5, 6.5), (0.0, 0.0)]
+ev["torus2"] = Dict("x" => [hxs(p) for p in ptsT], "v" => [hx(fT(p...)) for p in ptsT])
+vx = (x -> Chain(x[1], x[2] * x[1], 1.0 + x[2])).(g3)
+ev["chain2"] = Dict("x" => [hxs(p) for p in pts2[1:6]], "v" => [flat(vx(p...)) for p in pts2[1:6]])
+g33 = TensorField(ProductSpace(0:1.0:2, 0:1.0:3, 0:1.0:1))
+f3 = (x -> poly(x[1]) + 10x[2] + 100poly(x[3])).(g33)
+pts3 = [(0.5, 1.5, 0.5), (1.0, 2.0, 1.0), (1.9, 0.1, 0.3), (2.5, 1.0, 0.5), (0.0, 0.0, 0.0)]
+ev["open3"] = Dict("x" => [hxs(p) for p in pts3], "v" => [hx(f3(p...)) for p in pts3])
+ev["resample"] = encfield(Cartan.resample(gx, (5, 4)))
+save("eval", Dict("meta" => meta, "cases" => ev))
