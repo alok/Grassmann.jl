@@ -4,6 +4,7 @@ import Bench.Math
 import Bench.JuliaBase
 import Bench.StaticVectors
 import Bench.DirectSum
+import Bench.UnitSystems
 import Bench.MeshTopology
 import Bench.Fatou
 import Bench.Geophysics

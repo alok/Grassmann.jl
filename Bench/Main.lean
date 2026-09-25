@@ -20,7 +20,7 @@ open Bench
 /-- Every suite `lake exe bench` knows, in run order. `Bench.Grassmann.run` joins automatically
 once its module is imported into `Bench.lean` (`optional_suite%`). -/
 def suites : List Suite :=
-  [ Bench.Math.suite, Bench.JuliaBase.suite, Bench.StaticVectors.suite, Bench.DirectSum.suite, Bench.Geophysics.suite, Bench.MeshTopology.suite, Bench.Fatou.suite ] ++
+  [ Bench.Math.suite, Bench.JuliaBase.suite, Bench.StaticVectors.suite, Bench.DirectSum.suite, Bench.UnitSystems.suite, Bench.Geophysics.suite, Bench.MeshTopology.suite, Bench.Fatou.suite ] ++
   (optional_suite% "Grassmann" Bench.Grassmann.run).toList
 
 /-- Usage text. -/
