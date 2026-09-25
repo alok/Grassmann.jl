@@ -64,7 +64,7 @@ counts the nonzero entries (broken in StaticVectors, B9), and otherwise
 `(∑ |aᵢ|^p)^(1/p)`. `|x|` is `norm(x::Number) = abs(float(x))`. The general
 case uses the C `pow`, which may differ from Julia's `^` by an ulp. -/
 def normP [JNorm α] (a : Values α n) (p : Float) : Float :=
-  if p == Float.inf then a.mapReduce JNorm.norm Julia.max 0
+  if p == Float.inf then a.mapReduce JNorm.norm JuliaBase.F64.max 0
   else if p == 1 then a.mapReduce JNorm.norm (· + ·) 0
   else if p == 2 then a.norm
   else if p == 0 then a.mapReduce (fun x => if JNorm.norm x == 0 then 0 else 1) (· + ·) 0
@@ -119,7 +119,8 @@ instance {α : Type u} [Packed α] {n : Nat} [Sub α] [JNorm α] [JApprox α] : 
   isapprox x y atol rtol nans :=
     let d := (x - y).norm
     if d.isFinite then
-      if rtol == 0 then d ≤ atol else d ≤ Julia.max atol (rtol * Julia.max x.norm y.norm)
+      if rtol == 0 then d ≤ atol
+      else d ≤ JuliaBase.F64.max atol (rtol * JuliaBase.F64.max x.norm y.norm)
     else
       (Values.zipWith (fun a b => JApprox.isapprox a b atol rtol nans) x y : Values Bool n).all id
 

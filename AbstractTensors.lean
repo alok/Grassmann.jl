@@ -1,4 +1,3 @@
-import AbstractTensors.FloatExt
 import AbstractTensors.Complex
 import AbstractTensors.Coeff
 import AbstractTensors.Dims

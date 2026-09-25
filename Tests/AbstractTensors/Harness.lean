@@ -37,14 +37,14 @@ def runSuite (name : String) (m : TestM Unit) : IO (Nat × Nat) := do
 /-- Julia-style hex rendering of a float's bits, with its value. -/
 def showF (x : Float) : String := s!"{x} (0x{String.ofList (Nat.toDigits 16 x.toBits.toNat)})"
 
-/-- Bitwise equality up to the NaN payload (`±0` distinguished). -/
-@[inline] def same (x y : Float) : Bool := Julia.sameBits x y
+/-- Bitwise equality up to the NaN payload (`±0` distinguished): Julia `isequal`. -/
+@[inline] def same (x y : Float) : Bool := JuliaBase.F64.isequal x y
 
 /-- Within `k` ulps (NaNs equal to each other only). -/
-@[inline] def ulpClose (k : Nat) (x y : Float) : Bool := Julia.ulpDist x y ≤ k
+@[inline] def ulpClose (k : Nat) (x y : Float) : Bool := JuliaBase.F64.ulpDist x y ≤ k
 
 /-- Close in the relative sense `|x - y| ≤ rtol·max(|x|,|y|) + atol`, or bitwise equal. -/
 @[inline] def relClose (rtol atol : Float) (x y : Float) : Bool :=
-  same x y || (x - y).abs ≤ rtol * Julia.max x.abs y.abs + atol
+  same x y || (x - y).abs ≤ rtol * JuliaBase.F64.max x.abs y.abs + atol
 
 end Tests.AbstractTensors

@@ -43,9 +43,9 @@ def exactUnary : List String := ["inv", "abs", "sqrt"]
 /-- Component-wise closeness to `k` ulps, or to `k·eps` of the result's
 magnitude (a component far below the magnitude has meaningless ulps). -/
 def cclose (k : Nat) (got want : Complex Float) : Bool :=
-  let scale := Julia.max (Julia.hypot want.re want.im) (Julia.hypot got.re got.im)
+  let scale := JuliaBase.F64.max (JuliaBase.F64.hypot want.re want.im) (JuliaBase.F64.hypot got.re got.im)
   let comp (x y : Float) := ulpClose k x y ||
-    (x.isFinite && y.isFinite && (x - y).abs ≤ Float.ofNat k * Julia.epsF * scale)
+    (x.isFinite && y.isFinite && (x - y).abs ≤ Float.ofNat k * JuliaBase.F64.eps * scale)
   comp got.re want.re && comp got.im want.im
 
 /-- Render a complex value for failure messages. -/
@@ -73,11 +73,11 @@ def suite : TestM Unit := do
       | _ => let g := Complex.pow a b; (g, cclose 16 g want)
     check ok fun _ => s!"complex {name}({showC a}, {showC b}): got {showC got}, want {showC want}"
   for (name, x, r) in Golden.floatBase do
-    let got := if name == "expm1" then FloatExt.expm1 (fb x) else FloatExt.log1p (fb x)
+    let got := if name == "expm1" then JuliaBase.F64.expm1 (fb x) else JuliaBase.F64.log1p (fb x)
     check (ulpClose 2 got (fb r)) fun _ =>
-      s!"float {name}({showF (fb x)}): got {showF got}, want {showF (fb r)}, ulps {Julia.ulpDist got (fb r)}"
+      s!"float {name}({showF (fb x)}): got {showF got}, want {showF (fb r)}, ulps {JuliaBase.F64.ulpDist got (fb r)}"
   for (x, y, r) in Golden.hypotCases do
-    let got := Julia.hypot (fb x) (fb y)
+    let got := JuliaBase.F64.hypot (fb x) (fb y)
     check (same got (fb r)) fun _ => s!"hypot({fb x}, {fb y}): got {showF got}, want {showF (fb r)}"
   -- Julia facts from the port notes (§6.5): `(im)ǂ == -im`, `unit(3+4im) == 0.6+0.8im`.
   let im' : Complex Float := ⟨0, 1⟩

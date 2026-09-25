@@ -9,7 +9,7 @@ import Tests.AbstractTensors.Golden
 
 namespace Tests.AbstractTensors.StaticVectorsTests
 
-open StaticVectors
+open StaticVectors JuliaBase
 
 /-! ### Compile-time checks (exact entries, kernel-evaluated) -/
 
@@ -124,7 +124,15 @@ def suite : TestM Unit := do
   check (toString (Values.ofFn (n := 3) fun i => (i.1 : Int) + 1) == "[1, 2, 3]") fun _ => "print"
   check ((countvalues 1 4).toList == [1, 2, 3, 4]) fun _ => "countvalues"
   check ((evens 1 6).toList == [1, 3, 5]) fun _ => "evens"
-  check (Julia.isapprox 1.0 (1.0 + 1e-9) && !Julia.isapprox 1.0 1.001) fun _ => "isapprox"
-  check (same (Julia.max (-0.0) 0.0) 0.0 && same (Julia.min 0.0 (-0.0)) (-0.0)) fun _ => "Julia max/min"
+  check (F64.isapprox 1.0 (1.0 + 1e-9) && !F64.isapprox 1.0 1.001) fun _ => "isapprox"
+  check (same (F64.max (-0.0) 0.0) 0.0 && same (F64.min 0.0 (-0.0)) (-0.0)) fun _ => "Julia max/min"
+  -- Julia 1.13: `isapprox(x, y)` on `Float32` is `true` for these pairs, which sit exactly
+  -- where `rtol*max(|x|,|y|)` rounds up in `Float32` (a `Float64` product says `false`).
+  for (x, y) in [(0x3ebd2143, 0x3ebd31fc), (0x40b9d107, 0x40b9e175), (0x3fba14e3, 0x3fba2557),
+      (0x412786c5, 0x41279595)] do
+    let x := Float32.ofBits x
+    let y := Float32.ofBits y
+    check (JApprox.isapprox x y 0 (JApprox.rtolDefault Float32) false) fun _ =>
+      s!"isapprox(Float32) {x} {y}"
 
 end Tests.AbstractTensors.StaticVectorsTests

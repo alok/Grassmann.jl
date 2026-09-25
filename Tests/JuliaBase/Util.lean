@@ -30,8 +30,8 @@ def hexOfFloat (x : Float) : String :=
   let n := x.toBits.toNat
   if n == 0 then "0" else String.ofList (Nat.toDigits 16 n)
 
-/-- Bitwise float equality, treating every NaN as equal (Julia `isequal` up to NaN payload). -/
-def sameFloat (x y : Float) : Bool := (x.isNaN && y.isNaN) || x.toBits == y.toBits
+/-- Bitwise float equality, treating every NaN as equal: Julia `isequal`. -/
+@[inline] def sameFloat (x y : Float) : Bool := JuliaBase.F64.isequal x y
 
 /-- Running tally of a test suite: passes, failures, and the first few failure messages. -/
 structure Tally where

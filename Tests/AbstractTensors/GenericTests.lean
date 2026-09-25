@@ -128,7 +128,7 @@ def suite : TestM Unit := do
     | some f =>
       let got := f (fb x)
       check (same got (fb r)) fun _ =>
-        s!"generic real {name}({fb x}): got {showF got}, want {showF (fb r)}, ulps {Julia.ulpDist got (fb r)}"
+        s!"generic real {name}({fb x}): got {showF got}, want {showF (fb r)}, ulps {JuliaBase.F64.ulpDist got (fb r)}"
   for (name, re, im, rre, rim) in Golden.genericComplex do
     match unary (X := Complex Float) name with
     | none => check false fun _ => s!"generic complex: unknown function {name}"

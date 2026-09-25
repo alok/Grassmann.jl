@@ -98,14 +98,14 @@ instance : Coeff Float where
   zero := 0
   one := 1
   ofInt := Float.ofInt
-  ofRat := Julia.ratToFloat
+  ofRat := JuliaBase.F64.ofRat
   isZero x := x == 0
 
 instance : Coeff Float32 where
   zero := 0
   one := 1
   ofInt k := (Float.ofInt k).toFloat32
-  ofRat r := (Julia.ratToFloat r).toFloat32
+  ofRat r := (JuliaBase.F64.ofRat r).toFloat32
   isZero x := x == 0
 
 /-- Integer coefficients. `ofRat` truncates toward zero (Julia's `Int(r)` throws
@@ -136,14 +136,14 @@ instance {α : Type} [Coeff α] : Coeff (Complex α) where
 /-! ## `Analytic` instances -/
 
 /-- `Float` via the C `libm` (Julia uses its own `libm`; results agree to an
-ulp or two), with `expm1`/`log1p` from `FloatExt`. -/
+ulp or two), with `expm1`/`log1p` from `JuliaBase`. -/
 instance : Analytic Float where
   sqrt := Float.sqrt
   cbrt := Float.cbrt
   exp := Float.exp
-  expm1 := FloatExt.expm1
+  expm1 := JuliaBase.F64.expm1
   log := Float.log
-  log1p := FloatExt.log1p
+  log1p := JuliaBase.F64.log1p
   sin := Float.sin
   cos := Float.cos
   tan := Float.tan
@@ -164,9 +164,9 @@ instance : Analytic Float32 where
   sqrt := Float32.sqrt
   cbrt := Float32.cbrt
   exp := Float32.exp
-  expm1 := FloatExt.expm1F32
+  expm1 := JuliaBase.F32.expm1
   log := Float32.log
-  log1p := FloatExt.log1pF32
+  log1p := JuliaBase.F32.log1p
   sin := Float32.sin
   cos := Float32.cos
   tan := Float32.tan
