@@ -12,8 +12,37 @@ open Lean Tests.Small Cartan JuliaBase Grassmann
 
 namespace Tests.CartanTests.MiscTests
 
+/-- Orbits of field maps and reparametrization (`element/orbit.json`). -/
+def runOrbits : TestM Unit := do
+  let g ← load "element/orbit"
+  let t := TensorField.ofAxis (Axis.colon 0 0.25 1)
+  let s := t.sin
+  let f (u : TensorField (GridBundle.ofAxis (Axis.colon 0 0.25 1)) Float) : TensorField (GridBundle.ofAxis (Axis.colon 0 0.25 1)) Float := (0.5 : Float) * u + s
+  let lim (name : String) (L : AbstractAnalysis.Limit (TensorField (GridBundle.ofAxis (Axis.colon 0 0.25 1)) Float) (TensorField (GridBundle.ofAxis (Axis.colon 0 0.25 1)) Float)) :
+      TestM Unit := do
+    let j ← jField g name
+    checkEq s!"{name} n" L.length (← jNat (← jField j "n"))
+    checkFloat s!"{name} residual" L.residual (← jField j "r")
+    checkFloats s!"{name} first" L.first.data (← gFloats (← jField j "first"))
+    checkFloats s!"{name} last" L.last.data (← gFloats (← jField j "last"))
+  lim "orbit_eps" (TensorField.orbitLimit f s 1e-12)
+  lim "orbit_n" (TensorField.orbitSteps f s 7)
+  let (L, tr) := TensorField.orbitError f s 1e-10
+  lim "orbiterror" L
+  checkFloats "orbiterror trace" tr (← gFloats (← jField (← jField g "orbiterror") "trace"))
+  lim "orbithold" (TensorField.orbitHold (fun x u => (0.25 : Float) * u + x) t 9)
+  -- reparametrization (C6): the parameter's values become the points
+  let r := TensorField.reparametrize (t * t) s
+  checkFloats "reparametrize points" r.base.space.coords[0] (← gFloats (← jField g "reparam_points"))
+  checkFloats "reparametrize fiber" r.data (← gFloats (← jField g "reparam_fiber"))
+  let r2 := TensorField.reparametrize ((2 : Float) * t) t.cos
+  checkFloats "reparametrize range points" r2.base.space.coords[0]
+    (← gFloats (← jField g "reparam_range_points"))
+  check "reparametrize keeps a range" r2.base.space.axes[0].isRange
+
 /-- Run the utility checks. -/
 def run : TestM Unit := do
+  runOrbits
   let c ← jField (← load "misc") "cases"
   checkFloat "misc besseljzero(0,1)" (besseljzero 0 1) (← jField c "besseljzero(0,1)")
   checkFloat "misc besseljzero(2,3)" (besseljzero 2 3) (← jField c "besseljzero(2,3)")
