@@ -63,6 +63,12 @@ def run (smoke : Bool := false) : IO Unit := do
   let (ns, a) ← timeBest reps fun k =>
     ((TensorField.tabulatePoint (blackBox k g) fun x => x.get! 0 + 2 * x.get! 1).rebase? g).get!
   report "tabulate scalar" ns (checksum a)
+  let (ns, r) ← timeBest reps fun k =>
+    ((TensorField.tabulate2 (blackBox k g) fun x y => chain3 x y 1).rebase? g).get!
+  report "tabulate2 Chain ℝ3 (coordinates, no point)" ns (checksum r)
+  let (ns, r) ← timeBest reps fun k =>
+    ((TensorField.tabulate2 (blackBox k g) fun x y => x + 2 * y).rebase? g).get!
+  report "tabulate2 scalar" ns (checksum r)
   let lb := GridBundle.ofAxis line
   let (ns, t) ← timeBest reps fun k => ((TensorField.ofAxis (blackBox k line)).rebase? lb).get!
   report s!"identity field of range({n * n})" ns (checksum t)
@@ -94,6 +100,8 @@ def run (smoke : Bool := false) : IO Unit := do
   report "⋆v" ns (checksum r)
   let (ns, r) ← timeBest reps fun k => (blackBox k v).norm
   report "norm(v)" ns (checksum r)
+  let (ns, x) ← timeBest reps fun k => ((blackBox k a).eval2 0.3 0.7)
+  report "a(0.3, 0.7) (one evaluation)" ns x
   -- reductions
   let (ns, x) ← timeBest reps fun k => (blackBox k s).sumF
   report "sum(s)" ns x
