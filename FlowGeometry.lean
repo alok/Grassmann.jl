@@ -6,5 +6,6 @@ import FlowGeometry.Base
 import FlowGeometry.Airfoil
 import FlowGeometry.NACA
 import FlowGeometry.Mesh
+import FlowGeometry.Plot
 
 /-! FlowGeometry: Lean port of chakravala/FlowGeometry.jl. See docs/port-notes/. -/
