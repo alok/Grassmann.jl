@@ -121,7 +121,7 @@ function write_manifest(suite, shards)
         push!(entries, e)
     end
     man = Obj("meta" => Obj("schema" => SCHEMA_VERSION, "suite" => suite, "julia" => meta["julia"],
-                            "packages" => meta["packages"], "generator" => "oracle/suites/$suite.jl"),
+                            "packages" => toobj(meta["packages"]), "generator" => "oracle/suites/$suite.jl"),
               "totals" => Obj("cases" => tot["cases"], "errors" => tot["errors"],
                               "ref_mismatch" => tot["ref_mismatch"], "unexplained" => tot["unexplained"],
                               "defects" => Obj((k => dtot[k] for k in sort!(collect(keys(dtot))))...)),

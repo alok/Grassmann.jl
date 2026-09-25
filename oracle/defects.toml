@@ -69,7 +69,7 @@ policy = "ref"
   [[defect.match]]
   suite = "arith"
   op = "sub"
-  kinds = ["Chain:0|Chain:n", "*"]
+  kinds = ["Chain:0|Chain:n", "One|Submanifold|Single|Couple|PseudoCouple|Number"]
 
 [[defect]]
 id = "zero-method-gaps"
@@ -185,11 +185,22 @@ policy = "ref"
   [[defect.match]]
   space = "CGA*"
   op = "complementright|complementleft|hodge|complementlefthodge|metric"
-  kinds = ["One|Submanifold|Single"]
+  kinds = ["One|Submanifold|Single|Couple|PseudoCouple"]
   [[defect.match]]
   space = "CGA*"
   suite = "products"
   op = "cross|veedot|antidot"
+
+[[defect]]
+id = "conformal-generated-sandwich"
+title = "conformal spaces: the generated ⊘ / >>> with a Single or scalar operand splices a Tuple{Expr,Expr} (the non-diagonal blade product) into arithmetic and throws MethodError"
+source = "Grassmann.jl src/algebra.jl:1560-1790 (product_sandwich with paritygeometric terms)"
+notes = "found by the element oracle (products suite, CGA2/CGA3); grassmann-products.md §4.2, §4.6"
+correct = "the generic sandwich ~y⟑x⟑involute(y) (resp. y⟑x⟑clifford(y)), projected as documented"
+policy = "ref"
+  [[defect.match]]
+  suite = "products"
+  msg = "*::Tuple{Expr*"
 
 [[defect]]
 id = "conformal-antimetric"
@@ -214,6 +225,26 @@ policy = "ref"
   suite = "unary"
   space = "INF*|ORG*"
   op = "metric|antimetric"
+  kinds = ["One|Submanifold|Single|Couple|PseudoCouple"]
+
+[[defect]]
+id = "tangent-parity-grade"
+title = "tangent spaces: + / - of a Chain with a Spinor/CoSpinor decides parity with Leibniz grade (derivation indices not counted) but stores by full grade, throwing `... is not expressible as a Spinor/CoSpinor`"
+source = "Grassmann.jl src/products.jl:919-934; src/algebra.jl:744-1040 (adderspin/adderanti)"
+notes = "found by the element oracle (arith suite, TAN2); grassmann-types.md §3.2 (grade(V) = n − diffvars)"
+correct = "the linear combination, in the container of the storage parity"
+policy = "ref"
+  [[defect.match]]
+  space = "TAN*"
+  msg = "*is not expressible as*"
+
+[[defect]]
+id = "tangent-generated-crash"
+title = "tangent spaces: abs2 and complements of Spinor/CoSpinor/Multivector crash the Julia process (segfault in generated-function expansion), nondeterministically"
+source = "Grassmann.jl src/products.jl:1324-1487, AbstractTensors abs2 (generated code for tangent Spinor paths)"
+notes = "found by the element oracle; the unary suite therefore has no tangent shard"
+correct = "defined linear maps; tangent spaces are deferred in v1 (grassmann-products.md §4.14)"
+policy = "skip"
 
 [[defect]]
 id = "tangent-container-complement"
@@ -239,7 +270,7 @@ policy = "ref"
   [[defect.match]]
   suite = "unary"
   op = "antireverse"
-  kinds = ["Couple|PseudoCouple"]
+  kinds = ["Couple"]
 
 [[defect]]
 id = "trivector-couple"
@@ -260,6 +291,30 @@ correct = "the zero Multivector"
 policy = "ref"
   [[defect.match]]
   msg = "*zeros(::Expr)*"
+
+[[defect]]
+id = "grade-projection-above-n"
+title = "trivector (grade projection t(Val(3))) of a Multivector/CoSpinor in a space with n < 3 throws BoundsError"
+source = "Grassmann.jl src/multivectors.jl:300-316, :1107-1135"
+notes = "found by the element oracle (unary suite, E2); grassmann-types.md §4.4"
+correct = "Zero (no blades of that grade)"
+policy = "ref"
+  [[defect.match]]
+  suite = "unary"
+  op = "vector|bivector|trivector|grade:*"
+  msg = "BoundsError*"
+
+[[defect]]
+id = "antimetric-couple-scalar"
+title = "antimetric(Couple) leaves the scalar part unscaled (it should be multiplied by the metric product over the complement, g(I))"
+source = "Grassmann.jl src/products.jl:1630-1815 (Couple: scalar(z) + antimetric(imaginary(z)))"
+notes = "found by the element oracle (unary suite, M4/D3); grassmann-products.md §4.9"
+correct = "the Multivector path: every blade B scaled by g(complement of B)"
+policy = "ref"
+  [[defect.match]]
+  suite = "unary"
+  op = "antimetric"
+  kinds = ["Couple|PseudoCouple"]
 
 [[defect]]
 id = "volume-scalar-chain"
@@ -326,7 +381,7 @@ notes = "grassmann-algebra.md §4.10.3"
 correct = "a Julia limitation, not a wrong value: the port may compute the true inverse where it exists (e.g. 1 + ½I in ℝ⁴); such cases have no golden value"
 policy = "skip"
   [[defect.match]]
-  msg = "inv(*) is undefined"
+  msg = "inv(*"
 
 [[defect]]
 id = "scalar-trig-hyperbolic"

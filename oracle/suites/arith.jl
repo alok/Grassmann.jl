@@ -41,6 +41,9 @@ function build(sh, defects)
     V = evalsrc(m, "V")
     n = mdims(V)
     samples = lattice_samples(V, rng; infinity = true, zero_single = true, floats = true)
+    # Julia never forms Couple/PseudoCouple by + in tangent spaces, and its Couple algebra assumes
+    # the pseudoscalar grade is grade(V), which excludes the derivation indices; leave them out
+    diffvars(V) > 0 && filter!(s -> !startswith(s[1], "Couple") && !startswith(s[1], "PseudoCouple"), samples)
     nums = [("n:2", "2"), ("n:0", "0"), ("n:0.5", "0.5")]
     xs, inobjs = build_inputs(m, vcat(samples, nums); vshow = desc["show"])
     top["ops"] = Obj("add" => "a + b", "sub" => "a - b", "mul" => "a * b", "div" => "a / b",

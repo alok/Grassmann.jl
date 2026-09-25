@@ -18,24 +18,44 @@ function product_ref(op, a, b, V)
     da, db = todense(a), todense(b)
     (da === nothing || db === nothing) && return nothing
     f = BINARY[op][2]
-    r = f(mv_of(V, da), mv_of(V, db))
-    d = todense(r)
-    d === nothing && return nothing
-    if op in ("sandwich", "tsandwich")
-        ka, kb = kindof(a), kindof(b)
-        # a Couple with odd B, or a PseudoCouple whose B parity differs from n's, is not
-        # parity-homogeneous: Julia sandwiches with multispin(b), a Multivector (no projection)
-        if kb == "Couple" && isodd(count_ones(blade_bits(b)))
-            kb = "Multivector"
-        elseif kb == "PseudoCouple" && isodd(count_ones(blade_bits(b))) != isodd(n)
-            kb = "Multivector"
-        end
-        graded = ka in GRADED_KINDS
-        if graded && kb != "Multivector" && !(ka in TERM_KINDS && kb in TERM_KINDS)
-            d = project_grade(d, n, sgrade(a))
-        end
+    op in ("sandwich", "tsandwich") && return sandwich_ref(op, a, b, da, db, V)
+    return todense(f(mv_of(V, da), mv_of(V, db)))
+end
+
+"""
+Reference for `x ⊘ y` (op `sandwich`, x = a) and `y >>> x` (op `tsandwich`, x = b), following
+Julia's documented projection rule (grassmann-products.md §4.6): a graded `x` sandwiched by a
+parity-homogeneous non-Multivector `y` is projected onto grade(x), except when both are terms;
+a Couple/PseudoCouple `x` is split into its two parts, each sandwiched (and projected) separately.
+"""
+function sandwich_ref(op, a, b, da, db, V)
+    n = mdims(V)
+    f = BINARY[op][2]
+    x, y, dx, dy = op == "sandwich" ? (a, b, da, db) : (b, a, db, da)
+    sw(xd) = todense(op == "sandwich" ? f(mv_of(V, xd), mv_of(V, dy)) : f(mv_of(V, dy), mv_of(V, xd)))
+    ky = kindof(y)
+    # a Couple with odd B, or a PseudoCouple whose B parity differs from n's, is not
+    # parity-homogeneous: Julia sandwiches with multispin(y), a Multivector (no projection)
+    if ky == "Couple" && isodd(count_ones(blade_bits(y)))
+        ky = "Multivector"
+    elseif ky == "PseudoCouple" && isodd(count_ones(blade_bits(y))) != isodd(n)
+        ky = "Multivector"
     end
-    return d
+    part(xd, G, isterm) = (ky == "Multivector" || (isterm && ky in TERM_KINDS)) ? sw(xd) : project_grade(sw(xd), n, G)
+    kx = kindof(x)
+    if kx in GRADED_KINDS
+        return part(dx, sgrade(x), kx in TERM_KINDS)
+    elseif kx in ("Couple", "PseudoCouple")
+        B = blade_bits(x)
+        i1, i2 = kx == "Couple" ? (1, Leibniz.basisindex(n, B)) : (Leibniz.basisindex(n, B), 1 << n)
+        g1, g2 = kx == "Couple" ? (0, count_ones(B)) : (count_ones(B), n)
+        p1 = Any[zero(c) for c in dx]
+        p1[i1] = realvalue(x)
+        p2 = Any[zero(c) for c in dx]
+        p2[i2] = imagvalue(x)
+        return Any[u + v for (u, v) in zip(part(p1, g1, true), part(p2, g2, true))]
+    end
+    return sw(dx)
 end
 
 function build(sh, defects)
