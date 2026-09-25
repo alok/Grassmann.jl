@@ -188,13 +188,83 @@ def print (x : ExpGroup B) (product? : Option Float := none) : String :=
 
 end ExpGroup
 
+namespace LogBase
+
+/-- `log(b)` of a base as a `Float64` (`log(ℯ) = 1`). -/
+def logValue : LogBase → Float
+  | e => 1.0
+  | num b => JuliaBase.F64.log b.toFloat
+
+/-- Is this the base `2`? -/
+def isTwo : LogBase → Bool
+  | num (.int 2) => true
+  | _ => false
+
+/-- Is this the base `10`? -/
+def isTen : LogBase → Bool
+  | num (.int 10) => true
+  | _ => false
+
+end LogBase
+
 namespace LogGroup
 variable {B : Basis}
-/-- Julia `exp(log_ℯ g) = g`, and generally `exp(log_B g) = g^(1/log B)`. -/
-def exp (x : LogGroup B) : Option (Group B) :=
+
+/-- Julia `exp(log_B g)` (`FieldAlgebra.jl:511, 514`): `g` for `B = ℯ`, otherwise
+`g^inv(log(B))` (a `Float64` exponent vector). -/
+def exp (x : LogGroup B) : Group B :=
   match x.base with
-  | .e => some x.v
-  | _ => none
+  | .e => x.v
+  | b => x.v.fpow (1.0 / b.logValue)
+
+/-- Julia `exp2(log_B g)`: `g` for `B = 2` (`FieldAlgebra.jl:512`); for another base
+the formal inverse `g^(log(2)/log(B))` (Julia recurses forever, `:515`). -/
+def exp2 (x : LogGroup B) : Group B :=
+  if x.base.isTwo then x.v else x.v.fpow (JuliaBase.F64.log 2.0 / x.base.logValue)
+
+/-- Julia `exp10(log_B g)`: `g` for `B = 10` (`FieldAlgebra.jl:513`); for another
+base the formal inverse `g^(log(10)/log(B))` (Julia recurses forever, `:516`). -/
+def exp10 (x : LogGroup B) : Group B :=
+  if x.base.isTen then x.v else x.v.fpow (JuliaBase.F64.log 10.0 / x.base.logValue)
+
+/-- Julia `b^(log_B g) = exp(log_B(g)*log(b))` (`FieldAlgebra.jl:517`). -/
+def bpow (b : JNum) (x : LogGroup B) : Group B := (x.mulNum (JNum.log b)).exp
+
+/-- Julia `isonezero(x) = isone(x) || iszero(x)`; a logarithm is zero when its
+argument is one, and never one. -/
+def isonezero (x : LogGroup B) : Bool := x.isZero
+
 end LogGroup
+
+namespace ExpGroup
+variable {B : Basis}
+
+/-- Julia `log(b, B^g) = g/log(B, b)` (`FieldAlgebra.jl:558`): the exponent scaled by
+`inv(log(B, b))` (`times(g, inv(x))`, a bare-number coefficient). -/
+def logb (b : LogBase) (x : ExpGroup B) : Group B :=
+  let lb : Float := b.logValue / x.base.logValue
+  x.v.scale (.float (1.0 / lb))
+
+/-- Julia `log(ℯ^g) = g`, and `log(B^g) = log(ℯ, B^g)` (`FieldAlgebra.jl:555, 559`). -/
+def log (x : ExpGroup B) : Group B := match x.base with
+  | .e => x.v
+  | _ => x.logb .e
+
+/-- Julia `log2(2^g) = g`, `log2(B^g) = log(2, B^g)` (`FieldAlgebra.jl:556, 560`). -/
+def log2 (x : ExpGroup B) : Group B := if x.base.isTwo then x.v else x.logb .two
+
+/-- Julia `log10(10^g) = g`, `log10(B^g) = log(10, B^g)` (`FieldAlgebra.jl:557, 561`). -/
+def log10 (x : ExpGroup B) : Group B := if x.base.isTen then x.v else x.logb .ten
+
+end ExpGroup
+
+namespace Group
+variable {B : Basis}
+
+/-- Julia `isonezero(x) = isone(x) || iszero(x)` (`FieldAlgebra.jl:78`); a group
+element is never zero. -/
+def isonezero (g : Group B) : Bool := g.isOne
+
+end Group
 
 end FieldAlgebra
