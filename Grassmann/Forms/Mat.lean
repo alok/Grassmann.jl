@@ -184,12 +184,84 @@ product, then the others added left to right (Julia `+(x₁, x₂, …)`); zero 
   if i < n then pushLoop g n (i + 1) (Packed.push out (g i)) else out
 termination_by n - i
 
+/-! ### Unrolled small products (`2 × 2`, `3 × 3`, `4 × 4`) -/
+
+/-- `A x` for an `2 × 2` matrix, unrolled (Julia's order: the first product, then
+the others added left to right). -/
+@[inline] def mulVec2 (a x : Packed.Arr α) : Packed.Arr α :=
+  let x0 := rd x 0
+  let x1 := rd x 1
+  Packed.push (Packed.push (Packed.mkEmpty 2) ((rd a 0 * x0 + rd a 2 * x1))) ((rd a 1 * x0 + rd a 3 * x1))
+
+/-- `A x` for an `3 × 3` matrix, unrolled (Julia's order: the first product, then
+the others added left to right). -/
+@[inline] def mulVec3 (a x : Packed.Arr α) : Packed.Arr α :=
+  let x0 := rd x 0
+  let x1 := rd x 1
+  let x2 := rd x 2
+  Packed.push (Packed.push (Packed.push (Packed.mkEmpty 3) (((rd a 0 * x0 + rd a 3 * x1) + rd a 6 * x2))) (((rd a 1 * x0 + rd a 4 * x1) + rd a 7 * x2))) (((rd a 2 * x0 + rd a 5 * x1) + rd a 8 * x2))
+
+/-- `A x` for an `4 × 4` matrix, unrolled (Julia's order: the first product, then
+the others added left to right). -/
+@[inline] def mulVec4 (a x : Packed.Arr α) : Packed.Arr α :=
+  let x0 := rd x 0
+  let x1 := rd x 1
+  let x2 := rd x 2
+  let x3 := rd x 3
+  Packed.push (Packed.push (Packed.push (Packed.push (Packed.mkEmpty 4) ((((rd a 0 * x0 + rd a 4 * x1) + rd a 8 * x2) + rd a 12 * x3))) ((((rd a 1 * x0 + rd a 5 * x1) + rd a 9 * x2) + rd a 13 * x3))) ((((rd a 2 * x0 + rd a 6 * x1) + rd a 10 * x2) + rd a 14 * x3))) ((((rd a 3 * x0 + rd a 7 * x1) + rd a 11 * x2) + rd a 15 * x3))
+
+/-- `A B` of `2 × 2` matrices, unrolled (each entry in Julia's order). -/
+@[inline] def mul2 (a b : Packed.Arr α) : Packed.Arr α :=
+  let a0 := rd a 0
+  let a1 := rd a 1
+  let a2 := rd a 2
+  let a3 := rd a 3
+  Packed.push (Packed.push (Packed.push (Packed.push (Packed.mkEmpty 4) ((a0 * rd b 0 + a2 * rd b 1))) ((a1 * rd b 0 + a3 * rd b 1))) ((a0 * rd b 2 + a2 * rd b 3))) ((a1 * rd b 2 + a3 * rd b 3))
+
+/-- `A B` of `3 × 3` matrices, unrolled (each entry in Julia's order). -/
+@[inline] def mul3 (a b : Packed.Arr α) : Packed.Arr α :=
+  let a0 := rd a 0
+  let a1 := rd a 1
+  let a2 := rd a 2
+  let a3 := rd a 3
+  let a4 := rd a 4
+  let a5 := rd a 5
+  let a6 := rd a 6
+  let a7 := rd a 7
+  let a8 := rd a 8
+  Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.mkEmpty 9) (((a0 * rd b 0 + a3 * rd b 1) + a6 * rd b 2))) (((a1 * rd b 0 + a4 * rd b 1) + a7 * rd b 2))) (((a2 * rd b 0 + a5 * rd b 1) + a8 * rd b 2))) (((a0 * rd b 3 + a3 * rd b 4) + a6 * rd b 5))) (((a1 * rd b 3 + a4 * rd b 4) + a7 * rd b 5))) (((a2 * rd b 3 + a5 * rd b 4) + a8 * rd b 5))) (((a0 * rd b 6 + a3 * rd b 7) + a6 * rd b 8))) (((a1 * rd b 6 + a4 * rd b 7) + a7 * rd b 8))) (((a2 * rd b 6 + a5 * rd b 7) + a8 * rd b 8))
+
+/-- `A B` of `4 × 4` matrices, unrolled (each entry in Julia's order). -/
+@[inline] def mul4 (a b : Packed.Arr α) : Packed.Arr α :=
+  let a0 := rd a 0
+  let a1 := rd a 1
+  let a2 := rd a 2
+  let a3 := rd a 3
+  let a4 := rd a 4
+  let a5 := rd a 5
+  let a6 := rd a 6
+  let a7 := rd a 7
+  let a8 := rd a 8
+  let a9 := rd a 9
+  let a10 := rd a 10
+  let a11 := rd a 11
+  let a12 := rd a 12
+  let a13 := rd a 13
+  let a14 := rd a 14
+  let a15 := rd a 15
+  Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.push (Packed.mkEmpty 16) ((((a0 * rd b 0 + a4 * rd b 1) + a8 * rd b 2) + a12 * rd b 3))) ((((a1 * rd b 0 + a5 * rd b 1) + a9 * rd b 2) + a13 * rd b 3))) ((((a2 * rd b 0 + a6 * rd b 1) + a10 * rd b 2) + a14 * rd b 3))) ((((a3 * rd b 0 + a7 * rd b 1) + a11 * rd b 2) + a15 * rd b 3))) ((((a0 * rd b 4 + a4 * rd b 5) + a8 * rd b 6) + a12 * rd b 7))) ((((a1 * rd b 4 + a5 * rd b 5) + a9 * rd b 6) + a13 * rd b 7))) ((((a2 * rd b 4 + a6 * rd b 5) + a10 * rd b 6) + a14 * rd b 7))) ((((a3 * rd b 4 + a7 * rd b 5) + a11 * rd b 6) + a15 * rd b 7))) ((((a0 * rd b 8 + a4 * rd b 9) + a8 * rd b 10) + a12 * rd b 11))) ((((a1 * rd b 8 + a5 * rd b 9) + a9 * rd b 10) + a13 * rd b 11))) ((((a2 * rd b 8 + a6 * rd b 9) + a10 * rd b 10) + a14 * rd b 11))) ((((a3 * rd b 8 + a7 * rd b 9) + a11 * rd b 10) + a15 * rd b 11))) ((((a0 * rd b 12 + a4 * rd b 13) + a8 * rd b 14) + a12 * rd b 15))) ((((a1 * rd b 12 + a5 * rd b 13) + a9 * rd b 14) + a13 * rd b 15))) ((((a2 * rd b 12 + a6 * rd b 13) + a10 * rd b 14) + a14 * rd b 15))) ((((a3 * rd b 12 + a7 * rd b 13) + a11 * rd b 14) + a15 * rd b 15))
+
 /-- Matrix-vector product `A x` (Julia `matmul(value(A), value(x))`,
 `forms.jl:957-959`): `out[i] = A[i,1] x[1] + A[i,2] x[2] + …`, metric-free. -/
 @[inline] def mulVec (A : Mat r c α) (x : Values α c) : Values α r :=
   let a := A.v.data
   let xd := x.data
-  finish (pushLoop (fun i => sdot0 id a xd r 1 c i 0) r 0 (Packed.mkEmpty r))
+  if r = c then
+    if r = 3 then finish (mulVec3 a xd)
+    else if r = 2 then finish (mulVec2 a xd)
+    else if r = 4 then finish (mulVec4 a xd)
+    else finish (pushLoop (fun i => sdot0 id a xd r 1 c i 0) r 0 (Packed.mkEmpty r))
+  else finish (pushLoop (fun i => sdot0 id a xd r 1 c i 0) r 0 (Packed.mkEmpty r))
 
 /-- Row-vector times matrix, `out[j] = Σ_i f(x[i]) A[i,j]` (Julia
 `contraction(a::Chain, b::Chain{V,G,<:Chain})` = `value(a) ⋅ value(col_j)`,
@@ -204,7 +276,12 @@ termination_by n - i
 @[inline] def mul (A : Mat r c α) (B : Mat c k α) : Mat r k α :=
   let a := A.v.data
   let b := B.v.data
-  ⟨finish (fillCols (fun i j => sdot0 id a b r 1 c i (j * c)) r k 0 (Packed.mkEmpty (r * k)))⟩
+  if r = c ∧ c = k then
+    if r = 3 then ⟨finish (mul3 a b)⟩
+    else if r = 2 then ⟨finish (mul2 a b)⟩
+    else if r = 4 then ⟨finish (mul4 a b)⟩
+    else ⟨finish (fillCols (fun i j => sdot0 id a b r 1 c i (j * c)) r k 0 (Packed.mkEmpty (r * k)))⟩
+  else ⟨finish (fillCols (fun i j => sdot0 id a b r 1 c i (j * c)) r k 0 (Packed.mkEmpty (r * k)))⟩
 
 /-- The transpose (Julia `_transpose`, `forms.jl:305-308`). -/
 @[inline] def transpose (A : Mat r c α) : Mat c r α :=
