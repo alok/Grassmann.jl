@@ -45,35 +45,40 @@ termination_by xs.size - i
 def grid (n : Nat) (a d : Float) : FloatArray :=
   (List.range n).foldl (fun acc i => acc.push (a + i.toUInt64.toFloat * d)) (FloatArray.emptyWithCapacity n)
 
-/-- Values from a list (bench inputs). -/
-@[inline] def vs {n : Nat} (f : Fin n → Float) : Values Float n := Values.ofFn f
+/-- `0.0` as a module constant. -/
+def z0 : Float := f64! 0.0
+
+/-- Bench input coefficients at a literal size `k` (`h : k = n` by `rfl`), so no layout
+size (a `Nat` power in DirectSum's `Layout.size`) is computed per call. -/
+@[inline] def vs {n : Nat} (k : Nat) (h : k = n) (f : Fin k → Float) : Values Float n :=
+  (Values.ofFn f).cast h
 
 /-! ## ℝ3 elements -/
 
 /-- The bivector chain `x(0.3v₁₂ + 0.2v₁₃ + 0.4v₂₃)`. -/
 @[inline] def biv (x : Float) : Chain ℝ3 2 Float :=
-  ⟨vs fun i => match i.1 with | 0 => (f64! 0.3) * x | 1 => (f64! 0.2) * x | _ => (f64! 0.4) * x⟩
+  ⟨vs 3 rfl fun i => match i.1 with | 0 => (f64! 0.3) * x | 1 => (f64! 0.2) * x | _ => (f64! 0.4) * x⟩
 
 /-- The quaternion `1 + x(0.3v₁₂ + 0.2v₁₃ + 0.4v₂₃)`. -/
 @[inline] def quat (x : Float) : Spinor ℝ3 Float :=
-  ⟨vs fun i => match i.1 with | 0 => (f64! 1.0) | 1 => (f64! 0.3) * x | 2 => (f64! 0.2) * x | _ => (f64! 0.4) * x⟩
+  ⟨vs 4 rfl fun i => match i.1 with | 0 => (f64! 1.0) | 1 => (f64! 0.3) * x | 2 => (f64! 0.2) * x | _ => (f64! 0.4) * x⟩
 
 /-- The dense multivector `0.1x·(1, 2, …, 8)`. -/
 @[inline] def mvx (x : Float) : Multivector ℝ3 Float :=
-  ⟨vs fun i => ((f64! 0.1) * x) * (i.1.toUInt64.toFloat + 1)⟩
+  ⟨vs 8 rfl fun i => ((f64! 0.1) * x) * (i.1.toUInt64.toFloat + 1)⟩
 
 /-- The quaternion `1 + x(0.3v₁₂ + 0.2v₁₃ + 0.4v₂₃)` stored as a dense multivector (Julia's
 `log`/`sqrt` of a multivector need `inv(t + 1)`, defined when `(~m)m` is a scalar). -/
 @[inline] def mvq (x : Float) : Multivector ℝ3 Float :=
-  ⟨vs fun i => match i.1 with | 0 => (f64! 1.0) | 4 => (f64! 0.3) * x | 5 => (f64! 0.2) * x | 6 => (f64! 0.4) * x | _ => 0⟩
+  ⟨vs 8 rfl fun i => match i.1 with | 0 => (f64! 1.0) | 4 => (f64! 0.3) * x | 5 => (f64! 0.2) * x | 6 => (f64! 0.4) * x | _ => z0⟩
 
 /-- A PGA3 bivector (a motor generator): `x(0.3, 0.2, 0.4, 0.1, 0.5, 0.6)`. -/
 @[inline] def pgaBiv (x : Float) : Chain PGA3 2 Float :=
-  ⟨vs fun i => x * (match i.1 with | 0 => (f64! 0.3) | 1 => (f64! 0.2) | 2 => (f64! 0.4) | 3 => (f64! 0.1) | 4 => (f64! 0.5) | _ => (f64! 0.6))⟩
+  ⟨vs 6 rfl fun i => x * (match i.1 with | 0 => (f64! 0.3) | 1 => (f64! 0.2) | 2 => (f64! 0.4) | 3 => (f64! 0.1) | 4 => (f64! 0.5) | _ => (f64! 0.6))⟩
 
 /-- A CGA3 translator generator `x(v∞₁ + 0.5v∞₂ - 0.25v∞₃)` (null: `exp = 1 + t`). -/
 @[inline] def cgaTrans (x : Float) : Chain CGA3 2 Float :=
-  ⟨vs fun i => match i.1 with | 1 => x | 2 => (f64! 0.5) * x | 3 => -(f64! 0.25) * x | _ => 0⟩
+  ⟨vs 10 rfl fun i => match i.1 with | 1 => x | 2 => (f64! 0.5) * x | 3 => -(f64! 0.25) * x | _ => z0⟩
 
 /-! ## The README curves -/
 
@@ -82,11 +87,11 @@ def pi : Float := f64! 3.141592653589793
 
 /-- A vector of `Inf3` from its coefficients `(v∞, v₁, v₂, v₃)`. -/
 @[inline] def v3 (a b c d : Float) : Chain Inf3 1 Float :=
-  ⟨vs fun i => match i.1 with | 0 => a | 1 => b | 2 => c | _ => d⟩
+  ⟨vs 4 rfl fun i => match i.1 with | 0 => a | 1 => b | 2 => c | _ => d⟩
 
 /-- `(3/7)v₁₂ + v∞₃` in `Inf3`. -/
 def torusBiv : Chain Inf3 2 Float :=
-  ⟨vs fun i => match i.1 with | 2 => (f64! 1.0) | 3 => (3 : Float) / 7 | _ => 0⟩
+  ⟨vs 6 rfl fun i => match i.1 with | 2 => (f64! 1.0) | 3 => (3 : Float) / 7 | _ => z0⟩
 
 /-- `v1 + v2 + v3`. -/
 def p111 : Chain Inf3 1 Float := v3 0 1 1 1
@@ -111,7 +116,7 @@ def p11m : Chain Inf3 1 Float := v3 0 1 1 (-1)
   Chain.down (Half.exp (infTimes t (wobble t) / (2 : Float)) >>> Chain.up p11m)
 
 /-- `v₁₂` as a spinor of `Inf3`. -/
-def v12S : Spinor Inf3 Float := ⟨vs fun i => if i.1 = 4 then 1 else 0⟩
+def v12S : Spinor Inf3 Float := ⟨vs 8 rfl fun i => if i.1 = 4 then (f64! 1.0) else z0⟩
 
 /-- The `orbit-4` curve `↓(exp(t(v12 + 0.07v∞(…)/2)) >>> ↑(v1+v2-v3))`. -/
 @[inline] def orbit4 (t : Float) : Chain Inf3 1 Float :=
@@ -120,10 +125,10 @@ def v12S : Spinor Inf3 Float := ⟨vs fun i => if i.1 = 4 then 1 else 0⟩
 
 /-- `(3/7)v₁₂ + v∞₃` in `CGA3`. -/
 def helixBiv : Chain CGA3 2 Float :=
-  ⟨vs fun i => match i.1 with | 3 => (f64! 1.0) | 7 => (3 : Float) / 7 | _ => 0⟩
+  ⟨vs 10 rfl fun i => match i.1 with | 3 => (f64! 1.0) | 7 => (3 : Float) / 7 | _ => z0⟩
 
 /-- `v1 + v2 + v3` in `CGA3`. -/
-def c111 : Chain CGA3 1 Float := ⟨vs fun i => if i.1 ≥ 2 then 1 else 0⟩
+def c111 : Chain CGA3 1 Float := ⟨vs 5 rfl fun i => if i.1 ≥ 2 then (f64! 1.0) else z0⟩
 
 /-- The helix curve (the torus expression in `CGA3`). -/
 @[inline] def helix (t : Float) : Chain CGA3 1 Float :=
@@ -131,7 +136,7 @@ def c111 : Chain CGA3 1 Float := ⟨vs fun i => if i.1 ≥ 2 then 1 else 0⟩
 
 /-- The `orb` versor `exp((π/4)(v₁₂ + v∞₃))`. -/
 def orbVersor : Spinor Inf3 Float :=
-  Chain.expEven ((pi / (4 : Float)) * (⟨vs fun i => match i.1 with | 2 => (f64! 1.0) | 3 => (f64! 1.0) | _ => 0⟩ : Chain Inf3 2 Float))
+  Chain.expEven ((pi / (4 : Float)) * (⟨vs 6 rfl fun i => match i.1 with | 2 => (f64! 1.0) | 3 => (f64! 1.0) | _ => z0⟩ : Chain Inf3 2 Float))
 
 /-- The subspace `V(2,3,4)` of `Inf3`. -/
 def sub234 : SubSpace Inf3 := TensorBundle.sub Inf3 [2, 3, 4]
@@ -192,7 +197,7 @@ def casesDense : BenchM Unit := do
 
 /-- A vector of `CGA3` from `(v1, v2, v3)` and its null parts. -/
 @[inline] def c3 (a b c d e : Float) : Chain CGA3 1 Float :=
-  ⟨vs fun i => match i.1 with | 0 => a | 1 => b | 2 => c | 3 => d | _ => e⟩
+  ⟨vs 5 rfl fun i => match i.1 with | 0 => a | 1 => b | 2 => c | 3 => d | _ => e⟩
 
 /-- `↑`, `↓`. -/
 def casesUpDown : BenchM Unit := do
@@ -215,7 +220,7 @@ def casesCurves : BenchM Unit := do
   bench "CGA3/helix" (ops := n) (param := p) fun s => loopF (fun t => tot (helix t).v) (blackBox s xs) 0 0
   bench "Inf3/chainfield" (ops := n) (param := p) fun s =>
     loopF (fun x => tot (Fields.chainfield orbVersor sub234 sub234
-      ⟨vs fun i => match i.1 with | 0 => x | 1 => (f64! 0.5) | _ => -x⟩).v) (blackBox s xs) 0 0
+      ⟨vs 3 rfl fun i => match i.1 with | 0 => x | 1 => (f64! 0.5) | _ => -x⟩).v) (blackBox s xs) 0 0
 
 /-- The suite. -/
 def suite : Suite := ⟨"composite", do

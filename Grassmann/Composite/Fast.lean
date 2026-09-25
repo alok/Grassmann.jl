@@ -200,6 +200,20 @@ theorem fastSize_eq (n : Nat) (l : Layout) : fastSize n l = l.size n := by
 @[inline] def zeros (V : TensorBundle) (l : Layout) : Values Float (l.size V.n) :=
   (Values.replicate (n := fastSize V.n l) f0).cast (fastSize_eq V.n l)
 
+/-- The coefficients of the scalar `x` in layout `l` (no `Nat` powers at run time). -/
+@[inline] def scalarIn (V : TensorBundle) (l : Layout) (x : Float) : Values Float (l.size V.n) :=
+  vset (zeros V l) 0 x
+
+/-- The multivector `x·1` (Julia `Multivector(x)`), built without `Nat` powers. -/
+@[inline] def mvScalar {V : TensorBundle} (x : Float) : Multivector V Float := ⟨scalarIn V .full x⟩
+
+/-- The spinor `x·1`, built without `Nat` powers. -/
+@[inline] def spScalar {V : TensorBundle} (x : Float) : Half V false Float := ⟨scalarIn V (halfLayout false) x⟩
+
+/-- The coefficients of the constant `x` everywhere in layout `l`. -/
+@[inline] def constIn (V : TensorBundle) (l : Layout) (x : Float) : Values Float (l.size V.n) :=
+  vmap (fun _ => x) (zeros V l)
+
 /-- A grade-`g` chain's coefficients `x`, scaled by `k`, in layout `l` (which must store grade
 `g`): one copy of the zero vector with the block at `gradeOffset`. -/
 @[inline] def embedChain (V : TensorBundle) (g : Nat) (l : Layout) (k : Float)

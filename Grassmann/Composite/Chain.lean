@@ -183,7 +183,7 @@ space of dimension ≤ 3 are scalars, `Σ cᵢ²·Bᵢ²`. -/
 /-- Julia `exp(t::Chain)` (`src/composite.jl:136-159`, `C:407`): a `Spinor` for even `G`, a
 `Multivector` (`scalar + odd`) for odd `G`, returned as a multivector. -/
 @[inline] def exp (c : Chain V G Float) : Multivector V Float :=
-  if G == 0 then Multivector.scalar (F64.exp (getD c.v 0))
+  if G == 0 then mvScalar (F64.exp (getD c.v 0))
   else if G % 2 == 0 && isR301 V && G == 2 then (expPGA c).toMV
   else match expClosed? c with
     | some (a, x) => mvAffine a x c
@@ -194,7 +194,7 @@ space of dimension ≤ 3 are scalars, `Σ cᵢ²·Bᵢ²`. -/
 /-- Julia `expm1(t::Chain) = expm1(multispin(t))` (`src/composite.jl:28-30`): the scalar
 `expm1` for `G = 0`, the generated series of the `Spinor`/`Multivector` otherwise. -/
 @[specialize V] def expm1 (c : Chain V G Float) : Multivector V Float :=
-  if G == 0 then Multivector.scalar (F64.expm1 (getD c.v 0))
+  if G == 0 then mvScalar (F64.expm1 (getD c.v 0))
   else if G % 2 == 0 then (Half.expm1 (evenHalf c)).toMV
   else Multivector.expm1 (toMultivector c)
 
@@ -202,7 +202,7 @@ space of dimension ≤ 3 are scalars, `Σ cᵢ²·Bᵢ²`. -/
 `qlog((t - 1)/(t + 1))` (`C:369`) on the `Spinor`/`Multivector` of `t`; `none` where
 Julia throws (`inv` undefined). -/
 @[specialize V] def log? (c : Chain V G Float) : Option (Multivector V Float) :=
-  if G == 0 then some (Multivector.scalar (F64.log (getD c.v 0)))
+  if G == 0 then some (mvScalar (F64.log (getD c.v 0)))
   else if G % 2 == 0 then (Half.logSeries? (evenHalf c)).map Half.toMultivector
   else Multivector.log? (toMultivector c)
 
@@ -221,8 +221,8 @@ Julia throws (`inv` undefined). -/
 `G = 0` (`qrtScalar`), `0` for the zero chain (`isscalar`), else `exp(log(t)/n)`; `none`
 where Julia throws (the logarithm's `inv` undefined). -/
 @[specialize V] def root? (qrtScalar : Float → Float) (n : Float) (c : Chain V G Float) : Option (Multivector V Float) :=
-  if G == 0 then some (Multivector.scalar (qrtScalar (getD c.v 0)))
-  else if isScalarNorms c.v.norm f0 then some (Multivector.scalar (qrtScalar f0))
+  if G == 0 then some (mvScalar (qrtScalar (getD c.v 0)))
+  else if isScalarNorms c.v.norm f0 then some (mvScalar (qrtScalar f0))
   else if G % 2 == 0 then
     (Half.logSeries? (evenHalf c)).map fun l => Half.toMultivector (Half.exp (Half.sdiv l n))
   else (Multivector.log? (toMultivector c)).map fun l => Multivector.exp (l / n)
@@ -289,14 +289,14 @@ dimension ≤ 3 (no tangent variables) `sq^⌊k/2⌋` times `t` when `k` is odd,
   else
     let c' := if k < 0 then c.inv else c
     let n := k.natAbs
-    if n == 0 then Multivector.one
+    if n == 0 then (mvScalar f1)
     else if n == 1 then toMultivector c'
     else if V.n ≤ 3 && V.diffvars == 0 then
       let sq := getD ((contraction (~c') c' : Chain V (G - G) Float).cast (Nat.sub_self G)).v 0
       let v := scalarPow3 sq (n / 2)
-      if n % 2 == 0 then Multivector.scalar v else toMultivector (v * c')
-    else if G % 2 == 0 then Half.toMultivector (powJulia Half.smul' Spinor.one (evenHalf c') n)
-    else powJulia (· * ·) Multivector.one (toMultivector c') n
+      if n % 2 == 0 then mvScalar v else toMultivector (v * c')
+    else if G % 2 == 0 then Half.toMultivector (powJulia Half.smul' (spScalar f1) (evenHalf c') n)
+    else powJulia (· * ·) (mvScalar f1) (toMultivector c') n
 
 /-- Julia `b ^ t = exp(t ⟑ log(b))` for a real base (AbstractTensors `AT:326`). -/
 @[inline] def rpow (b : Float) (c : Chain V G Float) : Multivector V Float := exp (c * F64.log b)

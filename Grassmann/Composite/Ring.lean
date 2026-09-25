@@ -62,11 +62,11 @@ instance instSeriesRingMultivector : SeriesRing (Multivector V Float) where
 /-- Grassmann's multivectors as the carrier of AbstractTensors' derived functions. -/
 instance instTensorRingMultivector : TensorRing (Multivector V Float) where
   zero := Multivector.zero
-  one := Multivector.one
+  one := (mvScalar f1)
   pseudoscalar := Multivector.ofBlade (⟨pseudoMask V⟩ : Submanifold V (pseudoGrade V)) f1
   reverse := Multivector.reverse
   isScalar := Multivector.isScalar
-  scalar m := Multivector.scalar m.scalarValue
+  scalar m := mvScalar m.scalarValue
   complementLeft := Multivector.complementleft
   complementRight := Multivector.complementright
   expm1 := Multivector.expm1
@@ -94,7 +94,7 @@ instance instSeriesRingSpinor : SeriesRing (Half V false Float) where
 derived functions. -/
 instance instTensorRingSpinor [h : EvenDim V] : TensorRing (Half V false Float) where
   zero := Half.zero
-  one := Spinor.one
+  one := (spScalar f1)
   pseudoscalar := Half.ofBlade (⟨pseudoMask V⟩ : Submanifold V (pseudoGrade V)) f1
   reverse := Half.reverse
   isScalar := Half.isScalar

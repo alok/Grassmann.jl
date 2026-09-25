@@ -85,7 +85,7 @@ end Composite
 namespace Multivector
 
 /-- The multivector with every coefficient `NaN` (the value of an operation Julia rejects). -/
-def nan : Multivector V Float := ⟨Values.replicate Composite.nan⟩
+def nan : Multivector V Float := ⟨constIn V .full Composite.nan⟩
 
 /-- Julia `k + t` for a real `k`: `k` added to the scalar coefficient only. -/
 @[inline] def addScalar (k : Float) (m : Multivector V Float) : Multivector V Float :=
@@ -125,7 +125,7 @@ variable [Kernels V]
 @[specialize V] def expm1 (b : Multivector V Float) : Multivector V Float :=
   let nb := b.fnorm
   let sb := b.scalarValue
-  if approx sb.abs nb then Multivector.scalar (F64.expm1 sb)
+  if approx sb.abs nb then mvScalar (F64.expm1 sb)
   else expm1Generated addF (· * ·) sdivF fnorm b
 
 /-- Julia `exp(t::Multivector)` (`src/composite.jl:83-96`, parabolic defect fixed):
@@ -150,14 +150,14 @@ the closed form when `m = t - scalar(t)` squares to a scalar, else `1 + expm1(t)
 else `1 + τ/2 + τ²/4! + …` with `τ = b⟑b`. -/
 @[specialize V] def cosh (b : Multivector V Float) : Multivector V Float :=
   let sb := b.scalarValue
-  if approx sb.abs b.fnorm then Multivector.scalar (Float.cosh sb)
+  if approx sb.abs b.fnorm then mvScalar (Float.cosh sb)
   else addScalar f1 (coshGeneratedTail addF (· * ·) sdivF fnorm (b * b))
 
 /-- The generated `sinh` series of Grassmann (`src/composite.jl:541-570`, completed as
 `cosh`): `sinh(s)` for a scalar, else `b + b⟑τ/3! + …` with `τ = b⟑b`. -/
 @[specialize V] def sinh (b : Multivector V Float) : Multivector V Float :=
   let sb := b.scalarValue
-  if approx sb.abs b.fnorm then Multivector.scalar (Float.sinh sb)
+  if approx sb.abs b.fnorm then mvScalar (Float.sinh sb)
   else
     let τ := b * b
     sinhGeneratedWith addF sdivF fnorm (· * τ) b
@@ -184,7 +184,7 @@ throws (`inv(t + 1)` undefined). -/
 /-- Julia `sqrt(t) = isscalar(t) ? sqrt(scalar(t)) : exp(log(t)/2)` (`src/composite.jl:438`),
 or `none` where Julia throws. -/
 @[specialize V] def sqrt? (t : Multivector V Float) : Option (Multivector V Float) :=
-  if t.isScalar then some (Multivector.scalar (Float.sqrt t.scalarValue))
+  if t.isScalar then some (mvScalar (Float.sqrt t.scalarValue))
   else (log? t).map fun l => exp (l / f2)
 
 /-- Julia `sqrt(t::Multivector)`; `NaN` coefficients where Julia throws. -/
@@ -193,7 +193,7 @@ or `none` where Julia throws. -/
 /-- Julia `cbrt(t) = isscalar(t) ? cbrt(scalar(t)) : exp(log(t)/3)` (`src/composite.jl:438`),
 or `none` where Julia throws. -/
 @[specialize V] def cbrt? (t : Multivector V Float) : Option (Multivector V Float) :=
-  if t.isScalar then some (Multivector.scalar (F64.cbrt t.scalarValue))
+  if t.isScalar then some (mvScalar (F64.cbrt t.scalarValue))
   else (log? t).map fun l => exp (l / f3)
 
 /-- Julia `cbrt(t::Multivector)`; `NaN` coefficients where Julia throws. -/
@@ -211,7 +211,7 @@ end Multivector
 namespace Half
 
 /-- The spinor with every coefficient `NaN`. -/
-def nan : Half V false Float := ⟨Values.replicate Composite.nan⟩
+def nan : Half V false Float := ⟨constIn V (halfLayout false) Composite.nan⟩
 
 /-- The scalar coefficient of a spinor (storage index `0`, `0` when `n = 0`... never empty). -/
 @[inline] def scalarValue (s : Half V false Float) : Float := getD s.v 0
@@ -234,7 +234,7 @@ def nan : Half V false Float := ⟨Values.replicate Composite.nan⟩
   ⟨s.v.set ⟨0, even_size_pos V.n⟩ f0⟩
 
 /-- The spinor `x·1`. -/
-@[inline] def scalarF (x : Float) : Half V false Float := Spinor.scalar x
+@[inline] def scalarF (x : Float) : Half V false Float := spScalar x
 
 variable [Kernels V]
 
@@ -324,7 +324,7 @@ or `none` where Julia throws. -/
 
 /-- Julia `t ^ k` for a spinor (`src/algebra.jl:440-470`), `inv(t)^|k|` for `k < 0`. -/
 @[specialize V] def pow (t : Half V false Float) (k : Int) : Half V false Float :=
-  if k ≥ 0 then powJulia smul' Spinor.one t k.toNat else powJulia smul' Spinor.one t.invD k.natAbs
+  if k ≥ 0 then powJulia smul' (spScalar f1) t k.toNat else powJulia smul' (spScalar f1) t.invD k.natAbs
 
 end Half
 
