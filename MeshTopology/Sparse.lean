@@ -78,7 +78,9 @@ def addScaled (A B : SparseInt) (s : Int) : SparseInt :=
   ofTriplets A.m A.n (a.map (·.1) ++ b.map (·.1)) (a.map (·.2.1) ++ b.map (·.2.1))
     (a.map (·.2.2) ++ b.map fun x => s * x.2.2)
 
+/-- Julia `A + B`. -/
 instance : Add SparseInt := ⟨fun A B => A.addScaled B 1⟩
+/-- Julia `A - B`. -/
 instance : Sub SparseInt := ⟨fun A B => A.addScaled B (-1)⟩
 
 /-- Entry `A[i, j]` (1-based; `0` if not stored). -/

@@ -107,9 +107,11 @@ theorem crossGet_crossGet_last {n : Nat} (hn : n % 2 = 1) (h : 3 ≤ n) :
 
 /-! ## Lagrange node counts -/
 
+/-- Pascal's rule at `k = 2`. -/
 theorem choose_succ_two (M : Nat) : choose (M + 1) 2 = M + choose M 2 := by
   rw [choose_succ_succ, choose_one_right]
 
+/-- Pascal's rule at `k = 3`. -/
 theorem choose_succ_three (M : Nat) : choose (M + 1) 3 = choose M 2 + choose M 3 :=
   choose_succ_succ M 2
 
@@ -201,6 +203,7 @@ def discUnindex {N te : Nat} (x : Fin (N * te)) : Fin te × Fin N :=
   have hN : 0 < N := Nat.pos_of_ne_zero fun h => by have := x.2; simp [h] at this
   (⟨x.1 / N, Nat.div_lt_of_lt_mul x.2⟩, ⟨x.1 % N, Nat.mod_lt _ hN⟩)
 
+/-- `discUnindex` inverts `discIndex`. -/
 theorem discUnindex_discIndex {N te : Nat} (e : Fin te) (j : Fin N) :
     discUnindex (discIndex e j) = (e, j) := by
   have hj := j.2
@@ -209,6 +212,7 @@ theorem discUnindex_discIndex {N te : Nat} (e : Fin te) (j : Fin N) :
   have h2 : (N * e.1 + j.1) % N = j.1 := by rw [Nat.mul_add_mod, Nat.mod_eq_of_lt hj]
   apply Prod.ext <;> apply Fin.ext <;> simp [discUnindex, discIndex, h1, h2]
 
+/-- `discIndex` inverts `discUnindex`: the numbering is a bijection. -/
 theorem discIndex_discUnindex {N te : Nat} (x : Fin (N * te)) :
     discIndex (discUnindex x).1 (discUnindex x).2 = x := by
   simp only [discIndex, discUnindex]

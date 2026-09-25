@@ -325,6 +325,7 @@ def showString (m : ProductTopology N) : String :=
     s!"Values\{{N}, Int64}[" ++
       showArrayBody m.size.toList (m.toArray.map (showInts ·.toList)) ++ "]"
 
+/-- Julia `print(m)`. -/
 instance : ToString (ProductTopology N) := ⟨showString⟩
 
 /-- Julia `show(io, MIME"text/plain"(), m)`: the summary and the grid of `Values`. -/

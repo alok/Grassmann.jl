@@ -28,20 +28,26 @@ def choose : Nat → Nat → Nat
   | 0, _ + 1 => 0
   | n + 1, k + 1 => choose n k + choose n (k + 1)
 
+/-- `choose n 0 = 1`. -/
 @[simp] theorem choose_zero_right (n : Nat) : choose n 0 = 1 := by cases n <;> rfl
+/-- `choose 0 (k+1) = 0`. -/
 @[simp] theorem choose_zero_succ (k : Nat) : choose 0 (k + 1) = 0 := rfl
+/-- Pascal's rule. -/
 theorem choose_succ_succ (n k : Nat) : choose (n + 1) (k + 1) = choose n k + choose n (k + 1) := rfl
 
+/-- `choose n k = 0` for `k > n` (Julia `binomial`). -/
 theorem choose_eq_zero_of_lt : ∀ {n k : Nat}, n < k → choose n k = 0
   | 0, _ + 1, _ => rfl
   | n + 1, k + 1, h => by
     rw [choose_succ_succ, choose_eq_zero_of_lt (by omega : n < k),
       choose_eq_zero_of_lt (by omega : n < k + 1)]
 
+/-- `choose n n = 1`. -/
 @[simp] theorem choose_self : ∀ n, choose n n = 1
   | 0 => rfl
   | n + 1 => by rw [choose_succ_succ, choose_self n, choose_eq_zero_of_lt (Nat.lt_succ_self n)]
 
+/-- `choose n 1 = n`. -/
 @[simp] theorem choose_one_right : ∀ n, choose n 1 = n
   | 0 => rfl
   | n + 1 => by rw [choose_succ_succ, choose_one_right n, choose_zero_right]; omega
