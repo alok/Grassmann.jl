@@ -70,6 +70,22 @@ for s in systems
         showstr(exp(S.neper(U))), showstr(exp10(S.bel(U)))])
 end
 
+# `display(U)` of every system: the defining constants as quantities (`Similitude.jl:103-126`)
+function capture_display(x)
+    io = IOBuffer()
+    old = stdout
+    rd, wr = redirect_stdout()
+    t = @async read(rd, String)
+    try
+        display(x)
+    finally
+        redirect_stdout(old)
+        close(wr)
+    end
+    fetch(t)
+end
+dsp = Any[[string(s), capture_display(getfield(S, s))] for s in systems]
+
 writejson(joinpath(OUT, "quantity_ext.json"), Dict("julia" => string(VERSION), "powers" => pw,
-    "dimensionless" => dl, "logs" => lg, "neper" => nb))
+    "dimensionless" => dl, "logs" => lg, "neper" => nb, "display" => dsp))
 println("wrote quantity_ext.json")

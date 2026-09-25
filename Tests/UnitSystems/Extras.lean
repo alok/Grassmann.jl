@@ -88,6 +88,7 @@ def constructorsSuite : IO (Suite × Suite) := do
     s := s.check (U.unitname == str (fld r "name")) fun _ => s!"rescale name {U.unitname}"
   for (u : Sys) in Sys.all do
     s := s.check ((u.sys Num).unitname == u.name) fun _ => s!"unitname {u.name}"
+    s := s.check ((u.sys Num).displayAny == u.display) fun _ => s!"displayAny {u.name}"
   -- conversion helpers
   for r in arr (fld j "helpers") do
     let f := str (idx r 0)

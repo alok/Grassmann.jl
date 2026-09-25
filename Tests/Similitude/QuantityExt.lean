@@ -98,6 +98,9 @@ def quantityExtSuite : IO Suite := do
     s := chk s "div2" (toString (l / (2.0 : Float)))
     s := chk s "exp" (toString l.exp)
     s := chk s "exp10" (toString a.log10.exp10)
+  for r in arr (fld j "display") do
+    let U := sysOf! (str (idx r 0))
+    s := s.check (U.displayQ == str (idx r 1)) fun _ => s!"display {U.name}:\n{U.displayQ}"
   for r in arr (fld j "neper") do
     let U := sysOf! (str (idx r 0))
     s := s.check ((neper U).display == str (idx r 1)) fun _ => s!"neper({U.name})"

@@ -214,6 +214,28 @@ def _root_.UnitSystems.Sys.morphism (U : Sys) : Array (Array Expo) :=
   let cols := (List.finRange 11).toArray.map fun j => (U.image (Exps.unit j)).toExpos
   (List.range 11).toArray.map fun i => cols.map fun c => c[i]!
 
+/-- Julia `display(U)` in Similitude (`UnitSystems.jl:188-201` applied to the
+system of quantities `Quantity(U)`, `Similitude.jl:103-126`): the eleven defining
+constants of `U` as quantities with their units. (Julia's `4π` shortcut for the
+rationalization compares a quantity with a number, which never holds.) -/
+def _root_.UnitSystems.Sys.displayQ (U : Sys) : String :=
+  let C := U.consts
+  let pad (s : String) : String := s ++ String.ofList (List.replicate (17 - s.length) ' ')
+  let line (label v : String) : String := "  " ++ pad label ++ ": " ++ v ++ "\n"
+  let q (d : Dim) (x : Scalar) : String := toString (U.qty d x)
+  "UnitSystem: " ++ U.name ++ "\n" ++
+  line "entropy" (q (USQ.F * USQ.L / USQ.Θ) C.kB) ++
+  line "angularmomentum" (q (USQ.F * USQ.L * USQ.T / USQ.A) C.ħ) ++
+  line "speed" (q (USQ.L / USQ.T) C.c) ++
+  line "permeability" (q (USQ.F * USQ.T * USQ.T * USQ.C * USQ.C / (USQ.Q * USQ.Q) / USQ.R) C.μ₀) ++
+  line "mass" (q USQ.M C.mₑ) ++
+  line "molarmass" (q (USQ.M / USQ.N) C.Mᵤ) ++
+  line "luminousefficacy" (q (USQ.J * USQ.T / USQ.F / USQ.L) C.Kcd) ++
+  line "angle" (q USQ.A C.θ) ++
+  line "rationalization" (q USQ.R C.lam) ++
+  line "lorentz" (q USQ.C⁻¹ C.αL) ++
+  line "gravityforce" (q (USQ.M * USQ.L / (USQ.F * USQ.T * USQ.T)) C.g₀)
+
 /-- The natural unit of dimension `d` expressed in `U` (Julia `d(U)`,
 `dimension.jl:248`): `U(ratio(d, Natural, U), d)`. -/
 def naturalUnit (U : Sys) (d : Dim) : Q U d := ⟨ratio d.toGroup.v .Natural U⟩
