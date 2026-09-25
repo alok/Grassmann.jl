@@ -94,10 +94,29 @@ def detsimplexAt (m : SimplexBundle n (HPoint V) G) (e : Nat) : Array Float :=
   let r := 1 / factF (n - 1)
   (m.wedgeAt e).map (· * r)
 
+/-- Full vertex id `k` (1-based) of element `e` (0-based), read from the connectivity (no
+vector built). -/
+@[inline] def vertexOf (m : SimplexBundle n (HPoint V) G) (e k : Nat) : Nat :=
+  m.top.conn[n * (m.top.getFacet (e + 1) - 1) + k]!
+
+/-- The determinant of a planar triangle's homogeneous points (Julia `∧` of the three points, the
+operations of `Forms.det` on the columns of `simplexAt`: `wedge3` then `wedge21`), read from the
+cloud. -/
+@[inline] def det3At (m : SimplexBundle n (HPoint V) G) (e : Nat) : Float :=
+  let c := m.cloud.points
+  let o0 := (m.vertexOf e 0 - 1) * 3
+  let o1 := (m.vertexOf e 1 - 1) * 3
+  let o2 := (m.vertexOf e 2 - 1) * 3
+  let (b12, b13, b23) := Forms.wedge3 (c.get! o0) (c.get! (o0 + 1)) (c.get! (o0 + 2))
+    (c.get! o1) (c.get! (o1 + 1)) (c.get! (o1 + 2))
+  Forms.wedge21 b12 b13 b23 (c.get! o2) (c.get! (o2 + 1)) (c.get! (o2 + 2))
+
 /-- Julia `volumes(t)[e+1]` (`element.jl:45-54`): the length of a segment, else
-`|detsimplex|` (the norm of the blade when embedded). -/
+`|detsimplex|` (the norm of the blade when embedded). Planar triangles read their points
+directly (`det3At`, the same operations as the general path). -/
 def volumeAt (m : SimplexBundle n (HPoint V) G) (e : Nat) : Float :=
   if n == 2 then (m.simplexAt e).edgelength
+  else if n == 3 && V.n == 3 then (m.det3At e * (1 / factF 2)).abs
   else
     let d := m.detsimplexAt e
     if d.size == 1 then d[0]!.abs
@@ -114,6 +133,7 @@ def signedVolumeAt (m : SimplexBundle n (HPoint V) G) (e : Nat) : Float :=
     let l := T.edgelength
     if T.entry 1 1 < T.entry 1 0 then -l else l
   else if m.embedded then m.volumeAt e
+  else if n == 3 && V.n == 3 then m.det3At e * (1 / factF 2)
   else (m.detsimplexAt e)[0]!
 
 /-- Julia `∧(t)` as a field of flat coefficients (per element: one float, or the blade). -/
@@ -275,27 +295,31 @@ def interior (e : SimplexBundle n (HPoint V) G) : Array Nat := e.top.interiorNod
 /-- Julia `assembleincidence(t, f, m, Val(true))` (MeshTopology `element.jl:311-319`, B1 fixed):
 `b[tₖ] .+= f[tₖ] .* m[k]` element by element (`f` nodal, `m` per element). -/
 def assembleincidence (m : SimplexBundle n (HPoint V) G) (f : FloatArray) (w : FloatArray) :
-    FloatArray := Id.run do
-  let mut b : FloatArray := ⟨Array.replicate m.totalNodes 0⟩
-  for k in [0:m.elements] do
-    let vs := m.top.get (k + 1)
-    let wk := w.get! k
-    for j in [0:n] do
-      let v := vs[j]! - 1
-      b := b.set! v (b.get! v + f.get! v * wk)
-  return b
+    FloatArray :=
+  elems m.elements 0 (Flat.zeros m.totalNodes)
+where
+  /-- The vertices `j, …` of element `k`. -/
+  verts (k : Nat) (wk : Float) : Nat → Nat → FloatArray → FloatArray
+    | 0, _, b => b
+    | r + 1, j, b =>
+      let v := m.vertexOf k j - 1
+      verts k wk r (j + 1) (b.set! v (b.get! v + f.get! v * wk))
+  /-- The elements `k, …`. -/
+  elems : Nat → Nat → FloatArray → FloatArray
+    | 0, _, b => b
+    | r + 1, k, b => elems r (k + 1) (verts k (w.get! k) n 0 b)
 
 /-- The nodal values `f(x)` of a function of the homogeneous point at every full node (Julia
 `iterpts(t, f)`). -/
 def nodal (m : SimplexBundle n (HPoint V) G) (f : HPoint V → Float) : FloatArray :=
-  ⟨(Array.range m.totalNodes).map fun v => f (Chain.ofFn fun c => m.coord (v + 1) c.1)⟩
+  buildFlat (F := Float) m.totalNodes fun v => f (Chain.ofFn fun c => m.coord (v + 1) c.1)
 
 /-- Julia `assembleload(t, f, m = volumes(t))` (`element.jl:546`): the lumped P1 load
 `bᵢ = Σ_{k ∋ i} (fᵢ / n) |Tₖ|`, with `f` given at the nodes. -/
 def assembleloadNodal (m : SimplexBundle n (HPoint V) G) (f : FloatArray)
     (vol : FloatArray := m.volumes.data) : FloatArray :=
   let nf := Float.ofNat n
-  m.assembleincidence ⟨f.data.map (· / nf)⟩ vol
+  m.assembleincidence (Flat.map (· / nf) f) vol
 
 /-- Julia `assembleload(t, f)` for a function of the (homogeneous) point. -/
 def assembleload (m : SimplexBundle n (HPoint V) G) (f : HPoint V → Float := fun _ => 1) : FloatArray :=
