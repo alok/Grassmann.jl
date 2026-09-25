@@ -1367,6 +1367,10 @@ theorem wf_sub (a b : TA V α) (ha : a.WF) (hb : b.WF) : (a - b).WF := wf_add a 
 theorem toDense_add_le8 (h : V.n ≤ 8) {a b : TA V α} (ha : a.WF) (hb : b.WF) :
     (a + b).toDense = a.toDense + b.toDense := toDense_add (layoutInv_le8 V.n h) ha hb
 
+/-- `toDense_sub` for every space of at most 8 generators. -/
+theorem toDense_sub_le8 (h : V.n ≤ 8) {a b : TA V α} (ha : a.WF) (hb : b.WF) :
+    (a - b).toDense = a.toDense - b.toDense := toDense_sub (layoutInv_le8 V.n h) ha hb
+
 end TA
 
 end Grassmann
