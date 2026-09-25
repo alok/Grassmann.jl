@@ -37,7 +37,7 @@ import AbstractTensors.Ops
 
 namespace AbstractTensors
 
-open StaticVectors
+open StaticVectors JuliaBase
 
 /-- The arithmetic the power-series kernels need (Julia `TensorAlgebra` values
 with `+ - ⟑`, scalar scaling, `norm` and `inv`). `*` is the geometric product
@@ -65,7 +65,7 @@ variable {X : Type} [SeriesRing X]
 def seriesFuel : Nat := 10000
 
 /-- Julia `≈` on two running norms (`Base.isapprox`, default `rtol = √eps`). -/
-@[inline] def approx (a b : Float) : Bool := Julia.isapprox a b
+@[inline] def approx (a b : Float) : Bool := F64.isapprox a b
 
 /-- The shared loop of `expm1Series` (`composite.jl:39-50`): `n1 n2 n3` are
 Julia's `norms`, `k` the next divisor. -/
@@ -160,11 +160,11 @@ with right division `a ⟑ inv(b)`. -/
 The default `rtol` is `rtoldefault(Float64) = √eps`, and `0` when `atol > 0`.
 (Julia's `TensorGraded` method additionally compares manifolds and grades,
 which are type indices here.) -/
-def isapprox (a b : X) (atol : Float := 0) (rtol : Float := if atol > 0 then 0 else Julia.rtolF)
+def isapprox (a b : X) (atol : Float := 0) (rtol : Float := if atol > 0 then 0 else F64.rtoldefault)
     (nans : Bool := false) : Bool :=
   let x := norm a
   let y := norm b
-  (x.isFinite && y.isFinite && norm (a - b) ≤ Julia.max atol (rtol * Julia.max x y)) ||
+  (x.isFinite && y.isFinite && norm (a - b) ≤ F64.max atol (rtol * F64.max x y)) ||
     (nans && x.isNaN && y.isNaN)
 
 end Generic
@@ -254,16 +254,16 @@ metric pass-through at AT:401 shadows it and returns `log(b)`). -/
 @[inline] def logBase (b : Float) (t : X) : X := sdiv (TensorRing.log t) (Float.log b)
 
 /-- Julia `log2(t) = log2(ℯ)·log(t)` (AT:383). -/
-@[inline] def log2 (t : X) : X := smul FloatExt.log2e (TensorRing.log t)
+@[inline] def log2 (t : X) : X := smul F64.log2e (TensorRing.log t)
 
 /-- Julia `log10(t) = log10(ℯ)·log(t)` (AT:383). -/
-@[inline] def log10 (t : X) : X := smul FloatExt.log10e (TensorRing.log t)
+@[inline] def log10 (t : X) : X := smul F64.log10e (TensorRing.log t)
 
 /-- Julia `exp2(t) = exp(log(2)·t)` (AT:384). -/
-@[inline] def exp2 (t : X) : X := TensorRing.exp (smul FloatExt.ln2 t)
+@[inline] def exp2 (t : X) : X := TensorRing.exp (smul F64.ln2 t)
 
 /-- Julia `exp10(t) = exp(log(10)·t)` (AT:384). -/
-@[inline] def exp10 (t : X) : X := TensorRing.exp (smul FloatExt.ln10 t)
+@[inline] def exp10 (t : X) : X := TensorRing.exp (smul F64.ln10 t)
 
 /-- Julia `iszero(t) = norm(t) ≈ 0` (AT:445): exactly `norm(t) == 0` (NaN is not zero). -/
 @[inline] def isZero (t : X) : Bool := approx (norm t) 0
@@ -352,12 +352,12 @@ in a space with `I² = +1` this is `cosh t`. -/
 
 /-- Julia `sinc(t) = iszero(t) ? 1 : sin(πt)/(πt)` (AT:429). -/
 @[inline] def sinc (t : X) : X :=
-  if isZero t then TensorRing.one else let x := smul FloatExt.pi t; div (sin x) x
+  if isZero t then TensorRing.one else let x := smul F64.pi t; div (sin x) x
 
 /-- Julia `cosc(t) = iszero(t) ? 0 : cos(πt)/t - sin(πt)/(πt ⟑ t)` (AT:430). -/
 @[inline] def cosc (t : X) : X :=
   if isZero t then TensorRing.zero
-  else let x := smul FloatExt.pi t; div (cos x) t - div (sin x) (x * t)
+  else let x := smul F64.pi t; div (cos x) t - div (sin x) (x * t)
 
 /-! ## Norms (AT:435-480) -/
 

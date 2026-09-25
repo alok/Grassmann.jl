@@ -5,13 +5,16 @@ Julia's `Values` functions call generic `Base` functions on their elements:
 `conj` (in `dot`), `abs2`/`norm_sqr` (in `norm`), `norm(x::Number) = abs(float(x))`
 (in `norm(a, p)`), and `max`/`min` (in `maximum`/`minimum`). These classes
 carry exactly those element operations, with instances for the real scalar
-types here and for `Complex` in `AbstractTensors`.
+types and for `JuliaBase.Complex`. The element semantics themselves (Julia `max`,
+`isapprox`, `hypot`, …) are `JuliaBase`'s.
 -/
-import StaticVectors.Julia
+import JuliaBase.Complex
 
 universe u
 
 namespace StaticVectors
+
+open JuliaBase
 
 /-- Julia `conj`: complex conjugation, the identity on real types. For
 tensors (Grassmann) it is the reverse `~`. -/
@@ -67,39 +70,53 @@ instance : JNorm Float := ⟨fun x => x * x, Float.abs⟩
 instance : JNorm Float32 := ⟨fun x => (x * x).toFloat, fun x => x.toFloat.abs⟩
 instance : JNorm Int := ⟨fun x => Float.ofInt (x * x), fun x => Float.ofNat x.natAbs⟩
 instance : JNorm Nat := ⟨fun x => Float.ofNat (x * x), Float.ofNat⟩
-instance : JNorm Rat := ⟨fun x => Julia.ratToFloat (x * x), fun x => (Julia.ratToFloat x).abs⟩
+instance : JNorm Rat := ⟨fun x => F64.ofRat (x * x), fun x => (F64.ofRat x).abs⟩
 
-instance : JMinMax Float := ⟨Julia.max, Julia.min⟩
-instance : JMinMax Float32 := ⟨Julia.max32, Julia.min32⟩
+instance : JMinMax Float := ⟨F64.max, F64.min⟩
+instance : JMinMax Float32 := ⟨F32.max, F32.min⟩
 instance : JMinMax Int := ⟨Max.max, Min.min⟩
 instance : JMinMax Nat := ⟨Max.max, Min.min⟩
 instance : JMinMax Rat := ⟨fun a b => if a ≤ b then b else a, fun a b => if a ≤ b then a else b⟩
 
+/-- Julia `isapprox(::Float64, ::Float64)`: `JuliaBase.F64.isapprox`. -/
 instance : JApprox Float where
-  rtolDefault := Julia.rtolF
-  isapprox x y atol rtol nans := Julia.isapprox x y atol rtol nans
+  rtolDefault := F64.rtoldefault
+  isapprox x y atol rtol nans := F64.isapprox x y atol rtol nans
 
+/-- Julia `isapprox(::Float32, ::Float32)` in `Float32` arithmetic
+(`JuliaBase.F32.isapprox`), the tolerances rounded to `Float32`. This is exact for
+Julia's default `rtoldefault(Float32)` and for `Float32` tolerances; a `Float64` tolerance
+would make Julia compare in `Float64` instead. -/
 instance : JApprox Float32 where
-  rtolDefault := Julia.rtolF32.toFloat
-  isapprox x y atol rtol nans :=
-    -- Julia promotes the tolerances, and compares in `Float32` arithmetic.
-    let x' := x.toFloat
-    let y' := y.toFloat
-    x == y ||
-      (x.isFinite && y.isFinite &&
-        (x - y).abs.toFloat ≤ Julia.max atol (rtol * Julia.max x'.abs y'.abs)) ||
-      (nans && x.isNaN && y.isNaN)
+  rtolDefault := F32.rtoldefault.toFloat
+  isapprox x y atol rtol nans := F32.isapprox x y atol.toFloat32 rtol.toFloat32 nans
 
+/-- Julia `isapprox(::Integer, ::Integer)` (`JuliaBase.JInt.isapprox`; `nans` is
+irrelevant). -/
 instance : JApprox Int where
   rtolDefault := 0
-  isapprox x y atol rtol _ :=
-    x == y || Float.ofNat (x - y).natAbs ≤
-      Julia.max atol (rtol * Julia.max (Float.ofNat x.natAbs) (Float.ofNat y.natAbs))
+  isapprox x y atol rtol _ := JInt.isapprox x y atol rtol
 
+/-- Julia `isapprox(::Rational, ::Rational)`, the generic `Number` method
+(floatfuncs.jl:222), with the norms converted to `Float64`. -/
 instance : JApprox Rat where
   rtolDefault := 0
   isapprox x y atol rtol _ :=
-    x == y || (Julia.ratToFloat (x - y)).abs ≤
-      Julia.max atol (rtol * Julia.max (Julia.ratToFloat x).abs (Julia.ratToFloat y).abs)
+    x == y || (F64.ofRat (x - y)).abs ≤
+      F64.max atol (rtol * F64.max (F64.ofRat x).abs (F64.ofRat y).abs)
+
+/-! ## Complex instances -/
+
+/-- Julia `conj(z::Complex)` (complex.jl:276). -/
+instance {α : Type u} [Neg α] : Conj (Complex α) := ⟨Complex.conj⟩
+
+/-- Julia `norm_sqr`/`norm` of a complex entry: `abs2 = re² + im²` (no `hypot`) and
+`norm = abs = hypot(re, im)`. -/
+instance : JNorm (Complex Float) := ⟨Complex.abs2, ComplexF64.abs⟩
+
+/-- Julia `isapprox(z::ComplexF64, w::ComplexF64)`: `JuliaBase.ComplexF64.isapprox`. -/
+instance : JApprox (Complex Float) where
+  rtolDefault := F64.rtoldefault
+  isapprox z w atol rtol nans := ComplexF64.isapprox z w atol rtol nans
 
 end StaticVectors

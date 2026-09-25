@@ -1113,7 +1113,7 @@ Element promotion (`Values(1, 2.0)` becomes Float) has no Lean analog. Require a
 
 `sum` over `Bool` gives `Int` (`reduce_first`), while `sum` over `Int8` does not widen and `cumsum` over `Int8` widens (`add_sum`). None of this is relevant in Lean.
 
-Julia `max`/`min` on floats propagate NaN and order `-0.0 < 0.0`. Lean's `max` on `Float` is `if a ≤ b then b else a`, which differs on NaN and signed zeros. **Implement `juliaMax`/`juliaMin` explicitly**:
+Julia `max`/`min` on floats propagate NaN and order `-0.0 < 0.0`. Lean's `max` on `Float` is `if a ≤ b then b else a`, which differs on NaN and signed zeros. **Implement `juliaMax`/`juliaMin` explicitly** (as built: `JuliaBase.F64.max`/`min`, aliased `juliaMax`/`juliaMin`, used by `StaticVectors.JMinMax`):
 - `max`: `if isNaN a || isNaN b then NaN else if a == b then (if signbit a then b else a) else …`
 - `min`: symmetric
 
@@ -1201,6 +1201,11 @@ Lean plan:
 ### 8.7 Suggested Lean module decomposition
 
 Namespace `Chakravala`. Rough LOC is implementation plus proofs, excluding tests unless noted.
+
+As built, the three `Util` modules below are the `JuliaBase` library, the one home of Julia
+`Base` semantics that `StaticVectors` and `AbstractTensors` import: `JuliaShow` is
+`JuliaBase.Show`/`JuliaBase.Float`, `Complex` is `JuliaBase.Complex` (with the `ComplexF64`
+algorithms), and `FloatExt` is `JuliaBase.Num` (`F64`/`F32`/`JInt`).
 
 | Module | Contents | LOC |
 |---|---|---|

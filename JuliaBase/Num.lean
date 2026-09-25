@@ -5,10 +5,13 @@ Everything here reproduces what Julia 1.13 computes, bit for bit, on the oracle
 machine (Apple Silicon, where `Core.Intrinsics.have_fma(Float64)` is `true` and
 `muladd` lowers to a fused multiply-add). Lean core already gives us correctly
 rounded `+ - * / sqrt fma`, so the ports below only have to replay Julia's
-operation order.
+operation order. The exceptions are `F64.expm1`/`F64.log1p` (and their `F32` versions),
+which are accurate to a few ulps rather than bit-exact (see their section).
 
 Citations are to Julia's `share/julia/base/`.
 -/
+
+universe u
 
 namespace JuliaBase
 
@@ -183,20 +186,32 @@ def mod (x y : Float) : Float :=
 /-- Julia `minmax(x, y) = (min(x, y), max(x, y))` (math.jl:850). -/
 @[inline] def minmax (x y : Float) : Float × Float := (min x y, max x y)
 
+/-- The IEEE bits of a float mapped monotonically onto `Int` (Julia's `fpiseq`/`isless`
+integer trick): negative floats map below positive ones, `-0.0 ↦ -1` and `0.0 ↦ 0` are
+adjacent, and consecutive floats map to consecutive integers. -/
+def orderedBits (x : Float) : Int :=
+  let b := x.toBits
+  if signbit x then -((b &&& ~~~signMask).toNat : Int) - 1 else (b.toNat : Int)
+
 /-- Julia `isless(a::Float64, b::Float64)` (float.jl): the total order used by `sort`,
 with `-0.0 < 0.0` and every NaN after `Inf`. -/
 def isless (a b : Float) : Bool :=
   if a.isNaN || b.isNaN then !a.isNaN
-  else
-    let fp (x : Float) : Int :=
-      let i := x.toBits.toNat
-      if i ≥ 2 ^ 63 then -((i - 2 ^ 63 : Nat) : Int) - 1 else (i : Int)
-    fp a < fp b
+  else orderedBits a < orderedBits b
 
 /-- Julia `isequal(a::Float64, b::Float64)`: like `==` but all NaNs are equal and
-`-0.0 ≠ 0.0`. -/
+`-0.0 ≠ 0.0`. This is also the comparator of the oracle's bit-exact suites (bitwise
+equality up to the NaN payload). -/
 @[inline] def isequal (a b : Float) : Bool :=
   (a.isNaN && b.isNaN) || a.toBits == b.toBits
+
+/-- Distance in units in the last place, `|orderedBits x - orderedBits y|` (not a Julia
+function; the comparator of the oracle suites for `libm`-backed results). NaNs are at
+distance 0 from each other and `2^64` from everything else. -/
+def ulpDist (x y : Float) : Nat :=
+  if x.isNaN && y.isNaN then 0
+  else if x.isNaN || y.isNaN then 2 ^ 64
+  else (orderedBits x - orderedBits y).natAbs
 
 /-- Julia `sign(x::Float64)` (number.jl:206): `-1.0`, `1.0`, or `x` itself for `±0.0` and NaN. -/
 @[inline] def sign (x : Float) : Float :=
@@ -297,6 +312,71 @@ def cbrt (x : Float) : Float :=
   if !x.isFinite || iszero x then x
   else improveCbrt x (approxCbrt x)
 
+/-- Julia `Float64(x::Rational)` (rational.jl:162): `Float64(num) / Float64(den)`, one
+correctly rounded division of the converted parts. Correctly rounded whenever numerator
+and denominator are below `2^53`; larger ones are rounded twice, as in Julia. -/
+@[inline] def ofRat (r : Rat) : Float := Float.ofInt r.num / Float.ofNat r.den
+
+/-- Julia `exponent(x::Float64)` (math.jl:951): the unbiased binary exponent `⌊log₂|x|⌋`
+of a finite nonzero `x`, subnormals included. (Julia throws a `DomainError` for `0`, NaN
+and `Inf`; the value here is then unspecified.) -/
+@[inline] def exponent (x : Float) : Int := x.frExp.2 - 1
+
+/-- Julia `ldexp(x::Float64, k)` (math.jl:873) = `x · 2ᵏ`, correctly rounded
+(`scalbn`). -/
+@[inline] def ldexp (x : Float) (k : Int) : Float := x.scaleB k
+
+/-! ### Constants and `libm` substitutes
+
+Julia computes its transcendental functions with its own pure-Julia `libm`, Lean's `Float`
+with the platform C `libm`; both are faithful to within an ulp or two, which is the
+tolerance the oracle suites allow for them. `expm1` and `log1p` are missing from Lean
+core and are computed here in pure Lean (a C shim would need lakefile changes, and
+`@[extern]` symbols do not run in the interpreter). -/
+
+/-- Julia `Float64(π)`. -/
+def pi : Float := Float.ofBits 0x400921FB54442D18
+
+/-- Julia `log(2.0)`. -/
+def ln2 : Float := Float.ofBits 0x3FE62E42FEFA39EF
+
+/-- Julia `log(10.0)`. -/
+def ln10 : Float := Float.ofBits 0x40026BB1BBB55516
+
+/-- Julia `log2(ℯ)`. -/
+def log2e : Float := Float.ofBits 0x3FF71547652B82FE
+
+/-- Julia `log10(ℯ)`. -/
+def log10e : Float := Float.ofBits 0x3FDBCB7B1526E50E
+
+/-- Julia `expm1(x::Float64)` = `eˣ - 1`, accurate near `0` (a few ulps; Julia's own
+kernel is in special/exp.jl).
+
+Kahan's trick: with `u = exp x` (rounded), `(u - 1)·x / log u` cancels the rounding error
+of `u`. Exact special cases: `expm1(±0) = ±0`, `expm1(-Inf) = -1`, `expm1(Inf) = Inf`,
+NaN propagates. -/
+def expm1 (x : Float) : Float :=
+  let u := Float.exp x
+  if u == 1 then x
+  else if u.isInf then u
+  else
+    let um1 := u - 1
+    if um1 == -1 then -1 else um1 * (x / Float.log u)
+
+/-- Julia `log1p(x::Float64)` = `log(1 + x)`, accurate near `0` (a few ulps; Julia's own
+kernel is special/log.jl:335).
+
+Goldberg's trick: with `u = 1 + x` (rounded), `log(u)·x / (u - 1)` cancels the rounding
+error of `u`. Exact special cases: `log1p(±0) = ±0`, `log1p(-1) = -Inf`,
+`log1p(Inf) = Inf`; NaN and `x < -1` give NaN (Julia throws a `DomainError` for
+`x < -1`). -/
+def log1p (x : Float) : Float :=
+  let u := 1 + x
+  if u == 1 then x
+  else if u.isInf then (if x > 0 then u else nan)
+  else if u == 0 then -inf
+  else Float.log u * (x / (u - 1))
+
 end F64
 
 /-- Julia `max` on `Float64`; alias of `F64.max` (port-notes §8.4 name). -/
@@ -330,6 +410,10 @@ namespace F32
   else if x == y then (if signbit x then x else y)
   else if x < y then x else y
 
+/-- Julia `sign(x::Float32)`: `-1f0`, `1f0`, or `x` itself for `±0f0` and NaN. -/
+@[inline] def sign (x : Float32) : Float32 :=
+  if x < 0 then -1 else if x > 0 then 1 else x
+
 /-- Julia `rtoldefault(Float32)` = `sqrt(eps(Float32))` = `2^-11.5`, rounded. -/
 def rtoldefault : Float32 := (Float32.ofBits 0x34000000).sqrt
 
@@ -348,6 +432,13 @@ def hypot (x y : Float32) : Float32 :=
     let x' := x.toFloat
     let y' := y.toFloat
     (Float.fma x' x' (y' * y')).sqrt.toFloat32
+
+/-- Julia `expm1(x::Float32)`, via `F64.expm1` and rounded (a few ulps, like
+`F64.expm1`). -/
+@[inline] def expm1 (x : Float32) : Float32 := (F64.expm1 x.toFloat).toFloat32
+
+/-- Julia `log1p(x::Float32)`, via `F64.log1p` and rounded. -/
+@[inline] def log1p (x : Float32) : Float32 := (F64.log1p x.toFloat).toFloat32
 
 end F32
 
@@ -388,6 +479,9 @@ def cld (x y : Int) : Int :=
 /-- Julia `flipsign(x, y)`: `y < 0 ? -x : x`. -/
 @[inline] def flipsign (x y : Int) : Int := if y < 0 then -x else x
 
+/-- Julia `isodd(x::Integer)` (int.jl:155): `rem(x, 2) != 0`. -/
+@[inline] def isodd (x : Int) : Bool := x % 2 != 0
+
 /-- Julia `isapprox(x::Integer, y::Integer; atol=0, rtol=0)` (floatfuncs.jl:231) with the
 default `norm = abs`: exact equality when `atol < 1` and `rtol == 0`, otherwise
 `|x - y| ≤ max(atol, rtol*max(|x|, |y|))` in `Float64`. -/
@@ -398,5 +492,42 @@ def isapprox (x y : Int) (atol : Float := 0) (rtol : Float := 0) : Bool :=
       F64.max atol (rtol * F64.max (Float.ofInt x.natAbs) (Float.ofInt y.natAbs))
 
 end JInt
+
+/-! ## `power_by_squaring` -/
+
+/-- Julia `Base.power_by_squaring(x, p)` (intfuncs.jl:394) for `p ≥ 0`: the exact
+multiplication order Julia uses for `x^p` with an integer exponent, generic in the
+multiplication `mul` (`p = 2` is `x*x`; otherwise square away the trailing zero bits of
+`p`, then multiply in the remaining set bits from low to high). -/
+def powBySquaring {β : Type u} (mul : β → β → β) (one x : β) (p : Nat) : β :=
+  if p == 0 then one
+  else if p == 1 then x
+  else if p == 2 then mul x x
+  else
+    let t := trailingZeros p + 1
+    let p := p >>> t
+    let x := square x (t - 1)
+    loop x x p (p + 1)
+where
+  /-- Number of trailing zero bits of a positive `n` (`0` for `n = 0`). -/
+  trailingZeros (n : Nat) : Nat := tz n 64
+  /-- Fuelled trailing-zero count. -/
+  tz : Nat → Nat → Nat
+    | _, 0 => 0
+    | m, fuel + 1 => if m % 2 == 1 || m == 0 then 0 else tz (m / 2) fuel + 1
+  /-- `x^(2^k)` by repeated squaring. -/
+  square (x : β) : Nat → β
+    | 0 => x
+    | k + 1 => square (mul x x) k
+  /-- The main loop of `power_by_squaring` (the fuel bounds the bit count). -/
+  loop (x y : β) (p : Nat) : Nat → β
+    | 0 => y
+    | fuel + 1 =>
+      if p == 0 then y
+      else
+        let t := trailingZeros p + 1
+        let p := p >>> t
+        let x := square x t
+        loop x (mul y x) p fuel
 
 end JuliaBase
