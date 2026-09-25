@@ -161,7 +161,8 @@ def step (A : Atmosphere n) (gR : Float) (s : IntegrationState) (i : Nat) (hi : 
   let (Ti, Tc, ha) :=
     if aPrev.isInf then
       let Tz := (f64% 0.0)
-      let Tc := (A.a.get ⟨i, hi⟩ * Δh * Tz + s.T * s.T - Tz * Tz) / (hi' * Δh + (f64% 2.0) * s.T - (f64% 2.0) * Tz)
+      let Tc := (A.a.get ⟨i, hi⟩ * Δh * Tz + s.T * s.T - Tz * Tz) /
+        (hi' * Δh + (f64% 2.0) * s.T - (f64% 2.0) * Tz)
       let d1 := s.T - Tc
       let d2 := Tz - Tc
       let ha := Δh * (s.T - Tc) / Float.sqrt (d1 * d1 - d2 * d2)
@@ -342,13 +343,15 @@ def domainError (hG : Float) (i : Fin n) : Bool :=
 /-- Julia `pressure(hG, T, i, W, U)` (`Geophysics.jl:736-744`). -/
 def pressureT (hG T : Float) (i : Fin n) : Float :=
   let a := C.a.get i
-  C.p.get i * (if a == (f64% 0.0) then exp (C.gR * (hG - C.h.get i) / T) else pow (T / C.T.get i) (C.gR / a))
+  C.p.get i * (if a == (f64% 0.0) then exp (C.gR * (hG - C.h.get i) / T)
+    else pow (T / C.T.get i) (C.gR / a))
 
 /-- Julia `density(hG, T, i, W, U)` (`Geophysics.jl:752-761`). -/
 def densityT (hG T : Float) (i : Fin n) : Float :=
   let a := C.a.get i
   C.rho.get i *
-    (if a == (f64% 0.0) then exp (C.gR * (hG - C.h.get i) / T) else pow (T / C.T.get i) (C.gR / a - (f64% 1.0)))
+    (if a == (f64% 0.0) then exp (C.gR * (hG - C.h.get i) / T)
+      else pow (T / C.T.get i) (C.gR / a - (f64% 1.0)))
 
 /-- Julia `gravity(h, W, U)` (`Geophysics.jl:633-639`): inverse-square below
 `0.007·radius(W)`, `gravitygeodetic` above. -/
