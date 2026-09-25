@@ -121,9 +121,34 @@ instance [Div α] [JNorm α] : Inv (Multivector V α) :=
 
 end Multivector
 
+namespace Couple
+
+/-- The scalar `e_B e_B` of a couple's blade (a blade squares to a scalar in every metric). -/
+def bladeSquare (V : TensorBundle) (b : UInt64) : Rat :=
+  (V.terms₂ .mul b b).toOption.bind (fun ts => (ts.find? fun (t : BladeTerm) => t.bits == 0 && t.z == 0).map (·.coef)) |>.getD 0
+
+/-- `inv(re + im·B) = (re - im·B) / (re² - im²·B²)`, the inverse for every blade
+`B` (Julia's `inv(::Couple)` assumes `B² < 0` and is wrong otherwise: defect
+`couple-inv-hyperbolic`, fixed here). A degenerate couple (`B = 0`) is the
+scalar `re + im`. -/
+def inv [Div α] (z : Couple V α) : Couple V α :=
+  if z.bits == 0 then ⟨0, Coeff.one / (z.re + z.im), Coeff.zero⟩
+  else
+    let den := z.re * z.re - scaleBy (bladeSquare V z.bits) (z.im * z.im)
+    ⟨z.bits, z.re / den, -z.im / den⟩
+
+instance [Div α] : Inv (Couple V α) := ⟨Couple.inv⟩
+
+end Couple
+
 /-- Julia `a / b = a ⟑ inv(b)` (**right** division, `AbstractTensors.jl:320`)
 between elements. -/
 instance (priority := low) {Y Z : Type} [DenseLayout X V α] [DenseLayout Y V α] [Inv Y]
     [HMul X Y Z] : HDiv X Y Z := ⟨fun a b => a * b⁻¹⟩
+
+/-- Right division by an element without a typed inverse (`PseudoCouple`):
+through the `Multivector` inverse (Julia's algorithm; panics where it is undefined). -/
+instance (priority := 50) {Y : Type} [DenseLayout X V α] [DenseLayout Y V α] [Div α] [JNorm α] :
+    HDiv X Y (Multivector V α) := ⟨fun a b => toMultivector a * (toMultivector b)⁻¹⟩
 
 end Grassmann

@@ -256,6 +256,95 @@ instance (priority := low) [DenseLayout X V α] [DenseLayout Y V α] :
 /-- Julia `R >>> x` as a named function (the versor on the left). -/
 @[inline] def tsandwich {Z : Type} [HShiftRight Y X Z] (R : Y) (x : X) : Z := R >>> x
 
+/-! ### Couples in sandwiches
+
+Julia's generated sandwich (`src/algebra.jl:1737-1790`, grassmann-products.md
+§4.6; oracle-schema.md §8.3) treats a `Couple`/`PseudoCouple` versor as its
+`multispin`: when it is parity-homogeneous (a `Couple` with even `B`, a
+`PseudoCouple` whose `B` has the parity of `n`) the result for a homogeneous `x`
+is projected onto the grade of `x`, otherwise it is the full product. A
+`Couple`/`PseudoCouple` *sandwiched* element is split into its two blade parts,
+each sandwiched as a term and projected by the same rule (no projection when
+the versor is itself a term). The blade parities are runtime data here, so these
+results are `Multivector`s whose values follow Julia's rule. -/
+
+/-- How Julia classifies a versor in a sandwich: whether it is a single term,
+and whether it is parity-homogeneous (so that the result is projected). -/
+class VersorKind (Y : Type) where
+  /-- A `Single`/`Submanifold` (term ⊘ term is never projected). -/
+  isTerm : Bool
+  /-- Parity-homogeneous (Julia's `multispin` is a `Spinor`/`CoSpinor`). -/
+  homogeneous : Y → Bool
+
+instance : VersorKind (Chain V G α) := ⟨false, fun _ => true⟩
+instance : VersorKind (Half V p α) := ⟨false, fun _ => true⟩
+instance : VersorKind (Multivector V α) := ⟨false, fun _ => false⟩
+instance : VersorKind (Single V G α) := ⟨true, fun _ => true⟩
+instance : VersorKind (Submanifold V G) := ⟨true, fun _ => true⟩
+instance : VersorKind (Couple V α) := ⟨false, fun z => popcount z.bits % 2 == 0⟩
+instance : VersorKind (PseudoCouple V α) := ⟨false, fun z => popcount z.bits % 2 == V.n % 2⟩
+
+/-- The full `(~R) ⟑ x ⟑ involute(R)` of dense operands. -/
+@[inline] def sandwichFull [DenseLayout X V α] [DenseLayout Y V α] (x : X) (R : Y) : Multivector V α :=
+  let ly := layoutOf Y
+  let r := DenseLayout.values R
+  let t := Kernels.bin .mul ly (layoutOf X) .full (Kernels.un .reverse ly ly r) (DenseLayout.values x)
+  ⟨Kernels.bin .mul .full ly .full t (Kernels.un .involute ly ly r)⟩
+
+/-- The full `R ⟑ x ⟑ clifford(R)` of dense operands. -/
+@[inline] def tsandwichFull [DenseLayout X V α] [DenseLayout Y V α] (R : Y) (x : X) : Multivector V α :=
+  let ly := layoutOf Y
+  let r := DenseLayout.values R
+  let t := Kernels.bin .mul ly (layoutOf X) .full r (DenseLayout.values x)
+  ⟨Kernels.bin .mul .full ly .full t (Kernels.un .clifford ly ly r)⟩
+
+/-- Keep only grade `g` of `m` (as a multivector). -/
+@[inline] def keepGrade (m : Multivector V α) (g : Nat) : Multivector V α := toMultivector (m.grade g)
+
+/-- Julia's sandwich of a homogeneous `x` of grade `g` (a term or not) by `R`. -/
+@[inline] def sandwichRule [VersorKind Y]
+    (xTerm : Bool) (g : Nat) (full : Multivector V α) (R : Y) : Multivector V α :=
+  if VersorKind.homogeneous R && !(xTerm && VersorKind.isTerm Y) then keepGrade full g else full
+
+/-- The two blade parts `(blade, coefficient)` of a couple or pseudo-couple. -/
+@[inline] def coupleParts (z : Couple V α) : List (UInt64 × α) := [(0, z.re), (z.bits, z.im)]
+
+/-- The two blade parts of a pseudo-couple. -/
+@[inline] def pseudoParts (z : PseudoCouple V α) : List (UInt64 × α) :=
+  [(z.bits, z.re), (lowMask V.n, z.im)]
+
+/-- Julia's sandwich of the blade parts of a couple, each as a term. -/
+def sandwichParts [DenseLayout Y V α] [VersorKind Y] (parts : List (UInt64 × α)) (R : Y) :
+    Multivector V α :=
+  parts.foldl (init := Multivector.zero) fun acc (b, c) =>
+    let x : Single V (popcount b) α := ⟨b, c⟩
+    acc + sandwichRule (V := V) true (popcount b) (sandwichFull x R) R
+
+/-- Julia's `R >>> x` of the blade parts of a couple, each as a term. -/
+def tsandwichParts [DenseLayout Y V α] [VersorKind Y] (R : Y) (parts : List (UInt64 × α)) :
+    Multivector V α :=
+  parts.foldl (init := Multivector.zero) fun acc (b, c) =>
+    let x : Single V (popcount b) α := ⟨b, c⟩
+    acc + sandwichRule (V := V) true (popcount b) (tsandwichFull R x) R
+
+instance [AsChain X V G α] : Sandwich X (Couple V α) (Multivector V α) :=
+  ⟨fun x R => sandwichRule false G (sandwichFull (AsChain.toChain x) R) R⟩
+instance [AsChain X V G α] : Sandwich X (PseudoCouple V α) (Multivector V α) :=
+  ⟨fun x R => sandwichRule false G (sandwichFull (AsChain.toChain x) R) R⟩
+instance [DenseLayout Y V α] [VersorKind Y] : Sandwich (Couple V α) Y (Multivector V α) :=
+  ⟨fun x R => sandwichParts (coupleParts x) R⟩
+instance [DenseLayout Y V α] [VersorKind Y] : Sandwich (PseudoCouple V α) Y (Multivector V α) :=
+  ⟨fun x R => sandwichParts (pseudoParts x) R⟩
+
+instance [AsChain X V G α] : HShiftRight (Couple V α) X (Multivector V α) :=
+  ⟨fun R x => sandwichRule false G (tsandwichFull R (AsChain.toChain x)) R⟩
+instance [AsChain X V G α] : HShiftRight (PseudoCouple V α) X (Multivector V α) :=
+  ⟨fun R x => sandwichRule false G (tsandwichFull R (AsChain.toChain x)) R⟩
+instance [DenseLayout Y V α] [VersorKind Y] : HShiftRight Y (Couple V α) (Multivector V α) :=
+  ⟨fun R x => tsandwichParts R (coupleParts x)⟩
+instance [DenseLayout Y V α] [VersorKind Y] : HShiftRight Y (PseudoCouple V α) (Multivector V α) :=
+  ⟨fun R x => tsandwichParts R (pseudoParts x)⟩
+
 end Sandwich
 
 end Grassmann
