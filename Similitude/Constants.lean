@@ -154,37 +154,6 @@ def factorizeF (x : Float) : Consts :=
     let (x, e) := go x 0 64
     Group.mk' (.exact (Vector.ofFn fun j => if j.1 == 36 then (e : Rat) else 0)) (.float x)
 
-/-- Julia `*(a::Real, g::Group)` = `times(factorize(a), g)` for a Julia number. -/
-def scaleBy (a : Coef) (g : Consts) : Consts :=
-  match a with
-  | .int n => factorize n * g
-  | .float x => factorizeF x * g
-  | .rat q => g.scale (.rat q)
-
-/-- Julia's `^(a::Group, b::Integer)` for a *non-literal* integer (the power in
-`ratio_calc`): exponents scale, the coefficient is `coef^b` in Julia arithmetic
-(`Float64^Int` is `pow_body`, even for negative `b`). -/
-def npowRaw (a : Consts) (b : Int) : Consts :=
-  let c := match a.c with
-    | .int x => if b ≥ 0 then Coef.int (x ^ b.toNat) else .float (powInt (Float.ofInt x) b)
-    | .rat q => if b ≥ 0 then .rat (q ^ b.toNat) else .rat (q⁻¹ ^ (-b).toNat)
-    | .float x => .float (powInt x b)
-  Group.mk' (a.v.smul b) c
-
-/-- Julia `+` of constants (`dimension.jl:112-120`): equal exponents add
-coefficients (equal coefficients give `𝟐*a`), otherwise the floating-point sum
-(here refactorized, as Julia does when it is multiplied back into a group). -/
-def add (a b : Consts) : Consts :=
-  if a.v.beq b.v then
-    if a.c == b.c then gen 37 * a else Group.mk' a.v (a.c.add b.c)
-  else factorizeF (a.product + b.product)
-
-/-- Julia `-` of constants (`dimension.jl:121-129`). -/
-def sub (a b : Consts) : Consts :=
-  if a.v.beq b.v then
-    if a.c == b.c then factorize 0 else Group.mk' a.v (a.c.add b.c.neg)
-  else factorizeF (a.product - b.product)
-
 /-- The generator of a measured constant (`UnitSystems.jl:316-331` names mapped
 to the basis; `αinv = inv(α)`, `LD`, `JD` and the large prefixes are exact
 integers, `μE☾` a float coefficient; `Similitude.jl:128-129`, `constant.jl:56`). -/
@@ -196,7 +165,7 @@ def ofMeasured : Measured → Consts
   | .inHg => gen 21 | .RK1990 => gen 22 | .KJ1990 => gen 23 | .RK2014 => gen 24 | .KJ2014 => gen 25
   | .Rᵤ2014 => gen 26 | .Ωᵢₜ => gen 27 | .Vᵢₜ => gen 28 | .kG => gen 29 | .mP => gen 30
   | .GME => gen 31 | .GMJ => gen 32
-  | .μE => factorizeF 81.300568
+  | .μE => factorizeF 81.300568   -- a `FieldConstants.Constant` in Similitude (see `Scalar.measured`)
   | .LD => factorize 384399 * (gen 37 * gen 39) ^ (3 : Int)
   | .JD => factorize 778479 * (gen 37 * gen 39) ^ (6 : Int)
   | .zetta => (gen 37 * gen 39) ^ (21 : Int)
@@ -209,25 +178,19 @@ end Consts
 /-- Constants print with their value: `kB⋅NA = 8.31446261815324` (`dimension.jl:211`). -/
 instance : GroupProduct constantsBasis := ⟨fun g => some (JuliaBase.F64.showString (Consts.product g))⟩
 
-/-- Similitude's exact scalar: UnitSystems' formulas over `Consts` compute exact
-unit-system constants and conversion factors. -/
-instance : UnitAlg Consts where
-  mul := Group.mul
-  div := Group.div
-  add := Consts.add
-  sub := Consts.sub
-  beq := Group.beq
-  default := Group.one
-  inv := Group.inv
-  lpow := Group.zpow
-  sqrt := Group.sqrt
-  ilit := Consts.factorize
-  flit := Consts.factorizeF
-  tau := Consts.gen 36
-  measured := Consts.ofMeasured
-  snap x _ := x
-  isOne := Group.isOne
-  ident := Group.beq
-  eqFloat x f := Consts.product x == f
+/-- Julia `===` of two coefficients: same kind and same value (bits for floats). -/
+def coefIdent : Coef → Coef → Bool
+  | .int a, .int b => a == b
+  | .rat a, .rat b => a == b
+  | .float a, .float b => a.toBits == b.toBits
+  | _, _ => false
+
+/-- Julia `===` of two groups of the same basis: identical exponent vectors (same
+element type) and identical coefficients. -/
+def Consts.ident (a b : Consts) : Bool :=
+  coefIdent a.c b.c && match a.v, b.v with
+    | .exact u, .exact v => u == v
+    | .float u, .float v => (List.finRange 44).all fun i => (u.get i).toBits == (v.get i).toBits
+    | _, _ => false
 
 end Similitude
