@@ -68,22 +68,109 @@ namespace BPair
 /-- The unit `1 + 0B`. -/
 def one : BPair := ⟨f1, f0⟩
 
-/-- Grassmann's generic `expm1` series (`C:31-51`) in the algebra of one blade. -/
-@[specialize] def expm1 (β : Float) (t : BPair) : BPair := expm1Generic add (mul β) sdiv norm t
+/-! The series of one blade as loops over unboxed `Float` pairs: the operations and the
+stopping rule of `Composite.seriesLoop` specialized at `BPair` (`expm1Generic`,
+`coshGenericTail`, `sinhGenericWith`, `qlogWith`), written out so the partial sum and
+the term stay in registers (a `BPair` loop argument is a heap object per step). -/
 
-/-- Grassmann's generic `cosh` series (`C:458-481`): `1 + τ/2 + τ²/4! + …`, `τ = t⟑t`. -/
-@[specialize] def cosh (β : Float) (t : BPair) : BPair :=
+/-- The loop of the one-blade `expm1`: `term ↦ term ⟑ (t/k)`, `k` from 3. -/
+def expm1Loop (β tr ti : Float) (Sr Si ur ui n1 n2 n3 : Float) (k : Nat) : Nat → BPair
+  | 0 => ⟨Sr, Si⟩
+  | fuel + 1 =>
+    if (n2 < n1 || n2 > f1) && k ≤ noCap then
+      let Sr := Sr + ur
+      let Si := Si + ui
+      let ns := Float.sqrt (Sr * Sr + Si * Si)
+      if approx ns n3 then ⟨Sr, Si⟩
+      else
+        let c := natF k
+        let vr := tr / c
+        let vi := ti / c
+        let ur' := ur * vr + (ui * vi) * β
+        let ui' := ur * vi + ui * vr
+        expm1Loop β tr ti Sr Si ur' ui' n2 (Float.sqrt (ur' * ur' + ui' * ui')) ns (k + 1) fuel
+    else ⟨Sr, Si⟩
+
+/-- Grassmann's generic `expm1` series (`C:31-51`) in the algebra of one blade
+(`expm1Generic` at `BPair`). -/
+def expm1 (β : Float) (t : BPair) : BPair :=
+  let m := mul β t t
+  let ur := m.re / f2
+  let ui := m.im / f2
+  let f := norm t
+  expm1Loop β t.re t.im t.re t.im ur ui f (Float.sqrt (ur * ur + ui * ui)) f 3 seriesFuel
+
+/-- The loop of the one-blade `cosh`/`sinh` tails: `term ↦ term ⟑ (τ/(k(k-1)))`, `k` by 2. -/
+def tauLoop (β τr τi : Float) (Sr Si ur ui n1 n2 n3 : Float) (k : Nat) : Nat → BPair
+  | 0 => ⟨Sr, Si⟩
+  | fuel + 1 =>
+    if (n2 < n1 || n2 > f1) && k ≤ noCap then
+      let Sr := Sr + ur
+      let Si := Si + ui
+      let ns := Float.sqrt (Sr * Sr + Si * Si)
+      if approx ns n3 then ⟨Sr, Si⟩
+      else
+        let c := natF (k * (k - 1))
+        let vr := τr / c
+        let vi := τi / c
+        let ur' := ur * vr + (ui * vi) * β
+        let ui' := ur * vi + ui * vr
+        tauLoop β τr τi Sr Si ur' ui' n2 (Float.sqrt (ur' * ur' + ui' * ui')) ns (k + 2) fuel
+    else ⟨Sr, Si⟩
+
+/-- Grassmann's generic `cosh` series (`C:458-481`): `1 + τ/2 + τ²/4! + …`, `τ = t⟑t`
+(`coshGenericTail` at `BPair`). -/
+def cosh (β : Float) (t : BPair) : BPair :=
   let τ := mul β t t
-  let S := coshGenericTail add (mul β) sdiv norm τ
+  let Sr := τ.re / f2
+  let Si := τ.im / f2
+  let q := mul β τ τ
+  let ur := q.re / f24
+  let ui := q.im / f24
+  let f := Float.sqrt (Sr * Sr + Si * Si)
+  let S := tauLoop β τ.re τ.im Sr Si ur ui f (Float.sqrt (ur * ur + ui * ui)) f 6 seriesFuel
   ⟨f1 + S.re, S.im⟩
 
-/-- Grassmann's generic `sinh` series (`C:517-539`): `t + t⟑τ/3! + …`, `τ = t⟑t`. -/
-@[specialize] def sinh (β : Float) (t : BPair) : BPair :=
+/-- Grassmann's generic `sinh` series (`C:517-539`): `t + t⟑τ/3! + …`, `τ = t⟑t`
+(`sinhGenericWith` at `BPair`). -/
+def sinh (β : Float) (t : BPair) : BPair :=
   let τ := mul β t t
-  sinhGenericWith add sdiv norm (fun x => mul β x τ) (fun d x => mul β x (sdiv τ (natF d))) t
+  let q := mul β t τ
+  let ur := q.re / f6
+  let ui := q.im / f6
+  let f := norm t
+  tauLoop β τ.re τ.im t.re t.im ur ui f (Float.sqrt (ur * ur + ui * ui)) f 5 seriesFuel
 
-/-- Grassmann's `qlog(w) = 2 atanh w` series (`C:303-321`). -/
-@[specialize] def qlog (β : Float) (w : BPair) : BPair := qlogWith add (mul β) sdiv smul norm w
+/-- The loop of the one-blade `qlog`: `prod ↦ prod ⟑ w²`, `term = prod/k`, `k` by 2 to `x`. -/
+def qlogPairLoop (β w2r w2i : Float) (x : Nat) (Sr Si pr pi ur ui n1 n2 n3 : Float) (k : Nat) :
+    Nat → BPair
+  | 0 => ⟨Sr, Si⟩
+  | fuel + 1 =>
+    if (n2 < n1 || n2 > f1) && k ≤ x then
+      let Sr := Sr + ur
+      let Si := Si + ui
+      let ns := Float.sqrt (Sr * Sr + Si * Si)
+      if approx ns n3 then ⟨Sr, Si⟩
+      else
+        let pr' := pr * w2r + (pi * w2i) * β
+        let pi' := pr * w2i + pi * w2r
+        let c := natF k
+        let ur' := pr' / c
+        let ui' := pi' / c
+        qlogPairLoop β w2r w2i x Sr Si pr' pi' ur' ui' n2 (Float.sqrt (ur' * ur' + ui' * ui')) ns (k + 2) fuel
+    else ⟨Sr, Si⟩
+
+/-- Grassmann's `qlog(w) = 2 atanh w` series (`C:303-321`; `qlogWith` at `BPair`). -/
+def qlog (β : Float) (w : BPair) : BPair :=
+  let w2 := mul β w w
+  let f := norm w
+  let prod := mul β w w2
+  let ur := prod.re / f3
+  let ui := prod.im / f3
+  let x : Nat := 10000
+  let S := qlogPairLoop β w2.re w2.im x w.re w.im prod.re prod.im ur ui f
+    (Float.sqrt (ur * ur + ui * ui)) f 5 (x / 2 + 1)
+  smul f2 S
 
 /-- The inverse `(re - im·B)/(re² - im²·β)` (`nan` parts when not invertible). -/
 @[inline] def inv (β : Float) (a : BPair) : BPair :=

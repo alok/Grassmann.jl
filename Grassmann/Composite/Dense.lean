@@ -264,9 +264,24 @@ variable [Kernels V]
   if approx sb.abs nb then scalarF (F64.expm1 sb)
   else expm1Generated addF smul' sdiv fnorm b
 
-/-- Julia `exp(t::Spinor)` (`src/composite.jl:83-96`, parabolic defect fixed). -/
+/-- Julia `exp(t::Spinor)` (`src/composite.jl:83-96`, parabolic defect fixed). In a plain
+signature space of dimension ≤ 3 the non-scalar part of a spinor is a bivector (or the
+pseudoscalar of a plane), whose square is the scalar `Σ mᵢ²·e_bᵢ²`: the closed form is
+taken without the kernel product (Julia's numeric `isscalar` test holds there). -/
 @[inline] def exp (t : Half V false Float) : Half V false Float :=
   let s := t.scalarValue
+  let p := plainNeg V
+  if p != notPlain && V.n ≤ 3 then
+    let (bs, o) := bladeTable V.n (halfLayout false)
+    let hint := weightedSumLoop (plainSq p) bs o t.v 1 f0 t.v.data.size
+    let es := F64.exp s
+    if hint == f0 then ⟨vset (vmap (es * ·) t.v) 0 es⟩
+    else
+      let θ := Float.sqrt (Float.abs (weightedSumLoop (plainAbs2 p) bs o t.v 1 f0 t.v.data.size))
+      let c := if hint < f0 then Float.cos θ else Float.cosh θ
+      let x := if hint < f0 then sinOver θ else sinhOver θ
+      ⟨vset (vmap (fun y => es * (y * x)) t.v) 0 (es * c)⟩
+  else
   let m := t.dropScalar
   let sq := smul' m m
   if isScalarNorms sq.fnorm sq.scalarValue then

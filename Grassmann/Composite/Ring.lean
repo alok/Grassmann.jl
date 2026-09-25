@@ -85,7 +85,7 @@ instance instSeriesRingSpinor : SeriesRing (Half V false Float) where
   mul := Half.smul'
   neg := (- ·)
   addScalar := Half.addScalar
-  smul k s := ⟨s.v.map (k * ·)⟩
+  smul k s := ⟨vmap (k * ·) s.v⟩
   sdiv := Half.sdiv
   norm := Half.fnorm
   inv := Half.invD
@@ -248,7 +248,7 @@ series `1 + τ/2 + …` over `τ = x⟑x` is even. -/
     if approx f0 x.norm then x
     else
       let τ : Values Float ((halfLayout false).size V.n) := Kernels.bin .mul .odd .odd .even x x
-      sinhGeneratedWith (X := Values Float ((halfLayout true).size V.n)) (· + ·) (fun y k => y.map (· / k))
+      sinhGeneratedWith (X := Values Float ((halfLayout true).size V.n)) (vzip (· + ·)) (fun y k => vmap (· / k) y)
         (·.norm) (fun y => Kernels.bin .mul .odd .even .odd y τ) x
 
 /-- `I ⟑ s` for a spinor: the half of the parity of the pseudoscalar. -/
@@ -420,7 +420,7 @@ dimension: the formula never leaves the even subalgebra). -/
 
 /-- A real power `s ^ x = exp(x·log(s))` (the principal branch; Julia defines no
 `TensorAlgebra ^ Real`, only `Real ^ TensorAlgebra`, `rpow`). -/
-@[specialize V] def powf (s : Half V false Float) (x : Float) : Half V false Float := exp ⟨s.log.v.map (x * ·)⟩
+@[specialize V] def powf (s : Half V false Float) (x : Float) : Half V false Float := exp ⟨vmap (x * ·) s.log.v⟩
 
 end Half
 
@@ -488,7 +488,7 @@ variable [Kernels V]
 /-- The shared iteration of `log_fast`/`logh_fast` on multivectors. -/
 @[inline] def logFastWith (expf : Multivector V Float → Multivector V Float) (t : Multivector V Float) :
     Option (Multivector V Float) :=
-  logFastLoop (· - ·) (· + ·) (fun m => (2 : Float) * m) (fun a b => b.inv?.map (a * ·)) fnorm expf t
+  logFastLoop (· - ·) (· + ·) (fun m => f2 * m) (fun a b => b.inv?.map (a * ·)) fnorm expf t
     Multivector.zero f0 logFastCap
 
 /-- Julia `log_fast(t)` (`src/composite.jl:574-587`): Halley's iteration for `exp(y) = t`;
@@ -508,7 +508,7 @@ variable [Kernels V]
 /-- The shared iteration of `log_fast`/`logh_fast` on spinors. -/
 @[inline] def logFastWith (expf : Half V false Float → Half V false Float) (t : Half V false Float) :
     Option (Half V false Float) :=
-  logFastLoop (· - ·) (· + ·) (fun m => ⟨m.v.map ((2 : Float) * ·)⟩) (fun a b => b.inv?.map (smul' a ·))
+  logFastLoop (· - ·) (· + ·) (fun m => ⟨vmap (f2 * ·) m.v⟩) (fun a b => b.inv?.map (smul' a ·))
     fnorm expf t Half.zero f0 logFastCap
 
 /-- Julia `log_fast(t)` of a spinor (`src/composite.jl:574-587`), `none` where it fails. -/

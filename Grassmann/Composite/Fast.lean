@@ -159,6 +159,14 @@ variable {n : Nat}
 @[inline] def vset (v : Values Float n) (i : Nat) (x : Float) : Values Float n :=
   if h : i < v.data.size then ⟨v.data.set i x h, (size_set' ..).trans v.size_eq⟩ else v
 
+/-- Whether every entry from index `i` on is zero. -/
+def zeroFrom (a : FloatArray) (i : Nat) : Bool :=
+  if h : i < a.size then a[i] == f0 && zeroFrom a (i + 1) else true
+termination_by a.size - i
+
+/-- Whether `v` is exactly a multiple of its first entry (the scalar slot). -/
+@[inline] def vScalarOnly (v : Values Float n) : Bool := zeroFrom v.data 1
+
 /-- `Σ (vᵢ·vᵢ)·wᵢ`. -/
 @[inline] def vwsum (v : Values Float n) (w : FloatArray) : Float := wsumFrom v.data w 0 f0
 
@@ -177,8 +185,20 @@ where
     if k < g then go (k + 1) (if k % 2 == g % 2 then acc + Leibniz.binomial n k else acc) else acc
   termination_by g - k
 
-/-- The zero vector of layout `l` (a closed term at a literal space). -/
-@[inline] def zeros (V : TensorBundle) (l : Layout) : Values Float (l.size V.n) := Values.replicate f0
+/-- `Layout.size n l` with shifts instead of `Nat` powers (`2 ^ k` is a GMP computation per
+call at run time; DirectSum's `Layout.size` uses it). -/
+@[inline] def fastSize (n : Nat) : Layout → Nat
+  | .chain g => Layout.size n (.chain g)
+  | .even => if n == 0 then 1 else 1 <<< (n - 1)
+  | .odd => if n == 0 then 0 else 1 <<< (n - 1)
+  | .full => 1 <<< n
+
+theorem fastSize_eq (n : Nat) (l : Layout) : fastSize n l = l.size n := by
+  cases l <;> simp [fastSize, Layout.size, Nat.shiftLeft_eq]
+
+/-- The zero vector of layout `l` (sized with `fastSize`; a closed term at a literal space). -/
+@[inline] def zeros (V : TensorBundle) (l : Layout) : Values Float (l.size V.n) :=
+  (Values.replicate (n := fastSize V.n l) f0).cast (fastSize_eq V.n l)
 
 /-- A grade-`g` chain's coefficients `x`, scaled by `k`, in layout `l` (which must store grade
 `g`): one copy of the zero vector with the block at `gradeOffset`. -/

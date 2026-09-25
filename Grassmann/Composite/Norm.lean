@@ -134,7 +134,7 @@ variable {p : Bool} [Kernels V]
 /-- Julia `unit(t) = t/abs(t) = t ⟑ inv(abs(t))` of a spinor or co-spinor. -/
 @[inline] def unit (h : Half V p Float) : Half V p Float :=
   let a := h.abs
-  if a.isScalar then ⟨h.v.map (· / a.scalarValue)⟩
+  if a.isScalar then ⟨vmap (· / a.scalarValue) h.v⟩
   else ((h * Half.invD a : Half V (p ^^ false) Float)).cast (by simp)
 
 /-- Julia `geomabs(t) = abs(t) + coabs(t)` of a spinor or co-spinor (a multivector). -/
@@ -143,12 +143,12 @@ variable {p : Bool} [Kernels V]
 /-- Julia `unitnorm(t) = t/norm(geomabs(t))` of a spinor or co-spinor. -/
 @[inline] def unitnorm (h : Half V p Float) : Half V p Float :=
   let a := h.geomabs.fnorm
-  ⟨h.v.map (· / a)⟩
+  ⟨vmap (· / a) h.v⟩
 
 /-- Julia `unitize(t) = t/value(coabs(t))` of a spinor or co-spinor. -/
 @[inline] def unitize (h : Half V p Float) : Half V p Float :=
   let a := pseudoCoef (Multivector.coabs (toMultivector h))
-  ⟨h.v.map (· / a)⟩
+  ⟨vmap (· / a) h.v⟩
 
 end Half
 

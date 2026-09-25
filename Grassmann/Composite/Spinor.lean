@@ -51,7 +51,7 @@ positions `1 … 3`): a loop in a plain signature space, the chain kernel otherw
   let p := plainNeg V
   if p != notPlain then
     let (bs, o) := bladeTable V.n (halfLayout false)
-    weightedSumLoop (plainAbs2 p) bs o s.v 1 f0 (halfDim V.n false)
+    weightedSumLoop (plainAbs2 p) bs o s.v 1 f0 s.v.data.size
   else getD s.bivectorPart.abs2.v 0
 
 /-- The coefficient `acos(⟨z⟩₀/r)/|b|` of Julia's `angle(z::Quaternion, r)`
@@ -71,7 +71,7 @@ quaternion (`n = 3`: the even storage is the scalar followed by the bivector). -
 @[inline] def logPolar (s : Half V false Float) : Half V false Float :=
   let r := s.radius
   let k := s.angleCoef r
-  ⟨setFirst (s.v.map (· * k)) (F64.log r)⟩
+  ⟨setFirst (vmap (· * k) s.v) (F64.log r)⟩
 
 /-- Julia `log(t::Spinor)`: the polar form for Euclidean quaternions
 (`src/composite.jl:367`), otherwise `qlog((t - 1)/(t + 1))` (`C:369`); `none` where Julia
@@ -99,11 +99,11 @@ throws. -/
     -- `cos θ + B·sin θ/θ`, `θ = √contraction(B, B)` (Julia `exp(t::Chain)`, `C:148-156`)
     let r := s.radius
     let k := s.angleCoef r
-    let b : Half V false Float := ⟨s.v.map fun y => (y * k) / n⟩
+    let b : Half V false Float := ⟨vmap (fun y => (y * k) / n) s.v⟩
     let θ := Float.sqrt b.bivAbs2
     let x := sinOver θ
     let q := qrt r
-    some ⟨setFirst (b.v.map fun y => q * (y * x)) (q * Float.cos θ)⟩
+    some ⟨setFirst (vmap (fun y => q * (y * x)) b.v) (q * Float.cos θ)⟩
   else if s.isScalar then some (scalarF (qrt s.scalarValue))
   else s.logSeries?.map fun l => exp (sdiv l n)
 
@@ -124,7 +124,7 @@ throws. -/
 
 /-- Julia `b ^ t = exp(t ⟑ log(b))` for a real base (AbstractTensors `AT:326`). -/
 @[inline] def rpow (b : Float) (s : Half V false Float) : Half V false Float :=
-  exp ⟨s.v.map (· * F64.log b)⟩
+  exp ⟨vmap (· * F64.log b) s.v⟩
 
 end Half
 

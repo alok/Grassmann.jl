@@ -49,7 +49,12 @@ variable [Kernels V]
   if g == 0 then Half.scalarF (Float.cosh (getD x 0))
   else
     let τ : Half V false Float := ⟨Kernels.bin .mul (.chain g) (.chain g) (halfLayout false) x x⟩
-    Half.addScalar f1 (coshGenericTail (· + ·) Half.smul' Half.sdiv Half.fnorm τ)
+    if vScalarOnly τ.v then
+      -- `τ` is exactly a scalar: every partial sum and term of the spinor series is one, so the
+      -- series runs on the scalar with the same operations (its norm `√(x·x)`)
+      let S := coshGenericTail (· + ·) (· * ·) (· / ·) (fun y => Float.sqrt (y * y)) τ.scalarValue
+      Half.scalarF (f1 + S)
+    else Half.addScalar f1 (coshGenericTail Half.addF Half.smul' Half.sdiv Half.fnorm τ)
 
 /-- `sinh` of a grade-`g` chain (its coefficients `x`) as the half of parity `g`:
 `sinh(x₀)` for `g = 0` (Julia `C:515`), otherwise Grassmann's generic series
@@ -62,6 +67,12 @@ variable [Kernels V]
     let τ : Values Float ((halfLayout false).size V.n) :=
       Kernels.bin .mul (.chain g) (.chain g) (halfLayout false) x x
     let t0 : Values Float (lp.size V.n) := embedChain V g lp f1 x
+    if vScalarOnly τ then
+      -- `τ` is exactly a scalar `τ₀`: the right products by it are coefficient-wise
+      let τ0 := getD τ 0
+      sinhGenericWith (vzip (· + ·)) (fun y k => vmap (· / k) y) vnorm (fun y => vmap (· * τ0) y)
+        (fun d y => let c := τ0 / natF d; vmap (· * c) y) t0
+    else
     let mulτ := fun (y : Values Float (lp.size V.n)) => Kernels.bin .mul lp (halfLayout false) lp y τ
     sinhGenericWith (vzip (· + ·)) (fun y k => vmap (· / k) y) vnorm mulτ
       (fun d y => Kernels.bin .mul lp (halfLayout false) lp y (vmap (· / natF d) τ)) t0
