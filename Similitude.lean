@@ -7,5 +7,6 @@ import Similitude.Ratio
 import Similitude.Quantity
 import Similitude.Physics
 import Similitude.Derived
+import Similitude.Quotient
 
 /-! Similitude: Lean port of chakravala/Similitude.jl. See docs/port-notes/. -/
