@@ -41,8 +41,8 @@ def supChar (c : Char) : Char :=
 (`Float.ofInt` goes through `OfScientific` and `Nat.log2`, ~100 ns). -/
 @[inline] def intToFloat (n : Int) : Float :=
   match n with
-  | .ofNat k => if k < 18446744073709551616 then k.toUInt64.toFloat else Float.ofNat k
-  | .negSucc k => if k < 18446744073709551615 then -((k.toUInt64 + 1).toFloat) else Float.ofInt n
+  | .ofNat k => if k < 4611686018427387904 then k.toUInt64.toFloat else Float.ofNat k
+  | .negSucc k => if k < 4611686018427387904 then -((k.toUInt64 + 1).toFloat) else Float.ofInt n
 
 /-- A Julia exponent: `Int`, `Rational{Int}` or `Float64` (the element type of
 a `Group`'s exponent vector). -/

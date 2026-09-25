@@ -94,17 +94,17 @@ def factorize (x : Int) : Consts := factorizeWith genValues x
 integers; otherwise powers of `τ = 2π` are extracted (`4π ↦ τ⋅2`) and the rest
 is the coefficient (`π ↦ 3.141592653589793`). -/
 def factorizeF (x : Float) : Consts :=
-  if x.isFinite && x.floor == x && x.abs < 9.223372036854775807e18 then
+  if JuliaBase.F64.isfinite x && x.floor == x && x.abs < f64! 9.223372036854775807e18 then
     factorize (x.toInt64.toInt)
   else
-    let τ := 6.283185307179586
+    let τ := f64! 6.283185307179586
     let rec go (x : Float) (i : Nat) : Nat → Float × Nat
       | 0 => (x, i)
       | f + 1 =>
         if x == 0.0 then (x, 0)
         else if JuliaBase.F64.rem x τ == 0.0 then go (JuliaBase.F64.div x τ) (i + 1) f else (x, i)
     let (x, e) := go x 0 64
-    Group.mk' (.exact (Vector.ofFn fun j => if j.1 == 36 then (e : Rat) else 0)) (.float x)
+    Group.mk' (.int (Vector.ofFn fun j => if j.1 == 36 then (e : Int) else 0)) (.float x)
 
 /-- The generator of a measured constant (`UnitSystems.jl:316-331` names mapped
 to the basis; `αinv = inv(α)`, `LD`, `JD` and the large prefixes are exact

@@ -50,9 +50,17 @@ def applyFloat (m : LinMap) (d : Fin 11 → Float) : FVec 11 :=
   FVec.ofFn fun i => (m.rows.getD i.1 []).foldl
     (fun acc (j, k) => acc + (Float.ofInt k / 2.0) * (if h : j < 11 then d ⟨j, h⟩ else 0.0)) 0.0
 
+/-- Apply the map to integer exponents: `Int` arithmetic on the doubled
+coefficients, halved at the end (an odd entry makes the image rational). -/
+def applyInt (m : LinMap) (d : Vector Int 11) : Exps 11 :=
+  let twice : Vector Int 11 := Vector.ofFn fun i => (m.rows.getD i.1 []).foldl
+    (fun acc (j, k) => acc + k * (if h : j < 11 then d[j] else 0)) 0
+  if twice.all (· % 2 == 0) then .int (twice.map (· / 2))
+  else .exact (twice.map fun t => mkRat t 2)
+
 /-- Apply the map to a USQ exponent vector, keeping Julia's element type. -/
 def apply (m : LinMap) : Exps 11 → Exps 11
-  | .int v => Exps.ofRats (m.applyRat fun i => (v[i] : Rat))
+  | .int v => m.applyInt v
   | .exact v => Exps.ofRats (m.applyRat fun i => v[i])
   | .float v => .float (m.applyFloat v.get)
 

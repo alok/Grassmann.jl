@@ -28,6 +28,14 @@ function us_dimproducts(ds::Vector{Any})
     end
     acc
 end
+# Similitude's exact `ratio(d, U, S)` at run time, as a Float64.
+function us_ratioall(ds::Vector{Any}, ps::Vector{Any})
+    acc = 0.0
+    for d in ds, (U, S) in ps
+        acc += Float64(float(Similitude.ratio(d, U, S)))
+    end
+    acc
+end
 # `energy(v, English, Metric)` with literal systems: Julia folds the factor.
 function us_convlit(xs::Vector{Float64})
     acc = 0.0
@@ -70,6 +78,8 @@ function suite_unitsystems(ctx)
              getfield(Similitude, q) for q in us_US.Convert]
     bench!(i -> us_dimproducts(blackbox(i, ds)), ctx, "dim_products";
            ops = length(ds)^2, param = "$(length(ds))²")
+    bench!(i -> us_ratioall(blackbox(i, ds), ps), ctx, "ratio_runtime";
+           ops = length(ds) * length(ps), param = "$(length(ds))×$(length(ps))")
 end
 
 register!("unitsystems", suite_unitsystems)

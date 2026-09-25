@@ -269,18 +269,32 @@ two `Int` vectors, `fq` on rationals (integral results are stored as `int`). -/
     | some u => ofRats (u.map fq)
     | none => a
 
+/-- `a + b` on exponents. `Rat` arithmetic takes a GMP `gcd` even for small
+values; exponent vectors are sparse, so zeros and integers skip it. -/
+@[inline] def ratAdd (a b : Rat) : Rat :=
+  if a.num == 0 then b else if b.num == 0 then a
+  else if a.den == 1 && b.den == 1 then ((a.num + b.num : Int) : Rat) else a + b
+/-- `a - b` on exponents (see `ratAdd`). -/
+@[inline] def ratSub (a b : Rat) : Rat :=
+  if b.num == 0 then a else if a.num == 0 then -b
+  else if a.den == 1 && b.den == 1 then ((a.num - b.num : Int) : Rat) else a - b
+/-- `a * b` on exponents (see `ratAdd`). -/
+@[inline] def ratMul (a b : Rat) : Rat :=
+  if a.num == 0 || b.num == 0 then 0
+  else if a.den == 1 && b.den == 1 then ((a.num * b.num : Int) : Rat) else a * b
+
 /-- `a + b` (group multiplication). -/
-def add : Exps n → Exps n → Exps n := zipWith (· + ·) (· + ·) (· + ·)
+def add : Exps n → Exps n → Exps n := zipWith (· + ·) ratAdd (· + ·)
 /-- `a - b` (group division). -/
-def sub : Exps n → Exps n → Exps n := zipWith (· - ·) (· - ·) (· - ·)
+def sub : Exps n → Exps n → Exps n := zipWith (· - ·) ratSub (· - ·)
 /-- `-a` (group inverse). -/
 def neg : Exps n → Exps n
   | int u => int (u.map (- ·))
   | a => map (- ·) (- ·) a
 /-- `k·a` for a rational `k` (group power). -/
 def smul (k : Rat) : Exps n → Exps n
-  | int u => if k.den == 1 then int (u.map (k.num * ·)) else ofRats (u.map fun (x : Int) => k * (x : Rat))
-  | a => map (k * ·) (JuliaBase.IEEEFloat.ofRat Float k * ·) a
+  | int u => if k.den == 1 then int (u.map (k.num * ·)) else ofRats (u.map fun (x : Int) => ratMul k x)
+  | a => map (ratMul k ·) (JuliaBase.IEEEFloat.ofRat Float k * ·) a
 /-- `y·a` for a `Float64` `y`: always a `Float64` vector. -/
 def fmul (y : Float) (a : Exps n) : Exps n := float (FVec.ofFn fun i => y * a.getFloat i)
 

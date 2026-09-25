@@ -1,4 +1,5 @@
 import Similitude.Registry
+import Std.Data.HashMap
 
 /-!
 # Exact conversion ratios
@@ -69,10 +70,51 @@ def pairTable : Array (Thunk (Array Scalar × Array Bool)) :=
 def pairData (U S : Sys) : Array Scalar × Array Bool :=
   (pairTable[U.ctorIdx * Sys.all.length + S.ctorIdx]!).get
 
-/-- Julia `ratio(d, U, S)`: the exact factor converting a quantity of USQ
-dimension `d` from `U` to `S`. -/
-def ratio (d : Exps 11) (U S : Sys) : Scalar :=
+/-- `ratio(d, U, S)` computed from the cached constant ratios of the pair. -/
+def ratioUncached (d : Exps 11) (U S : Sys) : Scalar :=
   ratioOf (pairData U S).1 (usqMap.apply d)
+
+/-- A cache key: the exponents with their element type, and the two systems. -/
+structure RatioKey where
+  /-- `0` `Int`, `1` `Rational` (numerator, denominator pairs), `2` `Float64` bits -/
+  kind : UInt8
+  /-- the exponents -/
+  e : Array Int
+  /-- source system -/
+  U : Nat
+  /-- target system -/
+  S : Nat
+  deriving BEq, Hashable
+
+/-- The cache key of `ratio d U S`. -/
+def RatioKey.of (d : Exps 11) (U S : Sys) : RatioKey :=
+  match d with
+  | .int v => ⟨0, v.toArray, U.ctorIdx, S.ctorIdx⟩
+  | .exact v => ⟨1, v.toArray.flatMap (fun q => #[q.num, (q.den : Int)]), U.ctorIdx, S.ctorIdx⟩
+  | .float v => ⟨2, v.1.toList.toArray.map (fun x => (x.toBits.toNat : Int)), U.ctorIdx, S.ctorIdx⟩
+
+private unsafe def ratioCacheImpl : IO.Ref (Std.HashMap RatioKey Scalar) :=
+  unsafeBaseIO (IO.mkRef {})
+
+/-- The process-global cache of runtime ratios. -/
+@[implemented_by ratioCacheImpl]
+private opaque ratioCache : IO.Ref (Std.HashMap RatioKey Scalar)
+
+private unsafe def ratioImpl (d : Exps 11) (U S : Sys) : Scalar := unsafeBaseIO do
+  let k := RatioKey.of d U S
+  match (← ratioCache.get).get? k with
+  | some r => return r
+  | none =>
+    let r := ratioUncached d U S
+    ratioCache.modify (·.insert k r)
+    return r
+
+/-- Julia `ratio(d, U, S)`: the exact factor converting a quantity of USQ
+dimension `d` from `U` to `S`. Julia recomputes it on every runtime call; here
+it is computed once per `(d, U, S)` and cached for the process (logically
+`ratioUncached d U S`, as the plan caches of `Grassmann.Kernel.Reference`). -/
+@[implemented_by ratioImpl]
+def ratio (d : Exps 11) (U S : Sys) : Scalar := ratioUncached d U S
 
 /-- Would Julia throw computing `x^e`? Raising an `Int` (or a group with an `Int`
 coefficient other than `±1`) to a negative runtime power is a `DomainError`

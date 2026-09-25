@@ -22,6 +22,9 @@ Julia twin: `oracle/bench/unitsystems.jl` (UnitSystems 0.3 / Similitude).
   `natural_systems_sys` reads the per-pair tables (`Conv.naturalSys`).
 * `dim_products`: Similitude dimension arithmetic: the product of every pair of the 131 USQ
   dimension groups (`Group{:USQ}` in Julia).
+* `ratio_runtime`: Similitude's exact conversion factor `ratio(d, U, S)` of every quantity's
+  dimension for the six pairs of `convert_pairs`, evaluated at run time (Lean caches the eleven
+  constant ratios per pair of systems; Julia recomputes them).
 
 Checks are sums of the factors (resp. of the length exponents), equal when bit-exact.
 -/
@@ -70,6 +73,11 @@ def naturalAll (us : Array (UnitSystem Num)) : Float :=
 def naturalAllSys (us : Array Sys) : Float :=
   Conv.all.foldl (fun acc q => us.foldl (fun acc U => acc + (q.naturalSys U).toFloat) acc) 0
 
+/-- `∑ ratio(d, U, S)` (Similitude's exact factor, as a `Float64`) over every
+quantity's dimension and pair. -/
+def ratioAll (ds : Array USQGroup) (ps : Array (Sys × Sys)) : Float :=
+  ds.foldl (fun acc d => ps.foldl (fun acc (U, S) => acc + (Similitude.ratio d.v U S).toFloat) acc) 0
+
 /-- `∑ L-exponent (a * b)` over all pairs. -/
 def dimProducts (ds : Array USQGroup) : Float :=
   ds.foldl (fun acc a => ds.foldl (fun acc b => acc + (a * b).v.getFloat ⟨2, by decide⟩) acc) 0
@@ -104,6 +112,8 @@ def suite : Suite := ⟨"unitsystems", do
     naturalAllSys (blackBox s uss)
   let ds : Array USQGroup := Conv.all.toArray.map (·.dim.toGroup)
   bench "dim_products" (ops := ds.size * ds.size) (param := s!"{ds.size}²") fun s =>
-    dimProducts (blackBox s ds)⟩
+    dimProducts (blackBox s ds)
+  bench "ratio_runtime" (ops := ds.size * pss.size) (param := s!"{ds.size}×{pss.size}") fun s =>
+    ratioAll (blackBox s ds) pss⟩
 
 end Bench.UnitSystems
