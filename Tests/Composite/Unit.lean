@@ -532,9 +532,28 @@ def phasorApi (t : Tally) : Tally := Id.run do
   t := t.check (D.isdiag && !N.isdiag) fun _ => "isdiag"
   return t
 
+/-- The derived functions on every kind (`Grassmann.Composite.Kinds`): Julia's values where
+Julia computes them (`cot(0.5v₁₂) = -2.16395v₁₂`, `sech(0.3v₁ + 0.4v₂) = 0.886819`), and the
+reciprocal identities on the kinds where Julia throws. -/
+def kindsTests (t : Tally) : Tally := Id.run do
+  let mut t := t
+  t := expect t "cot(0.5v12)" ((⟨3, 0.5⟩ : Single E3 2 Float).cot) [0, 0, 0, 0, -2.1639534137885525, 0, 0, 0] seriesTol
+  t := expect t "sech(0.3v1+0.4v2)" ((ch E3 1 [0.3, 0.4, 0]).sech) [0.8868188839704753, 0, 0, 0, 0, 0, 0, 0] seriesTol
+  let z : Couple E3 Float := ⟨3, 1.0, 0.5⟩
+  let one : Multivector E3 Float := mv E3 [1, 0, 0, 0, 0, 0, 0, 0]
+  t := expectM t "cot(z)·tan(z) = 1" (z.cot * toMultivector z.tan) one 1e-9
+  t := expectM t "sec(z)·cos(z) = 1" (z.sec * z.cos) one 1e-9
+  let q : Half E3 false Float := sp E3 [0.5, 0.3, 0, 0]
+  t := expectM t "tanh(atanh(q))" (Multivector.tanh (Half.atanh q |> Half.toMultivector)) (Half.toMultivector q) 1e-7
+  let p : Phasor E3 Float := z.polarize
+  t := expectM t "sin(phasor) = sin(complexify)" p.sin z.sin 1e-12
+  let w : PseudoCouple E3 Float := ⟨0, 1.0, 0.5⟩
+  t := expectM t "sqrt(pseudo)²" (w.sqrt * w.sqrt) (toMultivector w) 1e-7
+  return t
+
 /-- Run the unit tests; returns `(passed, failed)`. -/
 def run : IO (Nat × Nat) := do
-  let t := phasorApi (closedSeries (powers (identities (fixes (atanh2Tests (spaces (e3 {})))))))
+  let t := kindsTests (phasorApi (closedSeries (powers (identities (fixes (atanh2Tests (spaces (e3 {}))))))))
   IO.println s!"[composite/unit] pass={t.pass} fail={t.fail}"
   for m in t.msgs do IO.eprintln s!"[composite/unit]   FAIL {m}"
   return (t.pass, t.fail)
