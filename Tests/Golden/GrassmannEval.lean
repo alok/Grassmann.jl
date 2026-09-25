@@ -188,6 +188,37 @@ def unaryKnownIssues : Array KnownIssue := #[
                   out := some (Glob.compile "Number"), kinds := some #[KindPat.compile "Couple"] }] }
 ]
 
+/-! ## products -/
+
+/-- The dynamic binary product of an oracle op key (schema §12). -/
+def productOf? (op : String) : Option (BinTA V) :=
+  match op with
+  | "mul" => some fun a b => TA.mul a b
+  | "wedge" => some fun a b => TA.wedge a b
+  | "vee" => some fun a b => TA.vee a b
+  | "contraction" => some fun a b => TA.contraction a b
+  | "lcontraction" => some fun a b => TA.lcontraction a b
+  | "lshift" => some fun a b => TA.lshift a b
+  | "rshift" => some fun a b => TA.rshift a b
+  | "revmul" => some fun a b => TA.revmul a b
+  | "scalarprod" => some fun a b => TA.scalarprod a b
+  | "cross" => some fun a b => TA.cross a b
+  | "sandwich" => some fun a b => TA.sandwich a b
+  | "tsandwich" => some fun a b => TA.tsandwich a b
+  | "veedot" => some fun a b => TA.veedot a b
+  | "antidot" => some fun a b => TA.antidot a b
+  | _ => none
+
+/-- `grassmann/products`: the 14 binary products over every ordered pair. -/
+def productsEval : Evaluator := fun ctx args => do
+  let V ← ctx.bundle?
+  let a ← AnyTA.decode V (← args[0]?)
+  let b ← AnyTA.decode V (← args[1]?)
+  let T ← CoeffType.promote a.T b.T
+  match productOf? (V := V) ctx.op with
+  | some f => (← a.bin T f b).encode
+  | none => none
+
 /-! ## Registrations -/
 
 /-- The dynamic layer's registrations. -/
@@ -195,7 +226,8 @@ def grassmannRegistrations : Array Registration := #[
   { name := "grassmann/construct", suite := "construct", op := "construct", eval := constructEval },
   { name := "grassmann/arith", suite := "arith", op := "*", eval := arithEval },
   { name := "grassmann/unary", suite := "unary", op := "*", eval := unaryEval,
-    knownIssues := unaryKnownIssues }
+    knownIssues := unaryKnownIssues },
+  { name := "grassmann/products", suite := "products", op := "*", eval := productsEval }
 ]
 
 initialize
