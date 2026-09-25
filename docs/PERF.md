@@ -100,8 +100,9 @@ Findings:
 * A decimal literal inlined into a specialized kernel can stay a runtime
   `Float.ofScientific` call with big-number arithmetic (`1.0` in the inlined Baudin–Smith
   division: Newton 255 → 69 ms once hoisted into top-level constants). Integer literals
-  (`Float.ofNat`) are cheap. `JuliaBase.ComplexF64.div`/`inv` are not `@[inline]`, so
-  `Fatou.C64.div`/`inv` restate them inlined (bit-identical, oracle-checked).
+  (`Float.ofNat`) are cheap. `JuliaBase.ComplexF64.div`/`inv` were not `@[inline]`, so
+  `Fatou.C64.div`/`inv` restate them inlined (bit-identical, oracle-checked); since the
+  consolidation below they are `@[inline]` with hoisted constants themselves.
 * Concatenating the chunk outputs costs ≈3 ns per float (`FloatArray` has no bulk copy);
   the three float arrays are concatenated by parallel tasks.
 * The same specializer hazard bites callers: a closed value (e.g. `let Z := fatou K` with a
