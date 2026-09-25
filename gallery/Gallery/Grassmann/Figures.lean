@@ -20,7 +20,7 @@ Julia's `points`.
 namespace Gallery.GrassmannFigs
 
 open LeanPlot Gallery.Fields
-open LeanPlot.Recipes.Algo (Stream.Options Stream.Result Stream.streamplot2 Stream.streamplot3)
+open LeanPlot.Recipes.Algo (Stream.Options Stream.Result Stream.streamplot2 Stream.streamplot3 Stream.arrowSize3)
 
 /-! ## Streamplot data checks -/
 
@@ -146,9 +146,52 @@ def sphereStream (w₁ w₂ w₃ : Nat) : Stream.Result :=
   Stream.streamplot3 (fun p => let (u, v, s) := sphereField t w₁ w₂ w₃ p.x p.y p.z; ⟨u, v, s⟩)
     ⟨-1.5, -1.5, -1.5⟩ ⟨3, 3, 3⟩ { gridsize := #[10, 10, 10] }
 
-/-- A 3D streamplot figure in an `Axis3`. -/
+/-- Makie's 3D streamplot arrowheads (`basic_recipes/streamplot.jl:106-111, 257-282`): a
+`meshscatter` of `Cone(Point3f(0), Point3f(0, 0, 1), 0.5)` tessellated with `quality = 16`,
+scaled by `0.2·min(widths)/min(gridsize)` and rotated from `+z` onto each arrow direction,
+coloured by the arrow values. Returns the mesh and one value per vertex. -/
+def cones (pos dir : Pts3) (vals : FloatArray) (size : Float) (k : Nat := 16) : TriMesh × FloatArray := Id.run do
+  let mut xs : FloatArray := .empty
+  let mut ys : FloatArray := .empty
+  let mut zs : FloatArray := .empty
+  let mut cv : FloatArray := .empty
+  let mut tri : Array UInt32 := #[]
+  let kf := k.toUInt64.toFloat
+  for i in [0:pos.size] do
+    let p := pos.get! i
+    let d := (dir.get! i).normalize
+    -- an orthonormal frame (u, v, d)
+    let a : Vec3 := if d.x.abs < 0.9 then ⟨1, 0, 0⟩ else ⟨0, 1, 0⟩
+    let u := (Vec3.cross d a).normalize
+    let v := Vec3.cross d u
+    let base := xs.size.toUInt32
+    let push (q : Vec3) (xs ys zs : FloatArray) : FloatArray × FloatArray × FloatArray :=
+      (xs.push q.x, ys.push q.y, zs.push q.z)
+    -- apex, base centre, then the ring
+    let apex := p + Vec3.smul size d
+    let (x1, y1, z1) := push apex xs ys zs
+    let (x2, y2, z2) := push p x1 y1 z1
+    xs := x2; ys := y2; zs := z2
+    for j in [0:k] do
+      let θ := 2 * 3.141592653589793 * j.toUInt64.toFloat / kf
+      let q := p + Vec3.smul (size * 0.5 * Float.cos θ) u + Vec3.smul (size * 0.5 * Float.sin θ) v
+      let (x3, y3, z3) := push q xs ys zs
+      xs := x3; ys := y3; zs := z3
+    for _ in [0:k + 2] do cv := cv.push (vals.get! i)
+    for j in [0:k] do
+      let r0 := base + 2 + j.toUInt32
+      let r1 := base + 2 + ((j + 1) % k).toUInt32
+      tri := tri.push r0 |>.push r1 |>.push base
+      tri := tri.push r1 |>.push r0 |>.push (base + 1)
+  return ((TriMesh.mk? (Pts3.ofArrays xs ys zs) tri).getD default, cv)
+
+/-- A 3D streamplot figure in an `Axis3`: the coloured streamlines and Makie's cone
+arrowheads, each with its own automatic colour range (as Makie's two child plots). -/
 def streamFigure3 (r : Stream.Result) : Figure :=
-  let ax := Axis3.new |>.streamplot r.linePoints r.lineColors r.arrowPos r.arrowDir r.arrowColors
+  let size := Stream.arrowSize3 ⟨3, 3, 3⟩ #[10, 10, 10]
+  let (m, cv) := cones r.arrowPos r.arrowDir r.arrowColors size
+  let ax := Axis3.new |>.linesColored r.linePoints r.lineColors
+    |>.mesh m (color := some (.values cv { colormap := Colormap.viridis }))
   Figure.new (600, 500) |>.axis3 1 1 ax
 
 /-- A 3D stream entry. -/
