@@ -87,6 +87,25 @@ theorem ofTerms_of_matches (hn : n ≤ 64) {g : Fin n → Rat} {r : Except Strin
       · have : ¬ mask c = mask d := fun e => hd (mask_inj hn e).symm
         simp [this, hd]
 
+/-! ## The reference kernels read these blade rules -/
+
+/-- The reference kernels' blade rule for `*` (`Grassmann.Kernel.binTermsC`, from
+which `Grassmann.Kernel.build` makes the plans) is DirectSum's `terms₂ .mul`. -/
+theorem binTermsC_mul (V : TensorBundle) (a b : UInt64) :
+    Grassmann.Kernel.binTermsC V .mul a b = V.terms₂ .mul a b := rfl
+
+/-- The reference kernels' blade rule for `∧` is `terms₂ .wedge`. -/
+theorem binTermsC_wedge (V : TensorBundle) (a b : UInt64) :
+    Grassmann.Kernel.binTermsC V .wedge a b = V.terms₂ .wedge a b := rfl
+
+/-- The reference kernels' blade rule for `∨` is `terms₂ .vee`. -/
+theorem binTermsC_vee (V : TensorBundle) (a b : UInt64) :
+    Grassmann.Kernel.binTermsC V .vee a b = V.terms₂ .vee a b := rfl
+
+/-- The reference kernels' blade rule for `⋅` is `terms₂ .contraction`. -/
+theorem binTermsC_contraction (V : TensorBundle) (a b : UInt64) :
+    Grassmann.Kernel.binTermsC V .contraction a b = V.terms₂ .contraction a b := rfl
+
 /-! ## Bilinear extension -/
 
 /-- The bilinear extension of a blade-level rule `T` (what the reference kernels
