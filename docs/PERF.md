@@ -125,10 +125,63 @@ Bind such constants to top-level `def`s (closed terms, evaluated once) and refer
   or exponents past `10^22`. The first port of the kernels ran `F64.log` at 3 µs (exp 180 ns);
   decoding the constants at elaboration time (`f64!`/`f32!`, `JuliaBase.FloatLit`) brought it to
   8 ns. Grep the generated C for `l_Float_ofScientific` outside `_init_` functions to find
-  others (`JuliaBase/Complex.lean` has about 50).
+  others (`JuliaBase/Complex.lean` had about 50; since 2026-09-24 no JuliaBase function has one).
 * `Int`/`Nat` arithmetic with `2 ^ 64`-style constants cost ~40 ns per conversion; the kernels use
   `Int64`/`UInt64` (`>>>` on `Int64` is arithmetic, as Julia's `>>`).
 * Turning off closed-term extraction (`compiler.extract_closed false`) inlines the `f64!` bit
   patterns as immediates but is not faster: the remaining cost is the out-of-line
   `lean_float_to_bits`/`lean_float_of_bits` calls (`bl` in the disassembly), five or so per `exp`.
   Unboxed `FloatArray` tables save two of them (7.3 → 6.6 ns).
+
+## 2026-09-24: Julia's own trig and hyperbolic kernels; literals as module globals
+
+`lake exe bench math` (10⁷ calls, a sweep of arguments folded into an accumulator; Apple M4 Max)
+against the same sweeps in Julia 1.13 (`sweep(f, x, dx, n)`, best of 3). `JuliaBase.Trig`,
+`JuliaBase.Hyperbolic` and `ComplexF64` agree with Julia bit for bit (`Tests/JuliaBase/trig.json`
+and 2·10⁶-row `fuzztrig` sweeps).
+
+| function (ns) | libm (`Float.sin`, …) | JuliaBase | Julia 1.13 |
+|---|---|---|---|
+| `exp` | 1.8 | 6.5 (6.6 before) | 2.6 |
+| `log` | 2.0 | 6.7 (8.2) | 3.1 |
+| `x^2.5` | 4.7 | 13.1 (22.1) | 8.6 |
+| `x^7` (`pow_body`) | — | 7.7 (9.0) | 2.9 |
+| `sin`, `cos` on [-10, 10] | 2.2 | 5.8 | 3.4, 3.6 |
+| `tan` | 2.9 | 10.4 | 4.9 |
+| `sin` of `x ≈ 10¹⁰` (Payne–Hanek) | — | 62 (2 160 in `Nat` arithmetic) | 9.6 |
+| `asin` | 2.8 | 5.3 | 2.7 |
+| `atan` | 2.4 | 2.2 | 4.6 |
+| `atan(y, 0.7)` | 4.3 | 11.0 | 5.5 |
+| `sinh`, `tanh` | 2.8, 2.6 | 8.1, 8.6 | 3.2, 3.4 |
+| `sinpi` | — | 7.0 | 3.4 |
+| `ComplexF64` `/` | — | 2.9 | 2.4 |
+| `ComplexF64` `exp`, `sin` | — | 30, 34 (38, 81 at first) | 7.1, 10.2 |
+
+Findings:
+* **Closed terms are atomic loads.** In Lean 4.35 a constant inside a function body (a hoisted
+  literal, `Float.ofBits n`, `-c`, an `Int32`/`Int64` literal) becomes a closed term read through
+  a once-cell whose state is `_Atomic(int)`: every use is a sequentially consistent load (`ldar`)
+  and a branch. A top-level `def` is initialized with its module and read as a plain global.
+  `f64!`/`f32!` therefore elaborate to a module-level constant per literal (`M._f64.x<bits>`),
+  with the sign inside (`f64! -0.5`, not `-f64! 0.5`): `x^2.5` 22 → 13 ns, `atan` 9.9 → 2.2 ns,
+  `log` 8.2 → 6.7 ns, with no source change beyond the macro. `Int32`/`Int64` literals are still
+  closed terms (e.g. the shift counts in `atan2` and `exp`).
+* `Float.isNaN`/`isInf`/`isFinite` and `Float.toBits`/`ofBits` are out-of-line runtime calls
+  (a `toBits`+`ofBits` round trip ≈ 0.6 ns). `F64.isnan x` (`x != x`), `F64.isinf`, `F64.isfinite`
+  (comparisons of `|x|` with `Inf`) are inline; take a sign from a comparison wherever the
+  operand cannot be `±0`, and keep bit casts for the cases that need them.
+* **A NaN's sign is unobservable in Lean**: `Float.toBits` canonicalizes NaNs (Float's logical
+  model identifies them), so `copysign(·, NaN)` sees every NaN as positive and negating a NaN is
+  invisible. Julia code that negates a NaN and reads its sign back needs the case written out
+  (`ComplexF64.atan(±Inf + NaN·im)`).
+* A tuple of `Float`s built in several branches or returned from a non-inlined function boxes
+  both fields (three allocations): `sincos` has a continuation-passing form `F64.sincosK` for the
+  complex functions, the kernels return single `Float`s (`atanPQ` returns `p + q`), and
+  `exthorner` is written out rather than through a local step function.
+* The remaining gap in `ComplexF64.exp`/`sin` is the result itself: `JuliaBase.Complex α` is
+  polymorphic, so a `Complex Float` returned from a non-inlined function holds two boxed floats.
+  `div` and `inv` are `@[inline]` and cancel their constructors inside specialized code.
+* `a[i]!` on a `FloatArray` compiles to an out-of-line bounds-check lambda; `a.get! i` is the inline
+  `lean_float_array_get` (`log` 7.8 → 6.8 ns).
+* Payne–Hanek reduction (`|x| ≥ 2^20·π/2`) runs its 128-bit products on `UInt64` limbs; the
+  first port used `Nat` and took 2.2 µs.
