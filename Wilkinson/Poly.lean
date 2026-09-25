@@ -1,5 +1,6 @@
 import JuliaBase.Ryu
 import Wilkinson.Expr
+import Wilkinson.Zassenhaus
 
 /-!
 # `ℚ[x]` and factorization over `ℤ`
@@ -15,12 +16,11 @@ factors a primitive integer polynomial into irreducibles over `ℤ`:
 2. Yun's square-free decomposition (over `ℚ`, made primitive);
 3. linear factors from rational roots, found `p`-adically (roots mod a small
    prime, Newton lifting, rational reconstruction), for coefficients of any size;
-4. Kronecker's method for factors of degree `2 … ⌊n/2⌋` (interpolation through
-   divisors of the values at small integers).
+4. the Berlekamp–Zassenhaus algorithm for what remains (`Wilkinson.Zassenhaus`: modular
+   factorization, Hensel lifting, recombination), which is complete: every square-free
+   primitive polynomial is split into its irreducible factors, as REDUCE's `factor` does.
 
-Step 4 enumerates divisors, so it is bounded (values up to about `10¹⁰`, at most
-`2·10⁶` candidates); past the bounds the remaining factor is reported unsplit. The printed shapes REDUCE gives these objects are in
-`Wilkinson.Reduce`.
+The printed shapes REDUCE gives these objects are in `Wilkinson.Reduce`.
 -/
 
 namespace Wilkinson
@@ -197,31 +197,6 @@ def divExact? (a b : Array Int) : Option (Array Int) :=
   let (q, r) := Poly.divMod (Poly.ofZ a) (Poly.ofZ b)
   if r.isZero && q.coeffs.all (·.den == 1) then some (q.coeffs.map (·.num)) else none
 
-/-- Trial-division factorization of `n > 0` into prime powers, `none` when a
-cofactor above `bound²` remains unfactored. -/
-def primeFactors (n : Nat) (bound : Nat := 100000) : Option (List (Nat × Nat)) :=
-  go n 2 [] (bound + 1)
-where
-  /-- Divide out primes up to `bound`. -/
-  go (n p : Nat) (acc : List (Nat × Nat)) : Nat → Option (List (Nat × Nat))
-    | 0 => if n = 1 then some acc else if n < bound * bound then some ((n, 1) :: acc) else none
-    | fuel + 1 =>
-      if n = 1 then some acc
-      else if p * p > n then some ((n, 1) :: acc)
-      else if n % p == 0 then
-        let (k, m) := strip n p 0 64
-        go m (p + 1) ((p, k) :: acc) fuel
-      else go n (p + 1) acc fuel
-  /-- Multiplicity of `p` in `n`. -/
-  strip (n p k : Nat) : Nat → Nat × Nat
-    | 0 => (k, n)
-    | fuel + 1 => if n % p == 0 && n > 0 then strip (n / p) p (k + 1) fuel else (k, n)
-
-/-- Positive divisors of `n > 0` (`none` when `n` cannot be factored within the bound). -/
-def divisors (n : Nat) : Option (List Nat) := do
-  let fs ← primeFactors n
-  return fs.foldl (fun ds (p, k) => ds.flatMap fun d => (List.range (k + 1)).map fun i => d * p ^ i) [1]
-
 /-! ### Rational roots, `p`-adically
 
 A rational root `r/s` of a square-free `f` (`s ∣ lc f`, `r ∣ f(0)`) reduces to a
@@ -336,58 +311,17 @@ def linearFactors (a : Array Int) : List (Array Int) :=
         if (Poly.ofZ a).eval ((n : Rat) / (d : Rat)) == 0 then some #[-n, (d : Int)] else none
       | none => none
 
-/-- Lagrange interpolation through `(tᵢ, vᵢ)` over `ℚ`. -/
-def interpolate (pts : List (Int × Int)) : Poly :=
-  pts.foldl (fun acc (ti, vi) =>
-    let basis := pts.foldl (fun b (tj, _) =>
-      if tj == ti then b else b * Poly.smul (1 / ((ti - tj : Int) : Rat)) (Poly.X - Poly.const tj)) (1 : Poly)
-    acc + Poly.smul (vi : Rat) basis) Poly.zero
-
-/-- Kronecker's method: an integer factor of `a` of degree exactly `d`, if one
-exists within the search budget. -/
-def kroneckerFactor (a : Array Int) (d : Nat) (budget : Nat := 2000000) : Option (Array Int) := do
-  -- evaluation points with nonzero values, fewest divisors first
-  let cands := (List.range (4 * d + 8)).map fun i : Nat => if i % 2 == 0 then (i / 2 : Int) else -((i + 1) / 2 : Int)
-  let scored := cands.filterMap fun t =>
-    let v := eval a t
-    if v == 0 then none else (divisors v.natAbs).map fun ds => (t, v, ds)
-  let pts := (scored.toArray.qsort (fun x y => x.2.2.length < y.2.2.length)).toList.take (d + 1)
-  guard (pts.length == d + 1)
-  let size := pts.foldl (fun acc (_, _, ds) => acc * (2 * ds.length)) 1
-  guard (size ≤ budget)
-  -- first value positive (fixes the sign of the factor), the others ±
-  let choices : List (List Int) := pts.zipIdx.map fun ((_, _, ds), i) =>
-    if i == 0 then ds.map (Int.ofNat ·) else ds.flatMap fun (x : Nat) => [(x : Int), -(x : Int)]
-  let ts := pts.map (·.1)
-  search ts choices []
-where
-  /-- Depth-first over value choices. -/
-  search (ts : List Int) : List (List Int) → List Int → Option (Array Int)
-    | [], vs =>
-      let g := interpolate (ts.zip vs.reverse)
-      if g.degree == d && g.coeffs.all (·.den == 1) then
-        let gi := g.coeffs.map (·.num)
-        let gi := if (gi.back?.getD 0) < 0 then gi.map (- ·) else gi
-        (divExact? a gi).map fun _ => gi
-      else none
-    | c :: cs, vs => c.firstM (fun v => search ts cs (v :: vs))
-
-/-- Split a square-free primitive factor into irreducibles (rational roots, then
-Kronecker for degrees `2 … ⌊n/2⌋`). -/
+/-- Split a square-free primitive factor into irreducibles: the rational roots `p`-adically,
+then Berlekamp–Zassenhaus for the rest (a remainder of degree `≤ 3` without rational roots is
+already irreducible). -/
 def splitSquareFree (a : Array Int) : List (Array Int) :=
   let lin := linearFactors a
   let rest := lin.foldl (fun r l => (divExact? r l).getD r) a
-  lin ++ kron rest 2 (rest.size + 1)
-where
-  /-- Kronecker search, smallest degree first. -/
-  kron (r : Array Int) (d : Nat) : Nat → List (Array Int)
-    | 0 => [r]
-    | fuel + 1 =>
-      if degree r ≤ 1 then (if degree r == 1 then [r] else [])
-      else if 2 * d > degree r then [r]
-      else match kroneckerFactor r d with
-        | some g => g :: kron ((divExact? r g).getD r) d fuel
-        | none => kron r (d + 1) fuel
+  let restFactors :=
+    if degree rest ≤ 0 then []
+    else if degree rest ≤ 3 then [rest]
+    else Zassenhaus.factorSquareFree rest
+  lin ++ restFactors
 
 /-- Yun's square-free decomposition of a primitive polynomial: `[(sᵢ, i)]` with
 `a = ∏ sᵢ^i`, each `sᵢ` primitive with positive leading coefficient. -/
@@ -410,25 +344,37 @@ where
       let acc := if g.degree ≥ 1 then (ZPoly.ofPoly g, i) :: acc else acc
       go c' d' (i + 1) acc fuel
 
-/-- Lexicographic comparison of coefficient arrays from the leading coefficient down. -/
-def cmpDesc (a b : Array Int) : Ordering :=
-  if a.size != b.size then compare a.size b.size
-  else go (a.size) (a.size + 1)
+/-- REDUCE's `ordp` on two univariate standard forms: does `a` print before `b`? A standard form
+is its list of nonzero terms `((x . k) . c)` of degree `≥ 1`, highest first, ending in the
+constant term (a number) or `nil` when that is zero. `ordp` walks both lists: at the first
+differing term the higher power, then the larger coefficient, comes first; a remaining term
+list comes before a number, and anything before `nil`; two constants compare as numbers
+(larger first). So the zero coefficients do not count: `x⁴ - x³ + 2` precedes `x⁴ + x + 1`
+(its next term is `x³`), and `x² + x + 1`, `x² - x + 1`, `x² + 1` are in that order. -/
+def reduceBefore (a b : Array Int) : Bool :=
+  go (terms a) (terms b)
 where
-  /-- Compare from the top index. -/
-  go (i : Nat) : Nat → Ordering
-    | 0 => .eq
-    | fuel + 1 =>
-      if i = 0 then .eq else
-      match compare (a[i - 1]?.getD 0) (b[i - 1]?.getD 0) with
-      | .eq => go (i - 1) fuel
-      | o => o
+  /-- Nonzero terms of degree `≥ 1`, highest first, and the constant term. -/
+  terms (a : Array Int) : List (Nat × Int) × Int :=
+    (((List.range a.size).reverse.filter fun k => k ≥ 1 && a[k]! != 0).map fun k => (k, a[k]!),
+     a[0]?.getD 0)
+  /-- `ordp` on the term lists. -/
+  go : List (Nat × Int) × Int → List (Nat × Int) × Int → Bool
+    | ((k, c) :: ts, c0), ((k', c') :: ts', c0') =>
+      if k == k' && c == c' then go (ts, c0) (ts', c0')
+      else if k != k' then k > k' else c > c'
+    | (_ :: _, _), ([], _) => true
+    | ([], _), (_ :: _, _) => false
+    | ([], c0), ([], c0') =>
+      if c0 == 0 then c0' == 0      -- `nil` before `nil` only
+      else if c0' == 0 then true
+      else c0 ≥ c0'
 
 end ZPoly
 
 /-- A factorization `N = content · ∏ fᵢ^eᵢ · x^xpow` over `ℤ` (each `fᵢ` primitive,
 positive leading coefficient, degree ≥ 1, not `x`), factors in REDUCE's output
-order: higher degree first, then larger coefficients from the leading one down. -/
+order (`ZPoly.reduceBefore`: higher degree first, then the next nonzero terms). -/
 structure Factored where
   /-- Signed integer content. -/
   content : Int
@@ -447,7 +393,7 @@ def factorZ (a : Array Int) : Factored :=
   let prim := a.map fun c => c / (s * g)
   let parts := if prim.size ≤ 1 then [] else ZPoly.squareFree prim
   let fs := parts.flatMap fun (sq, e) => (ZPoly.splitSquareFree sq).map fun f => (f, e)
-  let sorted := fs.toArray.qsort (fun x y => ZPoly.cmpDesc x.1 y.1 == .gt) |>.toList
+  let sorted := fs.toArray.qsort (fun x y => ZPoly.reduceBefore x.1 y.1 && x.1 != y.1) |>.toList
   { content := s * g, factors := sorted, xpow := m }
 
 end Wilkinson
