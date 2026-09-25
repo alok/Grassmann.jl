@@ -29,6 +29,11 @@ namespace SimplexTopology
 
 variable {N : Nat}
 
+/-- The distinct entries of an element in order of first appearance (pairwise comparison: no
+node-sized scratch array per element). -/
+@[inline] def dedupSmall (a : Array Nat) : Array Nat :=
+  a.foldl (fun acc v => if acc.contains v then acc else acc.push v) #[]
+
 /-- Julia `columns(t)` (element.jl:27-28): column `k` holds vertex `k` of every subspace element
 (full ids). -/
 def columns (m : SimplexTopology N) : Vector (Array Nat) N :=
@@ -65,22 +70,52 @@ def antiadjacency (m : SimplexTopology N) : SparseInt := let A := m.sparse; A - 
 /-- Julia `incidence(t)` (element.jl:320-327): the `totalnodes × elements` node-element
 incidence (`A[v, e]` = multiplicity of full vertex `v` in subspace element `e`). -/
 def incidence (m : SimplexTopology N) : SparseInt := Id.run do
-  let top := m.topology
-  let mut I : Array Nat := #[]
-  let mut J : Array Nat := #[]
-  for h : e in [0:top.size] do
-    for v in top[e].toArray do
-      I := I.push v
-      J := J.push (e + 1)
-  return SparseInt.ofTriplets m.totalNodes top.size I J (Array.replicate I.size 1)
+  let ne := m.elements
+  let mut colPtr : Array Nat := (Array.mkEmpty (ne + 1)).push 0
+  let mut rowVal : Array Nat := Array.mkEmpty (N * ne)
+  let mut nzVal : Array Int := Array.mkEmpty (N * ne)
+  for k in [0:ne] do
+    let base := N * (m.sub.get k - 1)
+    let mut ids : Array Nat := Array.mkEmpty N
+    for j in [0:N] do
+      ids := ids.push m.conn[base + j]!
+    -- the element's distinct vertices, ascending, with multiplicities
+    let sorted := ids.insertionSort (· < ·)
+    let mut prev := 0
+    let mut cnt : Int := 0
+    for v in sorted do
+      if v == prev then cnt := cnt + 1
+      else
+        if cnt > 0 then
+          rowVal := rowVal.push prev
+          nzVal := nzVal.push cnt
+        prev := v
+        cnt := 1
+    if cnt > 0 then
+      rowVal := rowVal.push prev
+      nzVal := nzVal.push cnt
+    colPtr := colPtr.push rowVal.size
+  return ⟨m.totalNodes, ne, colPtr, rowVal, nzVal⟩
 
 /-- Julia `degrees(t)` (element.jl:303-309): the number of subspace elements containing each
 full node (length `totalnodes`; a repeated vertex counts once per element, as Julia's
 `b[tk] .+= 1`). -/
 def degrees (m : SimplexTopology N) : Array Nat :=
-  m.topology.foldl (fun (acc : Array Nat) e =>
-    (verticesOf e.toArray).toArray.foldl (fun acc v => acc.modify (v - 1) (· + 1)) acc)
-    (Array.replicate m.totalNodes 0)
+  go 0 (Array.replicate m.totalNodes 0)
+where
+  /-- `v` occurs among the first `j` vertices of the element starting at `base`. -/
+  seen (base j v i : Nat) : Bool :=
+    if i < j then m.conn[base + i]! == v || seen base j v (i + 1) else false
+  termination_by j - i
+  /-- Walk the subspace elements' vertex slots `q = N·k + j`. -/
+  go (q : Nat) (out : Array Nat) : Array Nat :=
+    if q < N * m.elements then
+      let base := N * (m.sub.get (q / N) - 1)
+      let j := q % N
+      let v := m.conn[base + j]!
+      go (q + 1) (if seen base j v 0 then out else out.modify (v - 1) (· + 1))
+    else out
+  termination_by N * m.elements - q
 
 /-- Julia `weights(t) = inv.(degrees(t))` (element.jl:300); `Inf` for unused nodes. -/
 def weights (m : SimplexTopology N) : FloatArray :=
@@ -134,29 +169,62 @@ node count of `t` (`edges` of an edge topology is itself). -/
 def edges (m : SimplexTopology N) : SimplexTopology 2 :=
   if h : N = 2 then h ▸ m else ofElements m.edgeList 0 (some m.totalNodes)
 
-/-- Lookup of edge ids by vertex pair: Julia's `A = sparse(edges…); A += A'` (element.jl:346),
-so a self-edge `[v, v]` reads twice its id. -/
-def edgeIndexMap (et : SimplexTopology 2) : Std.HashMap (Nat × Nat) Nat :=
-  (Array.range et.totalElements).foldl (fun acc k =>
-    let e := et.fullElem! k
-    acc.insert (min e[0] e[1], max e[0] e[1]) (k + 1)) {}
+/-- Lookup of edge ids by vertex pair (Julia's `A = sparse(edges…); A += A'`, element.jl:346),
+stored CSR-style: the edges whose larger endpoint is `v` are `start[v] ..< start[v+1]`. -/
+structure EdgeIndex where
+  /-- Bucket starts by larger endpoint (size `maxId + 2`). -/
+  start : Array Nat
+  /-- Smaller endpoint of each bucketed edge. -/
+  lo : Array Nat
+  /-- Edge id (1-based) of each bucketed edge. -/
+  id : Array Nat
 
-/-- Julia `A[a, b]` of the symmetric edge-id matrix. -/
-@[inline] def edgeId (A : Std.HashMap (Nat × Nat) Nat) (a b : Nat) : Nat :=
-  let id := A.getD (min a b, max a b) 0
+/-- Build the `EdgeIndex` of an edge topology (counting sort by larger endpoint, O(E)). -/
+def edgeIndex (et : SimplexTopology 2) : EdgeIndex := Id.run do
+  let ne := et.totalElements
+  let P := et.conn.foldl max 0
+  let mut start : Array Nat := Array.replicate (P + 2) 0
+  for k in [0:ne] do
+    let hi := max et.conn[2 * k]! et.conn[2 * k + 1]!
+    start := start.modify (hi + 1) (· + 1)
+  for v in [1:P + 2] do
+    start := start.set! v (start[v]! + start[v - 1]!)
+  let mut pos := start
+  let mut lo : Array Nat := Array.replicate ne 0
+  let mut id : Array Nat := Array.replicate ne 0
+  for k in [0:ne] do
+    let (a, b) := (et.conn[2 * k]!, et.conn[2 * k + 1]!)
+    let hi := max a b
+    let p := pos[hi]!
+    lo := lo.set! p (min a b)
+    id := id.set! p (k + 1)
+    pos := pos.modify hi (· + 1)
+  return ⟨start, lo, id⟩
+
+/-- Julia `A[a, b]` of the symmetric edge-id matrix (`0` if `{a, b}` is not an edge; a self-edge
+`[v, v]` reads twice its id, as `A + A'` doubles the diagonal). -/
+def EdgeIndex.find (E : EdgeIndex) (a b : Nat) : Nat :=
+  let hi := max a b
+  let lo := min a b
+  let id := if hi + 1 < E.start.size then go lo E.start[hi]! E.start[hi + 1]! else 0
   if a == b then 2 * id else id
+where
+  /-- Scan the bucket `p ..< stop`. -/
+  go (lo p stop : Nat) : Nat :=
+    if p < stop then (if E.lo[p]! == lo then E.id[p]! else go lo (p + 1) stop) else 0
+  termination_by stop - p
 
 /-- Julia `localedge(A, v)` (element.jl:350-366): the edge ids of an element, opposite-vertex for
 triangles (`v₂v₃, v₁v₃, v₁v₂`) and lexicographic pairs otherwise. -/
-def localEdges (A : Std.HashMap (Nat × Nat) Nat) (v : Vector Nat N) : Array Nat :=
-  if N = 3 then #[edgeId A v[1]! v[2]!, edgeId A v[0]! v[2]!, edgeId A v[0]! v[1]!]
-  else (combinationsIdx N 2).map fun c => edgeId A v[c[0]!]! v[c[1]!]!
+def localEdges (A : EdgeIndex) (v : Vector Nat N) : Array Nat :=
+  if N = 3 then #[A.find v[1]! v[2]!, A.find v[0]! v[2]!, A.find v[0]! v[1]!]
+  else (combinationsIdx N 2).map fun c => A.find v[c[0]!]! v[c[1]!]!
 
 /-- Julia `edgesindices(t, et = edges(t))` (element.jl:344-349; Q21 fixed): for each subspace
 element, the ids of its edges in `et`, as a topology over `OneTo(#edges)`. -/
 def edgesIndicesWith (m : SimplexTopology N) (et : SimplexTopology 2) :
     SimplexTopology (N * (N - 1) / 2) :=
-  let A := edgeIndexMap et
+  let A := edgeIndex et
   let ne := et.totalElements
   let rows := m.topology.map fun e =>
     let l := localEdges A e
@@ -290,7 +358,7 @@ def neighbors (m : SimplexTopology N) : Array (Vector Nat N) :=
   let top := m.topology
   -- node → ascending subspace elements containing it
   let n2e := (Array.range top.size).foldl (fun (acc : Array (Array Nat)) e =>
-    (verticesOf top[e]!.toArray).toArray.foldl (fun acc v => acc.modify (v - 1) (·.push (e + 1))) acc)
+    (dedupSmall top[e]!.toArray).foldl (fun acc v => acc.modify (v - 1) (·.push (e + 1))) acc)
     (Array.replicate m.totalNodes #[])
   (Array.range top.size).map fun e =>
     let v := top[e]!

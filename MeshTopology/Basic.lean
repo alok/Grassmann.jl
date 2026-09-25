@@ -231,12 +231,20 @@ def linearIndex {N : Nat} (s : Vector Nat N) (idx : Vector Int N) : Int := Id.ru
     stride := stride * (s[k]'h.2.1 : Int)
   return acc + 1
 
+/-- The column-major stride of axis `k`: `s[0] * … * s[k-1]`. -/
+@[inline] def axisStride {N : Nat} (s : Vector Nat N) (k : Nat) : Nat :=
+  go 0 1
+where
+  /-- Multiply `s[j..k-1]` into `acc`. -/
+  go (j acc : Nat) : Nat := if h : j < k ∧ j < N then go (j + 1) (acc * s[j]) else acc
+  termination_by k - j
+
 /-- The 1-based multi-index of the 1-based column-major linear index `l` (Julia
 `CartesianIndices(s)[l]`). -/
 def cartesianIndex {N : Nat} (s : Vector Nat N) (l : Nat) : Vector Nat N :=
-  Vector.ofFn fun k : Fin N =>
-    let stride := (List.range k.1).foldl (fun acc j => acc * s[j]!) 1
-    (l - 1) / stride % s[k] + 1
+  Vector.ofFn fun k : Fin N => (l - 1) / axisStride s k.1 % s[k] + 1
+
+
 
 /-- Product of the grid sizes (Julia `prod(size)`). -/
 @[inline] def gridLength {N : Nat} (s : Vector Nat N) : Nat := s.foldl (· * ·) 1

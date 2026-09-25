@@ -32,6 +32,30 @@ theorem ghostCoord_mem {low targetLow : Bool} {i n s2 : Int} (hs : 2 ≤ s2)
   cases low <;> cases targetLow <;> simp only [ghostCoord, Bool.false_eq_true, ↓reduceIte] at hi ⊢ <;>
     omega
 
+/-- The one-pass `placeGhost` builds exactly the reference vector: the transversal map applied
+to the coordinates other than axis `a`, with `x` inserted at axis `a2`. -/
+theorem QuotientTopology.placeGhost_eq {N : Nat} (maps : ProductTopology (N - 1))
+    (idx : Vector Int N) (a a2 : Fin N) (x : Int) :
+    placeGhost maps idx a a2 x =
+      ((maps.get (idx.eraseIdx a.1)).insertIdx a2.1 x (by have := a2.2; omega)).cast
+        (by have := a.2; omega) := by
+  apply Vector.ext
+  intro k hk
+  simp only [placeGhost, Vector.getElem_ofFn, Vector.getElem_cast, Vector.getElem_insertIdx,
+    ProductTopology.get]
+  by_cases h1 : k < a2.1
+  · by_cases h3 : k < a.1 <;> simp [h1, h3, Vector.getElem_eraseIdx]
+  · by_cases h2 : k = a2.1
+    · simp [h2]
+    · have hk1 : k - 1 + 1 = k := by omega
+      by_cases h3 : k - 1 < a.1 <;> simp [h1, h2, h3, Vector.getElem_eraseIdx, hk1]
+
+/-- The fast `resolveAt` equals its reference form. -/
+theorem QuotientTopology.resolveAt_eq_ref {N : Nat} (m : QuotientTopology N) (a : Fin N)
+    (idx : Vector Int N) (q11 : Bool) : m.resolveAt a idx q11 = m.resolveAtRef a idx q11 := by
+  unfold resolveAt resolveAtRef
+  simp [placeGhost_eq]
+
 /-- `resolveAt` puts `ghostCoord` on the target face's axis. -/
 theorem QuotientTopology.resolveAt_target {N : Nat} (m : QuotientTopology N) (a : Fin N)
     (idx : Vector Int N) (g : Glue N)
@@ -39,7 +63,8 @@ theorem QuotientTopology.resolveAt_target {N : Nat} (m : QuotientTopology N) (a 
     (m.resolveAt a idx)[(faceAxis g.target).1]'(faceAxis g.target).2 =
       ghostCoord (decide (idx[a] < 2)) (decide (g.target.1 % 2 = 0)) idx[a] m.size[a]
         m.size[faceAxis g.target] := by
-  unfold resolveAt
+  rw [resolveAt_eq_ref]
+  unfold resolveAtRef
   simp only [hg]
   simp [Vector.getElem_cast, Vector.getElem_insertIdx_self]
 
@@ -121,18 +146,21 @@ degree-`M+1` triangle mesh as a `Vector Nat (lagrangeSimplex 3 (M+1))` (equal to
 by the property tests). -/
 def getVec (m : LagrangeTriangles (M + 1)) (i : Nat) : Vector Nat (lagrangeSimplex 3 (M + 1)) :=
   let ind := m.t.getFacet i
-  let ti := m.t.fullElem! (ind - 1)
-  let ei := m.ei.fullElem! (ind - 1)
+  let bt := 3 * (ind - 1)
   let np := m.t.totalNodes
   let ne := m.ei.totalNodes
-  let σ := edgeSigns ti
-  let edges : Vector Nat (3 * M) := Vector.ofFn fun q =>
-    let j := q.1 / M
-    let k := q.1 % M
-    np + M * (ei[j]! - 1) + (if σ[j]! == 1 then k + 1 else M - k)
   let cs := centerSimplex 3 (M + 1)
-  let centers : Vector Nat cs := Vector.ofFn fun k => np + M * ne + cs * (ind - 1) + k.1 + 1
-  ((ti ++ edges) ++ centers).cast (lagrange_triangle_count M)
+  let v (j : Nat) : Nat := m.t.conn[bt + j]!
+  -- local edge j runs from vertex (j+1) % 3 to (j+2) % 3 (v₂→v₃, v₃→v₁, v₁→v₂)
+  (Vector.ofFn (n := 3 + 3 * M + cs) fun q =>
+    if q.1 < 3 then v q.1
+    else if q.1 < 3 + 3 * M then
+      let r := q.1 - 3
+      let j := r / M
+      let k := r % M
+      let up := v ((j + 1) % 3) < v ((j + 2) % 3)
+      np + M * (m.ei.conn[bt + j]! - 1) + (if up then k + 1 else M - k)
+    else np + M * ne + cs * (ind - 1) + (q.1 - 3 - 3 * M) + 1).cast (lagrange_triangle_count M)
 
 end LagrangeTriangles
 
@@ -143,20 +171,22 @@ variable {M : Nat}
 /-- Julia `m[i]` with its length in the type (see `LagrangeTriangles.getVec`). -/
 def getVec (m : LagrangeTetrahedra (M + 1)) (i : Nat) : Vector Nat (lagrangeSimplex 4 (M + 1)) :=
   let ind := m.t.getFacet i
-  let ti := m.t.fullElem! (ind - 1)
-  let ei := m.ei.fullElem! (ind - 1)
-  let fi := m.fi.fullElem! (ind - 1)
   let np := m.t.totalNodes
   let ne := m.ei.totalNodes
   let nf := m.fi.totalNodes
   let fs := facetSimplex 4 (M + 1)
   let cs := centerSimplex 4 (M + 1)
-  let edges : Vector Nat (6 * M) := Vector.ofFn fun q =>
-    np + M * ei[q.1 % 6]! - (M - (q.1 / 6 + 1))
-  let facets : Vector Nat (4 * fs) := Vector.ofFn fun q =>
-    np + M * ne + fs * fi[q.1 % 4]! - (fs - (q.1 / 4 + 1))
-  let centers : Vector Nat cs := Vector.ofFn fun k => np + M * ne + fs * nf + cs * (ind - 1) + k.1 + 1
-  (((ti ++ edges) ++ facets) ++ centers).cast (lagrange_tetrahedron_count M)
+  let e0 := 4 + 6 * M
+  let f0 := e0 + 4 * fs
+  (Vector.ofFn (n := 4 + 6 * M + 4 * fs + cs) fun q =>
+    if q.1 < 4 then m.t.conn[4 * (ind - 1) + q.1]!
+    else if q.1 < e0 then
+      let r := q.1 - 4
+      np + M * m.ei.conn[6 * (ind - 1) + r % 6]! - (M - (r / 6 + 1))
+    else if q.1 < f0 then
+      let r := q.1 - e0
+      np + M * ne + fs * m.fi.conn[4 * (ind - 1) + r % 4]! - (fs - (r / 4 + 1))
+    else np + M * ne + fs * nf + cs * (ind - 1) + (q.1 - f0) + 1).cast (lagrange_tetrahedron_count M)
 
 end LagrangeTetrahedra
 

@@ -264,10 +264,9 @@ wraps (`1 ↦ s2`, `0 ↦ s2-1`), high → high reflects about `n`, high → low
   if low then (if targetLow then (i - 1).natAbs + 1 else s2 - (i - 1).natAbs)
   else (if targetLow then i + 1 - n else s2 + n - i)
 
-/-- Julia `location`/`locate` (QT:337-361): resolve the ghost index `idx`, out of bounds on
-axis `a` only, through the gluing of the face it lies beyond. With `q11 = true` the high face of
-axis 5 of a 5-D topology uses `n₄` as its source size, as upstream does (Q11). -/
-def resolveAt (m : QuotientTopology N) (a : Fin N) (idx : Vector Int N) (q11 : Bool := false) :
+/-- The reference form of `resolveAt` (Julia `location`, QT:352-361): erase the source axis,
+map the transversal coordinates, insert the resolved coordinate at the target axis. -/
+def resolveAtRef (m : QuotientTopology N) (a : Fin N) (idx : Vector Int N) (q11 : Bool := false) :
     Vector Int N :=
   let i := idx[a]
   let low := i < 2
@@ -282,6 +281,36 @@ def resolveAt (m : QuotientTopology N) (a : Fin N) (idx : Vector Int N) (q11 : B
     let x : Int := ghostCoord low (pr.1 % 2 = 0) i n s2
     let t := g.maps.get (idx.eraseIdx a.1)
     (t.insertIdx a2.1 x (by have := a2.2; omega)).cast (by have := a.2; omega)
+
+/-- `(maps.get (idx without axis a))` with `x` inserted at axis `a2`, built in one pass. -/
+@[inline] def placeGhost (maps : ProductTopology (N - 1)) (idx : Vector Int N) (a a2 : Fin N)
+    (x : Int) : Vector Int N :=
+  Vector.ofFn fun k =>
+    if h : k.1 < a2.1 then
+      maps.axes[k.1]'(by have := a2.2; omega) |>.get
+        (idx[if k.1 < a.1 then k.1 else k.1 + 1]'(by have := a2.2; split <;> omega))
+    else if _h2 : k.1 = a2.1 then x
+    else
+      maps.axes[k.1 - 1]'(by have := k.2; omega) |>.get
+        (idx[if k.1 - 1 < a.1 then k.1 - 1 else k.1]'(by have := k.2; split <;> omega))
+
+/-- Julia `location`/`locate` (QT:337-361): resolve the ghost index `idx`, out of bounds on
+axis `a` only, through the gluing of the face it lies beyond (`resolveAtRef`, built without
+intermediate vectors; `resolveAt_eq_ref` proves them equal). With `q11 = true` the high face of
+axis 5 of a 5-D topology uses `n₄` as its source size, as upstream does (Q11). -/
+def resolveAt (m : QuotientTopology N) (a : Fin N) (idx : Vector Int N) (q11 : Bool := false) :
+    Vector Int N :=
+  let i := idx[a]
+  let low := i < 2
+  let f : Fin (2 * N) := if low then lowFace a else highFace a
+  match m.glue[f] with
+  | none => idx
+  | some g =>
+    let pr := g.target
+    let a2 := faceAxis pr
+    let s2 : Int := m.size[a2]
+    let n : Int := if q11 && N = 5 && a.1 = 4 then m.size[3]! else m.size[a]
+    placeGhost g.maps idx a a2 (ghostCoord low (pr.1 % 2 = 0) i n s2)
 
 /-- Julia `m[Val(K), i₁,…,i_N]` (QT:420-561): the representative of the (possibly ghost) grid
 index `idx` when stepping along axis `K` (`K = 0`: plain indexing). Exactly one axis may be out
@@ -306,10 +335,16 @@ def toArray (m : QuotientTopology N) : Array (Vector Int N) :=
 /-- The 1-based linear index of `m[Val(K), idx…]`, or `0` when the result lies outside the grid
 (an open face). The allocation-light entry point for stencils. -/
 def ghostLinear (m : QuotientTopology N) (K : Nat) (idx : Vector Int N) : Nat :=
-  let r := m.ghost K idx
-  if (List.finRange N).all fun k => 0 < r[k] && r[k] ≤ (m.size[k] : Int) then
-    (linearIndex m.size r).toNat
-  else 0
+  go (m.ghost K idx) 0 0 1
+where
+  /-- Column-major linear index of `r`, checking each coordinate is in range. -/
+  go (r : Vector Int N) (k acc stride : Nat) : Nat :=
+    if h : k < N then
+      let c := r[k]
+      let n := m.size[k]
+      if 0 < c && c ≤ (n : Int) then go r (k + 1) (acc + (c.toNat - 1) * stride) (stride * n) else 0
+    else acc + 1
+  termination_by N - k
 
 /-- Precomputed ±1 neighbors: for every axis `a` and point `p` (0-based linear), the 1-based
 linear index of `m[Val(a+1), p ± e_a]`, or `0` beyond an open face. Julia recomputes the branchy
@@ -330,9 +365,16 @@ def neighborTable (m : QuotientTopology N) : NeighborTable N :=
   let tbl := (Array.range (N * len)).foldl (fun acc ap =>
       let a := ap / len
       let p := ap % len
-      let idx := (cartesianIndex m.size (p + 1)).map (Int.ofNat ·)
+      let st := axisStride m.size a
+      let sa := m.size[a]!
+      let c := p / st % sa + 1
+      -- a strictly interior target along the stepping axis is its own representative
       let step (d : Int) : Nat :=
-        if h : a < N then m.ghostLinear (a + 1) (idx.set a (idx[a] + d)) else 0
+        let c' := (c : Int) + d
+        if 1 < c' && c' < (sa : Int) then (if d < 0 then p + 1 - st else p + 1 + st)
+        else
+          let idx := (cartesianIndex m.size (p + 1)).map (Int.ofNat ·)
+          if h : a < N then m.ghostLinear (a + 1) (idx.set a (idx[a] + d)) else 0
       (acc.push (step (-1))).push (step 1)) (Array.mkEmpty (2 * N * len))
   if h : tbl.size = 2 * N * len then ⟨m.size, len, tbl, h⟩
   else ⟨m.size, len, Array.replicate (2 * N * len) 0, by simp⟩

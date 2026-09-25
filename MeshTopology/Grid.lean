@@ -62,32 +62,58 @@ def elementfun (m : QuotientTopology N) (idx : Vector Int N) : Nat :=
     else l
   min g l
 
+/-- The 0-based linear indices of the grid points on the face `i_a = pos` (1-based `pos`),
+column-major. -/
+def facePoints (s : Vector Nat N) (a pos : Nat) : Array Nat := Id.run do
+  let st := axisStride s a
+  let sa := s[a]!
+  let len := gridLength s
+  let outer := if st * sa == 0 then 0 else len / (st * sa)
+  let mut out := Array.mkEmpty (outer * st)
+  for o in [0:outer] do
+    for q in [0:st] do
+      out := out.push (q + (pos - 1) * st + o * st * sa)
+  return out
+
 /-- Apply the collapse flags in face order (GR:102-144): a collapsed low face of axis `a` becomes
 node `1`, a collapsed high face takes the current value of its point with all other
 coordinates `1`. -/
 def applyCollapse (m : QuotientTopology N) (out : Array Nat) : Array Nat := Id.run do
-  let len := out.size
   let mut out := out
   for h : f in [0:2 * N] do
     if m.collapse[f]'h.2.1 then
       let a := f / 2
-      let na := m.size[a]!
       let low := f % 2 == 0
-      let pos := if low then 1 else na
-      let corner := linearIndex m.size (Vector.ofFn fun k => if k.1 = a then (pos : Int) else 1)
-      let v := if low then 1 else out[corner.toNat - 1]!
-      for p in [0:len] do
-        let idx := cartesianIndex m.size (p + 1)
-        if idx[a]! == pos then out := out.set! p v
+      let pos := if low then 1 else m.size[a]!
+      let v := if low then 1 else out[(pos - 1) * axisStride m.size a]!
+      for p in facePoints m.size a pos do
+        out := out.set! p v
   return out
 
+/-- The 0-based linear indices of the boundary points of a 1-D or 2-D grid (the only points
+where Julia's `elementfun` can differ from the identity). -/
+def boundaryPoints (m : QuotientTopology N) : Array Nat :=
+  if N = 1 then
+    let n := m.size[0]!
+    if n = 0 then #[] else if n = 1 then #[0] else #[0, n - 1]
+  else if N = 2 then
+    let (n1, n2) := (m.size[0]!, m.size[1]!)
+    let cols := (Array.range n2).flatMap fun j =>
+      if n1 = 0 then #[] else if n1 = 1 then #[j * n1] else #[j * n1, n1 - 1 + j * n1]
+    let rows := (Array.range (n1 - 2)).flatMap fun i =>
+      if n2 = 0 then #[] else if n2 = 1 then #[i + 1] else #[i + 1, i + 1 + (n2 - 1) * n1]
+    cols ++ rows
+  else #[]
+
 /-- Julia `elementfuns(m)` (GR:92-145): the canonical linear index of every grid point,
-column-major. The identity for an open topology. -/
+column-major. The identity for an open topology. Interior points are their own representative,
+so only the boundary is resolved (Julia evaluates every point). -/
 def elementfuns (m : QuotientTopology N) : Array Nat :=
   let len := m.length
-  if m.isOpen then (Array.range len).map (· + 1) else
-  let raw := (Array.range len).map fun p =>
-    m.elementfun ((cartesianIndex m.size (p + 1)).map (Int.ofNat ·))
+  let ident := (Array.range len).map (· + 1)
+  if m.isOpen then ident else
+  let raw := m.boundaryPoints.foldl (fun (acc : Array Nat) p =>
+    acc.set! p (m.elementfun ((cartesianIndex m.size (p + 1)).map (Int.ofNat ·)))) ident
   if N = 1 then raw else m.applyCollapse raw
 
 /-- Union-find root with path halving (0-based). -/
@@ -112,11 +138,11 @@ Hopf) `elementfuns`'s classes refine these (Q7). -/
 def elementfunsClosed (m : QuotientTopology N) : Array Nat := Id.run do
   let len := m.length
   let mut parent := Array.range len
-  for p in [0:len] do
-    let idx := (cartesianIndex m.size (p + 1)).map (Int.ofNat ·)
-    for h : a in [0:N] do
-      let i := idx[a]'h.2.1
-      if i == 1 || i == (m.size[a]'h.2.1 : Int) then
+  for h : a in [0:N] do
+    let na := m.size[a]'h.2.1
+    for pos in (if na ≤ 1 then [1] else [1, na]) do
+      for p in facePoints m.size a pos do
+        let idx := (cartesianIndex m.size (p + 1)).map (Int.ofNat ·)
         let r := m.ghost (a + 1) idx
         if (List.finRange N).all fun k => 0 < r[k] && r[k] ≤ (m.size[k] : Int) then
           parent := ufUnion parent p (m.lin r - 1)
@@ -124,12 +150,9 @@ def elementfunsClosed (m : QuotientTopology N) : Array Nat := Id.run do
     if m.collapse[f]'h.2.1 then
       let a := f / 2
       let pos : Nat := if f % 2 == 0 then 1 else m.size[a]!
-      let mut first : Option Nat := none
-      for p in [0:len] do
-        if (cartesianIndex m.size (p + 1))[a]! == pos then
-          match first with
-          | none => first := some p
-          | some q => parent := ufUnion parent q p
+      let pts := facePoints m.size a pos
+      for p in pts do
+        parent := ufUnion parent pts[0]! p
   let mut rep : Array Nat := Array.replicate len 0
   for p in [0:len] do
     let (r, par) := ufFind parent p
