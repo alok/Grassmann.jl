@@ -30,7 +30,7 @@ inductive Method where
   | lines | linesegments | linegraph | scatter | text | mesh | wireframe | surface
   | contour | contourf | contour3d | heatmap | streamplot | arrows | arrows2d | arrows3d
   | scaledarrows | arrowsbundle | scaledfield | scaledbundle | planes | spaces
-  | scaledplanes | scaledspaces | planesbundle | spacesbundle | graylines
+  | scaledplanes | scaledspaces | planesbundle | spacesbundle | graylines | voxels
   deriving BEq, Repr, Inhabited
 
 /-- A Cartan method of the Makie function `m` for arguments of type `T`: `plot c t a` draws `t`
@@ -109,6 +109,8 @@ def arrows2d [MakiePlot .arrows2d T] (t : T) (a : Attrs := {}) : Canvas := plot 
 def arrows3d [MakiePlot .arrows3d T] (t : T) (a : Attrs := {}) : Canvas := plot .arrows3d t a
 /-- Cartan `scaledarrows(M, t)` (`MakieExt.jl:371-385`). -/
 def scaledarrows [MakiePlot .scaledarrows T] (t : T) (a : Attrs := {}) : Canvas := plot .scaledarrows t a
+/-- Makie `voxels(t)` (`MakieExt.jl:443-448`). -/
+def voxels [MakiePlot .voxels T] (t : T) (a : Attrs := {}) : Canvas := plot .voxels t a
 
 end Named
 
@@ -152,6 +154,8 @@ def arrows3d [MakiePlot .arrows3d T] (c : Canvas) (t : T) (a : Attrs := {}) : Ca
 /-- Cartan `scaledarrows!(M, t)`. -/
 def scaledarrows [MakiePlot .scaledarrows T] (c : Canvas) (t : T) (a : Attrs := {}) : Canvas :=
   c.plot .scaledarrows t a
+/-- Makie `voxels!(t)`. -/
+def voxels [MakiePlot .voxels T] (c : Canvas) (t : T) (a : Attrs := {}) : Canvas := c.plot .voxels t a
 
 end Canvas
 

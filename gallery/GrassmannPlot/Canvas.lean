@@ -81,6 +81,8 @@ structure Attrs where
   gridsize : Option (Array Nat) := none
   /-- Cartan `poly`: draw planes as polygons instead of meshes (`planes`, `planesbundle`). -/
   poly : Bool := false
+  /-- Makie `gap` of `voxels` (data units subtracted from the voxel size). -/
+  gap : Float := 0
   deriving Inhabited
 
 namespace Attrs
