@@ -95,6 +95,12 @@ def fastPathSuite : IO (Suite × Suite) := do
     s := s.check (Sys.identFull (u.sys Num) U) fun _ => s!"alias {nm}: value is not the system"
     s := s.check (Sys.ofSystem? U == some u) fun _ => s!"alias {nm}: ofSystem?"
   s := s.check (match Sys.SI2019 with | .SI => true | _ => false) fun _ => "match_pattern Sys.SI"
+  -- the `text.jl` name tables cover every quantity, constant function and derived unit
+  for q in Conv.all do
+    s := s.check (Text.quantities.lookup q.name).isSome fun _ => s!"no text for {q.name}"
+  for (nm, _) in (constantFunctions (α := Num)) ++ (physicsFunctions (α := Num)) do
+    s := s.check (Text.constants.lookup nm).isSome fun _ => s!"no text for {nm}"
+  s := s.check (Text.name? "photonintensity" == some "photon intensity") fun _ => "text photonintensity"
   -- a system that is not named: Metric with another coupling
   let M := Metric Num
   let custom : UnitSystem Num := { M with C := { M.C with ΩΛ := .c (.float 0.7) } }
