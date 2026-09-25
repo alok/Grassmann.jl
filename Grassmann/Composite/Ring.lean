@@ -194,7 +194,7 @@ variable [Kernels V]
 coefficient of `coabs(t)` on the pseudoscalar, applied as `t ⟑ inv(x)`. -/
 @[specialize V] def unitize (t : Multivector V Float) : Multivector V Float :=
   let c := Generic.coabs t
-  t * (f1 / getD c.v (2 ^ V.n - 1))
+  t * (f1 / getD c.v (Forms.pow2 V.n - 1))
 /-- AbstractTensors `metric(a, b) = abs(a - b)` (`AT:368`). -/
 @[specialize V] def metricDist (a b : Multivector V Float) : Multivector V Float := Generic.metric a b
 /-- AbstractTensors `cometric(a, b) = coabs(a - b)` (`AT:368`). -/

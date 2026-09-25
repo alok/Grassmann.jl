@@ -33,7 +33,7 @@ namespace Composite
 @[inline] def norm2 (re im : Float) : Float := Float.sqrt (re * re + im * im)
 
 /-- The pseudoscalar coefficient of a multivector (storage index `2ⁿ - 1`). -/
-@[inline] def pseudoCoef (m : Multivector V Float) : Float := getD m.v (2 ^ V.n - 1)
+@[inline] def pseudoCoef (m : Multivector V Float) : Float := getD m.v (Forms.pow2 V.n - 1)
 
 end Composite
 

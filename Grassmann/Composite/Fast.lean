@@ -22,6 +22,7 @@ All of it computes exactly what the typed operations compute (the same floating-
 operations in the same order); `Tests/Composite` checks the composite functions against Julia.
 -/
 import Grassmann.Composite.Scalar
+import Grassmann.Forms.Mat
 
 namespace Grassmann.Composite
 
@@ -185,16 +186,11 @@ where
     if k < g then go (k + 1) (if k % 2 == g % 2 then acc + Leibniz.binomial n k else acc) else acc
   termination_by g - k
 
-/-- `Layout.size n l` with shifts instead of `Nat` powers (`2 ^ k` is a GMP computation per
-call at run time; DirectSum's `Layout.size` uses it). -/
-@[inline] def fastSize (n : Nat) : Layout → Nat
-  | .chain g => Layout.size n (.chain g)
-  | .even => if n == 0 then 1 else 1 <<< (n - 1)
-  | .odd => if n == 0 then 0 else 1 <<< (n - 1)
-  | .full => 1 <<< n
+/-- `Layout.size n l` without `Nat` powers or shifts (both are GMP computations per call at run
+time; DirectSum's `Layout.size` uses `2 ^ k`): `Forms.layoutSize`. -/
+@[inline] def fastSize (n : Nat) (l : Layout) : Nat := Forms.layoutSize n l
 
-theorem fastSize_eq (n : Nat) (l : Layout) : fastSize n l = l.size n := by
-  cases l <;> simp [fastSize, Layout.size, Nat.shiftLeft_eq]
+theorem fastSize_eq (n : Nat) (l : Layout) : fastSize n l = l.size n := Forms.layoutSize_eq n l
 
 /-- The zero vector of layout `l` (sized with `fastSize`; a closed term at a literal space). -/
 @[inline] def zeros (V : TensorBundle) (l : Layout) : Values Float (l.size V.n) :=

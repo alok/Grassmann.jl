@@ -118,17 +118,6 @@ the `1 × 1` identity for `g = 0` and zero beyond `min(n, m)`. -/
   | .odd => g % 2 == 1
   | .full => true
 
-/-- `Layout.size n l` with shifts instead of `Nat` powers (a GMP computation per call at run
-time in DirectSum's `Layout.size`). -/
-@[inline] def layoutSize (n : Nat) : Layout → Nat
-  | .chain g => Layout.size n (.chain g)
-  | .even => if n == 0 then 1 else 1 <<< (n - 1)
-  | .odd => if n == 0 then 0 else 1 <<< (n - 1)
-  | .full => 1 <<< n
-
-theorem layoutSize_eq (n : Nat) (l : Layout) : layoutSize n l = l.size n := by
-  cases l <;> simp [layoutSize, Layout.size, Nat.shiftLeft_eq]
-
 /-- Push `rg` zeros. -/
 @[specialize] def pushZeros (rg : Nat) (out : Packed.Arr α) : Packed.Arr α :=
   Mat.pushLoop (fun _ => Coeff.zero) rg 0 out
@@ -159,7 +148,7 @@ of grade `g` at `off` (the sizes of the domain's lower stored grades). -/
 /-- The image of a coefficient vector stored in layout `l` (Julia `contraction(O, x)`,
 `forms.jl:1050-1073`): the scalar part is kept, grade `g ≤ k` goes through
 `Λᵍ F`, higher grades of the codomain are zero. One tail-recursive pass over the grades,
-no intermediate lists; the result size is checked with `layoutSize` (shifts). -/
+no intermediate lists; the result size is checked with `Forms.layoutSize` (no `Nat` powers). -/
 @[specialize] def applyValues (O : Outermorphism V W α) (l : Layout) (x : Values α (l.size V.n)) :
     Values α (l.size W.n) :=
   let m := W.n
@@ -201,7 +190,7 @@ is `det(I + F)`. -/
   (List.range O.blocks.size).foldl (fun acc k => acc + (O.block (k + 1)).tr) Coeff.one
 
 /-- Julia `scalar(O) = tr(O) / 2ⁿ` (`forms.jl:743`). -/
-@[inline] def scalar [Div α] (O : Outermorphism V W α) : α := O.tr / Coeff.ofInt (2 ^ V.n)
+@[inline] def scalar [Div α] (O : Outermorphism V W α) : α := O.tr / Coeff.ofInt (pow2 V.n)
 
 /-- Julia `∧(O)` (`forms.jl:746-753`): the first column of the top compound
 `Λᵏ F`, `k = min(n, m)`; for a square map the pseudoscalar `det(F)·I` of the

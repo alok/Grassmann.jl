@@ -226,7 +226,7 @@ variable {V : TensorBundle} {α : Type} [Coeff α]
 @[inline] def wedgeAll (D : DiagonalOutermorphism V α) : Chain V V.n α := ⟨(D.gradeDiag V.n).d⟩
 
 /-- Julia `det(D) = !∧(D)`: the pseudoscalar coefficient. -/
-@[inline] def det (D : DiagonalOutermorphism V α) : α := getD D.d (2 ^ V.n - 1)
+@[inline] def det (D : DiagonalOutermorphism V α) : α := getD D.d (pow2 V.n - 1)
 
 /-- Julia `adjugate(D) = outermorphism(adjugate(grade 1))` (`forms.jl:529`). -/
 @[inline] def adjugate (D : DiagonalOutermorphism V α) : DiagonalOutermorphism V α :=

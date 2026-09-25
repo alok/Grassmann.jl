@@ -27,6 +27,31 @@ namespace Grassmann.Forms
 
 open StaticVectors AbstractTensors
 
+/-- `2 ^ k` for sizes and indices, as a `UInt64` shift for `k < 63`. In this runtime
+`Nat.pow` and `Nat.shiftLeft` have no scalar fast path (`lean_nat_pow`, `lean_nat_shiftl`
+compute through GMP and allocate on every call), which dominated small kernels whose sizes
+are `2ⁿ` or `2ⁿ⁻¹` (the `O ⋅ M` of an outermorphism was half GMP before this). -/
+@[inline] def pow2 (k : Nat) : Nat := if k < 63 then ((1 : UInt64) <<< k.toUInt64).toNat else 2 ^ k
+
+theorem pow2_eq (k : Nat) : pow2 k = 2 ^ k := by
+  unfold pow2
+  split
+  · rename_i h
+    have h64 : k % 64 = k := Nat.mod_eq_of_lt (by omega)
+    have hlt : 2 ^ k < 2 ^ 64 := Nat.pow_lt_pow_right (by decide) (by omega)
+    simp [UInt64.toNat_shiftLeft, Nat.shiftLeft_eq, h64, Nat.mod_eq_of_lt hlt]
+  · rfl
+
+/-- `Layout.size n l` without `Nat` powers (`pow2`; `Leibniz.choose`'s table for a chain). -/
+@[inline] def layoutSize (n : Nat) : DirectSum.Layout → Nat
+  | .chain g => Leibniz.choose n g
+  | .even => if n == 0 then 1 else pow2 (n - 1)
+  | .odd => if n == 0 then 0 else pow2 (n - 1)
+  | .full => pow2 n
+
+theorem layoutSize_eq (n : Nat) (l : DirectSum.Layout) : layoutSize n l = l.size n := by
+  cases l <;> simp [layoutSize, DirectSum.Layout.size, pow2_eq] <;> rfl
+
 /-- `j * r + i < r * c` for `i < r`, `j < c`: column-major positions are in range. -/
 theorem colMajor_lt {r c i j : Nat} (hi : i < r) (hj : j < c) : j * r + i < r * c := by
   have h1 : j * r + i < (j + 1) * r := by rw [Nat.succ_mul]; omega
