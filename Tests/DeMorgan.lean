@@ -73,6 +73,28 @@ def readme2 : String :=
 #guard (truthtable p q in p &&& (p &&& q)).classes.size == 4
 #guard (truthtable p q in (p &&& q) &&& p).classes.size == 3
 #guard (truthtable p q in TruthTable.Clean.and p (TruthTable.Clean.and p q)).classes.size == 3
+-- README table 2 with Julia's own `∧` (AbstractLattices `wedge`, scoped in `DeMorgan`)
+#guard TruthTable.render (truthtable p q r in ((p ⇒ q) ∧ (q ⇒ r)) ⇒ (p ⇒ r)) == readme2
+#guard (truthtable p q in (p ∧ q) ∨ ¬p).value == (truthtable p q in (p &&& q) ||| ¬p).value
+-- `∧`/`∨` on Props are still Lean's `And`/`Or` under `open DeMorgan`
+example : True ∧ (False ∨ True) := ⟨trivial, .inr trivial⟩
+
+/-! Julia's `⊥`/`⟂`/`⊤` (DM:39-44) and the REPL form `@truthtable p q` (README.md:9-24). -/
+
+#guard ((⊥ : TruthValues 2) ∨ TruthValues.ofNat 2 5).toNat == 5
+#guard ((⟂ : TruthValues 3) ∧ TruthValues.ofNat 3 0xff) == ⊥
+#guard (¬(⊥ : TruthValues 3)) == ⊤
+#guard ((⊤ : TruthValues 6) ⇒ TruthValues.ofNat 6 0x1234).toNat == 0x1234
+#guard (⊤ : TruthValues 6).toNat == 0xFFFFFFFFFFFFFFFF
+
+namespace Readme
+
+truthtable p q
+
+#guard TruthTable.render ((p ⇒ q) ⇔ (¬q ⇒ ¬p)) == readme1
+#guard toString ((p ⇒ q) ⇔ (¬q ⇒ ¬p)) == "⊤"
+
+end Readme
 
 /-! ## Oracle goldens -/
 
