@@ -27,11 +27,34 @@ def checkElems (t : Tally) (what : String) (got : FloatArray) (want : String) : 
     | some i => t.check false fun _ =>
       s!"{what}: element {i + 1} got {F64.showString got[i]!}, want {(wf[i]!).map F64.showString}"
 
+/-- Compare a computed `Float32` range with the oracle's hex elements. -/
+def checkElems32 (t : Tally) (what : String) (got : Array Float32) (want : String) : Tally :=
+  let ws := if want.isEmpty then [] else want.splitOn ","
+  let wf := ws.map float32OfHex
+  if got.size != ws.length then
+    t.check false fun _ => s!"{what}: length {got.size}, want {ws.length}"
+  else
+    let bad := (List.range got.size).find? fun i =>
+      match wf[i]! with
+      | some w => !((got[i]!.isNaN && w.isNaN) || got[i]!.toBits == w.toBits)
+      | none => true
+    match bad with
+    | none => t.check true fun _ => ""
+    | some i => t.check false fun _ =>
+      s!"{what}: element {i + 1} got {F32.showString got[i]!}, want {(wf[i]!).map F32.showString}"
+
 /-- Check one range row. -/
 def checkRow (t : Tally) (row : List String) : Tally :=
   let f (h : String) : Float := (floatOfHex h).getD 0
+  let f32 (h : String) : Float32 := (float32OfHex h).getD 0
   let n (s : String) : Nat := s.toNat!
   match row with
+  | ["range32", a, b, len, e] =>
+    checkElems32 t s!"range({f32 a}, {f32 b}, {len}) :: Float32"
+      (range32 (f32 a) (f32 b) (n len)).toArray e
+  | ["linrange32", a, b, len, e] =>
+    checkElems32 t s!"LinRange({f32 a}, {f32 b}, {len}) :: Float32"
+      ((Array.range (n len)).map fun (i : Nat) => linRange32Get (f32 a) (f32 b) (n len) ((i : Int) + 1)) e
   | ["range", a, b, len, e] => checkElems t s!"range({f a}, {f b}, {len})" (JuliaBase.range (f a) (f b) (n len)).toFloatArray e
   | ["linrange", a, b, len, e] => checkElems t s!"LinRange({f a}, {f b}, {len})" (LinRange.mk' (f a) (f b) (n len)).toFloatArray e
   | ["rangeint", a, b, len, e] => checkElems t s!"range({a}, {b}, {len})" (rangeInt a.toInt! b.toInt! (n len)).toFloatArray e

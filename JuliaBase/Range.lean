@@ -390,6 +390,152 @@ def rangeStep (a st : Float) (len : Nat) : StepRangeLen :=
     else literal
   else literal
 
+/-! ## `Float32` ranges
+
+For `Float32` endpoints Julia builds a `StepRangeLen{Float32, Float64, Float64}`: the
+reference point and step are plain `Float64` (twiceprecision.jl:337-362 ignore `nb`), the
+search for them runs in `Float32` arithmetic, and each element is
+`Float32(ref + (i - offset) * step)` (range.jl:975). LeanPlot's `contourf` levels
+(`range(Float32(lo), nextfloat(Float32(hi)), length = n)`) go through this path. -/
+
+/-- Julia `StepRangeLen{Float32, Float64, Float64, Int}`. -/
+structure StepRangeLen32 where
+  /-- reference value (`Float64`) -/
+  ref : Float
+  /-- step (`Float64`) -/
+  step : Float
+  /-- number of elements -/
+  len : Nat
+  /-- index of `ref` -/
+  offset : Int
+  deriving Repr, Inhabited
+
+namespace StepRangeLen32
+
+/-- Julia `unsafe_getindex(r::StepRangeLen{T}, i)` (range.jl:975): `T(ref + u*step)`. -/
+@[inline] def get (r : StepRangeLen32) (i : Int) : Float32 :=
+  (r.ref + Float.ofInt (i - r.offset) * r.step).toFloat32
+
+/-- Julia `collect(r)`. -/
+def toArray (r : StepRangeLen32) : Array Float32 :=
+  (Array.range r.len).map fun (i : Nat) => r.get ((i : Int) + 1)
+
+end StepRangeLen32
+
+/-- Julia `truncbits(x::Float32, nb)`. -/
+@[inline] def truncbits32 (x : Float32) (nb : Nat) : Float32 :=
+  if nb ≥ 32 then Float32.ofBits 0
+  else Float32.ofBits (x.toBits &&& ((0xFFFFFFFF : UInt32) <<< nb.toUInt32))
+
+/-- Julia `add12(x::Float32, y::Float32)`. -/
+@[inline] def add12F32 (x y : Float32) : Float32 × Float32 :=
+  let (x, y) := if y.abs > x.abs then (y, x) else (x, y)
+  let h := x + y
+  (h, (x - h) + y)
+
+/-- Julia `rat(x::Float32)` (twiceprecision.jl:760): as `rat`, in `Float32` arithmetic, with
+bound `maxintfloat(Float16, Int) = 2048`. -/
+def rat32 (x : Float32) : Int × Int :=
+  go 100 x 1 0 0 1
+where
+  /-- the convergent loop -/
+  go : Nat → Float32 → Int → Int → Int → Int → Int × Int
+    | 0, _, a, b, _, _ => (a, b)
+    | fuel + 1, y, a, b, c, d =>
+      if !(y.abs ≤ 2048) then (a, b)
+      else
+        let f := F64.toIntTrunc y.toFloat
+        let y := y - Float32.ofInt f
+        let a' := f * a + c
+        let b' := f * b + d
+        if !(max a'.natAbs b'.natAbs ≤ 2048) then (a, b)
+        else if Float32.ofInt a' / Float32.ofInt b' == x then (a', b')
+        else go fuel (1 / y) a' b' a b
+
+/-- Julia `_linspace(Float32, start_n, stop_n, len, den)` (twiceprecision.jl:716) with the
+`Float32` `steprangelen_hp` (`ref[1]/ref[2]`, `step[1]/step[2]` in `Float64`). -/
+def linspaceRatio32 (startN stopN : Int) (len : Nat) (den : Int) : StepRangeLen32 :=
+  let q (n d : Int) : Float := Float.ofInt n / Float.ofInt d
+  if len < 2 then ⟨q startN den, q startN den - q stopN den, len, 1⟩
+  else if startN == stopN then ⟨q startN den, q 0 den, len, 1⟩
+  else
+    let tmin := Float.ofInt (-startN) / (Float.ofInt stopN - Float.ofInt startN)
+    let imin := F64.roundInt (tmin * Float.ofNat (len - 1) + 1)
+    let imin := if imin < 1 then 1 else if imin > len then (len : Int) else imin
+    let refNum := ((len : Int) - imin) * startN + (imin - 1) * stopN
+    let refDen := ((len : Int) - 1) * den
+    ⟨q refNum refDen, q (stopN - startN) refDen, len, imin⟩
+
+/-- Julia `_linspace(start::Float32, stop::Float32, len)` (twiceprecision.jl:668-712) with the
+`Float32` `steprangelen_hp` (`asF64((hi, lo)) = Float64(hi) + Float64(lo)`). -/
+def linspaceFloat32 (start stop : Float32) (len : Nat) : StepRangeLen32 :=
+  let lenF := Float32.ofNat len
+  let Δ0 := stop - start
+  let (Δ, Δfac) := if Δ0.isFinite then (Δ0, (1 : Float32)) else (stop / lenF - start / lenF, lenF)
+  let tmin := -(start / Δ) / Δfac
+  let lenn1 : Int := (len : Int) - 1
+  let imin0 := F64.roundInt (tmin * Float32.ofInt lenn1 + 1).toFloat
+  let (imin, ref, step) :=
+    if 1 < imin0 && imin0 < len then
+      let t := Float.ofInt (imin0 - 1) / Float.ofInt lenn1
+      let ref := ((1 - t) * start.toFloat + t * stop.toFloat).toFloat32
+      let step :=
+        if imin0 - 1 < (len : Int) - imin0 then (ref - start) / Float32.ofInt (imin0 - 1)
+        else (stop - ref) / Float32.ofInt ((len : Int) - imin0)
+      (imin0, ref, step)
+    else if imin0 ≤ 1 then ((1 : Int), start, (Δ / Float32.ofInt lenn1) * Δfac)
+    else ((len : Int), stop, (Δ / Float32.ofInt lenn1) * Δfac)
+  if len == 2 && !step.isFinite then
+    ⟨start.toFloat, -start.toFloat + stop.toFloat, len, 1⟩
+  else
+    let m : Float32 := Float32.ofBits 0x7F7FFFFE  -- prevfloat(floatmax(Float32))
+    let k := Float32.ofInt (max (imin - 1) ((len : Int) - imin))
+    let lo := F32.max (-(m + ref) / k) ((-m + ref) / k)
+    let hi := F32.min ((m - ref) / k) ((m + ref) / k)
+    let stepHiPre := if step > hi then hi else if step < lo then lo else step
+    let nb :=
+      if len < 2 then 0
+      else
+        let x := (max (imin - 1) ((len : Int) - imin) - 1).toNat
+        Nat.min 12 (Nat.log2 x + (if x == 0 then 0 else 1) + 1)
+    let stepHi := truncbits32 stepHiPre nb
+    let (x1h, x1l) := add12F32 (Float32.ofInt (1 - imin) * stepHi) ref
+    let (x2h, x2l) := add12F32 (Float32.ofInt ((len : Int) - imin) * stepHi) ref
+    let a := (start - x1h) - x1l
+    let b := (stop - x2h) - x2l
+    let stepLo := (b - a) / Float32.ofInt ((len : Int) - 1)
+    let refLo := a - Float32.ofInt (1 - imin) * stepLo
+    ⟨ref.toFloat + refLo.toFloat, stepHi.toFloat + stepLo.toFloat, len, imin⟩
+
+/-- Julia `range(start, stop; length)` for `Float32` endpoints (twiceprecision.jl:645). -/
+def range32 (start stop : Float32) (len : Nat) : StepRangeLen32 :=
+  if len < 2 then ⟨start.toFloat, start.toFloat - stop.toFloat, len, 1⟩
+  else if start == stop then ⟨start.toFloat, 0, len, 1⟩
+  else
+    let (_, startD) := rat32 start
+    let (_, stopD) := rat32 stop
+    let fallback : Unit → StepRangeLen32 := fun _ => linspaceFloat32 start stop len
+    if startD != 0 && stopD != 0 then
+      let den := lcmUnchecked startD stopD
+      let denF := Float32.ofInt den
+      let m : Float32 := 16777216
+      if den != 0 && (denF * start).abs ≤ m && (denF * stop).abs ≤ m then
+        let startN := F64.roundInt (denF * start).toFloat
+        let stopN := F64.roundInt (denF * stop).toFloat
+        if (Float.ofInt startN / Float.ofInt den).toFloat32 == start &&
+            (Float.ofInt stopN / Float.ofInt den).toFloat32 == stop then
+          linspaceRatio32 startN stopN len den
+        else fallback ()
+      else fallback ()
+    else fallback ()
+
+/-- Julia `LinRange{Float32}` element `i`: `lerpi` with `t = j/d` in `Float64`, then
+`Float32((1-t)*a + t*b)` (range.jl:981). -/
+def linRange32Get (start stop : Float32) (len : Nat) (i : Int) : Float32 :=
+  let lendiv := if len == 1 then 1 else Nat.max (len - 1) 1
+  let t := Float.ofInt (i - 1) / Float.ofNat lendiv
+  ((1 - t) * start.toFloat + t * stop.toFloat).toFloat32
+
 /-- Julia `LinRange{Float64}` (range.jl:579): `len` points from `start` to `stop`. -/
 structure LinRange where
   /-- first element -/

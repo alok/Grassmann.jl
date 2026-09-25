@@ -167,7 +167,7 @@ function range_case(rng, maxn = 500)
 end
 
 function range_case_(rng, maxn)
-    k = rand(rng, 1:10)
+    k = rand(rng, 1:12)
     n = rand(rng) < 0.9 ? rand(rng, 0:40) : rand(rng, 41:maxn)
     a, b = endpoint(rng), endpoint(rng)
     (rand(rng) < 0.05 || n == 1) && (b = a)
@@ -189,13 +189,22 @@ function range_case_(rng, maxn)
     elseif k == 8
         st = rand(rng, (0.1, 0.2, 0.25, 1/3, -0.1, π/4))
         return ["rangestep", hex(a), hex(st), string(n), rangehex(range(a; step = st, length = n))]
-    else
+    elseif k == 9
         n < 2 && (n = 2)
         r = range(a, b, length = n)
         x = rand(rng, (2.0, 0.5, 3.0, π, -1.5, 0.1))
         op = rand(rng, ("mul", "bmul", "bdiv", "badd", "div"))
         rr = op == "mul" ? x * r : op == "bmul" ? x .* r : op == "bdiv" ? r ./ x : op == "badd" ? r .+ x : r / x
         return [op, hex(a), hex(b), string(n), hex(x), rangehex(rr)]
+    elseif k == 10
+        a32, b32 = Float32(a), Float32(b)
+        rand(rng, Bool) && (b32 = nextfloat(b32))   # contourf: range(Float32(lo), nextfloat(Float32(hi)), n)
+        n == 1 && (b32 = a32)
+        return ["range32", hex(a32), hex(b32), string(n), join((hex(x) for x in range(a32, b32, length = n)), ",")]
+    else
+        a32, b32 = Float32(a), Float32(b)
+        n == 1 && (b32 = a32)
+        return ["linrange32", hex(a32), hex(b32), string(n), join((hex(x) for x in LinRange(a32, b32, n)), ",")]
     end
 end
 
