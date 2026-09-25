@@ -23,18 +23,23 @@ generator runs at elaboration time in the interpreter.
   `Half×Half` for `n < 12`, each into the static result layout of the typed
   instances (`Grassmann.Algebra.Products`).
 * **Dense families** (`Multivector` operands, result `.full`): `full×X` and
-  `X×full` for every layout `X` when `n < 12`, subject to the per-kernel entry
-  cap `maxEntries`; `Multivector×Multivector` is the cap's main victim.
+  `X×full` for every layout `X` when `n < 12`; `Policy.default` keeps only
+  `Multivector×Multivector` of `*` from `n = 6` on (Julia unrolls it below 6).
+  Every kernel is subject to the entry cap `maxEntries` (4096).
 * **Sandwich projections** (`binProj .mul`): a half on the left, a chain or
   half on the right, projected onto a chain or half of consistent parity: the
-  second product of `x ⊘ R` and `R >>> x`, and `Half.inv?`.
+  second product of the two-kernel `x ⊘ R` and `R >>> x`, and `Half.inv?`.
+  (The typed sandwiches use the fused kernels of
+  `Grassmann.Kernel.Codegen.Sandwich`.)
 * **Other binary operations** (`⨼`, `<<`, `>>`, `⊛`, `×`, `⟇`, `antidot`):
   `Chain×Chain` into `TensorBundle.chainResult`.
 * **Unary maps**: every `UnOp` on every layout, type-preserving or (for the
   complements) into the complementary chain/half.
 
 Anything a space does not emit, and any key whose plan fails to build (Julia's
-errors: complements in dyadic spaces), falls through to the reference kernels.
+errors: complements in dyadic spaces) or drops terms (a repeated tangent
+generator, which a scalar coefficient cannot hold), falls through to the
+reference kernels.
 -/
 import Grassmann.Kernel.Reference
 
@@ -70,7 +75,8 @@ structure Policy where
      .veedot, .antidot]
   /-- Unary operations. -/
   unOps : List UnOp := UnOp.all
-  /-- Emit the dense (`Multivector`-operand) families. -/
+  /-- Emit the dense (`Multivector`-operand) families; `Multivector×Multivector` of `*` is
+  emitted either way (within `maxEntries`). -/
   dense : Bool := true
   /-- Emit the sandwich projections. -/
   sandwich : Bool := true
