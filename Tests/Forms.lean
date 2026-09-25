@@ -6,6 +6,7 @@ import Tests.Forms.Diag
 import Tests.Forms.Geometry
 import Tests.Forms.Props
 import Tests.Forms.Types
+import Tests.Forms.Parity
 
 /-!
 # Forms test aggregator
@@ -23,6 +24,7 @@ elements (`Grassmann.Forms`): the Julia goldens in `oracle/golden/forms/`
 | `forms/geometry` | simplices, metric tensors, sandwich operators, Cayley/TeX, rank-one forms, evaluation, element spectra |
 | `forms/props` | Cauchy–Binet, adjugates, exact inverses, Newton's identities, Pfaffians, eigen residuals, `exp`/`log` |
 | `forms/types` | static result types and the worked examples through the notation |
+| `forms/parity` | roots of any degree, `eigvecs`/`eigvecsreal`, Vandermonde operators and fits |
 -/
 
 namespace Tests.Forms
@@ -34,7 +36,7 @@ def run : IO (Nat × Nat) := do
   IO.println "Forms"
   let suites : List (IO Tally) :=
     [Exact.suite, FloatSuite.suite, SpectralSuite.suite, DiagSuite.suite, GeometrySuite.suite,
-     Props.suite, Types.suite]
+     Props.suite, Types.suite, Parity.suite]
   let mut pass := 0
   let mut fail := 0
   for suite in suites do

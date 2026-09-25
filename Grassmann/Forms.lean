@@ -13,6 +13,7 @@ import Grassmann.Forms.Show
 import Grassmann.Forms.Eval
 import Grassmann.Forms.Lie
 import Grassmann.Forms.Simplex
+import Grassmann.Forms.Fit
 
 /-!
 # Grassmann.Forms: linear algebra of Grassmann elements
@@ -41,7 +42,11 @@ Port of Grassmann.jl `src/forms.jl` (and the determinant/simplex part of
   (symmetric `tred2`/`tql2`, general `orthes`/`hqr2`).
 * `Grassmann.Forms.Dyadic`: `Dyadic`, `Projector`, `SpectralOperator`.
 * `Grassmann.Forms.Spectral`: `characteristic`, `eigpolys`, `sylvester`,
-  `eigmults`, `eigvals*`, `eigen*`, `vandermonde`, `discriminant*`.
+  `eigmults`, `eigvals*`, `eigvecs*`, `eigen*`, `vandermonde`, `discriminant*`, and the
+  polynomial roots of any degree (`roots*`, `monicroots*`: the closed forms of
+  `Forms.Roots` up to degree 4, the companion matrix's eigenvalues beyond).
+* `Grassmann.Forms.Fit`: `polynom`, `approx`, the least-squares Vandermonde fit
+  `vandermonde(x, y, N)` and `vandermondeinterp`.
 * `Grassmann.Forms.MatFun`: `exp`, `expm1` (Grassmann's Padé), `log`.
 * `Grassmann.Forms.Cayley`: `operator(t, G)`, `gradedoperator`, `metrictensor`,
   `metricextensor`, `antimetrictensor`, Cayley tables.
