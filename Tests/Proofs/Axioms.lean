@@ -56,3 +56,6 @@ import Grassmann.Proofs
 
 /-- info: 'Grassmann.Proofs.implMul_eq_mul_of_signature' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Grassmann.Proofs.implMul_eq_mul_of_signature
+
+/-- info: 'Grassmann.Proofs.implWedge_eq_wedge_of_flat' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.implWedge_eq_wedge_of_flat

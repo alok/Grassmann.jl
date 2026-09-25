@@ -144,6 +144,7 @@ multiply-accumulate plans (`Grassmann.Kernel.build`, DESIGN.md §5.1).
 | `mulSign_eq_coef` | for every space and every `n ≤ 64`, `(-1)^{TensorBundle.mulSign a b}` is the spec coefficient of the signature metric `V.sigBits`, on every pair of blades |
 | `IsSignatureSpace.terms_mul` | in every plain signature space (`Signature` or `Int` metric, no conformal pair, no tangent variables), `terms₂ .mul a b` is the single term `(-1)^{parityjoin} e_{a⊕b}` for all 64-bit masks; `metricProduct` is a product of `±1`s, so its absolute value is `1` whatever its loop visits |
 | `implMul_eq_mul_of_signature` | hence **the implementation's geometric product is the spec product on all multivectors of every plain signature space of dimension `≤ 64`** (`R7_mul`, `S33_mul` instantiate it) |
+| `IsFlatSpace.terms_wedge`, `implWedge_eq_wedge_of_flat` | in every space without a conformal pair or tangent variables (any metric: signatures, `DiagonalForm`s including degenerate ones, `MetricTensor`s) and every width `≤ 64`, the implementation's exterior product is the spec exterior product on all multivectors (`PGA4_wedge` instantiates it) |
 
 **Checked** by the kernel (`Grassmann.Proofs.Tables`), on every basis blade
 (pair), in `ℝ2`, `ℝ3`, `STA = S!"-+++"`, `PGA2 = D!"0,1,1"`,
@@ -215,9 +216,9 @@ generated kernels) are exercised; they are not proved.
   loop visits the set bits with `ctz`, so they are checked (`PGA*`,
   `D!"1,2,-3"`) and tested (`PGA4`, `D5`), not proved; plain signature spaces
   are proved in every dimension (`implMul_eq_mul_of_signature`).
-* The exterior product, involutions and complements are linked per space
-  (checked, `n ≤ 4`) and tested (`n ≤ 7`), not in general: their blade rules
-  read the grade through `Bits.popcount`.
+* The involutions and complements are linked per space (checked, `n ≤ 4`) and
+  tested (`n ≤ 7`), not in general: their blade rules read the grade through
+  `Bits.popcount` (or `Bits.sumIndices`).
 * The other contractions (`⨼`, `<<`, `>>`), `cross`, `veedot`, `antidot` and the
   sandwiches have no spec yet; `Tests/Grassmann/Props.lean` tests their
   algebraic laws. The regressive product is linked blade by blade, not yet

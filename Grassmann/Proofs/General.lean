@@ -1,6 +1,7 @@
 /-
-Signature spaces in every dimension: the implementation's geometric product is
-the spec, proved without enumeration.
+Every dimension at once: the implementation's geometric product (signature
+spaces) and exterior product (every non-conformal, non-tangent space) are the
+spec, proved without enumeration.
 
 A *plain signature space* has a `Signature` (Julia `S"…"`, `ℝ^n`) or `Int`
 (Julia `n`, `V"n"`) metric, no conformal pair and no tangent variables. For every
@@ -15,9 +16,15 @@ such space and every width `n ≤ 64`:
 * `implMul_eq_mul_of_signature`: **the implementation's geometric product is
   the spec product `Cl.mul` on all multivectors**, in every dimension up to 64.
 
+The exterior product needs even less: its blade rule is metric-independent, so
+for **every** space without a conformal pair or tangent variables
+(`IsFlatSpace`: signatures, `DiagonalForm`s including degenerate ones, and
+`MetricTensor`s) and every width `n ≤ 64`, `terms_wedge` and
+`implWedge_eq_wedge_of_flat` identify it with the spec exterior product.
+
 `Grassmann.Proofs.Tables` checks the same for small spaces by evaluation; this
-file covers `ℝ⁵ … ℝ⁶⁴`, `S!"-+++…"`, `S!"++--"` and every other plain
-signature space at once.
+file covers `ℝ⁵ … ℝ⁶⁴`, `S!"-+++…"`, `S!"++--"`, `D!"0,1,1,1,1"` and every other
+such space at once.
 -/
 import Grassmann.Proofs.Link
 
@@ -166,6 +173,116 @@ coefficient field of DirectSum's term lists). -/
 theorem implMul_eq_mul_of_signature {V : TensorBundle} (hV : IsSignatureSpace V) {n : Nat} (hn : n ≤ 64)
     (x y : Cl (sigG (R := Rat) n V.sigBits.toNat)) : implMul V x y = x * y :=
   implMul_eq_mul hn (hV.table_mul hn) x y
+
+/-! ## The exterior product in every flat space -/
+
+/-- A flat space: no conformal null pair and no tangent variables (any metric). -/
+structure IsFlatSpace (V : TensorBundle) : Prop where
+  /-- No conformal null pair. -/
+  conformal : V.hasconformal = false
+  /-- No tangent variables. -/
+  tangent : V.diffvars = 0
+
+namespace IsFlatSpace
+
+variable {V : TensorBundle} (hV : IsFlatSpace V)
+include hV
+
+theorem diffmask : V.diffmask = 0 := by
+  unfold TensorBundle.diffmask TensorBundle.diffmaskV TensorBundle.diffmaskW
+  rw [hV.tangent]
+  have h0 : Bits.lowMask 0 = 0 := by decide
+  have hs : ∀ k, Bits.shl 0 k = 0 := fun k => by unfold Bits.shl; split <;> simp
+  rw [h0, hs]; split <;> simp [hs]
+
+theorem symmetricmask (a b : UInt64) : V.symmetricmask a b = (a, b, 0, 0) := by
+  unfold TensorBundle.symmetricmask
+  rw [hV.diffmask]
+  simp
+
+theorem diffcheck (a b : UInt64) : V.diffcheck a b = false := by
+  unfold TensorBundle.diffcheck
+  simp [hV.conformal, hV.tangent]
+
+omit hV in
+private theorem and_not_zero' (x : UInt64) : x &&& ~~~0 = x := by
+  apply UInt64.toBitVec_inj.mp
+  simp
+
+theorem parity_of_disjoint {a b : UInt64} (h : a &&& b = 0) : V.parity a b = Bits.reorderParity a b := by
+  show parityjoin V.sigBits (a &&& ~~~V.diffmask) (b &&& ~~~V.diffmask) = _
+  rw [hV.diffmask, and_not_zero', and_not_zero']
+  unfold parityjoin
+  rw [h, UInt64.zero_and]
+  have : Bits.parity 0 = false := by decide
+  rw [this]; simp
+
+/-- **DirectSum's exterior product of two blades in a flat space**: `0` on
+overlapping blades, `(-1)^{σ(a,b)} e_{a∪b}` on disjoint ones, for all 64-bit
+masks and every metric. -/
+theorem terms_wedge (a b : UInt64) :
+    V.terms₂ .wedge a b
+      = .ok (if a &&& b = 0 then #[{ bits := a ^^^ b, coef := signOf (Bits.reorderParity a b) }] else #[]) := by
+  show Except.ok (V.wedge a b).bladeTerms = _
+  congr 1
+  unfold TensorBundle.wedge
+  rw [hV.symmetricmask, hV.diffcheck]
+  simp only [Bool.or_false, UInt64.or_zero]
+  by_cases hab : a &&& b = 0
+  · rw [ite_eq_left hab]
+    have hne : (a &&& b != 0) = false := by simp [hab]
+    rw [hne]
+    simp only [Bool.false_eq_true, ite_false]
+    unfold TensorBundle.nestTangent
+    rw [hV.tangent]
+    simp only [beq_self_eq_true, Bool.true_or, ite_true]
+    rw [hV.parity_of_disjoint hab]
+    have hn1 : (-1 : Rat) ≠ 0 := by decide +kernel
+    cases Bits.reorderParity a b
+    · show (BladeResult.blade (a ^^^ b)).bladeTerms = _
+      rw [blade_terms]; rfl
+    · show (BladeResult.single (-1) (a ^^^ b)).bladeTerms = _
+      rw [single_terms _ _ hn1]; rfl
+  · rw [ite_eq_right hab]
+    have hne : (a &&& b != 0) = true := by simp [hab]
+    rw [hne]
+    simp [BladeResult.bladeTerms, BladeResult.terms]
+
+/-- The exterior-product table of a flat space agrees with the spec in every
+width `n ≤ 64`. -/
+theorem table_wedge {n : Nat} (hn : n ≤ 64) : TableAgrees V .wedge (wcoef (R := Rat) (n := n)) := by
+  intro a b
+  rw [hV.terms_wedge]
+  have hmask : mask (a ^^^ b) = mask a ^^^ mask b := by
+    apply UInt64.toNat_inj.mp
+    rw [UInt64.toNat_xor, toNat_mask hn, toNat_mask hn, toNat_mask hn, BitVec.toNat_xor]
+  have hand : (mask a &&& mask b = 0) ↔ (a &&& b = 0) := by
+    rw [← UInt64.toNat_inj, UInt64.toNat_and, toNat_mask hn, toNat_mask hn, ← BitVec.toNat_and]
+    exact toNat_eq_zero_iff _
+  have hsign : Bits.reorderParity (mask a) (mask b) = sign a b := by
+    rw [reorderParity_eq_sigma, toNat_mask hn, toNat_mask hn, sign, sigma_of_lt hn a.isLt]
+  unfold wcoef
+  by_cases hab : a &&& b = 0
+  · have hne : (signOf (sign a b) : Rat) ≠ 0 := by cases sign a b <;> decide
+    rw [ite_eq_left (hand.mpr hab), ite_eq_left hab]
+    simp only [Matches, single, hne, ite_false, hmask, hsign]
+    simp
+  · rw [ite_eq_right (fun e => hab (hand.mp e)), ite_eq_right hab]
+    simp [Matches, single]
+
+end IsFlatSpace
+
+/-- **The implementation's exterior product is the spec exterior product in
+every flat space** (any metric, no conformal pair, no tangent variables) of
+dimension `≤ 64`, on all multivectors. -/
+theorem implWedge_eq_wedge_of_flat {V : TensorBundle} (hV : IsFlatSpace V) {n : Nat} (hn : n ≤ 64)
+    {g : Fin n → Rat} (x y : Cl g) : implWedge V x y = Cl.wedge x y :=
+  implWedge_eq_wedge hn (hV.table_wedge hn) x y
+
+/-- `PGA4 = D!"0,1,1,1,1"`: the implementation's exterior product is the spec
+exterior product. -/
+theorem PGA4_wedge {g : Fin 5 → Rat} (x y : Cl g) : implWedge D!"0,1,1,1,1" x y = Cl.wedge x y :=
+  implWedge_eq_wedge_of_flat ⟨rfl, rfl⟩ (by decide) x y
 
 /-- `ℝⁿ` (Julia `V"n"`, the `Int` space) is a plain signature space. -/
 theorem isSignatureSpace_euclidean (n : Nat) : IsSignatureSpace (TensorBundle.euclidean n) :=
