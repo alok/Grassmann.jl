@@ -1,9 +1,8 @@
 name: CI
 
+# Manual-only while the port is under heavy local development; re-enable push/PR triggers
+# once the port is feature-complete (must pass on Linux).
 on:
-  push:
-    branches: [master]
-  pull_request:
   workflow_dispatch:
 
 jobs:

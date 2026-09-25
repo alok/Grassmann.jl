@@ -3,7 +3,7 @@ version = "0.1.0"
 description = "Lean 4 port of Michael Reed's Grassmann.jl ecosystem (DirectSum, Leibniz, AbstractTensors, Grassmann, Cartan, ...)"
 keywords = ["math", "geometric-algebra", "clifford-algebra", "differential-geometry"]
 license = "AGPL-3.0-or-later"
-defaultTargets = ["JuliaBase", "StaticVectors", "AbstractTensors", "Leibniz", "DirectSum", "Grassmann", "FieldAlgebra", "FieldConstants", "UnitSystems", "Similitude", "MeasureSystems", "Dendriform", "DeMorgan", "AbstractLattices", "AbstractAnalysis", "Wilkinson", "PrimitiveBits", "tests", "bench"]
+defaultTargets = ["JuliaBase", "StaticVectors", "AbstractTensors", "Leibniz", "DirectSum", "Grassmann", "FieldAlgebra", "FieldConstants", "UnitSystems", "Similitude", "MeasureSystems", "Dendriform", "DeMorgan", "AbstractLattices", "AbstractAnalysis", "Wilkinson", "PrimitiveBits", "MeshTopology", "Fatou", "Cartan", "Adapode", "Geophysics", "FlowGeometry", "tests", "bench"]
 testDriver = "tests"
 
 [leanOptions]
@@ -76,3 +76,21 @@ name = "Wilkinson"
 
 [[lean_lib]]
 name = "PrimitiveBits"
+
+[[lean_lib]]
+name = "MeshTopology"
+
+[[lean_lib]]
+name = "Fatou"
+
+[[lean_lib]]
+name = "Cartan"
+
+[[lean_lib]]
+name = "Adapode"
+
+[[lean_lib]]
+name = "Geophysics"
+
+[[lean_lib]]
+name = "FlowGeometry"
