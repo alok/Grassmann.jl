@@ -33,9 +33,10 @@ def suite : TestM Unit := do
     let st32 := stieltjes set32 e .f32
     let n32 := Ω st32
     checkEq s!"{name}.Ω(Float32)" n32 (jNat (jGet c "omega32"))
-    let smp32 := simpson set32 st32 n32
-    check s!"{name}.simpson(Float32)" (sameFloat smp32 (hexF64 (jGet c "smp32")))
-      s!"got {smp32}, expected {hexF64 (jGet c "smp32")}"
+    if jGet c "smp32" != .null then
+      let smp32 := simpson set32 st32 n32
+      check s!"{name}.simpson(Float32)" (sameFloat smp32 (hexF64 (jGet c "smp32")))
+        s!"got {smp32}, expected {hexF64 (jGet c "smp32")}"
     for smpl in jArr (jGet c "sample") do
       let s := jArr smpl
       let i := jNat s[0]!

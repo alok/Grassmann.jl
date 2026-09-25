@@ -31,6 +31,8 @@ tree(e::Symbol) = Dict("sym" => string(e))
 tree(e::Integer) = Dict("int" => string(e))
 tree(e::AbstractFloat) = Dict("f64" => repr(Float64(e)))
 function tree(e::Expr)
+    # integers beyond Int64 parse as `Core.@int128_str`/`Core.@big_str` macro calls
+    e.head == :macrocall && return Dict("bigint" => e.args[end])
     e.head == :call || error("unexpected head $(e.head) in $e")
     Dict("call" => string(e.args[1]), "args" => [tree(a) for a in e.args[2:end]])
 end
@@ -110,6 +112,11 @@ println("exprval done")
 
 # ------------------------------------------------------------------ REDUCE forms
 Reduce.Rational(false)
+# REDUCE forms whose integers exceed Int64: Int128 literals (evaluated in Float64
+# after promotion) and BigInt literals (which pull the evaluation into BigFloat)
+WIDE = [Reduce.rcall(:((x - 0.7236182478592211) * (x - 0.12345678901234567)), :expand),
+        Reduce.rcall(:((x - 0.7236182478592211) * (x - 0.12345678901234567) * (x - 0.9876543210987654)), :expand),
+        Reduce.rcall(:((x - 0.7236182478592211) * (x - 0.12345678901234567) * (x - 0.9876543210987654)), :horner)]
 randint(r, n) = Expr(:call, :+, [Expr(:call, :*, c, Expr(:call, :^, :x, k)) for (k, c) in
                   zip(0:n, rand(r, -6:6, n + 1)) if c != 0]..., 0)
 function randpoly(r)
@@ -152,11 +159,16 @@ polyrec(f, a) = (e = f(:x, a); Dict("a" => [x isa Integer ? Dict("int" => string
                                     "out" => exrec(e)))
 wjson("reduce.json", Dict("meta" => META,
     "forms" => [formrec(e) for e in vcat(RFIXED, [randpoly(rng) for _ in 1:400])],
+    # the last 12: Wilkinson's `tests` experiment inputs, `rand(d)` roots (16-digit decimals
+    # for REDUCE, so 50-150-digit coefficients); a separate stream keeps the rest unchanged
     "polyfactors" => [polyrec(polyfactors, a) for a in vcat([[1,2,3], [0.5,2.25], [-1,2], [3,3,3]],
-                        [filter(!iszero, randcoeffs(rng)) for _ in 1:40]) if !isempty(a)],
+                        [filter(!iszero, randcoeffs(rng)) for _ in 1:40],
+                        (r2 = MersenneTwister(0x5EEE); [rand(r2, rand(r2, 2:6)) for _ in 1:12])) if !isempty(a)],
     "polyhorner" => [polyrec(polyhorner, a) for a in vcat([[1,2,3], [-1,0,2]], [randcoeffs(rng) for _ in 1:40])
                         if !iszero(a[end])],
-    "polyexpand" => [polyrec(polyexpand, a) for a in vcat([[1,2,3]], [randcoeffs(rng) for _ in 1:40]) if !iszero(a[end])]))
+    "polyexpand" => [polyrec(polyexpand, a) for a in vcat([[1,2,3]], [randcoeffs(rng) for _ in 1:40]) if !iszero(a[end])],
+    # SyntaxTree on Int128/BigInt literals: not scalars for exprval, left alone by sub/abs
+    "wide" => [exprvalrec(e) for e in WIDE]))
 println("reduce done")
 
 # ------------------------------------------------------------------ kernels copied from Wilkinson.jl
@@ -280,7 +292,7 @@ SFIXED = [:(x^9 - 2), :((x - 2)^9), :(((((((((x - 18) * x + 144) * x - 672) * x 
           :((x - 1) * (x - 2) * (x - 3)), :(((x - 6) * x + 11) * x - 6), :(x^3 - 6x^2 + 11x - 6)]
 # `//` on floats is a MethodError in Julia (after `sub`), so those forms are left out
 hasrat(e) = e isa Expr && (e.args[1] == :// || any(hasrat, e.args))
-sforms = vcat(SFIXED, filter(!hasrat, [randexpr(rng) for _ in 1:45])[1:30])
+sforms = vcat(SFIXED, filter(!hasrat, [randexpr(rng) for _ in 1:45])[1:30], WIDE)
 strec(e, full) = begin
     st, _ = stieltjes(set64, e, Float64)
     n = Ω(st)
@@ -289,7 +301,9 @@ strec(e, full) = begin
     st32, _ = stieltjes(set32, e, Float32)
     n32 = Ω(st32)
     d = Dict("expr" => exrec(e), "omega" => n, "smp" => hex(smp), "geonorm" => hex(geonorm(smp)),
-             "smp_big" => hex(simpson(set64, stb, n)), "omega32" => n32, "smp32" => hex(simpson(set32, st32, n32)),
+             # Ω = 0 (the first Float32 point overflows) makes Julia's simpson throw
+             "smp_big" => hex(simpson(set64, stb, n)), "omega32" => n32,
+             "smp32" => n32 < 2 ? nothing : hex(simpson(set32, st32, n32)),
              "sample" => [[i, hex(st[i]), hex(stb[i]), hex(st32[i])] for i in unique(vcat(1:5, n-2:n, 17:97:2999, 3000))])
     full && (d["stj"] = hex.(st))
     d

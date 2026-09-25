@@ -36,6 +36,17 @@ def suite : TestM Unit := do
     -- the three forms are the same polynomial
     let p := Poly.ofJExpr e
     check s!"{name}.equal" ([Reduce.expand e, Reduce.horner e, Reduce.factor e].all (Poly.ofJExpr · == p))
+  -- SyntaxTree on REDUCE's Int128/BigInt literals
+  for c in jArr (jGet j "wide") do
+    let e := jExpr (jGet c "expr")
+    let name := s!"wide[{jExprStr (jGet c "expr")}]"
+    checkEq s!"{name}.callcount" (SyntaxTree.callcount e) (jNat (jGet c "callcount"))
+    let (v, _, mal, a, p) := SyntaxTree.exprval e
+    let ev := jArr (jGet c "exprval")
+    check s!"{name}.exprval" (sameFloat v (jFloat ev[0]!) && sameFloat mal (jFloat ev[2]!) &&
+      sameFloat a (jFloat ev[3]!) && sameFloat p (jFloat ev[4]!))
+    checkEq s!"{name}.sub64" (SyntaxTree.sub .f64 e).toJulia (jStr (jGet c "sub64"))
+    checkEq s!"{name}.abs" (SyntaxTree.abs e).toJulia (jStr (jGet c "abs"))
   for c in jArr (jGet j "polyfactors") do
     let want := jExpr (jGet c "out")
     let got := Reduce.polyfactors (jLits (jGet c "a"))
