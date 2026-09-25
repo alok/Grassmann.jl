@@ -48,6 +48,33 @@ namespace Composite
 @[inline] def unitVec (V : TensorBundle) (α : Type) [Coeff α] (b : UInt64) : Chain V 1 α :=
   Chain.ofBlade (⟨b⟩ : Submanifold V 1) Coeff.one
 
+/-- The signature mask of a space whose vectors have a diagonal `±1` Gram matrix apart from a
+conformal null pair (DirectSum's `gram`: `g(e∞,e∅) = -1`, `g(e∞,e∞) = g(e∅,e∅) = 0`, every
+other generator `-1` iff its signature bit is set): `.signature`/`.euclid` metrics of
+non-dual, non-tangent spaces; `none` otherwise (the product kernels are used there). -/
+@[inline] def vecSig? (V : TensorBundle) : Option UInt64 :=
+  if V.diffvars != 0 || V.dyadmode != 0 then none
+  else match V.metric with
+    | .signature s => some s
+    | .euclid => some 0
+    | _ => none
+
+/-- `Σ_{k ≥ k₀} g(e_k, e_k)·x_k·y_k` over the generators with signature mask `s`. -/
+@[specialize] def vdotLoop {n : Nat} (s : UInt64) (x y : Values α n) (k : Nat) (acc : α) : Nat → α
+  | 0 => acc
+  | fuel + 1 =>
+    if h : k < n then
+      let p := x.get ⟨k, h⟩ * y.get ⟨k, h⟩
+      vdotLoop s x y (k + 1) (if (s >>> k.toUInt64) &&& 1 == 1 then acc - p else acc + p) fuel
+    else acc
+
+/-- `x ⋅ y` of two vectors (coefficients in generator order) in a `vecSig?` space with mask
+`s`: the Gram form, the conformal pair contributing `-(x∞y∅ + x∅y∞)`. -/
+@[inline] def vdot (V : TensorBundle) (s : UInt64) {n : Nat} (x y : Values α n) : α :=
+  if V.hasinf && V.hasorigin then
+    vdotLoop s x y 2 Coeff.zero n - (getD x 0 * getD y 1 + getD x 1 * getD y 0)
+  else vdotLoop s x y 0 Coeff.zero n
+
 end Composite
 
 open Composite
@@ -77,9 +104,27 @@ separately, in Julia's order). -/
   let iω2 := Coeff.one / (ω2 + Coeff.one)
   (Coeff.ofInt 2 * iω2) * ω + ((ω2 - Coeff.one) * iω2) * p + ((ω2 + Coeff.one) * iω2) * m
 
-/-- Julia `↑ω` = `project(ω)` of a vector (`src/Grassmann.jl:164-183`), choosing `v∞`/`v∅`
-from the space: conformal `(v∞/2)ω² + v∅ + ω`, Riemann sphere `project(ω, b)`, else `ω`. -/
-@[inline] def up (ω : Chain V 1 α) : Chain V 1 α :=
+/-- `up` in a `vecSig?` space (mask `sg`) without product kernels: conformal
+`ω + v∅ + (ω²/2)·v∞`, Riemann sphere `(2/(ω²+1))·ω + ((ω²-1)/(ω²+1))·b`, one pass over the
+coefficients (`ω² = ω⋅ω` from the Gram form). -/
+@[inline] def upFast (sg : UInt64) (ω : Chain V 1 α) : Chain V 1 α :=
+  if V.hasinf || V.hasorigin then
+    let x := ω.v
+    let ω2 := vdot V sg x x
+    if V.hasinf && V.hasorigin then
+      let half : α := Coeff.one / Coeff.ofInt 2
+      let q := half * ω2
+      ⟨Values.ofFn fun i =>
+        if i.1 == 0 then q + x.get i else if i.1 == 1 then Coeff.one + x.get i else x.get i⟩
+    else
+      let iω2 := Coeff.one / (ω2 + Coeff.one)
+      let a := Coeff.ofInt 2 * iω2
+      let c := (ω2 - Coeff.one) * iω2
+      ⟨Values.ofFn fun i => if i.1 == 0 then c + a * x.get i else a * x.get i⟩
+  else ω
+
+/-- `up` through the space's product kernels (every metric). -/
+@[inline] def upGeneric (ω : Chain V 1 α) : Chain V 1 α :=
   if V.hasinf && V.hasorigin then
     let half : α := Coeff.one / Coeff.ofInt 2
     let a : Chain V 1 α := unitVec V α (infBits V) * half
@@ -94,6 +139,13 @@ from the space: conformal `(v∞/2)ω² + v∅ + ω`, Riemann sphere `project(ω
     let iω2 := Coeff.one / (ω2 + Coeff.one)
     unitVec V α (originBits V) * ((ω2 - Coeff.one) * iω2) + (Coeff.ofInt 2 * iω2) * ω
   else ω
+
+/-- Julia `↑ω` = `project(ω)` of a vector (`src/Grassmann.jl:164-183`), choosing `v∞`/`v∅`
+from the space: conformal `(v∞/2)ω² + v∅ + ω`, Riemann sphere `project(ω, b)`, else `ω`. -/
+@[inline] def up (ω : Chain V 1 α) : Chain V 1 α :=
+  match vecSig? V with
+  | some sg => upFast sg ω
+  | none => upGeneric ω
 
 /-- Julia `reject(ω, b)` (`src/Grassmann.jl:209`): `(~(b∧ω) ⋅ b)/(1 - ω⋅b)`. -/
 @[inline] def downWith (ω b : Chain V 1 α) : Chain V 1 α :=
@@ -121,14 +173,37 @@ from the space: conformal `(v∞/2)ω² + v∅ + ω`, Riemann sphere `project(ω
   let num : Chain V (1 + 1 + 1 - (1 + 1)) α := contraction t (Chain.inv (~m))
   num.cast (by decide) / (-(dot1 ω inf))
 
-/-- Julia `↓ω` = `reject(ω)` of a vector (`src/Grassmann.jl:196-205`), choosing `v∞`/`v∅`
-from the space. -/
-@[inline] def down (ω : Chain V 1 α) : Chain V 1 α :=
+/-- `down` in a `vecSig?` space (mask `sg`) without product kernels. Conformal: the
+numerator `(v∞∅ ∧ ω) ⋅ inv(~v∞∅)` keeps the non-null part of `ω` (the null pair's
+bivector squares to `1`) and `-ω⋅v∞ = ω∅`, so `↓ω = ω_E / ω∅` (zero on the pair). Riemann
+sphere with null point `b = e₀`, `σ = g(b, b)`: `~(ω∧b) ⋅ b = σ·ω_E` (zero on `b`) and
+`b⋅ω = σ·ω_b`, so `↓ω = σ·ω_E / (1 - σ·ω_b)`. -/
+@[inline] def downFast (sg : UInt64) (ω : Chain V 1 α) : Chain V 1 α :=
+  let x := ω.v
+  if V.hasinf && V.hasorigin then
+    let d := getD x 1
+    ⟨Values.ofFn fun i => if i.1 < 2 then Coeff.zero / d else x.get i / d⟩
+  else if V.hasinf || V.hasorigin then
+    let neg := sg &&& 1 == 1
+    let xb := getD x 0
+    let den := if neg then Coeff.one + xb else Coeff.one - xb
+    ⟨Values.ofFn fun i => if i.1 == 0 then Coeff.zero / den else (if neg then -(x.get i) else x.get i) / den⟩
+  else ω
+
+/-- `down` through the space's product kernels (every metric). -/
+@[inline] def downGeneric (ω : Chain V 1 α) : Chain V 1 α :=
   if V.hasinf && V.hasorigin then
     downConformal ω (unitVec V α (infBits V)) (unitVec V α (originBits V))
   else if V.hasinf then downRiemann ω (unitVec V α (infBits V))
   else if V.hasorigin then downRiemann ω (unitVec V α (originBits V))
   else ω
+
+/-- Julia `↓ω` = `reject(ω)` of a vector (`src/Grassmann.jl:196-205`), choosing `v∞`/`v∅`
+from the space. -/
+@[inline] def down (ω : Chain V 1 α) : Chain V 1 α :=
+  match vecSig? V with
+  | some sg => downFast sg ω
+  | none => downGeneric ω
 
 end Chain
 

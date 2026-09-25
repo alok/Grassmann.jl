@@ -36,6 +36,10 @@ def caseIn (V : TensorBundle) (t : Tally) (c : Json) (k : Nat) : Tally := Id.run
   t := t.nums m (denseOf ω.up) (fld c "up") (w "↑")
   t := t.nums m (denseOf ω.down) (fld c "down") (w "↓")
   t := t.nums m (denseOf ω.up.down) (fld c "downup") (w "↓↑")
+  -- the closed forms (`upFast`/`downFast`) agree with the product-kernel forms
+  let closeL := fun (a b : List Float) => a.length == b.length && (a.zip b).all fun (x, y) => close 1e-13 x y
+  t := t.ok (closeL ω.up.v.toList (Chain.upGeneric ω).v.toList) (w "↑ closed form = kernels")
+  t := t.ok (closeL ω.down.v.toList (Chain.downGeneric ω).v.toList) (w "↓ closed form = kernels")
   -- the generic entry points agree with the typed ones
   t := t.ok ((project ω).v.toList == ω.up.v.toList && (reject ω).v.toList == ω.down.v.toList) (w "project/reject")
   let e1 : Chain V 1 Float := Composite.unitVec V Float 1
