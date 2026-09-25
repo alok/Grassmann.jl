@@ -128,10 +128,37 @@ def set (t : TensorField m F) (i : Nat) (x : F) : TensorField m F :=
 
 /-! ## Maps (Julia broadcasting, port notes §4.2) -/
 
+/-- The loop of `map`: fiber `i` read into the storage of fiber `i-1` (`FlatFiber.readInto`),
+which `f` has released by then unless it kept it, handed to `f`, and the result written at
+`off`. -/
+@[specialize] def mapLoop (f : F → F') (t : TensorField m F) :
+    (k i off : Nat) → F → FloatArray → FloatArray
+  | 0, _, _, _, a => a
+  | k + 1, i, off, x, a =>
+    let x := FlatFiber.readInto t.data (i * FlatFiber.width F) x
+    mapLoop f t k (i + 1) (off + FlatFiber.width F') x (FlatFiber.write a off (f x))
+
+theorem mapLoop_eq (f : F → F') (t : TensorField m F) : ∀ (k i off : Nat) (x : F) (a : FloatArray),
+    mapLoop f t k i off x a = fillLoop (fun i => f (t.get i)) k i off a
+  | 0, _, _, _, _ => rfl
+  | k + 1, i, off, x, a => by
+    simp only [mapLoop, fillLoop, FlatFiber.readInto_eq]
+    exact mapLoop_eq f t k (i + 1) _ _ _
+
 /-- Julia `broadcast(f, t) = TensorField(base(t), f.(fiber(t)))` (`Cartan.jl:167`): apply `f` to
-every fiber value. -/
+every fiber value (each read into the storage of the previous one, `mapLoop`). -/
 @[inline] def map (f : F → F') (t : TensorField m F) : TensorField m F' :=
-  ofFn m fun i => f (t.get i)
+  { data := if card m = 0 then Flat.zeros (FlatFiber.width F' * card m)
+      else mapLoop f t (card m) 0 0 (t.get 0) (Flat.zeros (FlatFiber.width F' * card m)),
+    size_data := by split <;> simp [mapLoop_eq, size_fillLoop, Flat.size_zeros] }
+
+/-- `map` is `ofFn` of the mapped fibers. -/
+theorem map_eq (f : F → F') (t : TensorField m F) : t.map f = ofFn m fun i => f (t.get i) := by
+  simp only [map, ofFn, buildFlat]
+  congr 1
+  split
+  · rename_i h; rw [h]; rfl
+  · rw [mapLoop_eq]
 
 /-- Combine two fields over the same base pointwise (Julia `op.(fiber(a), fiber(b))`). -/
 @[inline] def zipWith (f : F → F' → F'') (a : TensorField m F) (b : TensorField m F') :

@@ -356,7 +356,8 @@ variable {M : Type} [FrameBundle M] {m : M} {F F' F'' : Type}
 
 /-- Julia `broadcast(f, t)` applies `f` at every point. -/
 @[simp] theorem get_map [LawfulFlatFiber F'] (f : F → F') (t : TensorField m F) (i : Nat)
-    (h : i < card m) : (t.map f).get i = f (t.get i) := get_ofFn _ i h
+    (h : i < card m) : (t.map f).get i = f (t.get i) := by
+  rw [map_eq]; exact get_ofFn _ i h
 
 /-- Pointwise binary operations combine the fibers at every point. -/
 @[simp] theorem get_zipWith [LawfulFlatFiber F''] (f : F → F' → F'') (a : TensorField m F)

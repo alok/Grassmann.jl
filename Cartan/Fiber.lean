@@ -101,6 +101,12 @@ class FlatFiber (F : Type) where
   /-- Writing keeps the size. -/
   size_write (a : FloatArray) (off : Nat) (x : F) : (write a off x).size = a.size := by
     intros; simp
+  /-- `read a off` decoded into the storage of `x` (in place when `x` is unshared): a loop that
+  hands each fiber to a function and then reads the next one reuses it (`TensorField.map`). The
+  default reads afresh. -/
+  readInto (a : FloatArray) (off : Nat) (x : F) : F := read a off
+  /-- Reusing storage does not change what is read. -/
+  readInto_eq (a : FloatArray) (off : Nat) (x : F) : readInto a off x = read a off := by intros; rfl
 
 attribute [simp] FlatFiber.size_push
 

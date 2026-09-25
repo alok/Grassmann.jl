@@ -54,6 +54,66 @@ instance : HMul Float (AffinePoint N) (AffinePoint N) := ⟨fun s a => ⟨s * a.
 instance : HMul (AffinePoint N) Float (AffinePoint N) := ⟨fun a s => ⟨a.coords * s⟩⟩
 instance : HDiv (AffinePoint N) Float (AffinePoint N) := ⟨fun a s => ⟨a.coords / s⟩⟩
 
+/-- `buf[j] := a[off + j]` for `j ∈ [j₀, j₀ + k)` (in place when `buf` is unshared). -/
+def readLoop (a : FloatArray) (off : Nat) : (k j : Nat) → FloatArray → FloatArray
+  | 0, _, buf => buf
+  | k + 1, j, buf => readLoop a off k (j + 1) (buf.set! j (a.get! (off + j)))
+
+@[simp] theorem size_readLoop (a : FloatArray) (off : Nat) :
+    ∀ (k j : Nat) (buf : FloatArray), (readLoop a off k j buf).size = buf.size
+  | 0, _, _ => rfl
+  | k + 1, j, buf => by rw [readLoop, size_readLoop a off k (j + 1), FloatArray.size_set!']
+
+theorem get!_readLoop_below (a : FloatArray) (off : Nat) :
+    ∀ (k j : Nat) (buf : FloatArray) (i : Nat), i < j → (readLoop a off k j buf).get! i = buf.get! i
+  | 0, _, _, _, _ => rfl
+  | k + 1, j, buf, i, h => by
+    rw [readLoop, get!_readLoop_below a off k (j + 1) _ i (by omega),
+      FloatArray.get!_set!_ne _ j i _ (by omega)]
+
+theorem get!_readLoop (a : FloatArray) (off : Nat) :
+    ∀ (k j : Nat) (buf : FloatArray) (i : Nat), j + k ≤ buf.size → j ≤ i → i < j + k →
+      (readLoop a off k j buf).get! i = a.get! (off + i)
+  | 0, _, _, _, _, h1, h2 => absurd h2 (by omega)
+  | k + 1, j, buf, i, hs, h1, h2 => by
+    rw [readLoop]
+    by_cases hij : i = j
+    · subst hij
+      rw [get!_readLoop_below a off k (i + 1) _ i (by omega),
+        FloatArray.get!_set!_self _ i _ (by omega)]
+    · exact get!_readLoop a off k (j + 1) _ i (by rw [FloatArray.size_set!']; omega) (by omega)
+        (by omega)
+
+/-- `Values.get` of a float vector is `get!` of its storage. -/
+theorem _root_.StaticVectors.Values.get_float {n : Nat} (v : Values Float n) (i : Fin n) :
+    v.get i = v.data.get! i.1 := by
+  obtain ⟨d, hd⟩ := v
+  have hd' : d.size = n := hd
+  have hi : i.1 < d.size := by rw [hd']; exact i.2
+  cases d with | mk xs =>
+  simp only [FloatArray.size] at hi
+  simp [Values.get, Packed.get, FloatArray.get!, getElem!_def, Array.getElem?_eq_getElem hi]
+  rfl
+
+/-- The point stored at `a[off …]` written into the storage of `x` (`readLoop`). -/
+@[inline] def readPointInto (a : FloatArray) (off : Nat) (x : AffinePoint N) : AffinePoint N :=
+  ⟨⟨readLoop a off N 0 x.coords.data, by
+    show (readLoop a off N 0 x.coords.data).size = N
+    rw [size_readLoop]; exact x.coords.size_eq⟩⟩
+
+theorem readPointInto_eq (a : FloatArray) (off : Nat) (x : AffinePoint N) :
+    readPointInto a off x = ⟨readValues N a off⟩ := by
+  cases x with | mk xc =>
+  simp only [readPointInto, AffinePoint.mk.injEq]
+  apply Values.ext
+  intro i
+  have hx : xc.data.size = N := xc.size_eq
+  rw [Values.get_float, readValues, Values.get_ofFn]
+  show (readLoop a off N 0 xc.data).get! i.1 = FlatFiber.read a (off + i.1 * FlatFiber.width Float)
+  rw [get!_readLoop a off N 0 _ i.1 (by omega) (Nat.zero_le _) (by omega)]
+  show a.get! (off + i.1) = a.get! (off + i.1 * 1)
+  rw [Nat.mul_one]
+
 instance : FlatFiber (AffinePoint N) where
   width := N * FlatFiber.width Float
   read a off := ⟨FlatFiber.read a off⟩
@@ -61,6 +121,8 @@ instance : FlatFiber (AffinePoint N) where
   size_push a p := FlatFiber.size_push a p.coords
   write a off p := FlatFiber.write a off p.coords
   size_write a off p := FlatFiber.size_write a off p.coords
+  readInto := readPointInto
+  readInto_eq := readPointInto_eq
 
 instance : LinearFiber (AffinePoint N) := ⟨true⟩
 

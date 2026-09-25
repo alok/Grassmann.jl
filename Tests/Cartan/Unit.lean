@@ -61,6 +61,12 @@ def run : TestM Unit := do
   checkEq "TorusParameter(60,60) size" (BaseShape.shape T.base) [60, 60]
   checkEq "torus seam: first point = last point" (T.get 0).coords.toList.head! 0
   check "torus glued" T.immersion.isCompact
+  -- `map` reads each point into the previous one's storage: the same fibers as reading afresh
+  let gT (q : AffinePoint 2) : Chain ℝ3 1 Float :=
+    Chain.ofFn fun i => if i.1 = 0 then Float.cos (q.get! 0) else if i.1 = 1 then q.get! 1 else 1
+  checkEq "map over points = pointwise" ((T.map gT).fiberArray.toList.map (·.v.toList))
+    (T.fiberArray.toList.map fun q => (gT q).v.toList)
+  checkEq "map keeping the point" ((T.map id).data.toList) T.data.toList
   -- port notes §4.4, §4.14: `extend(0:0.5:1, 5) == 0.0:0.5:2.0`, `resample(0:0.5:2, 9)`
   match (Axis.colon 0 0.5 1).extend 5 with
   | some e => checkEq "extend(0:0.5:1, 5)" e.toFloatArray.toList (Axis.colon 0 0.5 2).toFloatArray.toList
