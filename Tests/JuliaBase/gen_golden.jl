@@ -1,14 +1,19 @@
 # Oracle generator for the JuliaBase test suites.
 #
 #   julia --startup-file=no --project=oracle Tests/JuliaBase/gen_golden.jl golden Tests/JuliaBase
-#       writes the committed goldens (float_show.json, num.json, range.json, show.json, math.json)
+#       writes the committed goldens (float_show.json, num.json, range.json, show.json, math.json,
+#       trig.json)
 #   julia --startup-file=no --project=oracle Tests/JuliaBase/gen_golden.jl math Tests/JuliaBase
 #       rewrites only math.json (it has its own seed)
+#   julia --startup-file=no --project=oracle Tests/JuliaBase/gen_golden.jl trig Tests/JuliaBase
+#       rewrites only trig.json (Julia's own trigonometric, hyperbolic and ComplexF64 functions)
 #   julia --startup-file=no --project=oracle Tests/JuliaBase/gen_golden.jl fuzz PREFIX N SEED
-#       writes large TSV fuzz files PREFIX_{f64,f32,opts,num,range,math}.tsv (not committed); run
+#       writes large TSV fuzz files PREFIX_{f64,f32,opts,num,range,math,trig}.tsv (not committed); run
 #       them with Tests.JuliaBase.fuzzAll (see Tests/JuliaBase.lean)
 #   julia --startup-file=no --project=oracle Tests/JuliaBase/gen_golden.jl fuzzmath PREFIX N SEED
 #       writes only PREFIX_math.tsv
+#   julia --startup-file=no --project=oracle Tests/JuliaBase/gen_golden.jl fuzztrig PREFIX N SEED
+#       writes only PREFIX_trig.tsv
 #
 # Floats are exchanged as the hex of their bit pattern so they round-trip exactly.
 
@@ -501,6 +506,177 @@ math_rows(rng, n) = (rows = Any[]; while length(rows) < n; c = math_case(rng); c
 # Float16 printing is checked exhaustively
 f16all() = [string(reinterpret(Float16, u)) for u in UInt16(0):UInt16(0x7bff)]
 
+# ---------------------------------------------------------------- trigonometry (trig.json)
+
+const TRIG = Dict("sin" => sin, "cos" => cos, "tan" => tan, "asin" => asin, "acos" => acos,
+                  "atan" => atan, "sinh" => sinh, "cosh" => cosh, "tanh" => tanh, "asinh" => asinh,
+                  "acosh" => acosh, "atanh" => atanh, "sinpi" => sinpi, "cospi" => cospi)
+const TNAMES = sort(collect(keys(TRIG)))
+
+# arguments that reach every branch: reduction boundaries (multiples of π/2, Payne–Hanek up to
+# floatmax), the kernels' thresholds, domain edges and special values
+function trig_arg(rng, name)
+    k = rand(rng, 1:10)
+    sg = rand(rng, Bool) ? -1.0 : 1.0
+    special = (0.0, -0.0, Inf, -Inf, NaN, floatmax(), -floatmax(), 5e-324, -5e-324, 1e-300, 1.0, -1.0)
+    if name in ("sin", "cos", "tan")
+        k <= 3 && return (2rand(rng) - 1) * 10
+        k == 4 && return sg * exp(rand(rng) * 60 - 30)
+        k == 5 && return sg * exp(rand(rng) * 709)
+        k == 6 && return nudge(sg * rand(rng, 1:2^rand(rng, 1:30)) * (pi / 2), rand(rng, -3:3))
+        k == 7 && return nudge(sg * rand(rng, (pi/4, 3pi/4, 5pi/4, 7pi/4, 9pi/4, 2.0^20 * pi/2,
+                                                 sqrt(eps()), sqrt(eps() / 2), sqrt(eps()) / 2)), rand(rng, -3:3))
+        k == 8 && return rand(rng, special)
+        k == 9 && return sg * reinterpret(Float64, rand(rng, UInt64) >> 1)
+        return operand(rng)
+    elseif name in ("asin", "acos", "atanh")
+        k <= 4 && return 2rand(rng) - 1
+        k == 5 && return nudge(sg, rand(rng, -60:0))
+        k == 6 && return nudge(sg * rand(rng, (0.5, 0.975, 2.0^-26, 2.0^-57, sqrt(eps()))), rand(rng, -3:3))
+        k == 7 && return sg * exp(-rand(rng) * 90)
+        k == 8 && return rand(rng, (0.0, -0.0, NaN, 1.0, -1.0, 0.5, -0.5, 5e-324))
+        return (2rand(rng) - 1) * 10.0^rand(rng, -20:0)
+    elseif name == "atan"
+        k <= 3 && return sg * exp(rand(rng) * 80 - 40)
+        k == 4 && return (2rand(rng) - 1) * 3
+        k == 5 && return nudge(sg * rand(rng, (7/16, 11/16, 19/16, 39/16, 2.0^66, 2.0^-27)), rand(rng, -3:3))
+        k == 6 && return rand(rng, special)
+        return operand(rng)
+    elseif name in ("sinh", "cosh", "tanh")
+        k <= 3 && return (2rand(rng) - 1) * 25
+        k == 4 && return sg * exp(-rand(rng) * 40)
+        k == 5 && return nudge(sg * rand(rng, (2.1, 1.0, 0.5, 22.0, 709.7822265633563, 3.0, 9.0, 88.72283, 18.0 / 2,
+                                                 1.3862944 / 2)), rand(rng, -3:3))
+        k == 6 && return sg * (700 + rand(rng) * 20)
+        k == 7 && return rand(rng, special)
+        return operand(rng)
+    elseif name == "asinh"
+        k <= 4 && return sg * exp(rand(rng) * 100 - 50)
+        k == 5 && return nudge(sg * rand(rng, (2.0, 2.0^28, 2.0^-28)), rand(rng, -3:3))
+        k == 6 && return rand(rng, special)
+        return operand(rng)
+    elseif name == "acosh"
+        k <= 3 && return 1 + exp(rand(rng) * 40 - 38)
+        k <= 5 && return 1 + 2rand(rng)
+        k == 6 && return exp(rand(rng) * 700)
+        k == 7 && return nudge(rand(rng, (1.0, 2.0, 2.0^28)), rand(rng, 0:3))
+        k == 8 && return rand(rng, (1.0, Inf, NaN, floatmax()))
+        return abs(operand(rng)) + 1
+    else  # sinpi, cospi
+        k <= 3 && return (2rand(rng) - 1) * 10
+        k == 4 && return nudge(sg * rand(rng, 0:40) / rand(rng, (2, 4)), rand(rng, -3:3))
+        k == 5 && return sg * exp(rand(rng) * 40)
+        k == 6 && return nudge(sg * rand(rng, (2.0^52, 2.0^53, 2.0^60)), rand(rng, -3:3))
+        k == 7 && return rand(rng, special)
+        return operand(rng)
+    end
+end
+
+function trig_arg32(rng, name)
+    r = rand(rng)
+    r < 0.15 && return sample32(rng)
+    if r < 0.25 && name in ("sin", "cos", "tan")
+        return nudge(Float32(rand(rng, (pi/4, 2.0^28 * pi/2, sqrt(eps(Float32)), 2.0^-12))) *
+                     (rand(rng, Bool) ? -1f0 : 1f0), rand(rng, -3:3))
+    end
+    return Float32(trig_arg(rng, name))
+end
+
+# a complex operand: moderate, tiny, huge or special parts, often on an axis
+function carg(rng)
+    part() = (k = rand(rng, 1:10);
+              k <= 5 ? (rand(rng) - 0.5) * 10.0^rand(rng, -3:3) :
+              k == 6 ? Float64(rand(rng, -3:3)) :
+              k == 7 ? rand(rng, (0.0, -0.0, Inf, -Inf, NaN, 1.0, -1.0)) :
+              k == 8 ? (rand(rng) - 0.5) * 10.0^rand(rng, 100:308) :
+              k == 9 ? (rand(rng) - 0.5) * 10.0^rand(rng, -320:-100) : operand(rng))
+    a, b = part(), part()
+    k = rand(rng, 1:8)
+    k == 1 && (b = rand(rng, (0.0, -0.0)))
+    k == 2 && (a = rand(rng, (0.0, -0.0)))
+    return complex(a, b)
+end
+
+const CUNARY = Dict("exp" => exp, "expm1" => expm1, "log" => log, "log1p" => log1p, "sqrt" => sqrt,
+                    "sin" => sin, "cos" => cos, "tan" => tan, "sinh" => sinh, "cosh" => cosh,
+                    "tanh" => tanh, "asin" => asin, "acos" => acos, "atan" => atan, "asinh" => asinh,
+                    "acosh" => acosh, "atanh" => atanh)
+const CNAMES = sort(collect(keys(CUNARY)))
+
+function trig_case(rng)
+    k = rand(rng, 1:20)
+    if k <= 7
+        name = rand(rng, TNAMES)
+        x = trig_arg(rng, name)
+        r = try TRIG[name](x) catch; return nothing end
+        return ["t64", name, hex(x), hex(r)]
+    elseif k <= 9
+        name = rand(rng, TNAMES)
+        x = trig_arg32(rng, name)
+        r = try TRIG[name](x) catch; return nothing end
+        return ["t32", name, hex(x), hex(r)]
+    elseif k == 10
+        f32 = rand(rng) < 0.3
+        x = f32 ? trig_arg32(rng, "sin") : trig_arg(rng, "sin")
+        s, c = try sincos(x) catch; return nothing end
+        return [f32 ? "sincos32" : "sincos64", hex(x), hex(s), hex(c)]
+    elseif k == 11
+        x = trig_arg(rng, "sinpi")
+        s, c = try sincospi(x) catch; return nothing end
+        return ["sincospi64", hex(x), hex(s), hex(c)]
+    elseif k <= 13
+        f32 = rand(rng) < 0.3
+        y, x = operand(rng), operand(rng)
+        j = rand(rng, 1:5)
+        j == 1 && (y = x * 10.0^rand(rng, (-25, -20, -18, -17, 17, 18, 20, 25)) * (rand(rng, Bool) ? 1 : -1))
+        j == 2 && (x = rand(rng, (0.0, -0.0, Inf, -Inf, 1.0, NaN)))
+        j == 3 && (y = rand(rng, (0.0, -0.0, Inf, -Inf, NaN)))
+        if f32
+            y32, x32 = Float32(y), Float32(x)
+            j == 1 && rand(rng, Bool) && (y32 = x32 * 1f8)
+            return ["atan2_32", hex(y32), hex(x32), hex(atan(y32, x32))]
+        end
+        return ["atan2_64", hex(y), hex(x), hex(atan(y, x))]
+    elseif k <= 18
+        name = rand(rng, CNAMES)
+        z = carg(rng)
+        r = try CUNARY[name](z) catch; return nothing end
+        return ["c64", name, hex(real(z)), hex(imag(z)), hex(real(r)), hex(imag(r))]
+    elseif k == 19
+        θ = trig_arg(rng, "sin")
+        r = try cis(θ) catch; return nothing end
+        return ["cis", hex(θ), hex(real(r)), hex(imag(r))]
+    else
+        z = carg(rng)
+        j = rand(rng, 1:4)
+        p = j == 1 ? complex(rand(rng, (0.5, -0.5, 1/3, 2.5, -1.5, 0.1, 3.0, -2.0)), rand(rng, (0.0, -0.0))) :
+            j == 2 ? complex(Float64(rand(rng, -6:6)), 0.0) :
+            j == 3 ? complex((rand(rng) - 0.5) * 8, 0.0) : carg(rng)
+        j == 3 && (z = complex(-abs(real(z)), rand(rng, (0.0, -0.0))))  # negative real base, real power
+        r = try z^p catch; return nothing end
+        return ["cpow", hex(real(z)), hex(imag(z)), hex(real(p)), hex(imag(p)), hex(real(r)), hex(imag(r))]
+    end
+end
+
+trig_rows(rng, n) = (rows = Any[]; while length(rows) < n; c = trig_case(rng); c === nothing || push!(rows, c); end; rows)
+
+function trig_golden(dir)
+    rng = Random.Xoshiro(20260927)
+    open(joinpath(dir, "trig.json"), "w") do io
+        JSON.print(io, Dict("meta" => Dict("julia" => string(VERSION), "seed" => 20260927),
+            "cases" => trig_rows(rng, 9000)))
+    end
+end
+
+function trig_fuzz(prefix, n, seed)
+    rng = Random.Xoshiro(seed + 2)
+    open(prefix * "_trig.tsv", "w") do io
+        for row in trig_rows(rng, n)
+            println(io, join(row, '\t'))
+        end
+    end
+end
+
 # ---------------------------------------------------------------- drivers
 
 function golden(dir)
@@ -538,6 +714,7 @@ function golden(dir)
         JSON.print(io, Dict("meta" => Dict("julia" => string(VERSION)), "cases" => show_cases()))
     end
     math_golden(dir)
+    trig_golden(dir)
 end
 
 # math.json has its own seed so the older goldens keep their random streams
@@ -592,6 +769,7 @@ function fuzz(prefix, n, seed)
         end
     end
     math_fuzz(prefix, n, seed)
+    trig_fuzz(prefix, n, seed)
 end
 
 function math_fuzz(prefix, n, seed)
@@ -611,6 +789,10 @@ elseif ARGS[1] == "fuzz"
     fuzz(ARGS[2], parse(Int, ARGS[3]), parse(Int, ARGS[4]))
 elseif ARGS[1] == "fuzzmath"
     math_fuzz(ARGS[2], parse(Int, ARGS[3]), parse(Int, ARGS[4]))
+elseif ARGS[1] == "trig"
+    trig_golden(ARGS[2])
+elseif ARGS[1] == "fuzztrig"
+    trig_fuzz(ARGS[2], parse(Int, ARGS[3]), parse(Int, ARGS[4]))
 else
-    error("usage: gen_golden.jl golden DIR | math DIR | fuzz PREFIX N SEED | fuzzmath PREFIX N SEED")
+    error("usage: gen_golden.jl golden DIR | math DIR | trig DIR | fuzz PREFIX N SEED | fuzzmath PREFIX N SEED | fuzztrig PREFIX N SEED")
 end
