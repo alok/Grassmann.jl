@@ -1,5 +1,9 @@
 import AbstractAnalysis.JuliaFloat
 import AbstractAnalysis.Show
+import AbstractAnalysis.Countable
+import AbstractAnalysis.Sequence
+import AbstractAnalysis.Metric
+import AbstractAnalysis.Limit
 
 /-!
 # AbstractAnalysis
