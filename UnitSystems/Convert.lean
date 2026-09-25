@@ -502,6 +502,7 @@ def natural (q : Conv) (U : UnitSystem α) : α :=
   | .permeability => U.μ₀
   | q => q.factor (Natural α) U
 
+/-- `all` lists the quantities in constructor order (the per-pair tables index by `ctorIdx`). -/
 theorem ctorIdx_all : all.map Conv.ctorIdx = List.range 131 := by decide
 
 /-! ### Fast paths
@@ -632,6 +633,7 @@ def identFull (U S : UnitSystem Num) : Bool :=
   U.ident S && U.C.αG.ident S.C.αG && U.C.α.ident S.C.α && U.C.μₑᵤ.ident S.C.μₑᵤ &&
     U.C.μₚᵤ.ident S.C.μₚᵤ && U.C.ΩΛ.ident S.C.ΩΛ
 
+/-- `identFull` is reflexive (the pointer-equality fast path of `ofSystem?`). -/
 theorem identFull_refl (U : UnitSystem Num) : identFull U U = true := by
   simp [identFull, UnitSystem.ident, UnitAlg.ident, Num.ident_refl]
 
