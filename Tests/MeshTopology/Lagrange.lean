@@ -50,6 +50,7 @@ def jtets {M : Nat} (m : LagrangeTetrahedra M) : Json :=
 /-- The golden checks shared by the three families. -/
 structure Family (L : Type) where
   info : L → Json
+  display : L → String
   refinement : L → Option Json
   subtopology : L → Array (Array Nat)
   getSub : L → Array Nat → L
@@ -63,6 +64,7 @@ structure Family (L : Type) where
 def checkFamily {L : Type} (F : Family L) (lbl : String) (m : L) (c : Json) : TestM Unit := do
   let ks ← natsOf (← jField c "ks")
   checkJ s!"{lbl} info" (F.info m) (← jField c "info")
+  checkJ s!"{lbl} display" (jstr (F.display m)) (← jField c "display")
   checkOptJ s!"{lbl} refinement" (F.refinement m) (← jField c "refinement")
   checkJ s!"{lbl} subtopology" (jlists (F.subtopology m)) (← jField c "subtopology")
   let s := F.getSub m ks
@@ -76,19 +78,19 @@ def checkFamily {L : Type} (F : Family L) (lbl : String) (m : L) (c : Json) : Te
 
 /-- Lagrange edges. -/
 def edgesFamily (M : Nat) : Family (LagrangeEdges M) :=
-  { info := jedges, refinement := fun _ => none, subtopology := (·.subtopology)
+  { info := jedges, display := (·.displayString), refinement := fun _ => none, subtopology := (·.subtopology)
     getSub := (·.getSub ·), getElement := (·.getElement ·), elements := (·.t.elements)
     subImmersion := (·.subImmersion), fullImmersion := (·.fullImmersion), refine := (·.refine) }
 
 /-- Lagrange triangles. -/
 def trisFamily (M : Nat) : Family (LagrangeTriangles M) :=
-  { info := jtris, refinement := fun m => m.refinement.map jinfo, subtopology := (·.subtopology)
+  { info := jtris, display := (·.displayString), refinement := fun m => m.refinement.map jinfo, subtopology := (·.subtopology)
     getSub := (·.getSub ·), getElement := (·.getElement ·), elements := (·.t.elements)
     subImmersion := (·.subImmersion), fullImmersion := (·.fullImmersion), refine := (·.refine) }
 
 /-- Lagrange tetrahedra. -/
 def tetsFamily (M : Nat) : Family (LagrangeTetrahedra M) :=
-  { info := jtets, refinement := fun m => m.refinement.map jinfo, subtopology := (·.subtopology)
+  { info := jtets, display := (·.displayString), refinement := fun m => m.refinement.map jinfo, subtopology := (·.subtopology)
     getSub := (·.getSub ·), getElement := (·.getElement ·), elements := (·.t.elements)
     subImmersion := (·.subImmersion), fullImmersion := (·.fullImmersion), refine := (·.refine) }
 

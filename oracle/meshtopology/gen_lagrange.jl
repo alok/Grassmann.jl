@@ -32,6 +32,7 @@ for (name, elems) in meshes
         f = M -> ctor(M)(M.SimplexTopology(0, elems))
         d = Dict{String,Any}("mesh" => name, "N" => N, "M" => m, "ks" => ks)
         d["info"] = both(M -> linfoj(M, f(M)))
+        d["display"] = both(M -> sprint(show, MIME"text/plain"(), f(M)))
         d["refinement"] = both(M -> infoj(M, M.refinement(f(M))))
         d["subtopology"] = both(M -> M.subtopology(f(M)))
         d["subset"] = both(M -> linfoj(M, f(M)[ks]))

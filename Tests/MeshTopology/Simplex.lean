@@ -107,6 +107,8 @@ def checkOps {N : Nat} (lbl : String) (t : SimplexTopology N) (c : Json) : TestM
 /-- One mesh of `simplex.json`. -/
 def checkMesh {N : Nat} (name : String) (t : SimplexTopology N) (c : Json) : TestM Unit := do
   checkJ s!"{name} info" (jinfo t) (← jField c "info")
+  checkJ s!"{name} display" (jstr t.displayString) (← jField c "display")
+  checkJ s!"{name} print" (jstr t.printString) (← jField c "print")
   checkOps name t c
   if 2 ≤ N ∧ N ≤ 5 then
     let es ← gArr c "edgesigns"
@@ -121,6 +123,7 @@ def checkMesh {N : Nat} (name : String) (t : SimplexTopology N) (c : Json) : Tes
   let vs ← natsOf (← jField c "vs")
   let s := t.getSub ks
   checkJ s!"{name} t[ks]" (jinfo s) (← jField c "subset")
+  checkJ s!"{name} t[ks] display" (jstr s.displayString) (← jField c "subset_display")
   checkOps s!"{name} t[ks]" s (← jField c "subset_ops")
   checkJ s!"{name} t[ks] subtopology" (jvecsN s.subtopology) (← jField c "subset_subtopology")
   checkJ s!"{name} t[ks] subimmersion" (jinfo s.subImmersion) (← jField c "subset_subimmersion")
@@ -148,6 +151,7 @@ def checkMesh {N : Nat} (name : String) (t : SimplexTopology N) (c : Json) : Tes
   -- discontinuous
   let d := t.discontinuous
   checkJ s!"{name} discontinuous" (jdinfo d) (← jField c "discontinuous")
+  checkJ s!"{name} discontinuous display" (jstr d.displayString) (← jField c "d_display")
   checkJ s!"{name} discontinuousvertices" (jnats d.discontinuousVertices) (← jField c "discontinuousvertices")
   checkJ s!"{name} disconnect" (jdinfo t.disconnect) (← jField c "disconnect")
   checkJ s!"{name} d fullimmersion" (jdinfo d.fullImmersion) (← jField c "d_fullimmersion")

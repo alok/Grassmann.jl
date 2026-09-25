@@ -39,6 +39,8 @@ for (name, elems) in meshes
     f = M -> M.SimplexTopology(0, elems)
     d = Dict{String,Any}("name" => name, "N" => N, "mesh" => J(elems))
     d["info"] = both(M -> infoj(M, f(M)))
+    d["display"] = both(M -> sprint(show, MIME"text/plain"(), f(M)))
+    d["print"] = both(M -> sprint(print, f(M)))
     merge!(d, elementops(f, N))
     if 2 ≤ N ≤ 5
         d["edgesigns"] = [J(F.edgesigns(e)) for e in elems]
@@ -52,6 +54,7 @@ for (name, elems) in meshes
     d["vs"] = vs
     sub = M -> f(M)[ks]
     d["subset"] = both(M -> infoj(M, sub(M)))
+    d["subset_display"] = both(M -> sprint(show, MIME"text/plain"(), sub(M)))
     d["subset_ops"] = elementops(sub, N)
     d["subset_subtopology"] = both(M -> M.subtopology(sub(M)))
     d["subset_subimmersion"] = both(M -> infoj(M, M.subimmersion(sub(M))))
@@ -76,6 +79,7 @@ for (name, elems) in meshes
     # discontinuous
     dis = M -> M.discontinuous(f(M))
     d["discontinuous"] = both(M -> dinfoj(M, dis(M)))
+    d["d_display"] = both(M -> sprint(show, MIME"text/plain"(), dis(M)))
     d["discontinuousvertices"] = both(M -> M.discontinuousvertices(dis(M)))
     d["disconnect"] = both(M -> dinfoj(M, M.disconnect(f(M))))
     d["d_fullimmersion"] = both(M -> dinfoj(M, M.fullimmersion(dis(M))))

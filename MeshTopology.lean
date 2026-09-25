@@ -8,6 +8,7 @@ import MeshTopology.Element
 import MeshTopology.Lagrange
 import MeshTopology.Resample
 import MeshTopology.Proofs
+import MeshTopology.Api
 
 /-!
 # MeshTopology
