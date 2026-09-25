@@ -21,6 +21,8 @@ porting Julia expressions.
 -/
 import AbstractTensors.Dims
 import AbstractTensors.Coeff
+import AbstractTensors.Alias
+import AbstractLattices.Basic
 
 universe u v w
 
@@ -106,15 +108,18 @@ instance {α : Type} : Value (Complex α) (Complex α) := ⟨id⟩
 
 /-! ## Binary products (AT:257-349; port-notes §2.1.6) -/
 
-/-- Exterior product `∧` (Julia `wedge`, AbstractLattices). -/
-class Wedge (α : Type u) (β : Type v) (γ : outParam (Type w)) where
-  /-- `a ∧ b`. -/
-  wedge : α → β → γ
+/-! `Wedge`/`Vee` **are** the AbstractLattices classes `HWedge`/`HVee` (Julia: `∧ === wedge`
+and `∨ === vee` are single generic functions owned by AbstractLattices, extended by
+AbstractTensors, Grassmann, DeMorgan and Dendriform, `AbstractLattices.jl
+src/AbstractLattices.jl:5-9`). The names `Wedge`, `Wedge.wedge`, `wedge`, `Vee`, `Vee.vee`,
+`vee` are aliases of `AbstractLattices.HWedge`, `HWedge.wedge`, … (`export_alias`), so an
+instance declared as `Wedge A B C` is an `HWedge A B C` instance, and the `∧`/`∨` notation of
+AbstractTensors and Grassmann reaches the Bool, truth-table and tree instances too. -/
 
-/-- Regressive product `∨` (Julia `vee`, AbstractLattices). -/
-class Vee (α : Type u) (β : Type v) (γ : outParam (Type w)) where
-  /-- `a ∨ b`. -/
-  vee : α → β → γ
+export_alias Wedge => AbstractLattices.HWedge
+export_alias Wedge.wedge => AbstractLattices.HWedge.wedge
+export_alias Vee => AbstractLattices.HVee
+export_alias Vee.vee => AbstractLattices.HVee.vee
 
 /-- Geometric product `⟑` (Julia `wedgedot`, `times`, `*`). Grassmann gives
 tensors both this and `HMul`. -/
@@ -162,8 +167,8 @@ class AntiSymProd (α : Type u) (β : Type v) (γ : outParam (Type w)) where
   /-- `a ⊠ b`. -/
   antiSymProd : α → β → γ
 
-export Wedge (wedge)
-export Vee (vee)
+export_alias wedge => AbstractLattices.HWedge.wedge
+export_alias vee => AbstractLattices.HVee.vee
 export WedgeDot (wedgedot)
 export VeeDot (veedot)
 export Contraction (contraction)

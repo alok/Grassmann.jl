@@ -9,10 +9,19 @@ Grassmann). The Lean counterpart of "one generic function extended everywhere" i
 typeclass: `HWedge`/`HVee` below. They are heterogeneous (`α → β → γ` with `γ` an
 `outParam`) because Grassmann's `∧` maps `Chain V G × Chain V H → Chain V (G+H)`.
 
-Notation policy (docs/DESIGN.md §4.4): this library defines **no** notation. Lean's
-core `∧`/`∨` are `And`/`Or`; Grassmann owns the scoped overloads of those tokens and
-maps them onto `HWedge.wedge`/`HVee.vee`. Every instance declared against these classes
-(Bool, DeMorgan truth tables, Dendriform trees) is therefore picked up automatically.
+One class family: AbstractTensors' `Wedge`/`Vee` are aliases of `HWedge`/`HVee`
+(`AbstractTensors.Ops`), so the exterior and regressive products of Grassmann, the Bool
+instances below, DeMorgan's truth values and tables and Dendriform's grafting are all
+instances of the same two classes, as in Julia.
+
+Notation (docs/DESIGN.md §4.4): `∧`/`∨` are scoped. `open AbstractLattices` (or
+`open AbstractTensors`, or `open Grassmann`, which declare the same notation; open only
+one of them) overloads core's `And`/`Or` at their precedences (35/30, right-associative)
+through choice nodes, so Prop connectives keep working and `p ∧ q` on truth values, Bool
+lattices or trees elaborates to `HWedge.wedge`. As with Grassmann, write `(a ∧ b) = c`:
+`∧` binds looser than `=`. On two `Bool`s both readings typecheck (Prop `(a = true) ∧ …`
+and the lattice meet), so `a ∧ b` on Bools is ambiguous with the namespace open: write
+`a && b`.
 -/
 
 namespace AbstractLattices
@@ -41,6 +50,11 @@ class Dist (α : Type u) (β : outParam (Type v)) where
 export HWedge (wedge)
 export HVee (vee)
 export Dist (dist)
+
+/-- Meet `a ∧ b` (Julia `∧`, `AbstractLattices.jl:8`); overloads `And` (35, right-assoc). -/
+scoped infixr:35 " ∧ " => HWedge.wedge
+/-- Join `a ∨ b` (Julia `∨`, `AbstractLattices.jl:9`); overloads `Or` (30, right-assoc). -/
+scoped infixr:30 " ∨ " => HVee.vee
 
 /-- Unary meet is the identity, Julia `wedge(x) = x` (`AbstractLattices.jl:11`). It is
 the base case of Julia's variadic folds. -/
