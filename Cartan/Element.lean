@@ -1,0 +1,778 @@
+import Cartan.Operator
+import Cartan.Solve
+
+/-!
+# Finite elements on simplex bundles (Cartan.jl `src/element.jl`)
+
+The finite-element layer on `SimplexBundle`/`FaceBundle` (port notes
+`cartan-element-spectral-plot.md` §2.1, §4.1-4.8): simplex geometry, P1 hat-function gradients,
+element↔node transfers, the lumped load vector, evaluation of piecewise-linear fields, 1-D meshes
+and their refinement, graph operators, and the mesh-level forwarders of MeshTopology. Adapode's
+assembly (stiffness, mass, convection, solvers) consumes `volumes`, `gradienthat` and `means`.
+
+**Points.** A mesh point is homogeneous, `Chain V 1 Float` with coordinates `(1, x₁, …, x_d)`
+(Julia `Chain{varmanifold(d+1),1}`), so `V.n = d + 1`; an element with `n` vertices is the
+`Simplex (euclidean n) V Float` whose columns are its points (`simplexAt`, Julia
+`affinehull(t)[k]`), and every per-element formula is Grassmann's (`Grassmann.Forms.Simplex`),
+bit-identical to Julia's.
+
+**Julia defects fixed** (port notes §8.3; the tests record Julia's values and the fix):
+* **B3** — `gradienthat` of a 1-D element with `x₂ < x₁` or of a clockwise triangle divides by the
+  *unsigned* measure, so every gradient is negated; here the measure is signed (for positively
+  oriented elements the arithmetic, and so the result, is Julia's bit for bit).
+* **B1** — `assembleload`/`assembleincidence`/`interp`/`gradient` throw `UndefVarError` upstream
+  (MeshTopology never imports `fibertype`, `means`, …); implemented with the intended semantics.
+* `refinemesh!` resizes `vertices(t)`, a `OneTo` for every mesh `initmesh` builds (MethodError);
+  `refine1` returns the intended refined mesh.
+* **B6** `interior` (swapped arguments) and **B5** `incidence(::FrameBundle)` (undefined `cols`)
+  are MeshTopology's fixed `interiorNodes`/`incidence`.
+* **B7** — Julia's `Δ(t) = Diagonal(degrees) - adjacency` mixes element counts with edge
+  multiplicities (rows do not sum to zero); `laplacian` keeps Julia's matrix, `graphLaplacian`
+  is the graph Laplacian `D - A` of the edge graph.
+-/
+
+namespace Cartan
+
+open Grassmann DirectSum StaticVectors AbstractTensors JuliaBase MeshTopology Grassmann.Forms
+open Cartan.Solve
+
+/-- Homogeneous mesh points (Julia `Chain{varmanifold(d+1),1,Float64}`). -/
+abbrev HPoint (V : TensorBundle) := Chain V 1 Float
+
+/-- One element as a simplex operator: `n` columns, the homogeneous points. -/
+abbrev ElementSimplex (n : Nat) (V : TensorBundle) := Simplex (TensorBundle.euclidean n) V Float
+
+namespace SimplexBundle
+
+variable {n : Nat} {V : TensorBundle} {G : Type}
+
+/-- Coordinate `c` (0-based, homogeneous: `c = 0` is the `1`) of full vertex `v` (1-based). -/
+@[inline] def coord (m : SimplexBundle n (HPoint V) G) (v c : Nat) : Float :=
+  m.cloud.points.get! ((v - 1) * V.n + c)
+
+/-- The number of elements (Julia `elements(t)`). -/
+@[inline] def elements (m : SimplexBundle n (HPoint V) G) : Nat := m.top.elements
+
+/-- The number of nodes of the full mesh (Julia `totalnodes(t)`). -/
+@[inline] def totalNodes (m : SimplexBundle n (HPoint V) G) : Nat := m.top.totalNodes
+
+/-- Element `e` (0-based) as a simplex operator (Julia `affinehull(t)[e+1]`). -/
+def simplexAt (m : SimplexBundle n (HPoint V) G) (e : Nat) : ElementSimplex n V :=
+  let vs := m.top.get (e + 1)
+  TensorOperator.ofFn fun i j => m.coord vs[j.1]! i.1
+
+/-- The face bundle of the mesh (Julia `FaceBundle(t)`). -/
+abbrev faces' (m : SimplexBundle n (HPoint V) G) : FaceBundle n (HPoint V) G := .ofSimplex m
+
+/-! ## Geometry (§4.1) -/
+
+/-- The edge vectors `pᵢ - p₁` of element `e` without the homogeneous coordinate (Julia
+`affineframe(t)[e+1]`). -/
+def affineframeAt (m : SimplexBundle n (HPoint V) G) (e : Nat) :
+    Simplex (TensorBundle.euclidean (n - 1)) (Forms.drop1 V) Float :=
+  (m.simplexAt e).affineframe
+
+/-- Whether the elements are embedded (fewer vertices than homogeneous dimensions, e.g.
+triangles in 3-D). -/
+@[inline] def embedded (_ : SimplexBundle n (HPoint V) G) : Bool := n < V.n
+
+/-- `∧` of an element (Julia `∧(FaceBundle(t))[e+1]`): the wedge of its homogeneous points (a
+pseudoscalar of `V`, one coefficient) or, embedded, of its edge vectors (`C(d, n-1)`
+coefficients of a blade of `↓V`). -/
+def wedgeAt (m : SimplexBundle n (HPoint V) G) (e : Nat) : Array Float :=
+  if m.embedded then
+    let F := m.affineframeAt e
+    (wedgeList F.cols1).toArray
+  else #[(m.simplexAt e).det]
+
+/-- `(n-1)!` as a float. -/
+def factF (k : Nat) : Float := Float.ofNat (TensorOperator.factorial k)
+
+/-- Julia `detsimplex(t)[e+1] = ∧/(n-1)!` (a Grassmann element divided by a real: times the
+reciprocal). -/
+def detsimplexAt (m : SimplexBundle n (HPoint V) G) (e : Nat) : Array Float :=
+  let r := 1 / factF (n - 1)
+  (m.wedgeAt e).map (· * r)
+
+/-- Full vertex id `k` (1-based) of element `e` (0-based), read from the connectivity (no
+vector built). -/
+@[inline] def vertexOf (m : SimplexBundle n (HPoint V) G) (e k : Nat) : Nat :=
+  m.top.conn[n * (m.top.getFacet (e + 1) - 1) + k]!
+
+/-- The determinant of a planar triangle's homogeneous points (Julia `∧` of the three points, the
+operations of `Forms.det` on the columns of `simplexAt`: `wedge3` then `wedge21`), read from the
+cloud. -/
+@[inline] def det3At (m : SimplexBundle n (HPoint V) G) (e : Nat) : Float :=
+  let c := m.cloud.points
+  let o0 := (m.vertexOf e 0 - 1) * 3
+  let o1 := (m.vertexOf e 1 - 1) * 3
+  let o2 := (m.vertexOf e 2 - 1) * 3
+  let (b12, b13, b23) := Forms.wedge3 (c.get! o0) (c.get! (o0 + 1)) (c.get! (o0 + 2))
+    (c.get! o1) (c.get! (o1 + 1)) (c.get! (o1 + 2))
+  Forms.wedge21 b12 b13 b23 (c.get! o2) (c.get! (o2 + 1)) (c.get! (o2 + 2))
+
+/-- Julia `volumes(t)[e+1]` (`element.jl:45-54`): the length of a segment, else
+`|detsimplex|` (the norm of the blade when embedded). Planar triangles read their points
+directly (`det3At`, the same operations as the general path). -/
+def volumeAt (m : SimplexBundle n (HPoint V) G) (e : Nat) : Float :=
+  if n == 2 then (m.simplexAt e).edgelength
+  else if n == 3 && V.n == 3 then (m.det3At e * (1 / factF 2)).abs
+  else
+    let d := m.detsimplexAt e
+    if d.size == 1 then d[0]!.abs
+    else Float.sqrt (d.foldl (fun s x => s + x * x) 0)
+
+/-- Julia `volumes(t)`: the unsigned measures, a field over the elements. -/
+def volumes (m : SimplexBundle n (HPoint V) G) : TensorField m.faces' Float :=
+  TensorField.ofFn _ m.volumeAt
+
+/-- The signed measure of a non-embedded element (`detsimplex`; `volumes` of an embedded one). -/
+def signedVolumeAt (m : SimplexBundle n (HPoint V) G) (e : Nat) : Float :=
+  if n == 2 && V.n == 2 then
+    let T := m.simplexAt e
+    let l := T.edgelength
+    if T.entry 1 1 < T.entry 1 0 then -l else l
+  else if m.embedded then m.volumeAt e
+  else if n == 3 && V.n == 3 then m.det3At e * (1 / factF 2)
+  else (m.detsimplexAt e)[0]!
+
+/-- Julia `∧(t)` as a field of flat coefficients (per element: one float, or the blade). -/
+def wedgeField (m : SimplexBundle n (HPoint V) G) : Array (Array Float) :=
+  (Array.range m.elements).map m.wedgeAt
+
+/-- The pairs `(i, j)`, `i < j < n`, in lexicographic order. -/
+def pairsLex (n : Nat) : Array (Nat × Nat) :=
+  (Array.range n).flatMap fun i => ((Array.range n).filter (i < ·)).map fun j => (i, j)
+
+/-- The sign of the permutation `(i, j, K…)` of `0 … n-1` with `K` the rest ascending (the right
+complement `⋆eᵢⱼ = σ e_K`). -/
+def pairSign (n i j : Nat) : Bool :=
+  -- inversions of (i, j, rest…): i and j each precede every smaller element of the rest
+  let rest := (List.range n).filter fun k => k != i && k != j
+  let inv := (rest.filter (· < i)).length + (rest.filter (· < j)).length + (if j < i then 1 else 0)
+  inv % 2 == 1
+
+/-- Julia `curls(t)[e+1]` (Grassmann `composite.jl:942-945`, `curl(m) = V(∇) × m = ⋆(∇ ∧ m)` of the
+element's vertex chain): component `K` (the `(n-2)`-subsets in lexicographic order) is
+`σ (p_j − p_i)` for the complementary pair `i < j`, the sign applied by negating the difference
+(so zeros come out as `-0.0`, as in Julia). For a triangle: `(p₃ − p₂, −(p₃ − p₁), p₂ − p₁)`. -/
+def curlsAt (m : SimplexBundle n (HPoint V) G) (e : Nat) : Values (HPoint V) (Leibniz.binomial n 2) :=
+  let vs := m.top.get (e + 1)
+  let ps := pairsLex n
+  let P := ps.size
+  Values.ofFn fun t =>
+    let (i, j) := ps[P - 1 - t.1]!
+    let neg := pairSign n i j
+    Chain.ofFn fun c =>
+      let d := m.coord vs[j]! c.1 - m.coord vs[i]! c.1
+      if neg then -d else d
+
+/-- Julia `means(t)`: element centroids `Σpᵢ/n` (times `1/n`). -/
+def means (m : SimplexBundle n (HPoint V) G) : TensorField m.faces' (HPoint V) :=
+  TensorField.ofFn _ fun e => (m.simplexAt e).mean
+
+/-- Julia `barycenters(t)`: `Σ pᵢ`. -/
+def barycenters (m : SimplexBundle n (HPoint V) G) : TensorField m.faces' (HPoint V) :=
+  TensorField.ofFn _ fun e => (m.simplexAt e).barycenter
+
+/-- Julia `centroids(t)`: `s / s[1]` with `s = Σ pᵢ`. -/
+def centroids (m : SimplexBundle n (HPoint V) G) : TensorField m.faces' (HPoint V) :=
+  TensorField.ofFn _ fun e => (m.simplexAt e).centroid
+
+/-- Julia `curls(t)` (see `curlsAt`). -/
+def curls (m : SimplexBundle n (HPoint V) G) :
+    TensorField m.faces' (Values (HPoint V) (Leibniz.binomial n 2)) :=
+  TensorField.ofFn _ m.curlsAt
+
+/-- The P1 barycentric gradients of element `e` (Julia `gradienthat(t)[e+1]`, `element.jl:456-471`):
+column `i` is `∇λᵢ ∈ ↓V`. Segments: `(∓1/h)` with the *signed* length `h`; planar triangles:
+`revrot(curlᵢ)/(2A)` with the *signed* area (Julia divides by `|A|`, bug B3; for positively
+oriented triangles the arithmetic is Julia's: `curl·(1/(2|A|))`, then `(-y, x)`); tetrahedra and
+embedded elements: Grassmann's Cramer `gradient` (orientation-correct). -/
+def gradienthatAt (m : SimplexBundle n (HPoint V) G) (e : Nat) :
+    Simplex (TensorBundle.euclidean n) (Forms.drop1 V) Float :=
+  if V.n == 2 then
+    let h := m.signedVolumeAt e
+    let c := 1 / h
+    TensorOperator.ofFn fun _ j => if j.1 = 0 then -c else c
+  else if V.n == 3 && n == 3 then
+    let vol := m.volumeAt e
+    let r0 := 1 / (2 * vol)
+    let r := if m.signedVolumeAt e < 0 then -r0 else r0
+    let cs := m.curlsAt e
+    TensorOperator.ofFn fun i j =>
+      let c := cs.get! j.1
+      if i.1 = 0 then -(getD c.v 2 * r) else getD c.v 1 * r
+  else (m.simplexAt e).gradient
+
+/-- Julia `gradienthat(t)`: the P1 gradients of every element. -/
+def gradienthat (m : SimplexBundle n (HPoint V) G) :
+    TensorField m.faces' (Simplex (TensorBundle.euclidean n) (Forms.drop1 V) Float) :=
+  TensorField.ofFn _ m.gradienthatAt
+
+/-! ## Topology on the bundle (MeshTopology, §4.3) -/
+
+/-- Julia `degrees(t)` (number of elements at each node of the full mesh). -/
+def degrees (m : SimplexBundle n (HPoint V) G) : Array Nat := m.top.degrees
+
+/-- Julia `weights(t) = inv(degrees(t))`. -/
+def weights (m : SimplexBundle n (HPoint V) G) : FloatArray := m.top.weights
+
+/-- Julia `adjacency(t)` as a `Cartan.Solve.Sparse` matrix (edge multiplicities). -/
+def adjacency (m : SimplexBundle n (HPoint V) G) : Sparse := sparseOfInt m.top.adjacency
+where
+  /-- A MeshTopology integer matrix as a float CSC matrix. -/
+  sparseOfInt (A : SparseInt) : Sparse :=
+    ⟨A.m, A.n, A.colPtr, A.rowVal.map (· - 1), ⟨A.nzVal.map Float.ofInt⟩⟩
+
+/-- Julia `antiadjacency(t)`. -/
+def antiadjacency (m : SimplexBundle n (HPoint V) G) : Sparse := adjacency.sparseOfInt m.top.antiadjacency
+
+/-- Julia `incidence(t)` (node × element; B5 fixed). -/
+def incidence (m : SimplexBundle n (HPoint V) G) : Sparse := adjacency.sparseOfInt m.top.incidence
+
+/-- Julia `Δ(t) = Diagonal(degrees(t)) - adjacency(t)` (`element.jl:505-506`, Cartan's convention,
+B7: element counts minus edge multiplicities). -/
+def laplacian (m : SimplexBundle n (HPoint V) G) : Sparse :=
+  Sparse.lincomb 1 (Sparse.diagm ⟨m.degrees.map (·.toFloat)⟩) (-1) m.adjacency
+
+/-- The graph Laplacian `D - A` of the edge graph (`A` 0/1, `D` its row sums; B7 fixed). -/
+def graphLaplacian (m : SimplexBundle n (HPoint V) G) : Sparse := Id.run do
+  let A := m.adjacency
+  let mut I := #[]
+  let mut J := #[]
+  let mut Vv : FloatArray := .empty
+  let mut deg : Array Nat := Array.replicate A.rows 0
+  for j in [0:A.cols] do
+    for k in [A.colPtr[j]!:A.colPtr[j + 1]!] do
+      let i := A.rowIdx[k]!
+      if i != j then
+        I := I.push i; J := J.push j; Vv := Vv.push (-1)
+        deg := deg.modify i (· + 1)
+  for i in [0:A.rows] do
+    I := I.push i; J := J.push i; Vv := Vv.push deg[i]!.toFloat
+  return Sparse.ofTriplets A.rows A.cols I J Vv
+
+/-- Julia `edges(t)`: the edge mesh on the same points. -/
+def edges (m : SimplexBundle n (HPoint V) G) : SimplexBundle 2 (HPoint V) G := m.withTop m.top.edges
+
+/-- Julia `facets(t)`. -/
+def facets (m : SimplexBundle n (HPoint V) G) : SimplexBundle (n - 1) (HPoint V) G := m.withTop m.top.facets
+
+/-- Julia `neighbors(t)` (0 = no neighbour across that facet). -/
+def neighbors (m : SimplexBundle n (HPoint V) G) : Array (Vector Nat n) := m.top.neighbors
+
+/-- Julia `facetsigns(t)`. -/
+def facetsigns (m : SimplexBundle n (HPoint V) G) : Array (Vector Int n) := m.top.facetSigns
+
+/-- Julia `edgesindices(t)`: per element, the global edge ids (edge `i` opposite vertex `i` for
+triangles). -/
+def edgesindices (m : SimplexBundle n (HPoint V) G) : SimplexTopology (n * (n - 1) / 2) :=
+  m.top.edgesIndices
+
+/-- The boundary facets of a topology (Julia `∂(t::SimplexTopology{N})`, `element.jl:301-308`):
+for triangles the edges of odd multiplicity (in `edges` order), otherwise the facets met once (in
+first-appearance order). -/
+def boundaryTop (t : SimplexTopology n) : SimplexTopology (n - 1) :=
+  if h : n = 3 then
+    let A := t.adjacency
+    let odd := t.edgeList.filter fun e => A.get e[0] e[1] % 2 != 0
+    h ▸ SimplexTopology.ofElements odd 0 (some t.totalNodes)
+  else
+    let (top, again) := t.facetsInterior
+    let keep := (Array.range top.elements).filter fun k => !again.contains (k + 1)
+    SimplexTopology.ofElements (keep.map fun k => top.get (k + 1)) 0 (some t.totalNodes)
+
+/-- Julia `∂(t)`: the boundary mesh on the same points. -/
+def boundary (m : SimplexBundle n (HPoint V) G) : SimplexBundle (n - 1) (HPoint V) G :=
+  m.withTop (boundaryTop m.top)
+
+/-- Julia `interior(e)` (B6 fixed): the nodes not on the boundary mesh `e`, sorted. -/
+def interior (e : SimplexBundle n (HPoint V) G) : Array Nat := e.top.interiorNodes
+
+/-! ## Assembly and transfer (§4.2) -/
+
+/-- Julia `assembleincidence(t, f, m, Val(true))` (MeshTopology `element.jl:311-319`, B1 fixed):
+`b[tₖ] .+= f[tₖ] .* m[k]` element by element (`f` nodal, `m` per element). -/
+def assembleincidence (m : SimplexBundle n (HPoint V) G) (f : FloatArray) (w : FloatArray) :
+    FloatArray :=
+  elems m.elements 0 (Flat.zeros m.totalNodes)
+where
+  /-- The vertices `j, …` of element `k`. -/
+  verts (k : Nat) (wk : Float) : Nat → Nat → FloatArray → FloatArray
+    | 0, _, b => b
+    | r + 1, j, b =>
+      let v := m.vertexOf k j - 1
+      verts k wk r (j + 1) (b.set! v (b.get! v + f.get! v * wk))
+  /-- The elements `k, …`. -/
+  elems : Nat → Nat → FloatArray → FloatArray
+    | 0, _, b => b
+    | r + 1, k, b => elems r (k + 1) (verts k (w.get! k) n 0 b)
+
+/-- The nodal values `f(x)` of a function of the homogeneous point at every full node (Julia
+`iterpts(t, f)`). -/
+def nodal (m : SimplexBundle n (HPoint V) G) (f : HPoint V → Float) : FloatArray :=
+  buildFlat (F := Float) m.totalNodes fun v => f (Chain.ofFn fun c => m.coord (v + 1) c.1)
+
+/-- Julia `assembleload(t, f, m = volumes(t))` (`element.jl:546`): the lumped P1 load
+`bᵢ = Σ_{k ∋ i} (fᵢ / n) |Tₖ|`, with `f` given at the nodes. -/
+def assembleloadNodal (m : SimplexBundle n (HPoint V) G) (f : FloatArray)
+    (vol : FloatArray := m.volumes.data) : FloatArray :=
+  let nf := Float.ofNat n
+  m.assembleincidence (Flat.map (· / nf) f) vol
+
+/-- Julia `assembleload(t, f)` for a function of the (homogeneous) point. -/
+def assembleload (m : SimplexBundle n (HPoint V) G) (f : HPoint V → Float := fun _ => 1) : FloatArray :=
+  m.assembleloadNodal (m.nodal f)
+
+/-- Julia `interp(t::FaceMap)` (`element.jl:550`): node values as the averages of the incident
+element values (`wᵢ Σ_{k∋i} bₖ`, element by element). -/
+def interp (m : SimplexBundle n (HPoint V) G) (b : TensorField m.faces' Float) : TensorField m Float :=
+  let vals := m.top.interpValues b.data
+  if h : vals.size = FlatFiber.width Float * card m then ⟨vals, h, none⟩
+  else TensorField.ofFn m fun i => vals.get! (m.image i - 1)
+
+/-- Julia `pretni(t::SimplexMap) = means(t)` (`element.jl:556`): element averages of node values
+(`Σ uᵢ / n`). -/
+def pretni (m : SimplexBundle n (HPoint V) G) (u : FloatArray) : TensorField m.faces' Float :=
+  let nf := Float.ofNat n
+  TensorField.ofFn _ fun e =>
+    let vs := m.top.get (e + 1)
+    let s := (List.range n).foldl (fun acc j => if j == 0 then u.get! (vs[0]! - 1) else acc + u.get! (vs[j]! - 1)) 0
+    s / nf
+
+/-- Julia `gradient_2(t, u)` (`element.jl:491-501`): the constant gradient of the P1 field with
+node values `u` on each element, `Σᵢ uᵢ ∇λᵢ` (left to right). -/
+def gradient2 (m : SimplexBundle n (HPoint V) G) (u : FloatArray) :
+    TensorField m.faces' (Chain (Forms.drop1 V) 1 Float) :=
+  let g := m.gradienthat
+  TensorField.ofFn _ fun e =>
+    let vs := m.top.get (e + 1)
+    let T := g.get e
+    Chain.ofFn fun c =>
+      (List.range n).foldl (fun acc j =>
+        let x := u.get! (vs[j]! - 1) * T.entry c.1 j
+        if j == 0 then x else acc + x) 0
+
+/-- Julia `gradient(t::SimplexMap)` (`element.jl:479-483`): the element gradients averaged onto
+the nodes (`interp` of `gradient_2`, component by component). -/
+def gradient (m : SimplexBundle n (HPoint V) G) (u : FloatArray) :
+    Array (Chain (Forms.drop1 V) 1 Float) := Id.run do
+  let g2 := m.gradient2 u
+  let w := m.weights
+  let d := (Forms.drop1 V).n
+  let mut acc : Array FloatArray := Array.replicate d ⟨Array.replicate m.totalNodes 0⟩
+  for k in [0:m.elements] do
+    let vs := m.top.get (k + 1)
+    let gk := g2.get k
+    for j in [0:n] do
+      let v := vs[j]! - 1
+      for c in [0:d] do
+        acc := acc.modify c fun a => a.set! v (a.get! v + w.get! v * getD gk.v c)
+  return (Array.range m.totalNodes).map fun v => Chain.ofFn fun c => acc[c.1]!.get! v
+
+/-! ## Evaluation (§4.4) -/
+
+/-- Julia `findfirst(P, t)` (`element.jl:400-406`): the first element (1-based) containing the
+homogeneous point `P` (Grassmann's sign test on the Cramer numerators), `0` if none. -/
+def findfirst (m : SimplexBundle n (HPoint V) G) (P : HPoint V) : Nat := Id.run do
+  for k in [0:m.elements] do
+    if (m.simplexAt k).contains P then return k + 1
+  return 0
+
+/-- Julia `t(P)` for a piecewise-linear field (`sinterp`, `element.jl:33-42`): `Σ uᵢ λᵢ(P)` on the
+first element containing `P` (barycentric coordinates by Cramer's rule), `0` outside the mesh. -/
+def sinterp (m : SimplexBundle n (HPoint V) G) (u : FloatArray) (P : HPoint V) : Float :=
+  let j := m.findfirst P
+  if j == 0 then 0 else
+    let vs := m.top.get j
+    let T := m.simplexAt (j - 1)
+    T.interpolate (Values.ofFn fun i => u.get! (vs[i.1]! - 1)) P
+
+/-- `sinterp` for vertex values of any linear fiber: `Σ λᵢ(P) ϕᵢ` component by component (the
+flat encoding, as Julia's `Chain{V}(ϕ[i]) ⋅ λ` combines them), the zero fiber outside the mesh.
+`ϕ` is indexed by full vertex id (`ϕ[v - 1]`). -/
+def sinterpWith {F : Type} [FlatFiber F] [LinearFiber F] (m : SimplexBundle n (HPoint V) G)
+    (ϕ : Array F) (P : HPoint V) : F :=
+  let w := FlatFiber.width F
+  let j := m.findfirst P
+  if j == 0 then FlatFiber.read (Flat.zeros w) 0 else
+    let vs := m.top.get j
+    let T := m.simplexAt (j - 1)
+    let flat := vs.toArray.map fun v =>
+      match ϕ[v - 1]? with
+      | some x => buildFlat (F := F) 1 fun _ => x
+      | none => Flat.zeros w
+    FlatFiber.read (buildFlat (F := Float) w fun c =>
+      T.interpolate (Values.ofFn fun i => (flat[i.1]!).get! c) P) 0
+
+/-- Julia `tensorfield(t, ϕ)` (`Cartan.jl:862-875`): the map sending an affine point `p` to the
+barycentric interpolation `Σ λᵢ(p) ϕ[vᵢ]` of the vertex values `ϕ` on the first element of `m`
+containing `(1, p)` (a vector field for streamplots when `ϕ` holds vectors), zero outside. In
+Julia 0.4.16 it takes the old `ChainBundle` meshes (`Manifold(t)` has no `SimplexBundle` method);
+this is the intended map on a simplex bundle. The versor form `tensorfield(t, V, W)` needs
+Grassmann's conformal `↑`/`↓`, which the Grassmann port does not have. -/
+def tensorfield {F : Type} [FlatFiber F] [LinearFiber F] (m : SimplexBundle n (HPoint V) G)
+    (ϕ : Array F) (p : Array Float) : F :=
+  m.sinterpWith ϕ (Chain.ofFn fun c => if c.1 = 0 then 1 else p[c.1 - 1]!)
+
+end SimplexBundle
+
+/-! ## 1-D meshes (§4.5) -/
+
+namespace SimplexBundle
+
+/-- A homogeneous 1-D point `(1, x)`. -/
+def hp1 (x : Float) : HPoint ℝ2 := Chain.ofFn fun i => if i.1 = 0 then 1 else x
+
+/-- Julia `initmesh(r)` (`element.jl:61-67`): the segments `[i, i+1]` on the points `(1, rᵢ)`, and
+the boundary mesh of the two end nodes. -/
+def initmesh (xs : Array Float) : SimplexBundle 2 (HPoint ℝ2) × SimplexBundle 1 (HPoint ℝ2) :=
+  let np := xs.size
+  let t := SimplexBundle.ofPoints (xs.map hp1) ((Array.range (np - 1)).map fun i => #v[i + 1, i + 2])
+  let bnd := SimplexTopology.ofElements #[#v[1], #v[np]] 0 (some np) (some (IdxVec.arr #[1, np]))
+  (t, t.withTop bnd)
+
+/-- Julia `refinemesh!(r, pt, pe, η)` (`element.jl:131-157`, fixed): bisect the elements `η`
+(1-based, element `i` = `[xᵢ, xᵢ₊₁]` of the sorted points), re-sort the points, and rebuild the
+consecutive elements and the end-node boundary. -/
+def refine1 (m : SimplexBundle 2 (HPoint ℝ2)) (η : Array Nat) :
+    SimplexBundle 2 (HPoint ℝ2) × SimplexBundle 1 (HPoint ℝ2) :=
+  let np := m.totalNodes
+  let xs := (Array.range np).map fun v => m.coord (v + 1) 1
+  let mids := η.map fun i => (xs[i]! + xs[i - 1]!) / 2
+  initmesh ((xs ++ mids).qsort (· < ·))
+
+/-! ### Mesh data: MATLAB pdetool `P`, `E`, `T` (`element.jl:69-123`)
+
+`P` is given by its `d` rows (row `k` holds coordinate `k` of every point), `E` and `T` by their
+columns, of which the first `d` (edges) and `d + 1` (elements) entries are the 1-based vertex ids;
+pdetool's further rows (parameters, subdomains) are ignored, as Julia's `list(1, n)` does. The
+points become homogeneous in `V` (Julia's `varmanifold(d+1)`: take `V` with `d + 1` generators). -/
+
+section MeshData
+
+variable {n : Nat} {V : TensorBundle} {G : Type}
+
+/-- Julia `initpoints(P, Val(d))` (`element.jl:71-74`): the points `(1, P[1,k], …, P[d,k])`. -/
+def initpoints (V : TensorBundle) (P : Array (Array Float)) : Array (HPoint V) :=
+  let np := (P[0]?.map (·.size)).getD 0
+  (Array.range np).map fun k => Chain.ofFn fun i => if i.1 = 0 then 1 else (P[i.1 - 1]!)[k]!
+
+/-- The first `n` entries of the columns of a pdetool matrix as elements. -/
+def columnsOf (n : Nat) (E : Array (Array Nat)) : Array (Vector Nat n) :=
+  E.map fun c => Vector.ofFn fun k => c[k.1]!
+
+/-- Julia `initpointsdata(P, E)` (`element.jl:80-83`): the points with the boundary elements
+`E` (`d` vertices each) over them. -/
+def initpointsdata (V : TensorBundle) (d : Nat) (P : Array (Array Float)) (E : Array (Array Nat)) :
+    SimplexBundle d (HPoint V) :=
+  let pts := initpoints V P
+  ⟨.ofArray pts, SimplexTopology.ofElements (columnsOf d E) 0 (some pts.size)⟩
+
+/-- Julia `initmeshdata(P, E, T)` (`element.jl:85-88`): the mesh of the elements `T` over all the
+points, and the boundary of `initpointsdata`. -/
+def initmeshdata (V : TensorBundle) (d : Nat) (P : Array (Array Float)) (E T : Array (Array Nat)) :
+    SimplexBundle (d + 1) (HPoint V) × SimplexBundle d (HPoint V) :=
+  let e := initpointsdata V d P E
+  let np := e.cloud.size
+  (⟨e.cloud, SimplexTopology.ofElements (columnsOf (d + 1) T) 0 (some np) (some (.oneTo np))⟩, e)
+
+/-- Julia `edgemeshdata(pt, E, Val(2))` (`element.jl:99-123`): the edges of a triangle mesh
+(`edgetopology`, colex order) with each boundary edge of `E` turned to its orientation in `E`,
+and the 1-based indices of the boundary edges among them (`0` for an edge the mesh lacks, where
+Julia throws). -/
+def edgemeshdata (t : SimplexBundle 3 (HPoint V) G) (E : Array (Array Nat)) :
+    Array (Vector Nat 2) × Array Nat :=
+  (columnsOf 2 E).foldl (fun (ed, ind) b =>
+    match ed.findIdx? (· == b) with
+    | some j => (ed, ind.push (j + 1))
+    | none =>
+      match ed.findIdx? (· == #v[b[1], b[0]]) with
+      | some k => (ed.set! k b, ind.push (k + 1))
+      | none => (ed, ind.push 0)) (t.top.edgeList, #[])
+
+/-- Julia `totalmeshdata(P, E, T)` (`element.jl:92-98`) for a planar mesh: the triangles `T` over
+all the points, and the boundary `E` as the sub-topology of the mesh's edge topology (every
+edge, the boundary ones selected and oriented as in `E`). -/
+def totalmeshdata (V : TensorBundle) (P : Array (Array Float)) (E T : Array (Array Nat)) :
+    SimplexBundle 3 (HPoint V) × SimplexBundle 2 (HPoint V) :=
+  let pts := initpoints V P
+  let np := pts.size
+  let t : SimplexBundle 3 (HPoint V) :=
+    ⟨.ofArray pts, SimplexTopology.ofElements (columnsOf 3 T) 0 (some np) (some (.oneTo np))⟩
+  let (ed, ind) := edgemeshdata t E
+  let ⟨conn, h⟩ := flattenElems ed
+  let sel := ind.foldl (fun acc k => acc ++ (ed[k - 1]!).toArray) #[]
+  (t, ⟨t.cloud, SimplexTopology.raw 0 conn ed.size h (verticesOf sel) np (.arr ind) (verticesOf conn)⟩)
+
+/-- Julia `array(m)` (`element.jl:329`): the coordinates of every point of the full mesh, one row
+per point (homogeneous coordinate first). -/
+def array (m : SimplexBundle n (HPoint V) G) : Array (Array Float) :=
+  (Array.range (m.cloud.points.size / V.n)).map fun v =>
+    (Array.range V.n).map fun c => m.coord (v + 1) c
+
+/-- Julia `array(immersion(m))` (`element.jl:331-345`): the elements, one row each (1-based
+full ids; the sub-elements of a sub-topology). -/
+def arrayTop (m : SimplexBundle n (HPoint V) G) : Array (Array Nat) :=
+  m.top.topology.map (·.toArray)
+
+/-- Julia `submesh(m)` (`element.jl:380-385`): the affine coordinates (without the homogeneous
+`1`) of the full mesh's points, restricted to the bundle's vertices unless it covers them all. -/
+def submesh (m : SimplexBundle n (HPoint V) G) : Array (Array Float) :=
+  let rows := (m.array).map (·.extract 1 V.n)
+  if m.top.isCover then rows else m.top.verts.toArray.map fun v => rows[v - 1]!
+
+end MeshData
+
+/-! ### Crouzeix-Raviart interpolation (`element.jl:561-590`) -/
+
+section CR
+
+variable {V : TensorBundle} {G : Type}
+
+/-- Julia `invmap(t, v)`: the local index (0-based) of vertex `v` in the triangle `t` (`2` when
+it is not among the first two). -/
+@[inline] def invmap (t : Vector Nat 3) (v : Nat) : Nat := if v == t[0] then 0 else if v == t[1] then 1 else 2
+
+/-- Julia `findmissing(n)`: the local index (0-based) of a triangle missing from the pair `n`. -/
+@[inline] def findmissing (a b : Nat) : Nat :=
+  if a != 0 && b != 0 then 0 else if a != 1 && b != 1 then 1 else 2
+
+/-- Julia `interpCR(pt, dt, ed, m)` (`element.jl:568-588`): the piecewise-linear discontinuous
+field whose value at the midpoint of every edge of every triangle is the Crouzeix-Raviart
+degree of freedom `m[e]` of that edge (1-based edge ids of `ed`; `ei` gives each triangle's
+three edges): each edge adds `m[e]` at its two endpoints and subtracts it at the opposite vertex,
+node by node of the discontinuous topology `dt`. -/
+def interpCRWith (pt : SimplexBundle 3 (HPoint V) G) (dt : DiscontinuousTopology 3)
+    (ed : SimplexTopology 2) (ei : SimplexTopology 3) (m : FloatArray) :
+    TensorField (DiscontinuousBundle.mk pt.cloud dt) Float :=
+  let b := (List.range dt.elements).foldl (fun b k =>
+    let dk := dt.get (k + 1)
+    let tk := pt.top.get (k + 1)
+    let nk := ei.get (k + 1)
+    (List.range 3).foldl (fun b j =>
+      let e := ed.get nk[j]!
+      let i0 := invmap tk e[0]
+      let i1 := invmap tk e[1]
+      let mj := m.get! (nk[j]! - 1)
+      let b := b.set! (dk[i0]! - 1) (b.get! (dk[i0]! - 1) + mj)
+      let b := b.set! (dk[i1]! - 1) (b.get! (dk[i1]! - 1) + mj)
+      let o := dk[findmissing i0 i1]! - 1
+      b.set! o (b.get! o - mj)) b) (Flat.zeros dt.totalNodes)
+  TensorField.ofFn _ fun i => b.get! i
+
+/-- Julia `interpCR(pt, m)` (`element.jl:566-567`): `interpCRWith` over the edges of `pt` and its
+discontinuous topology; `m` holds one value per edge of `edges(pt)`. -/
+def interpCR (pt : SimplexBundle 3 (HPoint V) G) (m : FloatArray) :
+    TensorField pt.discontinuous Float :=
+  let ed := pt.top.edges
+  interpCRWith pt pt.top.discontinuous ed (pt.top.edgesIndicesWith ed) m
+
+/-- Julia `interpCR(pt, crfun)` (`element.jl:561-565`): the degrees of freedom `crfun` at the edge
+midpoints (the points of `edgesindices(pt, FaceBundle(edges(pt)))`). -/
+def interpCRFn (pt : SimplexBundle 3 (HPoint V) G) (f : HPoint V → Float) :
+    TensorField pt.discontinuous Float :=
+  let ed := pt.top.edges
+  let mid (e : Nat) : HPoint V :=
+    let v := ed.get (e + 1)
+    Chain.ofFn fun c => (pt.coord v[0] c.1 + pt.coord v[1] c.1) / 2
+  interpCR pt ⟨(Array.range ed.elements).map fun e => f (mid e)⟩
+
+end CR
+
+end SimplexBundle
+
+/-! ## Lagrange elements (`element.jl:677-786`) -/
+
+/-- Julia `LagrangeBundle(p, t)`: a point cloud holding every node of the degree-`M` Lagrange
+topology `t` (`LagrangeEdges`, `LagrangeTriangles` or `LagrangeTetrahedra`): the mesh's corner
+points first, then the nodes on the edges, facets and cells, at the lattice points
+`cᵢ + a·(cⱼ - cᵢ)/M + …` of each simplex. -/
+structure LagrangeBundle (L : Type) (V : TensorBundle) where
+  /-- Julia `fullcoordinates(m)`: all the nodes (homogeneous points). -/
+  cloud : PointCloud (HPoint V)
+  /-- Julia `immersion(m)`. -/
+  top : L
+
+namespace LagrangeBundle
+
+open MeshTopology
+
+variable {V : TensorBundle}
+
+/-! Point arithmetic on the flat nodes, as Julia's on `Chain`s: `+`, `-`, `x * v` componentwise
+and `v / M` as Grassmann's `v * (1/M)`. -/
+
+/-- Node `v` (1-based) of the flat array `c` of points of width `w`. -/
+@[inline] def node (c : FloatArray) (w v : Nat) : Array Float :=
+  (Array.range w).map fun k => c.get! ((v - 1) * w + k)
+
+/-- Overwrite node `v` (1-based). -/
+@[inline] def setNode (c : FloatArray) (w v : Nat) (x : Array Float) : FloatArray :=
+  (List.range w).foldl (fun c k => c.set! ((v - 1) * w + k) x[k]!) c
+
+/-- `a + b`. -/
+@[inline] def add (a b : Array Float) : Array Float := a.zipWith (· + ·) b
+/-- `a - b`. -/
+@[inline] def sub (a b : Array Float) : Array Float := a.zipWith (· - ·) b
+/-- `x * a` for an integer `x`. -/
+@[inline] def smul (x : Nat) (a : Array Float) : Array Float := a.map (Float.ofNat x * ·)
+/-- `a / M` (Grassmann: `a * (1/M)`). -/
+@[inline] def rdiv (a : Array Float) (M : Nat) : Array Float :=
+  let r := (1 : Float) / Float.ofNat M
+  a.map (· * r)
+
+/-- The cloud extended to `n` nodes (the new nodes zero until written). -/
+def extend (p : PointCloud (HPoint V)) (n : Nat) : FloatArray :=
+  let w := V.n
+  let c := p.points
+  if c.size ≥ n * w then c else ⟨c.data ++ (Flat.zeros (n * w - c.size)).data⟩
+
+/-- Julia's vectorized assignment `c[getindex.(ed, k)] = f(…)`: over all elements `e`, in order,
+node `slot e` gets `val e` (a later element overwrites a shared node, as in Julia). -/
+def assign (c : FloatArray) (w ne : Nat) (slot : Nat → Nat) (val : Nat → Array Float) : FloatArray :=
+  (List.range ne).foldl (fun c e => setNode c w (slot e) (val e)) c
+
+/-- Julia `LagrangeBundle!(p, t::LagrangeEdges{M})` (`element.jl:683-703`, fixed): the node
+`x + 2` of a segment `[cᵢ, cⱼ]` at `cᵢ + x(cⱼ - cᵢ)/M` (`printlagrange`'s layout), the midpoint
+`(cᵢ + cⱼ)/2` for `M = 2`. Julia reads the undefined `pt` (`cornertopology(pt)`) and puts the
+first node at `cⱼ + (cⱼ - cᵢ)/M`. -/
+def edges {M : Nat} (p : PointCloud (HPoint V)) (t : LagrangeEdges M) : LagrangeBundle (LagrangeEdges M) V :=
+  let w := V.n
+  let els := t.topology
+  let ne := els.size
+  let c0 := extend p t.nodes
+  let ci := els.map fun ed => node c0 w ed[0]!
+  let cj := els.map fun ed => node c0 w ed[1]!
+  let c :=
+    if M = 2 then assign c0 w ne (fun e => els[e]![2]!) fun e => rdiv (add ci[e]! cj[e]!) 2
+    else
+      let cij := (List.range ne).toArray.map fun e => rdiv (sub cj[e]! ci[e]!) M
+      (List.range (M - 1)).foldl (fun c x =>
+        assign c w ne (fun e => els[e]![x + 2]!) fun e => add ci[e]! (smul (x + 1) cij[e]!)) c0
+  ⟨⟨c, .induced, 0⟩, t⟩
+
+/-- Julia `LagrangeBundle!(p, t::LagrangeTriangles{M})` (`element.jl:705-741`): for `M = 2` the edge
+midpoints of each triangle; otherwise the `M - 1` nodes of every edge (`cₓ + x(c_y - cₓ)/M` from
+its smaller vertex) and the cell nodes `cᵢ + b(cₖ - cᵢ)/M + y(cⱼ - cᵢ)/M`, statement by statement
+over all elements as Julia's vectorized assignments. -/
+def triangles {M : Nat} (p : PointCloud (HPoint V)) (t : LagrangeTriangles M) :
+    LagrangeBundle (LagrangeTriangles M) V :=
+  let w := V.n
+  let c0 := extend p t.nodes
+  let els := t.topology
+  let ne := els.size
+  let corners := t.t.topology
+  let ci := corners.map fun tk => node c0 w tk[0]
+  let cj := corners.map fun tk => node c0 w tk[1]
+  let ck := corners.map fun tk => node c0 w tk[2]
+  let c :=
+    if M = 2 then
+      let c := assign c0 w ne (fun e => els[e]![3]!) fun e => rdiv (add cj[e]! ck[e]!) 2
+      let c := assign c w ne (fun e => els[e]![4]!) fun e => rdiv (add ci[e]! ck[e]!) 2
+      assign c w ne (fun e => els[e]![5]!) fun e => rdiv (add ci[e]! cj[e]!) 2
+    else
+      let es := t.e.topology
+      let cx := es.map fun xy => node c0 w xy[0]
+      let de := (List.range es.size).toArray.map fun g => rdiv (sub (node c0 w es[g]![1]) cx[g]!) M
+      let edg := (List.range es.size).toArray.map fun g => t.getEdge (g + 1)
+      let c := (List.range (M - 1)).foldl (fun c x =>
+        assign c w es.size (fun g => edg[g]![x]!) fun g => add cx[g]! (smul (x + 1) de[g]!)) c0
+      let cik := (List.range ne).toArray.map fun e => rdiv (sub ck[e]! ci[e]!) M
+      let cij := (List.range ne).toArray.map fun e => rdiv (sub cj[e]! ci[e]!) M
+      let start := 3 * M + 1
+      (List.range (M - 2)).foldl (fun c x' =>
+        let x := x' + 1
+        let ls := x * (x - 1) / 2
+        (List.range x).foldl (fun c y' =>
+          let y := y' + 1
+          let bw := x + 1 - y
+          assign c w ne (fun e => els[e]![start + ls + y' - 1]!) fun e =>
+            add (add ci[e]! (smul bw cik[e]!)) (smul y cij[e]!)) c) c
+  ⟨⟨c, .induced, 0⟩, t⟩
+
+/-- Julia `LagrangeBundle!(p, t::LagrangeTetrahedra{M})` (`element.jl:743-785`): the edge nodes
+`cₐ + x(c_b - cₐ)/M` of the six local edges, the facet nodes of the four faces, and the cell
+nodes, statement by statement over all elements as Julia's vectorized assignments (a node shared
+by several elements keeps the last element's value). -/
+def tetrahedra {M : Nat} (p : PointCloud (HPoint V)) (t : LagrangeTetrahedra M) :
+    LagrangeBundle (LagrangeTetrahedra M) V :=
+  let w := V.n
+  let els := t.topology
+  let ne := els.size
+  let corners := t.t.topology
+  let c0 := extend p t.nodes
+  let ci := corners.map fun tk => node c0 w tk[0]
+  let cj := corners.map fun tk => node c0 w tk[1]
+  let ck := corners.map fun tk => node c0 w tk[2]
+  let cl := corners.map fun tk => node c0 w tk[3]
+  let dif (a b : Array (Array Float)) : Array (Array Float) :=
+    (List.range ne).toArray.map fun e => rdiv (sub b[e]! a[e]!) M
+  let cij := dif ci cj
+  let cik := dif ci ck
+  let cil := dif ci cl
+  let cjk := dif cj ck
+  let cjl := dif cj cl
+  let ckl := dif ck cl
+  let slot (k : Nat) (e : Nat) : Nat := els[e]![k]!
+  -- the edge nodes (Julia's 1-based slots `k + 4 + 6(x-1)`)
+  let c := (List.range (M - 1)).foldl (fun c x' =>
+    let x := x' + 1
+    let b := 4 + 6 * x'
+    let c := assign c w ne (slot b) fun e => add ci[e]! (smul x cij[e]!)
+    let c := assign c w ne (slot (b + 1)) fun e => add ci[e]! (smul x cik[e]!)
+    let c := assign c w ne (slot (b + 2)) fun e => add ci[e]! (smul x cil[e]!)
+    let c := assign c w ne (slot (b + 3)) fun e => add cj[e]! (smul x cjk[e]!)
+    let c := assign c w ne (slot (b + 4)) fun e => add cj[e]! (smul x cjl[e]!)
+    assign c w ne (slot (b + 5)) fun e => add ck[e]! (smul x ckl[e]!)) c0
+  -- the facet nodes: `Y = start + 4 ls : 4 : …` (1-based), four faces per step
+  let start := 4 + 6 * (M - 1) + 1
+  let c := (List.range (M - 2)).foldl (fun c x' =>
+    let x := x' + 1
+    let ls := x * (x - 1) / 2
+    (List.range x).foldl (fun c y' =>
+      let y := y' + 1
+      let bw := x + 1 - y
+      let Y := start + 4 * ls + 4 * y' - 1
+      let c := assign c w ne (slot Y) fun e => add (add cj[e]! (smul bw cjk[e]!)) (smul y cjl[e]!)
+      let c := assign c w ne (slot (Y + 1)) fun e => add (add ci[e]! (smul bw cik[e]!)) (smul y cil[e]!)
+      let c := assign c w ne (slot (Y + 2)) fun e => add (add ci[e]! (smul bw cil[e]!)) (smul y cij[e]!)
+      assign c w ne (slot (Y + 3)) fun e => add (add ci[e]! (smul bw cik[e]!)) (smul y cij[e]!)) c) c
+  -- the cell nodes
+  let start := start + 4 * facetSimplex 4 M
+  let c := (List.range (M - 3)).foldl (fun c z' =>
+    let z := z' + 1
+    let rz := M - 3 + 1 - z
+    let ls1 := choose (z + 1) 3
+    (List.range z).foldl (fun c x' =>
+      let x := x' + 1
+      let ls := ls1 + choose (x + 1) 3
+      (List.range x).foldl (fun c y' =>
+        let y := y' + 1
+        let bw := x + 1 - y
+        assign c w ne (slot (start + ls + y' - 1)) fun e =>
+          add (add (add ci[e]! (smul rz cij[e]!)) (smul bw cik[e]!)) (smul y cil[e]!)) c) c) c
+  ⟨⟨c, .induced, 0⟩, t⟩
+
+end LagrangeBundle
+
+/-! ## Face fields: norms and markers (§4.8) -/
+
+namespace TensorField
+
+variable {M : Type} [FrameBundle M] {m : M}
+
+/-- Julia `rms(η) = norm(η)/√length(η)` (`element.jl:125`). -/
+def rms (t : TensorField m Float) : Float :=
+  let s := t.data.data.foldl (fun acc x => acc + x * x) 0
+  Float.sqrt s / Float.sqrt (Float.ofNat (card m))
+
+/-- Julia `select(η, ϵ = rms(η))` (`element.jl:126`): the sorted 1-based indices with `η > ϵ`
+(the refinement marker). -/
+def select (t : TensorField m Float) (ε : Float := t.rms) : Array Nat :=
+  (Array.range (card m)).filterMap fun i => if t.get i > ε then some (i + 1) else none
+
+end TensorField
+
+end Cartan

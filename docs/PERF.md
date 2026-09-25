@@ -568,3 +568,82 @@ Findings:
   the definition, twice as LCNF and once as IR): a fused dense CGA3 product is 1.3 MB. The
   benchmark and test modules are split and trimmed accordingly; `Tests/Fuse/Guards.lean` runs
   most fusion checks through the interpreter at build time, which adds nothing to the `.olean`.
+## 2026-09-25: Cartan field kernels vs Julia (`lake exe bench cartan`, `oracle/bench/cartan.jl`)
+
+The `cartan` suite (`Bench/Cartan.lean`) times Cartan's field operations per grid point against
+its Julia twin (Cartan 0.4.16, FFTW for the FFT cases; run the twin in an environment with FFTW).
+Minimum ns per point (per element for `mesh_*`, per node for `mesh_load`), Apple M4 Max, commit
+`956b92b5`; "before" is the same suite on the kernels this work started from. Every checksum
+agrees with Julia's.
+
+| case | param | Lean before | Lean now | Julia | now / Julia |
+|---|---|---|---|---|---|
+| `tabulate_chain3` | 1000×1000 | 35.4 ns | 29.1 ns | 8.99 ns | 3.2× |
+| `tabulate_w` | 1000×1000 | 34.1 ns | 27.5 ns | 5.73 ns | 4.8× |
+| `tabulate_scalar` | 1000×1000 | 16.1 ns | 8.8 ns | 2.75 ns | 3.2× |
+| `tabulate2_chain3` | 1000×1000 | 20.3 ns | 23 ns | 3.91 ns | 5.9× |
+| `tabulate2_scalar` | 1000×1000 | 2.06 ns | 2.62 ns | 2.7 ns | 0.97× |
+| `identity_range` | 1000000 | 8.22 ns | 0.992 ns | 4e-06 ns | (Julia lazy) |
+| `sin` | 1000000 | 4.73 ns | 5.37 ns | 3.52 ns | 1.5× |
+| `exp` | 1000000 | 4.16 ns | 4.91 ns | 2.57 ns | 1.9× |
+| `add_ts` | 1000000 | 1.37 ns | 0.307 ns | 1.9 ns | 0.16× |
+| `scale_s2` | 1000000 | 1.37 ns | 0.265 ns | 0.126 ns | 2.1× |
+| `mul_st` | 1000000 | 1.63 ns | 0.307 ns | 0.662 ns | 0.46× |
+| `add_vw` | 1000×1000 | 4.14 ns | 0.932 ns | 5.04 ns | 0.18× |
+| `scale_2v` | 1000×1000 | 3.9 ns | 0.873 ns | 1.15 ns | 0.76× |
+| `mul_av` | 1000×1000 | 5.16 ns | 1.06 ns | 1.29 ns | 0.82× |
+| `wedge_vw` | 1000×1000 | 4.74 ns | 1.2 ns | 4.95 ns | 0.24× |
+| `geom_vw` | 1000×1000 | 5.68 ns | 1.56 ns | 4.61 ns | 0.34× |
+| `dot_vw` | 1000×1000 | 3.48 ns | 0.757 ns | 0.904 ns | 0.84× |
+| `hodge_v` | 1000×1000 | 3.82 ns | 0.87 ns | 1.04 ns | 0.83× |
+| `norm_v` | 1000×1000 | 4.9 ns | 0.693 ns | 0.314 ns | 2.2× |
+| `resample_a` | 500×500 | 129 ns | 18.1 ns | 21.8 ns | 0.83× |
+| `sum_s` | 1000000 | 0.57 ns | 0.556 ns | 0.0872 ns | 6.4× |
+| `supnorm_v` | 1000×1000 | 6.69 ns | 0.451 ns | 0.349 ns | 1.3× |
+| `torus` | 1000×1000 | 41.1 ns | 33.5 ns | 15.2 ns | 2.2× |
+| `eval_a` | 100000 | - | 114 ns | 23 ns | 4.9× |
+| `mesh_volumes` | 300×300 | - | 13.9 ns | 6.23 ns | 2.2× |
+| `mesh_gradienthat` | 300×300 | - | 605 ns | 1.64 µs | 0.37× |
+| `mesh_gradient` | 300×300 | - | 767 ns | 1.66 µs | 0.46× |
+| `mesh_load` | 300×300 | - | 74.7 ns | 19.8 ns | 3.8× |
+| `fft_c` | 65536 | - | 56.5 ns | 7.51 ns | 7.5× |
+| `rfft_r` | 65536 | - | 34.8 ns | 2.11 ns | 17× |
+
+What moved the numbers (each change keeps the results bit for bit, checked by tests):
+
+* **Generated kernels without bounds checks.** The `cartan_field_kernels` loops carry the proof
+  that their `k` blocks fit (`Flat.runBin` checks the sizes once); every read and write is an
+  unchecked `uget`/`uset` whose index proof is `Flat.idxW h j (by decide)`. Generation still
+  takes ~8 s for ℝ2–ℝ4. `⋅`, `∧`, `*`, `⋆` fields 1.8–2.2× faster (now at or below Julia).
+* **Separable resampling.** Multilinear interpolation onto a product grid, axis after axis over
+  the flat data, performs exactly the corner nesting's operations (`linterp_y(linterp_x(…))`)
+  with the inner interpolations shared: `resample_a` 129 → 18 ns (Julia 22).
+* **One root for `supnorm`.** `√` is correctly rounded, hence monotone: the largest norm is the
+  root of the largest squared norm. With four independent compare chains, 6.7 → 0.45 ns.
+* **Point reuse.** `tabulatePoint` writes each grid point into the storage of the previous one
+  (`Coordinates.pointInto`, proved equal to `point`), which `f` has released: `tabulate_scalar`
+  16 → 8.8 ns. The rest of `tabulate_chain3` (29 ns vs 9) is building the `Chain` fiber:
+  `Packed.ofFn` at `Float` starts from a shared closed `mkEmpty n` (copied) and pushes each
+  entry through the out-of-line `lean_float_array_push`, ~20 ns for three floats
+  (`tabulate2_chain3`, which builds no point, 23 ns vs 3.9). The same cost dominates `torus`,
+  whose points `map` now reads into the previous point's storage (`FlatFiber.readInto`): 45 → 33 ns.
+* **Ranges materialize without `Int` arithmetic.** `Axis.toFloatArray` of a `StepRangeLen` runs
+  `stepLenGet`'s float operations with the index carried as a float (exact below `2^53`), and the
+  1-D identity field shares the grid's materialized axis: `identity_range` 8.2 → 1.0 ns (Julia
+  keeps the range lazy: O(1)).
+* **Fields are built by writing, not pushing.** `buildFlat`/`ofFn` write each fiber into a zero
+  buffer (`FlatFiber.write`, proved by `read_write_self`/`read_write_other`), sizes below 64 from
+  a zero table built once. Alone this moved little: the cost was elsewhere (above).
+* **Evaluation and meshes.** `t(x, y)` interpolates the bracketing cell in place (no vectors of
+  boxed floats) and brackets a range coordinate from a guess verified against its neighbours
+  (the bisection's count): 310 → 114 ns (Julia 23, which searches ranges in O(1) and allocates
+  nothing). Planar triangle volumes read their points from the cloud (183 → 14 ns); assembly reads
+  vertex ids from the connectivity (`mesh_load` 488 → 75 ns).
+* **FFT.** The radix-2 loops were `for`/`while` with mutable floats and `Nat`-indexed `set!`;
+  as tail-recursive `USize` loops (bit-identical) 99 → 57 ns, and even-length `rfft` transforms
+  the `N/2` complex numbers `x₂ⱼ + i x₂ⱼ₊₁`: 82 → 35 ns. FFTW's SIMD codelets stay 7–17× ahead.
+
+Not fixable from Cartan: `scale_s2` and `norm_v` (2.1–2.2×) are Julia's SIMD (a Lean result is
+first a copy of the shared operand, then a second pass; `√` throughput bounds `norm`); `sum_s`
+replays Julia's SIMD accumulator layout bit for bit (`JuliaBase.F64.sum`, bounds-checked `Nat`
+reads: a `USize` loop there would help).

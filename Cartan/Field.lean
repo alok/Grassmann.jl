@@ -67,7 +67,8 @@ variable {M : Type} [FrameBundle M] {m : M} {F F' F'' : Type}
 
 /-! ## Construction -/
 
-/-- The field `i ↦ f i` over `m` (`i` the 0-based linear index). All constructors reduce to it. -/
+/-- The field `i ↦ f i` over `m` (`i` the 0-based linear index). All constructors reduce to it.
+The fibers are written into a preallocated buffer (`buildFlat`). -/
 @[inline] def ofFn (m : M) (f : Nat → F) : TensorField m F :=
   { data := buildFlat (card m) f, size_data := size_buildFlat _ _ }
 
@@ -127,10 +128,37 @@ def set (t : TensorField m F) (i : Nat) (x : F) : TensorField m F :=
 
 /-! ## Maps (Julia broadcasting, port notes §4.2) -/
 
+/-- The loop of `map`: fiber `i` read into the storage of fiber `i-1` (`FlatFiber.readInto`),
+which `f` has released by then unless it kept it, handed to `f`, and the result written at
+`off`. -/
+@[specialize] def mapLoop (f : F → F') (t : TensorField m F) :
+    (k i off : Nat) → F → FloatArray → FloatArray
+  | 0, _, _, _, a => a
+  | k + 1, i, off, x, a =>
+    let x := FlatFiber.readInto t.data (i * FlatFiber.width F) x
+    mapLoop f t k (i + 1) (off + FlatFiber.width F') x (FlatFiber.write a off (f x))
+
+theorem mapLoop_eq (f : F → F') (t : TensorField m F) : ∀ (k i off : Nat) (x : F) (a : FloatArray),
+    mapLoop f t k i off x a = fillLoop (fun i => f (t.get i)) k i off a
+  | 0, _, _, _, _ => rfl
+  | k + 1, i, off, x, a => by
+    simp only [mapLoop, fillLoop, FlatFiber.readInto_eq]
+    exact mapLoop_eq f t k (i + 1) _ _ _
+
 /-- Julia `broadcast(f, t) = TensorField(base(t), f.(fiber(t)))` (`Cartan.jl:167`): apply `f` to
-every fiber value. -/
+every fiber value (each read into the storage of the previous one, `mapLoop`). -/
 @[inline] def map (f : F → F') (t : TensorField m F) : TensorField m F' :=
-  ofFn m fun i => f (t.get i)
+  { data := if card m = 0 then Flat.zeros (FlatFiber.width F' * card m)
+      else mapLoop f t (card m) 0 0 (t.get 0) (Flat.zeros (FlatFiber.width F' * card m)),
+    size_data := by split <;> simp [mapLoop_eq, size_fillLoop, Flat.size_zeros] }
+
+/-- `map` is `ofFn` of the mapped fibers. -/
+theorem map_eq (f : F → F') (t : TensorField m F) : t.map f = ofFn m fun i => f (t.get i) := by
+  simp only [map, ofFn, buildFlat]
+  congr 1
+  split
+  · rename_i h; rw [h]; rfl
+  · rw [mapLoop_eq]
 
 /-- Combine two fields over the same base pointwise (Julia `op.(fiber(a), fiber(b))`). -/
 @[inline] def zipWith (f : F → F' → F'') (a : TensorField m F) (b : TensorField m F') :
@@ -161,14 +189,75 @@ section Coordinates
 
 variable {P G : Type} [Coordinates M P G]
 
-/-- Julia `TensorField(dom::FrameBundle, fun)` = `fun.(dom)` (C11): `f` receives the
-`Coordinate`s (point and metric) of the base. -/
-@[inline] def tabulate (m : M) (f : Coordinate P G → F) : TensorField m F :=
-  ofFn m fun i => f (FrameBundle.coordinate m i)
+/-- The loop of `tabulatePoint`: the point `i` is written into the storage of the point `i-1`
+(`Coordinates.pointInto`), which `f` has released by then unless it kept it, so the points of a
+grid are not allocated one by one. -/
+@[specialize] def fillPoints (m : M) (f : P → F) : (k i off : Nat) → P → FloatArray → FloatArray
+  | 0, _, _, _, a => a
+  | k + 1, i, off, x, a =>
+    let x := Coordinates.pointInto m i x
+    fillPoints m f k (i + 1) (off + FlatFiber.width F) x (FlatFiber.write a off (f x))
+
+theorem fillPoints_eq (m : M) (f : P → F) : ∀ (k i off : Nat) (x : P) (a : FloatArray),
+    fillPoints m f k i off x a = fillLoop (fun i => f (Coordinates.point m i)) k i off a
+  | 0, _, _, _, _ => rfl
+  | k + 1, i, off, x, a => by
+    simp only [fillPoints, fillLoop, Coordinates.pointInto_eq]
+    exact fillPoints_eq m f k (i + 1) _ _ _
+
+/-- The fibers of `tabulatePoint m f` (the first point is built, the others reuse it). -/
+@[inline] def pointsData (m : M) (f : P → F) : FloatArray :=
+  let buf := Flat.zeros (FlatFiber.width F * card m)
+  if card m = 0 then buf else fillPoints m f (card m) 0 0 (Coordinates.point m 0) buf
+
+theorem pointsData_eq (m : M) (f : P → F) : pointsData m f =
+    fillLoop (fun i => f (Coordinates.point m i)) (card m) 0 0
+      (Flat.zeros (FlatFiber.width F * card m)) := by
+  unfold pointsData
+  split
+  · rename_i h; rw [h]; rfl
+  · rw [fillPoints_eq]
 
 /-- `tabulate` with a function of the point only (Julia `fun(point(x))`). -/
 @[inline] def tabulatePoint (m : M) (f : P → F) : TensorField m F :=
-  ofFn m fun i => f (Coordinates.point m i)
+  { data := pointsData m f, size_data := by rw [pointsData_eq, size_fillLoop, Flat.size_zeros] }
+
+/-- `tabulatePoint` is `ofFn` of the points. -/
+theorem tabulatePoint_eq (m : M) (f : P → F) :
+    tabulatePoint m f = ofFn m fun i => f (Coordinates.point m i) := by
+  simp only [tabulatePoint, ofFn, pointsData_eq, buildFlat]
+
+/-- The loop of `tabulate`: as `fillPoints`, `f` receiving the coordinate (reused point, metric). -/
+@[specialize] def fillCoords (m : M) (f : Coordinate P G → F) :
+    (k i off : Nat) → P → FloatArray → FloatArray
+  | 0, _, _, _, a => a
+  | k + 1, i, off, x, a =>
+    let x := Coordinates.pointInto m i x
+    fillCoords m f k (i + 1) (off + FlatFiber.width F) x
+      (FlatFiber.write a off (f ⟨x, Coordinates.metricAt m i⟩))
+
+theorem fillCoords_eq (m : M) (f : Coordinate P G → F) : ∀ (k i off : Nat) (x : P) (a : FloatArray),
+    fillCoords m f k i off x a = fillLoop (fun i => f (FrameBundle.coordinate m i)) k i off a
+  | 0, _, _, _, _ => rfl
+  | k + 1, i, off, x, a => by
+    simp only [fillCoords, fillLoop, Coordinates.pointInto_eq, FrameBundle.coordinate]
+    exact fillCoords_eq m f k (i + 1) _ _ _
+
+/-- Julia `TensorField(dom::FrameBundle, fun)` = `fun.(dom)` (C11): `f` receives the
+`Coordinate`s (point and metric) of the base (the points reused as in `tabulatePoint`). -/
+@[inline] def tabulate (m : M) (f : Coordinate P G → F) : TensorField m F :=
+  { data := if card m = 0 then Flat.zeros (FlatFiber.width F * card m)
+      else fillCoords m f (card m) 0 0 (Coordinates.point m 0) (Flat.zeros (FlatFiber.width F * card m)),
+    size_data := by split <;> simp [fillCoords_eq, size_fillLoop, Flat.size_zeros] }
+
+/-- `tabulate` is `ofFn` of the coordinates. -/
+theorem tabulate_eq (m : M) (f : Coordinate P G → F) :
+    tabulate m f = ofFn m fun i => f (FrameBundle.coordinate m i) := by
+  simp only [tabulate, ofFn, buildFlat]
+  congr 1
+  split
+  · rename_i h; rw [h]; rfl
+  · rw [fillCoords_eq]
 
 /-- Julia `TensorField(dom)` for a frame bundle (C13 → C5): the identity field, whose fibers are
 the base points. -/
@@ -248,10 +337,19 @@ namespace TensorField
 
 variable {F : Type} [FlatFiber F]
 
+/-- The identity field of a 1-D real grid (C13), recording the range for Julia's lazy range
+arithmetic when the points are a range. The fibers are the grid's points, i.e. its materialized
+axis, which the field shares (no copy). -/
+def identity1 {G : Type} (b : GridBundle 1 Float G) : TensorField b Float :=
+  let a := b.space.axes[0]
+  let c := b.space.coords[0]
+  let r := if a.isRange then some a else none
+  if h : c.size = FlatFiber.width Float * card b then { data := c, size_data := h, range? := r }
+  else { ofFn b fun k => c.get! k with range? := r }
+
 /-- Julia `TensorField(r)` for a 1-D coordinate vector (C13): the identity field of an open
 interval with real points. Its fibers *are* the range (lazy in Julia), recorded in `range?`. -/
-def ofAxis (a : Axis) : TensorField (GridBundle.ofAxis a) Float :=
-  { ofFn (GridBundle.ofAxis a) a.get with range? := if a.isRange then some a else none }
+def ofAxis (a : Axis) : TensorField (GridBundle.ofAxis a) Float := identity1 (GridBundle.ofAxis a)
 
 /-- Julia `TensorField(r, fun)` for a 1-D vector (C10): `fun` sees the real points. -/
 @[inline] def ofAxisFn (a : Axis) (f : Float → F) : TensorField (GridBundle.ofAxis a) F :=
@@ -290,16 +388,32 @@ def ofSpace {N : Nat} (ps : ProductSpace N) : TensorField (GridBundle.ofSpace ps
   let n01 := n0 * c1.size
   ofFn b fun k => f (c0.get! (k % n0)) (c1.get! (k / n0 % c1.size)) (c2.get! (k / n01))
 
+/-- Julia `TensorField(fiber(t))` for an `N`-D field `t` (C2, `Cartan.jl:109-111, 159`): the grid
+whose points are the fibers of `t` (a curvilinear grid, e.g. the points of a surface), with the
+shape of `t`'s base and the open topology. -/
+def PointGrid.ofField {N : Nat} {P G : Type} {b : GridBundle N P G} {Q : Type} [FlatFiber Q]
+    (t : TensorField b Q) : PointGrid N Q :=
+  .ofFlat b.size t.data
+
+/-- Julia `TensorField(fiber(t))`: the identity field of `PointGrid.ofField t` (its fibers are its
+points). -/
+def ofFibers {N : Nat} {P G : Type} {b : GridBundle N P G} {Q : Type} [FlatFiber Q]
+    (t : TensorField b Q) : TensorField (PointGrid.ofField t) Q :=
+  if h : t.data.size = FlatFiber.width Q * card (PointGrid.ofField t) then ⟨t.data, h, none⟩
+  else ofFn _ fun i => (PointGrid.ofField t).get i
+
+/-- Julia `TensorField(a, b)` for an `N`-D field `a` (C6, `Cartan.jl:115`): the fibers of `b` over
+the grid whose points are the fibers of `a`. -/
+def reparametrizeN {N : Nat} {P G : Type} {b : GridBundle N P G} {Q : Type} [FlatFiber Q]
+    (a : TensorField b Q) (c : TensorField b F) : TensorField (PointGrid.ofField a) F :=
+  if h : c.data.size = FlatFiber.width F * card (PointGrid.ofField a) then ⟨c.data, h, none⟩
+  else ofFn _ fun i => c.get i
+
 /-- Julia `TensorField(f, r)` (C14, `Cartan.jl:160`): the curve `f` sampled on `r` (Julia's
 default `r = -2π:0.0001:2π`). Julia applies `vector` to each value; here `f` returns the fiber. -/
 @[inline] def curve (f : Float → F) (r : Axis := Axis.colon (-twoPiF) (f64! 0.0001) twoPiF) :
     TensorField (GridBundle.ofAxis r) F := ofAxisFn r f
 
-/-- The identity field of a 1-D real grid (C13), recording the range for Julia's lazy range
-arithmetic when the points are a range. -/
-def identity1 {G : Type} (b : GridBundle 1 Float G) : TensorField b Float :=
-  let a := b.space.axes[0]
-  { ofFn b a.get with range? := if a.isRange then some a else none }
 
 /-- Julia `TensorField(a::TensorField, b::TensorField)` (C6, `Cartan.jl:115`): a new 1-D grid whose
 points are the values of the real field `a`, carrying the fibers of `b` (the reparametrization

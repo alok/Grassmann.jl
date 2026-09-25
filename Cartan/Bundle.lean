@@ -95,6 +95,11 @@ class Coordinates (M : Type) [FrameBundle M] (P G : outParam Type) where
   point : M → Nat → P
   /-- Julia `metricextensor(m)[i+1]`. -/
   metricAt : M → Nat → G
+  /-- `point m i` written into the storage of a previous point (in place when that point is
+  unshared); loops over the points use it to avoid allocating each one. -/
+  pointInto : M → Nat → P → P := fun m i _ => point m i
+  /-- Reusing storage does not change the point. -/
+  pointInto_eq : ∀ m i x, pointInto m i x = point m i := by intros; rfl
 
 export FrameBundle (card)
 
@@ -121,12 +126,20 @@ end FrameBundle
 class GridPoint (N : Nat) (P : Type) where
   /-- The point with 0-based linear index `k`. -/
   pointOf : ProductSpace N → Nat → P
+  /-- `pointOf ps k` written into the storage of a previous point (in place when unshared). -/
+  pointInto : ProductSpace N → Nat → P → P := fun ps k _ => pointOf ps k
+  /-- Reusing storage does not change the point. -/
+  pointInto_eq : ∀ ps k x, pointInto ps k x = pointOf ps k := by intros; rfl
 
 /-- 1-D real points: the coordinate vector itself (Julia `PointArray(0, range)`). -/
-instance : GridPoint 1 Float := ⟨fun ps k => (ps.coords[0]).get! k⟩
+instance : GridPoint 1 Float where
+  pointOf ps k := (ps.coords[0]).get! k
 
 /-- Affine points of a `ProductSpace` (Julia `Chain{affinemanifold(N),1}`). -/
-instance {N : Nat} : GridPoint N (AffinePoint N) := ⟨ProductSpace.point⟩
+instance {N : Nat} : GridPoint N (AffinePoint N) where
+  pointOf := ProductSpace.point
+  pointInto := ProductSpace.pointInto
+  pointInto_eq := ProductSpace.pointInto_eq
 
 /-- Julia `GridBundle{N}` over a `PointArray` of a `ProductSpace` (`fiber.jl:446-528`): a tensor
 product grid of points with a `QuotientTopology` (boundary gluing) and a metric. -/
@@ -154,6 +167,8 @@ instance [Inhabited G] : Inhabited (GridBundle N P G) :=
 instance [GridPoint N P] [Inhabited G] : Coordinates (GridBundle N P G) P G where
   point m k := GridPoint.pointOf m.space k
   metricAt m k := m.metric.get k
+  pointInto m k x := GridPoint.pointInto m.space k x
+  pointInto_eq m k x := GridPoint.pointInto_eq m.space k x
 
 /-- Julia `size(m)`. -/
 @[inline] def size (m : GridBundle N P G) : Vector Nat N := m.space.size
@@ -325,6 +340,51 @@ instance [BEq G] : BEq (GridBundle N P G) :=
 
 end GridBundle
 
+/-! ## Grids of explicit points -/
+
+/-- Julia `GridBundle(PointArray(0, P))` of an explicit `N`-dimensional array of points `P`
+(`Cartan.jl:109-111`, C2): a curvilinear grid, such as the points of a surface, not a product of
+coordinate axes. The points are stored flat and column-major (`width P` floats each), with the
+quotient topology of their shape. -/
+structure PointGrid (N : Nat) (P : Type) (G : Type := Induced) where
+  /-- Julia `size(P)`. -/
+  size : Vector Nat N
+  /-- The points, flat (Julia `points(m)`). -/
+  points : FloatArray
+  /-- Julia `immersion(m)`. -/
+  top : QuotientTopology N
+  /-- Julia `metricextensor(m)`. -/
+  metric : MetricStore G
+  /-- The topology has the grid's shape. -/
+  size_top : top.size = size
+
+namespace PointGrid
+
+variable {N : Nat} {P G : Type}
+
+instance : FrameBundle (PointGrid N P G) := ⟨fun m => MeshTopology.gridLength m.size⟩
+
+/-- Point `i` (0-based, column-major). -/
+@[inline] def get [FlatFiber P] (m : PointGrid N P G) (i : Nat) : P :=
+  FlatFiber.read m.points (i * FlatFiber.width P)
+
+instance [FlatFiber P] [Inhabited G] : Coordinates (PointGrid N P G) P G where
+  point := get
+  metricAt m i := m.metric.get i
+
+/-- The open grid of the flat points `pts` of shape `s` (Julia `GridBundle(PointArray(0, P))`). -/
+def ofFlat (s : Vector Nat N) (pts : FloatArray) : PointGrid N P :=
+  ⟨s, pts, QuotientTopology.openTop s, .induced, rfl⟩
+
+/-- The same points glued by `t` (Julia `XTopology(m)`), when `t` has the grid's shape. -/
+def withTop (m : PointGrid N P G) (t : QuotientTopology N) (h : t.size = m.size) : PointGrid N P G :=
+  { m with top := t, size_top := h }
+
+/-- Julia `TorusTopology(m)`: every axis periodic. -/
+def torus (m : PointGrid N P G) : PointGrid N P G := m.withTop (.torus m.size) rfl
+
+end PointGrid
+
 /-! ## Point clouds and simplex bundles -/
 
 /-- Julia `PointCloud` = `PointVector` (`fiber.jl:216-273`): explicit points (flat, `width P`
@@ -353,9 +413,37 @@ def size [FlatFiber P] (m : PointCloud P G) : Nat := m.points.size / FlatFiber.w
   FlatFiber.read m.points (i * FlatFiber.width P)
 
 instance [FlatFiber P] : FrameBundle (PointCloud P G) := ⟨size⟩
-instance [FlatFiber P] [Inhabited G] : Coordinates (PointCloud P G) P G := ⟨get, fun m i => m.metric.get i⟩
+instance [FlatFiber P] [Inhabited G] : Coordinates (PointCloud P G) P G where
+  point := get
+  metricAt m i := m.metric.get i
 
 end PointCloud
+
+/-- Julia `DiscontinuousBundle` = `SimplexBundle{N,C,PA,<:DiscontinuousTopology}` (`fiber.jl:534`):
+a point cloud with a `DiscontinuousTopology`, whose points are the discontinuous nodes (`N` per
+element), node `i` sitting at the cloud point `getimage(t, i)` (Julia `vertices(t)`). Fields over
+it may jump across element boundaries (Crouzeix-Raviart interpolants, DG solutions). -/
+structure DiscontinuousBundle (n : Nat) (P : Type) (G : Type := Induced) where
+  /-- Julia `fullcoordinates(m)`. -/
+  cloud : PointCloud P G
+  /-- Julia `immersion(m)`. -/
+  top : DiscontinuousTopology n
+
+namespace DiscontinuousBundle
+
+variable {n : Nat} {P G : Type}
+
+/-- The cloud point (1-based) of node `i` (0-based). -/
+@[inline] def image (m : DiscontinuousBundle n P G) (i : Nat) : Nat := m.top.getImage (i + 1)
+
+instance : FrameBundle (DiscontinuousBundle n P G) := ⟨fun m => m.top.nodes⟩
+
+/-- Julia `m[i]`: the coordinate of the cloud point of node `i`. -/
+instance [FlatFiber P] [Inhabited G] : Coordinates (DiscontinuousBundle n P G) P G where
+  point m i := m.cloud.get (m.image i - 1)
+  metricAt m i := m.cloud.metric.get (m.image i - 1)
+
+end DiscontinuousBundle
 
 /-- Julia `SimplexBundle{N}` (`fiber.jl:572-667`): a point cloud with a `SimplexTopology` of
 `n`-vertex elements; its points (and the fields over it) are the topology's vertices (Julia
@@ -406,7 +494,15 @@ def refine (m : SimplexBundle n P G) : SimplexBundle n P G := ⟨m.cloud, m.top.
 def elementPoints [FlatFiber P] (m : SimplexBundle n P G) (e : Nat) : Vector P n :=
   (m.top.get (e + 1)).map fun v => m.cloud.get (v - 1)
 
+/-- Julia `discontinuous(m)` (`Cartan.jl:603`, MeshTopology's `discontinuous`): the same points
+with the discontinuous topology of `m` (every element its own nodes). -/
+def discontinuous (m : SimplexBundle n P G) : DiscontinuousBundle n P G := ⟨m.cloud, m.top.discontinuous⟩
+
 end SimplexBundle
+
+/-- Julia `continuous(m)`: the same points with the continuous topology. -/
+def DiscontinuousBundle.continuous {n : Nat} {P G : Type} (m : DiscontinuousBundle n P G) :
+    SimplexBundle n P G := ⟨m.cloud, m.top.t⟩
 
 /-- Julia `FaceBundle{N}` (`fiber.jl:686-742`): the same data as a `SimplexBundle`, but its
 points are the elements, located at their centroids. -/

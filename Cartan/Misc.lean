@@ -1,4 +1,5 @@
 import Cartan.Product
+import AbstractAnalysis.Limit
 
 /-!
 # Small Cartan utilities
@@ -107,6 +108,12 @@ def restrict {b : SimplexBundle n P G} (t : TensorField b F) (top : SimplexTopol
     if j == 0 then FlatFiber.read (buildFlat (F := Float) (FlatFiber.width F) fun _ => 0) 0
     else t.get (j - 1)
 
+/-- Julia `discontinuous(t::SimplexMap)` (`Cartan.jl:604-605`): the field over the discontinuous
+bundle of its base, node `i` carrying the fiber of its vertex (`view(fiber(t), vertices(m))`). -/
+def discontinuous {b : SimplexBundle n P G} (t : TensorField b F) : TensorField b.discontinuous F :=
+  let vinv := b.top.vinv
+  ofFn _ fun i => t.get (vinv.get (b.discontinuous.image i - 1) - 1)
+
 /-- Julia `discontinuous(t::SimplexMap)` (`Cartan.jl:604-605`) as a disconnected mesh: every element
 gets its own copies of its vertices (`view(fiber(t), vertices(m))`, the per-element vertex
 values), and the element `e` uses the nodes `N e, …, N e + N - 1`. -/
@@ -118,6 +125,43 @@ def disconnect {b : SimplexBundle n P G} (t : TensorField b F) : Σ b' : Simplex
   let b' : SimplexBundle n P := ⟨⟨pts, .induced, 0⟩, SimplexTopology.ofElements conn (p := some ids.size)⟩
   let vinv := b.top.vinv
   ⟨b', ofFn b' fun i => t.get (vinv.get (ids[i]?.getD 1 - 1) - 1)⟩
+
+end TensorField
+
+/-! ## Orbits of field maps (AbstractAnalysis `orbit`, `Cartan.jl:37`)
+
+Julia iterates maps of fields with AbstractAnalysis's `orbit`, `orbiterror` and `orbithold`,
+measuring steps with `supnorm(a, b) = supnorm(a - b)` (the `@metric` of `supnorm`,
+`metric.jl:24-33`; a field's `supnorm` is the largest fiber norm, `Cartan.jl:513`). -/
+
+namespace TensorField
+
+variable {M : Type} [FrameBundle M] {m : M} {F : Type} [FlatFiber F] [FiberNorm F]
+  [Sub (TensorField m F)]
+
+/-- Julia `supnorm(a, b)` of two fields: `supnorm(a - b)`. -/
+def supdist (a b : TensorField m F) : Float := (a - b).supnorm
+
+/-- Julia `orbit(f, x, ϵ)` for a map of fields: iterate until `supnorm(xₙ₊₁ - xₙ) ≤ ϵ`. -/
+def orbitLimit (f : TensorField m F → TensorField m F) (x : TensorField m F)
+    (ϵ : Float := 5 * 2.220446049250313e-16) : AbstractAnalysis.Limit (TensorField m F) (TensorField m F) :=
+  AbstractAnalysis.orbit f x ϵ supdist
+
+/-- Julia `orbiterror(f, x, ϵ)`: `orbitLimit` with the residual of every step. -/
+def orbitError (f : TensorField m F → TensorField m F) (x : TensorField m F)
+    (ϵ : Float := 5 * 2.220446049250313e-16) :
+    AbstractAnalysis.Limit (TensorField m F) (TensorField m F) × FloatArray :=
+  AbstractAnalysis.orbitError f x ϵ supdist
+
+/-- Julia `orbit(f, x, k::Int)`: exactly `k` steps. -/
+def orbitSteps (f : TensorField m F → TensorField m F) (x : TensorField m F) (k : Nat) :
+    AbstractAnalysis.Limit (TensorField m F) (TensorField m F) :=
+  AbstractAnalysis.orbitN f x k supdist
+
+/-- Julia `orbithold(f, x, 1:k)`: iterate `xₙ ↦ f(x, xₙ)` with `x` held. -/
+def orbitHold (f : TensorField m F → TensorField m F → TensorField m F) (x : TensorField m F)
+    (k : Nat) : AbstractAnalysis.Limit (TensorField m F) (TensorField m F) :=
+  AbstractAnalysis.orbitHold f x k supdist
 
 end TensorField
 

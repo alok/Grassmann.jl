@@ -12,8 +12,55 @@ open Lean Tests.Small Cartan JuliaBase Grassmann
 
 namespace Tests.CartanTests.MiscTests
 
+/-- Fields over grids of explicit points (`element/pointgrid.json`). -/
+def runPointGrid : TestM Unit := do
+  let g ← load "element/pointgrid"
+  let b : GridBundle 2 (AffinePoint 2) := .ofSpace (.ofAxes #v[Axis.colon 0 0.25 1, Axis.colon 0 0.5 3])
+  let sheet : TensorField b (Chain ℝ3 1 Float) := .tabulatePoint b fun p =>
+    Chain.ofFn fun i => if i.1 = 0 then p.get! 0 else if i.1 = 1 then p.get! 1
+      else p.get! 0 * p.get! 1 + F64.sin (2 * p.get! 1)
+  let pg := TensorField.ofFibers sheet
+  checkEq "pointgrid size" (BaseShape.shape pg.base) ((← (← jArr (← jField g "size")).mapM jNat).toList)
+  checkFloats "pointgrid points" pg.base.points (← gFloats (← jField g "points"))
+  let h := pg.map fun x => x.v.get! 0 + x.v.get! 1 * x.v.get! 2
+  checkFloats "pointgrid map" h.data (← gFloats (← jField g "h"))
+  let r := TensorField.reparametrizeN sheet (TensorField.tabulatePoint b fun p => p.get! 0 - p.get! 1)
+  checkFloats "pointgrid reparametrize points" r.base.points (← gFloats (← jField g "r_points"))
+  checkFloats "pointgrid reparametrize fiber" r.data (← gFloats (← jField g "r_fiber"))
+  check "pointgrid torus glued" pg.base.torus.top.isCompact
+
+/-- Orbits of field maps and reparametrization (`element/orbit.json`). -/
+def runOrbits : TestM Unit := do
+  let g ← load "element/orbit"
+  let t := TensorField.ofAxis (Axis.colon 0 0.25 1)
+  let s := t.sin
+  let f (u : TensorField (GridBundle.ofAxis (Axis.colon 0 0.25 1)) Float) : TensorField (GridBundle.ofAxis (Axis.colon 0 0.25 1)) Float := (0.5 : Float) * u + s
+  let lim (name : String) (L : AbstractAnalysis.Limit (TensorField (GridBundle.ofAxis (Axis.colon 0 0.25 1)) Float) (TensorField (GridBundle.ofAxis (Axis.colon 0 0.25 1)) Float)) :
+      TestM Unit := do
+    let j ← jField g name
+    checkEq s!"{name} n" L.length (← jNat (← jField j "n"))
+    checkFloat s!"{name} residual" L.residual (← jField j "r")
+    checkFloats s!"{name} first" L.first.data (← gFloats (← jField j "first"))
+    checkFloats s!"{name} last" L.last.data (← gFloats (← jField j "last"))
+  lim "orbit_eps" (TensorField.orbitLimit f s 1e-12)
+  lim "orbit_n" (TensorField.orbitSteps f s 7)
+  let (L, tr) := TensorField.orbitError f s 1e-10
+  lim "orbiterror" L
+  checkFloats "orbiterror trace" tr (← gFloats (← jField (← jField g "orbiterror") "trace"))
+  lim "orbithold" (TensorField.orbitHold (fun x u => (0.25 : Float) * u + x) t 9)
+  -- reparametrization (C6): the parameter's values become the points
+  let r := TensorField.reparametrize (t * t) s
+  checkFloats "reparametrize points" r.base.space.coords[0] (← gFloats (← jField g "reparam_points"))
+  checkFloats "reparametrize fiber" r.data (← gFloats (← jField g "reparam_fiber"))
+  let r2 := TensorField.reparametrize ((2 : Float) * t) t.cos
+  checkFloats "reparametrize range points" r2.base.space.coords[0]
+    (← gFloats (← jField g "reparam_range_points"))
+  check "reparametrize keeps a range" r2.base.space.axes[0].isRange
+
 /-- Run the utility checks. -/
 def run : TestM Unit := do
+  runOrbits
+  runPointGrid
   let c ← jField (← load "misc") "cases"
   checkFloat "misc besseljzero(0,1)" (besseljzero 0 1) (← jField c "besseljzero(0,1)")
   checkFloat "misc besseljzero(2,3)" (besseljzero 2 3) (← jField c "besseljzero(2,3)")
