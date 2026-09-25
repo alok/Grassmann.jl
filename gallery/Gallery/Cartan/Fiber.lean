@@ -131,6 +131,22 @@ wireframes on one axis. -/
 def hopfCanvas : Canvas :=
   (List.range 7).foldl (fun c i => c.wireframe (hopf.leafAt i 0)) (Canvas.fresh 3)
 
+/-! ## C17: a tangent-space streamplot on the torus -/
+
+/-- Julia `torus(x) = Chain((2+0.5cos(x[1]))*cos(x[2]), (2+0.5cos(x[1]))*sin(x[2]), 0.5sin(x[1]))`. -/
+def torusMap (x : AffinePoint 2) : Chain ℝ3 1 Float :=
+  let a := x.get! 0
+  let b := x.get! 1
+  let r := 2 + f64! 0.5 * F64.cos a
+  Chain.ofFn fun i => if i.1 = 0 then r * F64.cos b else if i.1 = 1 then r * F64.sin b else f64! 0.5 * F64.sin a
+
+/-- Julia `tor = torus.(TorusParameter(60,60))`. -/
+def tor := (Parameter.torus #v[60, 60]).map torusMap
+
+/-- Julia `vf3 = f3.(TorusParameter(100,100))`, `f3(x) = Chain(cos(x[1])*cos(x[2]),sin(x[2])*sin(x[1]))`. -/
+def vf3 := (Parameter.torus #v[100, 100]).map fun x =>
+  (Chain.ofFn fun i => if i.1 = 0 then F64.cos (x.get! 0) * F64.cos (x.get! 1) else F64.sin (x.get! 1) * F64.sin (x.get! 0) : Chain ℝ2 1 Float)
+
 /-! ## Entries -/
 
 /-- The `fiber.md` figures. -/
@@ -168,6 +184,13 @@ def entries : List Entry :=
          | some _, none => #[{ label := "segments", ok := false, detail := "no segments drawn" }]
          | none, _ => #[]
        return { fig := c.figure (600, 500), checks } },
+   { name := "cartan-torus-tangent-stream", group := "Cartan (fiber.md)", upstream := fiberDoc
+     title := "Streamlines of a parameter field drawn on the torus (tangent-space streamplot)"
+     source := "`tor = torus.(TorusParameter(60,60)); vf3 = f3.(TorusParameter(100,100)); streamplot(tor,vf3)` (`fiber.md:778-797`)"
+     build := fun j? => do
+       let c := (Canvas.ax3 (Axis3.new (aspect := .data))).streamplot (tor, vf3)
+       let (r, _) := tangentStream3 vf3 {}
+       return { fig := c.figure (600, 500), checks := match j? with | some j => GrassmannFigs.streamChecks r j | none => #[] } },
    { name := "cartan-hopf", group := "Cartan (fiber.md)", upstream := fiberDoc
      title := "Hopf fibration: seven nested tori of the stereographic Hopf map"
      source := "`hs = stereohopf.(HopfParameter()); alteration!(hs,wireframe,wireframe!)` (`fiber.md:765-775`)"

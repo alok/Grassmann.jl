@@ -155,6 +155,18 @@ def meshArea {b : GridBundle 2 P G} (M : TensorField b E) : Float :=
     let (p, q, r) := m.triangle k
     s + 0.5 * (Vec3.cross (q - p) (r - p)).norm
 
+/-- The parameter-space streamlines of `streamplot(M, m)` for a surface embedded in 3-D
+(`MakieExt.jl:540-545`): Makie's 3-D streamplot of `p ↦ (m(p)₁, m(p)₂, 0)` over the parameter box
+× `[-1e-15, 1e-15]` with `gridsize = (32, 32, 1)` (a given `gridsize` extended by `1`), and the
+grid sizes used. -/
+def tangentStream3 {bm : GridBundle 2 P G} (m : TensorField bm F) (a : Attrs) : Stream.Result × Array Nat :=
+  let (x0, wx) := axisBox (bm.space.axis 0)
+  let (y0, wy) := axisBox (bm.space.axis 1)
+  let gs : Array Nat := match a.gridsize with | some g => g.push 1 | none => #[32, 32, 1]
+  let o := streamOptions { a with gridsize := some gs } gs
+  let f (p : Vec3) : Vec3 := let v := field2 m ⟨p.x, p.y⟩; ⟨v.x, v.y, 0⟩
+  (Stream.streamplot3 f ⟨x0, y0, f64! -1e-15⟩ ⟨wx, wy, f64! 2e-15⟩ o, gs)
+
 /-- Julia `streamplot(M::VectorField, m::VectorField{…,2,RealSpace{2}})` (`MakieExt.jl:536-557`). -/
 instance instStreamTangent {bM bm : GridBundle 2 P G} : MakiePlot .streamplot (TensorField bM E × TensorField bm F) where
   plot c Mm a :=
@@ -162,12 +174,9 @@ instance instStreamTangent {bM bm : GridBundle 2 P G} : MakiePlot .streamplot (T
     let m := Mm.2
     let embed (p : Vec3) : Vec3 := fiberVec (M.eval2 p.x p.y)
     if FlatFiber.width E != 2 then
-      let (x0, wx) := axisBox (bm.space.axis 0)
-      let (y0, wy) := axisBox (bm.space.axis 1)
-      let gs : Array Nat := match a.gridsize with | some g => g.push 1 | none => #[32, 32, 1]
-      let o := streamOptions { a with gridsize := some gs } gs
-      let f (p : Vec3) : Vec3 := let v := field2 m ⟨p.x, p.y⟩; ⟨v.x, v.y, 0⟩
-      let res := Stream.streamplot3 f ⟨x0, y0, -1e-15⟩ ⟨wx, wy, 2e-15⟩ o
+      let (_, wx) := axisBox (bm.space.axis 0)
+      let (_, wy) := axisBox (bm.space.axis 1)
+      let (res, gs) := tangentStream3 m a
       let scale := 0.2 * Float.sqrt (meshArea M / (wx * wy))
       let size := scale * JuliaBase.F64.min wx wy / (JuliaBase.F64.min (gs.getD 0 32).toUInt64.toFloat (gs.getD 1 32).toUInt64.toFloat)
       drawStream c (res.mapPoints embed) size a
