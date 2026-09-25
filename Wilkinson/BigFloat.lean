@@ -32,7 +32,7 @@ inductive BigFloat (p : Nat) where
   | inf (neg : Bool)
   /-- Not a number. -/
   | nan
-  deriving Inhabited, BEq, Repr
+  deriving Inhabited, BEq, Repr, DecidableEq
 
 namespace BigFloat
 

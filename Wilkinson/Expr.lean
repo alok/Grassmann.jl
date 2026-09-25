@@ -103,6 +103,7 @@ partial def render (e : JExpr) (ctx : Int) : String :=
         match a with
         | .call .. => op ++ "(" ++ showList [a] ", " fp ++ ")"
         | _ => op ++ render a fp
+      else if fp > 0 then "(" ++ op ++ ")(" ++ showList args ", " 0 ++ ")"
       else op ++ "(" ++ showList args ", " 0 ++ ")"
     | _, _ => binary op args fp ctx
 where

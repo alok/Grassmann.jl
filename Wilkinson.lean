@@ -5,6 +5,9 @@ import Wilkinson.Range
 import Wilkinson.Num
 import Wilkinson.SyntaxTree
 import Wilkinson.Analysis
+import Wilkinson.Parse
+import Wilkinson.Poly
+import Wilkinson.Reduce
 
 /-!
 # Wilkinson
@@ -24,4 +27,7 @@ parts of `SyntaxTree.jl` (1.0.1) it relies on (`exprval`, `callcount`, `sub`,
 | `Wilkinson.Num` | Julia promotion | `JNum`: Int64/Rational/Float32/Float64/BigFloat |
 | `Wilkinson.SyntaxTree` | `SyntaxTree.jl` | `callcount`, `sub`, `abs`, `alg`, `exprval`, `eval` |
 | `Wilkinson.Analysis` | `src/Wilkinson.jl`, `src/polynomial.jl` | `stieltjes`, `simpson`, `Ω`, `exacterr`, `PolynomialComparison` |
+| `Wilkinson.Parse` | Julia's parser | `JExpr.parse` for expression strings |
+| `Wilkinson.Poly` | (REDUCE's polynomial core) | `ℚ[x]`, square-free and irreducible factorization over `ℤ` |
+| `Wilkinson.Reduce` | REDUCE via Reduce.jl | `expand`/`horner`/`factor` in REDUCE's output shapes, `polyfactors`/`polyhorner`/`polyexpand`, the `CAS` |
 -/
