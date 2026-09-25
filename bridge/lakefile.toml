@@ -2,7 +2,7 @@ name = "GrassmannBridge"
 version = "0.1.0"
 description = "Bridge from the Grassmann specification model (Grassmann.Spec) to mathlib's CliffordAlgebra and ExteriorAlgebra"
 license = "AGPL-3.0-or-later"
-defaultTargets = ["GrassmannBridge"]
+defaultTargets = ["GrassmannBridge", "BridgeTests"]
 
 [leanOptions]
 autoImplicit = false
@@ -20,3 +20,6 @@ rev = "master"
 
 [[lean_lib]]
 name = "GrassmannBridge"
+
+[[lean_lib]]
+name = "BridgeTests"
