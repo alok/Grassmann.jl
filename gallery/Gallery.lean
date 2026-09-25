@@ -18,7 +18,7 @@ every figure to `gallery/out/`, compares the plotted data with the Julia dumps u
 
 | module | figures |
 |---|---|
-| `Gallery.Fatou` | Fatou.jl README: cobweb orbit, filled Julia set, Mandelbrot set, Newton fractals |
+| `Gallery.Fatou` | Fatou.jl README and wiki: cobweb orbit, filled Julia sets, Mandelbrot set, Newton fractals |
 | `Gallery.Grassmann.Figures` | Grassmann.jl README: plane versor streamplots, Riemann-sphere and conformal curves, 3D conformal streamplots |
 | `Gallery.Grassmann.Graphs` | Grassmann paper: multivectors drawn as directed graphs |
 | `Gallery.Wilkinson` | Wilkinson.jl: `plot(::PolynomialComparison)` error curves |

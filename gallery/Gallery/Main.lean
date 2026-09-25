@@ -37,6 +37,7 @@ def parseArgs : List String → Opts → Opts
 def selected (o : Opts) (e : Entry) : Bool :=
   o.only.isEmpty || o.only.any fun p => e.name == p || e.name.startsWith p
 
+/-- Render, compare and (with `--docs`) publish every selected figure. -/
 def main (args : List String) : IO UInt32 := do
   let o := parseArgs args {}
   IO.FS.createDirAll "out"
