@@ -56,7 +56,7 @@ def floorCases (d : Nat) : BenchM Unit := do
     let a := FloatArray.mk (xs[s % ringSize]!.data)
     (setN a ringSize).foldl (· + ·) 0
   case1 (k "copy") (fun (a : FloatArray) => (a.set! 0 (a.get! 1)).foldl (· + ·) 0) xs p
-  case1 (k "push") (fun (a : FloatArray) => (pushN (a.get! 0) d (FloatArray.mkEmpty d)).foldl (· + ·) 0) xs p
+  case1 (k "push") (fun (a : FloatArray) => (pushN (a.get! 0) d (FloatArray.emptyWithCapacity d)).foldl (· + ·) 0) xs p
   case1 (k "ctor") (fun (a : FloatArray) => let f := mkF3 (a.get! 0); f.a + f.b + f.c) xs p
 
 /-- The suite's floor cases. -/
