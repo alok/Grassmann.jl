@@ -1,8 +1,11 @@
 name: CI
 
-# Manual-only while the port is under heavy local development; re-enable push/PR triggers
-# once the port is feature-complete (must pass on Linux).
+# Build, test and bench smoke on every push to master and every PR (green on Linux as of
+# 2026-10-28). The Julia oracle job stays manual.
 on:
+  push:
+    branches: [master]
+  pull_request:
   workflow_dispatch:
 
 jobs:
