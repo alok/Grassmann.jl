@@ -73,7 +73,12 @@ merge conflicts in Cartan roots and registrations.
    - re-audit `docs/parity-gaps.json`, whose statuses were not updated after wave 1;
    - start the "exceed Julia" phase (perf, GPU in an optional `accel/` package, proofs);
    - build the DSL (`docs/DSL.md`);
-   - set up CI (Linux) at the end.
+   - ~~set up CI (Linux)~~ done 2026-10-28: CI runs on every push to master and on PRs,
+     green on Linux (the libm `atanh` mismatch is fixed by using Julia's kernel).
+
+Also landed 2026-10-28 from a cloud session (on GitHub, not yet on the Mac): the plan
+interpreter proof (`Grassmann.Proofs.Interp`) and `docs/TALK.md`. Pull master before
+merging the wave-2 branches.
 
 Open question for Alok: should the port move to a standalone repo (suggested
 `alok/Grassmann.lean`) instead of this Grassmann.jl fork?
