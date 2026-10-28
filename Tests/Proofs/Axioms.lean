@@ -120,3 +120,9 @@ import Grassmann.Tactic
 
 /-- info: 'Grassmann.Proofs.Interp.PGA3_refMul' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Grassmann.Proofs.Interp.PGA3_refMul
+
+/-- info: 'Grassmann.Proofs.Interp.eval₁_eq_unary' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.Interp.eval₁_eq_unary
+
+/-- info: 'Grassmann.Proofs.Interp.STA_refHodge' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.Interp.STA_refHodge

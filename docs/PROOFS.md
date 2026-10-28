@@ -294,6 +294,8 @@ storage. This module proves those loops correct, in four layers:
 | `eval₂_eq_twist` | if a plan is the spec table `k` in a storage order that is a bijection onto the blades (`IsSpecPlan`, `IsOrder`, both decidable), running it is the twisted convolution `twist k` | general |
 | `refBin_eq_twist` | the same for `refBin V op la lb lc`, from one decidable check of the built plan (`RefSpec`) | general |
 | `R3_refMul`, `R3_refWedge`, `D123_refMul`, `STA_refMul`, `PGA3_refMul` | the reference product kernels return the spec product on all full multivectors over `Rat` | `ℝ3` (`*`, `∧`), `D!"1,2,-3"`, `STA`, `PGA3` (`*`) |
+| `eval₁_eq_unary`, `refUn_eq_unary` | a unary plan that is the table `e_a ↦ k(a) e_{f a}` (`f` involutive) computes `c ↦ k(f c) · x(f c)` | general |
+| `R3_refReverse`, `R3_refInvolute`, `R3_refHodge`, `STA_refReverse`, `STA_refHodge` | the reference unary kernels are `Cl.reverse`, `Cl.involute`, `Cl.hodge` on all full multivectors over `Rat` | `ℝ3`, `STA` (Lorentzian Hodge star included) |
 
 Together with `implMul_eq_mul` this closes the chain from Julia's blade rules
 to the bytes the reference kernel writes: blade rule = spec coefficient
@@ -323,8 +325,8 @@ to the bytes the reference kernel writes: blade rule = spec coefficient
   order of operations) but not bounded: there is no rounding-error theorem.
   The generated straight-line kernels (`grassmann_kernels`) and the typed
   `Chain` plans are tested, not proved; `refBin_eq_twist` covers full
-  multivectors in the five checked spaces, and the unary interpreter
-  (`eval₁`) has its exact and `Rat` layers but no spec corollary yet.
+  multivectors in the five checked spaces, `refUn_eq_unary` the unary
+  kernels in `ℝ3` and `STA`.
 * Grade preservation of sandwiches beyond dimension 4 needs versors (products
   of vectors): for a general even `R` the grade-5 part of `R v R̃` can survive
   (`R = 1 + e₁₂₃₄`, `v = e₅` gives `2 e₅ + 2 I`, checked by `clifford` in

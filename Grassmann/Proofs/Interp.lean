@@ -23,7 +23,8 @@ not proved*: "a proof of `eval₂` would carry every §3 theorem to
 4. **The reference kernels** (`refBin_eq_twist`, `R3_refMul`, …): a `decide +kernel`
    check of the built plan (`RefSpec`) carries layer 3 to `refBin` itself, here
    for the geometric product of `ℝ3`, `D!"1,2,-3"`, `STA` and `PGA3` and the
-   exterior product of `ℝ3`.
+   exterior product of `ℝ3`; and, through `eval₁_eq_unary`/`refUn_eq_unary`, for the
+   reversion, grade involution and Hodge star kernels (`R3_refReverse`, `STA_refHodge`, …).
 -/
 import Grassmann.Proofs.Tables
 
@@ -447,6 +448,78 @@ theorem eval₂_eq_twist {N na nb : Nat} {blade : Nat → BitVec n} {k : BitVec 
     refine congrArg List.sum (List.map_congr_left fun ib hib => ?_)
     split <;> simp_all <;> grind
 
+/-! ### Unary plans: `e_a ↦ k(a) e_{f a}` -/
+
+/-- Row `c` of the unary spec table `e_a ↦ k(a) e_{f a}` in storage order. -/
+def specRow₁ (N : Nat) (blade : Nat → BitVec n) (f : BitVec n → BitVec n) (k : BitVec n → Rat)
+    (c : Nat) : List (Nat × Nat × Rat) :=
+  (List.range N).filterMap fun ia =>
+    if f (blade ia) = blade c ∧ k (blade ia) ≠ 0 then some (ia, 0, k (blade ia)) else none
+
+/-- A unary plan is the spec table `(f, k)` in the storage order `blade`. Decidable. -/
+def IsSpecPlan₁ (p : Plan) (N : Nat) (blade : Nat → BitVec n) (f : BitVec n → BitVec n)
+    (k : BitVec n → Rat) : Prop :=
+  p.Aligned ∧ Coded p = true ∧ ∀ c < N, rowList p c = specRow₁ N blade f k c
+
+instance (p : Plan) (N : Nat) (blade : Nat → BitVec n) (f : BitVec n → BitVec n) (k : BitVec n → Rat) :
+    Decidable (IsSpecPlan₁ p N blade f k) := by
+  unfold IsSpecPlan₁; exact inferInstance
+
+/-- For an involutive blade map `f` (the identity, or complementation), the unary spec row
+sums to `k(f c) · X(f c)`. -/
+theorem lsum_specRow₁ {N : Nat} {blade : Nat → BitVec n} (h : IsOrder N blade)
+    {f : BitVec n → BitVec n} (hf : ∀ a, f (f a) = a) (k : BitVec n → Rat) (X : BitVec n → Rat) (c : Nat) :
+    lsum (fun a _ => X (blade a)) (specRow₁ N blade f k c) = k (f (blade c)) * X (f (blade c)) := by
+  unfold specRow₁
+  rw [lsum_filterMap]
+  let G : BitVec n → Rat := fun A => if A = f (blade c) then k A * X A else 0
+  have hG : ∀ ia, (match (if f (blade ia) = blade c ∧ k (blade ia) ≠ 0 then
+      some (ia, 0, k (blade ia)) else none) with
+      | some (a, _, r) => r * X (blade a) | none => 0) = G (blade ia) := by
+    intro ia
+    simp only [G]
+    have hx : f (blade ia) = blade c ↔ blade ia = f (blade c) := by
+      constructor
+      · intro e; rw [← e, hf]
+      · intro e; rw [e, hf]
+    by_cases h1 : blade ia = f (blade c)
+    · rw [ite_eq_left h1]
+      by_cases hk : k (blade ia) = 0
+      · rw [ite_eq_right (by intro ⟨_, h⟩; exact h hk)]; simp [hk]
+      · rw [ite_eq_left ⟨hx.2 h1, hk⟩]
+    · rw [ite_eq_right h1, ite_eq_right (by intro ⟨e, _⟩; exact h1 (hx.1 e))]
+  rw [List.map_congr_left (fun ia _ => hG ia), bsum_order h G]
+  simp only [G]
+  rw [bsum_ite_eq]
+
+/-- **The unary interpreter computes the spec map.** If a plan is the table
+`e_a ↦ k(a) e_{f a}` for an involutive `f`, running it (`Plan.eval₁`) gives, read back as
+coefficients, `c ↦ k(f c) · x(f c)`: the reversion, grade involution and complements
+of `Grassmann.Spec` have exactly this form. -/
+theorem eval₁_eq_unary {N na : Nat} {blade : Nat → BitVec n} {f : BitVec n → BitVec n}
+    {k : BitVec n → Rat} {p : Plan} (ho : IsOrder N blade) (hf : ∀ a, f (f a) = a)
+    (hp : IsSpecPlan₁ p N blade f k) (x : Values Rat na) :
+    coeffs N blade (p.eval₁ x : Values Rat N).data =
+      fun C => k (f C) * coeffs N blade x.data (f C) := by
+  funext C
+  obtain ⟨ha, hc, hrows⟩ := hp
+  have hC := pos_lt ho C
+  have hread : coeffs N blade (p.eval₁ x : Values Rat N).data C =
+      (p.eval₁ x : Values Rat N).get ⟨pos N blade C, hC⟩ := by
+    unfold coeffs rd; rw [dite_eq_left]; rfl
+  rw [hread, get_eval₁ p ha, row₁_rat p ha hc]
+  have hF : ∀ a, a < N → rd x.data a = coeffs N blade x.data (blade a) := by
+    intro a ha; simp [coeffs, pos_blade ho ha]
+  have hI := isum_rowList p (pos N blade C) (fun a _ => rd x.data a)
+  rw [hI, hrows _ hC]
+  rw [show lsum (fun a _ => rd x.data a) (specRow₁ N blade f k (pos N blade C)) =
+      lsum (fun a _ => coeffs N blade x.data (blade a)) (specRow₁ N blade f k (pos N blade C)) from ?_]
+  · rw [lsum_specRow₁ ho hf, blade_pos ho, show (Coeff.zero : Rat) = 0 from rfl, Rat.zero_add]
+  · unfold specRow₁
+    rw [lsum_filterMap, lsum_filterMap]
+    refine congrArg List.sum (List.map_congr_left fun ia hia => ?_)
+    split <;> simp_all <;> grind
+
 end Spec
 
 /-! ## The reference kernels
@@ -538,6 +611,86 @@ theorem PGA3_refMul (x y : Values Rat (Layout.full.size PGA3.n)) :
     coeffs (2 ^ 4) (fullOrder 4) (refBin PGA3 .mul .full .full .full x y).data =
       twist (coef (gPGA 4)) (coeffs (2 ^ 4) (fullOrder 4) x.data) (coeffs (2 ^ 4) (fullOrder 4) y.data) :=
   refBin_eq_twist (by decide) fullOrder4 PGA3_refMul_spec x y
+
+/-! ### Unary kernels: reversion, grade involution and complements -/
+
+/-- The plan that `refUn V op la lc` runs is the unary spec table `(f, k)`. -/
+def RefSpec₁ (V : TensorBundle) (op : UnOp) (la lc : Layout) (N : Nat)
+    (blade : Nat → BitVec n) (f : BitVec n → BitVec n) (k : BitVec n → Rat) : Bool :=
+  match build { V, op := .un op, la, lb := la, lc } with
+  | .ok p => decide (IsSpecPlan₁ p N blade f k)
+  | .error _ => false
+
+/-- **The reference unary kernel computes the spec map**, at `Rat`. -/
+theorem refUn_eq_unary {V : TensorBundle} {op : UnOp} {la lc : Layout} {N : Nat}
+    {blade : Nat → BitVec n} {f : BitVec n → BitVec n} {k : BitVec n → Rat}
+    (hN : lc.size V.n = N) (ho : IsOrder N blade) (hf : ∀ a, f (f a) = a)
+    (hs : RefSpec₁ V op la lc N blade f k = true) (x : Values Rat (la.size V.n)) :
+    coeffs N blade (refUn V op la lc x).data = fun C => k (f C) * coeffs N blade x.data (f C) := by
+  subst hN
+  unfold RefSpec₁ at hs
+  unfold refUn plan
+  split at hs
+  · rename_i p hp
+    rw [hp]
+    exact eval₁_eq_unary ho hf (of_decide_eq_true hs) x
+  · cases hs
+
+theorem R3_refReverse_spec :
+    RefSpec₁ ℝ3 .reverse .full .full (2 ^ 3) (fullOrder 3) id (revSign (R := Rat) (n := 3)) = true := by
+  decide +kernel
+
+theorem R3_refInvolute_spec :
+    RefSpec₁ ℝ3 .involute .full .full (2 ^ 3) (fullOrder 3) id (invSign (R := Rat) (n := 3)) = true := by
+  decide +kernel
+
+theorem R3_refHodge_spec :
+    RefSpec₁ ℝ3 .complementrighthodge .full .full (2 ^ 3) (fullOrder 3) (fun a => ~~~a)
+      (hodgeCoef (gEuclid 3)) = true := by
+  decide +kernel
+
+theorem STA_refReverse_spec :
+    RefSpec₁ STA .reverse .full .full (2 ^ 4) (fullOrder 4) id (revSign (R := Rat) (n := 4)) = true := by
+  decide +kernel
+
+theorem STA_refHodge_spec :
+    RefSpec₁ STA .complementrighthodge .full .full (2 ^ 4) (fullOrder 4) (fun a => ~~~a)
+      (hodgeCoef gSTA) = true := by
+  decide +kernel
+
+/-- `ℝ3`'s reference reversion kernel is the spec reversion `Cl.reverse`. -/
+theorem R3_refReverse (x : Values Rat (Layout.full.size ℝ3.n)) :
+    coeffs (2 ^ 3) (fullOrder 3) (refUn ℝ3 .reverse .full .full x).data =
+      (Cl.reverse (⟨coeffs (2 ^ 3) (fullOrder 3) x.data⟩ : Cl (gEuclid 3))).coeff := by
+  rw [refUn_eq_unary (by decide) fullOrder3 (fun _ => rfl) R3_refReverse_spec x]; rfl
+
+/-- `ℝ3`'s reference grade-involution kernel is the spec `Cl.involute`. -/
+theorem R3_refInvolute (x : Values Rat (Layout.full.size ℝ3.n)) :
+    coeffs (2 ^ 3) (fullOrder 3) (refUn ℝ3 .involute .full .full x).data =
+      (Cl.involute (⟨coeffs (2 ^ 3) (fullOrder 3) x.data⟩ : Cl (gEuclid 3))).coeff := by
+  rw [refUn_eq_unary (by decide) fullOrder3 (fun _ => rfl) R3_refInvolute_spec x]; rfl
+
+/-- `ℝ3`'s reference Hodge-star kernel is the spec `Cl.hodge`. -/
+theorem R3_refHodge (x : Values Rat (Layout.full.size ℝ3.n)) :
+    coeffs (2 ^ 3) (fullOrder 3) (refUn ℝ3 .complementrighthodge .full .full x).data =
+      (Cl.hodge (⟨coeffs (2 ^ 3) (fullOrder 3) x.data⟩ : Cl (gEuclid 3))).coeff := by
+  rw [refUn_eq_unary (by decide) fullOrder3 (fun a => BitVec.not_not) R3_refHodge_spec x]
+  funext C
+  simp only [Cl.hodge, hodgeCoef, BitVec.not_not]
+
+/-- Spacetime algebra's reference reversion kernel is the spec `Cl.reverse`. -/
+theorem STA_refReverse (x : Values Rat (Layout.full.size STA.n)) :
+    coeffs (2 ^ 4) (fullOrder 4) (refUn STA .reverse .full .full x).data =
+      (Cl.reverse (⟨coeffs (2 ^ 4) (fullOrder 4) x.data⟩ : Cl gSTA)).coeff := by
+  rw [refUn_eq_unary (by decide) fullOrder4 (fun _ => rfl) STA_refReverse_spec x]; rfl
+
+/-- Spacetime algebra's reference Hodge-star kernel (Lorentzian metric) is the spec `Cl.hodge`. -/
+theorem STA_refHodge (x : Values Rat (Layout.full.size STA.n)) :
+    coeffs (2 ^ 4) (fullOrder 4) (refUn STA .complementrighthodge .full .full x).data =
+      (Cl.hodge (⟨coeffs (2 ^ 4) (fullOrder 4) x.data⟩ : Cl gSTA)).coeff := by
+  rw [refUn_eq_unary (by decide) fullOrder4 (fun a => BitVec.not_not) STA_refHodge_spec x]
+  funext C
+  simp only [Cl.hodge, hodgeCoef, BitVec.not_not]
 
 end Reference
 

@@ -52,7 +52,9 @@ proved in general, what is checked by kernel evaluation and what is tested):
   reference kernel runs: exact for every coefficient type (`get_eval₂`), the
   sum of its row at `Rat`, and the spec product whenever its plan is the spec
   table (`eval₂_eq_twist`); hence the reference product kernels of `ℝ3`,
-  `D!"1,2,-3"`, `STA` and `PGA3` compute the spec product (`R3_refMul`, …).
+  `D!"1,2,-3"`, `STA` and `PGA3` compute the spec product (`R3_refMul`, …), and
+  the unary interpreter likewise (`eval₁_eq_unary`: reversion, involution and
+  Hodge star kernels, `R3_refReverse`, `STA_refHodge`, …).
 * `Grassmann.Proofs.Conformal`: the conformal (null-basis, Chevalley) product
   by transport of structure to a diagonal metric: a transported blade table
   makes the product isomorphic to `Cl(p,q)` and associative on all multivectors
