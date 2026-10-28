@@ -76,26 +76,28 @@ def atanhHuge : Float := F64.pi / f2 + fhalf * f64! 1.2246467991473532e-16
 /-- Grassmann's `atanh(y::Float64, x::Float64)` (`src/composite.jl:636-705`), adapted from
 Julia's `atan(y, x)`: effectively `sign(y)·atanh(|y/x|)`, the sign of `x` ignored, with
 the special cases of the template. Where Julia throws `DomainError` (`|y/x| > 1`, `x = 0`,
-infinite `y`) this returns `NaN` (from `Float.atanh`); the `k > 60` branch returns the
-template's `≈ π/2`, an artefact Julia shares (port-notes/grassmann-composite.md §4.3.4). -/
+infinite `y`) this returns `NaN` (from `F64.atanh`); the `k > 60` branch returns the
+template's `≈ π/2`, an artefact Julia shares (port-notes/grassmann-composite.md §4.3.4).
+`F64.atanh` is Julia's own kernel, not the platform `libm`, so the result is Julia's bit
+for bit on every platform (glibc's `atanh` is one ulp off Julia's at `0.5`). -/
 def atanh2 (y x : Float) : Float :=
   if x.isNaN || y.isNaN then nan
-  else if x == f1 || x == -f1 then Float.atanh y
+  else if x == f1 || x == -f1 then F64.atanh y
   else
     let m : Nat := (if F64.signbit x then 2 else 0) + (if F64.signbit y then 1 else 0)
     if y == f0 then y
-    else if x == f0 then Float.atanh (F64.copysign F64.inf y)
+    else if x == f0 then F64.atanh (F64.copysign F64.inf y)
     else if x.isInf then
       if y.isInf then y
       else if m == 0 || m == 2 then f0 else -f0
-    else if y.isInf then Float.atanh y
+    else if y.isInf then F64.atanh y
     else
       -- `k = reinterpret(Int32, poshighword(y) - poshighword(x)) >> 20`
       let k : Int32 := (poshighword y - poshighword x).toInt32 >>> 20
       let (z, m) :=
         if k > 60 then (atanhHuge, m &&& 1)
         else if x < f0 && k < -60 then (f0, m)
-        else (Float.atanh (y / x).abs, m)
+        else (F64.atanh (y / x).abs, m)
       if m == 0 || m == 2 then z else -z
 
 /-! ## Blades of a runtime mask -/
