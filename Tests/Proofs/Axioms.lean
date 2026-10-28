@@ -108,3 +108,15 @@ import Grassmann.Tactic
 
 /-- info: 'Grassmann.Proofs.implWedge_comm_of_flat' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Grassmann.Proofs.implWedge_comm_of_flat
+
+/-- info: 'Grassmann.Proofs.Interp.eval₂_eq_twist' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.Interp.eval₂_eq_twist
+
+/-- info: 'Grassmann.Proofs.Interp.refBin_eq_twist' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.Interp.refBin_eq_twist
+
+/-- info: 'Grassmann.Proofs.Interp.STA_refMul' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.Interp.STA_refMul
+
+/-- info: 'Grassmann.Proofs.Interp.PGA3_refMul' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.Interp.PGA3_refMul

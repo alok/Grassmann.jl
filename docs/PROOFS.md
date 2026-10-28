@@ -188,7 +188,7 @@ families of spaces at once:
 These are statements about the blade rules extended (bi)linearly, which is
 what the reference kernels compute; between them and the typed containers
 (`Multivector V α * Multivector V α`) sits the plan interpreter, which is
-tested, not proved (see "Not covered").
+proved over `Rat` (`Grassmann.Proofs.Interp`, below); at `Float` it is tested.
 
 **Checked** by the kernel (`Grassmann.Proofs.Tables`), on every basis blade
 (pair), in `ℝ2`, `ℝ3`, `STA = S!"-+++"`, `PGA2 = D!"0,1,1"`,
@@ -269,9 +269,9 @@ evaluated at run time, in spaces beyond the `decide` range:
 | `ConfTable` (compiled; also kernel-checked) | exhaustive, `S!"∞∅+"`, `CGA2`, `CGA3` |
 | `T(x y) = T(x) T(y)` for the compiled `CGA3` product | random rational multivectors |
 
-This is where the plan interpreter (`Grassmann.Kernel.Plan.eval₂`) and
-whatever kernel the `Kernels` instance dispatches to (including future
-generated kernels) are exercised; they are not proved.
+This is where whatever kernel the `Kernels` instance dispatches to (the
+generated straight-line kernels included) is exercised at `Float`; those
+kernels are not proved. The plan interpreter is (next section).
 
 `Tests.Proofs.Axioms` is the compile-time axiom audit. Two more compile-time
 suites exercise the automation: `Tests.Proofs.TacticExamples` (40 `clifford`
@@ -280,6 +280,25 @@ Jacobi for bivectors and for opaque multivectors, quaternions, rotors and
 sandwiches in ℝ³, STA, a symbolic metric, PGA, ℝ⁵) and
 `Tests.Proofs.GrindExamples` (29 `grind`/`grind [grassmann]` identities in
 every dimension).
+
+## The plan interpreter (`Grassmann.Proofs.Interp`)
+
+Every reference kernel runs `Plan.eval₂` (or `eval₁`): tail-recursive loops
+over a gather-form plan that push one accumulator per output into packed
+storage. This module proves those loops correct, in four layers:
+
+| theorem | statement | scope |
+|---|---|---|
+| `get_eval₂`, `get_eval₁` | output `c` is the left fold of `acc` over row `c`'s entries, from `Coeff.zero` | every `Coeff α` (at `Float` this pins the exact order of operations) |
+| `row₂_rat`, `row₁_rat` | at `Rat` the fold is `Σ coef t · x[ia t] · y[ib t]` | every aligned plan whose sign codes match its coefficients (`Coded`) |
+| `eval₂_eq_twist` | if a plan is the spec table `k` in a storage order that is a bijection onto the blades (`IsSpecPlan`, `IsOrder`, both decidable), running it is the twisted convolution `twist k` | general |
+| `refBin_eq_twist` | the same for `refBin V op la lb lc`, from one decidable check of the built plan (`RefSpec`) | general |
+| `R3_refMul`, `R3_refWedge`, `D123_refMul`, `STA_refMul`, `PGA3_refMul` | the reference product kernels return the spec product on all full multivectors over `Rat` | `ℝ3` (`*`, `∧`), `D!"1,2,-3"`, `STA`, `PGA3` (`*`) |
+
+Together with `implMul_eq_mul` this closes the chain from Julia's blade rules
+to the bytes the reference kernel writes: blade rule = spec coefficient
+(general), plan = spec table (kernel-checked), interpreter = spec product
+(proved).
 
 ## Not covered (yet)
 
@@ -300,11 +319,12 @@ every dimension).
 * Tangent (`∂`), dyadic and `MetricTensor` spaces are outside the diagonal
   model (the exterior product excepted: it is metric-independent, and
   `implWedge_eq_wedge_of_flat` covers `MetricTensor` spaces too).
-* The plan interpreter (`Grassmann.Kernel.Plan.eval₂`) and the typed
-  containers: the transported laws of §3 are about the blade rules extended
-  (bi)linearly, the plans are checked to be the spec tables in the small
-  spaces, and the interpreter is tested; a proof of `eval₂` would carry every
-  §3 theorem to `Multivector V α`.
+* The interpreter at `Float` is characterised exactly (`get_eval₂` fixes the
+  order of operations) but not bounded: there is no rounding-error theorem.
+  The generated straight-line kernels (`grassmann_kernels`) and the typed
+  `Chain` plans are tested, not proved; `refBin_eq_twist` covers full
+  multivectors in the five checked spaces, and the unary interpreter
+  (`eval₁`) has its exact and `Rat` layers but no spec corollary yet.
 * Grade preservation of sandwiches beyond dimension 4 needs versors (products
   of vectors): for a general even `R` the grade-5 part of `R v R̃` can survive
   (`R = 1 + e₁₂₃₄`, `v = e₅` gives `2 e₅ + 2 I`, checked by `clifford` in
