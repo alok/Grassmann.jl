@@ -10,13 +10,15 @@ algebra):
   (`oracle/golden/{products,unary,arith}`, read relative to the repository root;
   `Tests/Grassmann/Golden.lean`);
 * `types`, `extension`: static result types, storage orders, conversions, Julia
-  display, inverses, and the `Kernels` extension point (`Tests/Grassmann/Types.lean`).
+  display, inverses, and the `Kernels` extension point (`Tests/Grassmann/Types.lean`);
+* `conformal`: the conformal-model utilities in CGA2–CGA4 (`Tests/Grassmann/Conformal.lean`).
 -/
 import Tests.Grassmann.Common
 import Tests.Grassmann.Props
 import Tests.Grassmann.Kernel
 import Tests.Grassmann.Golden
 import Tests.Grassmann.Types
+import Tests.Grassmann.Conformal
 
 open GrassmannTests
 
@@ -26,7 +28,8 @@ def Tests.Grassmann.run : IO (Nat × Nat) := do
     [ ("grassmann/props", Props.run), ("grassmann/kernel", Kernel.run),
       ("grassmann/golden", Golden.run),
       ("grassmann/types", Types.run), ("grassmann/basis", Basis.run),
-      ("grassmann/extension", Extension.run) ]
+      ("grassmann/extension", Extension.run),
+      ("grassmann/conformal", ConformalSuite.run) ]
   let mut pass := 0
   let mut fail := 0
   for (name, suite) in suites do

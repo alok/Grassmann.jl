@@ -24,6 +24,7 @@ import Grassmann.Fields
 import Grassmann.Fuse
 import Grassmann.Batch
 import Grassmann.Spec
+import Grassmann.Conformal
 
 /-!
 # Grassmann: ⟨Grassmann-Clifford-Hodge⟩ differential geometric algebra
