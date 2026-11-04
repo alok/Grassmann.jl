@@ -185,6 +185,32 @@ def reverseTerms (a : Multivector V α) : Multivector V α :=
   ofTerms ((termsOf a).fold (fun acc B x =>
     addTerm acc B (if revSign (DirectSum.Bits.popcount B) then x else -x)) {})
 
+/-- A grade-dependent sign applied termwise (the metric-free involutions). -/
+def gradeSign (keep : Nat → Bool) (a : Multivector V α) : Multivector V α :=
+  ofTerms ((termsOf a).fold (fun acc B x =>
+    addTerm acc B (if keep (DirectSum.Bits.popcount B) then x else -x)) {})
+
+/-- `involute(a)`: grade `k` times `(−1)ᵏ`. -/
+@[inline] def involuteTerms (a : Multivector V α) : Multivector V α := gradeSign (· % 2 == 0) a
+
+/-- `clifford(a) = involute(~a)`: grade `k` times `(−1)^{k(k+1)/2}`. -/
+@[inline] def cliffordTerms (a : Multivector V α) : Multivector V α :=
+  gradeSign (fun k => (k * (k + 1) / 2) % 2 == 0) a
+
+/-- Julia `>>>(R, x, g)` with a runtime metric, unprojected: `R ⟑ x ⟑ clifford(R)`. -/
+def tsandwichMetric (g : Gram α) (R x : Multivector V α) : Multivector V α :=
+  wedgedotMetric g (wedgedotMetric g R x) (cliffordTerms R)
+
+/-- Julia `x ⊘ R` with a runtime metric, unprojected: `(~R) ⟑ x ⟑ involute(R)`. -/
+def sandwichMetric (g : Gram α) (x R : Multivector V α) : Multivector V α :=
+  wedgedotMetric g (wedgedotMetric g (reverseTerms R) x) (involuteTerms R)
+
+/-- Julia's metric (`field`) right Hodge complement `wedgedot_metric(reverse(b), V(I), g)`
+(port-notes/grassmann-parity.md §4.9): `~b ⟑ I` with the runtime metric. -/
+def hodgeMetric (g : Gram α) (b : Multivector V α) : Multivector V α :=
+  wedgedotMetric g (reverseTerms b)
+    (ofTerms (({} : Terms α).insert (DirectSum.Bits.lowMask V.n) Coeff.one))
+
 /-- Julia `abs2(t, g)` for a multivector: `(~t) ⟑ t` with the runtime metric. -/
 def abs2Metric (g : Gram α) (a : Multivector V α) : Multivector V α :=
   wedgedotMetric g (reverseTerms a) a

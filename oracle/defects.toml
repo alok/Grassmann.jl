@@ -772,3 +772,21 @@ source = "julia base/special/pow.jl:79-89 (Julia 1.13: `s` is computed, then `po
 notes = "JuliaBase.F32.powInt; Tests/JuliaBase/Math.lean compares math.json `powi32` rows against the sign-corrected value"
 correct = "copysign(pow_body(|x|, n), s): negative for x < 0 and odd n (after clamp(n, Int32))"
 policy = "skip"
+
+[[defect]]
+id = "exp-closed-form-abs2"
+title = "exp(t::Multivector/Spinor) closed form uses θ = √|abs2(m)| instead of √|m⟑m| for the non-scalar part m"
+source = "Grassmann.jl src/composite.jl:83-96"
+notes = "found by Tests/Grassmann/Metric.lean (runtime-metric exp vs the dense exp); E2 composite cases a=14, a=15 (vector + bivector, m⟑m scalar but ~m⟑m ≠ ±m⟑m); independent Cl(2) Taylor sums agree with the port"
+correct = "θ = √|h| with h = scalar(m⟑m), the closed form cos/cosh θ + m sin/sinh θ/θ"
+policy = "skip"
+# no match table yet: the generator has no predicate for "m⟑m scalar, m not a blade";
+# Tests/Golden/Composite.lean lists the affected cases as a known issue
+
+[[defect]]
+id = "series-stop-nonmonotone"
+title = "the composite series loops stop as soon as a term below 1 is not smaller than the previous one, so under a general metric exp(b) returns 1 + b"
+source = "Grassmann.jl src/composite.jl:31-81, 458-570 (`while (norms[2]<norms[1] || norms[2]>1) && k ≤ 10000`), both the ⟑ and the wedgedot_metric copies"
+notes = "found by Tests/Grassmann/Metric.lean: for random symmetric g, ‖b ⟑_g b‖/2 > ‖b‖ with ‖b‖ < 1 is common and gave ‖exp(a) exp(−a) − 1‖ ≈ 0.3; fixed in Grassmann/Composite/Metric.lean (scaling and squaring, Denman–Beavers sqrt, inverse scaling and squaring log). The dense ⟑ family keeps Julia's loop for golden parity; it agrees with the robust metric functions to 1e-7 on the props spaces' random small elements"
+correct = "a Taylor sum that stops on negligible terms, after scaling the argument below ½"
+policy = "skip"

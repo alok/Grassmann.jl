@@ -18,6 +18,7 @@ import Grassmann.Notation
 import Grassmann.Basis
 import Grassmann.Dynamic
 import Grassmann.Composite
+import Grassmann.Composite.Metric
 import Grassmann.Forms
 import Grassmann.Calculus
 import Grassmann.Calculus.Simplicial
