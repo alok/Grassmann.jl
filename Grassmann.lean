@@ -13,6 +13,7 @@ import Grassmann.Algebra.Arith
 import Grassmann.Algebra.Unary
 import Grassmann.Algebra.Products
 import Grassmann.Algebra.Norms
+import Grassmann.Algebra.Metric
 import Grassmann.Notation
 import Grassmann.Basis
 import Grassmann.Dynamic

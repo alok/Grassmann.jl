@@ -14,7 +14,9 @@ algebra):
 * `conformal`: the conformal-model utilities in CGA2–CGA4 (`Tests/Grassmann/Conformal.lean`);
 * `identities`: classical identities (trace property of `⟨⟩₀`, antisymmetrised products,
   contraction rules, `antisandwich`, `pseudograde`) in the `props` spaces
-  (`Tests/Grassmann/Identities.lean`).
+  (`Tests/Grassmann/Identities.lean`);
+* `metric`: products with a runtime (also non-diagonal) metric against the kernels and the
+  outermorphism of a congruence (`Tests/Grassmann/Metric.lean`).
 -/
 import Tests.Grassmann.Common
 import Tests.Grassmann.Props
@@ -23,6 +25,7 @@ import Tests.Grassmann.Golden
 import Tests.Grassmann.Types
 import Tests.Grassmann.Conformal
 import Tests.Grassmann.Identities
+import Tests.Grassmann.Metric
 
 open GrassmannTests
 
@@ -34,7 +37,8 @@ def Tests.Grassmann.run : IO (Nat × Nat) := do
       ("grassmann/types", Types.run), ("grassmann/basis", Basis.run),
       ("grassmann/extension", Extension.run),
       ("grassmann/conformal", ConformalSuite.run),
-      ("grassmann/identities", Identities.run) ]
+      ("grassmann/identities", Identities.run),
+      ("grassmann/metric", MetricSuite.run) ]
   let mut pass := 0
   let mut fail := 0
   for (name, suite) in suites do
