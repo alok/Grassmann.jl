@@ -34,11 +34,13 @@ def ic := InitialCondition.of (lorenz 10 28 (8 / 3)) chaosStart
 * `Adapode.Element`: P1 finite elements on Cartan `SimplexBundle`s (intervals, triangles from
   `Cartan.Mesher`, tetrahedra): mass, stiffness, convection, streamline-diffusion, mass-load and
   Robin assembly in Julia's summation order, `solveDirichlet`, `solvePoisson`, `poisson`,
-  `solveTransport`, `solveTransportDiffusion`, `solveHeat` and the 1-D `adaptPoisson` loop
-  (checked against the Julia values of port notes §6.1–6.2 and against second-order convergence).
+  `solveTransport`, `solveTransportDiffusion`, `solveHeat`, the 1-D `adaptPoisson` loop,
+  `solveWave`/`solveWaveDirichlet`, Allen–Cahn (`solveBistable`, `solveBistableNewton`),
+  `solveNonlinearPoisson` and plane-strain elasticity (checked against the Julia values of port
+  notes §4.8, §6.1–6.2 and against second-order convergence, d'Alembert and the patch test).
 
-**Pending** (port notes §2.6-2.7, §4.7-4.10): wave, Stokes, Navier–Stokes, elasticity, Maxwell,
-DIPG, bistable and nonlinear Poisson, P2/isoparametric assembly and the 2-D `jumps` indicator of
+**Pending** (port notes §2.6-2.7, §4.7-4.10): Stokes, Navier–Stokes, Maxwell, DIPG,
+P2/isoparametric assembly and the 2-D `jumps` indicator of
 `src/element.jl`, and the spectral solvers of `src/grid.jl`/`ext/FFTWExt.jl` (Fourier/DCT/DST
 multipliers, Chebyshev Helmholtz/biharmonic/Orr–Sommerfeld/polar Laplacian).
 -/
