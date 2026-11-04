@@ -82,3 +82,37 @@ merging the wave-2 branches.
 
 Open question for Alok: should the port move to a standalone repo (suggested
 `alok/Grassmann.lean`) instead of this Grassmann.jl fork?
+
+## Cloud session 2026-11-04 (branch `claude/tests-docs-audit`)
+
+Work done off `origin/master` (`21581c6`) from a Linux cloud container, deliberately outside
+the areas the paused wave-2 branches own, so merging those should not conflict beyond the
+suite registrations in `Tests/Grassmann.lean`, `Tests/Dynamic.lean`, `Tests/AbstractAnalysis.lean`
+and `Clifford.lean`.
+
+- **Baseline:** `lake build` warning-free (1180 jobs, 14 min on 4 cores); `lake test` 3,453,355
+  checks, 0 failed, 56 s.
+- **`docs/parity-gaps.json` re-audited:** the 134 non-performance entries were re-checked
+  against the code at `21581c6` (read-only: definitions and `Tests/` uses, cited as
+  `file:line`). Each audited entry now has an `audit` object (`was`, `evidence`, `remaining`).
+  Statuses: 60 DONE, 63 PARTIAL, 13 MISSING; the 66 `performance` rows (SLOW/UNMEASURED) were
+  not re-measured (no Julia here). Spot checks found the audit sometimes calls a thing
+  untested when a test exists under another name (`JNum.rpow` is tested as `^1//2`; the
+  `N₂ … H₂` aliases exist): treat `remaining` as a lead, not a verdict.
+- **New tests:** `grassmann/identities` (trace property of `⟨⟩₀`, antisymmetrised products,
+  even/odd and grade decompositions, the left-contraction derivation rule, `antisandwich`,
+  `pseudograde`), `dynamic/anti` (`antisandwich(I, x) = x`, `isfinite`), compile-time checks
+  of AbstractAnalysis function families and countable arrays (`Tests/AbstractAnalysis/Families.lean`).
+  No library bug surfaced. One non-identity is worth knowing: Julia's `>>>` projects onto the
+  grades of the *kind* of `x`, and complements can change the kind (in `CGA3`
+  `⋆ʳ⋆ˡ(1 + 2v∞∅₁₂)` is a `Spinor`, as the unary goldens confirm), so
+  `antisandwich(⋆ˡR, ⋆ˡx) = ⋆ˡ(R >>> x)` holds for chains but not for every dynamic pair.
+- **Clifford sparse products:** `Clifford.Products` adds `*`, `∧`, `∨`, `⋅`, `⨼` on
+  `MultiGrade`, evaluated on the stored terms only (`O(p·q)` blade pairs, independent of `2ⁿ`),
+  tested against the dense kernels in ℝ3–ℝ5, STA, PGA3, CGA3 and by hand in `ℝ^16`.
+- **Docs corpus gaps:** `scripts/docs_unimplemented.lean` lists the docs statements the docs
+  evaluator does not model, with the reason (`lake test` prints only the count). At
+  `21581c6`: 122 statements, led by `cayley` (31), `∂` (5), operators (5), `skeleton` (4),
+  `barycenter` (4), `inv` (5) and number/element products with unsupported kinds (8). Most of
+  these are wave-2 branch 3's area (Cayley tables, calculus, simplicial complexes, chain
+  fields), so they were left alone here.

@@ -2,7 +2,7 @@
  {
   "pkg": "AbstractLattices",
   "symbol": "\u2227 / \u2228 (shared generic wedge/vee across AbstractTensors\u2192Grassmann, DeMorgan, Dendriform)",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Make AbstractTensors import AbstractLattices and turn `AbstractTensors.Wedge`/`Vee` (AbstractTensors/Ops.lean:110,115) into the AbstractLattices classes, e.g. `export AbstractLattices (HWedge HVee)` plus `abbrev Wedge := AbstractLattices.HWedge` / `abbrev Vee := AbstractLattices.HVee`, keeping the method names `wedge`/`vee`. If an abbrev class is awkward for instance indexing, add low-priority bridge instances `[AbstractLattices.HWedge \u03b1 \u03b2 \u03b3] \u2192 Wedge \u03b1 \u03b2 \u03b3` instead. Then Grassmann's scoped `\u2227`/`\u2228` (Grassmann/Notation.lean:65-67) reach the Bool, TruthValues, TruthTable, Tree and PBTree instances, as in Julia where every package extends one function. Add a scoped `AbstractLattices` notation (overloading And/Or the way Grassmann does) so DeMorgan and Dendriform users get `\u2227`/`\u2228` without opening Grassmann. Fix the AbstractLattices module doc, which currently claims Grassmann's `\u2227` maps to `HWedge` (false). Add tests: README table 2 written with `\u2227`, and `graft` written with `\u2228`.",
   "effort": "M",
   "priority": "P0",
@@ -18,12 +18,19 @@
    "Tests/DeMorgan.lean",
    "Tests/Dendriform/Static.lean"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: AbstractTensors/Ops.lean:119-122,170-171 (Wedge/Vee/wedge/vee are export_alias of AbstractLattices.HWedge/HVee); AbstractLattices/Basic.lean:53-56 scoped \u2227/\u2228 + module doc fixed (:12-15). tests: Tests/AbstractLattices/Unified.lean:28-57 (README table 2 with \u2227 :31, Dendriform graft with \u2228 :41-42, open Grassmann :54-57); Tests/DeMorgan.lean:77-78",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Fatou",
   "symbol": "newton / mandelbrot(m\u22600) symbolic Newton map (newton_raphson, REDUCE df + factor)",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Add a symbolic front-end in a new Fatou/Expr.lean that reuses Wilkinson's `JExpr`/`jl\u27ea\u2026\u27eb`/`JExpr.parse`: (1) a complex evaluator compiled by macro into a `C64 \u2192 C64 \u2192 C64` lambda, so the kernel still specializes; (2) symbolic d/dz over + - * / ^ exp log sin cos sinh cosh tan sqrt; (3) Julia's `newton_raphson(E,m) = factor(z - m*E/dE)`. For polynomial and rational E, normalize to a single rational function over \u211a[z] (or \u211a(i)[z] for complex m) using Wilkinson/Poly.lean, and print or emit it in REDUCE's factored shape so rasters are bit-exact with Julia. For transcendental E, emit REDUCE's shape for the observed cases (sin, exp, cos, log), falling back to the unfactored form. Then `newton jl\u27eaz^3-1\u27eb {\u2026}` needs no hand-written df, map or label. Move the hard-coded maps in Tests/Fatou/Catalog.lean onto this path, and oracle-check the generated F strings against the `F` field of sets.json.",
   "effort": "L",
   "priority": "P0",
@@ -38,7 +45,14 @@
    "Tests/Fatou/Sets.lean",
    "oracle/fatou/gen.jl"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: Fatou/CAS.lean:581 RF.deriv, :614 newtonRaphson, :710 factored printer; Fatou/Symbolic.lean:552 derive, :766-828 newton!/juliafill!/mandelbrot! elaboration-time maps. tests: Tests/Fatou/Symbolic.lean:86-107 (newton_raphson F vs sets.json, map equality), :136-139 newton! = hand-written REDUCE map; Tests/Fatou/Catalog.lean:29-38 catalog uses the symbolic front-ends",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Fatou",
@@ -53,12 +67,19 @@
    "oracle/fatou/gen.jl",
    "Tests/Fatou.lean"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: Fatou/CAS.lean:622 recomp, :838-924 LaTeX printer (latexFactor/latexAllfac); Fatou/Symbolic.lean:637 Define.basinOf computes the body from K.expr. tests: Tests/Fatou/Symbolic.lean:108-126 (basinOf 1 vs golden basin1 only for exactBody1 cases; others only `note`), :126 basin(K,0)",
+   "remaining": "Only j=1 (and 0) is checked against Julia; no goldens for basin(newton(:(z^3-1)),2..3) in oracle/fatou/gen.jl (:195 dumps basin0/basin1 only); non-exactBody1 cases only print a note"
+  }
  },
  {
   "pkg": "Fatou",
   "symbol": "Define / juliafill / mandelbrot expression input (label and F from one Expr)",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Add expression overloads `juliafill (E : JExpr)`, `mandelbrot (E : JExpr)` and `newton (E : JExpr)` (macro form `fatou\u27ea\u2026\u27eb` elaborating to a Lean lambda). They set `label := E.toJulia`, whose string rules match Julia's `string(E)`, and the LaTeX title from the new printer, so the user no longer types `label` by hand and titles are guaranteed to match `String(K)`. Keep the closure API for speed-critical custom maps.",
   "effort": "M",
   "priority": "P1",
@@ -67,12 +88,19 @@
    "Fatou/Expr.lean",
    "Tests/Fatou.lean"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: Fatou/Symbolic.lean:571 Symbolic.ofString (src := E.toJulia, latex), :587-619 juliafill/mandelbrot/newton on Symbolic, :754-828 juliafill!/mandelbrot!/newton! macros; closure API kept in Fatou/Define.lean:234. tests: Tests/Fatou/Symbolic.lean:167-169 (titles and LaTeX title from the expression), :178-183",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Dendriform",
   "symbol": "Tamari order notation: < > \u2264 \u2265 \u22d6 \u22d7 \u22b4 on trees",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Add `instance : LT Tree := \u27e8fun a b => tamariLt a b = true\u27e9` and a `LE` instance with `Decidable` instances (and the same for `PBTree n`). Add scoped infix `\u22d6` (covers), `\u22d7` (coveredBy) and `\u22b4` (between, returning a Grove) in namespace Dendriform (Dendriform/Poset.lean). Add a `SDiff (PBTree a) (PBTree b)` instance for `under`, to match the `HDiv` one. Add `#guard`/`decide` checks for README `[2,1,7,4,1,3,1] < [2,1,7,4,3,2,1]`. The functions already exist and are oracle-tested; only the notation is missing.",
   "effort": "S",
   "priority": "P1",
@@ -81,7 +109,14 @@
    "Dendriform/Tree.lean",
    "Tests/Dendriform/Static.lean"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: Dendriform/Poset.lean:218-231 LT/LE + Decidable for Tree and PBTree, :234-238 scoped \u22d6 \u22d7 \u22b4, :240 SDiff on PBTree; Dendriform/Tree.lean:122. tests: Tests/Dendriform/Static.lean:56-63 (#guard README [2,1,7,4,1,3,1] < [2,1,7,4,3,2,1], \u22d6 \u22d7 \u22b4, \\)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "AbstractAnalysis",
@@ -95,12 +130,19 @@
    "AbstractAnalysis/Metric.lean",
    "Tests/AbstractAnalysis/Limits.lean"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: AbstractAnalysis/Limit.lean:353-382 orbit/orbitError/orbitN/orbitNTrace/orbitHold with (d := by exact Metric.dist) default. tests: Tests/AbstractAnalysis/Limits.lean:64-84 (orbit f x0, orbitN, orbitError without d), :156 orbitHold",
+   "remaining": "FixedCycle (Limit.lean:388-395) field `d` still has no default metric (tests pass `dist` explicitly at Limits.lean:67,81); orbitNTrace has no test"
+  }
  },
  {
   "pkg": "AbstractAnalysis",
   "symbol": "SequenceMatrix / SlabArray multi-dim storage (Cartan dependency, untested)",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Add `abbrev SequenceMatrix := SequenceArray SlabArray FloatArray`. Add property tests for `SlabArray` (pushSlab/slice/count round trips, SequenceArray.resize/get/take over slabs, and `residuals`/`Limit.collectSeq` with a 2-D state), because the in-flight Cartan Diffgeo/Grid port relies on this storage for TensorField orbits.",
   "effort": "S",
   "priority": "P1",
@@ -108,12 +150,19 @@
    "AbstractAnalysis/Sequence.lean",
    "Tests/AbstractAnalysis/Props.lean"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: AbstractAnalysis/Sequence.lean:49-84 SlabArray + LastDimStorage, :137 abbrev SequenceMatrix := SequenceArray SlabArray FloatArray. tests: Tests/AbstractAnalysis/Props.lean:44-92 (pushSlab/slice/count round trips, SequenceMatrix get/take/extension, residuals of slabs, SequenceMatrix limit)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "DeMorgan",
   "symbol": "\u27c2 / \u22a5 / \u22a4 notation and @truthtable as a command",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Add scoped notation `\u22a5`/`\u27c2` for `TruthValues.bot` and `\u22a4` for `TruthValues.top` in namespace DeMorgan, checking for clashes with any `Bot`/`Top` notation in scope. Add a command `truthtable p q r` that declares `def p : TruthTable 3 := proj 3 0 \"p\"` and so on, mirroring the README REPL session; keep the existing `truthtable \u2026 in e` term form. Add `#guard`s for README table 1 using the command form.",
   "effort": "S",
   "priority": "P2",
@@ -122,12 +171,19 @@
    "DeMorgan/TruthTable.lean",
    "Tests/DeMorgan.lean"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: DeMorgan/TruthTable.lean:319-322 scoped \u22a5/\u27c2/\u22a4, :327-341 `truthtable p q r` command, :316,343 term form kept. tests: Tests/DeMorgan.lean:84-88 (\u22a5 \u27c2 \u22a4 guards), :90-97 namespace Readme with `truthtable p q` command + README table 1",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Dendriform",
   "symbol": "vector-as-tree literals ([1,2]\u222a[2,1], promote rules)",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Add term macros `tree![1,2,5,1,2]` and `grove![[1,2],[2,1]]` that elaborate through `Tree.ofName?`/`Grove.ofNames?` and discharge validity with `decide` (an elaboration error on an invalid Loday name). Then README `Grove(3,7) \u22a3 [1,2]\u222a[2,1]` becomes `Grove.ofIndex 3 7 \u22a3 (grove![[1,2]] \u222a grove![[2,1]])` without Option plumbing. Also add `ToString Tree` via `Tree.print`.",
   "effort": "S",
   "priority": "P2",
@@ -137,12 +193,19 @@
    "Dendriform/Display.lean",
    "Tests/Dendriform/Static.lean"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: Dendriform/Display.lean:30 ToString Tree via print, :46-60 tree![\u2026]/grove![[\u2026]] macros (by decide). tests: Tests/Dendriform/Static.lean:51-53,66 (toString tree), :67-69 README Grove.ofIndex 3 7 \u22a3 (grove![[1,2]] \u222a grove![[2,1]])",
+   "remaining": ""
+  }
  },
  {
   "pkg": "AbstractAnalysis",
   "symbol": "orders(G), iseven/isodd(G), Perm.isOdd, iscategory/issemicategory/isgroupoid",
-  "status": "MISSING",
+  "status": "DONE",
   "fix": "In Magma.lean add `Semimagma.orders G = G.v.map fun g => (cyclic g).order`, `Semimagma.isEven/isOdd` (all elements even/odd; needs a parity class or a Perm-specialized version), `Perm.isOdd`, and aliases `isGroupoid := isGroup`, `isSemicategory := isSemigroup`, `isCategory G e := isMonoid G e`. Oracle: `orders(magma(Complex(0,1))) = [4,2,4,1]` is already in port-notes \u00a76.5; extend oracle/abstractanalysis/generate.jl with orders/iseven for S3/S4 and Z_n.",
   "effort": "S",
   "priority": "P2",
@@ -152,12 +215,19 @@
    "Tests/AbstractAnalysis/Groups.lean",
    "oracle/abstractanalysis/generate.jl"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl: AbstractAnalysis/Magma.lean:318 orders, :197-200 isEven/isOdd (HasParity), :187-194 isSemicategory/isGroupoid/isCategory; AbstractAnalysis/Perm.lean:188-191 Perm.isEven/isOdd, :207 HasParity. tests: Tests/AbstractAnalysis/Groups.lean:177-195 (iseven/isodd S3/A3/A4, orders Z_n and magma(im) vs oracle), :217-218 isCategory/isGroupoid",
+   "remaining": ""
+  }
  },
  {
   "pkg": "AbstractAnalysis",
   "symbol": "CycleProduct type, decompose, Transposition, isabelian(::Cycle,::Cycle), commutator(::Perm,::Perm)",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "In Perm.lean add `structure CycleProduct (N) where cycles : List (Cycle N)` with `toPerm` (= cycleProduct), `transpositionCount` (sum) and `JuliaRepr` (`[[1, 2], [3, 4]]`). Add `decompose : Perm N \u2192 Cycle N \u2295 CycleProduct N`, returning a single Cycle when there is exactly one nontrivial cycle as Julia does, and an elementwise `decompose` on Semimagma. Add `abbrev Transposition N := {c : Cycle N // c.v.length = 2}` or a smart constructor, `Cycle.isAbelian a b := a.isDisjoint b || a.toPerm == b.toPerm`, and `Perm.commutator g h := g\u207b\u00b9 * h\u207b\u00b9 * g * h` (Julia's version is broken; this is the intended one). Check against the \u00a76.5 goldens (`decompose(S3)`, `decompose(Permutation(2,1,4,3))`).",
   "effort": "S",
   "priority": "P2",
@@ -165,7 +235,14 @@
    "AbstractAnalysis/Perm.lean",
    "Tests/AbstractAnalysis/Groups.lean"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: AbstractAnalysis/Perm.lean:279-308 CycleProduct (toPerm, transpositionCount, sign, JuliaRepr), :317 Perm.decompose, :328 Semimagma.decompose, :271-274 Transposition + mk?, :253 Cycle.isAbelian, :196 Perm.commutator. tests: Tests/AbstractAnalysis/Groups.lean:163-172 (decompose show vs \u00a76.5 goldens + recompose), :196-212 commutator/Transposition/isabelian/CycleProduct order & sign",
+   "remaining": ""
+  }
  },
  {
   "pkg": "AbstractAnalysis",
@@ -182,7 +259,14 @@
    "Tests/AbstractAnalysis/Limits.lean",
    "oracle/abstractanalysis/generate.jl"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: AbstractAnalysis/Limit.lean:191-209 (incl. HPow V L, HPow L V, HDiv/HPow L L), :429 Product.log, :434-440 CountableVector.limsup/liminf; Countable.lean:91-96 CountableVector HPow, :147-162 CountableArray Div/HPow, :231-245 FunctionVector Sub/Div/HPow; Magma.lean:322-328 Semimagma HMul/HAdd; Metric.lean:207-211 limsupAt/liminfAt. tests: Tests/AbstractAnalysis/Limits.lean:122-139 (L^2, 2^L, L/L, 2^x), :130-131 limsup/liminf, :175-177 Product.log; Groups.lean:214 Semimagma HMul; Metric.lean:43-44",
+   "remaining": "No tests for FunctionVector -, /, ^, CountableArray /, ^, or Semimagma HAdd (scalar +)"
+  }
  },
  {
   "pkg": "AbstractAnalysis",
@@ -195,12 +279,19 @@
    "AbstractAnalysis/Countable.lean",
    "Tests/AbstractAnalysis/Props.lean"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: AbstractAnalysis/Countable.lean:270-300 FunctionArray \u03b2 \u03b1 N (eval/term/map/zipWith/ofVector + arithmetic :300-304), abbrev FunctionMatrix (:277), :197 CountableArray.gridN for any rank",
+   "remaining": "Nothing under Tests/ exercises FunctionArray, FunctionMatrix or CountableArray.gridN/grid; FunctionVector is a separate structure (ofVector bridge) rather than the rank-1 abbrev"
+  }
  },
  {
   "pkg": "AbstractAnalysis",
   "symbol": "ModsExt (gequal / isinvertible for AbstractMod)",
-  "status": "MISSING",
+  "status": "DONE",
   "fix": "Add `instance : ApproxEq (Fin n) := \u27e8(\u00b7 == \u00b7)\u27e9` and modular laws `Law.addMod n` (inverse `n - a`) and `Law.mulMod n` (inverse via `Nat.gcdA`, defined on units), so `group([1,2], +mod 5, -mod 5)` and `magma(3, *mod 7)` from the goldens can use `Fin n` directly.",
   "effort": "S",
   "priority": "P2",
@@ -208,7 +299,14 @@
    "AbstractAnalysis/Magma.lean",
    "Tests/AbstractAnalysis/Groups.lean"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl: AbstractAnalysis/Magma.lean:45 ApproxEq (Fin n), :69 Law.addMod, :72-87 invMod + Law.mulMod. tests: Tests/AbstractAnalysis/Groups.lean:221-225 (group over Fin 7 with mulMod 6, Fin 12 with addMod 11)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "AbstractAnalysis",
@@ -221,7 +319,14 @@
    "AbstractAnalysis/Magma.lean",
    "AbstractAnalysis/Perm.lean"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: AbstractAnalysis/Magma.lean:249-275 closeArrayHashed (Std.HashSet), :278 magmaHashed, :283 groupHashed, :292 isGroupHashed, :287 cayleyIndex. tests: Tests/AbstractAnalysis/Groups.lean:34,87,94-95,112-113,233-234 (magmaHashed S6 order 720)",
+   "remaining": "Hash path is opt-in separate functions; default magma/groupOf/cyclic (Magma.lean:219) and pushNew still scan linearly; no hashed cyclic; no Bench row for magma closure (Bench/ has no magma suite)"
+  }
  },
  {
   "pkg": "Wilkinson",
@@ -237,12 +342,19 @@
    "Tests/Wilkinson/Reduce.lean",
    "oracle/wilkinson/gen.jl"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: Wilkinson/Zassenhaus.lean:187 Berlekamp, :272 Hensel step, :219-386 recombination; Wilkinson/Poly.lean:315-323 wired into factor. tests: Tests/Wilkinson/Reduce.lean:67-81 (Zassenhaus.factorSquareFree, Swinnerton-Dyer irreducible)",
+   "remaining": "factorRounded numeric form missing: Wilkinson/Reduce.lean:569-570 `cas := \u27e8expand, horner, factor, factor\u27e9` uses exact factor for 'rounded', so rxtra is always false; no Aberth/Durand-Kerner roots, no reduce_forms rounded goldens"
+  }
  },
  {
   "pkg": "Wilkinson",
   "symbol": "polyfactors / polyexpand / polyhorner Reduce.Algebra shapes",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Reproduce the `Reduce.Algebra.+/*` step-by-step simplification shapes (for example `polyhorner(:x,[1,2,3])` \u2192 `(3x + 2) * x + 1`, `polyfactors(:x,[0.5,2.25])` \u2192 `((4x - 9) * (2x - 1)) / 8`) instead of routing through the canonical expand/horner printers, and oracle-check against the probe outputs listed in port-notes \u00a76.6.",
   "effort": "S",
   "priority": "P2",
@@ -250,7 +362,14 @@
    "Wilkinson/Reduce.lean",
    "Tests/Wilkinson/Reduce.lean"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: Wilkinson/Reduce.lean:555-565 polyhorner/polyexpand built step by step through Reduce.Algebra (Alg.add/mulX'/monomial), :280 polyfactors. tests: Tests/Wilkinson/Reduce.lean:50-58 (polyfactors, polyhorner, polyexpand vs probe goldens)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Fatou",
@@ -266,12 +385,19 @@
    "Tests/Fatou/Orbit.lean",
    "oracle/fatou/gen.jl"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "no braille/half-block renderer: no Fatou/Text.lean; rg for braille/\u2580/ANSI 24-bit finds nothing in library or gallery",
+   "remaining": "All of it: braille cobweb plot of RealOrbit, ANSI half-block show(io,K; bare), text goldens"
+  }
  },
  {
   "pkg": "Fatou",
   "symbol": "z^p with non-integer / complex p in maps (C64 HPow instances)",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Add `instance : HPow C64 C64 C64 := \u27e8JuliaBase.ComplexF64.pow\u27e9` and `HPow C64 Float C64` (Julia's real-exponent `_cpow` path), taking care not to shadow the fast `NatPow`/`HPow C64 Int` literal paths. Then wiki nf16 `z^(4.0+3.0im) - 1` can be written directly; add its derivative to the Newton front-end.",
   "effort": "S",
   "priority": "P2",
@@ -279,12 +405,19 @@
    "Fatou/Complex.lean",
    "Tests/Fatou/Complex.lean"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: Fatou/Complex.lean:272 HPow C64 Int (literal path kept), :276 HPow C64 C64 (ComplexF64.pow), :280 HPow C64 Float. tests: Tests/Fatou/Symbolic.lean:173-174 (symbolic! \"z^(4.0 + 3.0im) - 1\" = _cpow), :39 newton_cpow in exact LaTeX list",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Fatou",
   "symbol": "GrassmannExt Couple{V,B} maps (B option) and juliafill(E; newt=true, m)",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Add `Options.B : Int := -1` (B\u00b2 = s) and have the front-ends pick `Couple.sq`/`Couple.abs2`, or better, accept a Lean `Grassmann` `Couple` blade and read `s` from its metric (bridge in a module that imports Grassmann, to keep Fatou light). Add `newt`/`m` to `juliafill` with its Julia defaults (\u03f5=4, m=0). Property-test the hyperbolic Mandelbrot set against the split-complex identities; no oracle is possible because Julia's extension is broken.",
   "effort": "S",
   "priority": "P2",
@@ -293,12 +426,19 @@
    "Fatou/Define.lean",
    "Tests/Fatou/Complex.lean"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: Fatou/Couple.lean:30-60 Couple.mul/sq/abs2 for B\u00b2=s, B option of mandelbrot!/juliafill! (Couple.lean:19); Fatou/Symbolic.lean:587-600 juliafill newt/m with \u03f5=4. tests: Tests/Fatou/Sets.lean:216-232 (hyperbolic Mandelbrot histogram, B\u00b2=-1 equals complex plane, mandelbrot! (B := \"1\")); Tests/Fatou/Symbolic.lean:178-183 juliafill!/mandelbrot! with m",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Clifford",
   "symbol": "SparseChain{V,G,T}, MultiGrade{V,G}, chainvalues densify rule, \u00b1, scalar *, involutions, complements, scalar/vector/volume/isscalar/isvector/terms/value/valuetype/adjoint, show, ==",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "fix": "New Grassmann/Sparse.lean implementing the intended semantics of applied-misc.md \u00a74.3. `SparseChain V G \u03b1` stores sorted `(bladeIndex, value)` arrays over `indexbasis(N,G)`. `chainvalues` keeps dense `Chain` storage when fewer than 50% of entries are zero (`fill_limit`) and always for G \u2208 {0,N}. `MultiGrade V` carries a grade mask `UInt64` and ascending-grade terms (dense or sparse). Provide: two-pointer \u00b1 with the correct signs (fixing the Julia sign-loss bugs); scalar `*`; termwise `reverse`/`involute`/`conj`/neg that keep MultiGrade; complements mapping grade g \u21a6 N\u2212g with the mask bit-reversed over N+1 bits; accessors; `adjoint` over `dual V`; scatter into a dense `Multivector` at `binomsum(N,G)+i`; and a `show` with `\" + \"`/`\" - \"|v|` terms. Optionally add `SparseChain`/`MultiGrade` kinds to `Grassmann.TA`. Test the toDense homomorphism (add/neg/smul/involutions/complements agree with the dense kernels) by property tests; no Julia oracle is possible because the Julia code never loads.",
   "effort": "M",
   "priority": "P2",
@@ -308,12 +448,19 @@
    "Tests/Grassmann/Sparse.lean",
    "Tests/Main.lean"
   ],
-  "key": "misc"
+  "key": "misc",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl: Clifford/Sparse.lean:27-194 SparseChain (fillLimit, ofChain/toChain, two-pointer merge \u00b1, smul, involutions, complements, chainValues densify :188), Clifford/MultiGrade.lean:26-212 MultiGrade (mask, merge \u00b1, involutions, complementMask, scalar/vector/volume/isScalar/isVector/terms/value, ==, show). tests: Tests/Clifford.lean:17-52 explicit #guards, :54-150 randomized toDense homomorphism checks on \u211d3/\u211d4/\u211d5",
+   "remaining": "adjoint (over dual V) and valuetype are not defined; no SparseChain/MultiGrade kinds in Grassmann.TA (optional)"
+  }
  },
  {
   "pkg": "DirectSum",
   "symbol": "\u222a, \u2229, \u2286, \u2287 (spaces, subspaces, blades; n-ary folds)",
-  "status": "MISSING",
+  "status": "DONE",
   "priority": "P0",
   "effort": "M",
   "fix": "Port DS/operations.jl:91-168. Space rules: identical metric but different tangent \u2192 max/min of (n, \u03bd, \u03bc); V \u222a V' = V\u2295V' (dual half first when a is dual); a dyadic space contains its halves; everything else errors. Subspace rules on masks: A|||B, A&&&B, popcount(A&&&B)==rank. Blade \u2286 blade: a.bits &&& b.bits == a.bits; blade/subspace \u2286 space. Add a Bool/Decidable \u2286 (HasSubset with a Decidable instance, or scoped notation), n-ary folds, and exports. Add a setops section to gen_spaces.jl and the README goldens: \u211d\u2295\u211d' \u2287 \u211d, \u211d\u2229\u211d' == V0, \u211d\u222a\u211d' == \u211d\u2295\u211d', v1 \u2286 v12, v12 \u2286 V, (\u211d^3)(1,2)\u222a(\u211d^3)(2,3) = \u27e8+++\u27e9, (\u211d^2)'\u222a\u211d^2 = \u27e8++--\u27e9*.",
@@ -327,12 +474,19 @@
    "/Users/alokbeniwal/Grassmann/Tests/DirectSum/Spaces.lean",
    "/Users/alokbeniwal/Grassmann/Tests/DirectSum/Literals.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl DirectSum/SetOps.lean:136-251 (subset?/equal?/union/inter, Union/Inter instances 241-244, unionAll/interAll 247-251), heterogeneous SubsetOf + scoped \u2286/\u2287 297-339, SubSpace \u222a/\u2229 323-331, Submanifold union/inter/\u2286 473-496; tests Tests/DirectSum/SetOps.lean:92-212 (setops.json oracle incl. unionall/interall), Tests/DirectSum/Literals.lean:39-53 (decide on \u2286/\u2287, \u222a, \u2229)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "DirectSum",
   "symbol": "\u039b / Basis / SparseBasis / ExtendedBasis container, @\u039b_str",
-  "status": "PARTIAL",
+  "status": "DONE",
   "priority": "P0",
   "effort": "M",
   "fix": "The functions exist: lookup (oracle-tested), showBasis, labels, basisAt. The missing part is the value and its syntax. Add structure Basis (V) with \u039b V, \u039b n (Int space) and \u039b(n,d,o,s); GetElem via Leibniz.basisAt (\u039b(3)[5] = v\u2081\u2082); ToString = showBasis; \u2032 and \u2295 through the TensorBundle ops. Add a term elaborator \u039b(V).name that runs TensorBundle.lookup at elaboration time and returns a typed Submanifold V G, or a Single when a sign or metric factor appears (\u039b(3).v21 = -1v\u2081\u2082). Add \u039b!\"\u2026\" for @\u039b_str. Goldens: indices(\u039b(3).v12), \u039b(62).v32a87Ng == -1\u039b(62).v2378agN, \u039b(\u211d^14) \u2295 \u039b(\u211d^14)'.",
@@ -344,12 +498,19 @@
    "/Users/alokbeniwal/Grassmann/Grassmann/Notation.lean",
    "/Users/alokbeniwal/Grassmann/Tests/DirectSum/Literals.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl DirectSum/Basis.lean:36-75 (structure Basis, \u039b, ToString=showBasis, GetElem via Leibniz.basisAt, dual, oplus, lookup), syntax \u039b(\u2026)/\u039b(V).name/\u039b!\"\u2026\" 81-131 (elaborator resolves blade at elab time); tests Tests/DirectSum/Basis.lean:27-80 (\u039b(3).v21, \u039b(3)[5], \u039b!\"-+++\", basis.json getindex/codes/strs/sums/duals)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "DirectSum",
   "symbol": "\u211d (= Signature(1))",
-  "status": "MISSING",
+  "status": "DONE",
   "priority": "P0",
   "effort": "S",
   "fix": "Add abbrev \u211d : TensorBundle := S!\"+\" and export it from Grassmann. Check that the \u211d^ token still wins by longest match and that \u211d\u2032 and \u211d \u2295 \u211d\u2032 parse. Add README goldens \u211d'\u2295\u211d^3 = \u27e8-+++\u27e9 and \u211d\u2295\u211d'.",
@@ -358,12 +519,19 @@
    "/Users/alokbeniwal/Grassmann/Grassmann/Notation.lean",
    "/Users/alokbeniwal/Grassmann/Tests/DirectSum/Literals.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl DirectSum/Common.lean:17 (abbrev \u211d := S!\"+\"); tests Tests/DirectSum/Literals.lean:31-34 (\u211d, \u211d\u2032 \u2295 \u211d^3 = \u27e8-+++\u27e9, \u211d \u2295 \u211d\u2032 = \u27e8+-\u27e9*, \u211d ^ 3 == \u211d^3)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "DirectSum",
   "symbol": "+ (space direct-sum alias), V^i",
-  "status": "MISSING",
+  "status": "DONE",
   "priority": "P0",
   "effort": "S",
   "fix": "Add instance HAdd TensorBundle TensorBundle TensorBundle := \u27e8oplus!\u27e9 (README V+V' = T\u00b9\u27e8+++---\u2081\u00b9\u27e9*). Add instance HPow TensorBundle Nat TensorBundle wrapping TensorBundle.pow (it panics with Julia's message on error), so that (\u211d^2)^2 = \u27e8++++\u27e9. Keep the \u211d^n literal macro unchanged.",
@@ -371,12 +539,19 @@
    "/Users/alokbeniwal/Grassmann/DirectSum/SpaceOps.lean",
    "/Users/alokbeniwal/Grassmann/Tests/DirectSum/Literals.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl DirectSum/SetOps.lean:81 (HAdd TensorBundle via oplus!), 85-92 (pow!, HPow TensorBundle Nat); tests Tests/DirectSum/Literals.lean:34-38 ((\u211d^2)^2 = \u27e8++++\u27e9, V+V\u2032 = \u27e8+++---\u27e9*, tangent sum), Tests/DirectSum/SetOps.lean:186-190 (plus/pow oracle records)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "DirectSum",
   "symbol": "Submanifold (subspace role): \u2295, V[i], mdims/diffvars, collect(V(1,4))",
-  "status": "PARTIAL",
+  "status": "DONE",
   "priority": "P1",
   "effort": "S",
   "fix": "Add SubSpace.oplus ((\u211d^3)(2,3) \u2295 (\u211d^3)(1) = \u27e8_+++__\u27e9, per DS/operations.jl:69-74), SubSpace.metricAt (the i-th included generator), SubSpace.mdims and diffvars (Julia's diffvars(::Submanifold)), a subspace showBasis (collect(V(1,4)) = DirectSum.Basis{\u27e81__1\u27e9,4}(v, v\u2081, v\u2084, v\u2081\u2084)), and index calls on a subspace (M(i\u2026) goes through the supermanifold).",
@@ -385,12 +560,19 @@
    "/Users/alokbeniwal/Grassmann/DirectSum/SpaceOps.lean",
    "/Users/alokbeniwal/Grassmann/Tests/DirectSum/Spaces.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl DirectSum/SetOps.lean:356-393 (SubSpace.mdims, diffvars, metricAt, metricList, toSignature, showBasis, oplus); tests Tests/DirectSum/Literals.lean:54-56 (\u2295 = \u27e8_+++__\u27e9, showBasis of (\u211d^4).sub [1,4]), Tests/DirectSum/SetOps.lean:106,198-205 (oplus and subinfo mdims/diffvars/metrics/collect oracle)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "DirectSum",
   "symbol": "== / equal on spaces (Julia a\u2286b && a\u2287b)",
-  "status": "PARTIAL",
+  "status": "DONE",
   "priority": "P1",
   "effort": "S",
   "fix": "The derived structural DecidableEq gives \u211d3 == \u211d^3 = false; Julia gives true. After the set ops land, add TensorBundle.equal a b := subset a b && subset b a (Int n vs Signature n, handles vs bundles). Expose it as the documented Julia ==, either as a BEq instance separate from DecidableEq or as a named equal plus scoped notation, and state which one instance keying uses.",
@@ -398,12 +580,19 @@
    "/Users/alokbeniwal/Grassmann/DirectSum/SpaceOps.lean",
    "/Users/alokbeniwal/Grassmann/Tests/DirectSum/Literals.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl DirectSum/SetOps.lean:174-182 (equal?/equal = subset both ways; docstring 170-173 states derived DecidableEq stays structural for keying); tests Tests/DirectSum/Literals.lean:42-43 (equal \u211d3 (\u211d^3)), Tests/DirectSum/SetOps.lean:100 (equal oracle records)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Leibniz",
   "symbol": "Derivation, Nabla, Laplacian, \u2207/nabla, \u0394/laplacian",
-  "status": "MISSING",
+  "status": "DONE",
   "priority": "P1",
   "effort": "M",
   "fix": "New Leibniz/Derivation.lean. Define structure Derivation (R) (O : Nat) with coeff : R (a sign type instead of Bool fixes quirk Q7), abbrev Nabla := Derivation Sign 1, Laplacian := Derivation Sign 2, \u2207, and \u0394 := \u2207^2. Add a pow with order O*n, same-order + - *, scalar * / \\, and negation. ToString must give Julia's \u2202\u2096v\u2096, \u2202\u2096\u00b2v and \u2202\u2096\u00b3v\u2096 (superscript order, v\u2096 present only for odd O, \u2202\u2096\u2205v for O = 0). Check against scratchpad/oracle/leibniz/golden/derivation.json and \u2207^2 == \u0394. Notation: notation \"\u2207\"; \u0394 is a legal identifier.",
@@ -413,12 +602,19 @@
    "/Users/alokbeniwal/Grassmann/Grassmann/Notation.lean",
    "/Users/alokbeniwal/Grassmann/Tests/DirectSum/Literals.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl Leibniz/Derivation.lean:36-156 (Sign, structure Derivation R, Nabla/Laplacian, Neg/HPow/Add/Sub/Mul, scalar HMul/HDiv/ldiv, showOperator + ToString, nabla, \u0394, laplacian, scoped \u2207); tests Tests/DirectSum/Leibniz.lean:22-70 (derivation records of leibniz.json: \u2207^O, (-\u2207)^O, scalar ops, \u2207^2==\u0394)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Leibniz",
   "symbol": "differential/d, codifferential/\u03b4, boundary/\u2202 and the V(\u2207) functor",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "priority": "P1",
   "effort": "M",
   "fix": "Declare classes HasDifferential, HasCodifferential and HasBoundary in Leibniz, with prefix \u2202 and namespaced d and \u03b4. In Grassmann, implement V(\u2207^O) from Grassmann.jl:88-106: \u03a3 \u2202\u2096v\u2096 over the tangent generators; O \u2265 2 uses (\u2207\u22c5\u2207)^\u230aO/2\u230b, and a non-tangent space gives \u03bb\u00b7ones. Then d \u03c9 = V(\u2207) \u2227 \u03c9, \u2202 \u03c9 = \u03c9 \u22c5 V(\u2207), \u03b4 \u03c9 = -\u2202 \u03c9. Goldens are in leibniz.md \u00a76.1: tangent(\u211d^3,4,3)(\u2207), \u211d3(\u2207), tangent(\u211d^2,2,2)(\u2207^2), plus the Grassmann docs example \u2202(\u039b(tangent(\u211d^4,2,4)).v1234).",
@@ -428,12 +624,19 @@
    "/Users/alokbeniwal/Grassmann/Grassmann.lean",
    "/Users/alokbeniwal/Grassmann/Tests/Grassmann/Types.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl Leibniz/Derivation.lean:163-192 (classes HasDifferential/HasCodifferential/HasBoundary, d, \u03b4, prefix \u2202), Grassmann/Calculus.lean:53-131 (nabla = V(\u2207) ones, tangentNabla \u03a3\u2202\u2096v\u2096, nablaM, boundary/differential/codifferential); tests Tests/Forms/Calculus.lean:53-81,112-136 (plain and tangent V(\u2207), \u2202, d, \u22c6d), Tests/Golden/CompositeDocs.lean:122-133",
+   "remaining": "No instances of the Leibniz HasDifferential/HasCodifferential/HasBoundary classes (Grassmann defines its own Boundary class, Calculus.lean:146); V(\u2207^O) for O \u2265 2 ((\u2207\u22c5\u2207)^\u230aO/2\u230b) is not implemented (laplacian is just an alias of nabla, Calculus.lean:57), so the golden tangent(\u211d^2,2,2)(\u2207^2) is not covered."
+  }
  },
  {
   "pkg": "Leibniz",
   "symbol": "\u03c7, count_gdims",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "priority": "P1",
   "effort": "S",
   "fix": "New Leibniz/Euler.lean. Add a class CountGdims X returning Array Nat of length n+1 (nonzero components per Grassmann grade). Define eulerChar with Julia's sign -\u03a3_p (-1)^p b_p (quirk Q10: opposite of the docstring), \u03c7(V,b,t) = iszero ? 0 : (odd grade ? 1 : -1) for terms, and notation \u03c7. Add Grassmann instances for Single, Chain, Multivector and TA. Goldens: \u03c7(\u039b(3).v12) = -1, count_gdims(\u039b(3).v12) = [0,0,1,0], euler.json.",
@@ -443,7 +646,14 @@
    "/Users/alokbeniwal/Grassmann/Grassmann/Algebra/Norms.lean",
    "/Users/alokbeniwal/Grassmann/Grassmann/Dynamic/Norms.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl DirectSum/Euler.lean:54-88 (chiBlade, countGdims over masks, eulerChar, Submanifold.chi/countGdims), Grassmann/Calculus/Simplicial.lean:110-120 (countGdims, \u03c7 for Multivector Float); tests Tests/DirectSum/Leibniz.lean:97-116 (blade chi/count_gdims, chain count_gdims/eulerChar), Tests/Forms/Calculus.lean:159-174 (\u03c7, countGdims of skeletons)",
+   "remaining": "There is no CountGdims class, and count_gdims/\u03c7 have no instances for Grassmann Single, Chain or TA (only masks, Submanifold and Multivector Float). There is no \u03c7 golden on a typed Single such as \u03c7(\u039b(3).v12) = -1."
+  }
  },
  {
   "pkg": "AbstractTensors",
@@ -458,7 +668,14 @@
    "/Users/alokbeniwal/Grassmann/Grassmann/Algebra/Arith.lean",
    "/Users/alokbeniwal/Grassmann/Tests/AbstractTensors/Notation.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "no interop/interform definitions anywhere (rg); prerequisites exist: DirectSum/SetOps.lean:193 union, Grassmann/Forms/Eval.lean:93,111 Chain.embed/Multivector.embed, Grassmann/Dynamic/Ops.lean:326 TA.embed",
+   "remaining": "None of the following exist: the Embed class, interop, interform, or the cross-space HAdd/HMul instances. The ATtest Manifold(op(a,b)) cases are not ported."
+  }
  },
  {
   "pkg": "AbstractTensors",
@@ -473,7 +690,14 @@
    "/Users/alokbeniwal/Grassmann/Grassmann/Algebra/Arith.lean",
    "/Users/alokbeniwal/Grassmann/Grassmann/Algebra/Products.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl AbstractTensors/Ops.lean:330-346 (UniformScaling struct, scalar ComplementRight/Hodge \u2192 \u03bbI, !(\u03bbI)=\u03bb), Grassmann/Forms/Operator.lean:289-295 (TensorOperator \u00b1 \u03bbI); tests Tests/AbstractTensors/Notation.lean:90-92, Tests/Forms/Types.lean:55",
+   "remaining": "These are missing: V(\u03bbI) as a Single (\u03bb times the pseudoscalar of the non-tangent generators), and the op lifts op(a, \u03bbI) / op(\u03bbI, a) on Chain, Multivector, Half and Single. The ATtest Manifold(a+I) == \u211d case is missing."
+  }
  },
  {
   "pkg": "DirectSum",
@@ -488,7 +712,14 @@
    "/Users/alokbeniwal/Grassmann/DirectSum/Space.lean",
    "/Users/alokbeniwal/Grassmann/Tests/Grassmann/Types.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Basis.lean:45-124 (basis! with (names := E e cov duo) renaming space/vec/cov/duo prefixes), 121-131 (dualbasis!, mixedbasis! macros)",
+   "remaining": "Nothing under Tests/ uses basis! (names := \u2026), dualbasis! or mixedbasis!. dualbasis! does not bind VV, and mixedbasis! does not bind W/VV as Julia does. The dif (\u03f5) slot cannot be renamed. Leibniz.nameScheme (Leibniz/Indices.lean:68) is still a closed two-scheme function, not an open table."
+  }
  },
  {
   "pkg": "DirectSum",
@@ -503,7 +734,14 @@
    "/Users/alokbeniwal/Grassmann/Grassmann/Forms/Eval.lean",
    "/Users/alokbeniwal/Grassmann/Tests/DirectSum/golden/gen_spaces.jl"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl DirectSum/SetOps.lean:434-462 (SubSpace.restrictBlade via pext, embedBlade via pdep, TensorBundle.embedBlade using mixed, evaluate1), 48-75 (mixed, combine with library `example`s); tests Tests/DirectSum/Literals.lean:70-80 (restrict/embed/evaluate1 goldens)",
+   "remaining": "The rules exist only on raw masks. There are no typed W(b) call forms on Submanifold, Single or Zero, and (V)(\u03bbI) is missing. mixed and combine are checked only by examples in the library file, not under Tests/. There is no gen_spaces.jl eval section."
+  }
  },
  {
   "pkg": "AbstractTensors",
@@ -518,12 +756,19 @@
    "/Users/alokbeniwal/Grassmann/DirectSum/BladeAlgebra.lean",
    "/Users/alokbeniwal/Grassmann/Tests/AbstractTensors/GenericTests.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl AbstractTensors/Generic.lean:46-460 (generic TensorRing family: exp/log/trig/abs/unit/metric\u2026); metricRing is only mentioned in the doc comment at Generic.lean:23",
+   "remaining": "metricRing (a TensorRing with a runtime diagonal metric g using mulSkeleton/contractionSkeleton) is not defined, so the f(t,g) family (wedgedot_metric, contraction_metric, log_metric, \u2026) is missing. The scalar pass-throughs AT:387-404 are also missing."
+  }
  },
  {
   "pkg": "StaticVectors",
   "symbol": "show/print/repr of Values",
-  "status": "PARTIAL",
+  "status": "DONE",
   "priority": "P1",
   "effort": "S",
   "fix": "ToString uses the element's Lean toString (0.500000); Julia prints 0.5. Add instance [JuliaShow \u03b1] : JuliaShow (Values \u03b1 n) for the compact form [e1, e2]. Elements use JuliaShow compact. Add Julia's eltype prefix for non-Int64/Float64 types (Float32[\u2026], Bool[\u2026], ComplexF64[\u2026]) and the text/plain display 'N-element Values{N, T} with indices SOneTo(N):' with Base column alignment. Use port-notes \u00a75 goldens.",
@@ -532,12 +777,19 @@
    "/Users/alokbeniwal/Grassmann/JuliaBase/Show.lean",
    "/Users/alokbeniwal/Grassmann/Tests/AbstractTensors/StaticVectorsTests.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl StaticVectors/Show.lean:25-163 (JuliaEltype prefixes Float32/Bool/ComplexF64\u2026, showRepr compact, showPlain text/plain with alignment, JuliaShow (Values \u03b1 n)); tests Tests/AbstractTensors/ValuesShow.lean:14-60 (values_show.json oracle)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "StaticVectors",
   "symbol": "Values(x...) / TV[...] literal",
-  "status": "PARTIAL",
+  "status": "DONE",
   "priority": "P1",
   "effort": "S",
   "fix": "Add a length-inferring literal, for example syntax vals![a, b, c] elaborating to Values.ofFn with n from the list length (or Values.ofList! with a decide proof), so the README quick start Values(1, 2, 3) has a direct spelling. Also add ones.",
@@ -545,7 +797,14 @@
    "/Users/alokbeniwal/Grassmann/StaticVectors/Values.lean",
    "/Users/alokbeniwal/Grassmann/Tests/AbstractTensors/StaticVectorsTests.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl StaticVectors/Show.lean:166-177 (vals![\u2026] length-inferring literal, Values.ones); tests Tests/AbstractTensors/ValuesShow.lean:14-17 (vals![1,2,3], ones)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "StaticVectors",
@@ -561,12 +820,19 @@
    "/Users/alokbeniwal/Grassmann/StaticVectors/LinAlg.lean",
    "/Users/alokbeniwal/Grassmann/docs/PERF.md"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "StaticVectors/Values.lean:151-160 foldlLoop is still a structural Nat loop; StaticVectors/LinAlg.lean:40-47 unrolls small sizes for dot only; docs/PERF.md:293 still reports about 2 ns per element",
+   "remaining": "There is no USize/FloatArray uget fold (@[implemented_by] or Packed.fold) at Float. sum, mapReduce, norm and normSqr are not routed through a fast path, and there is no benchmark against oracle/bench for them."
+  }
  },
  {
   "pkg": "Leibniz",
   "symbol": "\u2245 (sameKind)",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "priority": "P2",
   "effort": "S",
   "fix": "Add sameKind a b := grade a == grade b && order a == order b && diffmode a == diffmode b over TensorBundle, blades and elements, plus scoped infix \u2245. Golden: \u039b(tangent(\u211d^2)).\u22021 \u2245 \u039b(tangent(\u211d^2)).v1 = false.",
@@ -574,12 +840,19 @@
    "/Users/alokbeniwal/Grassmann/Leibniz/Generic.lean",
    "/Users/alokbeniwal/Grassmann/AbstractTensors/Ops.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl DirectSum/Euler.lean:49-50 (TensorBundle.sameKind on masks), 82 (Submanifold.sameKind), 93 (scoped infix \u2245); tests Tests/DirectSum/Leibniz.lean:100-105 (\u2245 records of leibniz.json)",
+   "remaining": "sameKind/\u2245 exists only for blades and masks. The element-level version (Single, Chain, TA: grade and order of the value) is missing."
+  }
  },
  {
   "pkg": "DirectSum",
   "symbol": "order",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "priority": "P2",
   "effort": "S",
   "fix": "Add TensorBundle.orderOf b := popcount (b &&& V.diffmask). Define order for Submanifold and Single (order(basis) + order(value)) and order(V) = diffvars. The logic already exists inline in nestTangent.",
@@ -588,19 +861,33 @@
    "/Users/alokbeniwal/Grassmann/DirectSum/BladeAlgebra.lean",
    "/Users/alokbeniwal/Grassmann/Grassmann/Types/Single.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl DirectSum/Euler.lean:27 (TensorBundle.order = diffvars), 31 (orderOf mask), 73 (Submanifold.order); tests Tests/DirectSum/Leibniz.lean:88 (order of blades)",
+   "remaining": "order for Single (order(basis) + order(value)) and for other Grassmann elements is missing."
+  }
  },
  {
   "pkg": "DirectSum",
   "symbol": "isorigin, isinf(::Submanifold)",
-  "status": "MISSING",
+  "status": "DONE",
   "priority": "P2",
   "effort": "S",
   "fix": "isinf e := bladeHasInf e && popcount e == 1. isorigin e := V.hasorigin && popcount e == 1 && originBit e (Julia: isorigin(\u039b(S\"\u221e\u2205+\").v\u2205) = true).",
   "files": [
    "/Users/alokbeniwal/Grassmann/DirectSum/Parity.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl DirectSum/Euler.lean:35-39 (isinfBlade, isoriginBlade), 76-79 (Submanifold.isinf/isorigin); tests Tests/DirectSum/Leibniz.lean:89-93",
+   "remaining": ""
+  }
  },
  {
   "pkg": "DirectSum",
@@ -613,24 +900,38 @@
    "/Users/alokbeniwal/Grassmann/AbstractTensors/Ops.lean",
    "/Users/alokbeniwal/Grassmann/DirectSum/SpaceOps.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl DirectSum/SetOps.lean:288 (subtangent), AbstractTensors/Ops.lean:310-313 (pseudogradeProj := GradeProj.proj (mdims V - G)), DirectSum/Parity.lean:135 pseudogradeOf; tests Tests/DirectSum/Literals.lean:57, Tests/DirectSum/SetOps.lean:197 (subtangent)",
+   "remaining": "Nothing under Tests/ calls pseudogradeProj."
+  }
  },
  {
   "pkg": "Leibniz",
   "symbol": "gdimseven, gdimsodd",
-  "status": "MISSING",
+  "status": "DONE",
   "priority": "P2",
   "effort": "S",
   "fix": "gdimseven n = [C(n,0), C(n,2), \u2026] and gdimsodd n = [C(n,1), C(n,3), \u2026], total for n = 0. Add decide examples: gdimseven 5 = #[1,10,5], gdimsodd 5 = #[5,10,1].",
   "files": [
    "/Users/alokbeniwal/Grassmann/Leibniz/Combinatorics.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl Leibniz/Combinatorics.lean:83-92 (gdimseven, gdimsodd with decide examples); tests Tests/DirectSum/Leibniz.lean:73-78 (gdims records)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Leibniz",
   "symbol": "indexsplit, symmetricsplit, mixed, combine",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "priority": "P2",
   "effort": "S",
   "fix": "indexsplit b = single-bit masks of b. symmetricsplit V a = (a &&& dm\u2081, a &&& dm\u2082) for dyadic V. mixed V b embeds a V or V\u2032 mask into V\u2295V\u2032 (Leibniz generic.jl:109-117; return Option for dyadic tangent, quirk Q12). combine v w a b is the direct-sum embedding (generic.jl:119-130). The blade W(b) embedding needs mixed.",
@@ -638,12 +939,19 @@
    "/Users/alokbeniwal/Grassmann/Leibniz/Generic.lean",
    "/Users/alokbeniwal/Grassmann/DirectSum/Parity.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl Leibniz/Generic.lean:37 (indexsplit), DirectSum/Euler.lean:43-46 (symmetricsplit), DirectSum/SetOps.lean:48-69 (mixed, combine) with library examples at 72-75; tests Tests/DirectSum/Leibniz.lean:79-81 (indexsplit), 94-96 (symmetricsplit)",
+   "remaining": "mixed and combine are checked only by `example`s inside DirectSum/SetOps.lean. No Tests/ suite covers them (e.g. the leibniz.md \u00a76 oracle values 0x43, 0x98, 0x28, 0x1d)."
+  }
  },
  {
   "pkg": "AbstractTensors",
   "symbol": "antiabs, antiabs2, antimetric (binary), pseudometric, pseudosandwich, antisandwich",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "priority": "P2",
   "effort": "S",
   "fix": "Add abbrevs: antiabs := coabs, antiabs2 := coabs2, antimetric a b := cometric a b, pseudometric := cometric, pseudosandwich := cosandwich. Add antisandwich R x := complementLeft ((!R) >>> (!x)) via HShiftRight (AT:568).",
@@ -651,24 +959,38 @@
    "/Users/alokbeniwal/Grassmann/AbstractTensors/Generic.lean",
    "/Users/alokbeniwal/Grassmann/AbstractTensors/Ops.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl AbstractTensors/Generic.lean:427-433 (antiabs, antiabs2, antimetric, pseudometric abbrevs of coabs/coabs2/cometric), AbstractTensors/Ops.lean:300-308 (pseudosandwich, antisandwich via HShiftRight); underlying coabs/cometric tested in Tests/AbstractTensors/GenericTests.lean:95-117",
+   "remaining": "antisandwich (a new definition, not an alias) has no test. The aliases are untested directly; their targets are tested."
+  }
  },
  {
   "pkg": "AbstractTensors",
   "symbol": "Scalar, GradedVector, Bivector, Trivector",
-  "status": "MISSING",
+  "status": "DONE",
   "priority": "P2",
   "effort": "S",
   "fix": "Add abbrev Scalar X M V T := TensorGraded X M V 0 T, and the same for grades 1, 2 and 3.",
   "files": [
    "/Users/alokbeniwal/Grassmann/AbstractTensors/Ops.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl AbstractTensors/Kinds.lean:28-34 (Scalar, GradedVector, Bivector, Trivector abbrevs); tests Tests/AbstractTensors/Kinds.lean:46-48 (inferInstance for GradedVector/Bivector/Scalar)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "AbstractTensors",
   "symbol": "isscalar/isvector/isbivector/istrivector/isvolume, isone, norm(a,b), isfinite, isnull",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "priority": "P2",
   "effort": "S",
   "fix": "Add generic predicates on typed elements: rank == k || isZero (AT:183-206), isone t := approx (norm t) (value (scalar t)) && \u2248 1, norm2 a b := norm (a - b), isfinite for terms. Today only the dynamic isscalar exists (Grassmann/Dynamic/Norms.lean:46).",
@@ -676,12 +998,19 @@
    "/Users/alokbeniwal/Grassmann/AbstractTensors/Generic.lean",
    "/Users/alokbeniwal/Grassmann/Grassmann/Algebra/Norms.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl AbstractTensors/Kinds.lean:111-155 (isscalar\u2026isvolume = rank==k || isZero, isnull, isone, norm2, isfiniteTerm); TA versions Grassmann/Dynamic/Ops.lean:226-259; tests Tests/AbstractTensors/Kinds.lean:40-55 (isscalar\u2026isvolume, isnull, isone, norm2), Tests/Grassmann/Types.lean:189-193",
+   "remaining": "isfinite (AbstractTensors isfiniteTerm and TA.isfinite) has no test."
+  }
  },
  {
   "pkg": "AbstractTensors",
   "symbol": "<< and >> contraction notation",
-  "status": "PARTIAL",
+  "status": "DONE",
   "priority": "P2",
   "effort": "S",
   "fix": "shiftLeftContraction and shiftRightContraction exist without notation. Add scoped infixl \" << \" and \" >> \" (precedence 75, Julia 14) in AbstractTensors and Grassmann notation. Check for token clashes with >>> and >>=.",
@@ -689,7 +1018,14 @@
    "/Users/alokbeniwal/Grassmann/AbstractTensors/Ops.lean",
    "/Users/alokbeniwal/Grassmann/Grassmann/Notation.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl AbstractTensors/Ops.lean:401-403 (scoped infixl:75 << and >>); Grassmann uses \u226a/\u226b (Grassmann/Notation.lean:134-137) to avoid clashes; tests Tests/AbstractTensors/Notation.lean:66-68",
+   "remaining": ""
+  }
  },
  {
   "pkg": "AbstractTensors",
@@ -701,19 +1037,33 @@
   "files": [
    "/Users/alokbeniwal/Grassmann/AbstractTensors/Ops.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl AbstractTensors/Ops.lean:316-322 (low-priority TensorProd X \u03b1 X / \u03b1 X X = scalar multiplication)",
+   "remaining": "The generic scalar-lift instances are never exercised in Tests/. The test at Tests/Forms/Types.lean:50 uses the Chain-specific instance in Grassmann/Forms/Dyadic.lean:108 instead."
+  }
  },
  {
   "pkg": "DirectSum",
   "symbol": "Signature(::DiagonalForm), DiagonalForm(::Signature) conversions",
-  "status": "PARTIAL",
+  "status": "DONE",
   "priority": "P2",
   "effort": "S",
   "fix": "TensorBundle.toSignature takes the sign bits of diagValues. TensorBundle.toDiagonal maps each signature bit to \u00b11 and keeps options (DS/DirectSum.jl:389-390). Forms.restrict already covers Submanifold \u2192 bundle.",
   "files": [
    "/Users/alokbeniwal/Grassmann/DirectSum/SpaceOps.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl DirectSum/SetOps.lean:261-283 (TensorBundle.toSignature, toDiagonal, options kept, dual handling); tests Tests/DirectSum/Literals.lean:61-67",
+   "remaining": ""
+  }
  },
  {
   "pkg": "DirectSum",
@@ -726,12 +1076,19 @@
    "/Users/alokbeniwal/Grassmann/Grassmann/Types/Single.lean",
    "/Users/alokbeniwal/Grassmann/Grassmann/Dynamic/Basic.lean"
   ],
-  "key": "foundations"
+  "key": "foundations",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "only Grassmann/Types/Single.lean:47 Single.map exists",
+   "remaining": "Still missing: named coefficient-wise wrappers (div, rem, mod, round, \u2026), Real/Float64/Complex conversions of Single/Zero/Infinity (Complex of a grade>0 Single puts the value in the imaginary part; Infinity maps to Inf), and Ord/LT on grade-0 terms."
+  }
  },
  {
   "pkg": "Grassmann.jl",
   "symbol": "operators on the dynamic TA layer (\u2227 \u2228 \u22c5 \u2a3c \u2298 >>> \u00d7 \u22c6 ! ~ \u208a \u208b) + Coe Submanifold\u2192TA",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "The Julia-exact layer TA only has + - * and scalar actions. Add Wedge/Vee/Contraction/Sandwich/HShiftRight/Hodge/ComplementRight/ComplementLeft/Reverse/Involute/Clifford/Even/Odd/Cross/VeeDot/Expansion/GradeProj instances for TA V \u03b1 that delegate to TA.wedge/vee/contraction/sandwich/tsandwich/hodge/..., add `Coe (Submanifold V G) (TA V \u03b1)`, `OfNat`/scalar coercion, and have basis! (optionally) expose TA-typed blade aliases. After this, Julia doc code such as `v1\u2227v2`, `~R*v1*R` or `1+v12` gives Julia's result kinds and printed strings in Lean.",
   "effort": "M",
   "priority": "P0",
@@ -742,7 +1099,14 @@
    "Grassmann/Notation.lean",
    "Grassmann/Basis.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Dynamic/Ops.lean:61-186 (IntoTA, Coe/CoeDep Submanifold\u2192TA 68-74, OfNat/OfScientific 80-86, Reverse/Involute/Clifford/Hodge/Complement/Even/Odd/Volume/GradeProj 99-116, WedgeDot/Wedge/Vee/Contraction/VeeDot/Expansion/Cross/Sandwich/HShiftRight 139-173, SymProd/AntiSymProd 185-186); tests Tests/Dynamic/Fast.lean:5-90 (the \u2026F functions behind the instances, 17602 results), Tests/Dynamic/Examples.lean:30-98, Tests/Golden/DocsOps.lean:213-268, Bench/Dynamic.lean (the operator instances)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Grassmann.jl",
@@ -757,12 +1121,19 @@
    "Grassmann/Composite/Chain.lean",
    "Grassmann/Dynamic/Norms.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Dynamic/Division.lean:185-279 (TA powNat/powInt with binary/literal_pow, HPow TA Nat/Int over any Coeff), Grassmann/Composite/Pow.lean:35-66 (typed ^ Int/Nat/Float and Float/Nat ^ element rpow); tests Tests/Golden/DocsOps.lean:303-313 (x^k, x^-k, b^x), Tests/Composite/Unit.lean:204-205 (rpow)",
+   "remaining": "Typed-container ^ instances exist only at Float coefficients. Element ^ Int for Int/Rat typed Chain/Single/Multivector (e.g. v12^2 at Int) is missing."
+  }
  },
  {
   "pkg": "Grassmann.jl",
   "symbol": "inv, / and \\ between elements on TA; \\ on typed elements",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Implement TA.inv with Julia's algorithm and result kinds: ~t/abs2 for terms and chains, Couple inverse, and d=(~m)\u27d1m for mixed elements, with an Option/rejection where Julia throws. Add TA / and \\ (right: a\u27d1inv b, left: inv a\u27d1b). Add a left-division notation for typed elements (Lean SDiff \\ or a dedicated infix). This covers docs 30, 31 and 45 (-n*a/n, n\\a*n, a/a, inv(1+v12)).",
   "effort": "S",
   "priority": "P0",
@@ -772,12 +1143,19 @@
    "Grassmann/Algebra/Norms.lean",
    "Grassmann/Notation.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Dynamic/Division.lean:61-172 (invTerm/invCouple/invContainer?, inv?/inv, Inv instance, div?/div, ldiv?/ldiv, Div and LeftDiv instances), typed LeftDiv Grassmann/Algebra/Predicates.lean:119 and `\\` notation Grassmann/Notation.lean:129; tests Tests/Golden/DocsOps.lean:220-233,298-302 (docs a/a, n\\a*n, inv), Tests/Dynamic/Composite.lean:38 (inv vs oracle)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Grassmann.jl",
   "symbol": "exp/expm1/log/log1p/sqrt/cbrt/sin/cos/tan/sinh/cosh/tanh with Julia result kinds (dynamic layer)",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Composite functions exist only on the typed layer, only at Float coefficients, and Chain.exp/log return a Multivector where Julia returns a Couple or Spinor (the composite suite compares values only). Add Grassmann/Dynamic/Composite.lean. It should dispatch TA kinds to the typed Composite functions and re-wrap per Julia's multispin: exp(v12) gives a Couple, exp(2v12+v13) a Spinor. Enable the kind check in Tests/Golden/Composite.lean.",
   "effort": "M",
   "priority": "P0",
@@ -787,7 +1165,14 @@
    "Grassmann/Composite/Dense.lean",
    "Tests/Golden/Composite.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Dynamic/Composite.lean:120-600 (TA exp/expm1/log?/log1p?/root?/sqrt/cbrt/cos/sin/tan/cosh/sinh/tanh with Couple/Spinor re-wrapping); tests Tests/Dynamic/Composite.lean:1-98 (composite oracle comparing Julia result kind, grade and bits as well as values)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Grassmann.jl",
@@ -803,7 +1188,14 @@
    "StaticVectors/Values.lean",
    "README.md"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Types/Chain.lean:54, Grassmann/Types/Half.lean:59, Grassmann/Types/Multivector.lean:37 (ofList with `h : l.length = \u2026 := by decide`)",
+   "remaining": "Nothing under Tests/ uses the checked ofList constructors. The README example in Grassmann.lean:71-72 still uses (Chain.ofList? [\u2026]).get!. There is no chain!/mv! term macro."
+  }
  },
  {
   "pkg": "Grassmann.jl",
@@ -817,7 +1209,14 @@
    "Tests/Golden/CompositeDocs.lean",
    "Tests.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl (test harness) Tests/Golden/Docs.lean:1-101 + DocsParse/DocsEval/DocsInterp/DocsOps (Julia-subset interpreter replaying all 58 docs shards on TA, comparing kind/str/compact), registered at Tests/Golden/Docs.lean:98 via Tests/Golden/GrassmannEval.lean:2",
+   "remaining": "The evaluator exists. Its own header (Docs.lean:14-17) still lists unmodelled categories: matrices/operators/forms, calculus \u2207 \u2202 d, simplicial complexes, projective \u2191 \u2193, chain fields, tangent tensor-valued products and closure displays. The current pass/unimplemented counts were not measured (no build was run)."
+  }
  },
  {
   "pkg": "Grassmann.jl",
@@ -831,12 +1230,19 @@
    "gallery/Gallery/Versor.lean",
    "Grassmann/Notation.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Composite/Project.lean:94-272 (Chain up/upWith/upPM/down/downWith/downPM choosing v\u221e/v\u2205 from V, Multivector up/down, UpDown class project/reject, scoped \u21e1/\u21e3), Grassmann/Dynamic/Project.lean:37-73 (TA projectWith?/project?/rejectWith?/reject?); tests Tests/Forms/UpDown.lean:30-57 (updown.json: \u2191, \u2193, project(\u03c9,b), project(\u03c9,\u221e,\u2205), reject\u2026, multivector forms)",
+   "remaining": "The TA project?/reject? functions have no test. The Submanifold (subspace) forms of project/reject are missing. The notation is \u21e1/\u21e3 rather than \u2191/\u2193."
+  }
  },
  {
   "pkg": "Grassmann.jl",
   "symbol": "points, vectorfield/pointfield, chainfield(t,V,W)",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "The README streamplot and line plots rely on gallery-local helpers. Add library points(f, r) and chainfield(t, V, W) = p \u21a6 V(vector(\u2193(\u2191(p) \u2298 t))) (vectorfield/pointfield as aliases returning coordinate arrays), and make gallery/Gallery/Grassmann/Fields.lean use them. Test against docs 42/43.",
   "effort": "S",
   "priority": "P0",
@@ -845,12 +1251,19 @@
    "gallery/Gallery/Grassmann/Fields.lean",
    "gallery/Gallery/Versor.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Fields.lean:48-110 (points, pointsCoords, versorMap, chainfield, chainfieldFull, vectorfield, pointfield), used by gallery/Gallery/Grassmann/Fields.lean:24-25; tests Tests/Forms/UpDown.lean:146-185 (chainfieldFull, vectorfield, points, pointsCoords, pointsRange)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Grassmann.jl",
   "symbol": "roots, rootsreal, rootscomplex; monicroots* for n \u2265 5",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "fix": "Add non-monic wrappers roots*(a) = monicroots*(a[0..N-2] / a[N-1]), with the scalar special cases. Make monicroots?/monicrootsreal?/monicrootscomplex? fall back to eigvals(companion(a)) (Forms.Eigen) for n \u2265 5 instead of returning none. Add Complex-coefficient quadratics. Extend roots.json.",
   "effort": "S",
   "priority": "P0",
@@ -859,24 +1272,38 @@
    "Grassmann/Forms/Spectral.lean",
    "oracle/forms/gen.jl"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl Grassmann/Forms/Spectral.lean:362-410 (monicroots/monicrootsreal/monicrootscomplex with companion-eigenvalue fallback for n \u2265 5, roots/rootsreal/rootscomplex via monicOf, rootsConst), monicrootsC1 413; tests Tests/Forms/Parity.lean:45-72 (roots2.json, any degree)",
+   "remaining": "Complex-coefficient quadratics are missing (only the degree-1 monicrootsC1 exists)."
+  }
  },
  {
   "pkg": "Grassmann.jl",
   "symbol": "eigvecsreal (and real-typed eigvecs)",
-  "status": "MISSING",
+  "status": "DONE",
   "fix": "Add TensorOperator.eigvecsreal: Except of the real eigenvector operator from Eigen.Decomposition when all eigenvalues are real. Make eigvecs return a real-typed result when the spectrum is real, as Julia does. Both are listed in the README API overview.",
   "effort": "S",
   "priority": "P0",
   "files": [
    "Grassmann/Forms/Spectral.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl Grassmann/Forms/Spectral.lean:313-340 (eigvecsreal as Except, eigvecs real-typed when the spectrum is real); tests Tests/Forms/Parity.lean:95-110 (eigvecs.json)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Grassmann.jl",
   "symbol": "istensor, isgraded, isterm, isvector, isbivector, istrivector, isvolume",
-  "status": "MISSING",
+  "status": "DONE",
   "fix": "Add class-level predicates in AbstractTensors (istensor true for TensorAlgebra; isgraded/isterm from TensorGraded/TensorTerm instances; isvector etc. as rank == k || isZero). Make TA.isGraded/isTerm public and add the TA versions. istensor, isgraded and isterm are listed in the README API overview.",
   "effort": "S",
   "priority": "P0",
@@ -885,12 +1312,19 @@
    "Grassmann/Dynamic/Norms.lean",
    "Grassmann/Dynamic/Products.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl AbstractTensors/Kinds.lean:41-119 (TensorKind class with istensor/ismanifold/isgraded/isterm/ismixed, isvector\u2026isvolume), Grassmann/Dynamic/Ops.lean:208-244 (public TA.istensor/isterm/isgraded/isvector\u2026); tests Tests/AbstractTensors/Kinds.lean:32-43, Tests/Grassmann/Types.lean:185-191, Tests/Golden/DocsInterp.lean:544-553",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Grassmann.jl",
   "symbol": "abs, unit (and unitize/unitnorm/geomabs) per element kind",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Julia returns elements, e.g. abs(a) = 3.74v (a scalar Single) and abs(1+v12) = Single. Lean Chain.abs returns a Float, and unit/unitize/unitnorm/geomabs exist only for Multivector. Add Chain/Single/Couple/Spinor/TA versions with Julia kinds, generic over Analytic \u03b1.",
   "effort": "S",
   "priority": "P0",
@@ -898,12 +1332,19 @@
    "Grassmann/Composite/Ring.lean",
    "Grassmann/Dynamic/Composite.lean (new)"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Composite/Norm.lean:46-172 (abs/unit/geomabs/unitnorm/unitize for Chain, Single, Couple, Half, PseudoCouple with Julia kinds, e.g. Chain.abs : Single V 0), Composite/Ring.lean:182-195 (Multivector), Dynamic/Composite.lean:542-575 (TA); tests Tests/Forms/Norms.lean:1-60 (per-kind oracle), Tests/Composite/Unit.lean:265-266",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Grassmann.jl (Leibniz re-exports)",
   "symbol": "\u2207/nabla/Nabla, \u0394/Laplacian, \u2202/boundary, d/differential, \u03b4/codifferential, grad(::TensorAlgebra), divergence, curl",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "fix": "Add Grassmann/Calculus.lean. In plain spaces V(\u2207) is the all-ones grade-1 chain, so \u2202\u03c9 = \u03c9\u22c5V(\u2207), d\u03c9 = V(\u2207)\u2227\u03c9, \u03b4 = \u2212\u2202, gradient = d, divergence = \u2202, curl = V(\u2207)\u00d7m (effort S). Add \u2202 for Simplex chains (\u2227(\u03c9)\u22c5\u039b(W).v1). Tangent spaces need a Leibniz Derivation type and V(\u2207) = \u03a3 \u2202\u2096v\u2096 plus (\u2207\u22c5\u2207)^k for \u0394 (effort M). Test against docs 20-22, 27, 39.",
   "effort": "M",
   "priority": "P1",
@@ -912,12 +1353,19 @@
    "Leibniz/Generic.lean",
    "Grassmann/Forms/Simplex.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl Grassmann/Calculus.lean:53-160 (nabla, laplacian alias, tangentNabla, nablaM, boundary/differential/codifferential, gradient/grad/divergence/curl, d/\u03b4, boundaryM\u2026, simplexBoundary, Boundary class, scoped \u2202 and \u2207); tests Tests/Forms/Calculus.lean:53-150 (calculus.json plain/simplices/tangent; \u2202, d, \u03b4, grad, divergence, curl, \u2202 notation on simplices)",
+   "remaining": "\u0394 in tangent spaces ((\u2207\u22c5\u2207)^k) is not implemented: laplacian is just nabla (Calculus.lean:57), which is only right for plain spaces. There is no Nabla/Laplacian type at the Grassmann level, and no test for the \u2207/\u0394 notation."
+  }
  },
  {
   "pkg": "Grassmann.jl",
   "symbol": "skeleton, \ud835\udcab, subcomplex, collapse, chain, path, betti, \u03c7",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "fix": "Add Grassmann/Simplicial.lean: absym, skeleton (TensorTerm/Chain/Multivector with the Val flag), collapse(a,b) = a\u22c5absym(\u2202b), chain/path (the 2-chain of a boundary cycle), count_gdims, boundary_rank/null, betti and \u03c7. Implement the intended \ud835\udcab/subcomplex, which are broken in Julia (defect laplacian-not-callable). Test against docs 39.",
   "effort": "M",
   "priority": "P1",
@@ -925,12 +1373,19 @@
    "Grassmann/Simplicial.lean (new)",
    "Grassmann/Calculus.lean (new)"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl Grassmann/Calculus/Simplicial.lean:32-143 (absym, skeleton, \ud835\udcab, subcomplex, collapse, edges, chain, path, countGdims, \u03c7, boundaryRank, boundaryNull, betti); tests Tests/Forms/Calculus.lean:152-175 (skeleton, \u03c7, betti, chain, path, \ud835\udcab, subcomplex, countGdims, boundaryNull)",
+   "remaining": "collapse and boundaryRank are never called from Tests/. All the functions exist only for Multivector Float; TensorTerm/Chain inputs (the Val flag) are not covered."
+  }
  },
  {
   "pkg": "Grassmann.jl",
   "symbol": "hyperplanes, \ud835\udd5a, \ud835\udd5b, \ud835\udd5c",
-  "status": "MISSING",
+  "status": "DONE",
   "fix": "Add hyperplanes V = [I \u27d1 v_k | k < V.grade] as Single values (a TA list) and \ud835\udd5a \ud835\udd5b \ud835\udd5c := hyperplanes \u211d3 = (v\u2082\u2083, \u2212v\u2081\u2083, v\u2081\u2082). Test against docs 16/37/38.",
   "effort": "S",
   "priority": "P1",
@@ -938,7 +1393,14 @@
    "Grassmann/Basis.lean",
    "Grassmann/Composite/Spinor.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl Grassmann/Basis.lean:140-157 (hyperplanes : Array Single, \ud835\udd5a \ud835\udd5b \ud835\udd5c), Grassmann/Composite/Phasor.lean:162-166 (Composite.hyperplanes); tests Tests/Composite/Unit.lean:527-536 (hyperplanes \u211d2/\u211d3/\u211d4, \ud835\udd5a\ud835\udd5b\ud835\udd5c = hyperplanes(\u211d3), products)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Grassmann.jl (DirectSum re-exports)",
@@ -951,7 +1413,14 @@
    "Grassmann/Basis.lean",
    "Tests/Grassmann/Types.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Basis.lean:45-124 (basis! (names := E e cov duo)), 121-131 (dualbasis!, mixedbasis!)",
+   "remaining": "Nothing under Tests/ checks the renamed names or the dual and mixed label sets (w\u00b9, v\u2081w\u00b9). The sig and dif slots are missing."
+  }
  },
  {
   "pkg": "Grassmann.jl",
@@ -967,7 +1436,14 @@
    "Grassmann/Composite/Chain.lean",
    "Grassmann/Composite/Couple.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "no promotion class found (rg 'Promote' in Grassmann/AbstractTensors); composite functions still Float-only (Grassmann/Composite/*.lean)",
+   "remaining": "Still missing: an Int\u2192Rat\u2192Float\u2192Complex promotion class, mixed-coefficient HAdd/HMul, and Composite functions generalised over [Analytic \u03b1] (Float32, Complex Float)."
+  }
  },
  {
   "pkg": "Grassmann.jl",
@@ -981,7 +1457,14 @@
    "Grassmann/Kernel/Plan.lean",
    "Grassmann/Kernel/Reference.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "no runtime-metric (Gram) product variants anywhere (rg wedgedot_metric/contraction_metric/metricRing/Gram)",
+   "remaining": "The whole f(t, g) family is missing, with g threaded through Kernel.Plan or plans built per g."
+  }
  },
  {
   "pkg": "Grassmann.jl",
@@ -997,12 +1480,19 @@
    "Grassmann/Forms/Operator.lean",
    "Grassmann/Composite/Couple.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Forms/Eval.lean:143-160 (Multivector.eval list, CoeFun Multivector/Half \u2192 grade part, bladeOfName/byName), Grassmann/Composite/Phasor.lean:87 (CoeFun Phasor \u2192 eval), Grassmann/Forms/Simplex.lean:258-262 (Membership + Decidable for Simplex \u2208); tests Tests/Forms/Types.lean:96-105 (m 2, m.byName \"v12\", \u2208 simplex), Tests/Composite/Unit.lean:513 (z t)",
+   "remaining": "There is no CoeFun from Chain/Multivector to evaluation on a list of vectors (t(y\u2026); only the named Multivector.eval). The T:T notation for TensorOperator.frobenius (Forms/Operator.lean:257) is missing."
+  }
  },
  {
   "pkg": "Grassmann.jl",
   "symbol": "@TensorOperator, @Endomorphism, @Outermorphism, @SpectralOperator",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Add matrix-literal term syntax (e.g. `op![[1,2],[3,4]]`) that elaborates to a TensorOperator with the dimension checked at elaboration time (not an Option), plus the Outermorphism/SpectralOperator wrappers. Covers docs 18.",
   "effort": "S",
   "priority": "P1",
@@ -1011,7 +1501,14 @@
    "Grassmann/Forms/Outermorphism.lean",
    "Grassmann/Forms/Dyadic.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Forms/Literal.lean:52-90 (op![\u2026], endo![\u2026], outer![\u2026], spectral![\u2026] with elaboration-time dimension checks); tests Tests/Forms/Types.lean:60-68,89-94 (literals, error message for non-square)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Grassmann.jl",
@@ -1025,12 +1522,19 @@
    "Grassmann/Dynamic/Products.lean",
    "oracle/suites/products.jl"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "DirectSum handles nested tangent products at blade level (Tests/DirectSum/Literals.lean:153, Tests/DirectSum/Derived.lean:164), but the TA harness explicitly rejects them (Tests/Golden/DocsOps.lean:203-216 nestedProduct)",
+   "remaining": "Still missing: TA (or a coefficient sum type) holding derivation-valued coefficients, and TAN/DUAL/DYAD shards in oracle/suites/products.jl."
+  }
  },
  {
   "pkg": "Grassmann.jl",
   "symbol": "performance: dynamic TA products",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "TA products run through interpreted cached plans (Dynamic/Loops.lean), never the generated kernels, and have never been benchmarked against Julia. Route container\u00d7container TA products to Kernels/SandwichKernels when V has generated kernels, keeping bit-exact summation order where the goldens need it. Add TA rows to Bench/Grassmann and PERF.md (with the in-flight Bench/Harness).",
   "effort": "M",
   "priority": "P1",
@@ -1040,7 +1544,14 @@
    "Bench/Grassmann/Products.lean",
    "docs/PERF.md"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Dynamic/Fast.lean:1-90+ (DynKernels: TA container products and unary maps routed to generated kernels, bit-exact with Julia's loops); tests Tests/Dynamic/Fast.lean:5-90 (fast vs loop paths agree bit for bit); bench Bench/Dynamic.lean, docs/PERF.md:418-447",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Grassmann.jl",
@@ -1054,7 +1565,14 @@
    "Grassmann/Kernel/Reference.lean",
    "Grassmann/Kernel/Codegen.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "fast paths only for spaces with generated kernels (Grassmann/Dynamic/Fast.lean); runtime spaces still use the reference/interpreted plans (Grassmann/Kernel/Reference.lean, Dynamic/Loops.lean)",
+   "remaining": "The plan interpreter has not been sped up (unrolled blocks, USize/FloatArray loops), and generating kernels for user spaces is neither automated nor documented. This was not verified by benchmarks."
+  }
  },
  {
   "pkg": "Grassmann.jl",
@@ -1069,7 +1587,14 @@
    "Grassmann/Types/Couple.lean",
    "Grassmann/Notation.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Composite/Phasor.lean:1-170 (\u2220 notation, Couple/Phasor realvalue/imagvalue/reim, amplitude/phase/unitangle, radius/angle for Chain/Single/Multivector, vectorizeChain over the blade subspace, Single.polarize, Phasor.eval); tests Tests/Composite/Unit.lean:502-526",
+   "remaining": "Still missing: polarize for Spinor, the non-simple phasor complexify (amp \u2298 exp(angle/2)), the 2-argument phasor call z(t, \u03b8), and TA phasor arithmetic. The Phasor.lean header says these are not provided."
+  }
  },
  {
   "pkg": "Grassmann.jl",
@@ -1086,7 +1611,14 @@
    "Tests/Composite/Unit.lean",
    "oracle/forms/gen.jl"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Composite/Kinds.lean (generated per-kind cot/sec/csc/coth/sech/csch, inverse trig/hyperbolic, pseudo-couple sqrt/cbrt), Composite/Ring.lean:179 exph, Forms/Spectral.lean:258-263 vandermonde*, Forms/Lie.lean:53 LieDerivative, Dynamic/Ops.lean:190 cosandwich; tests Tests/Composite/Unit.lean:545-560 (derived functions, exph), Tests/Forms/Parity.lean:176-190 (vandermondereal/complex)",
+   "remaining": "LieDerivative and cosandwich have no oracle cases or tests. Grassmann's Simplex volumes are not tested at the Grassmann level (only Cartan's mesh volumes are). Whether every kind has pseudo* aliases was not checked."
+  }
  },
  {
   "pkg": "Grassmann.jl",
@@ -1099,7 +1631,14 @@
    "AbstractTensors/Ops.lean",
    "Grassmann/Notation.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "UniformScaling is exported (Grassmann/Notation.lean:78), but no `I` constant is defined (rg '(def|abbrev) I\\b' finds nothing)",
+   "remaining": "Still missing: `I : UniformScaling Int := \u27e81\u27e9` exported under Grassmann, with a test."
+  }
  },
  {
   "pkg": "Grassmann.jl",
@@ -1117,24 +1656,38 @@
    "Grassmann/Forms/Lie.lean",
    "Grassmann/Types/Half.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Dynamic/Ops.lean:120-129 (complementrightanti/leftanti, pseudoreverse, unary cometric on TA), 190-199 (cosandwich, antisandwich, codot), 301-308 (antigrade?/pseudograde?/indices? on TA); AbstractTensors/Ops.lean:300 pseudosandwich, Generic.lean:427-433 antiabs/antiabs2/pseudometric; Grassmann/Composite/Spinor.lean:147 quatvalues; Grassmann/Forms/Spectral.lean:287-302 discriminantreal/disc/discreal/disccomplex; Grassmann/Types/Half.lean:36 Quaternion; AbstractTensors/Kinds.lean:28-34 Scalar\u2026Trivector; Grassmann/Notation.lean:134-137 \u226a/\u226b; tests Tests/Golden/DocsInterp.lean:565 (cometric/pseudometric)",
+   "remaining": "Still missing: the Proj abbrev, the \ud835\udcdb[\u2026] notation, and antigrade/pseudograde/indices on typed elements (only TA and Submanifold.indices). codot, pseudoreverse and antigrade? have no tests, and several aliases are not re-exported under Grassmann."
+  }
  },
  {
   "pkg": "Grassmann.jl",
   "symbol": "antisandwich",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "fix": "Add antisandwich R x = complementLeft (complementRight R >>> complementRight x) next to cosandwich.",
   "effort": "S",
   "priority": "P2",
   "files": [
    "AbstractTensors/Ops.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl AbstractTensors/Ops.lean:304-308 (antisandwich R x = complementLeft (complementRight R >>> complementRight x)), Grassmann/Dynamic/Ops.lean:195 (TA.antisandwich)",
+   "remaining": "Nothing under Tests/ calls antisandwich."
+  }
  },
  {
   "pkg": "Grassmann.jl",
   "symbol": "\u2299, \u22a0 (symmetric/antisymmetric products), \u2225",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "fix": "Notation is declared without instances. Implement the intended \u03a3\u03c3\u220f\u03c9/K! symmetrization and antisymmetrization (Julia is broken: defect symmetrize-permutations) and \u2225 = isZero(a\u2227b).",
   "effort": "S",
   "priority": "P2",
@@ -1142,7 +1695,14 @@
    "Grassmann/Algebra/Products.lean",
    "Grassmann/Dynamic/Products.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl Grassmann/Notation.lean:66-68,131 (Parallel class, \u2225), Grassmann/Algebra/Predicates.lean:112 (typed Parallel), Grassmann/Dynamic/Ops.lean:179-186,269 (TA symprod/antisymprod (ab\u00b1ba)/2, SymProd/AntiSymProd, Parallel); tests Tests/Grassmann/Types.lean:200 (\u2225), Tests/Golden/DocsOps.lean:265-268 (\u2225)",
+   "remaining": "\u2299 and \u22a0 have no tests and exist only for TA (no typed instances). Only the two-operand (ab \u00b1 ba)/2 form exists; the general \u03a3\u03c3\u220f\u03c9/K! symmetrization was not implemented."
+  }
  },
  {
   "pkg": "Grassmann.jl",
@@ -1154,7 +1714,14 @@
   "files": [
    "Grassmann/Forms/Dyadic.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Forms/Dyadic.lean:95-110 (Chain\u2297Chain, Single\u2297Chain, Chain\u2297Single, Single\u2297Single \u2192 Dyadic, scalar\u2297Chain); tests Tests/Forms/Types.lean:47-50",
+   "remaining": "Submanifold \u2297 graded and TA operands are missing."
+  }
  },
  {
   "pkg": "Grassmann.jl",
@@ -1169,7 +1736,14 @@
    "Tests/Golden/GrassmannEval.lean",
    "oracle/suites/unary.jl"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Dynamic/Ops.lean:120-123 (TA complementrightanti/leftanti), 251-277 (TA.isone, isfinite, isapprox), 353-360 (TA.adjoint?); tests Tests/Golden/DocsOps.lean:264 (isapprox), Tests/Golden/DocsInterp.lean:552 (isone)",
+   "remaining": "The harness still uses its own AnyTA.adjoint (Tests/Golden/GrassmannEval.lean:144) instead of TA.adjoint?. A typed Chain.adjoint is missing. TA.isfinite and the anti complements on TA have no tests or unary goldens."
+  }
  },
  {
   "pkg": "Grassmann.jl",
@@ -1184,7 +1758,14 @@
    "Grassmann/Types/Multivector.lean",
    "Grassmann/Types/Couple.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "only Single.map (Grassmann/Types/Single.lean:47) and the space-level signbit (DirectSum/BladeAlgebra.lean:147) exist",
+   "remaining": "Still missing: the elementwise wrappers (div, rem, mod, mod1, fld, cld, ldexp, mod2pi, rad2deg, round, rationalize), iseven/isodd by grade parity, and rand samplers in the library."
+  }
  },
  {
   "pkg": "Grassmann.jl",
@@ -1197,12 +1778,19 @@
    "Grassmann/Forms/Simplex.lean",
    "Grassmann/Forms/Operator.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Forms/Simplex.lean:220 (pointColumns), 231-242 (barycenters, means, centroids), 252 (Simplex.pointColumn, Julia column semantics); tests Tests/Forms/UpDown.lean:206-216",
+   "remaining": "curls is missing at the Grassmann level (it exists only in Cartan/Element.lean:183)."
+  }
  },
  {
   "pkg": "Grassmann.jl",
   "symbol": "Outermorphism/Dyadic/Projector exp, expm1, log",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Add them via Endomorphism/MatFun (Outermorphism: recompute the compounds from the grade-1 result; Dyadic via toOperator), plus the Proj exp/log heuristic.",
   "effort": "S",
   "priority": "P2",
@@ -1211,12 +1799,19 @@
    "Grassmann/Forms/Dyadic.lean",
    "Grassmann/Forms/MatFun.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Forms/MatFun.lean:304-345 (Outermorphism exp/expm1/log via compounds, Dyadic exp/expm1/log via toOperator, Projector exp/log heuristic), Forms/Dyadic.lean:251-253 (SpectralOperator exp/log); tests Tests/Forms/OpFun.lean:41-55 (Outermorphism exp/expm1/log, Dyadic expm1)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Grassmann.jl",
   "symbol": "scalarfield, chainfield(t,\u03d5), rectanglefield",
-  "status": "MISSING",
+  "status": "DONE",
   "fix": "Add the mesh barycentric interpolation samplers: find the simplex Pi containing P, return (Pi\\P)\u22c5\u03d5[ti]. rectanglefield samples chainfield over rectangle(points(t)). They belong with the new Fields module and use Simplex.contains/ldiv.",
   "effort": "M",
   "priority": "P2",
@@ -1224,7 +1819,14 @@
    "Grassmann/Fields.lean (new)",
    "Grassmann/Forms/Simplex.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl Grassmann/Fields.lean:118-180 (element, locate, scalarfield, chainfieldMesh, rectangle, rectanglefield); tests Tests/Forms/UpDown.lean:186-205 (scalarfield in/outside, chainfield(t,\u03d5), rectangle, rectanglefield)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Grassmann.jl",
@@ -1237,7 +1839,14 @@
    "AbstractTensors/Coeff.lean",
    "Grassmann/Types/Chain.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "no Coeff instance for Chain/Multivector and no Multiplex type (rg)",
+   "remaining": "Add recursive coefficients, or document that Forms' Mat-based operators replace them."
+  }
  },
  {
   "pkg": "Grassmann.jl",
@@ -1250,7 +1859,14 @@
    "Grassmann/Forms/Eval.lean",
    "Grassmann/Dynamic/Products.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Dynamic/Ops.lean:326-347 (TA.embed into an extending plain signature), Grassmann/Forms/Eval.lean:93,111 (Chain/Multivector.embed); the cross-space dispatch for binary ops lives only in the test harness (Tests/Golden/DocsOps.lean:177-198 embedInto/prefixOf)",
+   "remaining": "The library has no union-space promotion for TA binary operators over different bundles (V\u222aW). The harness duplicates TA.embed."
+  }
  },
  {
   "pkg": "Grassmann.jl",
@@ -1263,7 +1879,14 @@
    "Grassmann/Composite/Couple.lean",
    "Cartan (Spectral, in flight)"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "Cartan has FFTs (Tests/Cartan/FFT.lean), but there are no fft/ifft methods on Grassmann element arrays (rg fft in Grassmann finds nothing)",
+   "remaining": "Add fft/ifft over FloatArray SoA of Couples, using complexify."
+  }
  },
  {
   "pkg": "Grassmann.jl ext",
@@ -1276,7 +1899,14 @@
    "JuliaBase/Complex.lean",
    "Grassmann/Composite/Couple.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "no gamma/erf/bessel/elliptic functions in JuliaBase or Grassmann (rg)",
+   "remaining": "Port the SpecialFunctions/EllipticFunctions extensions."
+  }
  },
  {
   "pkg": "Grassmann.jl (DirectSum re-exports)",
@@ -1290,12 +1920,19 @@
    "Grassmann/Dynamic/Products.lean",
    "Grassmann/Basis.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl DirectSum/Common.lean:17 (\u211d), DirectSum/Basis.lean:36-131 (\u039b(V).name typed, \u039b(V)[i]), Grassmann/Dynamic/Ops.lean:313-320 (TA.basisBlades, TA.blade? V name via ofBladeResult); tests Tests/DirectSum/Basis.lean:27-40, Tests/DirectSum/Literals.lean:31",
+   "remaining": "TA.blade? and TA.basisBlades have no tests; the docs harness uses its own basisBlades/ofBladeResult (Tests/Golden/DocsInterp.lean:67, DocsEval.lean:248)."
+  }
  },
  {
   "pkg": "Grassmann.jl",
   "symbol": "Complex(m::Imaginary), Couple(m::Imaginary), reim; operator isdiag",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Add Spinor-on-n=1-plane \u2194 Complex/Couple conversions and TensorOperator.isdiag.",
   "effort": "S",
   "priority": "P2",
@@ -1303,12 +1940,19 @@
    "Grassmann/Composite/Couple.lean",
    "Grassmann/Forms/Operator.lean"
   ],
-  "key": "grassmann-core"
+  "key": "grassmann-core",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl Grassmann/Composite/Phasor.lean:146 (Half.toComplex), Half.toCouple, Couple.reim, 170-176 (TensorOperator.isdiag); tests Tests/Composite/Unit.lean:507,524-526,537-540",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Cartan (plot ext)",
   "symbol": "Makie methods on TensorFields: lines, linesegments, scatter, text, mesh, wireframe, surface, contour, contourf, contour3d, heatmap, streamplot, arrows/arrows2d/arrows3d (+ Components/Limit/LocalTensor forms); docs/src/plot.md 32 examples",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "fix": "Build a Cartan->LeanPlot bridge as its own Lake package, because the root package must stay dependency-free. It converts fields to LeanPlot data: 1-D curves become Pts2/Pts3 colored by `speed`; `GridBundle 2` fields become `Grid2` plus `Surface.quadsToTriMesh`/`gridMesh` with normals; `SimplexBundle` becomes `TriMesh`; heatmap centers become edges via `Algo.Heatmap.edges`; streamplot passes `TensorField.eval2/eval3` (Cartan/Interp.lean) as the vector function to `Algo.Streamplot` and uses `Result.mapPoints` for the tangent-space `makietransform`. Write one dispatch function per Makie method, mirroring the table in cartan-element-spectral-plot.md \u00a75.2. Then port the 32 plot.md figures into the gallery with oracle/gallery data dumps, and bump the gallery's LeanPlot pin from f141f59 to leanplot-next.",
   "effort": "L",
   "priority": "P0",
@@ -1321,12 +1965,19 @@
    "gallery/Gallery/Main.lean",
    "oracle/gallery/cartan_plotmd.jl (new)"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl: gallery/GrassmannPlot/Makie.lean:28-158 MakiePlot dispatch for lines\u2026voxels incl. Components/LocalTensor/AnyField (:57-67); Curves.lean:51-184, Surfaces.lean:100-398, Stream.lean:136-176 (eval2/3 based streamplot), Arrows.lean:103-118. tests: gallery/Gallery/Cartan/PlotMd.lean:225-371 (22 cartan-plot-* figures checked against oracle/gallery/data/*.json by gallery/Gallery/Check.lean:44-55, lake test)",
+   "remaining": "plot.md: 22 of the ~32 examples ported; pending (gallery/Gallery/Index.lean:41-43): contour_himmelblau, heatmap_logscale, contour_curvilinear, contourf, volume*, contour_volume*, voxels_cube_with_holes; LeanPlot pin still f141f59 (gallery/lakefile.toml rev), not bumped to leanplot-next"
+  }
  },
  {
   "pkg": "Cartan",
   "symbol": "EndomorphismField, DiagonalField, OutermorphismField, PhasorField, ComplexMap (Couple/Phasor fibers); det, polarize, complexify, vectorize, metrictensorfield, metricextensorfield, fullmetricextensor",
-  "status": "MISSING",
+  "status": "DONE",
   "fix": "Add `FlatFiber`/`LinearFiber`/`ShowFiber`/`FiberNorm` instances with `LawfulFlatFiber` proofs for `TensorOperator` (column-major rows\u00d7cols floats), `DiagonalOperator`, `Outermorphism` (grade blocks), `Couple`, `PseudoCouple`, `Phasor` and `Single`. Then lift det/tr/eigen*/polarize/complexify/vectorize as `TensorField.map`s and add metrictensorfield/metricextensorfield over `MetricStore`. Add operator-field probes to oracle/cartan/gen.jl. This unblocks the diffgeo frames, jacobian and first-form results (the README surface methods), so coordinate with the in-flight Diffgeo worker.",
   "effort": "M",
   "priority": "P0",
@@ -1340,12 +1991,19 @@
    "Tests/Cartan/Unit.lean",
    "Tests/Cartan/Misc.lean"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl: Cartan/Operator.lean:51-180 FlatFiber/LinearFiber/ShowFiber/FiberNorm (+LawfulFlatFiber for TensorOperator/DiagonalOperator) and blade-encoded Couple/PseudoCouple/Phasor/Single, :245-328 det/tr/transpose/invOp/diagonal/outermorphism/eigvalscomplex/polarize/complexify/vectorize/\u2026, :357-405 metricextensorfield/metrictensorfield/fullmetricextensor/fullmetrictensor; aliases Cartan/Aliases.lean:47-62. tests: Tests/Cartan/Operators.lean:61-120 (operators.json oracle)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Infrastructure (Adapode/Cartan)",
   "symbol": "sparse assembly + A\\b direct solve, dense LU `\\`, generalized sparse eigensolver (geneigsolve)",
-  "status": "MISSING",
+  "status": "DONE",
   "fix": "Add: (1) a CSC sparse matrix built from triplets, summing duplicates as Julia `sparse` does; (2) a sparse LU, or Cholesky for SPD stiffness/mass, with fill-reducing ordering; (3) dense LU with partial pivoting in LAPACK getrf order, for Chebyshev operators; (4) shift-invert Lanczos for the smallest generalized eigenpairs. Compare solutions using ulps or relative tolerances. Today only MeshTopology/Sparse.lean exists (triplets, transpose, row sums), with no factorization.",
   "effort": "L",
   "priority": "P0",
@@ -1356,7 +2014,14 @@
    "MeshTopology/Sparse.lean",
    "Tests/JuliaBase/*"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl: Cartan/Solve/Sparse.lean:58 ofTriplets (duplicates summed), :235 rcm, :348/:388 envelope Cholesky/LU, :468-473; Cartan/Solve/Dense.lean:143 lu (partial pivoting), :203 solve; Cartan/Solve/Iterative.lean:79 cg, :110 bicgstab, :166 \\ dispatcher; Cartan/Solve/Eigen.lean:111 geneigsolve (shift-invert Lanczos). tests: Tests/Cartan/Solve.lean:75-107 (CSC vs Julia sparse, lap2d/conv2d solves, dense LU factors) and generalized eigen pencils (:10-12)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Adapode",
@@ -1378,7 +2043,14 @@
    "oracle/adapode/gen_fem.jl (new)",
    "Tests/Adapode/Fem.lean (new)"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "Adapode/ has only Constants.lean and ODE; Adapode.lean:29-37 lists FEM as Pending. Only Cartan/Element.lean:297-326 assembleincidence/assembleload exist (prerequisites)",
+   "remaining": "All 44 FEM symbols (assemble*, solve*, adaptpoisson, nedelec, shapeP1/P2, \u2026) and oracle/adapode/gen_fem.jl"
+  }
  },
  {
   "pkg": "Adapode",
@@ -1395,24 +2067,38 @@
    "oracle/adapode/gen_grid.jl (new)",
    "Tests/Adapode/Grid.lean (new)"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "no multiplier/helmholtz/dirichlet solvers anywhere (rg); prerequisites exist: Cartan/Spectral/FFT.lean, Cartan/Solve/Dense.lean",
+   "remaining": "All 34 grid/spectral PDE solver symbols"
+  }
  },
  {
   "pkg": "Cartan (plot ext)",
   "symbol": "scaledarrows, scaledarrows! (fiber.md C1, the first interactive example)",
-  "status": "MISSING",
+  "status": "DONE",
   "fix": "In the bridge package: scaledarrows M t = arrows2d/3d with lengthscale = spacing M / (sum|t|/n) / 3, using Cartan.spacing (Cartan/Misc.lean, done). Add the operator-column form once TensorOperator fibers exist. The gridsize/arcgridsize keywords go through TensorField.resample (done).",
   "effort": "S",
   "priority": "P0",
   "files": [
    "plot/CartanPlot/Recipes.lean (new)"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl: gallery/GrassmannPlot/Arrows.lean:151-187 spacingOf/meanNorm/scaledLengthscale + instScaledArrowsPair/Grid/Frame (operator-column form), Makie.lean:111 scaledarrows, :155 scaledarrows!. tests: gallery/Gallery/Cartan/Recipes.lean:106-144 (cartan-scaledarrows-grid/-helix/-frame vs oracle/gallery/data dumps, run by gallery lake test)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Cartan (plot ext)",
   "symbol": "linegraph(!), tangentbundle(!), normalbundle(!), planesbundle(!), arrowsbundle(!), spacesbundle(!), scaledbundle(!), scaledfield(!), scaledplanes(!), scaledspaces(!), planes(!), spaces(!), graylines(!), variation!, alteration!, modification!",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "fix": "Port the MakieExt.jl:227-797 recipes into the bridge. linegraph uses TensorField.leaf/leafAt (done), colored by speed. The bundles, planes and spaces are LeanPlot arrows plus mesh quads from _orientedplane/_unorientedplane (fixing upstream B2/B4). graylines is linesColored (grays) plus a dashed black line. The `!` animation drivers become Figure frame sequences via LeanPlot.Figure.saveFrames.",
   "effort": "M",
   "priority": "P1",
@@ -1420,12 +2106,19 @@
    "plot/CartanPlot/Recipes.lean (new)",
    "plot/CartanPlot/Animate.lean (new)"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl: gallery/GrassmannPlot/Surfaces.lean:363-398 linegraph (+gridsize resample); Arrows.lean:210-387 arrowsbundle, planes/spaces/scaledplanes/scaledspaces/planesbundle/spacesbundle, scaledfield/scaledbundle, graylines; Animate.lean:26-122 variation/alteration/modification drivers + saveFrames. tests: gallery/Gallery/Cartan/Recipes.lean:129 arrowsbundle, :187-192 linegraph",
+   "remaining": "tangentbundle(!) and normalbundle(!) are not implemented; planes/spaces/scaledplanes/scaledspaces/planesbundle/spacesbundle/scaledfield/scaledbundle/graylines and the Animate drivers have no gallery check (no Julia render exists for several, Index.lean:105-108)"
+  }
  },
  {
   "pkg": "Cartan",
   "symbol": "OpenParameter, MirrorParameter, ClampedParameter, TorusParameter, BallParameter/PolarParameter, SphereParameter, CylinderParameter, MobiusParameter, WingParameter, KleinParameter, ConeParameter, TubeParameter/RevolvedParameter, HopfParameter, GeographicParameter (explicit-axes forms)",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "The size forms are done and oracle-tested (Cartan/Parameters.lean). Add explicit-axes overloads Parameter.x (ps : ProductSpace N) / (axes : Vector Axis N) = TensorField.identity ((GridBundle.ofSpace ps).x), plus the 1-D Axis forms, so plot.md's OpenParameter(xs, ys) and OpenParameter(-5:2:5, ...) read directly. Add parameters.json probes for them.",
   "effort": "S",
   "priority": "P1",
@@ -1434,12 +2127,19 @@
    "oracle/cartan/gen.jl",
    "Tests/Cartan/Grids.lean"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: Cartan/Parameters.lean:157-202 openOn\u2026hopf3On over ProductSpace (explicit axes), :206-216 1-D Axis forms. tests: Tests/Cartan/Unit.lean:82-91 (TorusParameter/MobiusParameter explicit axes equal the size forms, glued topology)",
+   "remaining": "(minor) checked against the size forms rather than new parameters.json probes; only torus and mobius forms are exercised"
+  }
  },
  {
   "pkg": "Cartan",
   "symbol": "tensorfield",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "fix": "Add tensorfield (t : versor) : AffinePoint N -> Chain = down(up((V u M)(p)) sandwich t), using Grassmann's sandwich and conformal lift/drop. Add the mesh-interpolant form tensorfield(t, phi) on a SimplexBundle, with point location from Element sinterp. Add probes for the fiber.md C6/C7 streamplots.",
   "effort": "S",
   "priority": "P1",
@@ -1448,12 +2148,19 @@
    "oracle/cartan/gen.jl",
    "Tests/Cartan/Misc.lean"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl: Cartan/Element.lean:409-420 tensorfield(t, \u03d5) mesh-interpolant form on SimplexBundle. tests: Tests/Cartan/Element.lean:188-205 (scalar/vector agree with sinterp, outside point)",
+   "remaining": "The versor form tensorfield(t) = down(up(p) sandwich t) (Element.lean:413 says it is not done) and the fiber.md C6/C7 streamplot probes are missing"
+  }
  },
  {
   "pkg": "Cartan",
   "symbol": "TensorField constructors (C2 non-product point arrays, integer-valued points, C6 reparametrize untested), Variation (field of fields), Limit/orbit/orbithold/orbiterror over fields, assign!",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Add a PointGrid N base (explicit per-point coordinates on a QuotientTopology) for curvilinear grids. Add a FlatFiber for nested fields, or a Variation wrapper over Array (TensorField ..). Lift AbstractAnalysis orbit/orbitError to fields, returning Limit. Add assign! as TensorField.setSlice on the last axis (the Adapode time series need it). Oracle-test reparametrize.",
   "effort": "M",
   "priority": "P1",
@@ -1465,12 +2172,19 @@
    "Tests/Cartan/Field1d.lean",
    "Tests/Cartan/Slices.lean"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: Cartan/Bundle.lean:349-384 PointGrid; Cartan/Field.lean:394-422 PointGrid.ofField/reparametrizeN/reparametrize; Cartan/Slice.lean:69-85 assignLast/assignLeaf (assign!), :127-143 variation/alteration/modification (fields of leaves); field orbits TensorField.orbitLimit/orbitSteps/orbitError/orbitHold. tests: Tests/Cartan/Misc.lean:16-58 (pointgrid reparametrize, orbit/orbiterror/orbithold, reparametrize oracle), Tests/Cartan/Slices.lean:113-121 assign!",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Cartan",
   "symbol": "DiscontinuousBundle",
-  "status": "MISSING",
+  "status": "DONE",
   "fix": "Model a SimplexBundle over a DiscontinuousTopology, with points gathered through discontinuousVertices, instead of only the disconnected copy. Element interpCR(pt, dt, ed, m) and Adapode assembleDIPG need it.",
   "effort": "M",
   "priority": "P1",
@@ -1479,7 +2193,14 @@
    "Cartan/Misc.lean",
    "Tests/Cartan/Mesh.lean"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl: Cartan/Bundle.lean:422-446 DiscontinuousBundle (cloud + DiscontinuousTopology, image/Coordinates), :499 SimplexBundle.discontinuous, :504 continuous; Aliases.lean:114 DiscontinuousMap; Cartan/Element.lean:547-574 interpCR. tests: Tests/Cartan/Element.lean:117-124 (interpCR fiber, discontinuous elements/vertices/nodes vs oracle)",
+   "remaining": "(assembleDIPG belongs to the Adapode FEM entry 95)"
+  }
  },
  {
   "pkg": "LeanPlot",
@@ -1494,7 +2215,14 @@
    "/Users/alokbeniwal/leanplot-next/LeanPlot/Recipes/Basic/Axis3.lean",
    "/Users/alokbeniwal/leanplot-next/LeanPlot/Backend/Raster/Render.lean"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "gallery/GrassmannPlot/Volume.lean:22-42 has only voxels; gallery/Gallery/Index.lean:43 lists M-volume*/contour_volume* as pending a LeanPlot volume mark",
+   "remaining": "volume (mip/absorption ray march) mark and volumeslices recipe"
+  }
  },
  {
   "pkg": "Cartan (ext meshers)",
@@ -1510,7 +2238,14 @@
    "Cartan/Mesh/TetGen.lean (new)",
    "FlowGeometry/Mesh.lean (new)"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "no Delaunay/triangulate/tetrahedralize/chull in any .lean; FlowGeometry/Mesh.lean:83-302 has only structured meshes (rectangletriangles, initrakich, icosahedron sphereRefine)",
+   "remaining": "Constrained 2-D Delaunay with refinement, N-D Bowyer-Watson, convex hull, tet mesher, cubesphere/spheremesh/cubemesh"
+  }
  },
  {
   "pkg": "MeshTopology (perf)",
@@ -1526,12 +2261,19 @@
    "MeshTopology/Lagrange.lean",
    "docs/PERF.md"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "docs/PERF.md:77-92 MeshTopology table and :360 still lists degrees/elementfuns/lagrange3_nodes 5-19x slower; :110 'acceptable for one-shot setup'",
+   "remaining": "degrees (1.7 ms vs 85 \u00b5s), elementfuns Torus/Hopf, edgesindices (12 vs 3.2 ms), incidence (5.1 vs 2.4 ms), Lagrange node lists (24 vs 7 ms), BilinearTopology (1.3 ms vs 658 \u00b5s) remain slower; flat-buffer rewrite not done"
+  }
  },
  {
   "pkg": "Cartan (perf)",
   "symbol": "TensorField kernels (tabulate, scalar maps, flat linear ops, Grassmann products, reductions, evaluation) vs Julia",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Tests/Cartan/Bench.lean exists but is not wired anywhere: master Bench/Main.lean runs only math, MeshTopology and Fatou, and the in-flight harness has no cartan suite. Add it as a cartan suite that emits JSON like lean_mt.json and compares against oracle/cartan/bench.jl. Record the lean/julia ratios in docs/PERF.md; today no Cartan performance number is recorded anywhere.",
   "effort": "S",
   "priority": "P1",
@@ -1541,7 +2283,14 @@
    "oracle/cartan/bench.jl",
    "docs/PERF.md"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: Bench/Cartan.lean (cartan suite) wired in Bench/Main.lean:26; twin oracle/bench/cartan.jl. evidence: docs/PERF.md:571-650 records Lean/Julia ratios per case",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Cartan (ext)",
@@ -1554,12 +2303,19 @@
    "/Users/alokbeniwal/leanplot-next/LeanPlot/Backend/Text.lean (new)",
    "plot/CartanPlot/Terminal.lean (new)"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "no braille/ASCII canvas in LeanPlot bridge; gallery/Gallery/Index.lean:48 lists G10 terminal backend as pending",
+   "remaining": "UnicodePlots methods (lineplot\u2026spy, heatmap) and display override, or a documented SKIP decision"
+  }
  },
  {
   "pkg": "Cartan (ext)",
   "symbol": "ColorTypesExt raster; SpecialFunctions/Elliptic/JacobiElliptic field lifts",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "fix": "raster is a 100x100 count of norm(P wedge g) < delta; put it in the bridge and display it with the LeanPlot image mark. The special-function lifts are just TensorField.map once Bessel, Airy, gamma, elliptic K/E and Jacobi elliptic kernels exist in JuliaBase (port the SpecialFunctions.jl/Elliptic.jl algorithms).",
   "effort": "L",
   "priority": "P2",
@@ -1567,7 +2323,14 @@
    "plot/CartanPlot/Raster.lean (new)",
    "JuliaBase/Special/*.lean (new)"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl: gallery/GrassmannPlot/Raster.lean:21-44 raster (100x100 count, drawRaster image). tests: gallery/Gallery/Cartan/Recipes.lean:177 cartan-raster vs oracle dump",
+   "remaining": "SpecialFunctions/Elliptic/JacobiElliptic field lifts: no Bessel/Airy/gamma/elliptic K,E/Jacobi kernels in JuliaBase (only Cartan/Misc.lean:18 besseljzero)"
+  }
  },
  {
   "pkg": "Cartan",
@@ -1581,7 +2344,14 @@
    "Cartan/Product.lean",
    "Tests/Cartan/Grids.lean"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "only Cartan/Product.lean:19-48 FiberProductBundle exists (pre-existing); no MultilinearBundle, VolumeBundle, HomotopyBundle, FiberProduct or ComplexSpace definitions",
+   "remaining": "All five named types"
+  }
  },
  {
   "pkg": "Cartan / Adapode",
@@ -1595,7 +2365,14 @@
    "Cartan.lean",
    "Adapode.lean"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: Cartan/Aliases.lean:23-114 ScalarField\u2026ScalarMap/FaceMap/DiscontinuousMap abbrevs, :123-129 domain/codomain/isextrinsic. tests: Tests/Cartan/Unit.lean:37-41 (VectorField/ScalarField/RealFunction typecheck), :95-96 codomain/isextrinsic",
+   "remaining": "Missing: reverse maps-to notation, affinemanifold, an ElementMap name (only DiscontinuousMap), domain untested, and Adapode.lean does not import/re-export Cartan.Aliases"
+  }
  },
  {
   "pkg": "Cartan",
@@ -1609,7 +2386,14 @@
    "oracle/golden/cartan/slices.json",
    "Tests/Cartan/Slices.lean"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: Cartan/Slice.lean:127-143 variation/alteration/modification (GridBundle 2 only). tests: Tests/Cartan/Slices.lean:122-135 (element/variation.json: base and every leaf vs Julia)",
+   "remaining": "Only 2-D grids are implemented and tested; the 3-D forms (leaves of a 3-D field) asked for in the fix are not ported or dumped"
+  }
  },
  {
   "pkg": "Adapode (ext)",
@@ -1621,12 +2405,19 @@
   "files": [
    "plot/CartanPlot/Adapode.lean (new)"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "Adapode ODE exists (Adapode/ODE) and a generic graylines recipe (gallery/GrassmannPlot/Arrows.lean:358), but no lines(X, \u03be::Vector{Chain}, t)/lines(X, c, n) flow-line or advected-curve methods or gallery figures",
+   "remaining": "Flow-line and advected-curve bridge methods and figures"
+  }
  },
  {
   "pkg": "FlowGeometry (ext)",
   "symbol": "Makie.lines(N::Profile / Airfoil / DoubleArc); UnicodePlots lineplot/display",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "fix": "After the in-flight FlowGeometry port: lines(profile N) as a RealFunction colored by speed; lines(complex N) as the closed outline (fixing FG-B1, the TorusTopology shim); DoubleArc as upper, mean and lower lines. These are gallery W1/W2.",
   "effort": "S",
   "priority": "P1",
@@ -1634,7 +2425,14 @@
    "plot/CartanPlot/FlowGeometry.lean (new)",
    "gallery/Gallery/FlowGeometry.lean (new)"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl: FlowGeometry/Plot.lean:35-77 Profile.series, Airfoil.outlineSeries/camberSeries/doubleArcSeries, Joukowski.outlineSeries, wingGrid, Mesh.edgeSegments. tests: Tests/FlowGeometry/Airfoils.lean:99-105 (outlineSeries 2412 vs golden outline)",
+   "remaining": "No Makie/gallery W1-W4 figures (gallery/Gallery/Index.lean:46 still pending), no speed colouring, doubleArcSeries/Profile.series untested, no UnicodePlots lineplot"
+  }
  },
  {
   "pkg": "MeshTopology",
@@ -1648,12 +2446,19 @@
    "oracle/meshtopology/gen_simplex.jl",
    "Tests/MeshTopology/Simplex.lean"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: Cartan/Element.lean:236 laplacian (Julia convention), :240 graphLaplacian on SimplexBundle; MeshTopology/Element.lean:309 facetsWith, :277 facetsInterior. tests: Tests/Cartan/Element.lean:308-312 laplacian/graph laplacian",
+   "remaining": "No topology-level SimplexTopology.laplacian in MeshTopology, and no oriented boundary complex d(t) (dropping interior facets) on SimplexTopology"
+  }
  },
  {
   "pkg": "Cartan docs",
   "symbol": "fiber.md interactive sessions C1-C23 (curves with frames, attractors, streamplots, curvature-colored surfaces, geodesics, Hopf, Stokes) as gallery figures",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "fix": "After diffgeo and ODE land, build each figure in the gallery with the bridge, with oracle/gallery data dumps (curve samples, frames, curvatures, geodesic endpoints), and move it out of Gallery.Index.pending.",
   "effort": "L",
   "priority": "P1",
@@ -1662,12 +2467,19 @@
    "gallery/Gallery/Index.lean",
    "oracle/gallery/cartan_fiber.jl (new)"
   ],
-  "key": "geometry"
+  "key": "geometry",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl/tests: gallery/Gallery/Cartan/Fiber.lean:63-193 (cartan-bivector-*, conformal-stream-*, riemann curves, circle, sphere-wireframe, torus-tangent-stream, hopf) checked against oracle/gallery/data",
+   "remaining": "Most fiber.md sessions still pending (gallery/Gallery/Index.lean:25-40: C1, C2, C3, C4, C8, C10-C15, C17 sphere, C18-C23)"
+  }
  },
  {
   "pkg": "UnitSystems",
   "symbol": "q(v,U,S) / q(U,S) hot path (Conv.convert, Conv.factor)",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Performance gap. Measured with compiled code: 7,286 ns per call in Lean vs 0.58 ns in Julia for energy(v,English,Metric). Julia folds the factor into a constant; Lean recomputes the conversion chain (unit snaps plus an 11-slot ident test) on every call. Fix: mark Conv.convert @[inline] and route the factor through a @[noinline] Conv.factorOf q U S. With literal (q,U,S) that becomes a closed term the compiler hoists; Similitude's Quantity.factor already does this and costs 1.24 ns. Add a lazily filled (Conv x Sys x Sys) -> Thunk Num table, a Float fast path Conv.convertSys, and a bench row.",
   "effort": "S",
   "priority": "P0",
@@ -1676,12 +2488,19 @@
    "UnitSystems/Systems.lean",
    "Bench/"
   ],
-  "key": "units-applied"
+  "key": "units-applied",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: UnitSystems/Convert.lean:480 @[noinline] factorOf, :487 @[inline] convert, :544-549 floatFactor/convertF, :574-580 pairTable (Thunk), :587-595 convertSysNum/convertSys. tests: Tests/UnitSystems/FastPaths.lean:34-68 (convertSys/convertF bit-exact vs chains). bench: Bench/UnitSystems.lean:17-19 convert_literal",
+   "remaining": ""
+  }
  },
  {
   "pkg": "FieldAlgebra",
   "symbol": "@ring, Ring",
-  "status": "MISSING",
+  "status": "DONE",
   "fix": "Add FieldAlgebra/Ring.lean: sorted monomials over Group B with Julia's merge rules (ring.jl:89-228). Needs Group+Group -> Ring, Ring +/- Ring, Ring*Group, distributive Ring*Ring, division by a Group, evaluation, and show ('x + y\u00b2', 'x\u00b2 + y\u00b2\u22c5-1'). Add a ring command that shares the @group elaborator. Put the README cases and random rings into oracle/similitude/fieldalgebra.jl. The README example x+y^2 cannot be written in Lean today.",
   "effort": "M",
   "priority": "P0",
@@ -1691,7 +2510,14 @@
    "oracle/similitude/fieldalgebra.jl",
    "Tests/FieldAlgebra/Groups.lean"
   ],
-  "key": "units-applied"
+  "key": "units-applied",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl: FieldAlgebra/Ring.lean (Julia merge rules ring.jl:89-247), FieldAlgebra/Command.lean:51,88-120 ring! command sharing elabDecl. tests: Tests/FieldAlgebra/Rings.lean:24,46-49 (#guard README x+y\u00b2, (x+y)(x-y)), :67-112 ring goldens + 400 random rings",
+   "remaining": ""
+  }
  },
  {
   "pkg": "FieldAlgebra",
@@ -1704,7 +2530,14 @@
    "FieldAlgebra/Command.lean",
    "FieldAlgebra/Group.lean"
   ],
-  "key": "units-applied"
+  "key": "units-applied",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: FieldAlgebra/Command.lean:45-136 group!/group2!/constgroup!/ring! commands with value generators ((a := v), (c \u2261 v)) emitting values instances. tests: Tests/FieldAlgebra/Rings.lean:25 `group! Val (a := 1.5) \u2026` and value-basis goldens",
+   "remaining": "group2! and constgroup! syntax are never used under Tests/ (Groups.lean:18-21 still hand-builds the XYZ/Named Basis)"
+  }
  },
  {
   "pkg": "Similitude",
@@ -1718,12 +2551,19 @@
    "Similitude/Ratio.lean",
    "UnitSystems/Systems.lean"
   ],
-  "key": "units-applied"
+  "key": "units-applied",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: Similitude/Quantity.lean:105 zpow, :111 qpow with Dim.HasRoot, :115-130 dimensionless \u00b1 number, :204-222 Quantity\u00d7ConvertUnit and Quantity/Quantity\u2192ConvertUnit. tests: Tests/Similitude/QuantityExt.lean:24-58",
+   "remaining": "User-built unit systems (Sys.custom / SysLike carrying a UnitSystem Scalar) are not implemented: U still ranges over the 48 named Sys"
+  }
  },
  {
   "pkg": "Similitude",
   "symbol": "neper, bel, decibel, logdb/expdb/dB on Quantity (also MeasureSystems)",
-  "status": "MISSING",
+  "status": "DONE",
   "fix": "Add a log-dimension quantity: either LogQuantity U (b : LogBase) d \u03b1 or a log flag in Dim, with Quantity.log, log10 and logdb. Then define neper U := U.qty (log \ud835\udfd9) 1, and bel and decibel the same way. Registry display should print log(\ud835\udfd9) and dB(\ud835\udfd9). Remove the skip in Tests/Similitude/Derived.lean. The README lists these units.",
   "effort": "M",
   "priority": "P1",
@@ -1733,7 +2573,14 @@
    "Similitude/Registry.lean",
    "Tests/Similitude/Derived.lean"
   ],
-  "key": "units-applied"
+  "key": "units-applied",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl: Similitude/LogQuantity.lean:99-104 neper/bel/decibel as LogQuantity with log/log10/logdb. tests: Tests/Similitude/QuantityExt.lean:15 (neper/bel/decibel in all 48 systems), Tests/Similitude/Derived.lean:22-23 (skip removed)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Similitude",
@@ -1753,7 +2600,7 @@
  {
   "pkg": "Similitude",
   "symbol": "runtime ratio(D,U,S)",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Performance gap. Measured with compiled code: 269,784 ns per call in Lean vs 2,617 ns in Julia. Memoise per (Conv,U,S) in a lazy Thunk table like pairTable, and use a HashMap cache for arbitrary Dim keys. Store exact exponents as twelfths (Vector Int) instead of Vector Rat 44 in Group.mul/zpow, which avoids a gcd on every operation.",
   "effort": "M",
   "priority": "P1",
@@ -1761,12 +2608,19 @@
    "Similitude/Ratio.lean",
    "FieldAlgebra/Group.lean"
   ],
-  "key": "units-applied"
+  "key": "units-applied",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: Similitude/Ratio.lean:63-74 per-pair Thunk pairTable, :77-101 HashMap ratio cache (IO.Ref); FieldAlgebra/Group.lean:187-191 Exps with an Int fast case. tests: Tests/Similitude/Ratios.lean. bench: Bench/UnitSystems.lean:26-28 ratio_runtime",
+   "remaining": "(minor) no Lean/Julia number for ratio_runtime written into docs/PERF.md"
+  }
  },
  {
   "pkg": "MeasureSystems",
   "symbol": "lunarmass, siderealmonth, synodicmonth, siderealyear, jovianyear, RH",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Make \u03bcE\u263e = measurement(\"81.300568(3)\") a measured value, and let a group carry a measured coefficient (an MValue.grpM g c constructor or a Coef.meas case). Evaluate the affected Similitude formulas over that scalar. In this audit's probe, Lean drops the uncertainty: lunarmass prints 3.6943034122(74)e-8 vs Julia 3.69430341(14)e-8, and synodicmonth prints no \u00b1. The other 194 of 199 measured derived-unit displays match Julia exactly. Add a measured derived-unit golden.",
   "effort": "M",
   "priority": "P1",
@@ -1776,12 +2630,19 @@
    "oracle/measuresystems/gen.jl",
    "Tests/MeasureSystems/Goldens.lean"
   ],
-  "key": "units-applied"
+  "key": "units-applied",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: MeasureSystems/Derived.lean:35-54 lunarmass with measured \u03bcE\u263e, siderealyear/siderealmonth/synodicmonth/jovianyear over MValue, :134 RH. tests: Tests/MeasureSystems/Goldens.lean:119-150 derivedSuite (derived.json measured derived-unit goldens incl. these)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Geophysics",
   "symbol": "gravity(\u03d5,P); temperature/pressure/density at altitude",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Performance gap. Lean gravity(\u03d5, Earth) takes 19.2 ns vs Julia 2.8 ns because the Somigliana constants (\u03b3e, \u03b3p, k, e\u00b2) are recomputed per call. Cache them per planet in Planet.of, as Column.build does for columns. temperature, pressure and density are 1.6 to 2.3 times slower (8.2/24.3/24.3 ns vs 3.6/14.7/15.2 ns); specialise Column.eval per Op so the hot ops skip the match. sonicspeed, viscosity and kinematic are already 2.4 to 3.4 times faster. Record the Lean numbers in docs/PERF.md.",
   "effort": "S",
   "priority": "P1",
@@ -1790,12 +2651,19 @@
    "Geophysics/Atmosphere.lean",
    "docs/PERF.md"
   ],
-  "key": "units-applied"
+  "key": "units-applied",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: Geophysics/Planet.lean:44-73 Planet.of fills cached Somigliana/eccentricity constants; Geophysics/Atmosphere.lean:376-459 per-op evalInline (Column.temperature/pressure/density). bench: Bench/Geophysics.lean:45-55; docs/PERF.md:22 records geophysics numbers",
+   "remaining": "(pressure still 1.5x Julia per PERF.md:22)"
+  }
  },
  {
   "pkg": "UnitSystems",
   "symbol": "q(U,S) with runtime-chosen UnitSystem",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Performance gap. Measured 6,057 ns per call in Lean vs 74 ns in Julia. Beyond the P0 table, add an unboxed Float evaluation path (UnitAlg Float or a NumF scalar) for arbitrary systems, and keep Num only for bit-exact goldens.",
   "effort": "M",
   "priority": "P1",
@@ -1803,7 +2671,14 @@
    "UnitSystems/Alg.lean",
    "UnitSystems/Convert.lean"
   ],
-  "key": "units-applied"
+  "key": "units-applied",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: UnitSystems/Alg.lean:155-180 NumF unboxed Float scalar for UnitAlg. tests: Tests/UnitSystems/FastPaths.lean:14,39-68 (NumF chains vs Num). bench: Bench/UnitSystems.lean:15-20 convert_pairs_numf, convert_any",
+   "remaining": ""
+  }
  },
  {
   "pkg": "UnitSystems",
@@ -1821,7 +2696,7 @@
  {
   "pkg": "UnitSystems",
   "symbol": "ASCII aliases (Mu Ru SB hh cc m0 e0 ke me mp mu m\u1d64 ee FF Z0 G0 Eh a0 re g0 lP aL \u03f5\u2080 mpe meu mpu ainv aG), BTUftlb, atomicmass, intensity, temp, universal, US, units, GG (also MeasureSystems)",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Add alias keys to moduleConstants and abbrevs: abbrev atomicmass := dalton, abbrev universal := molargas, abbrev temp := Convert.temperature, abbrev Convert.intensity := Convert.irradiance, abbrev US := UnitSystem, BTUftlb = thermalunit British, and so on.",
   "effort": "S",
   "priority": "P2",
@@ -1831,12 +2706,19 @@
    "UnitSystems/Convert.lean",
    "UnitSystems/Derived.lean"
   ],
-  "key": "units-applied"
+  "key": "units-applied",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: UnitSystems/Registry.lean:187-197 aliasConstants (Mu Ru SB hh cc m0 e0 \u2026 ainv aG, BTUftlb), :166 GG, :215-229 atomicmass/universal/US/Convert.intensity/temp, Conv.intensity/temp. tests: Tests/UnitSystems/Scalars.lean:37-41 (every moduleConstants entry incl. aliases vs golden), Tests/UnitSystems/Aliases.lean",
+   "remaining": ""
+  }
  },
  {
   "pkg": "UnitSystems",
   "symbol": "cal\u1d62\u209c, cal\u209c\u2095, kcal\u1d62\u209c, kcal\u209c\u2095, eulergamma, golden, \u03c6; MeasureSystems \u03b4\u03bc\u2080",
-  "status": "MISSING",
+  "status": "DONE",
   "fix": "Add plain Num constants: .p (.int 4184), .p (.float 4186.8), and the cal values as kcal/1e3. Add Float values for the irrationals. Define \u03b4\u03bc\u2080 = productM \u03bc\u2080 - 4\u03c0\u00b71e-7 as a Measurement (Julia prints 6.9e-16 \u00b1 1.9e-16). Add golden rows.",
   "effort": "S",
   "priority": "P2",
@@ -1845,12 +2727,19 @@
    "MeasureSystems/Measures.lean",
    "oracle/unitsystems/systems.jl"
   ],
-  "key": "units-applied"
+  "key": "units-applied",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl: UnitSystems/Registry.lean:199-210 calories (kcal\u209c\u2095, cal\u1d62\u209c, \u2026) and irrationalConstants (eulergamma, golden, \u03c6); MeasureSystems \u03b4\u03bc\u2080. tests: Tests/UnitSystems/Scalars.lean:37-41; Tests/MeasureSystems/Goldens.lean:136-138 \u03b4\u03bc\u2080",
+   "remaining": ""
+  }
  },
  {
   "pkg": "UnitSystems",
   "symbol": "callable rescale (U)(JK,Js,ms,Hm,kg); show/unitname of an arbitrary system",
-  "status": "MISSING",
+  "status": "DONE",
   "fix": "Add UnitSystem.rescale following UnitSystems.jl:205-221 (\u03b1L/ms unless \u03b1L is one). Add Sys.ofSystem? : UnitSystem Num \u2192 Option Sys by ident, and a show that prints the system name or 'Unknown'. The documented example Metric(1.0,1.0,1.0,1.0,1.0) needs both.",
   "effort": "S",
   "priority": "P2",
@@ -1858,7 +2747,14 @@
    "UnitSystems/System.lean",
    "UnitSystems/Show.lean"
   ],
-  "key": "units-applied"
+  "key": "units-applied",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl: UnitSystem.rescale (used at Tests/UnitSystems/Extras.lean:85), UnitSystems/Convert.lean:649 ofSystem?, unitname. tests: Tests/UnitSystems/Extras.lean:81-88 (rescaled systems' slots and names vs extras.json)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "UnitSystems",
@@ -1872,7 +2768,14 @@
    "Tests/UnitSystems/Extras.lean",
    "UnitSystems/Text.lean"
   ],
-  "key": "units-applied"
+  "key": "units-applied",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: UnitSystems/Text.lean:12-282 textconstants/textderived/textquantities (generated). tests: Tests/UnitSystems/Extras.lean:99-104 (kilograms/slugs/feet/meters/moles/molecules vs extras.json), FastPaths.lean:103 Text.name?",
+   "remaining": "The 1658 docstring examples (doc_goldens.json, not in the repo) are not replayed as a test"
+  }
  },
  {
   "pkg": "FieldConstants",
@@ -1886,12 +2789,19 @@
    "FieldConstants/Num.lean",
    "oracle/unitsystems/floats.jl"
   ],
-  "key": "units-applied"
+  "key": "units-applied",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: FieldConstants/JNum.lean:140 exp2, :142 logb, :149 pow (x^Constant), :156 rpow (Constant^Rational), :161 toInt?, :170 isapprox. tests: Tests/FieldAlgebra/FieldConstants.lean:100-127 (constant_ops: isapprox, Int, exp2, log3, 2^)",
+   "remaining": "No Rational payload and no documented non-goal; JNum.rpow (Constant^Rational) has no test"
+  }
  },
  {
   "pkg": "FieldAlgebra",
   "symbol": "LogGroup/ExpGroup inverses, isonezero, Field, Composite, Polynomial",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "fix": "Add LogGroup.exp for any base (as an ExpGroup), ExpGroup.log/log2/log10/logb, b^LogGroup, and isonezero. Port field.jl and polynomial.jl last; they are experimental and undocumented.",
   "effort": "L",
   "priority": "P2",
@@ -1899,12 +2809,19 @@
    "FieldAlgebra/LogExp.lean",
    "FieldAlgebra/Field.lean"
   ],
-  "key": "units-applied"
+  "key": "units-applied",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl: FieldAlgebra/LogExp.lean:89-105 log/log2/log10/logb/logdb/exp\u2026, :215-266 LogGroup.exp/exp2/exp10/bpow (b^LogGroup), ExpGroup.logb/log/log2/log10, isonezero. tests: Tests/FieldAlgebra/Groups.lean:160-176 (inverses and isonezero vs goldens)",
+   "remaining": "field.jl (Field), Composite and polynomial.jl (Polynomial) are not ported"
+  }
  },
  {
   "pkg": "Similitude",
   "symbol": "Quantities, Unified as a system, ConvertUnit composition/log, d(v,U,S) for any Dim, morphism, display(::UnitSystem) with Quantity slots, LaTeX/markdown helpers (latexquotient, latexquantity, ...), @unitdim, @unitgroup",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "fix": "Add: a QScalar instance for Values n Float; Sys.Unified with hom = usqMap; ConvertUnit.mul/div; Dim.convert v U S; Sys.morphism; a printer for UnitSystem Scalar; a new Similitude/Latex.lean. For @unitdim and @unitgroup, add a runtime registry extension through an IO.Ref.",
   "effort": "M",
   "priority": "P2",
@@ -1914,12 +2831,19 @@
    "Similitude/Registry.lean",
    "Similitude/Latex.lean"
   ],
-  "key": "units-applied"
+  "key": "units-applied",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "MISSING",
+   "evidence": "impl: Similitude/Latex.lean:45-65 latexquantity/latexquantityConv/latexquotient; Similitude/Ratio.lean:188-190 ConvertUnit * and /; Quantity.lean:208-222 Quantity\u00d7ConvertUnit. tests: Tests/Similitude/Quotients.lean:65-72 latexquantity; Tests/Similitude/QuantityExt.lean:11-13",
+   "remaining": "Missing: QScalar for Values n Float (Quantities), Sys.Unified as a system, ConvertUnit log, d(v,U,S) for any Dim, Sys.morphism, a printer for UnitSystem Scalar with Quantity slots, @unitdim/@unitgroup runtime registry"
+  }
  },
  {
   "pkg": "MeasureSystems",
   "symbol": "named measured constants (eV \u03ba \u03c3 \u03bcB \u03b5\u2080 k\u2091 m\u209a Da \ud835\udd09 \u03a6\u2080 Z\u2080 G\u2080 E\u2095 a\u2080 r\u2091 Ry BTUJ BTUftlb kcal cal), sackurtetrode, derived-unit golden",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Add MeasureSystems/Constants.lean with typed defs, for example def eV := measured Units.electronvolt. Add sackurtetrode over MValue, which needs Measurement.log. Turn this audit's 199-row probe into a repo golden.",
   "effort": "S",
   "priority": "P2",
@@ -1928,7 +2852,14 @@
    "MeasureSystems/Measurement.lean",
    "Tests/MeasureSystems/Goldens.lean"
   ],
-  "key": "units-applied"
+  "key": "units-applied",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: MeasureSystems/Derived.lean:112-148 Constants (eV \u03ba \u03c3 \u03bcB \u03b5\u2080 k\u2091 m\u209a Da \ud835\udd09 \u03a6\u2080 Z\u2080 G\u2080 E\u2095 a\u2080 r\u2091 Ry BTUJ BTUftlb kcal cal \u2026) and table, sackurtetrode. tests: Tests/MeasureSystems/Goldens.lean:120-150 (derived.json golden, Constants.table lookup, sackurtetrode)",
+   "remaining": ""
+  }
  },
  {
   "pkg": "Geophysics",
@@ -1942,7 +2873,14 @@
    "Geophysics/Data.lean",
    "Geophysics/Units.lean"
   ],
-  "key": "units-applied"
+  "key": "units-applied",
+  "audit": {
+   "date": "2026-11-04",
+   "commit": "21581c6",
+   "was": "PARTIAL",
+   "evidence": "impl: Geophysics/Atmosphere.lean:722-770 all 20 *ratio wrappers; Geophysics/Data.lean:87-91 N2/O2/CO2/CH4/H2 abbrevs. tests: Tests/Geophysics/Weather.lean:86 (ratio wrappers)",
+   "remaining": "Unicode aliases N\u2082 O\u2082 CO\u2082 CH\u2084 H\u2082 missing (only ASCII abbrevs); user-built unit systems: Geophysics/Units.lean:86 Units.ofSys only takes a named Sys"
+  }
  },
  {
   "pkg": "Grassmann",
