@@ -36,10 +36,11 @@ def ic := InitialCondition.of (lorenz 10 28 (8 / 3)) chaosStart
   Robin assembly in Julia's summation order, `solveDirichlet`, `solvePoisson`, `poisson`,
   `solveTransport`, `solveTransportDiffusion`, `solveHeat`, the 1-D `adaptPoisson` loop,
   `solveWave`/`solveWaveDirichlet`, Allen–Cahn (`solveBistable`, `solveBistableNewton`),
-  `solveNonlinearPoisson` and plane-strain elasticity (checked against the Julia values of port
+  `solveNonlinearPoisson`, plane-strain elasticity, Crouzeix–Raviart Stokes (`solveStokes`) and
+  discontinuous Galerkin Poisson (`solvePoissonDIPG`) (checked against the Julia values of port
   notes §4.8, §6.1–6.2 and against second-order convergence, d'Alembert and the patch test).
 
-**Pending** (port notes §2.6-2.7, §4.7-4.10): Stokes, Navier–Stokes, Maxwell, DIPG,
+**Pending** (port notes §2.6-2.7, §4.7-4.10): Navier–Stokes, Maxwell,
 P2/isoparametric assembly and the 2-D `jumps` indicator of
 `src/element.jl`, and the spectral solvers of `src/grid.jl`/`ext/FFTWExt.jl` (Fourier/DCT/DST
 multipliers, Chebyshev Helmholtz/biharmonic/Orr–Sommerfeld/polar Laplacian).

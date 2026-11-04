@@ -556,4 +556,180 @@ def solveElastic (m : SimplexBundle 3 (HPoint V) G) (e : SimplexBundle k (HPoint
   let d := solveDirichlet K F fixed vals
   (Array.range m.totalNodes).map fun v => (d.get! (2 * v), d.get! (2 * v + 1))
 
+/-! ## Triangle edges, Crouzeix–Raviart Stokes and DIPG -/
+
+/-- The edges of a triangle mesh in Julia's local convention (edge `j` of an element is opposite
+vertex `j`): per element the three 0-based edge ids, the edges as 0-based node pairs (first
+appearance order), and per element and edge the 1-based neighbour across it (`0` on the
+boundary). -/
+structure TriEdges where
+  /-- `edgeOf[k][j]`: the edge opposite vertex `j` of element `k`. -/
+  edgeOf : Array (Array Nat)
+  /-- The edges `(a, b)`, `a < b`. -/
+  edges : Array (Nat × Nat)
+  /-- `nbr[k][j]`: the element (1-based) across edge `j` of `k`, `0` on the boundary. -/
+  nbr : Array (Array Nat)
+  deriving Inhabited
+
+/-- Build `TriEdges`. -/
+def triEdges (m : SimplexBundle 3 (HPoint V) G) : TriEdges := Id.run do
+  let mut ids : Std.HashMap (Nat × Nat) Nat := {}
+  let mut edges : Array (Nat × Nat) := #[]
+  let mut owners : Array (Array Nat) := #[]
+  let mut edgeOf : Array (Array Nat) := #[]
+  for k in [0:m.elements] do
+    let vs := verts m k
+    let mut row : Array Nat := #[]
+    for j in [0:3] do
+      let a := vs[(j + 1) % 3]!
+      let b := vs[(j + 2) % 3]!
+      let key := (min a b, max a b)
+      match ids.get? key with
+      | some e =>
+        row := row.push e
+        owners := owners.modify e (·.push k)
+      | none =>
+        let e := edges.size
+        ids := ids.insert key e
+        edges := edges.push key
+        owners := owners.push #[k]
+        row := row.push e
+    edgeOf := edgeOf.push row
+  let nbr := (Array.range m.elements).map fun k => (edgeOf[k]!).map fun e =>
+    match owners[e]!.find? (· != k) with
+    | some o => o + 1
+    | none => 0
+  return ⟨edgeOf, edges, nbr⟩
+
+/-- The boundary edges (used by one element), sorted. -/
+def TriEdges.boundary (t : TriEdges) : Array Nat :=
+  (Array.range t.edges.size).filter fun e =>
+    (Array.range t.nbr.size).any fun k => (Array.range 3).any fun j => t.edgeOf[k]![j]! == e && t.nbr[k]![j]! == 0
+
+/-- The midpoint of edge `e` as a homogeneous point. -/
+def edgeMid (m : SimplexBundle n (HPoint V) G) (t : TriEdges) (e : Nat) : HPoint V :=
+  let (a, b) := t.edges[e]!
+  Chain.ofFn fun c => (m.coord (a + 1) c.1 + m.coord (b + 1) c.1) / 2
+
+/-- Julia `assemblestokes(pt, ν, t2e)`: the Crouzeix–Raviart/P0 saddle-point matrix
+`[νA 0 B₁ᵀ 0; 0 νA B₂ᵀ 0; B₁ B₂ 0 m; 0 0 mᵀ 0]` on the unknowns (u at the edges, v at the edges,
+p per element, the mean-pressure multiplier): `A` the CR stiffness (`∇ψⱼ = −2∇φⱼ`, Julia's
+`gradientCR`) and `B_c[k, e] = −mₖ ∂_c ψ` (`assembledivergence(t2e, m, −gCR)`). -/
+def assembleStokes (m : SimplexBundle 3 (HPoint V) G) (t : TriEdges) (ν : Float := 0.1) : Sparse :=
+  Id.run do
+    let ne := t.edges.size
+    let nt := m.elements
+    let N := 2 * ne + nt + 1
+    let w := vols m
+    let g := grads m
+    let mut I : Array Nat := #[]
+    let mut J : Array Nat := #[]
+    let mut X : FloatArray := .empty
+    for k in [0:nt] do
+      let mk := w.get! k
+      let gcr := (Array.range 3).map fun j => g[k]![j]!.map (-2 * ·)
+      let es := t.edgeOf[k]!
+      for i in [0:3] do
+        for j in [0:3] do
+          let a := ν * (dot gcr[j]! gcr[i]! * mk)
+          I := I.push es[i]!; J := J.push es[j]!; X := X.push a
+          I := I.push (ne + es[i]!); J := J.push (ne + es[j]!); X := X.push a
+      for i in [0:3] do
+        for c in [0:2] do
+          let bkc := mk * (-(gcr[i]![c]!))
+          -- B_c[k, e] and its transpose
+          I := I.push (2 * ne + k); J := J.push (c * ne + es[i]!); X := X.push bkc
+          I := I.push (c * ne + es[i]!); J := J.push (2 * ne + k); X := X.push bkc
+      I := I.push (2 * ne + k); J := J.push (N - 1); X := X.push mk
+      I := I.push (N - 1); J := J.push (2 * ne + k); X := X.push mk
+    return Sparse.ofTriplets N N I J X
+
+/-- Julia `solvestokes(pt, bc, ν)` (no body force): the velocity at the edges (CR degrees of
+freedom) and the pressure per element (mean zero), with the velocity `bc` imposed at the
+midpoints of the boundary edges. -/
+def solveStokes (m : SimplexBundle 3 (HPoint V) G) (bc : HPoint V → Float × Float) (ν : Float := 0.1) :
+    Array (Float × Float) × FloatArray :=
+  let t := triEdges m
+  let ne := t.edges.size
+  let nt := m.elements
+  let L := assembleStokes m t ν
+  let be := t.boundary
+  let fixed := be ++ be.map (ne + ·)
+  let gv := be.map fun e => bc (edgeMid m t e)
+  let vals : FloatArray := ⟨gv.map (·.1) ++ gv.map (·.2)⟩
+  let ξ := solveDirichlet L ⟨Array.replicate (2 * ne + nt + 1) 0⟩ fixed vals
+  ((Array.range ne).map fun e => (ξ.get! e, ξ.get! (ne + e)),
+    ⟨(Array.range nt).map fun k => ξ.get! (2 * ne + k)⟩)
+
+/-- The discontinuous P1 copy of a triangle mesh (Julia's DIPG bundle): element `k`'s vertex `j`
+is the node `3k + j`. -/
+def discontinuous (m : SimplexBundle 3 (HPoint V) G) : SimplexBundle 3 (HPoint V) :=
+  let pts := (Array.range m.elements).flatMap fun k => (verts m k).map fun v =>
+    (Chain.ofFn fun c => m.coord (v + 1) c.1 : HPoint V)
+  SimplexBundle.ofPoints pts ((Array.range m.elements).map fun k => #v[3 * k + 1, 3 * k + 2, 3 * k + 3])
+
+/-- Julia `assembleDIPG(pt, nbrs)` (`P`, `S`) on the discontinuous copy `discontinuous m`, with the
+neighbours of the continuous mesh `m`: for every edge once (and every boundary edge), Simpson's
+rule at the endpoints and midpoint, jumps `[λ⁺; −λ⁻]`, `PE = Σ w_q J_q J_qᵀ` (the penalty over the
+edge length) and `SE = Σ w_q |e| J_q {∂ₙφ}ᵀ` (twice, without the average, on the boundary). -/
+def assembleDIPG (m : SimplexBundle 3 (HPoint V) G) : Sparse × Sparse := Id.run do
+  let t := triEdges m
+  let nt := m.elements
+  let np := 3 * nt
+  let g := grads m
+  let wq : Array Float := #[1 / 6, 4 / 6, 1 / 6]
+  let pt := fun (v c : Nat) => m.coord (v + 1) c
+  -- barycentrics of the point x on element k: λᵢ(x) = δᵢ₀ + ∇φᵢ·(x − p₀)
+  let bary := fun (k : Nat) (x : Array Float) => Id.run do
+    let p0 := (verts m k)[0]!
+    return (Array.range 3).map fun i =>
+      (if i == 0 then (1 : Float) else 0) + dot g[k]![i]! #[x[0]! - pt p0 1, x[1]! - pt p0 2]
+  let mut IP : Array Nat := #[]
+  let mut JP : Array Nat := #[]
+  let mut XP : FloatArray := .empty
+  let mut IS : Array Nat := #[]
+  let mut JS : Array Nat := #[]
+  let mut XS : FloatArray := .empty
+  for i in [0:nt] do
+    let vs := verts m i
+    for j in [0:3] do
+      let n0 := t.nbr[i]![j]!
+      if n0 > i + 1 then continue
+      let n := if n0 == 0 then i else n0 - 1
+      let a := vs[(j + 1) % 3]!
+      let b := vs[(j + 2) % 3]!
+      let xa := #[pt a 1, pt a 2]
+      let xb := #[pt b 1, pt b 2]
+      let dx : Float := xb[0]! - xa[0]!
+      let dy : Float := xb[1]! - xa[1]!
+      let len := Float.sqrt (dx * dx + dy * dy)
+      -- outward unit normal of edge j (away from vertex j)
+      let nrm0 := #[(xb[1]! - xa[1]!) / len, -(xb[0]! - xa[0]!) / len]
+      let toJ := #[pt vs[j]! 1 - xa[0]!, pt vs[j]! 2 - xa[1]!]
+      let nrm := if dot nrm0 toJ > 0 then nrm0.map (- ·) else nrm0
+      let avg := ((Array.range 3).map fun q => dot nrm g[i]![q]! / 2) ++
+        ((Array.range 3).map fun q => dot nrm g[n]![q]! / 2)
+      let qs := #[xa, #[(xa[0]! + xb[0]!) / 2, (xa[1]! + xb[1]!) / 2], xb]
+      let jumps : Array (Array Float) := qs.map fun x => bary i x ++ (bary n x).map (- ·)
+      let dofs := (Array.range 3).map (3 * i + ·) ++ (Array.range 3).map (3 * n + ·)
+      let size := if n == i then 3 else 6
+      for r in [0:size] do
+        for c in [0:size] do
+          let pe := (List.range 3).foldl (fun s q => s + jumps[q]![r]! * wq[q]! * jumps[q]![c]!) 0
+          let se := (List.range 3).foldl (fun s q => s + jumps[q]![r]! * (wq[q]! * len) * avg[c]!) 0
+          IP := IP.push dofs[r]!; JP := JP.push dofs[c]!; XP := XP.push pe
+          IS := IS.push dofs[r]!; JS := JS.push dofs[c]!; XS := XS.push (if n == i then 2 * se else se)
+  return (Sparse.ofTriplets np np IP JP XP, Sparse.ofTriplets np np IS JS XS)
+
+/-- Julia `solvepoissonDIPG(f, c, β, α)`: `(A − S + αSᵀ + βP) u = b` on the discontinuous copy
+(`α = −1` SIPG, `+1` NIPG, `0` IIPG; Dirichlet `u = 0` weakly through the penalty). Returns the
+discontinuous mesh and the nodal values (three per element). -/
+def solvePoissonDIPG (m : SimplexBundle 3 (HPoint V) G) (f : HPoint V → Float) (c β : Float)
+    (α : Float := -1) : SimplexBundle 3 (HPoint V) × FloatArray :=
+  let dm := discontinuous m
+  let b := dm.assembleload f
+  let A := assembleStiffness dm (fun _ => c)
+  let (P, S) := assembleDIPG m
+  (dm, (A - S + α * S.transpose + β * P).solve b)
+
 end Adapode.FEM

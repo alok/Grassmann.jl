@@ -235,10 +235,64 @@ def nonlinear : TestM Unit := do
   check "fem: bistable separates into the wells ±1"
     (sn.back!.get! 0 > 0.95 && sn.back!.get! 100 < -0.95) fun _ => s!"{sn.back!.get! 0}, {sn.back!.get! 100}"
 
+
+/-- Max-abs over the edges of `u − exact` at the edge midpoints. -/
+def stokesErr (m : SimplexBundle 3 (HPoint ℝ3)) (ex : HPoint ℝ3 → Float × Float)
+    (u : Array (Float × Float)) : Float :=
+  let t := triEdges m
+  (List.range t.edges.size).foldl (fun s e =>
+    let (x, y) := ex (edgeMid m t e)
+    max s (max (u[e]!.1 - x).abs (u[e]!.2 - y).abs)) 0
+
+/-- Stokes and DIPG checks. -/
+def mixed : TestM Unit := do
+  -- port notes §4.8: the 4×4 square's Stokes matrix is 145 × 145
+  let g4 := squareGrid 4
+  checkEq "fem: Stokes system size on the 4×4 square (Julia 145)" (assembleStokes g4 (triEdges g4)).rows 145
+  -- Crouzeix–Raviart reproduces a linear Stokes flow exactly (p = const)
+  let lin := fun (x : HPoint ℝ3) => (px x 1 + 0.5 * px x 2, 0.25 * px x 1 - px x 2)
+  let (ul, pl) := solveStokes g4 lin
+  check "fem: Stokes reproduces a linear flow" (stokesErr g4 lin ul ≤ 1e-12) fun _ => s!"{stokesErr g4 lin ul}"
+  check "fem: Stokes pressure is zero for a linear flow" (pl.data.all (·.abs ≤ 1e-11))
+  -- u = (y², x²), p = 2ν(x + y) − mean: velocity converges at second order at the midpoints
+  let ν := 0.1
+  let quad := fun (x : HPoint ℝ3) => (px x 2 ^ 2, px x 1 ^ 2)
+  let errs := [4, 8, 16].map fun k =>
+    let g := squareGrid k
+    let (u, p) := solveStokes g quad ν
+    let cs := meanPoints g
+    let pe := (List.range g.elements).foldl (fun s e =>
+      max s (p.get! e - 2 * ν * (px cs[e]! 1 + px cs[e]! 2 - 1)).abs) 0
+    (stokesErr g quad u, pe)
+  let e : Array (Float × Float) := errs.toArray
+  check "fem: Stokes velocity converges (÷ ≥ 3 per halving)" (e[0]!.1 / e[1]!.1 ≥ (3 : Float) && e[1]!.1 / e[2]!.1 ≥ (3 : Float))
+    fun _ => s!"{errs}"
+  check "fem: Stokes pressure converges" (e[2]!.2 < e[1]!.2 && e[1]!.2 < e[0]!.2 && e[2]!.2 < (0.02 : Float))
+    fun _ => s!"{errs}"
+  -- port notes §4.8: DIPG on the 2×2 square, Σ P = 8, tr P = 16, Σ S = 0, tr S = 10
+  let g2 := squareGrid 2
+  let (P, S) := assembleDIPG g2
+  let tr := fun (A : Sparse) => (List.range A.rows).foldl (fun s i => s + A.get i i) 0
+  check "fem: DIPG Σ P = 8 (Julia)" (near (sumAll P) 8 1e-12) fun _ => s!"{sumAll P}"
+  check "fem: DIPG tr P = 16 (Julia)" (near (tr P) 16 1e-12) fun _ => s!"{tr P}"
+  check "fem: DIPG Σ S = 0 (Julia)" ((sumAll S).abs ≤ 1e-12) fun _ => s!"{sumAll S}"
+  check "fem: DIPG tr S = 10 (Julia)" (near (tr S) 10 1e-12) fun _ => s!"{tr S}"
+  -- SIPG converges to sin πx sin πy
+  let π := 3.141592653589793
+  let exact := fun (x : HPoint ℝ3) => Float.sin (π * px x 1) * Float.sin (π * px x 2)
+  let dErr := fun (k : Nat) =>
+    let (dm, u) := solvePoissonDIPG (squareGrid k) (fun x => 2 * π * π * exact x) 1 10
+    let ex := nodalOf dm exact
+    (List.range dm.totalNodes).foldl (fun s i => max s (u.get! i - ex.get! i).abs) 0
+  let d8 := dErr 8
+  let d16 := dErr 16
+  check "fem: SIPG converges at second order" (d8 / d16 ≥ 3 && d16 < 0.01) fun _ => s!"{d8}, {d16}"
+
 /-- Run the FEM checks. -/
 def run : TestM Unit := do
   julia
   math
   nonlinear
+  mixed
 
 end Tests.AdapodeTests.Fem
