@@ -11,7 +11,10 @@ algebra):
   `Tests/Grassmann/Golden.lean`);
 * `types`, `extension`: static result types, storage orders, conversions, Julia
   display, inverses, and the `Kernels` extension point (`Tests/Grassmann/Types.lean`);
-* `conformal`: the conformal-model utilities in CGA2–CGA4 (`Tests/Grassmann/Conformal.lean`).
+* `conformal`: the conformal-model utilities in CGA2–CGA4 (`Tests/Grassmann/Conformal.lean`);
+* `identities`: classical identities (trace property of `⟨⟩₀`, antisymmetrised products,
+  contraction rules, `antisandwich`, `pseudograde`) in the `props` spaces
+  (`Tests/Grassmann/Identities.lean`).
 -/
 import Tests.Grassmann.Common
 import Tests.Grassmann.Props
@@ -19,6 +22,7 @@ import Tests.Grassmann.Kernel
 import Tests.Grassmann.Golden
 import Tests.Grassmann.Types
 import Tests.Grassmann.Conformal
+import Tests.Grassmann.Identities
 
 open GrassmannTests
 
@@ -29,7 +33,8 @@ def Tests.Grassmann.run : IO (Nat × Nat) := do
       ("grassmann/golden", Golden.run),
       ("grassmann/types", Types.run), ("grassmann/basis", Basis.run),
       ("grassmann/extension", Extension.run),
-      ("grassmann/conformal", ConformalSuite.run) ]
+      ("grassmann/conformal", ConformalSuite.run),
+      ("grassmann/identities", Identities.run) ]
   let mut pass := 0
   let mut fail := 0
   for (name, suite) in suites do
