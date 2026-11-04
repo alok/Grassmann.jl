@@ -116,3 +116,18 @@ source = "Adapode.jl src/grid.jl:142-149, 165-172"
 behavior = "B19: solvenonlinearhelmholtz(f, k, N[, M]) calls the undefined nonlinearhelmholtz; solveiteration loops without an iteration cap"
 port = "Adapode.Chebyshev.solveNonlinearHelmholtz1/2 run the Picard iteration from zero; solveIteration takes fuel and returns the iteration count (Trefethen p14: 29 iterations)"
 notes = "B19"
+
+[adapode-navierstokes]
+source = "Adapode.jl src/element.jl:233-285 (solvenavierstokes)"
+behavior = "the time loop never sets UVold = UVnew (every step restarts from rest), reads an undefined counter k, and subtracts B*P from the uninitialized slices UVs[:, l+1]; the intended loop is commented out below it"
+port = "Adapode.FEM.solveNavierStokes runs the intended Chorin loop; it reaches Poiseuille flow in a channel with an O(dt) splitting error (Tests/Adapode/Fem.lean)"
+
+[adapode-jumps-2d-residual]
+source = "Adapode.jl src/element.jl:615"
+behavior = "the 2-D element residual term is h_K·sqrt(norm(f − a u)/(3|K|)), which does not scale as an L² norm of the residual"
+port = "Adapode.FEM.jumps2 uses h_K·sqrt(|K| Σᵢ ρᵢ²/3); the flux-jump term follows Julia"
+
+[adapode-gradientmultilinear]
+source = "Adapode.jl src/element.jl:806-830"
+behavior = "the Q1 gradients omit the 1/2^d factor of shapemultilinear, so they are 2, 4 and 8 times too large in 1-, 2- and 3-D"
+port = "Adapode.FEM.gradientMultilinear differentiates shapeMultilinear (checked against finite differences)"

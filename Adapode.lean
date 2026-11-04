@@ -41,7 +41,9 @@ def ic := InitialCondition.of (lorenz 10 28 (8 / 3)) chaosStart
   `solveNonlinearPoisson`, plane-strain elasticity, Crouzeix–Raviart Stokes (`solveStokes`) and
   discontinuous Galerkin Poisson (`solvePoissonDIPG`), and P2 elements with isoparametric
   quadrature (`lagrange`, `assemblePN`, `solvePoissonPN`), and Maxwell with Nédélec edge elements
-  (`solveMaxwell`, real `κ²`) (checked against the Julia values of port
+  (`solveMaxwell`, and `solveMaxwellC` for complex `κ²`), Chorin's projection method for
+  Navier–Stokes (`solveNavierStokes`), the 2-D error indicator `jumps2` with `trilength` and
+  `trinormals`, and Q1 shapes (`shapeMultilinear`, `gradientMultilinear`) (checked against the Julia values of port
   notes §4.8, §6.1–6.2 and against second-order convergence, d'Alembert and the patch test).
 
 * `Adapode.Grid`: the spectral solvers of `src/grid.jl` and `ext/FFTWExt.jl`: heat, Riesz,
@@ -54,6 +56,4 @@ def ic := InitialCondition.of (lorenz 10 28 (8 / 3)) chaosStart
   Orr–Sommerfeld pencil and the polar Laplacian on the disk (odd-derivative signs fixed, B17), with
   shifted inverse iteration for their eigenvalues (checked against Trefethen's p14, p28, p38, p40).
 
-**Pending** (port notes §2.6, §4.7-4.10): Navier–Stokes, complex-κ Maxwell and the 2-D `jumps`
-indicator of `src/element.jl`.
 -/

@@ -368,6 +368,92 @@ def maxwell : TestM Unit := do
   check "fem: Nédélec centroid field converges" (e[2]!.2 < e[1]!.2 && e[1]!.2 < e[0]!.2 && e[2]!.2 < (0.1 : Float))
     fun _ => s!"{errs}"
 
+/-- A `kx × ky` grid of `[0, L] × [0, 1]`, two triangles per cell. -/
+def rectGrid (kx ky : Nat) (L : Float) : SimplexBundle 3 (HPoint ℝ3) :=
+  let id := fun (i j : Nat) => j * (kx + 1) + i + 1
+  let pts := (Array.range ((kx + 1) * (ky + 1))).map fun q =>
+    let i := q % (kx + 1)
+    let j := q / (kx + 1)
+    (Chain.ofFn fun c => #[1, L * i.toFloat / kx.toFloat, j.toFloat / ky.toFloat][c.1]! : HPoint ℝ3)
+  let tris := (Array.range (kx * ky)).flatMap fun q =>
+    let i := q % kx
+    let j := q / kx
+    #[#v[id i j, id (i + 1) j, id (i + 1) (j + 1)], #v[id i j, id (i + 1) (j + 1), id i (j + 1)]]
+  SimplexBundle.ofPoints pts tris
+
+/-- Navier–Stokes, complex Maxwell and the 2-D error indicator. -/
+def flow : TestM Unit := do
+  -- Poiseuille flow in [0, 2] × [0, 1]: parabolic inflow, penalty outflow, ν = 0.1. The steady
+  -- state is u = 4y(1 − y), v = 0, p = 8ν(2 − x); Chorin's splitting error is O(dt).
+  let m := rectGrid 16 8 2
+  let x := fun (i : Nat) => m.coord (i + 1) 1
+  let y := fun (i : Nat) => m.coord (i + 1) 2
+  let np := m.totalNodes
+  let bnd := (Array.range np).filter fun i => x i == 0 || x i == 2 || y i == 0 || y i == 1
+  let inflow := ((Array.range np).filter (x · == 0)).map fun i => (i, 4 * y i * (1 - y i), (0 : Float))
+  let outflow := ((Array.range np).filter (x · == 2)).map fun i => (i, (1e6 : Float))
+  let mid := (Array.range np).filter fun i => x i > 0.5 && x i < 1.5
+  let errs := [((0.01 : Float), 150), (0.005, 300)].map fun (dt, st) =>
+    let s := (solveNavierStokes m bnd inflow outflow 0.1 dt st st).back!
+    (mid.foldl (fun e i => max e (s.u.get! i - 4 * y i * (1 - y i)).abs) 0,
+     mid.foldl (fun e i => max e (s.v.get! i).abs) 0,
+     mid.foldl (fun e i => max e (s.p.get! i - 0.8 * (2 - x i)).abs) 0)
+  let (e1, e2) := (errs[0]!, errs[1]!)
+  check "fem: Navier–Stokes reaches Poiseuille flow mid-channel" (e1.1 < 0.01 && e1.2.1 < 0.01 && e1.2.2 < 0.06)
+    fun _ => s!"{errs}"
+  check "fem: Navier–Stokes splitting error is O(dt)" (e1.1 / e2.1 ≥ 1.8) fun _ => s!"{errs}"
+  -- complex κ²: curl curl E + κ²E = (π² + 1)E₀ has E = cE₀, c = (π² + 1)/(π² + κ²)
+  let π := 3.141592653589793
+  let E0 := fun (x : HPoint ℝ3) => (Float.sin (π * px x 2), Float.sin (π * px x 1))
+  let f := fun (x : HPoint ℝ3) => let (a, b) := E0 x; ((π * π + 1) * a, (π * π + 1) * b)
+  let (kr, ki) := ((1 : Float), (2 : Float))
+  let d := (π * π + kr) ^ 2 + ki ^ 2
+  let (cr, ci) := ((π * π + 1) * (π * π + kr) / d, -(π * π + 1) * ki / d)
+  let sc := fun (s : Float) (x : HPoint ℝ3) => let (a, b) := E0 x; (s * a, s * b)
+  let cerrs := [4, 8, 16].map fun k =>
+    let m := squareGrid k
+    let (t, ur, ui) := solveMaxwellC m (fun _ => (kr, ki)) (sc cr) 1 f (sc ci)
+    let tg := edgeTangents m t
+    (List.range t.edges.size).foldl (fun s e =>
+      let (a, b) := E0 (edgeMid m t e)
+      let tE := a * tg[e]!.1 + b * tg[e]!.2
+      max s (max (ur.get! e - cr * tE).abs (ui.get! e - ci * tE).abs)) (0 : Float)
+  let ce : Array Float := cerrs.toArray
+  check "fem: complex-κ Maxwell converges to cE₀" (ce[0]! / ce[1]! ≥ 1.8 && ce[1]! / ce[2]! ≥ 1.8 && ce[2]! < 0.05)
+    fun _ => s!"{cerrs}"
+  let g4 := squareGrid 4
+  let (_, u) := solveMaxwell g4 (fun _ => 1) E0 1 f
+  let (_, ur, ui) := solveMaxwellC g4 (fun _ => (1, 0)) E0 1 f
+  let dr := (List.range u.size).foldl (fun s e => max s (u.get! e - ur.get! e).abs) 0
+  check "fem: complex Maxwell with real κ² is the real solve" (dr < 1e-12 && ui.data.all (·.abs < 1e-12))
+    fun _ => s!"{dr}"
+  -- Q1 shapes: a partition of unity, nodal, and gradients that match finite differences
+  let rs : Array (Array Float) := #[#[0.3], #[0.3, -0.7], #[0.3, -0.7, 0.1]]
+  for r in rs do
+    let S := shapeMultilinear r
+    let dS := gradientMultilinear r
+    let fd := (Array.range r.size).map fun c =>
+      let h := 1e-6
+      let rp := r.set! c (r[c]! + h); let rm := r.set! c (r[c]! - h)
+      (Array.zipWith (fun a b => (a - b) / (2 * h)) (shapeMultilinear rp) (shapeMultilinear rm))
+    let err := (List.range S.size).foldl (fun e v =>
+      (List.range r.size).foldl (fun e c => max e (dS[v]![c]! - fd[c]![v]!).abs) e) 0
+    check s!"fem: Q1 shapes in {r.size}-D sum to 1 with exact gradients" ((S.foldl (· + ·) 0 - 1).abs < 1e-15
+      && err < 1e-9) fun _ => s!"{S} {err}"
+  let corner := shapeMultilinear #[1, -1, 1]
+  check "fem: Q1 shapes are nodal" (corner == #[0, 0, 0, 0, 0, 1, 0, 0]) fun _ => s!"{corner}"
+  -- the 2-D indicator vanishes on exact linear solutions and decreases as O(h) for −Δu = 1
+  let lin := nodalOf g4 fun x => 1 + 2 * px x 1 - px x 2
+  let η0 := jumps2 g4 1 0 (fun _ => 0) lin
+  check "fem: 2-D jumps vanish for a linear solution" (η0.data.all (·.abs < 1e-12)) fun _ => s!"{η0.data}"
+  let tot := [4, 8, 16].map fun k =>
+    let g := squareGrid k
+    let u := solvePoisson g g.boundary (fun _ => 1) (fun _ => 1)
+    Float.sqrt ((jumps2 g 1 0 (fun _ => 1) u).data.foldl (fun s e => s + e * e) 0)
+  let te : Array Float := tot.toArray
+  check "fem: 2-D jumps estimate decreases as O(h)" (te[0]! / te[1]! ≥ 1.6 && te[1]! / te[2]! ≥ 1.6)
+    fun _ => s!"{tot}"
+
 /-- Run the FEM checks. -/
 def run : TestM Unit := do
   julia
@@ -376,5 +462,6 @@ def run : TestM Unit := do
   mixed
   quadratic
   maxwell
+  flow
 
 end Tests.AdapodeTests.Fem

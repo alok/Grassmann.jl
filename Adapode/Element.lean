@@ -798,6 +798,36 @@ def isoparametric (xy : Array (Float × Float)) (dS : Array (Float × Float)) :
   let det := j11 * j22 - j12 * j21
   (dS.map fun (a, b) => ((j22 * a - j12 * b) / det, (-j21 * a + j11 * b) / det), det)
 
+/-- Julia `volumePN(xy, dS) = det(dS·xyᵀ)`: the Jacobian determinant at a quadrature point. -/
+def volumePN (xy : Array (Float × Float)) (dS : Array (Float × Float)) : Float :=
+  (isoparametric xy dS).2
+
+/-- The corners of `[−1, 1]^d` in Julia's multilinear order (axis 1 fastest, counter-clockwise
+in each square face): `(−,−), (+,−), (+,+), (−,+)` and the same at `t = ±1`. -/
+def multilinearCorners (d : Nat) : Array (Array Float) :=
+  let sq : Array (Array Float) := #[#[-1, -1], #[1, -1], #[1, 1], #[-1, 1]]
+  match d with
+  | 1 => #[#[-1], #[1]]
+  | 2 => sq
+  | 3 => (sq.map (· ++ #[-1])) ++ (sq.map (· ++ #[1]))
+  | _ => #[]
+
+/-- Julia `shapemultilinear(r…)`: the Q1 shape functions `Π(1 ± rᵢ)/2^d` on `[−1, 1]^d`
+(`d ≤ 3`). -/
+def shapeMultilinear (r : Array Float) : Array Float :=
+  let d := r.size
+  let sc := 1 / (2 ^ d.toFloat)
+  (multilinearCorners d).map fun σ =>
+    sc * (List.range d).foldl (fun (p : Float) c => p * ((1 : Float) + σ[c]! * r[c]!)) 1
+
+/-- Julia `gradientmultilinear(r…)`: the gradients of `shapeMultilinear`. Julia omits the factor
+`1/2^d` (defect `adapode-gradientmultilinear`), so its gradients are `2^d` times too large. -/
+def gradientMultilinear (r : Array Float) : Array (Array Float) :=
+  let d := r.size
+  let sc := 1 / (2 ^ d.toFloat)
+  (multilinearCorners d).map fun σ => (Array.range d).map fun c =>
+    sc * σ[c]! * (List.range d).foldl (fun (p : Float) c' => if c' == c then p else p * ((1 : Float) + σ[c']! * r[c']!)) 1
+
 /-- Julia `assemblemassPN` / `assemblestiffnessPN` together with the consistent load
 `bᵢ = Σ_q w_q det J f(x_q) Sᵢ(x_q)` (Julia's `PN` assembly has no load). -/
 def assemblePN (L : LagrangeMesh) (f : Float × Float → Float := fun _ => 0) :
@@ -934,5 +964,169 @@ def nedelecCentroids (m : SimplexBundle 3 (HPoint V) G) (t : TriEdges) (u : Floa
       let gq := g[k]![(a + 2) % 3]!
       let gp := g[k]![(a + 1) % 3]!
       (acc.1 + c * (gq[0]! - gp[0]!), acc.2 + c * (gq[1]! - gp[1]!))) (0, 0)
+
+/-! ## Complex-coefficient Maxwell -/
+
+/-- Julia `assemblemaxwell` with complex `κ²`: the real and imaginary parts of the edge matrix
+(`κ²` enters linearly through `nedelecLocal`) and the real load. -/
+def assembleMaxwellC (m : SimplexBundle 3 (HPoint V) G) (t : TriEdges) (κ2 : Nat → Float × Float)
+    (μ : Float := 1) (f : HPoint V → Float × Float := fun _ => (0, 0)) : Sparse × Sparse × FloatArray :=
+  let (Ar, b) := assembleMaxwell m t (fun k => (κ2 k).1) μ f
+  let (Ai, _) := assembleMaxwell m t (fun k => (κ2 k).2) μ f
+  let (A0, _) := assembleMaxwell m t (fun _ => 0) μ f
+  (Ar, Ai - A0, b)
+
+/-- Julia `solvemaxwell(κ, bc, μ, f̂)` for complex `κ²` (Julia returns undefined names after the
+solve, B11): the complex edge degrees of freedom `(re, im)`, from the real `2n × 2n` system
+`[Aᵣ −Aᵢ; Aᵢ Aᵣ]` with the tangential trace of the field `bc + i·bcIm` on the boundary edges. -/
+def solveMaxwellC (m : SimplexBundle 3 (HPoint V) G) (κ2 : Nat → Float × Float)
+    (bc : HPoint V → Float × Float) (μ : Float := 1) (f : HPoint V → Float × Float := fun _ => (0, 0))
+    (bcIm : HPoint V → Float × Float := fun _ => (0, 0)) : TriEdges × FloatArray × FloatArray :=
+  let t := triEdges m
+  let (Ar, Ai, b) := assembleMaxwellC m t κ2 μ f
+  let ne := t.edges.size
+  let A := block2 ne #[(Ar, 0, 0, 1), (Ai, 0, 1, -1), (Ai, 1, 0, 1), (Ar, 1, 1, 1)]
+  let tg := edgeTangents m t
+  let be := t.boundary
+  let vals : FloatArray := ⟨be.map fun e => let (x, y) := bc (edgeMid m t e); x * tg[e]!.1 + y * tg[e]!.2⟩
+  let valsIm : Array Float := be.map fun e => let (x, y) := bcIm (edgeMid m t e); x * tg[e]!.1 + y * tg[e]!.2
+  let rhs : FloatArray := ⟨b.data ++ Array.replicate ne 0⟩
+  let ξ := solveDirichlet A rhs (be ++ be.map (· + ne)) ⟨vals.data ++ valsIm⟩
+  (t, ⟨ξ.data.extract 0 ne⟩, ⟨ξ.data.extract ne (2 * ne)⟩)
+
+/-! ## Triangle geometry and the 2-D error indicator -/
+
+/-- Julia `trilength(t)`: per triangle the lengths of the edges opposite vertices 1, 2, 3. -/
+def trilength (m : SimplexBundle 3 (HPoint V) G) : Array (Array Float) :=
+  (Array.range m.elements).map fun k =>
+    let vs := verts m k
+    (Array.range 3).map fun j =>
+      let p := vs[(j + 1) % 3]!
+      let q := vs[(j + 2) % 3]!
+      Float.sqrt ((m.coord (q + 1) 1 - m.coord (p + 1) 1) ^ 2 + (m.coord (q + 1) 2 - m.coord (p + 1) 2) ^ 2)
+
+/-- Julia `trinormals(t)`: the edge lengths and the outward unit normals of the edges opposite
+vertices 1, 2, 3 (outward whatever the orientation of the triangle). -/
+def trinormals (m : SimplexBundle 3 (HPoint V) G) : Array (Array Float) × Array (Array (Float × Float)) :=
+  let ds := trilength m
+  let dn := (Array.range m.elements).map fun k =>
+    let vs := verts m k
+    (Array.range 3).map fun j =>
+      let (i, p, q) := (vs[j]!, vs[(j + 1) % 3]!, vs[(j + 2) % 3]!)
+      let ex := m.coord (q + 1) 1 - m.coord (p + 1) 1
+      let ey := m.coord (q + 1) 2 - m.coord (p + 1) 2
+      let l := ds[k]![j]!
+      let (nx, ny) := (ey / l, -ex / l)
+      -- outward: away from the opposite vertex
+      let sx := m.coord (i + 1) 1 - m.coord (p + 1) 1
+      let sy := m.coord (i + 1) 2 - m.coord (p + 1) 2
+      if nx * sx + ny * sy > 0 then (-nx, -ny) else (nx, ny)
+  (ds, dn)
+
+/-- The P1 gradient of the nodal values `u` on every element (Cartan `gradient_2`). -/
+def elementGradients (m : SimplexBundle n (HPoint V) G) (u : FloatArray)
+    (g : Array (Array (Array Float)) := grads m) : Array (Array Float) :=
+  (Array.range m.elements).map fun k =>
+    let vs := verts m k
+    (Array.range (V.n - 1)).map fun c =>
+      (List.range n).foldl (fun s i => s + u.get! vs[i]! * g[k]![i]![c]!) 0
+
+/-- Julia `jumps(t, c, a, f, u)` on a triangle mesh: the residual indicator
+`ηₖ = √(½ Σₑ (|e|·|[c ∂ₙu]ₑ|)²) + hₖ √(|K| Σᵢ ρᵢ²/3)` with the flux jumps across the interior edges
+and the nodal residual `ρ = f − a u`. Julia's residual term is `hₖ √(‖ρ‖/(3|K|))`, which does not
+scale as a norm (defect `jumps-2d-residual`). -/
+def jumps2 (m : SimplexBundle 3 (HPoint V) G) (c a : Float) (f : HPoint V → Float) (u : FloatArray) :
+    FloatArray := Id.run do
+  let (ds, dn) := trinormals m
+  let du := elementGradients m u
+  let t := triEdges m
+  let fn := nodalOf m f
+  let w := vols m
+  -- the flux jump on every edge: Σ over its elements of −c n·∇u
+  let mut jump : FloatArray := ⟨Array.replicate t.edges.size 0⟩
+  for k in [0:m.elements] do
+    for j in [0:3] do
+      let e := t.edgeOf[k]![j]!
+      let (nx, ny) := dn[k]![j]!
+      jump := jump.set! e (jump.get! e + -c * (nx * du[k]![0]! + ny * du[k]![1]!))
+  let mut η : FloatArray := .empty
+  for k in [0:m.elements] do
+    let vs := verts m k
+    let sq := (List.range 3).foldl (fun s j =>
+      let e := t.edgeOf[k]![j]!
+      let J := if t.nbr[k]![j]! == 0 then 0 else jump.get! e
+      s + (ds[k]![j]! * J) ^ 2) 0
+    let ρ2 := (List.range 3).foldl (fun s i => s + (fn.get! vs[i]! - a * u.get! vs[i]!) ^ 2) 0
+    let h := ds[k]!.foldl max 0
+    η := η.push (Float.sqrt (sq / 2) + h * Float.sqrt (w.get! k * ρ2 / 3))
+  return η
+
+/-! ## Navier–Stokes: Chorin's projection method -/
+
+/-- One recorded state of `solveNavierStokes`: the nodal velocity components and the pressure of
+the projection step that produced them. -/
+structure FlowState where
+  /-- `u` at the nodes. -/
+  u : FloatArray
+  /-- `v` at the nodes. -/
+  v : FloatArray
+  /-- The pressure (zero for the initial state). -/
+  p : FloatArray
+  deriving Inhabited
+
+/-- Julia `solvenavierstokes(pt, pe, inbc, outbc, ν, T, skip)`: incompressible flow by Chorin's
+projection method on P1 elements (Larson–Bengzon §12.6), from rest, with explicit steps of `dt`:
+1. the tentative velocity `u* = u − dt M⁻¹(νA + C(u)) u` (lumped mass `M`, convection `C` by the
+   element-mean velocity); `u* = 0` on the no-slip nodes `boundary \ outflow`, then the inflow
+   profile is added on the inflow nodes;
+2. the pressure `(A + R) p = −(Bₓu* + B_y v*)/dt`, `R` the outflow penalty weights;
+3. the update `u = u* − dt M⁻¹ (Bₓ p, B_y p)`.
+
+Julia's loop never updates the old velocity, reads an undefined counter and subtracts from
+uninitialized storage (defect `adapode-navierstokes`); this is the commented-out intended loop.
+Returns every `skip`-th state, the initial one first. -/
+def solveNavierStokes (m : SimplexBundle 3 (HPoint V) G) (boundary : Array Nat)
+    (inflow : Array (Nat × Float × Float)) (outflow : Array (Nat × Float)) (ν : Float := 0.001)
+    (dt : Float := 0.01) (steps : Nat := 100) (skip : Nat := 1) : Array FlowState := Id.run do
+  let np := m.totalNodes
+  let w := vols m
+  let g := grads m
+  let A := assembleStiffness m (fun _ => 1) w g
+  let Bx := assembleConvection m (fun _ => #[1, 0]) w g
+  let By := assembleConvection m (fun _ => #[0, 1]) w g
+  let mut lumped : FloatArray := ⟨Array.replicate np 0⟩
+  for k in [0:m.elements] do
+    for v in verts m k do lumped := lumped.set! v (lumped.get! v + w.get! k / 3)
+  let dtiM : FloatArray := ⟨lumped.data.map (dt / ·)⟩
+  let isOut := outflow.foldl (fun (s : Array Bool) (i, _) => s.set! i true) (Array.replicate np false)
+  let noslip := boundary.filter fun i => isOut[i]! == false
+  let R := Sparse.diagm (outflow.foldl (fun (d : FloatArray) (i, r) => d.set! i r) ⟨Array.replicate np 0⟩)
+  let some F := Sparse.cholesky (A + R) | return #[]
+  let νA := ν * A
+  let zero : FloatArray := ⟨Array.replicate np 0⟩
+  let mut u := zero
+  let mut v := zero
+  let mut out : Array FlowState := #[⟨u, v, zero⟩]
+  for l in [0:steps] do
+    let C := assembleConvection m (fun k =>
+      let vs := verts m k
+      #[(vs.foldl (fun s i => s + u.get! i) 0) / 3, (vs.foldl (fun s i => s + v.get! i) 0) / 3]) w g
+    let K := νA + C
+    let Ku := K.mulVec u
+    let Kv := K.mulVec v
+    let mut us : FloatArray := ⟨(Array.range np).map fun i => u.get! i - Ku.get! i * dtiM.get! i⟩
+    let mut vs : FloatArray := ⟨(Array.range np).map fun i => v.get! i - Kv.get! i * dtiM.get! i⟩
+    for i in noslip do
+      us := us.set! i 0; vs := vs.set! i 0
+    for (i, a, b) in inflow do
+      us := us.set! i (us.get! i + a); vs := vs.set! i (vs.get! i + b)
+    let div := vadd (Bx.mulVec us) (By.mulVec vs)
+    let p : FloatArray := ⟨(F.solve div).data.map (· / -dt)⟩
+    let px := Bx.mulVec p
+    let py := By.mulVec p
+    u := ⟨(Array.range np).map fun i => us.get! i - px.get! i * dtiM.get! i⟩
+    v := ⟨(Array.range np).map fun i => vs.get! i - py.get! i * dtiM.get! i⟩
+    if (l + 1) % skip == 0 then out := out.push ⟨u, v, p⟩
+  return out
 
 end Adapode.FEM

@@ -2027,7 +2027,7 @@
  {
   "pkg": "Adapode",
   "symbol": "FEM (element.jl, 44 symbols): assemble, assembleglobal, assemblestiffness, assemblemass, assemblemassload, assemblemassincidence, assemblerobin, assembleconvection, assembleSD, assembledivergence, assemblestokes, assemblemaxwell, assembleelastic, assembleDIPG, assemblemassPN, assemblestiffnessPN, solvepoisson, solvedirichlet, solveheat, solvewave, solvetransport, solvetransportdiffusion, adaptpoisson, solvestokes, solvenavierstokes, solvemaxwell, solveelastic, solvenonlinearpoisson, solvebistable(_newton), solvepoissonDIPG, jumps, nedelec, nedelecmean, shapeP1/P2, gradientP1/P2, isoparametric, volumePN, volumesPN, gradientCR, trilength, trinormals",
-  "status": "PARTIAL",
+  "status": "DONE",
   "fix": "Port adapode.md \u00a72.6 and \u00a74.7-4.8 on top of Cartan Element (volumes, gradienthat, assembleload): local P1 mass/stiffness/convection/SD kernels as unrolled Values code, a global scatter into the sparse layer, Robin/Dirichlet handling, and the solvers. Fix upstream bugs B11, B13, B15 and the broken 2-D `jumps` branch rather than copying them. Take goldens from adapode.md \u00a76.1 (assemblemassload solves, backward-Euler heat, the adaptpoisson node sequence) via a new oracle/adapode/gen_fem.jl. Adapode.lean on master is a one-line stub, and FEM is not in the in-flight list.",
   "effort": "L",
   "priority": "P0",
@@ -2047,10 +2047,10 @@
   "key": "geometry",
   "audit": {
    "date": "2026-11-04",
-   "commit": "master",
-   "was": "MISSING",
-   "evidence": "Adapode/Element.lean: massEntry, assembleGlobal, assembleMass, assembleStiffness, assembleConvection, assembleSD, assembleMassIncidence, assembleMassLoad, assemble, assembleRobin, solveDirichlet, solvePoisson, poisson, solveTransport, solveTransportDiffusion, solveHeat, jumps1, adaptPoisson; Tests/Adapode/Fem.lean: runtests.jl L\u00b2 projections, backward-Euler heat, README R16 solveheat and the full adaptpoisson run (element counts, \u03f5, final nodes) to 1e-9, plus Robin sums, nodal exactness, O(h\u00b2) convergence and the disk eigenvalue on Cartan.Mesher meshes; solveWave (Julia overwrite) and solveWaveDirichlet, solveBistable, solveBistableNewton, jacobianResidue/solveNonlinearPoisson (Julia Newton log 0.0625, 2.71e-5, 1.53e-11 reproduced), lame, assembleElastic/solveElastic (B11 fixed; patch test exact); triEdges, assembleStokes/solveStokes (CR\u2013P0; Julia size 145 on the 4\u00d74 square, linear flows exact, second-order velocity), discontinuous, assembleDIPG/solvePoissonDIPG (Julia sums \u03a3P=8, trP=16, \u03a3S=0, trS=10 on the 2\u00d72 square; SIPG second order); shapeP1/P2, gradientP1/P2, lagrange (LagrangeP2), quadrature (GaussShape/GaussGradient), isoparametric, assemblePN (mass/stiffness PN, P2 no longer throws), solvePoissonPN (quadratics exact, third order); nedelecLocal (Julia closed form = direct integration), edgeSigns (facetsigns), assembleMaxwell/solveMaxwell/nedelecCentroids (real \u03ba\u00b2; edge values and centroid field converge to a manufactured curl\u2013curl solution)",
-   "remaining": "Navier\u2013Stokes (B15), complex \u03ba in Maxwell, the 2-D jumps indicator, trilength/trinormals/volumesPN as public helpers, multilinear Q1 shapes, oracle/adapode/gen_fem.jl (fem1d.json bitwise matrices)"
+   "commit": "ff82dbb+fem",
+   "was": "PARTIAL",
+   "evidence": "Adapode.Element now also has solveNavierStokes (Chorin, Julia's intended loop; Poiseuille test), assembleMaxwellC/solveMaxwellC (complex kappa^2, converges to cE0), jumps2 + trilength + trinormals (O(h) estimate), volumePN, shapeMultilinear/gradientMultilinear (Julia's 2^d gradient bug fixed)",
+   "remaining": "no oracle/adapode/gen_fem.jl (Julia goldens are the port-notes values); the elasticity edgeresiduals/elementresiduals adaptivity helpers are not ported"
   }
  },
  {
