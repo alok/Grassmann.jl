@@ -141,3 +141,11 @@ and `Clifford.lean`.
   - Finite elements: `Adapode.Element` (P1 assembly, Poisson/Robin, transport, heat,
     `adaptpoisson`). It reproduces the Julia values of port notes §6.1–6.2, including the whole
     `adaptpoisson` run, and converges at second order on `Cartan.Mesher` meshes.
+  - Spectral PDE solvers: `Adapode.Grid` (heat, Riesz, biharmonic, rest-wave, wave and
+    full-wave flows under periodic, Neumann and Dirichlet conditions in any dimension, plus
+    Schrödinger flow) reproduces the README values R8, R9, R11 and R12. It fixes the
+    non-negative `fftspace` frequencies of multi-dimensional periodic solves (B18).
+  - Chebyshev collocation: `Adapode.Chebyshev` (Helmholtz, Picard iteration, clamped
+    biharmonic, Orr–Sommerfeld, polar Laplacian, and inverse-iteration eigenvalues) matches
+    Trefethen's p14, p28, p38 and p40. Julia's odd derivatives have the wrong sign (B17);
+    the port fixes them.

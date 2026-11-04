@@ -2056,25 +2056,25 @@
  {
   "pkg": "Adapode",
   "symbol": "grid/spectral PDE solvers (34 symbols): dirichlet!, reshapedirichlet, reshapepolardirichlet, solvepolardirichlet, solveiteration, helmholtz, solvehelmholtz, solvenonlinearhelmholtz, polarlaplacian, biharmonic, orrsommerfeld, heat/restwave/biharmonic/riesz x periodic/neumann/dirichlet, wave/fullwave periodic/neumann, wavedirichlet, schrodingerperiodic, *multiplier",
-  "status": "MISSING",
+  "status": "DONE",
   "fix": "Implement adapode.md \u00a72.7 and \u00a74.9-4.10 over Cartan Spectral (rfft/irfft, DCT-II/III, DST via r2r) and the dense LU. The multiplier functions are closed forms; the periodic, neumann and dirichlet solvers are ifft(fft(u0) .* mult.(k,t)). Time-series overloads stack results along a new last axis, which needs assign!/pushAxis. Fix the B17 sign bugs and B19 (the biharmonic scalar forms and the missing fullwaveneumann import). Use the README R8-R12 sums and probe values from adapode.md \u00a76.2 as goldens.",
   "effort": "M",
   "priority": "P0",
   "files": [
-   "Adapode/Grid/Dirichlet.lean (new)",
-   "Adapode/Grid/Chebyshev.lean (new)",
-   "Adapode/Grid/Multipliers.lean (new)",
-   "Adapode/Grid/Spectral.lean (new)",
-   "oracle/adapode/gen_grid.jl (new)",
-   "Tests/Adapode/Grid.lean (new)"
+   "Adapode/Grid.lean",
+   "Adapode/Chebyshev.lean",
+   "Cartan/Spectral/FFT.lean (RODFT01 via FFT)",
+   "Tests/Adapode/Grid.lean",
+   "Tests/Adapode/Chebyshev.lean",
+   "oracle/adapode/defects.toml"
   ],
   "key": "geometry",
   "audit": {
    "date": "2026-11-04",
-   "commit": "21581c6",
+   "commit": "53c35cd+chebyshev",
    "was": "MISSING",
-   "evidence": "no multiplier/helmholtz/dirichlet solvers anywhere (rg); prerequisites exist: Cartan/Spectral/FFT.lean, Cartan/Solve/Dense.lean",
-   "remaining": "All 34 grid/spectral PDE solver symbols"
+   "evidence": "Adapode.Grid: heat/riesz/biharmonic/restwave/wave/fullwave x periodic/Neumann/Dirichlet in any dimension, Schrodinger, multipliers, series; README R8, R9, R11, R12 goldens to 1e-12. Adapode.Chebyshev: helmholtz 1-D/2-D, solvehelmholtz, solveiteration, solvenonlinearhelmholtz, biharmonic 1-D/2-D, orrsommerfeld, polarlaplacian, (re)shape(polar)dirichlet, eigenvalues by inverse iteration matching Trefethen p14/p28/p38/p40. B17, B18, B19 fixed.",
+   "remaining": "TensorField wrappers exist only for 1-D axes (n-D solvers take Array Axis + column-major data); no oracle/adapode/gen_grid.jl (goldens are the README values recorded in port notes)"
   }
  },
  {

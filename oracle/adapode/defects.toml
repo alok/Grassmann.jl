@@ -104,3 +104,15 @@ notes = "B19"
 source = "Adapode.jl src/grid.jl:256-330, ext/FFTWExt.jl:33-87 (assign!(out, 1, u0))"
 behavior = "the time-series solvers store u0 as slice 1 whatever t[1] is"
 port = "Adapode.Grid.series stores the solution at every t[i], u0 itself when t[i] = 0 (the README's 0:0.01:2π series agree)"
+
+[adapode-chebyshev-odd-derivatives]
+source = "Adapode.jl src/grid.jl:177-212 with Cartan.jl ChebyshevMatrix(::Chebyshev) (descending nodes)"
+behavior = "B17: biharmonic, orrsommerfeld and polarlaplacian differentiate Julia's ascending Chebyshev points with the descending-node matrix (−d/dx), so the −8xD³ term and the (1/r)∂_r term change sign"
+port = "Adapode.Chebyshev uses d/dx on the nodes it collocates on; the clamped-beam, Orr–Sommerfeld (R = 5772) and disk eigenvalues match Trefethen's p38, p40 and p28 (Tests/Adapode/Chebyshev.lean)"
+notes = "B17"
+
+[adapode-nonlinear-helmholtz]
+source = "Adapode.jl src/grid.jl:142-149, 165-172"
+behavior = "B19: solvenonlinearhelmholtz(f, k, N[, M]) calls the undefined nonlinearhelmholtz; solveiteration loops without an iteration cap"
+port = "Adapode.Chebyshev.solveNonlinearHelmholtz1/2 run the Picard iteration from zero; solveIteration takes fuel and returns the iteration count (Trefethen p14: 29 iterations)"
+notes = "B19"

@@ -2,6 +2,7 @@ import Adapode.Constants
 import Adapode.ODE
 import Adapode.Element
 import Adapode.Grid
+import Adapode.Chebyshev
 
 /-!
 # Adapode: adaptive ODE (and, later, PDE) solvers
@@ -48,7 +49,11 @@ def ic := InitialCondition.of (lorenz 10 28 (8 / 3)) chaosStart
   Dirichlet (DST) conditions in any dimension, Schrödinger flow, and their time series (checked
   against the README values R8, R9, R11, R12 and the semigroup, conservation and unitarity laws).
 
-**Pending** (port notes §2.6-2.7, §4.7-4.10): Navier–Stokes, complex-κ Maxwell and the 2-D `jumps`
-indicator of `src/element.jl`, and the Chebyshev collocation operators of `src/grid.jl`
-(Helmholtz, biharmonic, Orr–Sommerfeld, polar Laplacian).
+* `Adapode.Chebyshev`: Chebyshev collocation of `src/grid.jl`: the 1-D and 2-D Dirichlet Helmholtz
+  operators and solves, the Picard iteration for `u″ + k²u = f(u)`, the clamped biharmonic, the
+  Orr–Sommerfeld pencil and the polar Laplacian on the disk (odd-derivative signs fixed, B17), with
+  shifted inverse iteration for their eigenvalues (checked against Trefethen's p14, p28, p38, p40).
+
+**Pending** (port notes §2.6, §4.7-4.10): Navier–Stokes, complex-κ Maxwell and the 2-D `jumps`
+indicator of `src/element.jl`.
 -/
