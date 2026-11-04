@@ -157,5 +157,34 @@ def run : TestM Unit := do
   let q := Axis.colon 0 0.25 1
   checkFloats "spectral FourierCosine(2, t)" ⟨(Array.range q.length).map fun i => FourierCosine.f 2 (q.get i)⟩
     (← fl sj "cos2") libm
+  -- 7. FFTs of arrays of elements (Grassmann.jl's AbstractFFTs glue)
+  let V := DirectSum.TensorBundle.euclidean 3
+  let B : UInt64 := 0b011
+  let zs : Array (Grassmann.Couple V Float) := (Array.range 12).map fun k =>
+    let t := k.toUInt64.toFloat
+    ⟨B, F64.cos (0.7 * t) + 0.1 * t, F64.sin (1.3 * t) - 0.05 * t * t⟩
+  let reim := fun (cs : Array (Grassmann.Couple V Float)) => Elements.toCVec cs
+  match Elements.fft zs, Elements.ifft zs, Elements.bfft zs with
+  | some f, some fi, some fb =>
+    checkRel "spectral fft(couples) = fft(re + i·im)" (reim f) (fft (Elements.toCVec zs)) 1e-15
+    checkRel "spectral bfft(couples)" (reim fb) (bfft (Elements.toCVec zs)) 1e-15
+    check "spectral fft(couples) keeps the blade" (f.all (·.bits == B) && fi.all (·.bits == B))
+      fun _ => "blade changed"
+    match Elements.ifft f with
+    | some back => checkRel "spectral ifft(fft(couples)) = id" (reim back) (reim zs) 1e-13
+    | none => check "spectral ifft(fft(couples))" false fun _ => "mixed blades"
+  | _, _, _ => check "spectral fft(couples)" false fun _ => "mixed blades"
+  let mixed : Array (Grassmann.Couple V Float) := #[⟨B, 1, 0⟩, ⟨0b101, 1, 0⟩]
+  check "spectral fft of mixed blades is an error" (Elements.fft mixed).isNone fun _ => "accepted"
+  -- phasors go through complexify; scalars through Real
+  let ps : Array (Grassmann.Phasor V Float) := (Array.range 8).map fun k =>
+    ⟨1 + k.toUInt64.toFloat / 4, ⟨B, 0, 0.3 * k.toUInt64.toFloat⟩⟩
+  match Elements.fftPhasors ps, Elements.fft (ps.map Grassmann.Phasor.complexify) with
+  | some a, some b => checkRel "spectral fft(phasors) = fft(complexify)" (reim a) (reim b) 0
+  | _, _ => check "spectral fft(phasors)" false fun _ => "mixed blades"
+  let xs : FloatArray := ⟨(Array.range 10).map fun k => F64.sin (k.toUInt64.toFloat)⟩
+  checkRel "spectral fft(scalars) = fft(real)" (reim (Elements.fftScalars (V := V) B xs))
+    (fft (CVec.ofReal xs)) 0
+  checkRel "spectral rfft(scalars) = rfft(real)" (reim (Elements.rfftScalars (V := V) B xs)) (rfft xs) 0
 
 end Tests.CartanTests.SpectralTests

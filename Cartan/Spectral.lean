@@ -1,4 +1,5 @@
 import Cartan.Spectral.FFT
+import Cartan.Spectral.Elements
 import Cartan.Solve.Dense
 import Cartan.Algebra
 
