@@ -2,6 +2,7 @@ import Bench.Harness
 import Cartan
 import Cartan.Element
 import Cartan.Spectral
+import Cartan.Mesher
 
 /-!
 # `cartan`: tensor-field kernels
@@ -135,6 +136,17 @@ def suite : Suite := ⟨"cartan", do
   let z : Spectral.CVec := ⟨(Array.range (2 * nf)).map fun k => Float.sin (Float.ofNat k * 0.001)⟩
   bench "fft_c" (ops := nf) (param := s!"{nf}") fun s => chkA (Spectral.fft (blackBox s z))
   bench "rfft_r" (ops := nf) (param := s!"{nf}") fun s =>
-    chkA (Spectral.rfft (blackBox s ⟨(Array.range nf).map fun k => z.get! (2 * k)⟩))⟩
+    chkA (Spectral.rfft (blackBox s ⟨(Array.range nf).map fun k => z.get! (2 * k)⟩))
+  -- meshing (Cartan's Qhull/Triangle extensions): Delaunay of scattered points (ns per
+  -- point) and Ruppert refinement of a disk to area 5·10⁻⁴ (ns per output triangle)
+  let nd ← size 20000 200
+  let cloud : Array Delaunay.Pt := (Array.range nd).map fun k =>
+    (Float.ofNat (k * 7919 % 100003) / 100003, Float.ofNat (k * 104729 % 100019) / 100019)
+  bench "delaunay" (ops := nd) (param := s!"{nd}") fun s =>
+    Float.ofNat (Delaunay.delaunay (blackBox s cloud)).size
+  let area : Float := if (← smoke) then 0.02 else 0.0005
+  let nt := (Mesher.triangulate (Mesher.disk 64) { maxArea := area }).triangles.size
+  bench "triangulate_disk" (ops := nt) (param := s!"a={area}") fun s =>
+    Float.ofNat (Mesher.triangulate (blackBox s (Mesher.disk 64)) { maxArea := area }).triangles.size⟩
 
 end Bench.Cartan

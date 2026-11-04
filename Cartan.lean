@@ -18,6 +18,7 @@ import Cartan.Solve
 import Cartan.Element
 import Cartan.Spectral
 import Cartan.Delaunay
+import Cartan.Mesher
 import Cartan.Aliases
 
 /-!

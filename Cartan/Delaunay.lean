@@ -205,14 +205,16 @@ def sweep (pts : Array Pt) (s : Array Nat) : Mesh := Id.run do
     hull := (rot.extract 0 (h - len + 1)).push p
   return m
 
-/-- Lawson's flips: flip every interior edge whose opposite vertex lies strictly inside the
-circumcircle, until there are none. -/
-def lawson (pts : Array Pt) (m0 : Mesh) : Mesh := Id.run do
+/-- Lawson's flips from a stack of edges: flip every interior edge whose opposite vertex lies
+strictly inside the circumcircle, pushing the edges a flip exposes, until the stack is empty.
+Edges with `fixed u v` (constrained segments) are never flipped. -/
+def lawsonFrom (pts : Array Pt) (m0 : Mesh) (stack0 : Array (Nat × Nat))
+    (fixed : Nat → Nat → Bool := fun _ _ => false) : Mesh := Id.run do
   let mut m := m0
-  let mut stack : Array (Nat × Nat) := m.tris.foldl (fun acc (a, b, c) => ((acc.push (a, b)).push (b, c)).push (c, a)) #[]
+  let mut stack := stack0
   -- each flip strictly lowers the triangulation in the lifting map, so this terminates; the
   -- fuel bound only guards against a predicate bug
-  let mut fuel := 64 * (stack.size + 1) * (stack.size + 1)
+  let mut fuel := 64 * (m.tris.size + stack.size + 1) * (m.tris.size + stack.size + 1)
   while fuel > 0 do
     fuel := fuel - 1
     match stack.back? with
@@ -223,7 +225,7 @@ def lawson (pts : Array Pt) (m0 : Mesh) : Mesh := Id.run do
       | some t1, some t2 =>
         let w := Mesh.opposite m.tris[t1]! u v
         let x := Mesh.opposite m.tris[t2]! v u
-        if m.tris[t1]! != m.tris[t2]! && incircle pts[u]! pts[v]! pts[w]! pts[x]! > 0 then
+        if m.tris[t1]! != m.tris[t2]! && !fixed u v && incircle pts[u]! pts[v]! pts[w]! pts[x]! > 0 then
           let e := (m.edge.erase (u, v)).erase (v, u)
           m := { m with edge := e }
           m := m.put t1 (u, x, w)
@@ -231,6 +233,10 @@ def lawson (pts : Array Pt) (m0 : Mesh) : Mesh := Id.run do
           stack := (((stack.push (u, x)).push (x, v)).push (v, w)).push (w, u)
       | _, _ => pure ()
   return m
+
+/-- Lawson's flips over every edge of the mesh. -/
+def lawson (pts : Array Pt) (m : Mesh) : Mesh :=
+  lawsonFrom pts m (m.tris.foldl (fun acc (a, b, c) => ((acc.push (a, b)).push (b, c)).push (c, a)) #[])
 
 /-- Julia `delaunay(points)` in the plane: the Delaunay triangles as counter-clockwise
 triples of 0-based indices into `pts`. -/
