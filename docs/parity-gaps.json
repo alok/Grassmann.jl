@@ -1215,7 +1215,8 @@
    "commit": "21581c6",
    "was": "PARTIAL",
    "evidence": "impl (test harness) Tests/Golden/Docs.lean:1-101 + DocsParse/DocsEval/DocsInterp/DocsOps (Julia-subset interpreter replaying all 58 docs shards on TA, comparing kind/str/compact), registered at Tests/Golden/Docs.lean:98 via Tests/Golden/GrassmannEval.lean:2",
-   "remaining": "The evaluator exists. Its own header (Docs.lean:14-17) still lists unmodelled categories: matrices/operators/forms, calculus \u2207 \u2202 d, simplicial complexes, projective \u2191 \u2193, chain fields, tangent tensor-valued products and closure displays. The current pass/unimplemented counts were not measured (no build was run)."
+   "remaining": "The evaluator exists. Its own header (Docs.lean:14-17) still lists unmodelled categories: matrices/operators/forms, calculus \u2207 \u2202 d, simplicial complexes, projective \u2191 \u2193, chain fields, tangent tensor-valued products and closure displays. The current pass/unimplemented counts were not measured (no build was run).",
+   "followup": "2026-11-04: cayley(V, op) shows are evaluated (Grassmann/Forms/Show.lean CayleyTable.showJulia); the 31 algebra.md:626 cases pass; scripts/docs_unimplemented.lean lists 95 statements (was 122)"
   }
  },
  {
@@ -1448,7 +1449,7 @@
  {
   "pkg": "Grassmann.jl",
   "symbol": "metric-argument method family f(t, g) (wedgedot_metric, contraction_metric, log_metric, abs/exp/inv/hodge/sandwich/radius/complexify with g)",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "fix": "Add runtime-metric (Gram operator) variants of the products and derived maps. The kernel plans already carry metric coefficients, so thread a runtime Gram through Kernel.Plan or build the plans per g. Cartan diffgeo with non-induced metrics needs this.",
   "effort": "L",
   "priority": "P1",
@@ -1460,10 +1461,10 @@
   "key": "grassmann-core",
   "audit": {
    "date": "2026-11-04",
-   "commit": "21581c6",
+   "commit": "claude/tests-docs-audit",
    "was": "MISSING",
-   "evidence": "no runtime-metric (Gram) product variants anywhere (rg wedgedot_metric/contraction_metric/metricRing/Gram)",
-   "remaining": "The whole f(t, g) family is missing, with g threaded through Kernel.Plan or plans built per g."
+   "evidence": "Grassmann/Algebra/Metric.lean: Gram (runtime, also non-diagonal) metric; wedgedotMetric, contractionMetric, contractionLeftMetric, abs2Metric, powMetric, invMetric?, divMetric? by Chevalley recursion; Tests/Grassmann/Metric.lean checks the induced metric against the kernels in every non-dyadic props space (CGA3 included), congruences g = P\u1d40DP through the outermorphism of P, and the algebra axioms for random symmetric g",
+   "remaining": "log_metric/exp/hodge/sandwich/radius/complexify with g; Julia-exact inv for general multivectors; a kernel-speed path (plans per g)"
   }
  },
  {
@@ -1871,7 +1872,7 @@
  {
   "pkg": "Grassmann.jl",
   "symbol": "AbstractFFTs methods on arrays of elements",
-  "status": "MISSING",
+  "status": "DONE",
   "fix": "After the in-flight Cartan Spectral FFT lands, add fft/ifft/... over FloatArray SoA of Couples, using complexify for Chains/Phasors and Real for scalars.",
   "effort": "M",
   "priority": "P2",
@@ -1882,10 +1883,10 @@
   "key": "grassmann-core",
   "audit": {
    "date": "2026-11-04",
-   "commit": "21581c6",
+   "commit": "claude/tests-docs-audit",
    "was": "MISSING",
-   "evidence": "Cartan has FFTs (Tests/Cartan/FFT.lean), but there are no fft/ifft methods on Grassmann element arrays (rg fft in Grassmann finds nothing)",
-   "remaining": "Add fft/ifft over FloatArray SoA of Couples, using complexify."
+   "evidence": "Cartan/Spectral/Elements.lean: fft/bfft/ifft over arrays of Couples (one blade), Phasors via complexify, scalars via Real (fftScalars, rfftScalars); Tests/Cartan/Spectral.lean section 7",
+   "remaining": ""
   }
  },
  {
@@ -2227,7 +2228,7 @@
  {
   "pkg": "Cartan (ext meshers)",
   "symbol": "TriangulateExt (triangulate/initmesh), DelaunayExt/MiniQhullExt (delaunay), TetGenExt (tetrahedralize), QHullExt (chull); FlowGeometry cubesphere/spheresurf/spheremesh/cubemesh",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "fix": "Port a constrained 2-D Delaunay mesher with area/angle refinement (Ruppert/Shewchuk) that produces a SimplexBundle plus a boundary SimplexBundle; this replaces MATLAB initmesh for the disk eigenmodes and the airfoil domain. Also port an N-D Bowyer-Watson Delaunay for point clouds, a convex hull and, later, a tetrahedral mesher. The exact orientation predicates can be proved.",
   "effort": "L",
   "priority": "P1",
@@ -2241,10 +2242,10 @@
   "key": "geometry",
   "audit": {
    "date": "2026-11-04",
-   "commit": "21581c6",
+   "commit": "claude/tests-docs-audit",
    "was": "MISSING",
-   "evidence": "no Delaunay/triangulate/tetrahedralize/chull in any .lean; FlowGeometry/Mesh.lean:83-302 has only structured meshes (rectangletriangles, initrakich, icosahedron sphereRefine)",
-   "remaining": "Constrained 2-D Delaunay with refinement, N-D Bowyer-Watson, convex hull, tet mesher, cubesphere/spheremesh/cubemesh"
+   "evidence": "Cartan/Delaunay.lean: exact (float-filtered, rational fallback) orient2d/incircle, planar convexHull (monotone chain) and delaunay (sweep + Lawson flips) with delaunayBundle; Tests/Cartan/Delaunay.lean checks empty circumcircles, Euler counts, areas and a brute-force comparison",
+   "remaining": "Constrained 2-D Delaunay (PSLG, holes) with Ruppert refinement, N-D Bowyer-Watson/Qhull, tetrahedralize, cubesphere/spheremesh/cubemesh"
   }
  },
  {

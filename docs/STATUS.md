@@ -116,3 +116,16 @@ and `Clifford.lean`.
   `barycenter` (4), `inv` (5) and number/element products with unsupported kinds (8). Most of
   these are wave-2 branch 3's area (Cayley tables, calculus, simplicial complexes, chain
   fields), so they were left alone here.
+- **Follow-up (same branch):**
+  - Cayley tables. `CayleyTable.showJulia` reproduces Julia's `show` of `cayley(V, op)`: the
+    columns are tensors over the right operand, a column whose `Σ ⟨e ~e⟩₀` is zero is
+    skipped, and a negative sum is Julia's `DomainError`. The docs evaluator runs
+    `cayley`, and all 31 `algebra.md:626` goldens pass, so the unimplemented docs
+    statements drop from 122 to 95. This touches wave-2 branch 3's area (Cayley tables), but
+    only in `Forms/Show.lean` and the docs evaluator.
+  - Runtime metrics (`f(t, g)`). `Grassmann.Algebra.Metric` takes a Gram matrix, which may
+    be non-diagonal, and evaluates the products by Chevalley recursion. With the space's own
+    metric it equals the kernels in every non-dyadic props space, CGA3's `g(∞, ∅) = −1`
+    included. For `g = PᵀDP` it commutes with the outermorphism of `P`.
+  - Element FFTs: `Cartan.Spectral.Elements`.
+  - Planar exact-predicate Delaunay and convex hull: `Cartan.Delaunay`.
