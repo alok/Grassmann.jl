@@ -306,4 +306,254 @@ where
         let marked := (Array.range ne).filterMap fun i => if η.get! i > ϵ' then some (i + 1) else none
         go (SimplexBundle.refine1 m marked).1 (log.push ⟨ne, ϵ', mx⟩) ϵ' fuel
 
+/-! ## Time-dependent and nonlinear problems -/
+
+/-- `x − y`. -/
+@[inline] def vsub (x y : FloatArray) : FloatArray := ⟨(Array.range x.size).map fun i => x.get! i - y.get! i⟩
+
+/-- `s x`. -/
+@[inline] def vscale (s : Float) (x : FloatArray) : FloatArray := ⟨x.data.map (s * ·)⟩
+
+/-- `‖x‖₂`. -/
+@[inline] def vnorm (x : FloatArray) : Float := Float.sqrt (x.data.foldl (fun s v => s + v * v) 0)
+
+/-- The `2×2` block matrix `[s₁₁A₁₁ s₁₂A₁₂; s₂₁A₂₁ s₂₂A₂₂]` of `np × np` blocks. -/
+def block2 (np : Nat) (bs : Array (Sparse × Nat × Nat × Float)) : Sparse := Id.run do
+  let mut I : Array Nat := #[]
+  let mut J : Array Nat := #[]
+  let mut X : FloatArray := .empty
+  for (A, bi, bj, sc) in bs do
+    for (i, j, x) in A.triplets do
+      I := I.push (bi * np + i); J := J.push (bj * np + j); X := X.push (sc * x)
+  return Sparse.ofTriplets (2 * np) (2 * np) I J X
+
+/-- Julia `solvewave(pt, bc)` (Crank–Nicolson on `[u; v]`, `(A, M, b) = assemble(pt, 1, 1, 0)`):
+from `u = v = 0`, each step solves `LHS [u; v] = RHS [u; v] + [0; Δt b]`, then overwrites
+`u[fixed]` with that step's boundary values (Julia's "ugly way"). Returns `u` after every step,
+one slice per entry of `bc` (the values at `fixed`, in its order).
+
+The overwrite leaves `v` on the boundary to the free dynamics, so a wave driven through the
+boundary enters with the wrong amplitude (`2/3` of the boundary value for a 1-D pulse, defect
+`solvewave-boundary-overwrite`); `solveWaveDirichlet` imposes the boundary values in the solve. -/
+def solveWave (m : SimplexBundle n (HPoint V) G) (fixed : Array Nat) (Δt : Float)
+    (bc : Array FloatArray) : Array FloatArray :=
+  let np := m.totalNodes
+  let (A, M, b) := assemble m
+  let LHS := block2 np #[(M, 0, 0, 1), (M, 0, 1, -Δt / 2), (A, 1, 0, Δt / 2), (M, 1, 1, 1)]
+  let RHS := block2 np #[(M, 0, 0, 1), (M, 0, 1, Δt / 2), (A, 1, 0, -Δt / 2), (M, 1, 1, 1)]
+  let zkb : FloatArray := ⟨Array.replicate np 0 ++ b.data.map (Δt * ·)⟩
+  let F := LHS.luNoPivot
+  let solve := fun (r : FloatArray) => match F with
+    | some F => F.solve r
+    | none => LHS.solve r
+  let (_, out) := bc.foldl (fun (sol, out) g =>
+    let sol := solve (vadd (RHS.mulVec sol) zkb)
+    let sol := (Array.range fixed.size).foldl (fun s i => s.set! fixed[i]! (g.get! i)) sol
+    (sol, out.push ⟨sol.data.extract 0 np⟩)) ((⟨Array.replicate (2 * np) 0⟩ : FloatArray), #[])
+  out
+
+/-- Crank–Nicolson for `u_tt = Δu + f` with Dirichlet values imposed in the solve: `u[fixed]`
+takes the step's boundary values and `v[fixed]` the Crank–Nicolson-consistent
+`2(gₙ₊₁ − gₙ)/Δt − vₙ`, the free unknowns are solved for (one factorization for all steps).
+Starts from `u = v = 0` with `g₀ = 0`; returns `u` after every step. -/
+def solveWaveDirichlet (m : SimplexBundle n (HPoint V) G) (fixed : Array Nat) (Δt : Float)
+    (bc : Array FloatArray) : Array FloatArray := Id.run do
+  let np := m.totalNodes
+  let (A, M, b) := assemble m
+  let LHS := block2 np #[(M, 0, 0, 1), (M, 0, 1, -Δt / 2), (A, 1, 0, Δt / 2), (M, 1, 1, 1)]
+  let RHS := block2 np #[(M, 0, 0, 1), (M, 0, 1, Δt / 2), (A, 1, 0, -Δt / 2), (M, 1, 1, 1)]
+  let zkb : FloatArray := ⟨Array.replicate np 0 ++ b.data.map (Δt * ·)⟩
+  let fx := fixed ++ fixed.map (np + ·)
+  let isFixed := fx.foldl (fun (s : Array Bool) i => s.set! i true) (Array.replicate (2 * np) false)
+  let free := (Array.range (2 * np)).filter fun i => isFixed[i]! == false
+  let Aff := submatrix LHS free free
+  let Afx := submatrix LHS free fx
+  let F := Aff.luNoPivot
+  let mut sol : FloatArray := ⟨Array.replicate (2 * np) 0⟩
+  let mut g0 : FloatArray := ⟨Array.replicate fixed.size 0⟩
+  let mut out : Array FloatArray := #[]
+  for g in bc do
+    let vb : FloatArray := ⟨(Array.range fixed.size).map fun i =>
+      2 * (g.get! i - g0.get! i) / Δt - sol.get! (np + fixed[i]!)⟩
+    let gv : FloatArray := ⟨g.data ++ vb.data⟩
+    let r := vadd (RHS.mulVec sol) zkb
+    let ax := Afx.mulVec gv
+    let rhs : FloatArray := ⟨(Array.range free.size).map fun i => r.get! free[i]! - ax.get! i⟩
+    let xf := match F with
+      | some F => F.solve rhs
+      | none => Aff.solve rhs
+    for i in [0:fx.size] do sol := sol.set! fx[i]! (gv.get! i)
+    for i in [0:free.size] do sol := sol.set! free[i]! (xf.get! i)
+    g0 := g
+    out := out.push ⟨sol.data.extract 0 np⟩
+  return out
+
+/-- Julia `solvebistable(ic, ϵ, T, f)`: semi-implicit Euler for `u_t = ϵΔu + f(u)` (natural
+boundary), with three Picard iterations
+`ξ⁽ᵏ⁺¹⁾ = (M + dt ϵ A) \ (M ξₙ + dt M f(ξ⁽ᵏ⁾))` per step. `steps + 1` slices. -/
+def solveBistable (m : SimplexBundle n (HPoint V) G) (ic : FloatArray) (ϵ : Float := 0.01)
+    (dt : Float := 0.1) (steps : Nat := 100) (f : Float → Float := fun u => u - u ^ 3) :
+    Array FloatArray :=
+  let (A, M, _) := assemble m
+  let MA := M + (dt * ϵ) * A
+  let F := MA.cholesky
+  let solve := fun (r : FloatArray) => match F with
+    | some F => F.solve r
+    | none => MA.solve r
+  let step := fun (ξ : FloatArray) =>
+    (List.range 3).foldl (fun ξt _ =>
+      solve (vadd (M.mulVec ξ) (vscale dt (M.mulVec ⟨ξt.data.map f⟩)))) ξ
+  (List.range steps).foldl (fun out _ => out.push (step out.back!)) #[ic]
+
+/-- Julia `solvebistable_newton(ic, ϵ, T, f, df)`: the same scheme with three Newton iterations
+per step (`J = M + dt ϵ A − dt M_{f′}`, `M_{f′}` the mass weighted by `f′` of the element means,
+and the lumped load of `f`). -/
+def solveBistableNewton (m : SimplexBundle n (HPoint V) G) (ic : FloatArray) (ϵ : Float := 0.01)
+    (dt : Float := 0.1) (steps : Nat := 100) (f : Float → Float := fun u => u - u ^ 3)
+    (df : Float → Float := fun u => 1 - 3 * u ^ 2) : Array FloatArray :=
+  let w := vols m
+  let (A, M, _) := assemble m
+  let MA := M + (dt * ϵ) * A
+  let N := Float.ofNat n
+  let step := fun (ξ : FloatArray) =>
+    (List.range 3).foldl (fun ξt _ =>
+      let mid := (Array.range m.elements).map fun k =>
+        ((verts m k).foldl (fun s v => s + ξt.get! v) 0) / N
+      let (Mdf, b) := assembleMassLoad m ⟨ξt.data.map f⟩
+        ⟨(Array.range m.elements).map fun k => df mid[k]! * w.get! k⟩ w
+      let J := MA - dt * Mdf
+      let ρ := vsub (vsub (MA.mulVec ξt) (M.mulVec ξ)) (vscale dt b)
+      vsub ξt (J.solve ρ)) ξ
+  (List.range steps).foldl (fun out _ => out.push (step out.back!)) #[ic]
+
+/-- One Newton iteration of `solveNonlinearPoisson`: `‖d‖` and `‖r‖`. -/
+structure NewtonStep where
+  /-- The norm of the correction. -/
+  d : Float
+  /-- The norm of the residual. -/
+  r : Float
+  deriving Repr, Inhabited
+
+/-- Julia `assemblejacobianresidue(f, pe, u, A, m, g)` for `−∇·(a(u)∇u) = f` (`f` per element):
+with `ū` the element mean, `a = A(ū)`, `a′ = (A(ū + 10⁻⁸) − a)/10⁻⁸`, `γᵢ = ∇u·∇φᵢ`,
+`J_loc[i, j] = a ∇φⱼ·∇φᵢ + (a′/N) γᵢ`, `r[tₖ] += (fₖ/N − a γ) mₖ`, and the boundary rows replaced by
+the identity with `r = 0`. -/
+def jacobianResidue (m : SimplexBundle n (HPoint V) G) (fixed : Array Nat) (f : Nat → Float)
+    (u : FloatArray) (Afcn : Float → Float) (w : FloatArray := vols m)
+    (g : Array (Array (Array Float)) := grads m) (tiny : Float := 1e-8) : Sparse × FloatArray :=
+  Id.run do
+    let np := m.totalNodes
+    let N := Float.ofNat n
+    let d := V.n - 1
+    let isFixed := fixed.foldl (fun (s : Array Bool) i => s.set! i true) (Array.replicate np false)
+    let mut I : Array Nat := #[]
+    let mut J : Array Nat := #[]
+    let mut X : FloatArray := .empty
+    let mut r : FloatArray := ⟨Array.replicate np 0⟩
+    for k in [0:m.elements] do
+      let vs := verts m k
+      let gk := g[k]!
+      let uc := (vs.foldl (fun s v => s + u.get! v) 0) / N
+      let a := Afcn uc
+      let da := (Afcn (uc + tiny) - a) / tiny
+      let gu := (Array.range d).map fun c => (Array.range n).foldl (fun s j => s + u.get! vs[j]! * gk[j]![c]!) 0
+      let gug := (Array.range n).map fun i => dot gu gk[i]!
+      let mk := w.get! k
+      for i in [0:n] do
+        for j in [0:n] do
+          I := I.push vs[i]!; J := J.push vs[j]!
+          X := X.push ((a * dot gk[j]! gk[i]! + da / N * gug[i]!) * mk)
+        r := r.set! vs[i]! (r.get! vs[i]! + (f k / N - a * gug[i]!) * mk)
+    -- the boundary rows: identity, zero residual
+    let mut I' : Array Nat := #[]
+    let mut J' : Array Nat := #[]
+    let mut X' : FloatArray := .empty
+    for q in [0:I.size] do
+      if isFixed[I[q]!]! == false then
+        I' := I'.push I[q]!; J' := J'.push J[q]!; X' := X'.push (X.get! q)
+    for v in fixed do
+      I' := I'.push v; J' := J'.push v; X' := X'.push 1
+      r := r.set! v 0
+    return (Sparse.ofTriplets np np I' J' X', r)
+
+/-- Julia `solvenonlinearpoisson(f, pe, A)`: five Newton iterations from `u = 0` for
+`−∇·(a(u)∇u) = f`, `u = 0` on `e` (`f` per element); the solution and the log of `(‖d‖, ‖r‖)`
+that Julia prints. -/
+def solveNonlinearPoisson (m : SimplexBundle n (HPoint V) G) (e : SimplexBundle k (HPoint V) G)
+    (f : Nat → Float) (Afcn : Float → Float) (iterations : Nat := 5) :
+    FloatArray × Array NewtonStep :=
+  let w := vols m
+  let g := grads m
+  let fixed := nodesOf e
+  (List.range iterations).foldl (fun (u, log) _ =>
+    let (J, r) := jacobianResidue m fixed f u Afcn w g
+    let d := J.solve r
+    (vadd u d, log.push ⟨vnorm d, vnorm r⟩)) ((⟨Array.replicate m.totalNodes 0⟩ : FloatArray), #[])
+
+/-! ## Plane-strain elasticity -/
+
+/-- Julia `Eν2Lame(E, ν)`: `(μ, λ)`. -/
+def lame (E ν : Float) : Float × Float := (E / (2 * (1 + ν)), E * ν / ((1 + ν) * (1 - 2 * ν)))
+
+/-- Julia `assembleelastic(f, μ, λ)` with bug B11 fixed: the plane-strain stiffness
+`Σₖ Bₖᵀ D Bₖ mₖ` (`D = diag(2μ, 2μ, μ) + λ [1 1 0; 1 1 0; 0 0 0]`, `B` with columns
+`(∂ₓφₐ, 0, ∂ᵧφₐ)`, `(0, ∂ᵧφₐ, ∂ₓφₐ)`), the mass on each component, and the consistent load
+`Σₖ massₖ fₖ` (accumulated). DOFs are interleaved: node `v` has `2v` (x) and `2v + 1` (y). `force`
+is nodal. Triangles only. -/
+def assembleElastic (m : SimplexBundle 3 (HPoint V) G) (force : Array (Float × Float)) (μ lam : Float) :
+    Sparse × Sparse × FloatArray := Id.run do
+  let np := m.totalNodes
+  let w := vols m
+  let g := grads m
+  let D := #[#[2 * μ + lam, lam, 0], #[lam, 2 * μ + lam, 0], #[0, 0, μ]]
+  let mut IK : Array Nat := #[]
+  let mut JK : Array Nat := #[]
+  let mut XK : FloatArray := .empty
+  let mut IM : Array Nat := #[]
+  let mut JM : Array Nat := #[]
+  let mut XM : FloatArray := .empty
+  let mut F : FloatArray := ⟨Array.replicate (2 * np) 0⟩
+  for k in [0:m.elements] do
+    let vs := verts m k
+    let gk := g[k]!
+    let mk := w.get! k
+    -- B: 3 × 6, column 2a = (∂x, 0, ∂y), column 2a+1 = (0, ∂y, ∂x)
+    let B : Array (Array Float) := (Array.range 6).map fun c =>
+      let a := c / 2
+      let gx := gk[a]![0]!
+      let gy := gk[a]![1]!
+      if c % 2 == 0 then #[gx, 0, gy] else #[0, gy, gx]
+    let dofs := (Array.range 6).map fun c => 2 * vs[c / 2]! + c % 2
+    let DB := (Array.range 6).map fun i => (Array.range 3).map fun r => dot D[r]! B[i]!
+    for i in [0:6] do
+      for j in [0:6] do
+        -- `Bⱼ·D Bᵢ` from the smaller index, so the matrix is exactly symmetric
+        let x := if i ≤ j then dot B[j]! DB[i]! else dot B[i]! DB[j]!
+        IK := IK.push dofs[i]!; JK := JK.push dofs[j]!; XK := XK.push (x * mk)
+    for a in [0:3] do
+      for b in [0:3] do
+        let x := massEntry 3 a b * mk
+        IM := IM.push (2 * vs[a]!); JM := JM.push (2 * vs[b]!); XM := XM.push x
+        IM := IM.push (2 * vs[a]! + 1); JM := JM.push (2 * vs[b]! + 1); XM := XM.push x
+        F := F.set! (2 * vs[a]!) (F.get! (2 * vs[a]!) + x * force[vs[b]!]!.1)
+        F := F.set! (2 * vs[a]! + 1) (F.get! (2 * vs[a]! + 1) + x * force[vs[b]!]!.2)
+  return (Sparse.ofTriplets (2 * np) (2 * np) IK JK XK,
+    Sparse.ofTriplets (2 * np) (2 * np) IM JM XM, F)
+
+/-- Julia `solveelastic(f, e, E, ν)` (fixed): `K u = F` with prescribed displacements on the
+nodes of `e` (Julia clamps them to zero; `bc` gives the values, default zero). Returns the nodal
+displacements. -/
+def solveElastic (m : SimplexBundle 3 (HPoint V) G) (e : SimplexBundle k (HPoint V) G)
+    (force : Array (Float × Float)) (E : Float := 1) (ν : Float := 0.3)
+    (bc : HPoint V → Float × Float := fun _ => (0, 0)) : Array (Float × Float) :=
+  let (μ, lam) := lame E ν
+  let (K, _, F) := assembleElastic m force μ lam
+  let bn := nodesOf e
+  let fixed := bn.flatMap fun v => #[2 * v, 2 * v + 1]
+  let pts := (Array.range m.totalNodes).map fun v =>
+    (Chain.ofFn fun c => m.coord (v + 1) c.1 : HPoint V)
+  let vals : FloatArray := ⟨bn.flatMap fun v => let (x, y) := bc pts[v]!; #[x, y]⟩
+  let d := solveDirichlet K F fixed vals
+  (Array.range m.totalNodes).map fun v => (d.get! (2 * v), d.get! (2 * v + 1))
+
 end Adapode.FEM

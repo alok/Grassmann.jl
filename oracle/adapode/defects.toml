@@ -77,3 +77,13 @@ port = "the trajectory is a TensorField over FiberProductBundle(base(x0), time);
 source = "Adapode.jl src/constants.jl:25-26, 75-77 (Values(Values(1)), Values(Values(1,1)/3))"
 behavior = "a one-element Values of a Values is the inner Values (copy constructor): CBA[1]'s stage row and Gauss[1]'s point list are not wrapped"
 port = "no effect on values (the port stores rows and points uniformly); the table test reads both shapes"
+
+[adapode-solvewave-boundary-overwrite]
+source = "Adapode.jl src/element.jl:192-208 (sol[fixed] .= fiber(bc)[:,l] after the Crank–Nicolson solve)"
+behavior = "only u is overwritten on the boundary; v there follows the free (Neumann) dynamics, so a pulse driven through the boundary enters with 2/3 of its amplitude (1-D, h = Δt·2)"
+port = "Adapode.FEM.solveWave keeps Julia's overwrite; solveWaveDirichlet imposes u = g and the Crank–Nicolson-consistent v = 2(gₙ₊₁ − gₙ)/Δt − vₙ in the solve and matches d'Alembert (Tests/Adapode/Fem.lean)"
+
+[adapode-assembleelastic]
+source = "Adapode.jl src/element.jl:293-314"
+behavior = "B11: Lamé parameters swapped, the interleaved 6×6 local matrix scattered at [x1,x2,x3,y1,y2,y3], and the load overwritten (.=) instead of accumulated"
+port = "Adapode.FEM.assembleElastic fixes all three; rigid motions are in the kernel of K and the patch test is exact"

@@ -155,9 +155,90 @@ def math : TestM Unit := do
   let ut := solveTransport mr mr.boundary (fun _ => #[1, 0])
   check "fem: transport is finite and positive inside" (ut.data.all fun x => x ≥ -1e-12 && !x.isNaN)
 
+
+/-- The unit square split into `k × k` squares, each cut by its rising diagonal. -/
+def squareGrid (k : Nat) : SimplexBundle 3 (HPoint ℝ3) :=
+  let id := fun (i j : Nat) => j * (k + 1) + i + 1
+  let pts := (Array.range ((k + 1) * (k + 1))).map fun q =>
+    let i := q % (k + 1)
+    let j := q / (k + 1)
+    (Chain.ofFn fun c => #[1, i.toFloat / k.toFloat, j.toFloat / k.toFloat][c.1]! : HPoint ℝ3)
+  let tris := (Array.range (k * k)).flatMap fun q =>
+    let i := q % k
+    let j := q / k
+    #[#v[id i j, id (i + 1) j, id (i + 1) (j + 1)], #v[id i j, id (i + 1) (j + 1), id i (j + 1)]]
+  SimplexBundle.ofPoints pts tris
+
+/-- Time-dependent, nonlinear and elasticity checks. -/
+def nonlinear : TestM Unit := do
+  -- port notes §4.8: Newton on the 2×2 square, a = 1 + u², f = 1
+  let sq2 := squareGrid 2
+  let (_, log) := solveNonlinearPoisson sq2 sq2.boundary (fun _ => 1) (fun u => 1 + u ^ 2)
+  check "fem: nonlinear Poisson ‖d₁‖ = 0.0625 (Julia)" (near log[0]!.d 0.0625 1e-12)
+    fun _ => s!"{repr log}"
+  check "fem: nonlinear Poisson ‖d₂‖ ≈ 2.71e-5 (Julia)" ((log[1]!.d - 2.71e-5).abs ≤ 0.01e-5)
+    fun _ => s!"{repr log}"
+  check "fem: nonlinear Poisson ‖d₃‖ ≈ 1.53e-11 (Julia)" ((log[2]!.d - 1.53e-11).abs ≤ 0.02e-11)
+    fun _ => s!"{repr log}"
+  check "fem: nonlinear Poisson converges quadratically" (log[3]!.d ≤ 1e-16 && log[4]!.r ≤ 1e-15)
+    fun _ => s!"{repr log}"
+  -- a finer mesh: Newton converges and a = 1 reproduces the linear solve
+  let g8 := squareGrid 8
+  let (ul, _) := solveNonlinearPoisson g8 g8.boundary (fun _ => 1) (fun _ => 1) 2
+  let up := poisson g8 g8.boundary (f := fun _ => 1)
+  check "fem: nonlinear Poisson with a = 1 is the linear solve"
+    ((List.range ul.size).all fun i => (ul.get! i - up.get! i).abs ≤ 1e-14)
+  -- elasticity: the patch test (a linear displacement is reproduced exactly)
+  let m := Cartan.Mesher.triangulateBundle (Cartan.Mesher.polygon #[(0, 0), (1, 0), (1, 1), (0, 1)])
+    { maxArea := 0.02 }
+  let lin := fun (x : HPoint ℝ3) => (0.1 * px x 1 + 0.2 * px x 2, -0.05 * px x 1 + 0.3 * px x 2)
+  let zero := (Array.range m.totalNodes).map fun _ => ((0 : Float), (0 : Float))
+  let u := solveElastic m m.boundary zero (bc := lin)
+  let worst := (List.range m.totalNodes).foldl (fun s v =>
+    let p : HPoint ℝ3 := Chain.ofFn fun c => m.coord (v + 1) c.1
+    let (ex, ey) := lin p
+    max s (max (u[v]!.1 - ex).abs (u[v]!.2 - ey).abs)) 0
+  check "fem: elasticity patch test (linear displacement exact)" (worst ≤ 1e-12) fun _ => s!"{worst}"
+  let (μ, lam) := lame 1 0.3
+  let (K, _, _) := assembleElastic m zero μ lam
+  let rot : FloatArray := ⟨(Array.range m.totalNodes).flatMap fun v => #[-m.coord (v + 1) 2, m.coord (v + 1) 1]⟩
+  check "fem: rigid rotation is in the kernel of K (bug B11 fixed)" (vnorm (K.mulVec rot) ≤ 1e-12)
+    fun _ => s!"{vnorm (K.mulVec rot)}"
+  check "fem: elasticity stiffness is symmetric" K.isSymmetric
+  -- the wave equation: a pulse entering at x = 0 travels at speed 1 (d'Alembert)
+  let nx := 401
+  let xs := (Array.range nx).map fun i => i.toFloat / (nx - 1).toFloat
+  let (pt, _) := SimplexBundle.initmesh xs
+  let pulse := fun (s : Float) => if s ≤ 0 || s ≥ 0.5 then 0 else (1 - Float.cos (4 * 3.141592653589793 * s)) / 2
+  let dt := 0.00125
+  let nt := 600
+  let bc := (Array.range nt).map fun l => (⟨#[pulse ((l + 1).toFloat * dt), 0]⟩ : FloatArray)
+  let us := solveWaveDirichlet pt #[0, nx - 1] dt bc
+  let tEnd := nt.toFloat * dt
+  let werr := (List.range nx).foldl (fun s i => max s (us.back!.get! i - pulse (tEnd - xs[i]!)).abs) 0
+  check "fem: Crank–Nicolson wave matches d'Alembert" (werr ≤ 0.03) fun _ => s!"max error {werr}"
+  -- Julia's boundary overwrite: right speed, 2/3 of the amplitude
+  let uj := solveWave pt #[0, nx - 1] dt bc
+  let peak := uj.back!.get! 200
+  check "fem: solvewave (Julia's overwrite) carries 2/3 of the pulse" ((peak - 2 / 3).abs ≤ 0.01)
+    fun _ => s!"peak {peak}"
+  -- Allen–Cahn: Picard and Newton agree and stay in [−1, 1]
+  let xs := (Array.range 101).map fun i => i.toFloat / 100
+  let (pt, _) := SimplexBundle.initmesh xs
+  let ic : FloatArray := ⟨xs.map fun x => 0.5 * Float.cos (3.141592653589793 * x)⟩
+  let sp := solveBistable pt ic
+  let sn := solveBistableNewton pt ic
+  checkEq "fem: bistable slices" sp.size 101
+  let dpn := (List.range 101).foldl (fun s i => max s (sp.back!.get! i - sn.back!.get! i).abs) 0
+  check "fem: bistable Picard ≈ Newton" (dpn ≤ 1e-3) fun _ => s!"{dpn}"
+  check "fem: bistable stays in [−1, 1]" (sp.all fun u => u.data.all (·.abs ≤ 1 + 1e-9))
+  check "fem: bistable separates into the wells ±1"
+    (sn.back!.get! 0 > 0.95 && sn.back!.get! 100 < -0.95) fun _ => s!"{sn.back!.get! 0}, {sn.back!.get! 100}"
+
 /-- Run the FEM checks. -/
 def run : TestM Unit := do
   julia
   math
+  nonlinear
 
 end Tests.AdapodeTests.Fem
