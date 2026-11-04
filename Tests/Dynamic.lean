@@ -28,7 +28,7 @@ open GrassmannTests DynamicTests
 def Tests.Dynamic.run : IO (Nat × Nat) := do
   let suites : List (String × IO Tally) :=
     [ ("dynamic/laws", lawsRun), ("dynamic/products", productsRun),
-      ("dynamic/equal", equalRun), ("dynamic/examples", examplesRun),
+      ("dynamic/equal", equalRun), ("dynamic/anti", antiRun), ("dynamic/examples", examplesRun),
       ("dynamic/composite", compositeRun), ("dynamic/fast", fastRun) ]
   let mut pass := 0
   let mut fail := 0

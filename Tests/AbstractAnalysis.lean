@@ -5,6 +5,7 @@ import Tests.AbstractAnalysis.Metric
 import Tests.AbstractAnalysis.Groups
 import Tests.AbstractAnalysis.FloatPrint
 import Tests.AbstractAnalysis.Props
+import Tests.AbstractAnalysis.Families
 
 /-!
 Test aggregator for the AbstractAnalysis port: Julia-oracle goldens

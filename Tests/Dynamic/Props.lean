@@ -8,7 +8,14 @@ Properties of the dynamic layer over random integer elements of every linear kin
   returns, and whichever of Julia's loops computes it) agree with the reference plan
   kernels on the dense operands;
 * `equal`: `x == x`, the symmetry of `==`, and `x == y ↔ dense x = dense y` between
-  containers.
+  containers;
+* `anti`: `antisandwich(I, x) = x` for the unit pseudoscalar `I` (whose right complement is
+  `1`), and `isfinite` (every random element is finite, `∞` is not). The identity
+  `antisandwich(⋆ˡR, ⋆ˡx) = ⋆ˡ(R >>> x)` is not checked here: Julia's `>>>` projects onto the
+  grades of `x`'s *kind* (a `Couple` part by part, a `Spinor` or `Multivector` not at all), and the
+  complements can change the kind (in `CGA3`, `⋆ʳ⋆ˡ(1 + 2v∞∅₁₂)` is a `Spinor`), so the
+  two sides legitimately differ for non-versors. The typed layer checks it on chains
+  (`grassmann/identities`).
 -/
 import Tests.Dynamic.Common
 
@@ -63,5 +70,11 @@ def equalRun : IO Tally := pure <| overPairs 37 fun _ _ name a b t =>
   if isContainer a && isContainer b then
     t.check (a.equal b == (a.toDense == b.toDense)) s!"{name}: {a} == {b} vs dense"
   else t
+
+/-- `anti`: `antisandwich` and `isfinite` on random elements. -/
+def antiRun : IO Tally := pure <| overPairs 41 fun V _ name a _ t =>
+  let I : TA V Int := .blade (DirectSum.Bits.lowMask V.n)
+  let t := t.check ((TA.antisandwich I a).toDense == a.toDense) s!"{name}: antisandwich(I, {a}) ≠ {a}"
+  t.check (TA.isfinite a && !TA.isfinite (TA.infinity : TA V Int)) s!"{name}: isfinite {a}"
 
 end DynamicTests
