@@ -385,6 +385,19 @@ end R2RKind
 /-- The real part of the forward FFT of a real sequence. -/
 private def fftRe (x : FloatArray) : CVec := fft (CVec.ofReal x)
 
+/-- FFTW `REDFT01` (DCT-III): `Y_k = x₀ + 2 Σ_{j≥1} x_j cos(πj(2k+1)/(2N))`
+`= Re(Σ_{j<4N} u_j e^{-2πi j(2k+1)/(4N)})` for the length-`4N` extension `u`. -/
+private def redft01 (x : FloatArray) : FloatArray :=
+  let N := x.size
+  let g := fun (j : Nat) => x.get! j
+  let L := 4 * N
+  let e : FloatArray := ⟨(Array.range L).map fun j =>
+    if j < N then g j else if j == N || j == 3 * N then 0
+    else if j < 2 * N then -(g (2 * N - j)) else if j < 3 * N then -(g (j - 2 * N))
+    else g (L - j)⟩
+  let F := fftRe e
+  ⟨(Array.range N).map fun k => F.re (2 * k + 1) / 2⟩
+
 /-- FFTW `r2r(x, kind)` (the unnormalized definitions of the FFTW manual §4.8), by FFTs of
 symmetric extensions:
 * `REDFT00` (DCT-I, `N ≥ 2`): extension to `2(N−1)`; `REDFT10` (DCT-II): `Y_k = 2 Σ x_j cos(π(j+½)k/N)`
@@ -437,24 +450,12 @@ def r2r (x : FloatArray) (kind : R2RKind) : FloatArray := Id.run do
       if j % 2 == 0 then 0 else if j < 2 * N then g (j / 2) else -(g ((L - j) / 2))⟩
     let F := fftRe e
     return ⟨(Array.range N).map fun k => -(F.im (k + 1))⟩
-  | .REDFT01 =>
-    -- DCT-III: Y_k = x₀ + 2 Σ_{j≥1} x_j cos(πj(2k+1)/(2N)) = Re(Σ_{j<4N} u_j e^{-2πi j(2k+1)/(4N)})
-    let L := 4 * N
-    let e : FloatArray := ⟨(Array.range L).map fun j =>
-      if j < N then g j else if j == N || j == 3 * N then 0
-      else if j < 2 * N then -(g (2 * N - j)) else if j < 3 * N then -(g (j - 2 * N))
-      else g (L - j)⟩
-    let F := fftRe e
-    return ⟨(Array.range N).map fun k => F.re (2 * k + 1) / 2⟩
+  | .REDFT01 => return redft01 x
   | .RODFT01 =>
-    -- DST-III: Y_k = (−1)^k x_{N−1} + 2 Σ_{j<N−1} x_j sin(π(j+1)(2k+1)/(2N))
-    return ⟨(Array.range N).map fun k => Id.run do
-      let mut s := 0.0
-      for j in [0:N] do
-        let w := if j + 1 == N then 1.0 else 2.0
-        let (_, sn) := cossinpiRat ((j + 1) * (2 * k + 1)) (2 * N)
-        s := s + w * g j * sn
-      return s⟩
+    -- DST-III: Y_k = (−1)^k x_{N−1} + 2 Σ_{j<N−1} x_j sin(π(j+1)(2k+1)/(2N)). With m = N−1−j,
+    -- sin(π(N−m)(2k+1)/(2N)) = (−1)^k cos(πm(2k+1)/(2N)), so Y_k = (−1)^k DCT-III(reverse x)_k.
+    let z := redft01 ⟨(Array.range N).map fun m => g (N - 1 - m)⟩
+    return ⟨(Array.range N).map fun k => if k % 2 == 0 then z.get! k else -(z.get! k)⟩
   | .REDFT11 =>
     return ⟨(Array.range N).map fun k => Id.run do
       let mut s := 0.0

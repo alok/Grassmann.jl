@@ -6,6 +6,7 @@ import Tests.Adapode.Flow
 import Tests.Adapode.Geodesic
 import Tests.Adapode.Props
 import Tests.Adapode.Fem
+import Tests.Adapode.Grid
 
 /-!
 Adapode test aggregator.
@@ -28,5 +29,6 @@ def run : IO (Nat × Nat) := runSuite "Adapode" do
   Tests.AdapodeTests.Geodesics.run
   Tests.AdapodeTests.Props.run
   Tests.AdapodeTests.Fem.run
+  Tests.AdapodeTests.Grid.run
 
 end Tests.Adapode

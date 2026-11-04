@@ -1,6 +1,7 @@
 import Adapode.Constants
 import Adapode.ODE
 import Adapode.Element
+import Adapode.Grid
 
 /-!
 # Adapode: adaptive ODE (and, later, PDE) solvers
@@ -42,7 +43,12 @@ def ic := InitialCondition.of (lorenz 10 28 (8 / 3)) chaosStart
   (`solveMaxwell`, real `κ²`) (checked against the Julia values of port
   notes §4.8, §6.1–6.2 and against second-order convergence, d'Alembert and the patch test).
 
-**Pending** (port notes §2.6-2.7, §4.7-4.10): Navier–Stokes, complex-κ Maxwell and the 2-D `jumps` indicator of
-`src/element.jl`, and the spectral solvers of `src/grid.jl`/`ext/FFTWExt.jl` (Fourier/DCT/DST
-multipliers, Chebyshev Helmholtz/biharmonic/Orr–Sommerfeld/polar Laplacian).
+* `Adapode.Grid`: the spectral solvers of `src/grid.jl` and `ext/FFTWExt.jl`: heat, Riesz,
+  biharmonic, rest-wave, wave and full-wave flows under periodic (`rfft`), Neumann (DCT) and
+  Dirichlet (DST) conditions in any dimension, Schrödinger flow, and their time series (checked
+  against the README values R8, R9, R11, R12 and the semigroup, conservation and unitarity laws).
+
+**Pending** (port notes §2.6-2.7, §4.7-4.10): Navier–Stokes, complex-κ Maxwell and the 2-D `jumps`
+indicator of `src/element.jl`, and the Chebyshev collocation operators of `src/grid.jl`
+(Helmholtz, biharmonic, Orr–Sommerfeld, polar Laplacian).
 -/

@@ -87,3 +87,20 @@ port = "Adapode.FEM.solveWave keeps Julia's overwrite; solveWaveDirichlet impose
 source = "Adapode.jl src/element.jl:293-314"
 behavior = "B11: Lamé parameters swapped, the interleaved 6×6 local matrix scattered at [x1,x2,x3,y1,y2,y3], and the load overwritten (.=) instead of accumulated"
 port = "Adapode.FEM.assembleElastic fixes all three; rigid motions are in the kernel of K and the patch test is exact"
+
+[adapode-periodic-frequencies]
+source = "Cartan.jl src/spectral.jl:42, 52-56 (rfftspace(::ProductSpace), fftspace) used by Adapode.jl src/grid.jl:227-250"
+behavior = "B18: multi-dimensional periodic solves take axis 1's frequencies from rfftspace(x.v[2]) and give axes 2… (and the Schrödinger solver every axis) the non-negative fftspace k·2π/L, k = 0…N−1, so e^{-iky} is damped or rotated like e^{i(N−k)y}"
+port = "Adapode.Grid uses axis 1's own rfftspace and signed frequencies on the fft axes; a 2-D periodic heat flow of f(y) equals the 1-D flow of every column (Tests/Adapode/Grid.lean). The 1-D and DC-only goldens (README R8, R9 Σ, R11) are unaffected"
+notes = "B18"
+
+[adapode-missing-spectral-solvers]
+source = "Adapode.jl ext/FFTWExt.jl:19-22, 49-56"
+behavior = "B19: biharmonicneumann and biharmonicdirichlet are imported but only their time-series methods exist, and fullwaveneumann is defined but not imported into Adapode"
+port = "Adapode.Grid.biharmonicNeumann, biharmonicDirichlet and fullwaveNeumann are defined"
+notes = "B19"
+
+[adapode-series-first-slice]
+source = "Adapode.jl src/grid.jl:256-330, ext/FFTWExt.jl:33-87 (assign!(out, 1, u0))"
+behavior = "the time-series solvers store u0 as slice 1 whatever t[1] is"
+port = "Adapode.Grid.series stores the solution at every t[i], u0 itself when t[i] = 0 (the README's 0:0.01:2π series agree)"
