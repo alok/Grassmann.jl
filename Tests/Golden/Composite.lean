@@ -29,6 +29,9 @@ Known issues (expected failures, see `compositeKnownIssues`):
   `exp(1.0 + 0.25v∞)` in `CGA3` is `5.44 + 0.68v∞` in Julia, `2.72 + 0.68v∞` here). The
   port fixes it; the golden is not yet tagged (integrator request: a `skip` defect in
   `oracle/defects.toml`).
+* `exp-closed-form-abs2`: Julia's closed-form `exp(s + m)` (`m⟑m = h` a scalar) uses
+  `θ = √|⟨~m m⟩₀|` instead of `√|h|`, wrong unless `m` is a blade (two `E2` multivector
+  cases); fixed in `Multivector.exp`/`Half.exp`.
 * `norm2-infinite`: the composite comparator takes `‖out − expect‖₂` of equal infinite
   coefficients as `NaN` (`inv(0.7v∞) = Inf·v∞` in `CGA3` agrees exactly); integrator
   request for `Tests/Golden/Scalar.lean`.
@@ -225,6 +228,14 @@ def compositeKnownIssues : Array KnownIssue := #[
       Grassmann.Couple.exp; the golden needs a skip defect in oracle/defects.toml"
     tables := #[{ suite := some (Glob.compile "composite"), op := some (Glob.compile "exp"),
                   kinds := some #[KindPat.compile "Couple"], when := some "null_blade" }] },
+  { id := "exp-closed-form-abs2"
+    note := "Julia's closed-form exp(s + m) when m⟑m is a scalar h takes θ = √|⟨~m m⟩₀| \
+      instead of √|h| (composite.jl:83-96); they agree only for blades. E2 cases a=14, a=15 \
+      (m = vector + bivector) disagree with Julia's own series and an independent Cl(2) Taylor \
+      sum (exp(-0.3045 - 0.3665v₁ + 0.1105v₂ - 0.053v₁₂) has scalar part 0.79113, Julia \
+      0.79325); fixed in Grassmann.Multivector.exp / Half.exp; documented in oracle/defects.toml"
+    tables := #[{ suite := some (Glob.compile "composite"), op := some (Glob.compile "exp"),
+                  kinds := some #[KindPat.compile "Multivector|Spinor"] }] },
   { id := "norm2-infinite"
     note := "the composite comparator's ‖out − expect‖₂ is NaN for equal infinite \
       coefficients (inv(0.7v∞) = Inf·v∞ agrees); Tests/Golden/Scalar.lean compareCoeffs \

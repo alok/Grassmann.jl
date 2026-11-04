@@ -142,7 +142,10 @@ The same operations as `Multivector.inv?`, so the same values. -/
   else expm1Generated addF (· * ·) sdivF fnorm b
 
 /-- Julia `exp(t::Multivector)` (`src/composite.jl:83-96`, parabolic defect fixed):
-the closed form when `m = t - scalar(t)` squares to a scalar, else `1 + expm1(t)`. -/
+the closed form when `m = t - scalar(t)` squares to a scalar `h`, else `1 + expm1(t)`.
+The closed form uses `θ = √|h|` (defect `exp-closed-form-abs2` fixed: Julia uses
+`√|⟨~m m⟩₀|`, which is `√|h|` only when `m` is a blade; for `m = −0.3v₁ + 0.2v₂ + 0.3v₁₂`
+in ℝ2, `h = 0.04` but `⟨~m m⟩₀ = 0.22`, and Julia's value disagrees with its own series). -/
 @[inline] def exp (t : Multivector V Float) : Multivector V Float :=
   let s := t.scalarValue
   let m := t.dropScalar
@@ -152,7 +155,9 @@ the closed form when `m = t - scalar(t)` squares to a scalar, else `1 + expm1(t)
     let es := F64.exp s
     if hint == f0 then ⟨vset (vmap (es * ·) m.v) 0 es⟩
     else
-      let θ := Float.sqrt (Float.abs (abs2Sum .full m.v))
+      -- θ² = |m⟑m|, the scalar the closed form needs (Julia takes |abs2(m)| = |~m⟑m|,
+      -- which differs unless m is a blade: defect exp-closed-form-abs2)
+      let θ := Float.sqrt (Float.abs hint)
       let c := if hint < f0 then Float.cos θ else Float.cosh θ
       let x := if hint < f0 then sinOver θ else sinhOver θ
       ⟨vset (vmap (fun y => es * (y * x)) m.v) 0 (es * c)⟩
@@ -311,7 +316,7 @@ taken without the kernel product (Julia's numeric `isscalar` test holds there). 
     let es := F64.exp s
     if hint == f0 then ⟨vset (vmap (es * ·) m.v) 0 es⟩
     else
-      let θ := Float.sqrt (Float.abs (abs2Sum (halfLayout false) m.v))
+      let θ := Float.sqrt (Float.abs hint) -- defect exp-closed-form-abs2 fixed
       let c := if hint < f0 then Float.cos θ else Float.cosh θ
       let x := if hint < f0 then sinOver θ else sinhOver θ
       ⟨vset (vmap (fun y => es * (y * x)) m.v) 0 (es * c)⟩
