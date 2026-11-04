@@ -414,4 +414,11 @@ def delaunay3Bundle (pts : Array P3) : SimplexBundle 4 (Grassmann.Chain Grassman
     (Grassmann.Chain.ofFn fun i => #[1, p.x, p.y, p.z][i.1]! : Grassmann.Chain Grassmann.ℝ4 1 Float)
   SimplexBundle.ofPoints (pts.map hp) ((delaunay3 pts).map fun (a, b, c, d) => #v[a + 1, b + 1, c + 1, d + 1])
 
+/-- The convex hull as a boundary `SimplexBundle` on the same points as `delaunay3Bundle`
+(Julia's boundary `e` of `tetrahedralize`), triangles 1-based and outward-oriented. -/
+def hull3Bundle (pts : Array P3) : SimplexBundle 3 (Grassmann.Chain Grassmann.ℝ4 1 Float) :=
+  let hp := fun (p : P3) =>
+    (Grassmann.Chain.ofFn fun i => #[1, p.x, p.y, p.z][i.1]! : Grassmann.Chain Grassmann.ℝ4 1 Float)
+  SimplexBundle.ofPoints (pts.map hp) ((convexHull3 pts).map fun (a, b, c) => #v[a + 1, b + 1, c + 1])
+
 end Cartan.Delaunay3

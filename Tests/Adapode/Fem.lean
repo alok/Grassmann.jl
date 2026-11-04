@@ -1,6 +1,7 @@
 import Tests.Adapode.Common
 import Adapode.Element
 import Cartan.Mesher
+import Cartan.Delaunay3
 
 /-!
 # Finite elements (`Adapode.Element`)
@@ -15,6 +16,9 @@ import Cartan.Mesher
   for `−u″ = 1` in 1-D, second-order convergence of `−Δu = 2π² sin πx sin πy` on the unit square,
   and the first Dirichlet eigenvalue of the unit disk (`j₀₁² = 5.7832`, approached from above as
   the conforming P1 bound requires).
+* **3-D** on `Cartan.Delaunay3` tetrahedra of a jittered cube grid: mass sums to the volume,
+  stiffness rows sum to zero, linear Dirichlet data is exact, and `−Δu = 3π² sin πx sin πy sin πz`
+  converges at second order.
 -/
 
 open Lean Tests.Small Cartan Cartan.Solve Adapode.FEM Grassmann JuliaBase
@@ -454,6 +458,48 @@ def flow : TestM Unit := do
   check "fem: 2-D jumps estimate decreases as O(h)" (te[0]! / te[1]! ≥ 1.6 && te[1]! / te[2]! ≥ 1.6)
     fun _ => s!"{tot}"
 
+/-- An `(n+1)³` grid of the unit cube with a little deterministic interior jitter (so the
+tetrahedralization is not the degenerate cospherical one everywhere). -/
+def cubePoints (n : Nat) : Array Cartan.Delaunay3.P3 :=
+  (Array.range ((n + 1) ^ 3)).map fun q =>
+    let (i, j, k) := (q % (n + 1), q / (n + 1) % (n + 1), q / (n + 1) ^ 2)
+    let h := 1 / n.toFloat
+    let inner := fun (a : Nat) => a != 0 && a != n
+    let jit := fun (s : Nat) => if inner i && inner j && inner k then
+      0.15 * h * (((q * 2654435761 + s * 40503) % 1000).toFloat / 1000 - 0.5) else 0
+    ⟨i.toFloat * h + jit 1, j.toFloat * h + jit 2, k.toFloat * h + jit 3⟩
+
+/-- P1 elements on `Cartan.Delaunay3` tetrahedra. -/
+def tets : TestM Unit := do
+  let π := 3.141592653589793
+  let pts := cubePoints 4
+  let m := Cartan.Delaunay3.delaunay3Bundle pts
+  let e := Cartan.Delaunay3.hull3Bundle pts
+  let M := assembleMass m
+  let msum := (List.range M.rows).foldl (fun s i => s + (M.mulVec ⟨Array.replicate M.cols 1⟩).get! i) 0
+  check "fem 3-D: the mass matrix sums to the cube's volume" (near msum 1 1e-12) fun _ => s!"{msum}"
+  let A := assembleStiffness m
+  let rs := A.mulVec ⟨Array.replicate A.cols 1⟩
+  check "fem 3-D: stiffness rows sum to zero" (rs.data.all (·.abs < 1e-12)) fun _ => s!"{rs.data.extract 0 5}"
+  checkEq "fem 3-D: the boundary nodes are the cube's surface" (nodesOf e).size (125 - 27)
+  -- harmonic linear data is reproduced exactly
+  let g := fun (p : Cartan.Delaunay3.P3) => 1 + 2 * p.x - p.y + 3 * p.z
+  let bn := nodesOf e
+  let u := solveDirichlet A ⟨Array.replicate A.rows 0⟩ bn ⟨bn.map fun i => g pts[i]!⟩
+  let err := (List.range pts.size).foldl (fun s i => max s (u.get! i - g pts[i]!).abs) (0 : Float)
+  check "fem 3-D: linear Dirichlet data is reproduced exactly" (err < 1e-12) fun _ => s!"{err}"
+  -- −Δu = 3π² sin πx sin πy sin πz, u = 0 on the cube: O(h²) nodal convergence
+  let ex := fun (p : Cartan.Delaunay3.P3) => Float.sin (π * p.x) * Float.sin (π * p.y) * Float.sin (π * p.z)
+  let errs := [4, 8, 12].map fun n =>
+    let pts := cubePoints n
+    let m := Cartan.Delaunay3.delaunay3Bundle pts
+    let e := Cartan.Delaunay3.hull3Bundle pts
+    let u := poisson m e (f := fun x => 3 * π * π * Float.sin (π * px x 1) * Float.sin (π * px x 2) * Float.sin (π * px x 3))
+    (List.range pts.size).foldl (fun s i => max s (u.get! i - ex pts[i]!).abs) (0 : Float)
+  let a := errs.toArray
+  check "fem 3-D: Poisson on a Delaunay tet mesh converges at O(h²)"
+    (a[0]! / a[1]! ≥ 3 && Float.log (a[1]! / a[2]!) / Float.log 1.5 ≥ 1.9 && a[2]! < 0.05) fun _ => s!"{errs}"
+
 /-- Run the FEM checks. -/
 def run : TestM Unit := do
   julia
@@ -463,5 +509,6 @@ def run : TestM Unit := do
   quadratic
   maxwell
   flow
+  tets
 
 end Tests.AdapodeTests.Fem
