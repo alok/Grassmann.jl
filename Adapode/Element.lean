@@ -835,4 +835,104 @@ def solvePoissonPN (L : LagrangeMesh) (f : Float × Float → Float) : FloatArra
   let (A, _, b) := assemblePN L f
   solveDirichlet A b L.boundary
 
+/-! ## Maxwell: lowest-order Nédélec edge elements -/
+
+/-- Julia `_nedelec(λ, g)`: `(1/|K|) ∫ λ Nₐ·N_b` for the Whitney forms
+`Nₐ = φₐ₊₁∇φₐ₊₂ − φₐ₊₂∇φₐ₊₁` (indices mod 3), from `f_ab = λ ∇φₐ·∇φ_b`, in Julia's closed form. -/
+def nedelecLocal (lam : Float) (g : Array (Array Float)) : Array (Array Float) :=
+  let f := fun (a b : Nat) => lam * dot g[a]! g[b]!
+  let m11 := (f 2 2 - f 1 2 + f 1 1) / 6
+  let m22 := (f 0 0 - f 0 2 + f 2 2) / 6
+  let m33 := (f 1 1 - f 0 1 + f 0 0) / 6
+  let m12 := (f 2 0 - f 2 2 - 2 * f 1 0 + f 1 2) / 12
+  let m13 := (f 2 1 - 2 * f 2 0 - f 1 1 + f 1 0) / 12
+  let m23 := (f 0 1 - f 0 0 - 2 * f 2 1 + f 2 0) / 12
+  #[#[m11, m12, m13], #[m12, m22, m23], #[m13, m23, m33]]
+
+/-- The global orientation of the local edges (Julia `facetsigns`): `+1` when the neighbour
+across edge `j` has a smaller index (or there is none), else `−1`. -/
+def edgeSigns (t : TriEdges) (k : Nat) : Array Float :=
+  (t.nbr[k]!).map fun n => if n < k + 1 then 1 else -1
+
+/-- Julia `assemblemaxwell` for a real coefficient: `curl (μ⁻¹ curl E) + κ² E = f` with the
+basis `lₐ sₐ Nₐ` (edge length `l`, orientation sign `s`). Per element
+`M_ab = (1/(|K|²μ) + n_ab(κ²)) lₐ l_b |K|` and, for the load, centroid quadrature
+`bₑ += f(c)·(∇φₐ₊₂ − ∇φₐ₊₁) lₐ |K|/3` (Julia takes a constant `f̂`). Real `κ²` only (Julia allows
+complex `κ`). -/
+def assembleMaxwell (m : SimplexBundle 3 (HPoint V) G) (t : TriEdges) (κ2 : Nat → Float)
+    (μ : Float := 1) (f : HPoint V → Float × Float := fun _ => (0, 0)) : Sparse × FloatArray :=
+  Id.run do
+    let ne := t.edges.size
+    let w := vols m
+    let g := grads m
+    let cs := meanPoints m
+    let len := t.edges.map fun (a, b) =>
+      Float.sqrt ((m.coord (a + 1) 1 - m.coord (b + 1) 1) ^ 2 + (m.coord (a + 1) 2 - m.coord (b + 1) 2) ^ 2)
+    let mut I : Array Nat := #[]
+    let mut J : Array Nat := #[]
+    let mut X : FloatArray := .empty
+    let mut b : FloatArray := ⟨Array.replicate ne 0⟩
+    for k in [0:m.elements] do
+      let ed := t.edgeOf[k]!
+      let sg := edgeSigns t k
+      let li := (Array.range 3).map fun a => len[ed[a]!]! * sg[a]!
+      let mk := w.get! k
+      let mμ := 1 / (mk * mk * μ)
+      let n := nedelecLocal (κ2 k) g[k]!
+      let (fx, fy) := f cs[k]!
+      for a in [0:3] do
+        for c in [0:3] do
+          I := I.push ed[a]!; J := J.push ed[c]!
+          X := X.push ((mμ + n[a]![c]!) * (li[a]! * li[c]!) * mk)
+        let gq := g[k]![(a + 2) % 3]!
+        let gp := g[k]![(a + 1) % 3]!
+        let fN := fx * (gq[0]! - gp[0]!) + fy * (gq[1]! - gp[1]!)
+        b := b.set! ed[a]! (b.get! ed[a]! + fN * (li[a]! * (mk / 3)))
+    return (Sparse.ofTriplets ne ne I J X, b)
+
+/-- The global unit tangent of edge `e` (from the element with sign `+1`, along its local
+direction `vₐ₊₁ → vₐ₊₂`). -/
+def edgeTangents (m : SimplexBundle 3 (HPoint V) G) (t : TriEdges) : Array (Float × Float) := Id.run do
+  let mut out : Array (Float × Float) := Array.replicate t.edges.size (0, 0)
+  for k in [0:m.elements] do
+    let vs := verts m k
+    let sg := edgeSigns t k
+    for a in [0:3] do
+      if sg[a]! > 0 then
+        let p := vs[(a + 1) % 3]!
+        let q := vs[(a + 2) % 3]!
+        let dx := m.coord (q + 1) 1 - m.coord (p + 1) 1
+        let dy := m.coord (q + 1) 2 - m.coord (p + 1) 2
+        let l := Float.sqrt (dx * dx + dy * dy)
+        out := out.set! t.edgeOf[k]![a]! (dx / l, dy / l)
+  return out
+
+/-- Julia `solvemaxwell` for a real coefficient: the edge degrees of freedom (the mean tangential
+component along each edge's global tangent), with the tangential trace of `bc` imposed on the
+boundary edges at their midpoints. -/
+def solveMaxwell (m : SimplexBundle 3 (HPoint V) G) (κ2 : Nat → Float) (bc : HPoint V → Float × Float)
+    (μ : Float := 1) (f : HPoint V → Float × Float := fun _ => (0, 0)) : TriEdges × FloatArray :=
+  let t := triEdges m
+  let (A, b) := assembleMaxwell m t κ2 μ f
+  let tg := edgeTangents m t
+  let be := t.boundary
+  let vals : FloatArray := ⟨be.map fun e => let (x, y) := bc (edgeMid m t e); x * tg[e]!.1 + y * tg[e]!.2⟩
+  (t, solveDirichlet A b be vals)
+
+/-- Julia `interpnedelec` at the element centroids: `E(c) = Σₐ uₑ lₐ sₐ Nₐ(c)`,
+`Nₐ(c) = (∇φₐ₊₂ − ∇φₐ₊₁)/3`. -/
+def nedelecCentroids (m : SimplexBundle 3 (HPoint V) G) (t : TriEdges) (u : FloatArray) :
+    Array (Float × Float) :=
+  let g := grads m
+  let len := t.edges.map fun (a, b) =>
+    Float.sqrt ((m.coord (a + 1) 1 - m.coord (b + 1) 1) ^ 2 + (m.coord (a + 1) 2 - m.coord (b + 1) 2) ^ 2)
+  (Array.range m.elements).map fun k =>
+    let ed := t.edgeOf[k]!
+    let sg := edgeSigns t k
+    (List.range 3).foldl (fun (acc : Float × Float) a =>
+      let c := u.get! ed[a]! * len[ed[a]!]! * sg[a]! / 3
+      let gq := g[k]![(a + 2) % 3]!
+      let gp := g[k]![(a + 1) % 3]!
+      (acc.1 + c * (gq[0]! - gp[0]!), acc.2 + c * (gq[1]! - gp[1]!))) (0, 0)
+
 end Adapode.FEM

@@ -329,6 +329,45 @@ def quadratic : TestM Unit := do
   check "fem: P2 Poisson converges at third order (÷ ≥ 6 per halving)" (e4 / e8 ≥ 6 && e8 < 1e-3)
     fun _ => s!"{e4}, {e8}"
 
+
+/-- Maxwell (Nédélec) checks. -/
+def maxwell : TestM Unit := do
+  -- Julia's closed-form local Nédélec mass against direct integration (∫φᵢφⱼ = |K|(1+δᵢⱼ)/12)
+  let m := squareGrid 1
+  let g := (grads m)[0]!
+  let n := nedelecLocal 1 g
+  let gg := fun (a b : Nat) => dot g[a]! g[b]!
+  let ip := fun (i j : Nat) => (if i == j then (2 : Float) else 1) / 12
+  -- Nₐ = φ_p ∇φ_q − φ_q ∇φ_p with p = a+1, q = a+2
+  let direct := fun (a b : Nat) =>
+    let p := (a + 1) % 3; let q := (a + 2) % 3; let r := (b + 1) % 3; let t := (b + 2) % 3
+    ip p r * gg q t - ip p t * gg q r - ip q r * gg p t + ip q t * gg p r
+  check "fem: Julia's closed-form Nédélec mass = ∫ Nₐ·N_b / |K|"
+    ((List.range 3).all fun a => (List.range 3).all fun b => (n[a]![b]! - direct a b).abs ≤ 1e-14)
+    fun _ => s!"{n} vs {(List.range 3).map fun a => (List.range 3).map (direct a)}"
+  -- curl curl E + E = f with E = (sin πy, sin πx)
+  let π := 3.141592653589793
+  let E := fun (x : HPoint ℝ3) => (Float.sin (π * px x 2), Float.sin (π * px x 1))
+  let f := fun (x : HPoint ℝ3) => let (a, b) := E x; ((π * π + 1) * a, (π * π + 1) * b)
+  let errs := [4, 8, 16].map fun k =>
+    let m := squareGrid k
+    let (t, u) := solveMaxwell m (fun _ => 1) E 1 f
+    let tg := edgeTangents m t
+    let eErr := (List.range t.edges.size).foldl (fun s e =>
+      let (x, y) := E (edgeMid m t e)
+      max s (u.get! e - (x * tg[e]!.1 + y * tg[e]!.2)).abs) (0 : Float)
+    let cs := meanPoints m
+    let fc := nedelecCentroids m t u
+    let cErr := (List.range m.elements).foldl (fun s k =>
+      let (x, y) := E cs[k]!
+      max s (max (fc[k]!.1 - x).abs (fc[k]!.2 - y).abs)) (0 : Float)
+    (eErr, cErr)
+  let e : Array (Float × Float) := errs.toArray
+  check "fem: Nédélec edge values converge" (e[0]!.1 / e[1]!.1 ≥ (1.8 : Float) && e[1]!.1 / e[2]!.1 ≥ (1.8 : Float)
+    && e[2]!.1 < (0.05 : Float)) fun _ => s!"{errs}"
+  check "fem: Nédélec centroid field converges" (e[2]!.2 < e[1]!.2 && e[1]!.2 < e[0]!.2 && e[2]!.2 < (0.1 : Float))
+    fun _ => s!"{errs}"
+
 /-- Run the FEM checks. -/
 def run : TestM Unit := do
   julia
@@ -336,5 +375,6 @@ def run : TestM Unit := do
   nonlinear
   mixed
   quadratic
+  maxwell
 
 end Tests.AdapodeTests.Fem
