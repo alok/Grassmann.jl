@@ -306,7 +306,7 @@ def isBad (o : Options) (a b c : Pt) : Bool :=
 quality conforming Delaunay triangulation of the domain. -/
 def triangulate (g : PSLG) (o : Options := {}) : Result := Id.run do
   let pts := g.points
-  let base := lawson pts (sweep pts (sortedUnique pts))
+  let base := (delaunay pts).foldl Mesh.add {}
   let segs : Std.HashSet (Nat × Nat) :=
     g.segments.foldl (fun acc (u, v) => if u != v then acc.insert (key u v) else acc) {}
   let mut s : State := { pts, mesh := base, segs }

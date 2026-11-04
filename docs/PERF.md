@@ -698,3 +698,23 @@ Apple M4 Max under load (≈15% noise), best of 7:
 Julia's RK4 path allocates through Adapode's `butcher`, which explains its large times. Its Heun
 and ABM keep isbits Chains in registers, while the Lean steps read and write FloatArrays. The
 in-place Lean Lorenz loop allocates nothing per step (checked in the generated C).
+
+## Planar Delaunay and Ruppert meshing (`Cartan.Delaunay`, `Cartan.Mesher`)
+
+Suite `cartan` (`Bench/Cartan.lean`), Linux cloud container, median of 5. `delaunay` is
+20 000 scattered points (ns per point); `triangulate_disk` refines a 64-gon to area 5·10⁻⁴
+(ns per output triangle).
+
+| case | before | after | change |
+|---|---|---|---|
+| `delaunay` 20 000 points | 15.0 µs/pt | 5.1 µs/pt | half-edge arrays instead of a `HashMap (Nat × Nat) Nat`; predicates on unboxed `FloatArray` coordinates; `noEdge` below `2³²` |
+| `triangulate_disk` | 10.1 µs/tri | 9.6 µs/tri | its initial triangulation now uses the fast `delaunay` |
+
+Two pitfalls were each worth about 2× on the Delaunay benchmark:
+
+* A sentinel `1 <<< 62` was inlined as a big-`Nat` literal. Each use then parsed it from a
+  string (`lean_cstr_to_nat`, GMP), which cost 13% of the instructions.
+* `orient2d`/`incircle` on `Float × Float` boxed every coordinate.
+
+The mesher still keeps its triangulation in the `HashMap`-based `Delaunay.Mesh`. Porting its
+refinement to the half-edge arrays is the next speed-up.
