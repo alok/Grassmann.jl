@@ -177,6 +177,9 @@ inductive Val where
   | closure (params : Array String) (body : Expr) (env : List (String × Val))
   /-- Julia `nothing`. -/
   | nothing
+  /-- A value of kind `Other` known only by its `show` strings (`none`: Julia's `show`
+  threw), such as a Cayley table. -/
+  | shown (str compact : Option String)
   /-- A value whose display is known but which the interpreter cannot compute with. -/
   | opaque (display : String)
   deriving Inhabited

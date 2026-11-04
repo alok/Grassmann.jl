@@ -140,6 +140,7 @@ partial def showVal (sandbox : Nat) : Val → Option String
   | .user f _ _ => some ("Main.DocSandbox" ++ toString sandbox ++ ".var\"#" ++ f ++ "\"()")
   | .nothing => some "nothing"
   | .opaque d => some d
+  | .shown s _ => s
   | _ => none
 
 /-- A number as an oracle element. -/
@@ -163,6 +164,9 @@ def encodeVal (sandbox : Nat) (v : Val) : Option GoldenElem :=
   | .num n => encodeNum n
   | .elem V hdl m x => if V.n > denseLimit then encodeBig hdl x else some (encodeElem V hdl m x)
   | .space V m true => some { kind := .space, str := .val (V.showSub m), compactStr := .val (V.showSub m) }
+  | .shown s c =>
+    let f := fun (o : Option String) => match o with | some x => Field.val x | none => .null
+    some { kind := .other, str := f s, compactStr := f c }
   | _ => (showVal sandbox v).map fun s => { kind := .other, str := .val s }
 
 /-! ## Elements across spaces -/

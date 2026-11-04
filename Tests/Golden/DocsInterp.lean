@@ -1,5 +1,6 @@
 import Tests.Golden.DocsOps
 import Grassmann.Basis
+import Grassmann.Forms.Show
 
 /-!
 # The docs interpreter
@@ -411,6 +412,21 @@ partial def callBuiltin (name : String) (params : Array Val) (args : Array Val) 
     | #[.num (.int n)] => return subOf (TensorBundle.euclidean n.toNat)
     | #[.space V m _] => return .space V m true
     | _ => unsupported "Submanifold"
+  | "cayley" =>
+    let op? : String → Option BinOp
+      | "wedge" | "∧" => some .wedge | "vee" | "∨" => some .vee | "*" => some .mul
+      | "<" => some .contractionLeft | ">" => some .contraction
+      | "<<" => some .contractionRevLeft | ">>" => some .contractionRevRight
+      | _ => none
+    match args with
+    | #[.space V m _, .fn f] =>
+      if m != lowMask V.n then unsupported "cayley of a subspace" else
+      match op? f with
+      | some op =>
+        let C := cayley V op
+        return .shown (C.showJulia false) (C.showJulia true)
+      | none => unsupported s!"cayley: operation {f}"
+    | _ => unsupported "cayley"
   | "Manifold" =>
     match args with
     | #[.num (.int n)] => return subOf (TensorBundle.euclidean n.toNat)

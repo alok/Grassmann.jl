@@ -277,6 +277,52 @@ def displayBody (C : CayleyTable V) : String :=
   printMatrix (displayCells V C.layout V C.layout fun i j =>
     Cell.number (showEntry V ((C.entries[i]?.bind (·[j]?)).getD (.ok .zero))))
 
+/-- `⟨b ~b⟩₀` for a basis blade `b` (the product of its generators' squares). -/
+def bladeNormSq (V : TensorBundle) (b : UInt64) : Rat :=
+  let g := DirectSum.Bits.popcount b
+  let rev : Rat := if (g * (g - 1) / 2) % 2 == 0 then 1 else -1
+  match V.terms₂ .mul b b with
+  | .ok ts => rev * ts.foldl (fun s t => if t.bits == 0 && t.z == 0 then s + t.coef else s) 0
+  | .error _ => 0
+
+/-- `⟨e ~e⟩₀` of one table entry (orthogonal basis: the cross terms vanish). -/
+def entryNormSq (V : TensorBundle) : Except String BladeResult → Rat
+  | .ok r => r.bladeTerms.foldl (fun s t => if t.z == 0 then s + t.coef * t.coef * bladeNormSq V t.bits else s) 0
+  | .error _ => 0
+
+/-- Julia `show` of `cayley(V, op)` (an `Endomorphism` whose matrix is a `Multiplex`):
+column `j` (the right operand `b_j`) prints as the tensor `e₀ⱼ + Σᵢ eᵢⱼ⊗bᵢ` over its
+nonzero rows `i ≥ 1` (`⊗v⃖` when there are none), and the table as `col₀ + Σⱼ (colⱼ)bⱼ`
+over the non-null columns `j ≥ 1` (again `⊗v⃖` when none). A column is null when its
+norm `Σᵢ ⟨eᵢⱼ ~eᵢⱼ⟩₀` is zero; a negative norm makes Julia's `sqrt` throw a
+`DomainError`, so the table has no string (`none`). Signs are not folded (`+-1v₁₂⊗v₂`),
+matching Julia. -/
+def showJulia (C : CayleyTable V) (compact : Bool) : Option String := Id.run do
+  let bs := C.layout.blades V.n
+  let entry (i j : Nat) : Except String BladeResult := (C.entries[i]?.bind (·[j]?)).getD (.ok .zero)
+  let isZero : Except String BladeResult → Bool
+    | .ok .zero => true
+    | _ => false
+  let col (j : Nat) : String := Id.run do
+    let mut s := showEntry V (entry 0 j)
+    let mut any := false
+    for i in [1:bs.size] do
+      let e := entry i j
+      if !isZero e then
+        s := s ++ "+" ++ showEntry V e ++ "⊗" ++ V.bladeLabel bs[i]!
+        any := true
+    return if any then s else s ++ "⊗v⃖"
+  let norms := (Array.range bs.size).map fun j =>
+    (Array.range bs.size).foldl (fun s i => s + entryNormSq V (entry i j)) 0
+  if norms.any (· < 0) then return none
+  let mut out := col 0
+  let mut any := false
+  for j in [1:bs.size] do
+    if norms[j]! != 0 then
+      out := out ++ (if compact then "+(" else " + (") ++ col j ++ ")" ++ V.bladeLabel bs[j]!
+      any := true
+  return some (if any then out else out ++ "⊗v⃖")
+
 end CayleyTable
 
 /-- Julia `alltex(V, ops=[∧,∨,<,>,<<,>>])` (`forms.jl:1762-1764`). -/
