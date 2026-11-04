@@ -1,5 +1,6 @@
 import Cartan.Element
 import Cartan.Solve
+import Adapode.Constants
 
 /-!
 # Finite elements: P1 assembly and solvers (Adapode `src/element.jl`)
@@ -731,5 +732,107 @@ def solvePoissonDIPG (m : SimplexBundle 3 (HPoint V) G) (f : HPoint V → Float)
   let A := assembleStiffness dm (fun _ => c)
   let (P, S) := assembleDIPG m
   (dm, (A - S + α * S.transpose + β * P).solve b)
+
+/-! ## P2 (quadratic) Lagrange elements and isoparametric quadrature -/
+
+/-- Julia `shapeP1(r, s)`: `(1 − r − s, r, s)`. -/
+def shapeP1 (r s : Float) : Array Float := #[1 - r - s, r, s]
+
+/-- Julia `gradientP1(r, s)`: `(∂ᵣ, ∂ₛ)` of the P1 shapes. -/
+def gradientP1 (_ _ : Float) : Array (Float × Float) := #[(-1, -1), (1, 0), (0, 1)]
+
+/-- Julia `shapeP2(r, s)` (§4.7): vertices, then the nodes on the edges opposite vertices 1, 2, 3. -/
+def shapeP2 (r s : Float) : Array Float :=
+  #[1 - 3 * r - 3 * s + 2 * r * r + 4 * r * s + 2 * s * s, 2 * r * r - r, 2 * s * s - s, 4 * r * s,
+    4 * s - 4 * r * s - 4 * s * s, 4 * r - 4 * r * r - 4 * r * s]
+
+/-- Julia `gradientP2(r, s)` (§4.7). -/
+def gradientP2 (r s : Float) : Array (Float × Float) :=
+  #[(-3 + 4 * r + 4 * s, -3 + 4 * r + 4 * s), (4 * r - 1, 0), (0, 4 * s - 1), (4 * s, 4 * r),
+    (-4 * s, 4 - 4 * r - 8 * s), (4 - 8 * r - 4 * s, -4 * r)]
+
+/-- A planar Lagrange mesh of degree 1 or 2: node coordinates, element node lists (Julia
+`LagrangeP2` order for degree 2: `[v₁, v₂, v₃, e(v₂v₃), e(v₁v₃), e(v₁v₂)]`, edge nodes numbered
+after the vertices), and the boundary nodes. -/
+structure LagrangeMesh where
+  /-- Degree (1 or 2). -/
+  degree : Nat
+  /-- Node coordinates. -/
+  xy : Array (Float × Float)
+  /-- Element node lists (0-based). -/
+  elems : Array (Array Nat)
+  /-- Boundary nodes (0-based, sorted). -/
+  boundary : Array Nat
+  deriving Inhabited
+
+/-- Julia `LagrangeP2(t)` (degree 2) or the P1 mesh itself (degree 1) of a triangle mesh. -/
+def lagrange (m : SimplexBundle 3 (HPoint V) G) (degree : Nat := 2) : LagrangeMesh :=
+  let t := triEdges m
+  let np := m.totalNodes
+  let vxy := (Array.range np).map fun v => (m.coord (v + 1) 1, m.coord (v + 1) 2)
+  let be := t.boundary
+  let bv := nodesOf m.boundary
+  if degree ≤ 1 then ⟨1, vxy, (Array.range m.elements).map (verts m), bv⟩
+  else
+    let exy := t.edges.map fun (a, b) => ((vxy[a]!.1 + vxy[b]!.1) / 2, (vxy[a]!.2 + vxy[b]!.2) / 2)
+    ⟨2, vxy ++ exy, (Array.range m.elements).map fun k => verts m k ++ t.edgeOf[k]!.map (np + ·),
+      (bv ++ be.map (np + ·)).qsort (· < ·)⟩
+
+/-- The shapes and reference gradients at the quadrature points of Julia's rules (`Gauss[2]` for
+P1, `Gauss[4]` for P2; `GaussShape`, `GaussGradient`). -/
+def quadrature (degree : Nat) : Array (Float × Array Float × Array (Float × Float)) :=
+  let R := Adapode.Gauss (2 * degree)
+  (Array.range R.w.size).map fun q =>
+    let r := R.r.get! q
+    let s := R.s.get! q
+    (R.w.get! q / 2, if degree ≤ 1 then shapeP1 r s else shapeP2 r s,
+      if degree ≤ 1 then gradientP1 r s else gradientP2 r s)
+
+/-- Julia `isoparametric(xy, dS)`: `J = dS xyᵀ`, the physical gradients `J⁻¹ dS`, and `det J`. -/
+def isoparametric (xy : Array (Float × Float)) (dS : Array (Float × Float)) :
+    Array (Float × Float) × Float :=
+  let j11 := (List.range dS.size).foldl (fun a i => a + dS[i]!.1 * xy[i]!.1) 0
+  let j12 := (List.range dS.size).foldl (fun a i => a + dS[i]!.1 * xy[i]!.2) 0
+  let j21 := (List.range dS.size).foldl (fun a i => a + dS[i]!.2 * xy[i]!.1) 0
+  let j22 := (List.range dS.size).foldl (fun a i => a + dS[i]!.2 * xy[i]!.2) 0
+  let det := j11 * j22 - j12 * j21
+  (dS.map fun (a, b) => ((j22 * a - j12 * b) / det, (-j21 * a + j11 * b) / det), det)
+
+/-- Julia `assemblemassPN` / `assemblestiffnessPN` together with the consistent load
+`bᵢ = Σ_q w_q det J f(x_q) Sᵢ(x_q)` (Julia's `PN` assembly has no load). -/
+def assemblePN (L : LagrangeMesh) (f : Float × Float → Float := fun _ => 0) :
+    Sparse × Sparse × FloatArray := Id.run do
+  let np := L.xy.size
+  let Q := quadrature L.degree
+  let mut IA : Array Nat := #[]
+  let mut JA : Array Nat := #[]
+  let mut XA : FloatArray := .empty
+  let mut XM : FloatArray := .empty
+  let mut b : FloatArray := ⟨Array.replicate np 0⟩
+  for ti in L.elems do
+    let xy := ti.map (L.xy[·]!)
+    let d := ti.size
+    let mut AK : Array Float := Array.replicate (d * d) 0
+    let mut MK : Array Float := Array.replicate (d * d) 0
+    for (w, S, dS) in Q do
+      let (g, det) := isoparametric xy dS
+      let wx := w * det
+      let xq := (List.range d).foldl (fun (a : Float × Float) i => (a.1 + S[i]! * xy[i]!.1, a.2 + S[i]! * xy[i]!.2)) (0, 0)
+      let fq := f xq
+      for i in [0:d] do
+        b := b.set! ti[i]! (b.get! ti[i]! + wx * fq * S[i]!)
+        for j in [0:d] do
+          AK := AK.modify (i * d + j) (· + wx * (g[j]!.1 * g[i]!.1 + g[j]!.2 * g[i]!.2))
+          MK := MK.modify (i * d + j) (· + S[i]! * (S[j]! * wx))
+    for i in [0:d] do
+      for j in [0:d] do
+        IA := IA.push ti[i]!; JA := JA.push ti[j]!
+        XA := XA.push AK[i * d + j]!; XM := XM.push MK[i * d + j]!
+  return (Sparse.ofTriplets np np IA JA XA, Sparse.ofTriplets np np IA JA XM, b)
+
+/-- `−Δu = f`, `u = 0` on the boundary, with Lagrange elements of the mesh's degree. -/
+def solvePoissonPN (L : LagrangeMesh) (f : Float × Float → Float) : FloatArray :=
+  let (A, _, b) := assemblePN L f
+  solveDirichlet A b L.boundary
 
 end Adapode.FEM

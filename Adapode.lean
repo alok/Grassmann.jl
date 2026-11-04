@@ -37,11 +37,11 @@ def ic := InitialCondition.of (lorenz 10 28 (8 / 3)) chaosStart
   `solveTransport`, `solveTransportDiffusion`, `solveHeat`, the 1-D `adaptPoisson` loop,
   `solveWave`/`solveWaveDirichlet`, Allen–Cahn (`solveBistable`, `solveBistableNewton`),
   `solveNonlinearPoisson`, plane-strain elasticity, Crouzeix–Raviart Stokes (`solveStokes`) and
-  discontinuous Galerkin Poisson (`solvePoissonDIPG`) (checked against the Julia values of port
+  discontinuous Galerkin Poisson (`solvePoissonDIPG`), and P2 elements with isoparametric
+  quadrature (`lagrange`, `assemblePN`, `solvePoissonPN`) (checked against the Julia values of port
   notes §4.8, §6.1–6.2 and against second-order convergence, d'Alembert and the patch test).
 
-**Pending** (port notes §2.6-2.7, §4.7-4.10): Navier–Stokes, Maxwell,
-P2/isoparametric assembly and the 2-D `jumps` indicator of
+**Pending** (port notes §2.6-2.7, §4.7-4.10): Navier–Stokes, Maxwell and the 2-D `jumps` indicator of
 `src/element.jl`, and the spectral solvers of `src/grid.jl`/`ext/FFTWExt.jl` (Fourier/DCT/DST
 multipliers, Chebyshev Helmholtz/biharmonic/Orr–Sommerfeld/polar Laplacian).
 -/

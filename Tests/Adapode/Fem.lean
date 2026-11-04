@@ -288,11 +288,53 @@ def mixed : TestM Unit := do
   let d16 := dErr 16
   check "fem: SIPG converges at second order" (d8 / d16 ≥ 3 && d16 < 0.01) fun _ => s!"{d8}, {d16}"
 
+
+/-- `max |A − B|` over the union of the stored entries. -/
+def maxDiff (A B : Sparse) : Float :=
+  let D := A - B
+  D.vals.data.foldl (fun m x => max m x.abs) 0
+
+/-- P2 checks. -/
+def quadratic : TestM Unit := do
+  let g4 := squareGrid 4
+  let L1 := lagrange g4 1
+  let (A1, M1, _) := assemblePN L1
+  check "fem: assemblemassPN(P1) = assemblemass (Julia's verified identity)" (maxDiff M1 (assembleMass g4) ≤ 1e-15)
+    fun _ => s!"{maxDiff M1 (assembleMass g4)}"
+  check "fem: assemblestiffnessPN(P1) = assemblestiffness" (maxDiff A1 (assembleStiffness g4) ≤ 1e-13)
+    fun _ => s!"{maxDiff A1 (assembleStiffness g4)}"
+  let L2 := lagrange g4 2
+  checkEq "fem: LagrangeP2 nodes = vertices + edges" L2.xy.size (25 + 56)
+  let (A2, M2, _) := assemblePN L2
+  check "fem: P2 Σ mass = area" (near (sumAll M2) 1 1e-12) fun _ => s!"{sumAll M2}"
+  let rows := A2.mulVec ⟨Array.replicate L2.xy.size 1⟩
+  check "fem: P2 stiffness annihilates constants" (rows.data.all (·.abs ≤ 1e-12))
+  -- quadratics are reproduced exactly: −Δ(x(1−x) + y(1−y)) = 4
+  let qex := fun (p : Float × Float) => p.1 * (1 - p.1) + p.2 * (1 - p.2)
+  let g := squareGrid 3
+  let Lq := lagrange g 2
+  let (Aq, _, bq) := assemblePN Lq fun _ => 4
+  let uq := solveDirichlet Aq bq Lq.boundary ⟨Lq.boundary.map fun v => qex Lq.xy[v]!⟩
+  check "fem: P2 reproduces a quadratic solution exactly"
+    ((List.range Lq.xy.size).all fun i => (uq.get! i - qex Lq.xy[i]!).abs ≤ 1e-12)
+  -- third-order convergence for sin πx sin πy
+  let π := 3.141592653589793
+  let ex := fun (p : Float × Float) => Float.sin (π * p.1) * Float.sin (π * p.2)
+  let err := fun (k : Nat) =>
+    let L := lagrange (squareGrid k) 2
+    let u := solvePoissonPN L fun p => 2 * π * π * ex p
+    (List.range L.xy.size).foldl (fun s i => max s (u.get! i - ex L.xy[i]!).abs) 0
+  let e4 := err 4
+  let e8 := err 8
+  check "fem: P2 Poisson converges at third order (÷ ≥ 6 per halving)" (e4 / e8 ≥ 6 && e8 < 1e-3)
+    fun _ => s!"{e4}, {e8}"
+
 /-- Run the FEM checks. -/
 def run : TestM Unit := do
   julia
   math
   nonlinear
   mixed
+  quadratic
 
 end Tests.AdapodeTests.Fem
