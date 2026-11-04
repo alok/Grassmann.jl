@@ -407,6 +407,38 @@ def convexHull3 (pts : Array P3) : Array (Nat × Nat × Nat) :=
         let f := (List.range 4).filter (· != g) |>.map (T.v t ·)
         if g % 2 == 1 then some (f[0]!, f[2]!, f[1]!) else some (f[0]!, f[1]!, f[2]!)
 
+/-- The circumcentre and circumradius of a tetrahedron (floating point; `NaN`/`inf` when flat). -/
+def circumsphere (a b c d : P3) : P3 × Float :=
+  let (bx, by_, bz) := (b.x - a.x, b.y - a.y, b.z - a.z)
+  let (cx, cy, cz) := (c.x - a.x, c.y - a.y, c.z - a.z)
+  let (dx, dy, dz) := (d.x - a.x, d.y - a.y, d.z - a.z)
+  let (b2, c2, d2) := (bx * bx + by_ * by_ + bz * bz, cx * cx + cy * cy + cz * cz, dx * dx + dy * dy + dz * dz)
+  let det := bx * (cy * dz - cz * dy) - by_ * (cx * dz - cz * dx) + bz * (cx * dy - cy * dx)
+  let ux := (b2 * (cy * dz - cz * dy) - c2 * (by_ * dz - bz * dy) + d2 * (by_ * cz - bz * cy)) / (2 * det)
+  let uy := -(b2 * (cx * dz - cz * dx) - c2 * (bx * dz - bz * dx) + d2 * (bx * cz - bz * cx)) / (2 * det)
+  let uz := (b2 * (cx * dy - cy * dx) - c2 * (bx * dy - by_ * dx) + d2 * (bx * cy - by_ * cx)) / (2 * det)
+  (⟨a.x + ux, a.y + uy, a.z + uz⟩, (ux * ux + uy * uy + uz * uz).sqrt)
+
+/-- The radius–edge ratio (circumradius over shortest edge) of a tetrahedron: TetGen's `q`
+quality measure, `√6/4 ≈ 0.612` for the regular tetrahedron. -/
+def radiusEdge (a b c d : P3) : Float :=
+  let dist := fun (p q : P3) => ((p.x - q.x) ^ 2 + (p.y - q.y) ^ 2 + (p.z - q.z) ^ 2).sqrt
+  let e := min (min (min (dist a b) (dist a c)) (min (dist a d) (dist b c))) (min (dist b d) (dist c d))
+  (circumsphere a b c d).2 / e
+
+/-- Julia `∂` of a tetrahedral mesh: the faces used by exactly one tetrahedron, 0-based and
+oriented counter-clockwise seen from outside (away from the tetrahedron that owns them). -/
+def boundaryFaces (pts : Array P3) (ts : Array (Nat × Nat × Nat × Nat)) : Array (Nat × Nat × Nat) :=
+  let key := fun (a b c : Nat) =>
+    let s := #[a, b, c].qsort (· < ·)
+    (s[0]!, s[1]!, s[2]!)
+  let faces := fun ((a, b, c, d) : Nat × Nat × Nat × Nat) => #[(b, c, d, a), (a, c, d, b), (a, b, d, c), (a, b, c, d)]
+  let count := ts.foldl (fun (m : Std.HashMap (Nat × Nat × Nat) Nat) t =>
+    (faces t).foldl (fun m (a, b, c, _) => let k := key a b c; m.insert k (m.getD k 0 + 1)) m) {}
+  ts.foldl (fun out t => (faces t).foldl (fun out (a, b, c, o) =>
+    if count.getD (key a b c) 0 != 1 then out
+    else if orient3d pts[a]! pts[b]! pts[c]! pts[o]! > 0 then out.push (a, b, c) else out.push (a, c, b)) out) #[]
+
 /-- The tetrahedralization as a `SimplexBundle` of homogeneous points `(1, x, y, z)` (1-based
 vertex ids, as Julia's `SimplexTopology`). -/
 def delaunay3Bundle (pts : Array P3) : SimplexBundle 4 (Grassmann.Chain Grassmann.ℝ4 1 Float) :=

@@ -7,6 +7,7 @@ import FlowGeometry.Airfoil
 import FlowGeometry.NACA
 import FlowGeometry.Mesh
 import FlowGeometry.Plot
+import FlowGeometry.Spheres
 
 /-!
 # FlowGeometry
@@ -75,9 +76,11 @@ without `/6`, `NACA6`'s value-path `g`/`h` swap and `log(a - x)` domain error, t
 1- and 6A-series parameter mapping, `upper`/`lower` forcing `1 + 0im` for every `c`, `x0`, and
 `rectcirc` without centre offsets.
 
-Not ported: the MATLAB call of `decsg` (its geometry matrix is `decsgGeometry`), the
-MiniQhull/TetGen stubs `cubesphere`, `spheresurf`, `spheremesh`, `cubemesh` (no Delaunay or
-tetrahedral mesher in Lean yet), the unused `Chord{p,c,x0}` type, and the undefined exports `arc`,
+The MiniQhull/TetGen extensions `spheresurf`, `cubesphere`, `cubemesh` and `spheremesh` are in
+`FlowGeometry.Spheres` (on `Cartan.Delaunay3`; TetGen's meshes are matched by contract, not vertex
+for vertex).
+
+Not ported: the MATLAB call of `decsg` (its geometry matrix is `decsgGeometry`), the unused `Chord{p,c,x0}` type, and the undefined exports `arc`,
 `arcslope`, `chordedges`. UnicodePlots' braille rendering belongs to LeanPlot.
 
 ## Performance (`Tests/FlowGeometry/Bench.lean` vs `oracle/flowgeometry/bench.jl`, Apple M4 Max)

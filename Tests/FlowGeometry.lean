@@ -1,6 +1,7 @@
 import Tests.FlowGeometry.Profiles
 import Tests.FlowGeometry.Airfoils
 import Tests.FlowGeometry.Meshes
+import Tests.FlowGeometry.Spheres
 
 /-!
 FlowGeometry test aggregator.
@@ -19,5 +20,6 @@ def run : IO (Nat × Nat) := runSuite "FlowGeometry" do
   Tests.FlowGeometryTests.Profiles.run
   Tests.FlowGeometryTests.Airfoils.run
   Tests.FlowGeometryTests.Meshes.run
+  Tests.FlowGeometryTests.Spheres.run
 
 end Tests.FlowGeometry

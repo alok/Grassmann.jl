@@ -600,7 +600,7 @@ Counts: DONE 186, IN_PROGRESS 417, MISSING 185, PARTIAL 83, SKIP 55 (total 926 r
 | `ToeplitzMatricesExt: derivetoeplitz(N,h), derivetoeplitz2(N,h)` | ext/ToeplitzMatricesExt.jl:19-20 | - | IN_PROGRESS | Cartan Element+Spectral in flight; nothing on master | S | P2 |
 | `GeometryBasicsExt: Point conversions, GeometryBasics.Mesh(GridBundle/TF), SimplexBundle(::Mesh), grid call with Point` | ext/GeometryBasicsExt.jl:19-66 | - | SKIP | Julia-package interop; the one load-bearing piece (quad tessellation of a GridBundle for mesh/wireframe) belongs to the plot bridge | - | - |
 | `MeshesExt: SimplexBundle(::Meshes.SimpleMesh)` | ext/MeshesExt.jl:19-25 | - | SKIP | Julia-package interop | - | - |
-| `DelaunayExt / MiniQhullExt: delaunay(::PointCloud)` | ext/DelaunayExt.jl, MiniQhullExt.jl | - | MISSING | no 2-D/N-D Delaunay mesher in Lean; blocks meshing arbitrary point clouds (FlowGeometry `cubesphere`, Adapode R19) | L | P1 |
+| `DelaunayExt / MiniQhullExt: delaunay(::PointCloud)` | ext/DelaunayExt.jl, MiniQhullExt.jl | Cartan/Delaunay.lean, Cartan/Delaunay3.lean | PARTIAL | 2-D and 3-D done (exact predicates); N-D (d > 3) missing | L | P1 |
 | `QHullExt: chull(::PointCloud)` | ext/QHullExt.jl:19-27 | - | MISSING | no convex hull; FlowGeometry has an O(n^3) `convhull` to port instead | M | P2 |
 | `TriangulateExt: TriangulateIO(e::SimplexBundle), triangulate(switches, e; holes), initmesh(::TriangulateIO)` | ext/TriangulateExt.jl:19-62 | - | MISSING | constrained 2-D mesher (Shewchuk Triangle) absent; this is what replaces MATLAB `initmesh` for disk eigenmodes (C20/A11) and the airfoil heat flow (C21/A12) | L | P1 |
 | `TetGenExt: JLTetGenIO, initmesh(tio), tetrahedralize(mesh)` | ext/TetGenExt.jl:19-40 | - | MISSING | 3-D tetrahedral mesher absent (C22/A13 sphere-in-cube Poisson) | L | P2 |
@@ -889,10 +889,10 @@ Counts: DONE 186, IN_PROGRESS 417, MISSING 185, PARTIAL 83, SKIP 55 (total 926 r
 | `box` | src/FlowGeometry.jl:146 | - | IN_PROGRESS | FlowGeometry port in flight (`FlowGeometry.lean` on master is a one-line stub; untracked `oracle/flowgeometry/gen.jl` in worktree wf_94031bbb-b39-5) | S | P1 |
 | `sphere` | src/FlowGeometry.jl:146 | - | IN_PROGRESS | FlowGeometry port in flight (`FlowGeometry.lean` on master is a one-line stub; untracked `oracle/flowgeometry/gen.jl` in worktree wf_94031bbb-b39-5) | M | P1 |
 | `decsg` | src/FlowGeometry.jl:291 | - | SKIP | MATLAB decsg geometry (MATLABExt); needs MATLAB. The airfoil-in-box domain should feed a Lean 2-D mesher instead | - | - |
-| `cubesphere` | src/FlowGeometry.jl:291 | - | MISSING | stubs implemented by MiniQhullExt/TetGenExt: need a Delaunay/tet mesher (see Cartan ext rows) | L | P2 |
-| `spheresurf` | src/FlowGeometry.jl:291 | - | MISSING | stubs implemented by MiniQhullExt/TetGenExt: need a Delaunay/tet mesher (see Cartan ext rows) | L | P2 |
-| `spheremesh` | src/FlowGeometry.jl:291 | - | MISSING | stubs implemented by MiniQhullExt/TetGenExt: need a Delaunay/tet mesher (see Cartan ext rows) | L | P2 |
-| `cubemesh` | src/FlowGeometry.jl:291 | - | MISSING | stubs implemented by MiniQhullExt/TetGenExt: need a Delaunay/tet mesher (see Cartan ext rows) | L | P2 |
+| `cubesphere` | src/FlowGeometry.jl:291 | FlowGeometry/Spheres.lean | DONE | on `Cartan.Delaunay3` | L | P2 |
+| `spheresurf` | src/FlowGeometry.jl:291 | FlowGeometry/Spheres.lean | DONE | on `Cartan.Delaunay3` | L | P2 |
+| `spheremesh` | src/FlowGeometry.jl:291 | FlowGeometry/Spheres.lean | DONE | on `Cartan.Delaunay3` (TetGen contract q1.414/a, not its vertices) | L | P2 |
+| `cubemesh` | src/FlowGeometry.jl:291 | FlowGeometry/Spheres.lean | DONE | on `Cartan.Delaunay3` (TetGen contract q1.414/a, not its vertices) | L | P2 |
 | `FlatPlate` | src/profiles.jl:20 | - | IN_PROGRESS | FlowGeometry port in flight (`FlowGeometry.lean` on master is a one-line stub; untracked `oracle/flowgeometry/gen.jl` in worktree wf_94031bbb-b39-5) | M | P1 |
 | `ParabolicArc` | src/profiles.jl:20 | - | IN_PROGRESS | FlowGeometry port in flight (`FlowGeometry.lean` on master is a one-line stub; untracked `oracle/flowgeometry/gen.jl` in worktree wf_94031bbb-b39-5) | M | P1 |
 | `CircularArc` | src/profiles.jl:20 | - | IN_PROGRESS | FlowGeometry port in flight (`FlowGeometry.lean` on master is a one-line stub; untracked `oracle/flowgeometry/gen.jl` in worktree wf_94031bbb-b39-5) | M | P1 |
