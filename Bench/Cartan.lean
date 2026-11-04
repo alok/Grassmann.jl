@@ -3,6 +3,7 @@ import Cartan
 import Cartan.Element
 import Cartan.Spectral
 import Cartan.Mesher
+import Cartan.Delaunay3
 
 /-!
 # `cartan`: tensor-field kernels
@@ -144,6 +145,12 @@ def suite : Suite := ⟨"cartan", do
     (Float.ofNat (k * 7919 % 100003) / 100003, Float.ofNat (k * 104729 % 100019) / 100019)
   bench "delaunay" (ops := nd) (param := s!"{nd}") fun s =>
     Float.ofNat (Delaunay.delaunay (blackBox s cloud)).size
+  let nd3 ← size 20000 200
+  let cloud3 : Array Delaunay3.P3 := (Array.range nd3).map fun k =>
+    ⟨Float.ofNat (k * 7919 % 100003) / 100003, Float.ofNat (k * 104729 % 100019) / 100019,
+      Float.ofNat (k * 15485863 % 100043) / 100043⟩
+  bench "delaunay3" (ops := nd3) (param := s!"{nd3}") fun s =>
+    Float.ofNat (Delaunay3.delaunay3 (blackBox s cloud3)).size
   let area : Float := if (← smoke) then 0.02 else 0.0005
   let nt := (Mesher.triangulate (Mesher.disk 64) { maxArea := area }).triangles.size
   bench "triangulate_disk" (ops := nt) (param := s!"a={area}") fun s =>

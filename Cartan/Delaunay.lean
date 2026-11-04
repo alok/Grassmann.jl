@@ -28,9 +28,9 @@ and cocircular inputs (grids, regular polygons) are handled exactly and never fl
 Duplicate points are triangulated once, at their first index. A point with a
 non-finite coordinate is left out. If all points are collinear, there are no triangles.
 
-**Not ported (yet).** Constrained triangulation (PSLG segments and holes), Ruppert/Chew
-refinement by area and angle, `tetrahedralize` and the N-D Qhull variants. These are listed
-in `docs/parity-gaps.json`.
+Constrained triangulation with holes and Ruppert refinement live in `Cartan.Mesher`; the 3-D
+tetrahedralization and convex hull live in `Cartan.Delaunay3`. TetGen's quality refinement and
+the N-D (`d > 3`) Qhull variants are not ported (see `docs/parity-gaps.json`).
 -/
 
 namespace Cartan.Delaunay

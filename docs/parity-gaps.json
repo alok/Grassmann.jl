@@ -2244,8 +2244,8 @@
    "date": "2026-11-04",
    "commit": "claude/tests-docs-audit",
    "was": "MISSING",
-   "evidence": "Cartan/Delaunay.lean: exact (float-filtered, rational fallback) orient2d/incircle, planar convexHull (monotone chain) and delaunay (sweep + Lawson flips) with delaunayBundle; Tests/Cartan/Delaunay.lean checks empty circumcircles, Euler counts, areas and a brute-force comparison",
-   "remaining": "Constrained 2-D Delaunay (PSLG, holes) with Ruppert refinement, N-D Bowyer-Watson/Qhull, tetrahedralize, cubesphere/spheremesh/cubemesh"
+   "evidence": "Cartan/Delaunay.lean: exact (float-filtered, rational fallback) orient2d/incircle, planar convexHull (monotone chain) and delaunay (sweep + Lawson flips) with delaunayBundle; Tests/Cartan/Delaunay.lean checks empty circumcircles, Euler counts, areas and a brute-force comparison; Cartan/Mesher.lean: constrained Delaunay with holes and Ruppert refinement; Cartan/Delaunay3.lean: 3-D Bowyer-Watson tetrahedralization (ghost tetrahedra, exact orient3d/insphere with a rational fallback, cospherical grids) with convexHull3 and delaunay3Bundle, checked in Tests/Cartan/Delaunay3.lean (empty circumspheres, face sharing, volumes, Euler relations)",
+   "remaining": "TetGen quality refinement (radius-edge, volume constraints), N-D (d > 3) Delaunay/Qhull, FlowGeometry cubesphere/spheremesh/cubemesh"
   }
  },
  {
