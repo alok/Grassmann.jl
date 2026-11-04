@@ -129,3 +129,15 @@ and `Clifford.lean`.
     included. For `g = PᵀDP` it commutes with the outermorphism of `P`.
   - Element FFTs: `Cartan.Spectral.Elements`.
   - Planar exact-predicate Delaunay and convex hull: `Cartan.Delaunay`.
+  - Ruppert quality meshing of planar domains (holes, constraint segments, minimum angle,
+    maximum area): `Cartan.Mesher`.
+  - Runtime-metric composite functions: `Grassmann.Composite.Metric` computes `exp`, `cosh`,
+    `sinh`, `log`, `sqrt` and a general inverse under any Gram matrix. Julia's series loop stops
+    after one term when the metric enlarges norms (defect `series-stop-nonmonotone`), so the
+    port uses scaling and squaring, Denman–Beavers and inverse scaling and squaring. Writing
+    these tests also exposed `exp-closed-form-abs2` in the dense `exp`: the closed form used
+    `√|⟨~m m⟩₀|` instead of `√|m m|`, which is wrong for E2 vector-plus-bivector inputs.
+    The dense `exp` now uses `√|m m|`.
+  - Finite elements: `Adapode.Element` (P1 assembly, Poisson/Robin, transport, heat,
+    `adaptpoisson`). It reproduces the Julia values of port notes §6.1–6.2, including the whole
+    `adaptpoisson` run, and converges at second order on `Cartan.Mesher` meshes.

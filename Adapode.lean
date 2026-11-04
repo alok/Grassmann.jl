@@ -1,5 +1,6 @@
 import Adapode.Constants
 import Adapode.ODE
+import Adapode.Element
 
 /-!
 # Adapode: adaptive ODE (and, later, PDE) solvers
@@ -30,12 +31,14 @@ def ic := InitialCondition.of (lorenz 10 28 (8 / 3)) chaosStart
 * `Adapode.ODE`: states, integrators, flows, the fixed-step, multistep, adaptive, leapfrog and
   geodesic solvers, `odesolve`, and the `examples/chaos.jl` systems.
 
-**Pending** (port notes §2.6-2.7, §4.7-4.10): the finite-element solvers of `src/element.jl`
-(assembly of mass/stiffness/convection/SD/Robin matrices, Poisson, transport, heat, wave, Stokes,
-Navier–Stokes, elasticity, Maxwell, DIPG, bistable and nonlinear Poisson, `adaptpoisson`) and the
-spectral solvers of `src/grid.jl`/`ext/FFTWExt.jl` (Fourier/DCT/DST multipliers, Chebyshev
-Helmholtz/biharmonic/Orr–Sommerfeld/polar Laplacian). They need Cartan's simplex geometry
-(`volumes`, `gradienthat`, `means`, `refinemesh`), a sparse direct solver, Cartan's FFT/DCT/DST
-wrappers and frequency grids (`r2rspace`, `rfftspace`, `fftspace`), and `ChebyshevMatrix`/`Chebyshev`
-grids (Cartan/Diffgeo, Cartan/Grid, Cartan/Element, Cartan/Spectral).
+* `Adapode.Element`: P1 finite elements on Cartan `SimplexBundle`s (intervals, triangles from
+  `Cartan.Mesher`, tetrahedra): mass, stiffness, convection, streamline-diffusion, mass-load and
+  Robin assembly in Julia's summation order, `solveDirichlet`, `solvePoisson`, `poisson`,
+  `solveTransport`, `solveTransportDiffusion`, `solveHeat` and the 1-D `adaptPoisson` loop
+  (checked against the Julia values of port notes §6.1–6.2 and against second-order convergence).
+
+**Pending** (port notes §2.6-2.7, §4.7-4.10): wave, Stokes, Navier–Stokes, elasticity, Maxwell,
+DIPG, bistable and nonlinear Poisson, P2/isoparametric assembly and the 2-D `jumps` indicator of
+`src/element.jl`, and the spectral solvers of `src/grid.jl`/`ext/FFTWExt.jl` (Fourier/DCT/DST
+multipliers, Chebyshev Helmholtz/biharmonic/Orr–Sommerfeld/polar Laplacian).
 -/

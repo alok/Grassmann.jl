@@ -2027,7 +2027,7 @@
  {
   "pkg": "Adapode",
   "symbol": "FEM (element.jl, 44 symbols): assemble, assembleglobal, assemblestiffness, assemblemass, assemblemassload, assemblemassincidence, assemblerobin, assembleconvection, assembleSD, assembledivergence, assemblestokes, assemblemaxwell, assembleelastic, assembleDIPG, assemblemassPN, assemblestiffnessPN, solvepoisson, solvedirichlet, solveheat, solvewave, solvetransport, solvetransportdiffusion, adaptpoisson, solvestokes, solvenavierstokes, solvemaxwell, solveelastic, solvenonlinearpoisson, solvebistable(_newton), solvepoissonDIPG, jumps, nedelec, nedelecmean, shapeP1/P2, gradientP1/P2, isoparametric, volumePN, volumesPN, gradientCR, trilength, trinormals",
-  "status": "MISSING",
+  "status": "PARTIAL",
   "fix": "Port adapode.md \u00a72.6 and \u00a74.7-4.8 on top of Cartan Element (volumes, gradienthat, assembleload): local P1 mass/stiffness/convection/SD kernels as unrolled Values code, a global scatter into the sparse layer, Robin/Dirichlet handling, and the solvers. Fix upstream bugs B11, B13, B15 and the broken 2-D `jumps` branch rather than copying them. Take goldens from adapode.md \u00a76.1 (assemblemassload solves, backward-Euler heat, the adaptpoisson node sequence) via a new oracle/adapode/gen_fem.jl. Adapode.lean on master is a one-line stub, and FEM is not in the in-flight list.",
   "effort": "L",
   "priority": "P0",
@@ -2047,10 +2047,10 @@
   "key": "geometry",
   "audit": {
    "date": "2026-11-04",
-   "commit": "21581c6",
+   "commit": "master",
    "was": "MISSING",
-   "evidence": "Adapode/ has only Constants.lean and ODE; Adapode.lean:29-37 lists FEM as Pending. Only Cartan/Element.lean:297-326 assembleincidence/assembleload exist (prerequisites)",
-   "remaining": "All 44 FEM symbols (assemble*, solve*, adaptpoisson, nedelec, shapeP1/P2, \u2026) and oracle/adapode/gen_fem.jl"
+   "evidence": "Adapode/Element.lean: massEntry, assembleGlobal, assembleMass, assembleStiffness, assembleConvection, assembleSD, assembleMassIncidence, assembleMassLoad, assemble, assembleRobin, solveDirichlet, solvePoisson, poisson, solveTransport, solveTransportDiffusion, solveHeat, jumps1, adaptPoisson; Tests/Adapode/Fem.lean: runtests.jl L\u00b2 projections, backward-Euler heat, README R16 solveheat and the full adaptpoisson run (element counts, \u03f5, final nodes) to 1e-9, plus Robin sums, nodal exactness, O(h\u00b2) convergence and the disk eigenvalue on Cartan.Mesher meshes",
+   "remaining": "solvewave, Stokes (CR\u2013P0), Navier\u2013Stokes (B15), elasticity (B11), Maxwell/N\u00e9d\u00e9lec, DIPG, bistable (Picard/Newton), nonlinear Poisson, P2/isoparametric (shapeP2, assemblemassPN/stiffnessPN, LagrangeP2), the 2-D jumps indicator, trilength/trinormals/gradientCR, oracle/adapode/gen_fem.jl (fem1d.json bitwise matrices)"
   }
  },
  {
