@@ -1,5 +1,6 @@
 import Clifford.Sparse
 import Clifford.MultiGrade
+import Clifford.Products
 
 /-!
 # Clifford
@@ -15,6 +16,9 @@ implements the intended semantics and checks them against Grassmann's dense cont
 * `Clifford.MultiGrade V α`: the nonzero homogeneous parts in ascending grade, each dense or
   sparse; the grade mask, `+ - *`, involutions, complements (grade `g ↦ n - g`), accessors
   (`scalar`, `vector`, `volume`, `isScalar`, `isVector`, `terms`, `value`), `compress`.
+* `Clifford.Products`: the sparse products of `MultiGrade` (geometric `*`, `∧`, `∨`, `⋅`, `⨼`),
+  the blade rules applied to the stored terms only (`O(p·q)` blade pairs for `p` and `q` nonzero
+  terms, independent of `2ⁿ`). Clifford.jl never implemented products; these go beyond it.
 
 ```lean
 open Grassmann Clifford in

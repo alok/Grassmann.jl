@@ -7,7 +7,9 @@ oracle: the sparse containers are checked against Grassmann's dense ones, which 
 oracle-tested. For random `Int` elements of ℝ3, ℝ4 and ℝ5, `toMultivector` is a homomorphism for
 `+ - *` (scalar), negation, the involutions and the complements; the densify rule, the masks
 (including the bit-reversed complement mask), the accessors and the printed forms are checked
-on explicit examples.
+on explicit examples. The sparse products (`Clifford.Products`: `*`, `∧`, `∨`, `⋅`, `⨼`) are
+checked the same way in ℝ3–ℝ5, spacetime, projective (degenerate) and conformal (null basis)
+spaces, and by hand in `ℝ^16`, where a dense multivector would hold 65536 coefficients.
 -/
 
 namespace Tests.Clifford
@@ -50,6 +52,32 @@ def mg : MultiGrade ℝ3 Int :=
 #guard toString mg == "1v + 1v₁₂₃"
 #guard toString (MultiGrade.zero : MultiGrade ℝ3 Int) == "0"
 #guard (mg - mg).parts.isEmpty
+
+-- sparse products by hand: `(v₁ + v₂)(v₁ - v₂) = -2v₁₂`, `v₁ ∧ v₁ = 0`, `v₁₂ ∨ v₂₃ = v₂` in ℝ3
+def p1 : MultiGrade ℝ3 Int := MultiGrade.term 0b001 1 + MultiGrade.term 0b010 1
+def p2 : MultiGrade ℝ3 Int := MultiGrade.term 0b001 1 - MultiGrade.term 0b010 1
+#guard (p1 * p2).bladeTerms == [(0b011, -2)]
+#guard (p1 * p1).bladeTerms == [(0, 2)]
+#guard (MultiGrade.wedge (MultiGrade.term 0b001 (1 : Int)) (MultiGrade.term 0b001 1) : MultiGrade ℝ3 Int).parts.isEmpty
+#guard (MultiGrade.vee (MultiGrade.term 0b011 (1 : Int)) (MultiGrade.term 0b110 1) : MultiGrade ℝ3 Int).toMultivector ==
+  (Vee.vee (MultiGrade.term 0b011 (1 : Int) : MultiGrade ℝ3 Int).toMultivector
+    (MultiGrade.term 0b110 (1 : Int) : MultiGrade ℝ3 Int).toMultivector : Multivector ℝ3 Int)
+
+/-- `ℝ^16`: 16 generators, `2¹⁶` blades; only the stored terms are ever touched. -/
+abbrev R16 : TensorBundle := DirectSum.TensorBundle.euclidean 16
+
+/-- `v₁ + 2v₉ - v₁₆` in `ℝ^16`. -/
+def big1 : MultiGrade R16 Int :=
+  MultiGrade.term 1 (1 : Int) + MultiGrade.term ((1 : UInt64) <<< 8) (2 : Int) - MultiGrade.term ((1 : UInt64) <<< 15) (1 : Int)
+/-- `3v₉ + v₁₆` in `ℝ^16`. -/
+def big2 : MultiGrade R16 Int :=
+  MultiGrade.term ((1 : UInt64) <<< 8) (3 : Int) + MultiGrade.term ((1 : UInt64) <<< 15) (1 : Int)
+-- `big1 * big2 = (6 - 1) + 3v₁₉ + v₁,₁₆ + 2v₉,₁₆ + 3v₉,₁₆ = 5 + 3v₁₉ + v₁,₁₆ + 5v₉,₁₆`
+#guard (big1 * big2).bladeTerms ==
+  [(0, 5), (0x101, 3), (0x8001, 1), (0x8100, 5)]
+#guard (big1 * big2).grades == [0, 2] && ((big1 * big2).parts.getLast?.map (·.isSparse)) == some true
+-- `big1 ∧ big2` is the bivector part, `big1 ⋅ big2` the scalar part
+#guard (MultiGrade.wedge big1 big2).grades == [2] && (MultiGrade.contraction big1 big2).bladeTerms == [(0, 5)]
 
 /-! ## Randomised homomorphism checks -/
 
@@ -94,6 +122,11 @@ def props (V : TensorBundle) [Kernels V] (name : String) (seed : Nat) :
   let mut sorted := true
   let mut roundtrip := true
   let mut sparseOps := true
+  let mut prodMul := true
+  let mut prodWedge := true
+  let mut prodVee := true
+  let mut prodDot := true
+  let mut prodLeft := true
   for _ in [0:60] do
     let (a, g1) := randMulti V g
     let (b, g2) := randMulti V g1
@@ -114,6 +147,12 @@ def props (V : TensorBundle) [Kernels V] (name : String) (seed : Nat) :
     let gs := (a + b).grades
     if !(gs == (gs.toArray.qsort (· < ·)).toList && gs.eraseDups == gs) then sorted := false
     if !((MultiGrade.ofMultivector A).toMultivector == A) then roundtrip := false
+    -- sparse products agree with the dense kernels
+    if !((a * b).toMultivector == A * B) then prodMul := false
+    if !((MultiGrade.wedge a b).toMultivector == (Wedge.wedge A B : Multivector V Int)) then prodWedge := false
+    if !((MultiGrade.vee a b).toMultivector == (Vee.vee A B : Multivector V Int)) then prodVee := false
+    if !((MultiGrade.contraction a b).toMultivector == (Contraction.contraction A B : Multivector V Int)) then prodDot := false
+    if !((MultiGrade.contractionLeft a b).toMultivector == (leftContraction A B : Multivector V Int)) then prodLeft := false
     -- sparse chains of grade 2 alone
     let (c, g4) := randChain V 2 3 g
     let (d, g5) := randChain V 2 3 g4
@@ -135,11 +174,17 @@ def props (V : TensorBundle) [Kernels V] (name : String) (seed : Nat) :
   ok := ok.push (s!"{name}: grades ascending, distinct", sorted)
   ok := ok.push (s!"{name}: MultiGrade(::MultiVector) round trip", roundtrip)
   ok := ok.push (s!"{name}: SparseChain ops = Chain ops", sparseOps)
+  ok := ok.push (s!"{name}: (a * b)♯ = a♯ * b♯", prodMul)
+  ok := ok.push (s!"{name}: (a ∧ b)♯ = a♯ ∧ b♯", prodWedge)
+  ok := ok.push (s!"{name}: (a ∨ b)♯ = a♯ ∨ b♯", prodVee)
+  ok := ok.push (s!"{name}: (a ⋅ b)♯ = a♯ ⋅ b♯", prodDot)
+  ok := ok.push (s!"{name}: (a ⨼ b)♯ = a♯ ⨼ b♯", prodLeft)
   return ok.toList
 
 /-- Run the suite (for the `lake test` driver): `(passed, failed)`. -/
 def run : IO (Nat × Nat) := do
-  let checks := props ℝ3 "ℝ3" 0xC11F ++ props ℝ4 "ℝ4" 0xC12F ++ props ℝ5 "ℝ5" 0xC13F
+  let checks := props ℝ3 "ℝ3" 0xC11F ++ props ℝ4 "ℝ4" 0xC12F ++ props ℝ5 "ℝ5" 0xC13F ++
+    props STA "STA" 0xC14F ++ props PGA3 "PGA3" 0xC15F ++ props CGA3 "CGA3" 0xC16F
   let mut passed := 0
   let mut failed := 0
   for (lbl, ok) in checks do
