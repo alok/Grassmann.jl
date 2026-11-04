@@ -1463,8 +1463,8 @@
    "date": "2026-11-04",
    "commit": "claude/tests-docs-audit",
    "was": "MISSING",
-   "evidence": "Grassmann/Algebra/Metric.lean: Gram (runtime, also non-diagonal) metric; wedgedotMetric, contractionMetric, contractionLeftMetric, abs2Metric, powMetric, invMetric?, divMetric? by Chevalley recursion; Tests/Grassmann/Metric.lean checks the induced metric against the kernels in every non-dyadic props space (CGA3 included), congruences g = P\u1d40DP through the outermorphism of P, and the algebra axioms for random symmetric g",
-   "remaining": "log_metric/exp/hodge/sandwich/radius/complexify with g; Julia-exact inv for general multivectors; a kernel-speed path (plans per g)"
+   "evidence": "Grassmann/Algebra/Metric.lean: Gram (runtime, also non-diagonal) metric; wedgedotMetric, contractionMetric, contractionLeftMetric, abs2Metric, powMetric, invMetric?, divMetric? by Chevalley recursion; Tests/Grassmann/Metric.lean checks the induced metric against the kernels in every non-dyadic props space (CGA3 included), congruences g = P\u1d40DP through the outermorphism of P, and the algebra axioms for random symmetric g; Grassmann/Algebra/Metric.lean tsandwichMetric, sandwichMetric, hodgeMetric; Grassmann/Composite/Metric.lean expMetric, expm1Metric, coshMetric, sinhMetric, logMetric?, sqrtMetric? (scaling and squaring, Denman\u2013Beavers, inverse scaling and squaring instead of Julia's series loop, defect series-stop-nonmonotone) and invMetricLinear? (any invertible element, 2\u207f\u00d72\u207f solve); tested for random symmetric g (exp(a)exp(\u2212a)=1, exp(log u)=u, \u221au\u221au=u, cosh\u00b2\u2212sinh\u00b2=1) and congruences (\u03c6(exp_g a)=exp(\u03c6 a))",
+   "remaining": "radius/complexify with g; a kernel-speed path (plans per g)"
   }
  },
  {
