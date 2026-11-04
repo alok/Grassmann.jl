@@ -43,16 +43,35 @@ structure P3 where
   z : Float
   deriving Inhabited, BEq, Repr
 
-/-- Exact `orient3d` over `ℚ`. -/
+/-- `x = m · 2^e` exactly, for a finite `x` (`m = 0` for zeros). -/
+@[inline] def dyadic (x : Float) : Int × Int :=
+  let b := x.toBits
+  let ex := ((b >>> 52) &&& 0x7FF).toNat
+  let fr := (b &&& 0xFFFFFFFFFFFFF).toNat
+  let (m, e) : Nat × Int := if ex == 0 then (fr, -1074) else (fr + 4503599627370496, (ex : Int) - 1075)
+  (if b >>> 63 == 1 then -(m : Int) else m, e)
+
+/-- The coordinates as integers `xᵢ · 2^(−E)`, for the smallest exponent `E` among the nonzero
+ones: an exact, common positive scaling, so the sign of any homogeneous integer polynomial in
+them is the sign at the original values. `none` if a coordinate is not finite. -/
+def scaledInts (xs : Array Float) : Option (Array Int) :=
+  if xs.any fun x => x.isNaN || x.isInf then none else
+  let ds := xs.map dyadic
+  let E := ds.foldl (fun E (m, e) => if m == 0 then E else min E e) 0
+  some (ds.map fun (m, e) => if m == 0 then 0 else m * (2 : Int) ^ (e - E).toNat)
+
+/-- The sign of an integer. -/
+@[inline] def sgnZ (x : Int) : Int := if x > 0 then 1 else if x < 0 then -1 else 0
+
+/-- Exact `orient3d`, on the inputs scaled to integers (no rational normalisation). -/
 def orientExact (a b c d : P3) : Int :=
-  match q a.x, q a.y, q a.z, q b.x, q b.y, q b.z, q c.x, q c.y, q c.z, q d.x, q d.y, q d.z with
-  | some ax, some ay, some az, some bx, some by_, some bz, some cx, some cy, some cz,
-      some dx, some dy, some dz =>
-    let adx := ax - dx; let ady := ay - dy; let adz := az - dz
-    let bdx := bx - dx; let bdy := by_ - dy; let bdz := bz - dz
-    let cdx := cx - dx; let cdy := cy - dy; let cdz := cz - dz
-    sgnQ (adx * (bdy * cdz - bdz * cdy) + bdx * (cdy * adz - cdz * ady) + cdx * (ady * bdz - adz * bdy))
-  | _, _, _, _, _, _, _, _, _, _, _, _ => 0
+  match scaledInts #[a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, d.x, d.y, d.z] with
+  | none => 0
+  | some v =>
+    let adx := v[0]! - v[9]!; let ady := v[1]! - v[10]!; let adz := v[2]! - v[11]!
+    let bdx := v[3]! - v[9]!; let bdy := v[4]! - v[10]!; let bdz := v[5]! - v[11]!
+    let cdx := v[6]! - v[9]!; let cdy := v[7]! - v[10]!; let cdz := v[8]! - v[11]!
+    sgnZ (adx * (bdy * cdz - bdz * cdy) + bdx * (cdy * adz - cdz * ady) + cdx * (ady * bdz - adz * bdy))
 
 /-- Shewchuk's `orient3d(a, b, c, d)`: `+1` when `d` lies below the plane through `a, b, c`
 (counter-clockwise seen from above), `−1` above, `0` coplanar. Exact. -/
@@ -69,16 +88,15 @@ def orient3d (a b c d : P3) : Int :=
   let bound := (7 + 56 * eps) * eps * perm
   if det > bound then 1 else if -det > bound then -1 else orientExact a b c d
 
-/-- Exact `insphere` over `ℚ`. -/
+/-- Exact `insphere`, on the inputs scaled to integers. -/
 def insphereExact (a b c d e : P3) : Int :=
-  match q a.x, q a.y, q a.z, q b.x, q b.y, q b.z, q c.x, q c.y, q c.z, q d.x, q d.y, q d.z,
-      q e.x, q e.y, q e.z with
-  | some ax, some ay, some az, some bx, some by_, some bz, some cx, some cy, some cz,
-      some dx, some dy, some dz, some ex, some ey, some ez =>
-    let aex := ax - ex; let aey := ay - ey; let aez := az - ez
-    let bex := bx - ex; let bey := by_ - ey; let bez := bz - ez
-    let cex := cx - ex; let cey := cy - ey; let cez := cz - ez
-    let dex := dx - ex; let dey := dy - ey; let dez := dz - ez
+  match scaledInts #[a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, d.x, d.y, d.z, e.x, e.y, e.z] with
+  | none => 0
+  | some v =>
+    let aex := v[0]! - v[12]!; let aey := v[1]! - v[13]!; let aez := v[2]! - v[14]!
+    let bex := v[3]! - v[12]!; let bey := v[4]! - v[13]!; let bez := v[5]! - v[14]!
+    let cex := v[6]! - v[12]!; let cey := v[7]! - v[13]!; let cez := v[8]! - v[14]!
+    let dex := v[9]! - v[12]!; let dey := v[10]! - v[13]!; let dez := v[11]! - v[14]!
     let ab := aex * bey - bex * aey; let bc := bex * cey - cex * bey
     let cd := cex * dey - dex * cey; let da := dex * aey - aex * dey
     let ac := aex * cey - cex * aey; let bd := bex * dey - dex * bey
@@ -90,8 +108,7 @@ def insphereExact (a b c d e : P3) : Int :=
     let blift := bex * bex + bey * bey + bez * bez
     let clift := cex * cex + cey * cey + cez * cez
     let dlift := dex * dex + dey * dey + dez * dez
-    sgnQ ((dlift * abc - clift * dab) + (blift * cda - alift * bcd))
-  | _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ => 0
+    sgnZ ((dlift * abc - clift * dab) + (blift * cda - alift * bcd))
 
 /-- Shewchuk's `insphere(a, b, c, d, e)` for `orient3d(a, b, c, d) > 0`: `+1` when `e` lies
 strictly inside the sphere through `a, b, c, d`, `−1` outside, `0` on it. Exact. -/
@@ -205,10 +222,22 @@ namespace Tets
 
 /-- Whether `t` is a ghost, and the slot of its ghost vertex. -/
 @[inline] def ghostSlot (T : Tets) (t : Nat) : Option Nat :=
-  (List.range 4).find? fun i => T.v t i == T.inf
+  if T.v t 0 == T.inf then some 0 else if T.v t 1 == T.inf then some 1
+  else if T.v t 2 == T.inf then some 2 else if T.v t 3 == T.inf then some 3 else none
 
 /-- The point of a (finite) vertex id. -/
 @[inline] def pt (T : Tets) (i : Nat) : P3 := T.pts[i]!
+
+/-- Vertex `j` of `t` as a point, with slot `g` replaced by `p`. -/
+@[inline] def ptOr (T : Tets) (t j g : Nat) (p : P3) : P3 := if j == g then p else T.pt (T.v t j)
+
+/-- `orient3d` of `t` with its slot `g` replaced by `p`. -/
+@[inline] def orientWith (T : Tets) (t g : Nat) (p : P3) : Int :=
+  orient3d (T.ptOr t 0 g p) (T.ptOr t 1 g p) (T.ptOr t 2 g p) (T.ptOr t 3 g p)
+
+/-- The three slots other than `g`, in increasing order. -/
+@[inline] def others (g : Nat) : Nat × Nat × Nat :=
+  if g == 0 then (1, 2, 3) else if g == 1 then (0, 2, 3) else if g == 2 then (0, 1, 3) else (0, 1, 2)
 
 /-- Whether `p` conflicts with `t` (lies in its open circumball, or beyond its ghost face). -/
 def conflict (T : Tets) (t : Nat) (p : P3) : Bool :=
@@ -216,26 +245,53 @@ def conflict (T : Tets) (t : Nat) (p : P3) : Bool :=
   | none => insphere (T.pt (T.v t 0)) (T.pt (T.v t 1)) (T.pt (T.v t 2)) (T.pt (T.v t 3)) p > 0
   | some g =>
     -- the face in tetrahedron order with ∞ replaced by p: positive when p is beyond it
-    let vs := (List.range 4).map fun i => if i == g then p else T.pt (T.v t i)
-    let o := orient3d vs[0]! vs[1]! vs[2]! vs[3]!
+    let o := T.orientWith t g p
     if o > 0 then true else if o < 0 then false else
-      let f := (List.range 4).filter (· != g) |>.map fun i => T.pt (T.v t i)
-      incircleCoplanar f[0]! f[1]! f[2]! p
+      let (a, b, c) := others g
+      incircleCoplanar (T.pt (T.v t a)) (T.pt (T.v t b)) (T.pt (T.v t c)) p
+
+/-- `T.tv[k] := x` in place (the field is taken out first so the array stays unshared). -/
+@[inline] def setTv (T : Tets) (k x : Nat) : Tets :=
+  let a := T.tv
+  let T := { T with tv := #[] }
+  { T with tv := a.set! k x }
+
+/-- `T.tn[k] := x` in place. -/
+@[inline] def setTn (T : Tets) (k x : Nat) : Tets :=
+  let a := T.tn
+  let T := { T with tn := #[] }
+  { T with tn := a.set! k x }
+
+/-- `T.alive[k] := x` in place. -/
+@[inline] def setAlive (T : Tets) (k : Nat) (x : Bool) : Tets :=
+  let a := T.alive
+  let T := { T with alive := #[] }
+  { T with alive := a.set! k x }
+
+/-- `T.stamp[k] := x` in place. -/
+@[inline] def setStamp (T : Tets) (k x : Nat) : Tets :=
+  let a := T.stamp
+  let T := { T with stamp := #[] }
+  { T with stamp := a.set! k x }
 
 /-- A fresh slot for a tetrahedron. -/
 def alloc (T : Tets) (vs : Array Nat) : Tets × Nat :=
   match T.free.back? with
   | some t =>
-    let tv := (List.range 4).foldl (fun a i => a.set! (4 * t + i) vs[i]!) T.tv
-    ({ T with free := T.free.pop, tv, alive := T.alive.set! t true }, t)
+    let free := T.free
+    let T := { T with free := #[] }
+    let T := { T with free := free.pop }
+    let T := ((T.setTv (4 * t) vs[0]!).setTv (4 * t + 1) vs[1]! |>.setTv (4 * t + 2) vs[2]!).setTv (4 * t + 3) vs[3]!
+    (T.setAlive t true, t)
   | none =>
     let t := T.alive.size
-    let T' : Tets := { T with tv := T.tv ++ vs, tn := T.tn ++ #[0, 0, 0, 0] }
-    ({ T' with alive := T'.alive.push true, stamp := T'.stamp.push 0 }, t)
+    let (tv, tn, alive, stamp) := (T.tv, T.tn, T.alive, T.stamp)
+    let T := { T with tv := #[], tn := #[], alive := #[], stamp := #[] }
+    ({ T with tv := tv ++ vs, tn := tn ++ #[0, 0, 0, 0], alive := alive.push true, stamp := stamp.push 0 }, t)
 
 /-- Make `t` and `u` neighbours across the face opposite vertex `i` of `t` and `j` of `u`. -/
 @[inline] def link (T : Tets) (t i u j : Nat) : Tets :=
-  { T with tn := (T.tn.set! (4 * t + i) u).set! (4 * u + j) t }
+  (T.setTn (4 * t + i) u).setTn (4 * u + j) t
 
 /-- A visibility walk from `T.last` to a tetrahedron that conflicts with `p` (a ghost when `p`
 is outside the hull); a scan if the walk does not finish in `fuel` steps. -/
@@ -243,13 +299,19 @@ def locate (T : Tets) (p : P3) (fuel : Nat) : Nat := Id.run do
   let mut t := T.last
   let mut seed := 0
   for _ in [0:fuel] do
-    if T.ghostSlot t |>.isSome then return t
+    match T.ghostSlot t with
+    | some g =>
+      -- a ghost reached through its hull face has p beyond that face; a start ghost may not,
+      -- so step into the finite tetrahedron behind it
+      if T.conflict t p then return t
+      t := T.tn[4 * t + g]!
+      continue
+    | none => pure ()
     -- leave through a face that separates t from p (start at a rotating face)
     let mut moved := false
     for k in [0:4] do
       let i := (k + seed) % 4
-      let vs := (List.range 4).map fun j => if j == i then p else T.pt (T.v t j)
-      if !moved && orient3d vs[0]! vs[1]! vs[2]! vs[3]! < 0 then
+      if !moved && T.orientWith t i p < 0 then
         t := T.tn[4 * t + i]!
         moved := true
     seed := seed + 1
@@ -264,13 +326,14 @@ def insert (T0 : Tets) (pi stampId : Nat) : Tets := Id.run do
   let p := T0.pt pi
   let s := T0.locate p (4 * T0.alive.size + 16)
   -- a duplicate of a vertex of the containing tetrahedron
-  if (List.range 4).any fun i => T0.v s i != T0.inf && T0.pt (T0.v s i) == p then return T0
+  let dup := fun (i : Nat) => T0.v s i != T0.inf && T0.pt (T0.v s i) == p
+  if dup 0 || dup 1 || dup 2 || dup 3 then return T0
   let s := if T0.conflict s p then s else
     ((List.range T0.alive.size).find? fun u => T0.alive[u]! && T0.conflict u p).getD s
   if !(T0.conflict s p) then return T0
   let mut T := T0
   -- the conflict region, breadth first
-  T := { T with stamp := T.stamp.set! s stampId }
+  T := T.setStamp s stampId
   let mut cavity : Array Nat := #[s]
   let mut k := 0
   let mut bnd : Array (Nat × Nat) := #[]
@@ -281,40 +344,50 @@ def insert (T0 : Tets) (pi stampId : Nat) : Tets := Id.run do
       let u := T.tn[4 * t + i]!
       if T.stamp[u]! == stampId then continue
       if T.conflict u p then
-        T := { T with stamp := T.stamp.set! u stampId }
+        T := T.setStamp u stampId
         cavity := cavity.push u
       else
         bnd := bnd.push (t, i)
   -- new tetrahedra: the cavity tetrahedron behind each boundary face with its opposite vertex → p
   let mut made : Array (Nat × Nat × Nat) := #[]  -- (new tet, face slot i, outside neighbour)
   let olds := cavity
-  let vsOf := bnd.map fun (t, i) => (Array.range 4).map fun j => if j == i then pi else T.v t j
+  let vsOf := bnd.map fun (t, i) =>
+    #[if i == 0 then pi else T.v t 0, if i == 1 then pi else T.v t 1, if i == 2 then pi else T.v t 2,
+      if i == 3 then pi else T.v t 3]
   let outs := bnd.map fun (t, i) => (T.tn[4 * t + i]!, t)
   for t in olds do
-    T := { T with alive := T.alive.set! t false }
-  let mut faces : Std.HashMap (Nat × Nat) (Nat × Nat) := {}
+    T := T.setAlive t false
+  -- unmatched faces through p: (smaller, larger other vertex, tetrahedron, slot); the list stays
+  -- short (the cavity boundary's open edges), so a linear scan beats hashing
+  let mut pend : Array (Nat × Nat × Nat × Nat) := #[]
   for b in [0:bnd.size] do
     let (_, i) := bnd[b]!
     let (T', nt) := T.alloc vsOf[b]!
     T := T'
     let (u, told) := outs[b]!
     -- u's pointer to the old cavity tetrahedron now points to nt
-    let j := (List.range 4).find? (fun j => T.tn[4 * u + j]! == told) |>.getD 0
+    let j := if T.tn[4 * u]! == told then 0 else if T.tn[4 * u + 1]! == told then 1
+      else if T.tn[4 * u + 2]! == told then 2 else 3
     T := T.link nt i u j
     made := made.push (nt, i, u)
     -- the three faces through p: opposite each other vertex; key = the two vertices besides p
     for jj in [0:4] do
       if jj != i then
-        let others := (List.range 4).filter (fun r => r != i && r != jj) |>.map (T.v nt ·)
-        let key := (min others[0]! others[1]!, max others[0]! others[1]!)
-        match faces.get? key with
-        | some (ot, oj) =>
+        let (r0, r1, r2) := others jj
+        let (x, y) := if r0 == i then (r1, r2) else if r1 == i then (r0, r2) else (r0, r1)
+        let (x, y) := (T.v nt x, T.v nt y)
+        let (x, y) := (min x y, max x y)
+        match pend.findIdx? (fun (a, c, _, _) => a == x && c == y) with
+        | some q =>
+          let (_, _, ot, oj) := pend[q]!
           T := T.link nt jj ot oj
-          faces := faces.erase key
-        | none => faces := faces.insert key (nt, jj)
+          pend := (pend.set! q pend.back!).pop
+        | none => pend := pend.push (x, y, nt, jj)
   -- the cavity slots are reused only by later insertions (a neighbour's pointer to an old
   -- tetrahedron must stay unambiguous while the new ones are linked)
-  return { T with last := (made.back?.map (·.1)).getD T.last, free := T.free ++ olds }
+  let free := T.free
+  T := { T with free := #[] }
+  return { T with last := (made.back?.map (·.1)).getD T.last, free := free ++ olds }
 
 end Tets
 
@@ -322,11 +395,15 @@ end Tets
 def morton (lo hi : P3) (p : P3) : Nat :=
   let qz := fun (a l h : Float) =>
     let t := if h > l then (a - l) / (h - l) else 0
-    (t * 1023).toUInt64.toNat
+    (t * 1023).toUInt64
   let (x, y, z) := (qz p.x lo.x hi.x, qz p.y lo.y hi.y, qz p.z lo.z hi.z)
-  (List.range 10).foldl (fun acc b =>
-    acc ||| (((x >>> b) &&& 1) <<< (3 * b)) ||| (((y >>> b) &&& 1) <<< (3 * b + 1)) |||
-      (((z >>> b) &&& 1) <<< (3 * b + 2))) 0
+  -- spread the 10 bits of `v` to every third position
+  let spread := fun (v : UInt64) =>
+    let v := (v ||| (v <<< 16)) &&& 0x030000FF
+    let v := (v ||| (v <<< 8)) &&& 0x0300F00F
+    let v := (v ||| (v <<< 4)) &&& 0x030C30C3
+    (v ||| (v <<< 2)) &&& 0x09249249
+  (spread x ||| (spread y <<< 1) ||| (spread z <<< 2)).toNat
 
 /-- The tetrahedralization of `pts` inserting the points in `order` (finite points only). -/
 def buildOrdered (pts : Array P3) (order : Array Nat) (limit : Nat := order.size) : Option Tets := Id.run do
@@ -373,7 +450,7 @@ def buildOrdered (pts : Array P3) (order : Array Nat) (limit : Nat := order.size
 def build (pts : Array P3) : Option Tets := Id.run do
   let n := pts.size
   if n < 4 then return none
-  let fin := fun (p : P3) => (q p.x).isSome && (q p.y).isSome && (q p.z).isSome
+  let fin := fun (p : P3) => !(p.x.isNaN || p.x.isInf || p.y.isNaN || p.y.isInf || p.z.isNaN || p.z.isInf)
   let idx := (Array.range n).filter fun i => fin pts[i]!
   if idx.size < 4 then return none
   let lo : P3 := ⟨idx.foldl (fun m i => min m pts[i]!.x) pts[idx[0]!]!.x,

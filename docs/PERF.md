@@ -717,9 +717,21 @@ Two pitfalls were each worth about 2× on the Delaunay benchmark:
 * `orient2d`/`incircle` on `Float × Float` boxed every coordinate.
 
 `delaunay3` (Bowyer–Watson with ghost tetrahedra, Morton-ordered insertion, a visibility walk
-for point location) takes 159 µs per point on 20 000 points in `[0,1)³`, about 3.2 s per
-build. The exact `ℚ` fallback is rarely hit on random input; the cost is the cavity search
-and the edge-key `HashMap` used to link the new tetrahedra, the obvious next targets.
+for point location) on the bench's 20 000 points in `[0,1)³`:
+
+| change | µs/pt |
+|---|---|
+| first version | 156 |
+| exact predicates on integer-scaled inputs instead of `Rat` | 87 → (bench) 53 |
+| no `List`s in the hot predicates, linear face matching instead of a `HashMap`, `UInt64` Morton keys, a `Float` finiteness test instead of `toRat?` | 53 |
+
+The bench cloud (`k·7919 mod 100003`, …) lies close to lattice planes, so about half the
+`orient3d` calls miss the float filter; a pseudo-random cloud of the same size runs at about
+26 µs/pt. The exact stage converts each coordinate to `m·2^(e−E)` for the smallest exponent `E`
+(one common positive scaling) and evaluates the determinant in `Int`; `Rat` arithmetic spent most of
+its time in `gcd` normalisation. The rest is allocation in the cavity search and linking
+(callgrind: about 170 k instructions per insertion, of which `insphere` itself is 13 k), the next
+target.
 
 The mesher still keeps its triangulation in the `HashMap`-based `Delaunay.Mesh`. Porting its
 refinement to the half-edge arrays is the next speed-up.
