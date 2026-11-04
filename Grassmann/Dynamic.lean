@@ -13,6 +13,7 @@ import Grassmann.Dynamic.Ops
 import Grassmann.Dynamic.Division
 import Grassmann.Dynamic.Composite
 import Grassmann.Dynamic.Project
+import Grassmann.Dynamic.Simplicial
 
 /-!
 # The dynamic, Julia-exact element layer (`Grassmann.TA`)

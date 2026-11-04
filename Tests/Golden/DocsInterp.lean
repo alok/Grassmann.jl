@@ -535,6 +535,27 @@ partial def callBuiltin (name : String) (params : Array Val) (args : Array Val) 
     | #[.elem _ _ _ x] => return .num (.int (← need "grade" (x.encode.grade)))
     | #[.elem V hdl m x, .num (.int g)] => return .elem V hdl m (x.un fun y => TA.gradeProj g.toNat y)
     | _ => unsupported "grade"
+  -- simplicial topology (`Int64` elements)
+  | "∂" | "boundary" | "skeleton" | "𝒫" | "subcomplex" | "chain" | "path" =>
+    match args with
+    | #[.elem V hdl m (.int t)] =>
+      let r := match name with
+        | "∂" | "boundary" => TA.Simplicial.boundary t | "skeleton" => TA.Simplicial.skeleton t
+        | "𝒫" => TA.Simplicial.𝒫 t | "subcomplex" => TA.Simplicial.subcomplex t
+        | "chain" => TA.Simplicial.chainPath t | _ => TA.Simplicial.path t
+      return .elem V hdl m (.int r)
+    | _ => unsupported name
+  | "χ" =>
+    match args with
+    | #[.elem _ _ _ (.int t)] => return .num (.int (TA.Simplicial.χ t))
+    | _ => unsupported name
+  | "betti" | "count_gdims" =>
+    match args with
+    | #[.elem _ _ _ (.int t)] =>
+      let xs : Array Int := if name == "betti" then TA.Simplicial.betti t
+        else (TA.Simplicial.countGdims t).map (Int.ofNat ·)
+      return .values (xs.map Num.int)
+    | _ => unsupported name
   | "indices" =>
     match args with
     | #[.elem V _ _ x] =>
