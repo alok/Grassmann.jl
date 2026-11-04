@@ -11,9 +11,11 @@ import Adapode.Element
 * `cubemesh`, `spheremesh`: TetGen's contract `q1.414a…` (radius–edge ≤ √2, volume ≤ a), positive
   tetrahedra, volumes adding up to the region's, the boundary made of the input surfaces (every
   `spheresurf` triangle is a mesh face, pointing into the hole).
-* Potential flow past the unit sphere (Adapode README R19's set-up): with the exact potential
+* Potential flow past the unit sphere: with the exact potential
   `x(1 + 1/(2r³))` on the cube, the P1 solution with the natural condition `∂ₙφ = 0` on the sphere
   matches it to the accuracy of the 320-face polyhedral sphere.
+* Adapode README R19 itself (`solvepoisson` with a penalty outlet and unit inflow): `2 − x` on
+  `cubemesh`, and a speed-up over the sphere on `spheremesh`.
 -/
 
 open Lean Tests.Small JuliaBase FlowGeometry Grassmann Cartan Cartan.Delaunay3
@@ -136,5 +138,37 @@ def run : TestM Unit := do
     (List.range pts.size).foldl (fun s i => max s (u.get! i - φ pts[i]!).abs) (0 : Float)
   check "spheremesh: potential flow past the sphere approaches x(1 + 1/2r³)"
     (errs[1]! < 0.7 * errs[0]! && errs[1]! < 0.06) fun _ => s!"{errs}"
+
+/-- Adapode README R19: `solvepoisson(pt, pe, 1, 0, x -> x[2] > 1.99 ? 1e6 : 0, 0,
+x -> x[2] < -1.99 ? 1 : 0)`, unit inflow at `x = −2`, `u = 0` (penalty) at `x = 2`. -/
+def readme : TestM Unit := do
+  let κ := fun (x : Chain ℝ4 1 Float) => if x.v.get! 1 > 1.99 then (1e6 : Float) else 0
+  let gN := fun (x : Chain ℝ4 1 Float) => if x.v.get! 1 < -1.99 then (1 : Float) else 0
+  -- without the sphere the solution is 2 − x (to the penalty's 1/κ)
+  let (m, e) := cubemesh 0.1
+  let u := Adapode.FEM.solvePoisson m e (f := fun _ => 0) (κ := κ) (gN := gN)
+  let pts := ptsOf m.cloud.points
+  let err := (List.range pts.size).foldl (fun s i => max s (u.get! i - (2 - pts[i]!.x)).abs) (0 : Float)
+  check "R19 on cubemesh: uniform flow u = 2 − x" (err < 1e-4) fun _ => s!"{err}"
+  -- around the sphere: the flow speeds up over the top (potential flow: 1 + 1/(2r³) at height r)
+  let (m, e) := spheremesh
+  let u := Adapode.FEM.solvePoisson m e (f := fun _ => 0) (κ := κ) (gN := gN)
+  let pts := ptsOf m.cloud.points
+  let g := Adapode.FEM.elementGradients m u
+  let near := fun (k : Nat) =>
+    let c := (List.range 4).foldl (fun (c : P3) j => let p := pts[m.vertexOf k j - 1]!
+      ⟨c.x + p.x / 4, c.y + p.y / 4, c.z + p.z / 4⟩) ⟨0, 0, 0⟩
+    c.x.abs < 0.3 && c.y.abs < 0.3 && c.z > 1 && c.z < 1.3
+  let top := (Array.range m.elements).filter near
+  let speed := top.foldl (fun s k => s + (g[k]![0]! * g[k]![0]! + g[k]![1]! * g[k]![1]! + g[k]![2]! * g[k]![2]!).sqrt) 0 / top.size.toFloat
+  check "R19 on spheremesh: the flow is about 1.4× faster just over the sphere" (top.size > 0 && speed > 1.3 && speed < 1.8)
+    fun _ => s!"{speed} over {top.size}"
+  let ui := (List.range pts.size).filter (fun i => pts[i]!.x == -2) |>.foldl (fun s i => max s (u.get! i)) 0
+  check "R19 on spheremesh: the sphere raises the inflow potential above the free 4" (ui > 4) fun _ => s!"{ui}"
+
+/-- All checks. -/
+def runAll : TestM Unit := do
+  run
+  readme
 
 end Tests.FlowGeometryTests.Spheres

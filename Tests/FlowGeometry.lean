@@ -20,6 +20,6 @@ def run : IO (Nat × Nat) := runSuite "FlowGeometry" do
   Tests.FlowGeometryTests.Profiles.run
   Tests.FlowGeometryTests.Airfoils.run
   Tests.FlowGeometryTests.Meshes.run
-  Tests.FlowGeometryTests.Spheres.run
+  Tests.FlowGeometryTests.Spheres.runAll
 
 end Tests.FlowGeometry

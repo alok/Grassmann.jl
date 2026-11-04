@@ -792,7 +792,7 @@ All numbers below are **[verified]**. Every item is also stored in the JSON gold
 | R16 | `solveheat(triangle.(pt), (x->2x[2]).(pt), (x->1e6).(pe), range(0,0.6,101))` on `initmesh(0:0.01:1)` (L307-311) | `surface` over (x,t) (the current Cartan fails to plot it) | size (101,101); u[51,2] = 0.4285756604563396, u[51,end] = 0.12587667370150693, Σ u[:,end] = 8.38832030667821 |
 | R17 | `adaptpoisson` (L329) | console | §6.1 item 5 |
 | R18 | Airfoil: FlowGeometry `NACA"6511"`, MATLAB `decsg`, `solvepoisson`, `gtf = −gradient(tf)`, `solvetransportdiffusion(gtf, kf, 0.01, 1/50, …)` (L336-354) | `wireframe(pt)`, `streamplot(gtf, …)`, `mesh(tf2)` | needs MATLAB and FlowGeometry. Note that the README passes 5 arguments, where the last is a source/gD function, which differs from the signature `(tf, eκ, c, δ, gD, gN)` |
-| R19 | TetGen `cubesphere` tetrahedral Poisson with a 3D streamplot (L359-367) | – | needs TetGen |
+| R19 | TetGen `cubesphere` tetrahedral Poisson with a 3D streamplot (L359-367) | – | runs on `FlowGeometry.spheremesh` (TetGen replaced by `Cartan.Delaunay3`, same q1.414/a0.1 bounds); `Tests/FlowGeometry/Spheres.lean` checks uniform flow on `cubemesh` and the speed-up over the sphere. The streamplot is not ported |
 
 ### 6.3 `examples/chaos.jl` (`odesolve(f, x0)` default: RK4, h = 2^-15, T = 2π, n = 205888)
 
