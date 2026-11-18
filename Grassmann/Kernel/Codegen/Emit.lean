@@ -238,11 +238,11 @@ recursion depth for their long `let` chains (a whole space in one batch exceeds 
 heartbeat budget of the compiler's checks; an `n = 6` kernel nests hundreds of `let`s). -/
 def compileKernels (names : Array Name) : CommandElabM Unit := do
   for i in [0:(names.size + 31) / 32] do
-    liftCoreM <| withTheReader Core.Context
-      (fun ctx => { ctx with
-        maxHeartbeats := 0
-        maxRecDepth := max ctx.maxRecDepth 65536
-        options := maxRecDepth.set ctx.options (max (maxRecDepth.get ctx.options) 65536) }) <|
+    liftCoreM <| withOptions (fun o => maxRecDepth.set o (max (maxRecDepth.get o) 65536)) <|
+      withTheReader Core.Context
+        (fun ctx => { ctx with
+          maxHeartbeats := 0
+          maxRecDepth := max ctx.maxRecDepth 65536 }) <|
       compileDecls (names.extract (i * 32) ((i + 1) * 32))
 
 /-- Add the kernel `name` of plan `p` (not yet compiled), marked `@[specialize]`, with a

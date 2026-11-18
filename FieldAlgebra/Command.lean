@@ -79,7 +79,8 @@ def intLiteral? (t : Term) : Option Nat :=
 
 /-- A doc comment `/-- s -/` as syntax. -/
 def docComment (s : String) : TSyntax ``Lean.Parser.Command.docComment :=
-  ⟨mkNode ``Lean.Parser.Command.docComment #[mkAtom "/--", mkAtom (" " ++ s ++ " -/")]⟩
+  ⟨mkNode ``Lean.Parser.Command.docComment #[mkAtom "/--",
+    mkNode ``Lean.Parser.Command.commentBody #[mkAtom (" " ++ s ++ " "), mkAtom "-/"]]⟩
 
 /-- Display name of a generator (`«2»` shows as `2`). -/
 def genText (id : Ident) : String := id.getId.eraseMacroScopes.toString (escape := false)
