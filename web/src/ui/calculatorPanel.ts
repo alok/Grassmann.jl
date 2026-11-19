@@ -53,7 +53,12 @@ export class CalculatorStudioPanel {
   private activeCalcMode = 'STA';
   private eqList: string[] = ['x^2 + y^2 - 1.4', 'y - 0.6*x^2 + 0.5'];
   private readonly eqListEl: HTMLDivElement;
+  private surfaceExprInput!: HTMLInputElement;
+  private surfaceBoundInput!: HTMLInputElement;
   private implicit3dInput!: HTMLInputElement;
+  private implicitGpuRaymarch = true;
+  private implicitBound = 2.2;
+  private syncImplicitToggle?: () => void;
   private paramFxInput!: HTMLInputElement;
   private paramFyInput!: HTMLInputElement;
   private paramFzInput!: HTMLInputElement;
@@ -140,12 +145,38 @@ export class CalculatorStudioPanel {
     this.inlineErrorEl.classList.remove('hidden');
   }
 
+  getSurfaceExpr(): string {
+    return this.surfaceExprInput?.value.trim() ?? '';
+  }
+
+  setSurfaceExpr(expr: string, bound?: number): void {
+    if (this.surfaceExprInput) this.surfaceExprInput.value = expr;
+    if (this.surfaceBoundInput && typeof bound === 'number' && Number.isFinite(bound) && bound > 0) {
+      this.surfaceBoundInput.value = String(bound);
+    }
+  }
+
+  getSurfaceBound(): number {
+    return Math.max(0.5, Number.parseFloat(this.surfaceBoundInput?.value ?? '2.5') || 2.5);
+  }
+
   getImplicitExpr(): string {
     return this.implicit3dInput?.value.trim() ?? '';
   }
 
-  setImplicitExpr(expr: string): void {
+  getImplicitOptions(): { gpuRaymarch: boolean; bound: number } {
+    return { gpuRaymarch: this.implicitGpuRaymarch, bound: this.implicitBound };
+  }
+
+  setImplicitExpr(expr: string, gpuRaymarch?: boolean, bound?: number): void {
     if (this.implicit3dInput) this.implicit3dInput.value = expr;
+    if (typeof gpuRaymarch === 'boolean') {
+      this.implicitGpuRaymarch = gpuRaymarch;
+      this.syncImplicitToggle?.();
+    }
+    if (typeof bound === 'number' && Number.isFinite(bound) && bound > 0) {
+      this.implicitBound = bound;
+    }
   }
 
   getParametricExpr(): { fx: string; fy: string; fz: string } {
@@ -289,6 +320,7 @@ export class CalculatorStudioPanel {
     const exprInput = document.createElement('input');
     exprInput.className = 'gs-input mono';
     exprInput.value = 'sin(sqrt(x^2 + y^2)*3 - t) / (1 + 0.35*(x^2 + y^2))';
+    this.surfaceExprInput = exprInput;
 
     const gridInput = document.createElement('input');
     gridInput.type = 'range';
@@ -307,6 +339,7 @@ export class CalculatorStudioPanel {
     boundInput.className = 'gs-input gs-input-sm';
     boundInput.value = '2.5';
     boundInput.step = '0.5';
+    this.surfaceBoundInput = boundInput;
 
     const evalSurface = () => {
       const b = Math.max(0.5, Number.parseFloat(boundInput.value) || 2.5);
@@ -391,7 +424,6 @@ export class CalculatorStudioPanel {
     this.implicit3dInput = exprInput;
 
     // Crisp Mesh / GPU Raymarch toggle switch
-    let gpuRaymarch = true;
     const modeSwitch = document.createElement('div');
     modeSwitch.className = 'gs-segmented';
     const meshBtn = document.createElement('button');
@@ -404,26 +436,28 @@ export class CalculatorStudioPanel {
     gpuBtn.textContent = 'GPU Raymarch (GLSL3)';
 
     const syncToggle = () => {
-      meshBtn.classList.toggle('active', !gpuRaymarch);
-      gpuBtn.classList.toggle('active', gpuRaymarch);
+      meshBtn.classList.toggle('active', !this.implicitGpuRaymarch);
+      gpuBtn.classList.toggle('active', this.implicitGpuRaymarch);
     };
+    this.syncImplicitToggle = syncToggle;
     const emitImplicit = () => {
+      const b = this.implicitBound;
       this.callbacks.onDispatchJson({
         op: 'evalImplicit',
         expr: exprInput.value.trim(),
-        gpuRaymarch,
-        bounds: [-2.2, 2.2, -2.2, 2.2, -2.2, 2.2],
+        gpuRaymarch: this.implicitGpuRaymarch,
+        bounds: [-b, b, -b, b, -b, b],
         gridN: 24,
       });
     };
 
     meshBtn.addEventListener('click', () => {
-      gpuRaymarch = false;
+      this.implicitGpuRaymarch = false;
       syncToggle();
       emitImplicit();
     });
     gpuBtn.addEventListener('click', () => {
-      gpuRaymarch = true;
+      this.implicitGpuRaymarch = true;
       syncToggle();
       emitImplicit();
     });

@@ -277,11 +277,16 @@ export class WedgeGameHud {
     }
 
     this.dimToggleBtn.textContent = hud.is3D ? '3D PGA (Spatial)' : '2D PGA (Planar)';
-    const matchedLevel = WEDGE_LEVELS.find(
-      (lv) => lv.is3D === hud.is3D && lv.label.includes(`L${hud.level} `)
-    );
-    if (matchedLevel) {
-      this.levelSelect.value = String(matchedLevel.index);
+    // Dynamically extend level dropdown if Lean adds Wave 6C Level 17+
+    while (this.levelSelect.options.length < hud.totalLevels) {
+      const nextNum = this.levelSelect.options.length + 1;
+      const opt = document.createElement('option');
+      opt.value = String(nextNum);
+      opt.textContent = `L${nextNum} · 3D Challenge`;
+      this.levelSelect.appendChild(opt);
+    }
+    if (hud.level >= 1 && hud.level <= this.levelSelect.options.length) {
+      this.levelSelect.value = String(hud.level);
     }
     this.titleEl.textContent = `Level ${hud.level}/${hud.totalLevels} · ${hud.title}`;
     this.goalEl.textContent = hud.goal;

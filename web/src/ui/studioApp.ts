@@ -37,9 +37,13 @@ import { CoffeeShopCodeEditor } from './codeEditor';
 import {
   decodeExperimentFromHash,
   encodeExperimentToHash,
+  inferLegacySceneKind,
+  normalizeSeedString,
   parseGrassmannExperiment,
   serializeExperiment,
+  type ExperimentSceneKind,
   type GrassmannExperimentV1,
+  type WedgeTutorialId,
 } from './experiment';
 import { FormulaCardOverlay } from './formulaCard';
 import { PresetGalleryModal } from './galleryModal';
@@ -49,10 +53,59 @@ import { ParamTimelineOverlay } from './paramBar';
 import { KATEX_CHEAT_SHEET, STUDIO_PRESETS, type StudioPreset } from './presets';
 import { ViewportVideoRecorder } from './recorder';
 import { MyStashPanel } from './stashPanel';
+import { GuidedTourOverlay } from './tourModal';
 import { WedgeGameHud } from './wedgeHud';
 
 export type StudioMode = 'coffeeshop' | 'wedge' | 'calculator' | 'galculator';
 type LeftTab = 'presets' | 'stash' | 'inspect' | 'help';
+
+const INTERACTIVE_SPACE_SELECTOR =
+  'button, a[href], [role="button"], [role="menuitem"], [role="tab"], select, input, textarea, summary, [contenteditable=""], [contenteditable="true"]';
+
+/**
+ * Pure accessibility guard (Dots P2 #11): returns true whenever a keyboard Space event
+ * targets or fires while focus is inside an interactive control so global Play/Pause
+ * never hijacks button/link/input activation!
+ */
+export function shouldIgnoreGlobalSpaceKey(
+  target: EventTarget | null,
+  activeElement: Element | null = typeof document !== 'undefined' ? document.activeElement : null
+): boolean {
+  const isInteractive = (node: unknown): boolean => {
+    if (!node || typeof node !== 'object') return false;
+    const el = node as Partial<HTMLElement>;
+    const tag = typeof el.tagName === 'string' ? el.tagName.toUpperCase() : '';
+    if (
+      tag === 'BUTTON' ||
+      tag === 'A' ||
+      tag === 'SELECT' ||
+      tag === 'INPUT' ||
+      tag === 'TEXTAREA' ||
+      tag === 'SUMMARY' ||
+      tag === 'OPTION'
+    ) {
+      return true;
+    }
+    if (el.isContentEditable) return true;
+    if (typeof el.getAttribute === 'function') {
+      const role = el.getAttribute('role')?.toLowerCase();
+      if (role === 'button' || role === 'menuitem' || role === 'tab' || role === 'checkbox' || role === 'switch') {
+        return true;
+      }
+      const ce = el.getAttribute('contenteditable');
+      if (ce === '' || ce === 'true') return true;
+    }
+    if (typeof el.closest === 'function') {
+      try {
+        if (el.closest(INTERACTIVE_SPACE_SELECTOR)) return true;
+      } catch {
+        // Ignore selector errors in minimal DOM mocks
+      }
+    }
+    return false;
+  };
+  return isInteractive(target) || isInteractive(activeElement);
+}
 
 export class GrassmannStudioApp {
   private readonly root: HTMLElement;
@@ -69,6 +122,7 @@ export class GrassmannStudioApp {
   private readonly paramTimeline: ParamTimelineOverlay;
   private readonly formulaCard: FormulaCardOverlay;
   private readonly galleryModal: PresetGalleryModal;
+  private readonly tourOverlay: GuidedTourOverlay;
   private readonly recorder = new ViewportVideoRecorder();
   private readonly connModal: ReturnType<typeof createConnectionModal>;
   private readonly aboutModal: ReturnType<typeof createAboutModal>;
@@ -85,6 +139,8 @@ export class GrassmannStudioApp {
   private readonly sparkCtx: CanvasRenderingContext2D | null;
   private readonly sparkSamples: number[] = [];
   private readonly playBtn: HTMLButtonElement;
+  private readonly floorBtn: HTMLButtonElement;
+  private readonly tourBtn: HTMLButtonElement;
   private readonly recBtn: HTMLButtonElement;
   private readonly zenBtn: HTMLButtonElement;
   private readonly exitZenBtn: HTMLButtonElement;
@@ -98,11 +154,13 @@ export class GrassmannStudioApp {
 
   // State
   private mode: StudioMode = 'coffeeshop';
+  private activeSceneKind: ExperimentSceneKind = 'preset';
   private activeAlgebra = 'PGA3';
   private activePresetId = 'pga3d_slicing';
   private darkTheme = true;
   private zenMode = false;
   private gridVisible = true;
+  private floorShadowVisible = true;
   private wireframe = false;
   private animRunning = false;
   private animSpeed = 1;
@@ -113,7 +171,10 @@ export class GrassmannStudioApp {
   private lastDecodeUs = 0;
   private lastP95Ms = 0;
   private lastDroppedFrames = 0;
-  private lastWedgeSeed = 42;
+  private lastWedgeSeedStr = '42';
+  private lastWedgeDim: 2 | 3 = 2;
+  private lastWedgeDifficulty: 0 | 1 | 2 = 1;
+  private lastWedgeTutorialId: WedgeTutorialId = 'T1';
   private lastFrame: GsirFrame | null = null;
   private dispatchedEventLog: string[] = [];
   private livePresets: StudioPreset[] = [...STUDIO_PRESETS];
@@ -335,17 +396,31 @@ export class GrassmannStudioApp {
     vpTools.className = 'gs-vp-toolbar';
     this.playBtn = this.makeVpBtn('▶ Play', () => this.setAnimationRunning(!this.animRunning));
     const galleryBtn = this.makeVpBtn('Gallery (G)', () => this.galleryModal.toggle(this.activePresetId));
+    this.tourBtn = this.makeVpBtn('Tour (T)', () => {
+      this.tourOverlay.toggle();
+      this.tourBtn.classList.toggle('active', this.tourOverlay.opened);
+    });
+    this.tourBtn.title = 'Interactive 6-Stop Guided GA Tour (T)';
+    this.floorBtn = this.makeVpBtn('Floor', () => {
+      this.floorShadowVisible = !this.floorShadowVisible;
+      this.floorBtn.classList.toggle('active', this.floorShadowVisible);
+      this.renderer.setFloorShadowVisible(this.floorShadowVisible);
+    });
+    this.floorBtn.classList.add('active');
+    this.floorBtn.title = 'Toggle Soft Studio Floor Contact Shadow';
     this.recBtn = this.makeVpBtn('● Rec', () => this.toggleVideoRecording());
     this.recBtn.title = 'Record 5s 60fps WebM Video';
     this.zenBtn = this.makeVpBtn('Zen (F)', () => this.setZenMode(!this.zenMode));
     this.zenBtn.title = 'Toggle Fullscreen Zen Mode (F)';
     vpTools.append(
+      this.tourBtn,
       galleryBtn,
       this.playBtn,
       this.makeVpBtn('Grid', () => {
         this.gridVisible = !this.gridVisible;
         this.renderer.setGridVisible(this.gridVisible);
       }),
+      this.floorBtn,
       this.makeVpBtn('Wire', () => {
         this.wireframe = !this.wireframe;
         this.renderer.setWireframeOverride(this.wireframe);
@@ -364,6 +439,30 @@ export class GrassmannStudioApp {
       this.zenBtn
     );
     viewportWrap.appendChild(vpTools);
+
+    // Interactive 6-Stop Guided GA Tour Card (T shortcut)
+    this.tourOverlay = new GuidedTourOverlay({
+      onLoadStop: (stop) => {
+        this.tourBtn.classList.add('active');
+        if (stop.mode === 'wedge') {
+          this.setMode('wedge', true);
+        } else {
+          if (this.mode !== 'coffeeshop') this.setMode('coffeeshop', false);
+          const found = this.livePresets.find((p) => p.id === stop.presetId);
+          if (found) {
+            this.loadPreset(found);
+          } else {
+            this.activeSceneKind = 'preset';
+            this.activePresetId = stop.presetId;
+            void this.dispatchJson({ op: 'loadPreset', id: stop.presetId, forceFullSnapshot: true });
+          }
+        }
+      },
+      onClose: () => {
+        this.tourBtn.classList.remove('active');
+      },
+    });
+    viewportWrap.appendChild(this.tourOverlay.element);
 
     // Floating Exit Zen pill (only visible in Zen mode)
     this.exitZenBtn = document.createElement('button');
@@ -387,14 +486,16 @@ export class GrassmannStudioApp {
       onTogglePlay: () => this.setAnimationRunning(!this.animRunning),
       onScrubTime: (timeSec) => {
         this.animTimeSec = timeSec;
-        this.enqueueBinaryEvent(encodeTick(0, timeSec));
+        // Dots P1 #10: explicit seekTime op (never Tick(0, t) which advances simulation time!)
+        void this.dispatchJson({ op: 'seekTime', t: timeSec });
       },
       onSpeedChange: (speed) => {
         this.animSpeed = speed;
       },
       onResetTime: () => {
         this.animTimeSec = 0;
-        this.enqueueBinaryEvent(encodeTick(0, 0));
+        // Dots P1 #10: explicit resetTime op (resets sim clock cleanly to 0!)
+        void this.dispatchJson({ op: 'resetTime' });
       },
     });
     vpLeftStack.append(this.formulaCard.element, this.paramTimeline.paramPanel);
@@ -430,14 +531,34 @@ export class GrassmannStudioApp {
     // Wedge 2D/3D Game HUD overlay inside viewport
     this.wedgeHud = new WedgeGameHud(this.synth, {
       onAction: (action: WedgeActionCodeValue, arg = 0) => {
+        if (
+          action === WedgeActionCode.GOTO_LEVEL ||
+          action === WedgeActionCode.NEXT ||
+          action === WedgeActionCode.PREV ||
+          action === WedgeActionCode.TOGGLE_3D
+        ) {
+          this.activeSceneKind = 'wedgeLevel';
+        }
         this.enqueueBinaryEvent(encodeWedgeAction(action, arg));
       },
       onTutorial: (id) => {
+        this.activeSceneKind = 'wedgeTutorial';
+        this.lastWedgeTutorialId = id;
         void this.dispatchJson({ op: 'wedgeTutorial', id, forceFullSnapshot: true });
       },
       onRandomChallenge: (dim, difficulty, seed) => {
-        this.lastWedgeSeed = seed;
-        void this.dispatchJson({ op: 'wedgeRandom', dim, difficulty, seed, forceFullSnapshot: true });
+        this.activeSceneKind = 'wedgeRandom';
+        this.lastWedgeDim = dim;
+        this.lastWedgeDifficulty = difficulty;
+        this.lastWedgeSeedStr = normalizeSeedString(seed);
+        void this.dispatchJson({
+          op: 'wedgeRandom',
+          dim,
+          difficulty,
+          seed,
+          seedStr: this.lastWedgeSeedStr,
+          forceFullSnapshot: true,
+        });
       },
       onAccessibleOp: (op) => {
         this.renderer.commitArmedWedgeOp(op);
@@ -599,6 +720,11 @@ export class GrassmannStudioApp {
     (window as unknown as Record<string, unknown>).__grassmannStudio = {
       getState: () => ({
         mode: this.mode,
+        sceneKind: this.activeSceneKind,
+        animRunning: this.animRunning,
+        tourOpen: this.tourOverlay.opened,
+        tourStop: this.tourOverlay.activeIndex,
+        floorShadowVisible: this.floorShadowVisible,
         theme: this.darkTheme ? 'dark' : 'light',
         transportKind: this.transport?.kind ?? null,
         transportLabel: this.transport?.label ?? null,
@@ -634,6 +760,12 @@ export class GrassmannStudioApp {
         recentEvents: this.dispatchedEventLog.slice(-12),
       }),
       getHandleScreenPos: (handleId?: number) => this.renderer.getInteractiveHandleScreenPos(handleId),
+      getAllInteractiveHandles: () => this.renderer.getAllInteractiveHandles(),
+      getRenderInfo: () => this.renderer.getRenderInfo(),
+      resetLatencySamples: () => this.renderer.resetLatencySamples(),
+      openTour: (idx = 0) => this.tourOverlay.open(idx),
+      closeTour: () => this.tourOverlay.close(),
+      dispatchJson: (ev: JsonInputEvent) => this.dispatchJson(ev),
       exportExperiment: () => this.buildExperimentSnapshot(),
       importExperiment: (exp: GrassmannExperimentV1) => this.applyExperiment(exp),
       benchmarkJson: async (ev: JsonInputEvent, runs = 5): Promise<{ coldMs: number; warmAvgMs: number; minMs: number }> => {
@@ -964,6 +1096,7 @@ export class GrassmannStudioApp {
       '<div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd> Switch studio modes</div>' +
       '<div><kbd>Space</kbd> Play / Pause simulation clock</div>' +
       '<div><kbd>G</kbd> Open visual Preset Gallery</div>' +
+      '<div><kbd>T</kbd> Interactive 6-Stop Guided GA Tour</div>' +
       '<div><kbd>F</kbd> Fullscreen Zen Mode</div>' +
       '<div><kbd>R</kbd> Smooth reset camera</div>' +
       '<div><kbd>J/M/A/D</kbd> Accessible Wedge Join/Meet/Add/Dot</div>' +
@@ -1050,43 +1183,164 @@ export class GrassmannStudioApp {
         pos: [p.pos[0], p.pos[1], p.pos[2]] as [number, number, number],
       }));
     const cam = this.renderer.getCameraState();
-    return {
+    const impOpts = this.calcPanel.getImplicitOptions();
+    const paramMap: Record<string, number> = {};
+    for (const p of this.lastFrame?.meta?.params ?? []) {
+      if (Number.isFinite(p.value)) paramMap[p.name] = p.value;
+    }
+    const rawMetaPreset = this.lastFrame?.meta?.presetId;
+    const isSyntheticPreset =
+      !rawMetaPreset ||
+      rawMetaPreset === 'custom_script' ||
+      rawMetaPreset === 'surface_3d' ||
+      rawMetaPreset === 'implicit_expr' ||
+      rawMetaPreset === 'implicit_gpu' ||
+      rawMetaPreset === 'parametric_expr' ||
+      rawMetaPreset.startsWith('wedge_');
+    const persistedPresetId =
+      this.activeSceneKind === 'preset' && !isSyntheticPreset ? rawMetaPreset : this.activePresetId;
+    const bound = this.activeSceneKind === 'surface' ? this.calcPanel.getSurfaceBound() : impOpts.bound;
+
+    const exp: GrassmannExperimentV1 = {
       version: 1,
       mode: this.mode,
-      presetId: this.lastFrame?.meta?.presetId ?? this.activePresetId,
+      sceneKind: this.activeSceneKind,
+      presetId: this.activeSceneKind === 'preset' ? persistedPresetId : '',
       algebra: this.activeAlgebra,
       script: this.codeEditor.getCode(),
+      surfaceExpr: this.calcPanel.getSurfaceExpr(),
       implicitExpr: this.calcPanel.getImplicitExpr(),
+      gpuRaymarch: impOpts.gpuRaymarch,
+      bound,
       parametricExpr: this.calcPanel.getParametricExpr(),
       handles,
       wedgeLevel: this.lastFrame?.meta?.wedge?.level ?? 1,
-      wedgeSeed: this.lastWedgeSeed,
+      wedgeSeed: this.lastWedgeSeedStr,
+      wedgeDim: this.lastFrame?.meta?.wedge?.is3D ? 3 : this.lastWedgeDim,
+      wedgeDifficulty: this.lastWedgeDifficulty,
+      wedgeTutorialId: this.lastWedgeTutorialId,
       camera: {
         pos: [cam.pos[0], cam.pos[1], cam.pos[2]],
         target: [cam.target[0], cam.target[1], cam.target[2]],
         isOrtho: cam.isOrtho,
       },
     };
+    if (Object.keys(paramMap).length > 0) {
+      exp.params = paramMap;
+    }
+    return exp;
   }
 
   private async applyExperiment(exp: GrassmannExperimentV1): Promise<void> {
-    this.activePresetId = exp.presetId;
+    const kind = inferLegacySceneKind(exp);
+    const seedStr = normalizeSeedString(exp.wedgeSeed);
+    this.activeSceneKind = kind;
     this.activeAlgebra = exp.algebra;
     this.algebraSelect.value = exp.algebra;
-    this.lastWedgeSeed = exp.wedgeSeed;
+    this.lastWedgeSeedStr = seedStr;
+    if (exp.wedgeDim) this.lastWedgeDim = exp.wedgeDim;
+    if (exp.wedgeDifficulty !== undefined) this.lastWedgeDifficulty = exp.wedgeDifficulty;
+    if (exp.wedgeTutorialId) this.lastWedgeTutorialId = exp.wedgeTutorialId;
+    if (exp.presetId && kind === 'preset') {
+      this.activePresetId = exp.presetId;
+    }
+
     this.codeEditor.setCode(exp.script);
-    this.calcPanel.setImplicitExpr(exp.implicitExpr);
+    if (exp.surfaceExpr) this.calcPanel.setSurfaceExpr(exp.surfaceExpr, exp.bound);
+    this.calcPanel.setImplicitExpr(exp.implicitExpr, exp.gpuRaymarch, exp.bound);
     this.calcPanel.setParametricExpr(exp.parametricExpr);
     this.setMode(exp.mode, false);
 
-    if (exp.mode === 'wedge') {
-      this.enqueueBinaryEvent(encodeWedgeAction(WedgeActionCode.GOTO_LEVEL, exp.wedgeLevel));
-    } else if (exp.presetId) {
-      await this.dispatchJson({ op: 'loadPreset', id: exp.presetId, forceFullSnapshot: true });
-    } else if (exp.script.trim()) {
-      await this.dispatchJson({ op: 'evalScript', algebra: exp.algebra, code: exp.script });
+    // Dots P0 #4: Restore via the EXACT matching Lean op — never clobber custom scripts / surfaces / random Wedge with loadPreset!
+    switch (kind) {
+      case 'wedgeRandom': {
+        const dim = exp.wedgeDim ?? 2;
+        const difficulty = exp.wedgeDifficulty ?? 1;
+        const numericSeed = Number.parseInt(seedStr, 10);
+        await this.dispatchJson({
+          op: 'wedgeRandom',
+          dim,
+          difficulty,
+          seed: Number.isSafeInteger(numericSeed) ? numericSeed : 0,
+          seedStr,
+          forceFullSnapshot: true,
+        });
+        break;
+      }
+      case 'wedgeTutorial': {
+        await this.dispatchJson({
+          op: 'wedgeTutorial',
+          id: exp.wedgeTutorialId ?? 'T1',
+          forceFullSnapshot: true,
+        });
+        break;
+      }
+      case 'wedgeLevel': {
+        await this.dispatchJson({
+          op: 'wedgeAction',
+          action: 'goto',
+          arg: Math.max(1, exp.wedgeLevel),
+          forceFullSnapshot: true,
+        });
+        break;
+      }
+      case 'script': {
+        await this.dispatchJson({
+          op: 'evalScript',
+          algebra: exp.algebra,
+          code: exp.script,
+          forceFullSnapshot: true,
+        });
+        break;
+      }
+      case 'surface': {
+        const b = exp.bound ?? this.calcPanel.getSurfaceBound();
+        await this.dispatchJson({
+          op: 'evalSurface',
+          expr: exp.surfaceExpr || this.calcPanel.getSurfaceExpr(),
+          bounds: [-b, b, -b, b],
+          gridN: 48,
+          forceFullSnapshot: true,
+        });
+        break;
+      }
+      case 'implicit': {
+        const b = exp.bound ?? this.calcPanel.getImplicitOptions().bound;
+        await this.dispatchJson({
+          op: 'evalImplicit',
+          expr: exp.implicitExpr,
+          gpuRaymarch: exp.gpuRaymarch ?? true,
+          bounds: [-b, b, -b, b, -b, b],
+          gridN: 24,
+          forceFullSnapshot: true,
+        });
+        break;
+      }
+      case 'parametric': {
+        await this.dispatchJson({
+          op: 'evalParametric',
+          fx: exp.parametricExpr.fx,
+          fy: exp.parametricExpr.fy,
+          fz: exp.parametricExpr.fz,
+          forceFullSnapshot: true,
+        });
+        break;
+      }
+      case 'preset':
+      default: {
+        const pid = exp.presetId || 'pga3d_slicing';
+        this.activePresetId = pid;
+        this.rebuildPresetBrowser?.();
+        await this.dispatchJson({ op: 'loadPreset', id: pid, forceFullSnapshot: true });
+        break;
+      }
     }
 
+    if (exp.params) {
+      for (const [name, value] of Object.entries(exp.params)) {
+        await this.dispatchJson({ op: 'setParam', name, value });
+      }
+    }
     for (const h of exp.handles) {
       this.enqueueBinaryEvent(encodeDragHandle(h.handleId, h.pos[0], h.pos[1], h.pos[2]));
     }
@@ -1106,10 +1360,42 @@ export class GrassmannStudioApp {
       this.offlineBanner.classList.remove('hidden');
       return Promise.resolve();
     }
+    switch (ev.op) {
+      case 'loadPreset':
+        this.activeSceneKind = ev.id === 'game_wedge' ? 'wedgeLevel' : 'preset';
+        break;
+      case 'evalScript':
+        this.activeSceneKind = 'script';
+        break;
+      case 'evalSurface':
+        this.activeSceneKind = 'surface';
+        break;
+      case 'evalImplicit':
+        this.activeSceneKind = 'implicit';
+        break;
+      case 'evalParametric':
+        this.activeSceneKind = 'parametric';
+        break;
+      case 'wedgeTutorial':
+        this.activeSceneKind = 'wedgeTutorial';
+        this.lastWedgeTutorialId = ev.id;
+        break;
+      case 'wedgeRandom':
+        this.activeSceneKind = 'wedgeRandom';
+        this.lastWedgeDim = ev.dim;
+        this.lastWedgeDifficulty = ev.difficulty;
+        this.lastWedgeSeedStr = normalizeSeedString(ev.seedStr ?? ev.seed);
+        break;
+      case 'wedgeAction':
+        if (ev.action === 'goto' || ev.action === 'next' || ev.action === 'prev' || ev.action === 'toggle3D') {
+          this.activeSceneKind = 'wedgeLevel';
+        }
+        break;
+    }
     this.dispatchedEventLog.push(`json:${ev.op}`);
     if (this.dispatchedEventLog.length > 40) this.dispatchedEventLog.shift();
     return this.eventQueue.enqueueJson(ev, {
-      syncCamera: ev.op === 'loadPreset',
+      syncCamera: ev.op === 'loadPreset' || ev.op === 'loadTourStop',
       inputTimestampMs: performance.now(),
     });
   }
@@ -1117,13 +1403,28 @@ export class GrassmannStudioApp {
   private async executeQueuedEvent(item: QueuedStudioEvent): Promise<void> {
     if (!this.transport) return;
     const t0 = performance.now();
-    const frameBytes =
-      item.kind === 'bin'
-        ? await this.transport.dispatchBin(item.bytes)
-        : await this.transport.dispatchJson(item.event);
+    let frameBytes: Uint8Array;
+    if (item.kind === 'bin') {
+      frameBytes = await this.transport.dispatchBin(item.bytes);
+    } else {
+      try {
+        frameBytes = await this.transport.dispatchJson(item.event);
+      } catch (err) {
+        // Graceful compatibility if connected to a pre-Wave-6C backend that predates resetTime/seekTime
+        const msg = (err as Error).message || '';
+        if (
+          (item.event.op === 'resetTime' || item.event.op === 'seekTime') &&
+          /unknown InputEvent op|ERR_BAD_INPUT|status -2/i.test(msg)
+        ) {
+          this.paramTimeline.setTime(item.event.op === 'resetTime' ? 0 : item.event.t);
+          return;
+        }
+        throw err;
+      }
+    }
     this.lastLeanUs = (performance.now() - t0) * 1000;
     this.updateEngineBadge();
-    const syncEditorScript = item.kind === 'json' && item.event.op === 'loadPreset';
+    const syncEditorScript = item.kind === 'json' && (item.event.op === 'loadPreset' || item.event.op === 'loadTourStop');
     this.ingestRawFrame(frameBytes, item.syncCamera, item.inputTimestampMs, syncEditorScript);
 
     if (
@@ -1346,6 +1647,9 @@ export class GrassmannStudioApp {
         return;
       }
       if (ev.key === ' ') {
+        if (shouldIgnoreGlobalSpaceKey(ev.target, document.activeElement)) {
+          return;
+        }
         ev.preventDefault();
         this.setAnimationRunning(!this.animRunning);
         return;
@@ -1358,11 +1662,20 @@ export class GrassmannStudioApp {
         this.galleryModal.toggle(this.activePresetId);
         return;
       }
+      if (ev.key === 't' || ev.key === 'T') {
+        this.tourOverlay.toggle();
+        this.tourBtn.classList.toggle('active', this.tourOverlay.opened);
+        return;
+      }
       if (ev.key === 'f' || ev.key === 'F') {
         this.setZenMode(!this.zenMode);
         return;
       }
       if (ev.key === 'Escape') {
+        if (this.tourOverlay.opened) {
+          this.tourOverlay.close();
+          return;
+        }
         if (this.galleryModal.opened) {
           this.galleryModal.close();
           return;

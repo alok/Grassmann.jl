@@ -8,6 +8,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
@@ -26,7 +28,12 @@ import {
 } from '../gsir/types';
 import { AxisTriadGizmo, type AxisSnapPreset } from './axisGizmo';
 import { ContourOverlayRenderer } from './contourOverlay';
-import { createBackdropDome, createInfiniteGrid, createStudioEnvironmentMap } from './environment';
+import {
+  createBackdropDome,
+  createInfiniteGrid,
+  createStudioContactShadow,
+  createStudioEnvironmentMap,
+} from './environment';
 import {
   OpnsShaderCache,
   createBivectorMaterial,
@@ -78,13 +85,16 @@ interface InteractiveMeta {
   anchor: THREE.Vector3;
   kind: 'point' | 'segment' | 'line' | 'plane';
   label?: string;
+  axis?: THREE.Vector3;
 }
 
 interface WedgePickSlot {
   handleId: number;
+  kind: 'point' | 'segment' | 'line' | 'plane';
   label: string;
   anchorWorld: THREE.Vector3;
   currentWorld: THREE.Vector3;
+  axis?: THREE.Vector3;
 }
 
 function toColor(rgba: RgbaTuple): THREE.Color {
@@ -172,6 +182,7 @@ export class GrassmannSceneRenderer {
 
   private readonly backdrop: ReturnType<typeof createBackdropDome>;
   private readonly grid: ReturnType<typeof createInfiniteGrid>;
+  private readonly floorShadow: ReturnType<typeof createStudioContactShadow>;
   private envMapDark: THREE.Texture;
   private envMapLight: THREE.Texture;
 
@@ -184,17 +195,23 @@ export class GrassmannSceneRenderer {
   private readonly opnsResolution = new THREE.Vector2(800, 600);
   private readonly opnsInvViewProj = new THREE.Matrix4();
   private readonly meshGeoCache = new Map<bigint, CachedGpuMesh>();
+  private readonly maxCachedMeshes = 24;
   private readonly lineMaterials: LineMaterial[] = [];
   private readonly flowMaterials: THREE.ShaderMaterial[] = [];
   private readonly interactiveObjects: THREE.Object3D[] = [];
+  // Deferred 1-frame disposal queue so Three.js WebGLPrograms refcounts stay >=1 across
+  // live frame rebuilds (prevents gl.deleteProgram + 40ms Metal/ANGLE shader recompile every drag frame!)
+  private readonly pendingDisposeGeos: THREE.BufferGeometry[] = [];
+  private readonly pendingDisposeMats: THREE.Material[] = [];
 
-  // Shared unit geometries
+  // Shared unit geometries (never recreated per frame -> zero GPU leaks!)
   private readonly unitSphereGeo = new THREE.SphereGeometry(1, 28, 20);
   private readonly fresnelSphereGeo = new THREE.SphereGeometry(1, 48, 32);
   private readonly imaginarySphereGeo = new THREE.IcosahedronGeometry(1, 2);
   private readonly ringTorusGeo = new THREE.TorusGeometry(1.45, 0.12, 12, 36);
   private readonly hollowTorusGeo = new THREE.TorusGeometry(1.0, 0.22, 14, 36);
   private readonly arrowConeGeo = new THREE.ConeGeometry(0.065, 0.2, 16);
+  private readonly flowUnitPlaneGeo = new THREE.PlaneGeometry(1, 1, 4, 1);
   private readonly opnsBoxGeo = new THREE.BoxGeometry(8, 8, 8);
   private readonly opnsQuadGeo = new THREE.PlaneGeometry(2, 2);
 
@@ -236,6 +253,7 @@ export class GrassmannSceneRenderer {
   private themeOverride: boolean | null = null;
   private forceGridOverride: boolean | null = null;
   private forceWireframeOverride = false;
+  private floorShadowEnabled = true;
   private isOrtho = false;
   private orthoScale = 3.0;
   private lastCameraSyncMs = 0;
@@ -317,9 +335,11 @@ export class GrassmannSceneRenderer {
     rimLight.position.set(-5, 5, -7);
     this.scene.add(rimLight);
 
-    // Backdrop & Infinite AA Grid
+    // Backdrop, Studio Contact Shadow & Infinite AA Grid
     this.backdrop = createBackdropDome();
     this.scene.add(this.backdrop.mesh);
+    this.floorShadow = createStudioContactShadow();
+    this.scene.add(this.floorShadow.mesh);
     this.grid = createInfiniteGrid();
     this.scene.add(this.grid.mesh);
 
@@ -414,7 +434,28 @@ export class GrassmannSceneRenderer {
         : (frame.header.flags & HeaderFlag.GRID_ENABLED) !== 0;
 
     if (frame.camera) {
-      this.orthoScale = Math.max(0.25, frame.camera.orthoScale || 3.0);
+      let nextOrthoScale = Math.max(0.25, frame.camera.orthoScale || 3.0);
+      if (wantOrtho) {
+        const aspect = Math.max(0.5, this.width / Math.max(1, this.height));
+        let maxAbsY = 0;
+        let maxAbsX = 0;
+        for (const pt of frame.points) {
+          maxAbsX = Math.max(maxAbsX, Math.abs(pt.pos[0]));
+          maxAbsY = Math.max(maxAbsY, Math.abs(pt.pos[1]));
+        }
+        for (const cir of frame.circles) {
+          maxAbsX = Math.max(maxAbsX, Math.abs(cir.center[0]) + cir.radius);
+          maxAbsY = Math.max(maxAbsY, Math.abs(cir.center[1]) + cir.radius);
+        }
+        // Keep all 2D Wedge / PGA2D points comfortably clear of HUD cards & viewport edges
+        const fitOrtho = Math.max(maxAbsY * 1.48 + 0.35, (maxAbsX * 1.38 + 0.35) / aspect);
+        if (this.isWedgeMode()) {
+          nextOrthoScale = Math.max(nextOrthoScale, 1.85, fitOrtho);
+        } else if (fitOrtho > nextOrthoScale) {
+          nextOrthoScale = fitOrtho;
+        }
+      }
+      this.orthoScale = nextOrthoScale;
       if (frame.camera.fovDeg > 5 && frame.camera.fovDeg < 150) {
         this.perspCamera.fov = frame.camera.fovDeg;
         this.perspCamera.updateProjectionMatrix();
@@ -434,7 +475,7 @@ export class GrassmannSceneRenderer {
     });
 
     // 3. Rebuild dynamic primitives (reusing cached mesh BufferGeometries & OPNS ShaderMaterials!)
-    this.clearDynamicGroup();
+    this.clearDynamicGroup(false);
     const labelTexts = frame.meta?.labels ?? [];
     const renderedLabelIndices = new Set<number>();
     const renderedLabelTexts = new Set<string>();
@@ -520,21 +561,37 @@ export class GrassmannSceneRenderer {
       }
     }
 
-    // 0x03 SEGMENTS (Screen-space AA Line2 + optional arrowhead + dashed)
+    // 0x03 SEGMENTS (Batched screen-space AA LineSegments2 per style bucket + optional arrowhead + dashed)
+    const segBuckets = new Map<
+      string,
+      { width: number; dashed: boolean; rgba: RgbaTuple; positions: number[] }
+    >();
     for (const seg of frame.segments) {
-      this.addThickPolyline(
-        [seg.a[0], seg.a[1], seg.a[2], seg.b[0], seg.b[1], seg.b[2]],
-        seg.width,
-        seg.rgba,
-        seg.dashed,
-        seg.draggable ? seg.handleId : null,
-        'segment',
-        [
-          (seg.a[0] + seg.b[0]) * 0.5,
-          (seg.a[1] + seg.b[1]) * 0.5,
-          (seg.a[2] + seg.b[2]) * 0.5,
-        ]
-      );
+      if (seg.draggable) {
+        this.addThickPolyline(
+          [seg.a[0], seg.a[1], seg.a[2], seg.b[0], seg.b[1], seg.b[2]],
+          seg.width,
+          seg.rgba,
+          seg.dashed,
+          seg.handleId,
+          'segment',
+          [
+            (seg.a[0] + seg.b[0]) * 0.5,
+            (seg.a[1] + seg.b[1]) * 0.5,
+            (seg.a[2] + seg.b[2]) * 0.5,
+          ]
+        );
+      } else {
+        const w = Math.max(1.2, seg.width || 2.0);
+        const colHex = toColor(seg.rgba).getHex();
+        const key = `${w.toFixed(2)}|${seg.dashed ? 1 : 0}|${colHex}|${seg.rgba[3].toFixed(2)}`;
+        let bucket = segBuckets.get(key);
+        if (!bucket) {
+          bucket = { width: w, dashed: seg.dashed, rgba: seg.rgba, positions: [] };
+          segBuckets.set(key, bucket);
+        }
+        bucket.positions.push(seg.a[0], seg.a[1], seg.a[2], seg.b[0], seg.b[1], seg.b[2]);
+      }
 
       if (seg.arrow) {
         const start = new THREE.Vector3(seg.a[0], seg.a[1], seg.a[2]);
@@ -555,6 +612,27 @@ export class GrassmannSceneRenderer {
           this.dynamicGroup.add(cone);
         }
       }
+    }
+    for (const bucket of segBuckets.values()) {
+      const geo = new LineSegmentsGeometry();
+      geo.setPositions(bucket.positions);
+      const mat = new LineMaterial({
+        color: toColor(bucket.rgba).getHex(),
+        linewidth: bucket.width,
+        transparent: bucket.rgba[3] < 0.99,
+        opacity: bucket.rgba[3],
+        dashed: bucket.dashed,
+        dashSize: 0.16,
+        gapSize: 0.11,
+        worldUnits: false,
+        resolution: new THREE.Vector2(this.width, this.height),
+      });
+      this.lineMaterials.push(mat);
+      const segsMesh = new LineSegments2(geo, mat);
+      if (bucket.dashed) {
+        segsMesh.computeLineDistances();
+      }
+      this.dynamicGroup.add(segsMesh);
     }
 
     // 0x04 LINES (Infinite clipped lines: origin ± dir * clip)
@@ -578,7 +656,9 @@ export class GrassmannSceneRenderer {
         ln.dashed || ln.hint,
         ln.draggable ? ln.handleId : null,
         'line',
-        ln.origin
+        ln.origin,
+        undefined,
+        ln.dir
       );
     }
 
@@ -597,11 +677,15 @@ export class GrassmannSceneRenderer {
       this.dynamicGroup.add(mesh);
 
       if (pl.draggable) {
+        const pnx = pl.u[1] * pl.v[2] - pl.u[2] * pl.v[1];
+        const pny = pl.u[2] * pl.v[0] - pl.u[0] * pl.v[2];
+        const pnz = pl.u[0] * pl.v[1] - pl.u[1] * pl.v[0];
         mesh.userData.interactive = {
           handleId: pl.handleId,
           anchor: new THREE.Vector3(pl.center[0], pl.center[1], pl.center[2]),
           kind: 'plane',
           label: pl.labelIdx !== GSIR_NO_LABEL ? labelTexts[pl.labelIdx] : undefined,
+          axis: new THREE.Vector3(pnx, pny, pnz),
         } satisfies InteractiveMeta;
         this.interactiveObjects.push(mesh);
       }
@@ -791,12 +875,11 @@ export class GrassmannSceneRenderer {
     // 0x0D FLOW_PARTICLES (GPU-instanced velocity-colored luminous tapered ribbons)
     for (const fp of frame.flowParticles) {
       if (fp.particleCount === 0) continue;
-      // Unit 4-segment tapered strip quad along uv.x ∈ [0,1], uv.y ∈ [0,1]
-      const basePlane = new THREE.PlaneGeometry(1, 1, 4, 1);
+      // Reuse shared unit 4-segment tapered strip quad (zero per-frame PlaneGeometry leaks!)
       const instGeo = new THREE.InstancedBufferGeometry();
-      instGeo.index = basePlane.index;
-      instGeo.setAttribute('position', basePlane.getAttribute('position'));
-      instGeo.setAttribute('uv', basePlane.getAttribute('uv'));
+      instGeo.index = this.flowUnitPlaneGeo.index;
+      instGeo.setAttribute('position', this.flowUnitPlaneGeo.getAttribute('position'));
+      instGeo.setAttribute('uv', this.flowUnitPlaneGeo.getAttribute('uv'));
       instGeo.instanceCount = fp.particleCount;
 
       instGeo.setAttribute('aStart', new THREE.InstancedBufferAttribute(new Float32Array(fp.starts), 3));
@@ -831,15 +914,15 @@ export class GrassmannSceneRenderer {
     // 0x10 OPNS_UNIFORMS (Cached Lean-emitted GLSL ShaderMaterial pass)
     this.updateOpnsGroup(frame);
 
-    // 4. Smart viewport framing guard on preset load: if a 3D scene's rendered bounds exceed
-    // Lean's default camera distance (e.g. relativistic Terrell-Penrose warped cube + observer),
-    // smoothly pull back so nothing clips viewport edges!
+    // 4. Studio contact shadow floor depth cue + smart viewport framing guard on preset load
+    const bounds = this.computeSceneBounds(frame);
+    this.updateFloorShadow(frame, wantOrtho, bounds);
     if (syncCamera && !wantOrtho && frame.opnsUniforms.length === 0) {
-      this.ensureSceneFitsCamera(frame, frame.camera?.distance || 5.0);
+      this.ensureSceneFitsCamera(bounds, frame.camera?.distance || 5.0);
     }
   }
 
-  private ensureSceneFitsCamera(frame: GsirFrame, leanDist: number): void {
+  private computeSceneBounds(frame: GsirFrame): THREE.Box3 {
     const box = new THREE.Box3();
     const tmp = new THREE.Vector3();
     const mat4 = new THREE.Matrix4();
@@ -866,7 +949,65 @@ export class GrassmannSceneRenderer {
         box.union(localBox);
       }
     }
+    return box;
+  }
 
+  private updateFloorShadow(frame: GsirFrame, wantOrtho: boolean, bounds?: THREE.Box3): void {
+    const show =
+      this.floorShadowEnabled &&
+      !wantOrtho &&
+      !this.xr.isActive() &&
+      frame.opnsUniforms.length === 0 &&
+      (frame.meshRefs.length > 0 || frame.spheres.length > 0 || frame.points.length > 0 || frame.segments.length > 0);
+    if (!show) {
+      this.floorShadow.update({
+        visible: false,
+        centerX: 0,
+        centerZ: 0,
+        floorY: -0.02,
+        radius: 2,
+        darkTheme: this.darkTheme,
+      });
+      return;
+    }
+    const box = bounds ?? this.computeSceneBounds(frame);
+    if (box.isEmpty()) {
+      this.floorShadow.update({
+        visible: true,
+        centerX: 0,
+        centerZ: 0,
+        floorY: -0.015,
+        radius: 2.6,
+        darkTheme: this.darkTheme,
+      });
+      return;
+    }
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const footprint = Math.max(1.35, Math.hypot(size.x, size.z) * 0.92);
+    const floorY = Math.min(-0.015, box.min.y - 0.03);
+    this.floorShadow.update({
+      visible: true,
+      centerX: center.x,
+      centerZ: center.z,
+      floorY,
+      radius: footprint,
+      darkTheme: this.darkTheme,
+    });
+  }
+
+  setFloorShadowVisible(visible: boolean): void {
+    this.floorShadowEnabled = visible;
+    if (this.currentFrame) {
+      const is2D = (this.currentFrame.header.flags & HeaderFlag.IS_2D) !== 0;
+      const wantOrtho = is2D || Boolean(this.currentFrame.camera?.isOrtho);
+      this.updateFloorShadow(this.currentFrame, wantOrtho);
+    } else {
+      this.floorShadow.mesh.visible = visible && !this.isOrtho && !this.xr.isActive();
+    }
+  }
+
+  private ensureSceneFitsCamera(box: THREE.Box3, leanDist: number): void {
     if (box.isEmpty()) return;
     const sphere = box.getBoundingSphere(new THREE.Sphere());
     if (!Number.isFinite(sphere.radius) || sphere.radius <= 0.1 || sphere.radius > 18) return;
@@ -922,6 +1063,9 @@ export class GrassmannSceneRenderer {
         this.currentFrame.meta?.labels ?? [],
         dark
       );
+      const is2D = (this.currentFrame.header.flags & HeaderFlag.IS_2D) !== 0;
+      const wantOrtho = is2D || Boolean(this.currentFrame.camera?.isOrtho);
+      this.updateFloorShadow(this.currentFrame, wantOrtho);
     }
   }
 
@@ -1026,21 +1170,110 @@ export class GrassmannSceneRenderer {
   /**
    * Read-only screen-space projection helper for deterministic E2E handle drag testing.
    */
-  getInteractiveHandleScreenPos(handleId?: number): { handleId: number; clientX: number; clientY: number; world: Vec3Tuple } | null {
+  getInteractiveHandleScreenPos(handleId?: number): {
+    handleId: number;
+    kind: string;
+    label?: string;
+    clientX: number;
+    clientY: number;
+    world: Vec3Tuple;
+  } | null {
+    const all = this.getAllInteractiveHandles();
+    if (handleId === undefined) return all[0] ?? null;
+    return all.find((h) => h.handleId === handleId) ?? null;
+  }
+
+  getAllInteractiveHandles(): Array<{
+    handleId: number;
+    kind: string;
+    label?: string;
+    clientX: number;
+    clientY: number;
+    world: Vec3Tuple;
+  }> {
     const rect = this.renderer.domElement.getBoundingClientRect();
+    const out: Array<{
+      handleId: number;
+      kind: string;
+      label?: string;
+      clientX: number;
+      clientY: number;
+      world: Vec3Tuple;
+    }> = [];
+    const seenIds = new Set<number>();
+    const pointAnchors: THREE.Vector3[] = [];
     for (const obj of this.interactiveObjects) {
       const meta = obj.userData.interactive as InteractiveMeta | undefined;
-      if (!meta) continue;
-      if (handleId !== undefined && meta.handleId !== handleId) continue;
-      const p = meta.anchor.clone().project(this.activeCamera);
-      return {
+      if (meta?.kind === 'point') pointAnchors.push(meta.anchor);
+    }
+    for (const obj of this.interactiveObjects) {
+      const meta = obj.userData.interactive as InteractiveMeta | undefined;
+      if (!meta || seenIds.has(meta.handleId)) continue;
+      seenIds.add(meta.handleId);
+      const sample = meta.anchor.clone();
+      // For infinite lines passing right near a point or shared origin, pick a clean non-overlapping click point along the line!
+      if (meta.kind === 'line' && meta.axis && meta.axis.lengthSq() > 1e-6) {
+        const dir = meta.axis.clone().normalize();
+        const collides = (pt: THREE.Vector3) =>
+          pointAnchors.some((pa) => pa.distanceToSquared(pt) < 0.16) ||
+          out.some((o) => {
+            const dx = o.world[0] - pt.x;
+            const dy = o.world[1] - pt.y;
+            const dz = o.world[2] - pt.z;
+            return dx * dx + dy * dy + dz * dz < 0.16;
+          });
+        for (const offset of [0, 0.85, -0.85, 1.45, -1.45]) {
+          const cand = meta.anchor.clone().addScaledVector(dir, offset);
+          if (!collides(cand)) {
+            sample.copy(cand);
+            break;
+          }
+        }
+      }
+      const p = sample.clone().project(this.activeCamera);
+      out.push({
         handleId: meta.handleId,
+        kind: meta.kind,
+        label: meta.label,
         clientX: rect.left + ((p.x + 1) * 0.5) * rect.width,
         clientY: rect.top + ((1 - p.y) * 0.5) * rect.height,
-        world: [meta.anchor.x, meta.anchor.y, meta.anchor.z],
-      };
+        world: [sample.x, sample.y, sample.z],
+      });
     }
-    return null;
+    return out;
+  }
+
+  getRenderInfo(): {
+    geometries: number;
+    textures: number;
+    programs: number;
+    cachedMeshes: number;
+    cachedOpnsShaders: number;
+    dynamicChildren: number;
+    labelChildren: number;
+    labelDomNodes: number;
+    droppedFrames: number;
+    floorShadowVisible: boolean;
+    samples: number[];
+  } {
+    return {
+      geometries: this.renderer.info.memory.geometries,
+      textures: this.renderer.info.memory.textures,
+      programs: this.renderer.info.programs?.length ?? 0,
+      cachedMeshes: this.meshGeoCache.size,
+      cachedOpnsShaders: this.opnsCache.size,
+      dynamicChildren: this.dynamicGroup.children.length,
+      labelChildren: this.labelGroup.children.length,
+      labelDomNodes: this.labelRenderer.domElement.childElementCount,
+      droppedFrames: this.droppedFrames,
+      floorShadowVisible: this.floorShadow.mesh.visible,
+      samples: [...this.inputToPresentSamples],
+    };
+  }
+
+  resetLatencySamples(): void {
+    this.inputToPresentSamples.length = 0;
+    this.droppedFrames = 0;
   }
 
   private startCameraTransition(endPos: THREE.Vector3, endTarget: THREE.Vector3, durationMs = 460): void {
@@ -1070,7 +1303,15 @@ export class GrassmannSceneRenderer {
     if (!this.wedgeFirst || !this.wedgeSecond) return false;
     const u = this.wedgeFirst.anchorWorld.clone().sub(this.wedgeSecond.anchorWorld);
     if (u.lengthSq() < 1e-6) {
-      u.set(1, 0, 0);
+      // Shared-origin lines/planes fallback: use difference of raw GSIR display axes (matches Lean Engine.lean!)
+      if (this.wedgeFirst.axis && this.wedgeSecond.axis) {
+        u.copy(this.wedgeFirst.axis).sub(this.wedgeSecond.axis);
+      }
+      if (u.lengthSq() < 1e-6) {
+        u.set(1, 0, 0);
+      } else {
+        u.normalize();
+      }
     } else {
       u.normalize();
     }
@@ -1079,10 +1320,19 @@ export class GrassmannSceneRenderer {
     let dirB: Vec3Tuple;
     switch (op) {
       case 'join':
-      case 'add':
         // Pull apart along separation axis (aOut && bOut)
         dirA = [u.x, u.y, u.z];
         dirB = [-u.x, -u.y, -u.z];
+        break;
+      case 'add':
+        // Two points add (midpoint) by pushing together (meet->none->add); two lines/planes add (bisector) by pulling apart!
+        if (this.wedgeFirst.kind === 'point' && this.wedgeSecond.kind === 'point') {
+          dirA = [-u.x, -u.y, -u.z];
+          dirB = [u.x, u.y, u.z];
+        } else {
+          dirA = [u.x, u.y, u.z];
+          dirB = [-u.x, -u.y, -u.z];
+        }
         break;
       case 'meet':
         // Push together along separation axis (aIn && bIn)
@@ -1090,9 +1340,14 @@ export class GrassmannSceneRenderer {
         dirB = [u.x, u.y, u.z];
         break;
       case 'dot':
-        // Hold A stationary (dirA = 0), push B toward A (holdA && bIn)
-        dirA = [0, 0, 0];
-        dirB = [u.x, u.y, u.z];
+        // Hold the point stationary and push the line/plane toward it regardless of click order!
+        if (this.wedgeSecond.kind === 'point' && this.wedgeFirst.kind !== 'point') {
+          dirA = [-u.x, -u.y, -u.z];
+          dirB = [0, 0, 0];
+        } else {
+          dirA = [0, 0, 0];
+          dirB = [u.x, u.y, u.z];
+        }
         break;
     }
 
@@ -1107,11 +1362,11 @@ export class GrassmannSceneRenderer {
    * Spawns a crisp expanding luminous emerald-gold ring pulse when Lean reports Wedge solved.
    */
   triggerWedgeWinPulse(): void {
-    const geo = new THREE.RingGeometry(0.18, 0.28, 64);
+    const geo = new THREE.RingGeometry(0.24, 0.265, 96);
     const mat = new THREE.MeshBasicMaterial({
       color: 0x34d399,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.58,
       side: THREE.DoubleSide,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
@@ -1308,10 +1563,16 @@ export class GrassmannSceneRenderer {
 
   private ensureCachedMeshGeometry(asset: GsirMeshAsset): void {
     const existing = this.meshGeoCache.get(asset.meshId);
-    if (existing && existing.dirtyHash === asset.dirtyHash) return;
+    if (existing && existing.dirtyHash === asset.dirtyHash) {
+      // Touch LRU recency
+      this.meshGeoCache.delete(asset.meshId);
+      this.meshGeoCache.set(asset.meshId, existing);
+      return;
+    }
 
     if (existing) {
       existing.geometry.dispose();
+      this.meshGeoCache.delete(asset.meshId);
     }
 
     const geo = new THREE.BufferGeometry();
@@ -1328,6 +1589,18 @@ export class GrassmannSceneRenderer {
       dirtyHash: asset.dirtyHash,
       geometry: geo,
     });
+
+    // Bounded LRU eviction so GPU BufferGeometries never grow monotonically across preset switches
+    if (this.meshGeoCache.size > this.maxCachedMeshes) {
+      const activeIds = new Set<bigint>((this.currentFrame?.meshRefs ?? []).map((mr) => mr.meshId));
+      activeIds.add(asset.meshId);
+      for (const [id, entry] of this.meshGeoCache) {
+        if (this.meshGeoCache.size <= this.maxCachedMeshes) break;
+        if (activeIds.has(id)) continue;
+        entry.geometry.dispose();
+        this.meshGeoCache.delete(id);
+      }
+    }
   }
 
   private addThickPolyline(
@@ -1337,7 +1610,9 @@ export class GrassmannSceneRenderer {
     dashed: boolean,
     draggableHandleId: number | null,
     kind: 'segment' | 'line',
-    anchor: Vec3Tuple
+    anchor: Vec3Tuple,
+    label?: string,
+    axis?: Vec3Tuple
   ): void {
     const geo = new LineGeometry();
     geo.setPositions(positions);
@@ -1376,11 +1651,14 @@ export class GrassmannSceneRenderer {
         const hitMat = new THREE.MeshBasicMaterial({ visible: false });
         const hitMesh = new THREE.Mesh(hitGeo, hitMat);
         hitMesh.position.copy(a).add(b).multiplyScalar(0.5);
-        hitMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), span.normalize());
+        const dirNorm = span.clone().normalize();
+        hitMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirNorm);
         hitMesh.userData.interactive = {
           handleId: draggableHandleId,
           anchor: new THREE.Vector3(anchor[0], anchor[1], anchor[2]),
           kind,
+          label,
+          axis: axis ? new THREE.Vector3(axis[0], axis[1], axis[2]) : dirNorm,
         } satisfies InteractiveMeta;
         this.dynamicGroup.add(hitMesh);
         this.interactiveObjects.push(hitMesh);
@@ -1435,7 +1713,16 @@ export class GrassmannSceneRenderer {
     }
   }
 
-  private clearDynamicGroup(): void {
+  private flushPendingDisposals(): void {
+    while (this.pendingDisposeGeos.length > 0) {
+      this.pendingDisposeGeos.pop()!.dispose();
+    }
+    while (this.pendingDisposeMats.length > 0) {
+      this.pendingDisposeMats.pop()!.dispose();
+    }
+  }
+
+  private clearDynamicGroup(immediate = false): void {
     this.interactiveObjects.length = 0;
     this.lineMaterials.length = 0;
     this.flowMaterials.length = 0;
@@ -1443,7 +1730,12 @@ export class GrassmannSceneRenderer {
     while (this.dynamicGroup.children.length > 0) {
       const child = this.dynamicGroup.children[0]!;
       this.dynamicGroup.remove(child);
-      if (child instanceof THREE.Mesh || child instanceof THREE.Points || child instanceof Line2) {
+      if (
+        child instanceof THREE.Mesh ||
+        child instanceof THREE.Points ||
+        child instanceof Line2 ||
+        child instanceof LineSegments2
+      ) {
         if (
           !child.userData.sharedGeometry &&
           child.geometry !== this.unitSphereGeo &&
@@ -1452,14 +1744,20 @@ export class GrassmannSceneRenderer {
           child.geometry !== this.ringTorusGeo &&
           child.geometry !== this.hollowTorusGeo &&
           child.geometry !== this.arrowConeGeo &&
+          child.geometry !== this.flowUnitPlaneGeo &&
           child.geometry !== this.opnsBoxGeo
         ) {
-          child.geometry.dispose();
+          if (immediate) child.geometry.dispose();
+          else this.pendingDisposeGeos.push(child.geometry);
         }
         if (Array.isArray(child.material)) {
-          for (const m of child.material) m.dispose();
+          for (const m of child.material) {
+            if (immediate) m.dispose();
+            else this.pendingDisposeMats.push(m);
+          }
         } else {
-          child.material.dispose();
+          if (immediate) child.material.dispose();
+          else this.pendingDisposeMats.push(child.material);
         }
       }
     }
@@ -1550,13 +1848,21 @@ export class GrassmannSceneRenderer {
   private raycastInteractive(): { meta: InteractiveMeta; hitPoint: THREE.Vector3 } | null {
     this.raycaster.setFromCamera(this.pointerNdc, this.activeCamera);
     const hits = this.raycaster.intersectObjects(this.interactiveObjects, false);
+    // Picking priority: points > lines/segments > planes so a point lying ON a line or plane
+    // (e.g. Wedge L5 a<<B, L8 midpoints, L10/L14 3D vertices) is never occluded by a thicker line cylinder!
+    const priority = (kind: InteractiveMeta['kind']): number =>
+      kind === 'point' ? 0 : kind === 'segment' || kind === 'line' ? 1 : 2;
+    let best: { meta: InteractiveMeta; hitPoint: THREE.Vector3; prio: number } | null = null;
     for (const h of hits) {
       const meta = h.object.userData.interactive as InteractiveMeta | undefined;
-      if (meta) {
-        return { meta, hitPoint: h.point.clone() };
+      if (!meta) continue;
+      const prio = priority(meta.kind);
+      if (!best || prio < best.prio) {
+        best = { meta, hitPoint: h.point.clone(), prio };
+        if (prio === 0) break;
       }
     }
-    return null;
+    return best ? { meta: best.meta, hitPoint: best.hitPoint } : null;
   }
 
   private setCameraDragPlane(anchor: THREE.Vector3): void {
@@ -1584,9 +1890,11 @@ export class GrassmannSceneRenderer {
       if (!this.wedgeFirst || (this.wedgeFirst && this.wedgeSecond)) {
         this.wedgeFirst = {
           handleId: hit.meta.handleId,
+          kind: hit.meta.kind,
           label: slotLabel,
           anchorWorld: hit.meta.anchor.clone(),
           currentWorld: hit.meta.anchor.clone(),
+          axis: hit.meta.axis?.clone(),
         };
         this.wedgeSecond = null;
         this.wedgeDraggingSlot = 1;
@@ -1597,9 +1905,11 @@ export class GrassmannSceneRenderer {
       } else {
         this.wedgeSecond = {
           handleId: hit.meta.handleId,
+          kind: hit.meta.kind,
           label: slotLabel,
           anchorWorld: hit.meta.anchor.clone(),
           currentWorld: hit.meta.anchor.clone(),
+          axis: hit.meta.axis?.clone(),
         };
         this.wedgeDraggingSlot = 2;
       }
@@ -1890,8 +2200,8 @@ export class GrassmannSceneRenderer {
           this.winPulses.splice(i, 1);
         } else {
           const ease = 1 - Math.pow(1 - u, 3);
-          p.mesh.scale.setScalar(1 + ease * 11);
-          p.mat.opacity = 0.88 * (1 - u);
+          p.mesh.scale.setScalar(1 + ease * 7.5);
+          p.mat.opacity = 0.56 * (1 - u);
           if (!this.isOrtho) p.mesh.lookAt(this.activeCamera.position);
         }
       }
@@ -1938,19 +2248,22 @@ export class GrassmannSceneRenderer {
     }
 
     if (this.xr.isActive()) {
-      // During WebXR sessions render straight to the XR framebuffer (per RayTrace4D #8)
+      // During WebXR sessions disable floor depth cue & render straight to the XR framebuffer (per RayTrace4D #8)
+      this.floorShadow.mesh.visible = false;
       this.renderer.render(this.scene, this.activeCamera);
     } else {
       this.composer.render();
       this.labelRenderer.render(this.scene, this.activeCamera);
     }
+    // Dispose previous frame's geometries/materials AFTER new frame binds them so WebGLPrograms stay hot (0ms!)
+    this.flushPendingDisposals();
 
     const tEnd = performance.now();
     if (this.pendingInputTsMs !== null) {
       const i2p = Math.max(0, tEnd - this.pendingInputTsMs);
       this.pendingInputTsMs = null;
       this.inputToPresentSamples.push(i2p);
-      if (this.inputToPresentSamples.length > 60) {
+      if (this.inputToPresentSamples.length > 360) {
         this.inputToPresentSamples.shift();
       }
     }
@@ -1985,13 +2298,15 @@ export class GrassmannSceneRenderer {
     window.removeEventListener('pointermove', this.onPointerMove);
     window.removeEventListener('pointerup', this.onPointerUp);
 
-    this.clearDynamicGroup();
+    this.clearDynamicGroup(true);
+    this.flushPendingDisposals();
     for (const cached of this.meshGeoCache.values()) {
       cached.geometry.dispose();
     }
     this.meshGeoCache.clear();
     this.opnsCache.dispose();
     this.backdrop.dispose();
+    this.floorShadow.dispose();
     this.grid.dispose();
     this.envMapDark.dispose();
     this.envMapLight.dispose();
@@ -2001,6 +2316,7 @@ export class GrassmannSceneRenderer {
     this.ringTorusGeo.dispose();
     this.hollowTorusGeo.dispose();
     this.arrowConeGeo.dispose();
+    this.flowUnitPlaneGeo.dispose();
     this.opnsBoxGeo.dispose();
     this.opnsQuadGeo.dispose();
     this.xr.dispose();

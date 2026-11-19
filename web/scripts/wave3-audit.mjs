@@ -332,7 +332,12 @@ async function main() {
     const expSnap = await page.evaluate(() => window.__grassmannStudio.exportExperiment());
     assert(expSnap && expSnap.version === 1 && typeof expSnap.presetId === 'string', 'Expected valid .grassmann.json v1 export');
     await page.evaluate(async (exp) => {
-      await window.__grassmannStudio.importExperiment({ ...exp, mode: 'coffeeshop', presetId: 'pga3d_slicing' });
+      await window.__grassmannStudio.importExperiment({
+        ...exp,
+        mode: 'coffeeshop',
+        sceneKind: 'preset',
+        presetId: 'pga3d_slicing',
+      });
     }, expSnap);
     await page.waitForTimeout(450);
     const sAfterImport = await page.evaluate(() => window.__grassmannStudio.getState());

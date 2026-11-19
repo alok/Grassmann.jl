@@ -117,13 +117,18 @@ export class OrderedStudioEventQueue {
     options?: { syncCamera?: boolean; inputTimestampMs?: number }
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    const coalesceKey = event.op === 'setParam' ? `param:${event.name}` : null;
+    const coalesceKey =
+      event.op === 'setParam'
+        ? `param:${event.name}`
+        : event.op === 'seekTime'
+          ? 'seekTime'
+          : null;
     const item: QueuedStudioEvent = {
       kind: 'json',
       event,
       inputTimestampMs: options?.inputTimestampMs ?? performance.now(),
       coalesceKey,
-      syncCamera: options?.syncCamera ?? event.op === 'loadPreset',
+      syncCamera: options?.syncCamera ?? (event.op === 'loadPreset' || event.op === 'loadTourStop'),
       label: `json:${event.op}`,
     };
 

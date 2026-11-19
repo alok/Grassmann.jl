@@ -2544,4 +2544,157 @@ body,
   .gs-timeline-bar {
     display: none;
   }
+
+  .gs-tour-card {
+    width: min(300px, calc(100% - 24px));
+    bottom: 84px;
+  }
+}
+
+/* ============================================================================
+   Wave 6D: Interactive 6-Stop Guided GA Tour Card (T)
+   ============================================================================ */
+.gs-tour-card {
+  position: absolute;
+  top: 52px;
+  right: 14px;
+  z-index: 16;
+  width: 312px;
+  max-width: calc(100% - 28px);
+  padding: 12px 14px;
+  border-radius: 13px;
+  background: rgba(10, 16, 30, 0.92);
+  border: 1px solid rgba(56, 189, 248, 0.42);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.46), 0 0 0 1px rgba(56, 189, 248, 0.14) inset;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.gs-app[data-theme='light'] .gs-tour-card {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(2, 132, 199, 0.36);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.16);
+}
+
+.gs-tour-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.gs-tour-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.gs-tour-badge {
+  font-size: 10px;
+  font-weight: 650;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--accent-glow);
+  color: var(--accent);
+  border: 1px solid rgba(56, 189, 248, 0.38);
+}
+
+.gs-tour-step {
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+
+.gs-tour-close {
+  width: 24px;
+  height: 24px;
+  font-size: 15px;
+}
+
+.gs-tour-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.gs-tour-formula {
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.18);
+  font-size: 12.5px;
+  color: var(--text);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.gs-tour-blurb {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+.gs-tour-try {
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(52, 211, 153, 0.1);
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  color: var(--text);
+}
+
+.gs-tour-try strong {
+  color: #34d399;
+}
+
+.gs-app[data-theme='light'] .gs-tour-try strong {
+  color: #059669;
+}
+
+.gs-tour-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.gs-tour-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.gs-tour-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.gs-tour-dot.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  transform: scale(1.22);
+}
+
+.gs-tour-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gs-tour-prev,
+.gs-tour-next {
+  padding: 4px 10px;
+  font-size: 11.5px;
 }

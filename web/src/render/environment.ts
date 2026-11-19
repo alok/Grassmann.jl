@@ -67,6 +67,10 @@ export function createStudioEnvironmentMap(
   pmrem.dispose();
   roomGeo.dispose();
   roomMat.dispose();
+  for (const panel of [keyPanel, fillPanel, rimPanel, warmAccent]) {
+    panel.geometry.dispose();
+    (panel.material as THREE.Material).dispose();
+  }
   return renderTarget.texture;
 }
 
@@ -243,6 +247,107 @@ export function createInfiniteGrid(): {
       uniforms.uMinorColor.value.setHex(0xc8d2e2);
       uniforms.uMajorColor.value.setHex(0x94a3b8);
       uniforms.uOpacity.value = 0.85;
+    }
+  };
+
+  return {
+    mesh,
+    update,
+    dispose: () => {
+      geo.dispose();
+      mat.dispose();
+    },
+  };
+}
+
+/**
+ * Subtle studio floor radial contact shadow & depth cue beneath 3D scenes.
+ * Automatically disabled in 2D ortho mode, WebXR passthrough, and full-screen OPNS passes.
+ */
+export function createStudioContactShadow(): {
+  mesh: THREE.Mesh;
+  update: (opts: {
+    visible: boolean;
+    centerX: number;
+    centerZ: number;
+    floorY: number;
+    radius: number;
+    darkTheme: boolean;
+  }) => void;
+  dispose: () => void;
+} {
+  const geo = new THREE.PlaneGeometry(2, 2, 1, 1);
+  geo.rotateX(-Math.PI / 2);
+
+  const uniforms = {
+    uColor: { value: new THREE.Color(0x020612) },
+    uRimTint: { value: new THREE.Color(0x1e3a5f) },
+    uOpacity: { value: 0.48 },
+    uDarkTheme: { value: 1.0 },
+  };
+
+  const mat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    uniforms,
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv * 2.0 - 1.0;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 uColor;
+      uniform vec3 uRimTint;
+      uniform float uOpacity;
+      uniform float uDarkTheme;
+      varying vec2 vUv;
+
+      void main() {
+        float r2 = dot(vUv, vUv);
+        if (r2 >= 1.0) discard;
+        // Soft Gaussian contact core + gentle plinth halo falloff
+        float core = exp(-r2 * 4.2);
+        float halo = exp(-r2 * 1.9) * (1.0 - smoothstep(0.68, 1.0, sqrt(r2)));
+        float strength = core * 0.62 + halo * 0.38;
+        vec3 col = uDarkTheme > 0.5
+          ? mix(uRimTint, uColor, clamp(core * 1.15, 0.0, 1.0))
+          : uColor;
+        float alpha = strength * uOpacity;
+        if (alpha < 0.004) discard;
+        gl_FragColor = vec4(col, alpha);
+      }
+    `,
+  });
+
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.renderOrder = -60;
+  mesh.frustumCulled = false;
+
+  const update = (opts: {
+    visible: boolean;
+    centerX: number;
+    centerZ: number;
+    floorY: number;
+    radius: number;
+    darkTheme: boolean;
+  }) => {
+    mesh.visible = opts.visible;
+    if (!opts.visible) return;
+    const r = Math.max(1.25, Math.min(8.5, opts.radius));
+    mesh.position.set(opts.centerX, opts.floorY, opts.centerZ);
+    mesh.scale.set(r, 1, r);
+    uniforms.uDarkTheme.value = opts.darkTheme ? 1.0 : 0.0;
+    if (opts.darkTheme) {
+      uniforms.uColor.value.setHex(0x02050d);
+      uniforms.uRimTint.value.setHex(0x16294a);
+      uniforms.uOpacity.value = 0.52;
+    } else {
+      uniforms.uColor.value.setHex(0x0f172a);
+      uniforms.uRimTint.value.setHex(0x475569);
+      uniforms.uOpacity.value = 0.22;
     }
   };
 

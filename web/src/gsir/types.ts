@@ -596,8 +596,18 @@ export type JsonInputEvent =
       forceFullSnapshot?: boolean;
     }
   | { op: 'wedgeTutorial'; id: 'T1' | 'T2' | 'T3' | 'T4' | 'T5' | 'T6'; forceFullSnapshot?: boolean }
-  | { op: 'wedgeRandom'; dim: 2 | 3; difficulty: 0 | 1 | 2; seed: number; forceFullSnapshot?: boolean }
-  | { op: 'setParam'; name: string; value: number };
+  | {
+      op: 'wedgeRandom';
+      dim: 2 | 3;
+      difficulty: 0 | 1 | 2;
+      seed: number;
+      seedStr?: string;
+      forceFullSnapshot?: boolean;
+    }
+  | { op: 'setParam'; name: string; value: number }
+  | { op: 'resetTime'; forceFullSnapshot?: boolean }
+  | { op: 'seekTime'; t: number; forceFullSnapshot?: boolean }
+  | { op: 'loadTourStop'; index: number; forceFullSnapshot?: boolean };
 
 // C ABI return status codes (§5)
 export const GsirStatus = {
