@@ -163,6 +163,7 @@ def toMetaJson (f : SceneFrame) (labelsTbl : Array String) : String :=
     ("algebra", algebraMetaJson f.algebra),
     ("presetId", quote f.presetId),
     ("title", quote f.title),
+    ("script", quote f.script),
     ("labels", arrJson (labelsTbl.map quote)),
     ("inspect", arrJson (f.inspect.map inspectEntryJson)),
     ("opnsShaders", arrJson (f.opnsShaders.map opnsShaderJson)),

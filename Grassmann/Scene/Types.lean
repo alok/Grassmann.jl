@@ -571,6 +571,7 @@ structure SceneFrame where
   algebra        : AlgebraMeta           := {}
   presetId       : String                := ""
   title          : String                := ""
+  script         : String                := ""
   camera         : CameraState           := {}
   points         : Array PointPrim       := #[]
   segments       : Array SegmentPrim     := #[]
