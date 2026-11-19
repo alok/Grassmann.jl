@@ -194,6 +194,10 @@ export class GuidedTourOverlay {
     return this.currentIndex;
   }
 
+  get stopCount(): number {
+    return this.stops.length;
+  }
+
   open(startIndex = 0): void {
     this.isOpen = true;
     this.element.classList.remove('hidden');

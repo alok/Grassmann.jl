@@ -11,11 +11,13 @@ type WorkerRequest =
   | { id: number; op: 'dispatchJson'; event: JsonInputEvent }
   | { id: number; op: 'getFrame' }
   | { id: number; op: 'getPresetCatalog' }
+  | { id: number; op: 'getTourCatalog' }
   | { id: number; op: 'dispose' };
 
 type WorkerResponse =
   | { id: number; ok: true; buffer: ArrayBuffer }
   | { id: number; ok: true; catalog: unknown[] }
+  | { id: number; ok: true; tour: unknown[] }
   | { id: number; ok: true }
   | { id: number; ok: false; error: string };
 
@@ -75,6 +77,12 @@ self.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
         if (!transport) throw new Error('WASM worker not connected');
         const catalog = await transport.getPresetCatalog();
         postReply({ id: req.id, ok: true, catalog });
+        return;
+      }
+      case 'getTourCatalog': {
+        if (!transport) throw new Error('WASM worker not connected');
+        const tour = await transport.getTourCatalog();
+        postReply({ id: req.id, ok: true, tour });
         return;
       }
       case 'dispose': {

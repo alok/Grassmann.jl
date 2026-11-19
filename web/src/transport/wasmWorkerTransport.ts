@@ -2,7 +2,7 @@
 // transferable ArrayBuffers so heavy Lean WASM remeshes never block 60fps rendering.
 
 import type { JsonInputEvent } from '../gsir/types';
-import type { LeanPresetCatalogItem, StudioTransport } from './types';
+import type { LeanPresetCatalogItem, LeanTourStopItem, StudioTransport } from './types';
 import { WasmTransport } from './wasm';
 
 export interface WasmWorkerTransportOptions {
@@ -71,6 +71,7 @@ export class WasmWorkerTransport implements StudioTransport {
         ok: boolean;
         buffer?: ArrayBuffer;
         catalog?: LeanPresetCatalogItem[];
+        tour?: LeanTourStopItem[];
         error?: string;
       };
       const entry = this.pending.get(msg.id);
@@ -84,6 +85,8 @@ export class WasmWorkerTransport implements StudioTransport {
         entry.resolve(new Uint8Array(msg.buffer));
       } else if (msg.catalog !== undefined) {
         entry.resolve(msg.catalog);
+      } else if (msg.tour !== undefined) {
+        entry.resolve(msg.tour);
       } else {
         entry.resolve(undefined);
       }
@@ -128,6 +131,11 @@ export class WasmWorkerTransport implements StudioTransport {
   async getPresetCatalog(): Promise<LeanPresetCatalogItem[]> {
     if (this.fallback) return this.fallback.getPresetCatalog();
     return (await this.rpc({ op: 'getPresetCatalog' })) as LeanPresetCatalogItem[];
+  }
+
+  async getTourCatalog(): Promise<LeanTourStopItem[]> {
+    if (this.fallback) return this.fallback.getTourCatalog();
+    return (await this.rpc({ op: 'getTourCatalog' })) as LeanTourStopItem[];
   }
 
   dispose(): void {

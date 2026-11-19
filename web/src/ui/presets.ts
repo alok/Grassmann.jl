@@ -393,6 +393,7 @@ export const WEDGE_LEVELS: WedgeLevelInfo[] = [
   { index: 14, label: 'L14 · Tetrahedron Altitude', is3D: true },
   { index: 15, label: 'L15 · Tetrahedron Circumcenter', is3D: true },
   { index: 16, label: 'L16 · 3D Monge Point', is3D: true },
+  { index: 17, label: 'L17 · 3D Euler Axis (Grand Finale)', is3D: true },
 ];
 
 export interface CheatSheetItem {

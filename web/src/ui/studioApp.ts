@@ -53,7 +53,7 @@ import { ParamTimelineOverlay } from './paramBar';
 import { KATEX_CHEAT_SHEET, STUDIO_PRESETS, type StudioPreset } from './presets';
 import { ViewportVideoRecorder } from './recorder';
 import { MyStashPanel } from './stashPanel';
-import { GuidedTourOverlay } from './tourModal';
+import { GUIDED_TOUR_STOPS, GuidedTourOverlay, type GuidedTourStop } from './tourModal';
 import { WedgeGameHud } from './wedgeHud';
 
 export type StudioMode = 'coffeeshop' | 'wedge' | 'calculator' | 'galculator';
@@ -178,6 +178,7 @@ export class GrassmannStudioApp {
   private lastFrame: GsirFrame | null = null;
   private dispatchedEventLog: string[] = [];
   private livePresets: StudioPreset[] = [...STUDIO_PRESETS];
+  private leanTourCount = 0;
   private rebuildPresetBrowser: (() => void) | null = null;
 
   // Unified ordered event pump (coalesces continuous drag/tick/camera, preserves all discrete actions)
@@ -440,23 +441,28 @@ export class GrassmannStudioApp {
     );
     viewportWrap.appendChild(vpTools);
 
-    // Interactive 6-Stop Guided GA Tour Card (T shortcut)
+    // Interactive 6-Stop Guided GA Tour Card (T shortcut) — synced live with Lean tourCatalog & loadTourStop
     this.tourOverlay = new GuidedTourOverlay({
       onLoadStop: (stop) => {
         this.tourBtn.classList.add('active');
         if (stop.mode === 'wedge') {
-          this.setMode('wedge', true);
+          this.setMode('wedge', false);
+          this.activeSceneKind = 'wedgeLevel';
         } else {
           if (this.mode !== 'coffeeshop') this.setMode('coffeeshop', false);
+          this.activeSceneKind = 'preset';
           const found = this.livePresets.find((p) => p.id === stop.presetId);
           if (found) {
-            this.loadPreset(found);
+            this.activePresetId = found.id;
+            this.activeAlgebra = found.algebra;
+            this.algebraSelect.value = found.algebra;
+            this.rebuildPresetBrowser?.();
+            this.galleryModal.setPresets(this.livePresets, found.id);
           } else {
-            this.activeSceneKind = 'preset';
             this.activePresetId = stop.presetId;
-            void this.dispatchJson({ op: 'loadPreset', id: stop.presetId, forceFullSnapshot: true });
           }
         }
+        void this.dispatchJson({ op: 'loadTourStop', index: stop.index, forceFullSnapshot: true });
       },
       onClose: () => {
         this.tourBtn.classList.remove('active');
@@ -722,8 +728,11 @@ export class GrassmannStudioApp {
         mode: this.mode,
         sceneKind: this.activeSceneKind,
         animRunning: this.animRunning,
+        simTime: this.lastFrame?.header.simTime ?? 0,
         tourOpen: this.tourOverlay.opened,
         tourStop: this.tourOverlay.activeIndex,
+        tourCount: this.tourOverlay.stopCount,
+        leanTourCount: this.leanTourCount,
         floorShadowVisible: this.floorShadowVisible,
         theme: this.darkTheme ? 'dark' : 'light',
         transportKind: this.transport?.kind ?? null,
@@ -743,6 +752,7 @@ export class GrassmannStudioApp {
         diagnostics: this.lastFrame?.meta?.diagnostics ?? [],
         cachedMeshes: this.decoder.getCachedMeshCount(),
         presetCount: this.livePresets.length,
+        handlesCount: this.lastFrame?.points.filter((p) => p.draggable).length ?? 0,
         opnsCount: this.lastFrame?.opnsUniforms.length ?? 0,
         flowCount: this.lastFrame?.flowParticles.reduce((acc, fp) => acc + fp.particleCount, 0) ?? 0,
         bivectorCount: this.lastFrame?.bivectorDisks.length ?? 0,
@@ -815,7 +825,10 @@ export class GrassmannStudioApp {
       this.offlineBanner.classList.add('hidden');
       this.updateEngineBadge();
       this.ingestRawFrame(initialFrame, true, undefined, true);
-      await this.syncPresetCatalogFromLean(transport);
+      await Promise.all([
+        this.syncPresetCatalogFromLean(transport),
+        this.syncTourCatalogFromLean(transport),
+      ]);
       this.applyUrlHashOnConnect();
     } catch (err) {
       this.setStatus('error', 'Lean Offline · Connect');
@@ -836,7 +849,10 @@ export class GrassmannStudioApp {
       this.offlineBanner.classList.add('hidden');
       this.updateEngineBadge();
       this.ingestRawFrame(bytes, true, undefined, true);
-      await this.syncPresetCatalogFromLean(next);
+      await Promise.all([
+        this.syncPresetCatalogFromLean(next),
+        this.syncTourCatalogFromLean(next),
+      ]);
     } catch (err) {
       next.dispose();
       this.setStatus('error', 'Connection Failed');
@@ -872,6 +888,29 @@ export class GrassmannStudioApp {
       this.galleryModal.setPresets(this.livePresets, this.activePresetId);
     } catch {
       // Keep fallback presets if catalog endpoint not supported
+    }
+  }
+
+  private async syncTourCatalogFromLean(transport: StudioTransport): Promise<void> {
+    if (!transport.getTourCatalog) return;
+    try {
+      const items = await transport.getTourCatalog();
+      if (items.length === 0) return;
+      const mapped: GuidedTourStop[] = items.map((it, idx) => ({
+        index: typeof it.index === 'number' ? it.index : idx,
+        id: it.id || `tour_${idx}`,
+        presetId: it.presetId || 'pga3d_slicing',
+        mode: it.mode.toLowerCase() === 'wedge' ? 'wedge' : 'coffeeshop',
+        algebra: it.algebra || 'PGA3',
+        title: it.title || `Stop ${idx + 1}`,
+        formula: it.formula || '',
+        blurb: it.summary || '',
+        tryIt: it.tryIt || '',
+      }));
+      this.leanTourCount = mapped.length;
+      this.tourOverlay.setStops(mapped);
+    } catch {
+      // Keep fallback stops if backend predates grassmann_studio_tour_catalog / /api/tour
     }
   }
 
@@ -1201,6 +1240,26 @@ export class GrassmannStudioApp {
       this.activeSceneKind === 'preset' && !isSyntheticPreset ? rawMetaPreset : this.activePresetId;
     const bound = this.activeSceneKind === 'surface' ? this.calcPanel.getSurfaceBound() : impOpts.bound;
 
+    const wMeta = this.lastFrame?.meta?.wedge;
+    const authoritativeSeed =
+      wMeta?.seedStr && wMeta.seedStr.trim().length > 0
+        ? normalizeSeedString(wMeta.seedStr)
+        : this.lastWedgeSeedStr;
+    const authoritativeDim: 2 | 3 =
+      wMeta?.dim === 2 || wMeta?.dim === 3
+        ? wMeta.dim
+        : wMeta?.is3D
+          ? 3
+          : this.lastWedgeDim;
+    const authoritativeDiff: 0 | 1 | 2 =
+      wMeta?.difficulty === 0 || wMeta?.difficulty === 1 || wMeta?.difficulty === 2
+        ? wMeta.difficulty
+        : this.lastWedgeDifficulty;
+    const authoritativeTut: WedgeTutorialId =
+      wMeta?.tutorialId && /^T[1-6]$/.test(wMeta.tutorialId)
+        ? (wMeta.tutorialId as WedgeTutorialId)
+        : this.lastWedgeTutorialId;
+
     const exp: GrassmannExperimentV1 = {
       version: 1,
       mode: this.mode,
@@ -1214,11 +1273,11 @@ export class GrassmannStudioApp {
       bound,
       parametricExpr: this.calcPanel.getParametricExpr(),
       handles,
-      wedgeLevel: this.lastFrame?.meta?.wedge?.level ?? 1,
-      wedgeSeed: this.lastWedgeSeedStr,
-      wedgeDim: this.lastFrame?.meta?.wedge?.is3D ? 3 : this.lastWedgeDim,
-      wedgeDifficulty: this.lastWedgeDifficulty,
-      wedgeTutorialId: this.lastWedgeTutorialId,
+      wedgeLevel: wMeta?.level ?? 1,
+      wedgeSeed: authoritativeSeed,
+      wedgeDim: authoritativeDim,
+      wedgeDifficulty: authoritativeDiff,
+      wedgeTutorialId: authoritativeTut,
       camera: {
         pos: [cam.pos[0], cam.pos[1], cam.pos[2]],
         target: [cam.target[0], cam.target[1], cam.target[2]],
@@ -1310,6 +1369,7 @@ export class GrassmannStudioApp {
           op: 'evalImplicit',
           expr: exp.implicitExpr,
           gpuRaymarch: exp.gpuRaymarch ?? true,
+          bound: b,
           bounds: [-b, b, -b, b, -b, b],
           gridN: 24,
           forceFullSnapshot: true,
@@ -1410,16 +1470,29 @@ export class GrassmannStudioApp {
       try {
         frameBytes = await this.transport.dispatchJson(item.event);
       } catch (err) {
-        // Graceful compatibility if connected to a pre-Wave-6C backend that predates resetTime/seekTime
+        // Graceful compatibility if connected to a pre-Wave-6C backend that predates resetTime/seekTime/loadTourStop
         const msg = (err as Error).message || '';
-        if (
-          (item.event.op === 'resetTime' || item.event.op === 'seekTime') &&
-          /unknown InputEvent op|ERR_BAD_INPUT|status -2/i.test(msg)
-        ) {
-          this.paramTimeline.setTime(item.event.op === 'resetTime' ? 0 : item.event.t);
-          return;
+        if (/unknown InputEvent op|ERR_BAD_INPUT|status -2/i.test(msg)) {
+          if (item.event.op === 'resetTime' || item.event.op === 'seekTime') {
+            const nextT = item.event.op === 'resetTime' ? 0 : item.event.t;
+            this.animTimeSec = nextT;
+            this.paramTimeline.setTime(nextT);
+            return;
+          }
+          if (item.event.op === 'loadTourStop') {
+            const fallbackStop = GUIDED_TOUR_STOPS[item.event.index] ?? GUIDED_TOUR_STOPS[0]!;
+            const fallbackId = fallbackStop.mode === 'wedge' ? 'game_wedge' : fallbackStop.presetId;
+            frameBytes = await this.transport.dispatchJson({
+              op: 'loadPreset',
+              id: fallbackId,
+              forceFullSnapshot: true,
+            });
+          } else {
+            throw err;
+          }
+        } else {
+          throw err;
         }
-        throw err;
       }
     }
     this.lastLeanUs = (performance.now() - t0) * 1000;
@@ -1432,7 +1505,13 @@ export class GrassmannStudioApp {
       (item.event.op === 'evalSurface' || item.event.op === 'evalImplicit' || item.event.op === 'evalParametric')
     ) {
       const b = item.event.op === 'evalSurface' ? item.event.bounds : item.event.op === 'evalImplicit' ? item.event.bounds : undefined;
-      const extent = b ? Math.max(Math.abs(b[0] ?? 2.5), Math.abs(b[1] ?? 2.5)) : 2.8;
+      const scalarBound = item.event.op === 'evalImplicit' ? item.event.bound : undefined;
+      const extent =
+        typeof scalarBound === 'number' && Number.isFinite(scalarBound)
+          ? Math.max(0.8, scalarBound)
+          : b
+            ? Math.max(Math.abs(b[0] ?? 2.5), Math.abs(b[1] ?? 2.5))
+            : 2.8;
       this.renderer.frameRadius(extent);
     }
   }
@@ -1460,12 +1539,46 @@ export class GrassmannStudioApp {
         errDiag ? (typeof errDiag === 'string' ? errDiag : errDiag.message) : null
       );
       this.calcPanel.updateCalcState(frame.meta?.calc);
-      const isWedge = this.mode === 'wedge' || Boolean(frame.meta?.wedge);
-      this.wedgeHud.update(frame.meta?.wedge, isWedge);
+      const w = frame.meta?.wedge;
+      if (w) {
+        if (w.seedStr && w.seedStr.trim().length > 0) {
+          this.lastWedgeSeedStr = normalizeSeedString(w.seedStr);
+        }
+        if (w.dim === 2 || w.dim === 3) {
+          this.lastWedgeDim = w.dim;
+        } else {
+          this.lastWedgeDim = w.is3D ? 3 : 2;
+        }
+        if (w.difficulty === 0 || w.difficulty === 1 || w.difficulty === 2) {
+          this.lastWedgeDifficulty = w.difficulty;
+        }
+        if (w.tutorialId && /^T[1-6]$/.test(w.tutorialId)) {
+          this.lastWedgeTutorialId = w.tutorialId as WedgeTutorialId;
+        }
+        if (w.isRandom) {
+          this.activeSceneKind = 'wedgeRandom';
+        } else if (w.tutorialId && w.tutorialId.trim().length > 0) {
+          this.activeSceneKind = 'wedgeTutorial';
+        } else if (this.mode === 'wedge') {
+          this.activeSceneKind = 'wedgeLevel';
+        }
+      }
+      if (syncEditorScript && frame.meta?.presetId && !w) {
+        const pid = frame.meta.presetId;
+        if (this.livePresets.some((p) => p.id === pid)) {
+          this.activePresetId = pid;
+          this.rebuildPresetBrowser?.();
+          this.galleryModal.setPresets(this.livePresets, pid);
+        }
+      }
+      const isWedge = this.mode === 'wedge' || Boolean(w);
+      this.wedgeHud.update(w, isWedge);
       this.formulaCard.update(frame.meta, !isWedge);
       this.paramTimeline.setTimelineVisible(!isWedge);
       this.paramTimeline.updateParams(frame.meta?.params, !isWedge);
-      this.paramTimeline.setTime(frame.header.simTime || this.animTimeSec);
+      const simTime = Number.isFinite(frame.header.simTime) ? frame.header.simTime : this.animTimeSec;
+      this.animTimeSec = simTime;
+      this.paramTimeline.setTime(simTime);
     } catch (err) {
       const msg = (err as Error).message;
       this.codeEditor.setDiagnostics([{ severity: 'error', message: msg }]);

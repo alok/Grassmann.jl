@@ -431,6 +431,11 @@ export interface WedgeHudState {
   hintText: string;
   solved: boolean;
   canUndo: boolean;
+  isRandom?: boolean;
+  seedStr?: string;
+  difficulty?: number;
+  dim?: number;
+  tutorialId?: string;
 }
 
 export interface DiagnosticItem {
@@ -581,6 +586,7 @@ export type JsonInputEvent =
       op: 'evalImplicit';
       expr: string;
       gpuRaymarch: boolean;
+      bound?: number;
       bounds?: [number, number, number, number, number, number];
       gridN?: number;
       forceFullSnapshot?: boolean;
@@ -590,6 +596,10 @@ export type JsonInputEvent =
       fx: string;
       fy: string;
       fz: string;
+      uBounds?: [number, number];
+      vBounds?: [number, number];
+      nu?: number;
+      nv?: number;
       uRange?: [number, number];
       vRange?: [number, number];
       gridN?: number;

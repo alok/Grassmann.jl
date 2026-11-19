@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { buildAllSectionsFixtureBytes } from '../src/gsir';
 import { MAX_CACHED_OPNS_SHADERS, OpnsShaderCache } from '../src/render/materials';
-import { OrderedStudioEventQueue } from '../src/transport';
+import { OrderedStudioEventQueue, WasmTransport, type GrassmannWasmExports } from '../src/transport';
 import {
   decodeExperimentFromHash,
   encodeExperimentToHash,
@@ -10,6 +11,7 @@ import {
   serializeExperiment,
   type GrassmannExperimentV1,
 } from '../src/ui/experiment';
+import { WEDGE_LEVELS } from '../src/ui/presets';
 import { shouldIgnoreGlobalSpaceKey } from '../src/ui/studioApp';
 import { GUIDED_TOUR_STOPS } from '../src/ui/tourModal';
 
@@ -224,7 +226,7 @@ describe('Wave 6D / Dots P2 #11: Global Space Shortcut Accessibility Guard', () 
   });
 });
 
-describe('Wave 6D: Interactive 6-Stop Guided GA Tour', () => {
+describe('Wave 6D / 7A: Interactive 6-Stop Guided GA Tour & 17 Wedge Levels', () => {
   it('defines 6 well-formed tour stops (0..5) with KaTeX formulas and interactive tryIt prompts', () => {
     expect(GUIDED_TOUR_STOPS).toHaveLength(6);
     GUIDED_TOUR_STOPS.forEach((stop, idx) => {
@@ -235,5 +237,90 @@ describe('Wave 6D: Interactive 6-Stop Guided GA Tour', () => {
       expect(stop.presetId.length).toBeGreaterThan(3);
     });
     expect(GUIDED_TOUR_STOPS[5]?.mode).toBe('wedge');
+  });
+
+  it('lists all 17 1-based Wedge levels (L1..L9 2D, L10..L17 3D Grand Finale)', () => {
+    expect(WEDGE_LEVELS).toHaveLength(17);
+    WEDGE_LEVELS.forEach((lv, idx) => {
+      expect(lv.index).toBe(idx + 1);
+      expect(lv.is3D).toBe(idx + 1 >= 10);
+    });
+    expect(WEDGE_LEVELS[16]?.label).toContain('L17');
+  });
+
+  it('reads dynamic tourCatalog JSON via the 2-step grassmann_studio_tour_catalog C ABI', async () => {
+    const memory = new WebAssembly.Memory({ initial: 8 });
+    let bump = 1024;
+    const frameBytes = buildAllSectionsFixtureBytes();
+    const tourPayload = new TextEncoder().encode(
+      JSON.stringify([
+        {
+          index: 0,
+          id: 'tour_points_lines',
+          title: '1. Points & Lines',
+          presetId: 'pga2d_points_and_lines',
+          mode: 'coffeeShop',
+          algebra: 'PGA2',
+          formula: 'L = A \\vee B',
+          summary: 'Join spans lines.',
+          tryIt: 'Drag A and B.',
+        },
+        {
+          index: 5,
+          id: 'tour_play_wedge',
+          title: '6. Play Wedge 2D/3D!',
+          presetId: 'wedge_2d',
+          mode: 'wedge',
+          algebra: 'PGA2 / PGA3',
+          formula: 'A \\vee B',
+          summary: '17 puzzles.',
+          tryIt: 'Pull A and B apart.',
+        },
+      ])
+    );
+
+    const mockExports: GrassmannWasmExports = {
+      memory,
+      malloc: (bytes) => {
+        const ptr = (bump + 7) & ~7;
+        bump = ptr + bytes + 16;
+        return ptr;
+      },
+      free: () => {},
+      grassmann_studio_create: () => 1n,
+      grassmann_studio_destroy: () => {},
+      grassmann_studio_dispatch_bin: (_s, _ep, _el, outPtr, outCap, outLenPtr) => {
+        new DataView(memory.buffer, outLenPtr, 4).setUint32(0, frameBytes.byteLength, true);
+        if (outCap < frameBytes.byteLength) return -3;
+        new Uint8Array(memory.buffer, outPtr, frameBytes.byteLength).set(frameBytes);
+        return 0;
+      },
+      grassmann_studio_dispatch_json: (_s, _jp, _jl, outPtr, outCap, outLenPtr) => {
+        new DataView(memory.buffer, outLenPtr, 4).setUint32(0, frameBytes.byteLength, true);
+        if (outCap < frameBytes.byteLength) return -3;
+        new Uint8Array(memory.buffer, outPtr, frameBytes.byteLength).set(frameBytes);
+        return 0;
+      },
+      grassmann_studio_get_frame: (_s, outPtr, outCap, outLenPtr) => {
+        new DataView(memory.buffer, outLenPtr, 4).setUint32(0, frameBytes.byteLength, true);
+        if (outCap < frameBytes.byteLength) return -3;
+        new Uint8Array(memory.buffer, outPtr, frameBytes.byteLength).set(frameBytes);
+        return 0;
+      },
+      grassmann_studio_tour_catalog: (outPtr, outCap, outLenPtr) => {
+        new DataView(memory.buffer, outLenPtr, 4).setUint32(0, tourPayload.byteLength, true);
+        if (outPtr === 0 || outCap < tourPayload.byteLength) return -3;
+        new Uint8Array(memory.buffer, outPtr, tourPayload.byteLength).set(tourPayload);
+        return 0;
+      },
+    };
+
+    const transport = new WasmTransport({ loadExports: async () => mockExports });
+    await transport.connect();
+    const stops = await transport.getTourCatalog();
+    expect(stops).toHaveLength(2);
+    expect(stops[0]?.id).toBe('tour_points_lines');
+    expect(stops[1]?.mode).toBe('wedge');
+    transport.dispose();
   });
 });

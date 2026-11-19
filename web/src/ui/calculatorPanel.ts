@@ -56,6 +56,7 @@ export class CalculatorStudioPanel {
   private surfaceExprInput!: HTMLInputElement;
   private surfaceBoundInput!: HTMLInputElement;
   private implicit3dInput!: HTMLInputElement;
+  private implicitBoundInput!: HTMLInputElement;
   private implicitGpuRaymarch = true;
   private implicitBound = 2.2;
   private syncImplicitToggle?: () => void;
@@ -176,6 +177,7 @@ export class CalculatorStudioPanel {
     }
     if (typeof bound === 'number' && Number.isFinite(bound) && bound > 0) {
       this.implicitBound = bound;
+      if (this.implicitBoundInput) this.implicitBoundInput.value = String(bound);
     }
   }
 
@@ -435,21 +437,34 @@ export class CalculatorStudioPanel {
     gpuBtn.className = 'gs-seg-btn active';
     gpuBtn.textContent = 'GPU Raymarch (GLSL3)';
 
+    const boundInput = document.createElement('input');
+    boundInput.type = 'number';
+    boundInput.className = 'gs-input gs-input-sm';
+    boundInput.value = String(this.implicitBound);
+    boundInput.min = '0.5';
+    boundInput.max = '20';
+    boundInput.step = '0.2';
+    this.implicitBoundInput = boundInput;
+
     const syncToggle = () => {
       meshBtn.classList.toggle('active', !this.implicitGpuRaymarch);
       gpuBtn.classList.toggle('active', this.implicitGpuRaymarch);
     };
     this.syncImplicitToggle = syncToggle;
     const emitImplicit = () => {
-      const b = this.implicitBound;
+      const parsedBound = Number.parseFloat(boundInput.value);
+      const b = Number.isFinite(parsedBound) && parsedBound > 0.1 ? Math.min(20, parsedBound) : this.implicitBound;
+      this.implicitBound = b;
       this.callbacks.onDispatchJson({
         op: 'evalImplicit',
         expr: exprInput.value.trim(),
         gpuRaymarch: this.implicitGpuRaymarch,
+        bound: b,
         bounds: [-b, b, -b, b, -b, b],
         gridN: 24,
       });
     };
+    boundInput.addEventListener('change', emitImplicit);
 
     meshBtn.addEventListener('click', () => {
       this.implicitGpuRaymarch = false;
@@ -496,6 +511,7 @@ export class CalculatorStudioPanel {
 
     pane.append(
       this.field('Implicit f(x, y, z, t) = 0', exprInput),
+      this.field('Domain Half-Extent (±)', boundInput),
       this.field('Renderer Backend (Lean 4)', modeSwitch),
       chips,
       evalBtn,
@@ -529,6 +545,10 @@ export class CalculatorStudioPanel {
         fx: fxInput.value.trim(),
         fy: fyInput.value.trim(),
         fz: fzInput.value.trim(),
+        uBounds: [0, 6.283185],
+        vBounds: [-1, 1],
+        nu: 44,
+        nv: 28,
         uRange: [0, 6.283185],
         vRange: [-1, 1],
         gridN: 36,

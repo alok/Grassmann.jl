@@ -16,7 +16,7 @@
 
 import { encodeTick } from '../gsir/encoder';
 import { GsirStatus, type JsonInputEvent } from '../gsir/types';
-import type { LeanPresetCatalogItem, StudioTransport } from './types';
+import type { LeanPresetCatalogItem, LeanTourStopItem, StudioTransport } from './types';
 
 export interface GrassmannWasmExports {
   memory?: WebAssembly.Memory;
@@ -82,6 +82,16 @@ export interface GrassmannWasmExports {
     outLenPtr: number
   ) => number;
   _grassmann_studio_preset_catalog?: (
+    outPtr: number,
+    outCap: number,
+    outLenPtr: number
+  ) => number;
+  grassmann_studio_tour_catalog?: (
+    outPtr: number,
+    outCap: number,
+    outLenPtr: number
+  ) => number;
+  _grassmann_studio_tour_catalog?: (
     outPtr: number,
     outCap: number,
     outLenPtr: number
@@ -168,6 +178,7 @@ interface ResolvedExports {
   ) => number;
   getFrame: (session: bigint, outPtr: number, outCap: number, outLenPtr: number) => number;
   presetCatalog?: (outPtr: number, outCap: number, outLenPtr: number) => number;
+  tourCatalog?: (outPtr: number, outCap: number, outLenPtr: number) => number;
 }
 
 const textEncoder = new TextEncoder();
@@ -183,6 +194,7 @@ function resolveExports(raw: GrassmannWasmExports): ResolvedExports {
   const dispatchJson = raw.grassmann_studio_dispatch_json ?? raw._grassmann_studio_dispatch_json;
   const getFrame = raw.grassmann_studio_get_frame ?? raw._grassmann_studio_get_frame;
   const presetCatalog = raw.grassmann_studio_preset_catalog ?? raw._grassmann_studio_preset_catalog;
+  const tourCatalog = raw.grassmann_studio_tour_catalog ?? raw._grassmann_studio_tour_catalog;
 
   const hasMem = Boolean(raw.memory || raw.wasmMemory || raw.HEAPU8);
   if (!hasMem || !malloc || !free || !createRaw || !destroy || !dispatchBin || !dispatchJson || !getFrame) {
@@ -208,6 +220,7 @@ function resolveExports(raw: GrassmannWasmExports): ResolvedExports {
     dispatchJson,
     getFrame,
     presetCatalog,
+    tourCatalog,
   };
 }
 
@@ -369,18 +382,32 @@ export class WasmTransport implements StudioTransport {
   async getPresetCatalog(): Promise<LeanPresetCatalogItem[]> {
     const ex = this.requireReady();
     if (!ex.presetCatalog) return [];
+    const parsed = this.readStaticJsonCatalog(ex, ex.presetCatalog);
+    return Array.isArray(parsed) ? (parsed as LeanPresetCatalogItem[]) : [];
+  }
+
+  async getTourCatalog(): Promise<LeanTourStopItem[]> {
+    const ex = this.requireReady();
+    if (!ex.tourCatalog) return [];
+    const parsed = this.readStaticJsonCatalog(ex, ex.tourCatalog);
+    return Array.isArray(parsed) ? (parsed as LeanTourStopItem[]) : [];
+  }
+
+  private readStaticJsonCatalog(
+    ex: ResolvedExports,
+    fn: (outPtr: number, outCap: number, outLenPtr: number) => number
+  ): unknown {
     const lenPtr = ex.malloc(8);
     try {
-      ex.presetCatalog(0, 0, lenPtr);
+      fn(0, 0, lenPtr);
       const len = new DataView(ex.getMemoryBuffer(), lenPtr, 4).getUint32(0, true);
       if (len === 0) return [];
       const buf = ex.malloc(len);
       try {
-        const rc = ex.presetCatalog(buf, len, lenPtr);
+        const rc = fn(buf, len, lenPtr);
         if (rc !== GsirStatus.OK) return [];
         const bytes = new Uint8Array(ex.getMemoryBuffer(), buf, len).slice();
-        const parsed = JSON.parse(textDecoder.decode(bytes));
-        return Array.isArray(parsed) ? (parsed as LeanPresetCatalogItem[]) : [];
+        return JSON.parse(textDecoder.decode(bytes));
       } finally {
         ex.free(buf);
       }

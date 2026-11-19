@@ -212,7 +212,7 @@ export class GrassmannSceneRenderer {
   private readonly hollowTorusGeo = new THREE.TorusGeometry(1.0, 0.22, 14, 36);
   private readonly arrowConeGeo = new THREE.ConeGeometry(0.065, 0.2, 16);
   private readonly flowUnitPlaneGeo = new THREE.PlaneGeometry(1, 1, 4, 1);
-  private readonly opnsBoxGeo = new THREE.BoxGeometry(8, 8, 8);
+  private readonly opnsBoxGeo = new THREE.BoxGeometry(72, 72, 72);
   private readonly opnsQuadGeo = new THREE.PlaneGeometry(2, 2);
 
   // Wedge 2D/3D green rubber-band SVG overlay
@@ -820,6 +820,12 @@ export class GrassmannSceneRenderer {
       const cached = this.meshGeoCache.get(mr.meshId);
       if (!cached) continue;
 
+      // When an active GPU OPNS raymarcher is rendering the infinite-resolution surface,
+      // keep coarse low-alpha fallback wireframe cages hidden unless the user toggles `Wire` ON.
+      if (frame.opnsUniforms.length > 0 && mr.wireframe && mr.rgba[3] < 0.35 && !this.forceWireframeOverride) {
+        continue;
+      }
+
       const wantWire = mr.wireframe || this.forceWireframeOverride;
       const isGhost = mr.rgba[3] < 0.99;
       const baseColor = mr.useVertexColors ? new THREE.Color(0xffffff) : toColor(mr.rgba);
@@ -917,7 +923,7 @@ export class GrassmannSceneRenderer {
     // 4. Studio contact shadow floor depth cue + smart viewport framing guard on preset load
     const bounds = this.computeSceneBounds(frame);
     this.updateFloorShadow(frame, wantOrtho, bounds);
-    if (syncCamera && !wantOrtho && frame.opnsUniforms.length === 0) {
+    if (syncCamera && !wantOrtho) {
       this.ensureSceneFitsCamera(bounds, frame.camera?.distance || 5.0);
     }
   }
