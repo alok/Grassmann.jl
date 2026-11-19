@@ -3,6 +3,7 @@ import Grassmann.Eval.Engine
 import Grassmann.Eval.Calc
 import Grassmann.CoffeeShop.Mesh
 import Grassmann.Codegen.GPU
+import Grassmann.Codegen.GPUInit
 
 /-!
 # Pure-Lean CoffeeShop Preset Gallery (19 Flagship Interactive 3D & 2D Scenes)
@@ -570,17 +571,23 @@ def buildCga3dSpheresApollonius (handles : Array (UInt32 × Vec3)) (seq : UInt64
 
 def buildCga3dOpnsCyclide (seq : UInt64) (t : Float) : SceneFrame :=
   let f := baseFrame "cga3d_opns_cyclide" "3D CGA OPNS Raymarcher (Lean WGSL/GLSL/MSL)" "CGA3" seq t
-  let shaderOpt := Grassmann.Codegen.GPU.compileOpnsBundle "cga3_witt" AlgSpace.CGA3 4 false
+  let shaderOpt := Grassmann.Codegen.GPUInit.compileGaOpnsBundle "cga3_witt" Grassmann.Codegen.GPUInit.AlgSpec.cga3 4 false
   let shaders := match shaderOpt with | .ok s => #[s] | .error _ => #[]
-  -- Grade-4 blade in 5D CGA3 has C(5,4) = 5 coefficients (animating a dual sphere / cyclide)
-  let cx := 0.35 * Float.sin (t * 0.7)
-  let r := 0.75 + 0.15 * Float.cos (t * 0.9)
+  -- Grade-4 blade in 5D CGA3 has C(5,4) = 5 coefficients ordered for GPUInit's
+  -- `c0 = z*b[0] - y*b[1] + x*b[2] - 1.0*b[3] + 0.5*(x^2+y^2+z^2)*b[4] = 0`:
+  -- Sphere of center (cx, cy, cz) and radius r:
+  --   b[0] = -cz, b[1] = cy, b[2] = -cx, b[3] = 0.5*(r^2 - (cx^2+cy^2+cz^2)), b[4] = 1.0
+  let cx := 0.28 * Float.sin (t * 0.7)
+  let cy := 0.16 * Float.sin (t * 0.9)
+  let cz := 0.22 * Float.cos (t * 0.6)
+  let r := 0.78 + 0.12 * Float.cos (t * 0.9)
+  let c2 := cx * cx + cy * cy + cz * cz
   let coeffs := (FloatArray.emptyWithCapacity 5)
-    |>.push (0.5 * (cx * cx - r * r))
+    |>.push (-cz)
+    |>.push cy
+    |>.push (-cx)
+    |>.push (0.5 * (r * r - c2))
     |>.push 1.0
-    |>.push cx
-    |>.push (0.2 * Float.sin t)
-    |>.push 0.0
   { f with
     opnsShaders := shaders
     opnsUniforms := #[{

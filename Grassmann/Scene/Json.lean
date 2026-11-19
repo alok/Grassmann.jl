@@ -477,6 +477,33 @@ def parseInputEventJson (s : String) : Except String InputEvent := do
     let maxY := (bArr[3]?.bind JVal.asNum?).getD 2.0
     let gridN := ((j.get? "gridN").bind JVal.asNum?).getD 48.0
     return .evalEquations eqs minX maxX minY maxY gridN.toUInt32
+  | "evalImplicit" =>
+    let expr := ((j.get? "expr").bind JVal.asStr?).getD "cos(x*2)*sin(y*2)+cos(y*2)*sin(z*2)+cos(z*2)*sin(x*2)"
+    let gpuRay := ((j.get? "gpuRaymarch").bind JVal.asBool?).getD false
+    let bound := ((j.get? "bound").bind JVal.asNum?).getD 1.6
+    let gridN := ((j.get? "gridN").bind JVal.asNum?).getD 18.0
+    return .evalImplicit expr gpuRay bound gridN.toUInt32
+  | "evalParametric" =>
+    let fx := ((j.get? "fx").bind JVal.asStr?).getD "(1.1 + 0.42*cos(v))*cos(u)"
+    let fy := ((j.get? "fy").bind JVal.asStr?).getD "0.42*sin(v)"
+    let fz := ((j.get? "fz").bind JVal.asStr?).getD "(1.1 + 0.42*cos(v))*sin(u)"
+    let uArr := ((j.get? "uBounds").bind JVal.asArr?).getD #[]
+    let vArr := ((j.get? "vBounds").bind JVal.asArr?).getD #[]
+    let uMin := (uArr[0]?.bind JVal.asNum?).getD 0.0
+    let uMax := (uArr[1]?.bind JVal.asNum?).getD 6.283185307179586
+    let vMin := (vArr[0]?.bind JVal.asNum?).getD 0.0
+    let vMax := (vArr[1]?.bind JVal.asNum?).getD 6.283185307179586
+    let nu := ((j.get? "nu").bind JVal.asNum?).getD 40.0
+    let nv := ((j.get? "nv").bind JVal.asNum?).getD 24.0
+    return .evalParametric fx fy fz uMin uMax vMin vMax nu.toUInt32 nv.toUInt32
+  | "wedgeTutorial" =>
+    let id := ((j.get? "id").bind JVal.asStr?).getD "T1"
+    return .wedgeTutorial id
+  | "wedgeRandom" =>
+    let dim := ((j.get? "dim").bind JVal.asNum?).getD 2.0
+    let diff := ((j.get? "difficulty").bind JVal.asNum?).getD 1.0
+    let seed := ((j.get? "seed").bind JVal.asNum?).getD 0.0
+    return .wedgeRandom (dim ≥ 2.5) diff.toUInt32 seed.toUInt64
   | _ => throw s!"unknown InputEvent op: {op}"
 
 end Grassmann.Scene.Json

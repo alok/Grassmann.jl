@@ -214,6 +214,9 @@ structure WedgeLevel where
 structure WedgeState where
   dim           : WedgeDim := .dim2D
   levelIdx      : Nat      := 0
+  customLevel   : Option WedgeLevel := none
+  tutorialGlyph : String   := ""
+  tutorialCopy  : String   := ""
   items         : Array BoardItem := #[]
   nextId        : UInt32   := 1
   moves         : UInt32   := 0

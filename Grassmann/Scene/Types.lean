@@ -619,7 +619,11 @@ inductive InputEvent where
   | calcEval      (mode : String) (expr : String)
   | setCamera     (motor : Motor3) (fovDeg : Float) (distance : Float)
   | slicePlane    (motor : Motor3)
-  | evalEquations (equations : Array String) (minX maxX minY maxY : Float) (gridN : UInt32)
+  | evalEquations  (equations : Array String) (minX maxX minY maxY : Float) (gridN : UInt32)
+  | evalImplicit   (expr : String) (gpuRaymarch : Bool := false) (bound : Float := 1.6) (gridN : UInt32 := 18)
+  | evalParametric (fx fy fz : String) (uMin uMax vMin vMax : Float) (nu nv : UInt32)
+  | wedgeTutorial  (id : String)
+  | wedgeRandom    (is3D : Bool) (difficulty : UInt32) (seed : UInt64)
   | snapshot
   deriving Repr, Inhabited
 

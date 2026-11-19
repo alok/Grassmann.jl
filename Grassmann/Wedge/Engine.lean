@@ -1,6 +1,7 @@
 import Grassmann.Wedge.Types
 import Grassmann.Wedge.Levels2D
 import Grassmann.Wedge.Levels3D
+import Grassmann.Wedge.Tutorials
 import Grassmann.Eval.Engine
 
 /-!
@@ -19,10 +20,10 @@ namespace Grassmann.Wedge
 
 open Grassmann.Scene Grassmann.Eval
 
-/-- Load a specific level index (0-based into `allLevels`, clamped). -/
-def loadLevel (idx : Nat) : WedgeState :=
-  let clamped := if allLevels.isEmpty then 0 else min idx (allLevels.size - 1)
-  let lvl := allLevels[clamped]!
+/-- Populate a playable `WedgeState` from any `WedgeLevel` (campaign, tutorial card, or
+procedural challenge). -/
+def loadCustomLevel (lvl : WedgeLevel) (levelIdx : Nat := 0) (isCustom : Bool := true)
+    (tutorialGlyph : String := "") (tutorialCopy : String := "") : WedgeState :=
   let rec pushList (xs : Array (PgaElem × String)) (role : WedgeRole)
       (nextId : UInt32) (acc : Array BoardItem) : Array BoardItem × UInt32 :=
     xs.foldl (init := (acc, nextId)) fun (a, nid) (el, lbl) =>
@@ -30,10 +31,32 @@ def loadLevel (idx : Nat) : WedgeState :=
   let (it1, id1) := pushList lvl.targets .target 1 #[]
   let (it2, id2) := pushList lvl.hints .hint id1 it1
   let (it3, id3) := pushList lvl.givens .given id2 it2
-  { dim := lvl.dim, levelIdx := clamped, items := it3, nextId := id3,
+  { dim := lvl.dim, levelIdx,
+    customLevel := if isCustom then some lvl else none,
+    tutorialGlyph, tutorialCopy,
+    items := it3, nextId := id3,
     moves := 0, elapsedSec := 0.0, timerStarted := false,
     lastOp := "", previewOp := "", previewElem := none,
     selectedIds := #[], showHints := true, solved := false, undoStack := #[] }
+
+/-- Load a specific level index (0-based into `allLevels`, clamped). -/
+def loadLevel (idx : Nat) : WedgeState :=
+  let clamped := if allLevels.isEmpty then 0 else min idx (allLevels.size - 1)
+  loadCustomLevel allLevels[clamped]! clamped false
+
+/-- Load one of the 6 canonical Wedge tutorial cards (`"T1"`..`"T6"`) as a playable board
+with animated green gesture indicator arrows. -/
+def loadTutorial (id : String) : WedgeState :=
+  let card :=
+    (Tutorials.tutorialCards.find? fun c => c.id == id).getD (Tutorials.getTutorialCard 0)
+  let copy := s!"{card.headline} — {card.body}"
+  loadCustomLevel card.miniLevel 0 true card.gestureGlyph copy
+
+/-- Generate and load a deterministic SplitMix64 procedural 2D or 3D Wedge challenge. -/
+def loadRandomChallenge (is3D : Bool) (difficulty : Nat) (seed : UInt64) : WedgeState :=
+  let dim : WedgeDim := if is3D then .dim3D else .dim2D
+  let lvl := Tutorials.generateChallenge seed dim (min 2 difficulty)
+  loadCustomLevel lvl 0 true
 
 /-- Initial state for Wedge 2D (Level 1) or Wedge 3D (Level 10). -/
 def initState (start3D : Bool := false) : WedgeState :=
@@ -160,7 +183,10 @@ def stepAction (st : WedgeState) (act : WedgeActionKind) (arg : UInt32 := 0) : W
         solved := checkSolved prevItems, lastOp := "undo",
         previewOp := "", previewElem := none, selectedIds := #[] }
     else st
-  | .reset => loadLevel st.levelIdx
+  | .reset =>
+    match st.customLevel with
+    | some lvl => loadCustomLevel lvl st.levelIdx true st.tutorialGlyph st.tutorialCopy
+    | none     => loadLevel st.levelIdx
   | .next  => loadLevel (min (allLevels.size - 1) (st.levelIdx + 1))
   | .prev  => loadLevel (if st.levelIdx > 0 then st.levelIdx - 1 else 0)
   | .toggle3D =>
@@ -222,10 +248,11 @@ private def pushElemToFrame (f : SceneFrame) (id : UInt32) (role : WedgeRole)
         color := ⟨col.r, col.g, col.b, alpha⟩,
         gridLines := true, handleId := id, role := rf, label } }
 
-/-- Emit the complete `SceneFrame` + `WedgeHudState` for the current Wedge board. -/
+/-- Emit the complete `SceneFrame` + `WedgeHudState` for the current Wedge board
+(supporting campaign levels 1–16, animated tutorial cards T1–T6, and procedural challenges). -/
 def toSceneFrame (st : WedgeState) (frameSeq : UInt64 := 0) (simTime : Float := 0.0) :
     SceneFrame := Id.run do
-  let lvl := allLevels[min st.levelIdx (allLevels.size - 1)]!
+  let lvl := st.customLevel.getD (allLevels[min st.levelIdx (allLevels.size - 1)]!)
   let is3D := st.dim == .dim3D
   let (algName, V, p, q, r, witt) := resolveAlgebra (if is3D then "PGA3" else "PGA2")
   let mut f : SceneFrame :=
@@ -241,6 +268,28 @@ def toSceneFrame (st : WedgeState) (frameSeq : UInt64 := 0) (simTime : Float := 
       camera :=
         if is3D then { motor := Motor3.orbitCamera 0.55 (-0.34) 5.4, fovDeg := 45.0, distance := 5.4 }
         else { motor := Motor3.translator 0.0 0.0 (-4.2), orthoScale := 1.0, isOrtho := true } }
+  -- Animated green gesture indicator arrows for Tutorial Cards (while untouched)
+  if !st.tutorialGlyph.isEmpty && st.moves == 0 && !st.solved && lvl.givens.size ≥ 2 then
+    let pulse := 0.15 + 0.35 * (0.5 + 0.5 * Float.sin (simTime * 2.4))
+    let arrowRole : RoleFlags := { arrow := true }
+    let a := (lvl.givens[0]!.1).anchor
+    let b := (lvl.givens[1]!.1).anchor
+    let diff := Vec3.sub b a
+    let axis := if Vec3.norm diff > 1e-4 then Vec3.normalize diff else ⟨1.0, 0.0, 0.0⟩
+    let arrows : Array SegmentPrim :=
+      match st.tutorialGlyph with
+      | "pull-apart" | "intro" =>
+        #[ { a := a, b := Vec3.sub a (Vec3.scale pulse axis), width := 3.0, color := RGBA.green, role := arrowRole }
+         , { a := b, b := Vec3.add b (Vec3.scale pulse axis), width := 3.0, color := RGBA.green, role := arrowRole } ]
+      | "push-together" =>
+        #[ { a := a, b := Vec3.add a (Vec3.scale pulse axis), width := 3.0, color := RGBA.green, role := arrowRole }
+         , { a := b, b := Vec3.sub b (Vec3.scale pulse axis), width := 3.0, color := RGBA.green, role := arrowRole } ]
+      | "hold-drag" | "spatial-two-hand" =>
+        #[ { a := a, b := Vec3.add a (Vec3.scale (pulse * 1.1) axis), width := 3.2, color := RGBA.green, role := arrowRole } ]
+      | _ =>
+        #[ { a := a, b := Vec3.lerp a b (0.35 * pulse), width := 3.0, color := RGBA.green, role := arrowRole }
+         , { a := b, b := Vec3.lerp b a (0.35 * pulse), width := 3.0, color := RGBA.green, role := arrowRole } ]
+    f := { f with segments := f.segments ++ arrows }
   let mut inspectIdx : UInt32 := 0
   for it in st.items do
     if it.role != .hint || st.showHints then
@@ -253,9 +302,10 @@ def toSceneFrame (st : WedgeState) (frameSeq : UInt64 := 0) (simTime : Float := 
         inspectIdx := inspectIdx + 1
   if let some ghost := st.previewElem then
     f := pushElemToFrame f 0 .hint false true s!"preview:{st.previewOp}" ghost
+  let tutText := if st.tutorialCopy.isEmpty then lvl.tutorialText else st.tutorialCopy
   let hud : WedgeHudState :=
     { is3D, level := lvl.number, totalLevels := allLevels.size.toUInt32,
-      title := lvl.title, goal := lvl.goal, tutorialText := lvl.tutorialText,
+      title := lvl.title, goal := lvl.goal, tutorialText := tutText,
       moves := st.moves, score := currentScore st,
       elapsedMs := (st.elapsedSec * 1000.0).toUInt32,
       lastOp := st.lastOp, previewOp := st.previewOp,

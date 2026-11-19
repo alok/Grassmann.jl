@@ -34,15 +34,16 @@ inductive ActiveApp where
 
 /-- Complete stateful studio session (pure immutable value; C ABI / server stores in `IO.Ref`). -/
 structure StudioSession where
-  active          : ActiveApp := .coffeeShop
-  coffee          : CoffeeShopState := CoffeeShopState.init "pga3d_slicing"
-  wedge           : WedgeState := Wedge.initState false
-  calcState       : CalcState := CalcState.init "STA"
-  frameSeq        : UInt64 := 0
-  sentMeshHashes  : Array (UInt64 × UInt64) := #[]
-  sentShaderHash  : Array String := #[]
-  lastMetaDigest  : UInt64 := 0
-  lastEncoded     : ByteArray := ByteArray.empty
+  active            : ActiveApp := .coffeeShop
+  coffee            : CoffeeShopState := CoffeeShopState.init "pga3d_slicing"
+  wedge             : WedgeState := Wedge.initState false
+  calcState         : CalcState := CalcState.init "STA"
+  frameSeq          : UInt64 := 0
+  randomSeedCounter : UInt64 := 1
+  sentMeshHashes    : Array (UInt64 × UInt64) := #[]
+  sentShaderHash    : Array String := #[]
+  lastMetaDigest    : UInt64 := 0
+  lastEncoded       : ByteArray := ByteArray.empty
   deriving Inhabited
 
 /-- Fast 64-bit FNV-1a digest of a `String` for detecting unchanged `metaJson`. -/
@@ -107,16 +108,10 @@ with its initial `GSIR` v1 frame pre-cached. -/
 def create : StudioSession :=
   renderAndCache {} true
 
-/-- Return the catalog of all 19 CoffeeShop presets as an `Init`-only JSON array string. -/
+/-- Return the unified catalog of ALL 69 CoffeeShop presets (19 base + 28 extra + 22 parity)
+as a strictly `Init`-only JSON array string. -/
 def presetCatalogJson : String :=
-  Json.arrJson (presetCatalog.map fun p => Json.objJson #[
-    ("id", Json.quote p.id),
-    ("title", Json.quote p.title),
-    ("category", Json.quote p.category),
-    ("algebra", Json.quote p.algebra),
-    ("description", Json.quote p.description),
-    ("sampleCode", Json.quote p.sampleCode)
-  ])
+  CoffeeShop.allPresetCatalogJson
 
 /-- Apply a typed `InputEvent` ONCE, re-render, and cache the resulting `GSIR` v1 binary frame. -/
 def dispatchEvent (st : StudioSession) (ev : InputEvent) (forceSnap : Bool := false) :
@@ -162,6 +157,19 @@ def dispatchEvent (st : StudioSession) (ev : InputEvent) (forceSnap : Bool := fa
     | .evalEquations eqs minX maxX minY maxY gridN =>
       ({ st with active := .coffeeShop,
                  coffee := CoffeeShop.setEquations st.coffee eqs minX maxX minY maxY gridN.toNat }, true)
+    | .evalImplicit expr gpuRay bound gridN =>
+      ({ st with active := .coffeeShop,
+                 coffee := CoffeeShop.setImplicit st.coffee expr gpuRay bound gridN.toNat }, true)
+    | .evalParametric fx fy fz uMin uMax vMin vMax nu nv =>
+      ({ st with active := .coffeeShop,
+                 coffee := CoffeeShop.setParametric st.coffee fx fy fz uMin uMax vMin vMax nu.toNat nv.toNat }, true)
+    | .wedgeTutorial id =>
+      ({ st with active := .wedge, wedge := Wedge.loadTutorial id }, true)
+    | .wedgeRandom is3D difficulty seed =>
+      let effectiveSeed := if seed == 0 then st.randomSeedCounter else seed
+      ({ st with active := .wedge,
+                 randomSeedCounter := st.randomSeedCounter + 1,
+                 wedge := Wedge.loadRandomChallenge is3D difficulty.toNat effectiveSeed }, true)
     | .snapshot =>
       (st, true)
   renderAndCache st1 forceFull
