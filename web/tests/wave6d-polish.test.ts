@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildAllSectionsFixtureBytes } from '../src/gsir';
-import { MAX_CACHED_OPNS_SHADERS, OpnsShaderCache } from '../src/render/materials';
+import { MAX_CACHED_OPNS_SHADERS, OpnsShaderCache, computeOpnsProxyBoxSize } from '../src/render/materials';
 import { OrderedStudioEventQueue, WasmTransport, type GrassmannWasmExports } from '../src/transport';
 import {
   decodeExperimentFromHash,
@@ -322,5 +322,12 @@ describe('Wave 6D / 7A: Interactive 6-Stop Guided GA Tour & 17 Wedge Levels', ()
     expect(stops[0]?.id).toBe('tour_points_lines');
     expect(stops[1]?.mode).toBe('wedge');
     transport.dispose();
+  });
+
+  it('sizes OPNS raymarching proxy box dynamically (>= 120 and >= 6*bound so bound=20 never clips)', () => {
+    expect(computeOpnsProxyBoxSize(undefined, 1.6)).toBeGreaterThanOrEqual(120);
+    expect(computeOpnsProxyBoxSize('// Implicit 3D: x-15 = 0, bound=20.000000', 2.2)).toBeGreaterThanOrEqual(120);
+    expect(computeOpnsProxyBoxSize('vec3 bMax = vec3(20.0);', 20)).toBeGreaterThanOrEqual(120);
+    expect(computeOpnsProxyBoxSize('vec3 bMax = vec3(30.0);', 20)).toBeGreaterThanOrEqual(180);
   });
 });

@@ -36,6 +36,7 @@ import {
 } from './environment';
 import {
   OpnsShaderCache,
+  computeOpnsProxyBoxSize,
   createBivectorMaterial,
   createFlowParticleMaterial,
   createFresnelPlaneMaterial,
@@ -212,8 +213,9 @@ export class GrassmannSceneRenderer {
   private readonly hollowTorusGeo = new THREE.TorusGeometry(1.0, 0.22, 14, 36);
   private readonly arrowConeGeo = new THREE.ConeGeometry(0.065, 0.2, 16);
   private readonly flowUnitPlaneGeo = new THREE.PlaneGeometry(1, 1, 4, 1);
-  private readonly opnsBoxGeo = new THREE.BoxGeometry(72, 72, 72);
+  private readonly opnsBoxGeo = new THREE.BoxGeometry(1, 1, 1);
   private readonly opnsQuadGeo = new THREE.PlaneGeometry(2, 2);
+  private activeOpnsBoundHint = 2.2;
 
   // Wedge 2D/3D green rubber-band SVG overlay
   private readonly wedgeSvg: SVGSVGElement;
@@ -1164,8 +1166,13 @@ export class GrassmannSceneRenderer {
   }
 
   frameRadius(radius: number): void {
+    this.activeOpnsBoundHint = Math.max(0.5, Number.isFinite(radius) ? radius : 2.2);
     if (this.isOrtho) return;
     const d = Math.max(4.8, radius * 2.75);
+    if (this.perspCamera.far < d * 6) {
+      this.perspCamera.far = Math.ceil(d * 6);
+      this.perspCamera.updateProjectionMatrix();
+    }
     this.startCameraTransition(
       new THREE.Vector3(d * 0.62, d * 0.48, d * 0.72),
       new THREE.Vector3(0, 0.05, 0),
@@ -1713,6 +1720,14 @@ export class GrassmannSceneRenderer {
         entry.isFullScreenQuad ? this.opnsQuadGeo : this.opnsBoxGeo,
         entry.material
       );
+      if (!entry.isFullScreenQuad) {
+        const boxSize = computeOpnsProxyBoxSize(shaderMeta.glsl, this.activeOpnsBoundHint);
+        mesh.scale.setScalar(boxSize);
+        if (this.perspCamera.far < boxSize * 4) {
+          this.perspCamera.far = boxSize * 4;
+          this.perspCamera.updateProjectionMatrix();
+        }
+      }
       mesh.frustumCulled = false;
       mesh.renderOrder = entry.isFullScreenQuad ? 1 : entry.material.depthWrite ? 1 : 4;
       this.opnsGroup.add(mesh);

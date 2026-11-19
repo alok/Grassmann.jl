@@ -757,6 +757,11 @@ export class GrassmannStudioApp {
         flowCount: this.lastFrame?.flowParticles.reduce((acc, fp) => acc + fp.particleCount, 0) ?? 0,
         bivectorCount: this.lastFrame?.bivectorDisks.length ?? 0,
         meshCount: this.lastFrame?.meshRefs.length ?? 0,
+        meshRefMatrices:
+          this.lastFrame?.meshRefs.map((m) => ({
+            meshId: m.meshId,
+            mat4: Array.from(m.modelMat4),
+          })) ?? [],
         segmentCount: this.lastFrame?.segments.length ?? 0,
         curveCount: this.lastFrame?.curves.length ?? 0,
         wedge: this.lastFrame?.meta?.wedge ?? null,
