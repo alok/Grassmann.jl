@@ -24,6 +24,7 @@ import {
   type RgbaTuple,
   type Vec3Tuple,
 } from '../gsir/types';
+import { AxisTriadGizmo, type AxisSnapPreset } from './axisGizmo';
 import { ContourOverlayRenderer } from './contourOverlay';
 import { createBackdropDome, createInfiniteGrid, createStudioEnvironmentMap } from './environment';
 import {
@@ -158,7 +159,10 @@ export class GrassmannSceneRenderer {
   private readonly labelGroup = new THREE.Group();
   private readonly opnsGroup = new THREE.Group();
   private readonly contourOverlay: ContourOverlayRenderer;
+  private readonly axisGizmo: AxisTriadGizmo;
   private readonly opnsCache = new OpnsShaderCache();
+  private readonly opnsResolution = new THREE.Vector2(800, 600);
+  private readonly opnsInvViewProj = new THREE.Matrix4();
   private readonly meshGeoCache = new Map<bigint, CachedGpuMesh>();
   private readonly lineMaterials: LineMaterial[] = [];
   private readonly flowMaterials: THREE.ShaderMaterial[] = [];
@@ -194,6 +198,7 @@ export class GrassmannSceneRenderer {
   // Frame / UI state
   private currentFrame: GsirFrame | null = null;
   private darkTheme = true;
+  private themeOverride: boolean | null = null;
   private forceGridOverride: boolean | null = null;
   private forceWireframeOverride = false;
   private isOrtho = false;
@@ -253,6 +258,10 @@ export class GrassmannSceneRenderer {
     // 2D Contour PiP Inset (0x0F CONTOUR_OVERLAY)
     this.contourOverlay = new ContourOverlayRenderer();
     container.appendChild(this.contourOverlay.element);
+
+    // Interactive 3D Axis Triad Gizmo (bottom-right)
+    this.axisGizmo = new AxisTriadGizmo((preset) => this.snapCamera(preset));
+    container.appendChild(this.axisGizmo.element);
 
     // Scene & Studio IBL
     this.scene = new THREE.Scene();
@@ -373,7 +382,7 @@ export class GrassmannSceneRenderer {
     }
 
     this.setOrthoMode(wantOrtho);
-    this.setDarkTheme(frameDark);
+    this.setDarkTheme(this.themeOverride !== null ? this.themeOverride : frameDark);
     this.grid.update({
       visible: gridVisible,
       gridSize: frame.header.gridSize || 5,
@@ -527,6 +536,7 @@ export class GrassmannSceneRenderer {
         selected: pl.selected,
         target: pl.target,
         hint: pl.hint,
+        darkTheme: this.darkTheme,
       });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.renderOrder = 2;
@@ -743,11 +753,25 @@ export class GrassmannSceneRenderer {
     this.updateOpnsGroup(frame);
   }
 
+  setThemeOverride(dark: boolean | null): void {
+    this.themeOverride = dark;
+    if (dark !== null) {
+      this.setDarkTheme(dark);
+    } else if (this.currentFrame) {
+      this.setDarkTheme((this.currentFrame.header.flags & HeaderFlag.DARK_THEME) !== 0);
+    }
+  }
+
   setDarkTheme(dark: boolean): void {
     if (this.darkTheme === dark) return;
     this.darkTheme = dark;
     this.scene.environment = dark ? this.envMapDark : this.envMapLight;
     this.backdrop.setTheme(dark);
+    for (const child of this.dynamicGroup.children) {
+      if (child instanceof THREE.Mesh && child.material instanceof THREE.ShaderMaterial && child.material.uniforms.uDarkTheme) {
+        child.material.uniforms.uDarkTheme.value = dark ? 1.0 : 0.0;
+      }
+    }
     if (this.currentFrame) {
       this.grid.update({
         visible:
@@ -781,6 +805,10 @@ export class GrassmannSceneRenderer {
   }
 
   resetCamera(): void {
+    this.snapCamera('iso');
+  }
+
+  snapCamera(preset: AxisSnapPreset): void {
     if (this.isOrtho) {
       this.cameraTransition = null;
       this.orthoCamera.position.set(0, 0, 10);
@@ -788,10 +816,58 @@ export class GrassmannSceneRenderer {
       this.orthoCamera.updateProjectionMatrix();
       this.controls.target.set(0, 0, 0);
       this.controls.update();
-    } else {
-      this.startCameraTransition(new THREE.Vector3(3.8, 2.8, 4.8), new THREE.Vector3(0, 0, 0), 420);
+      this.maybeEmitCameraChange(true);
+      return;
     }
+
+    const d = Math.max(3.2, this.perspCamera.position.distanceTo(this.controls.target) || 6.4);
+    let endPos: THREE.Vector3;
+    switch (preset) {
+      case '+x':
+        endPos = new THREE.Vector3(d, 0.01, 0);
+        break;
+      case '-x':
+        endPos = new THREE.Vector3(-d, 0.01, 0);
+        break;
+      case '+y':
+        endPos = new THREE.Vector3(0.01, d, 0.01);
+        break;
+      case '-y':
+        endPos = new THREE.Vector3(0.01, -d, 0.01);
+        break;
+      case '+z':
+        endPos = new THREE.Vector3(0, 0.01, d);
+        break;
+      case '-z':
+        endPos = new THREE.Vector3(0, 0.01, -d);
+        break;
+      case 'iso':
+      default:
+        endPos = new THREE.Vector3(d * 0.58, d * 0.46, d * 0.68);
+        break;
+    }
+    this.startCameraTransition(endPos, new THREE.Vector3(0, 0, 0), 420);
     this.maybeEmitCameraChange(true);
+  }
+
+  /**
+   * Read-only screen-space projection helper for deterministic E2E handle drag testing.
+   */
+  getInteractiveHandleScreenPos(handleId?: number): { handleId: number; clientX: number; clientY: number; world: Vec3Tuple } | null {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    for (const obj of this.interactiveObjects) {
+      const meta = obj.userData.interactive as InteractiveMeta | undefined;
+      if (!meta) continue;
+      if (handleId !== undefined && meta.handleId !== handleId) continue;
+      const p = meta.anchor.clone().project(this.activeCamera);
+      return {
+        handleId: meta.handleId,
+        clientX: rect.left + ((p.x + 1) * 0.5) * rect.width,
+        clientY: rect.top + ((1 - p.y) * 0.5) * rect.height,
+        world: [meta.anchor.x, meta.anchor.y, meta.anchor.z],
+      };
+    }
+    return null;
   }
 
   private startCameraTransition(endPos: THREE.Vector3, endTarget: THREE.Vector3, durationMs = 460): void {
@@ -1100,14 +1176,19 @@ export class GrassmannSceneRenderer {
     }
 
     const shaders = frame.meta?.opnsShaders ?? [];
+    this.opnsResolution.set(this.width, this.height);
+    this.opnsInvViewProj
+      .multiplyMatrices(this.activeCamera.projectionMatrix, this.activeCamera.matrixWorldInverse)
+      .invert();
+
     for (const item of frame.opnsUniforms) {
       const shaderMeta = shaders[item.shaderIdx];
       if (!shaderMeta) continue;
       const mat = this.opnsCache.getOrCreate(shaderMeta);
       if (!mat) continue;
-      this.opnsCache.updateUniforms(mat, item, this.simTime);
+      this.opnsCache.updateUniforms(mat, item, this.simTime, this.opnsResolution, this.opnsInvViewProj);
       const box = new THREE.Mesh(this.opnsBoxGeo, mat);
-      box.renderOrder = 4;
+      box.renderOrder = mat.depthWrite ? 1 : 4;
       this.opnsGroup.add(box);
     }
   }
@@ -1513,6 +1594,24 @@ export class GrassmannSceneRenderer {
       fm.uniforms.uTime!.value = sec;
     }
 
+    // Sync OPNS camera matrix & corner 3D axis gizmo smoothly
+    if (this.opnsGroup.children.length > 0) {
+      this.opnsInvViewProj
+        .multiplyMatrices(this.activeCamera.projectionMatrix, this.activeCamera.matrixWorldInverse)
+        .invert();
+      for (const child of this.opnsGroup.children) {
+        if (child instanceof THREE.Mesh && child.material instanceof THREE.ShaderMaterial) {
+          if (child.material.uniforms.uInvViewProj) {
+            (child.material.uniforms.uInvViewProj.value as THREE.Matrix4).copy(this.opnsInvViewProj);
+          }
+          if (child.material.uniforms.uResolution) {
+            (child.material.uniforms.uResolution.value as THREE.Vector2).set(this.width, this.height);
+          }
+        }
+      }
+    }
+    this.axisGizmo.update(this.activeCamera, this.isOrtho);
+
     if (this.xr.isActive()) {
       // During WebXR sessions render straight to the XR framebuffer (per RayTrace4D #8)
       this.renderer.render(this.scene, this.activeCamera);
@@ -1562,6 +1661,7 @@ export class GrassmannSceneRenderer {
     this.arrowConeGeo.dispose();
     this.opnsBoxGeo.dispose();
     this.xr.dispose();
+    this.axisGizmo.dispose();
     this.contourOverlay.dispose();
     this.controls.dispose();
     this.composer.dispose();

@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "audit:visual": "node scripts/visual-audit.mjs"
+    "audit:visual": "node scripts/visual-audit.mjs",
+    "test:e2e": "node scripts/interaction-e2e.mjs"
   },
   "dependencies": {
     "katex": "^0.16.21",

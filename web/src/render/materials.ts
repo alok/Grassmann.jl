@@ -10,19 +10,21 @@ import type { GsirOpnsUniform, OpnsShaderMeta, RgbaTuple } from '../gsir/types';
 
 export function createFresnelPlaneMaterial(
   rgba: RgbaTuple,
-  opts: { gridLines: boolean; selected: boolean; target: boolean; hint: boolean }
+  opts: { gridLines: boolean; selected: boolean; target: boolean; hint: boolean; darkTheme?: boolean }
 ): THREE.ShaderMaterial {
+  const dark = opts.darkTheme ?? true;
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
     side: THREE.DoubleSide,
     uniforms: {
       uColor: { value: new THREE.Color(rgba[0], rgba[1], rgba[2]) },
-      uAlpha: { value: Math.max(0.14, Math.min(0.85, rgba[3])) },
+      uAlpha: { value: Math.max(dark ? 0.16 : 0.24, Math.min(0.85, rgba[3])) },
       uGridLines: { value: opts.gridLines ? 1.0 : 0.0 },
       uSelected: { value: opts.selected ? 1.0 : 0.0 },
       uTarget: { value: opts.target ? 1.0 : 0.0 },
       uHint: { value: opts.hint ? 1.0 : 0.0 },
+      uDarkTheme: { value: dark ? 1.0 : 0.0 },
     },
     vertexShader: `
       varying vec2 vUv;
@@ -43,6 +45,7 @@ export function createFresnelPlaneMaterial(
       uniform float uSelected;
       uniform float uTarget;
       uniform float uHint;
+      uniform float uDarkTheme;
       varying vec2 vUv;
       varying vec3 vNormalW;
       varying vec3 vViewDirW;
@@ -55,18 +58,20 @@ export function createFresnelPlaneMaterial(
         float grid = 0.0;
         if (uGridLines > 0.5) {
           vec2 g = abs(fract(vUv * 8.0 - 0.5) - 0.5) / max(fwidth(vUv * 8.0), vec2(0.001));
-          grid = (1.0 - min(min(g.x, g.y), 1.0)) * 0.25;
+          grid = (1.0 - min(min(g.x, g.y), 1.0)) * 0.28;
         }
 
+        vec3 defaultRim = uDarkTheme > 0.5 ? mix(uColor, vec3(1.0), 0.45) : mix(uColor, vec3(0.02, 0.25, 0.52), 0.55);
         vec3 accent = uSelected > 0.5
           ? vec3(0.32, 0.96, 0.58)
-          : (uTarget > 0.5 ? vec3(1.0, 0.36, 0.44) : mix(uColor, vec3(1.0), 0.45));
+          : (uTarget > 0.5 ? vec3(1.0, 0.36, 0.44) : defaultRim);
 
-        vec3 col = mix(uColor, accent, clamp(border * 0.85 + fresnel * 0.45, 0.0, 1.0));
-        col += accent * grid * 0.5;
+        vec3 baseTint = uDarkTheme > 0.5 ? uColor : mix(uColor, vec3(0.05, 0.38, 0.68), 0.38);
+        vec3 col = mix(baseTint, accent, clamp(border * 0.85 + fresnel * 0.45, 0.0, 1.0));
+        col += accent * grid * (uDarkTheme > 0.5 ? 0.5 : 0.35);
 
         float baseAlpha = uHint > 0.5 ? uAlpha * 0.45 : uAlpha;
-        float alpha = clamp(baseAlpha * (0.65 + 0.55 * fresnel) + border * 0.72 + grid * 0.25, 0.0, 0.94);
+        float alpha = clamp(baseAlpha * (0.65 + 0.55 * fresnel) + border * 0.78 + grid * 0.28, 0.0, 0.94);
         gl_FragColor = vec4(col, alpha);
       }
     `,
@@ -324,11 +329,13 @@ export class OpnsShaderCache {
     if (!meta.glsl) return null;
 
     const glsl3 = isGlsl3Shader(meta.glsl);
+    const writesDepth = /\bgl_FragDepth\b/.test(meta.glsl);
     const coeffsBuf = new Float32Array(OPNS_MAX_COEFFS);
     const mat = new THREE.ShaderMaterial({
       glslVersion: glsl3 ? THREE.GLSL3 : THREE.GLSL1,
-      transparent: true,
-      depthWrite: false,
+      transparent: !writesDepth,
+      depthTest: true,
+      depthWrite: writesDepth,
       side: THREE.BackSide,
       uniforms: {
         uColor: { value: new THREE.Vector4(0.35, 0.8, 1.0, 0.75) },
@@ -339,6 +346,8 @@ export class OpnsShaderCache {
         uStepSize: { value: 0.05 },
         uIsIPNS: { value: 0 },
         uSimTime: { value: 0 },
+        uResolution: { value: new THREE.Vector2(1024, 768) },
+        uInvViewProj: { value: new THREE.Matrix4() },
       },
       vertexShader: glsl3 ? OPNS_VERTEX_SHADER_GLSL3 : OPNS_VERTEX_SHADER_GLSL1,
       fragmentShader: glsl3 ? stripVersionDirective(meta.glsl) : wrapLeanOpnsGlsl(meta.glsl),
@@ -348,7 +357,13 @@ export class OpnsShaderCache {
     return mat;
   }
 
-  updateUniforms(mat: THREE.ShaderMaterial, item: GsirOpnsUniform, simTime: number): void {
+  updateUniforms(
+    mat: THREE.ShaderMaterial,
+    item: GsirOpnsUniform,
+    simTime: number,
+    resolution?: THREE.Vector2,
+    invViewProj?: THREE.Matrix4
+  ): void {
     const u = mat.uniforms;
     if (u.uColor) (u.uColor.value as THREE.Vector4).set(item.rgba[0], item.rgba[1], item.rgba[2], item.rgba[3]);
     if (u.uCoeffs) {
@@ -362,6 +377,8 @@ export class OpnsShaderCache {
     if (u.uStepSize) u.uStepSize.value = item.stepSize;
     if (u.uIsIPNS) u.uIsIPNS.value = item.isIPNS ? 1 : 0;
     if (u.uSimTime) u.uSimTime.value = simTime;
+    if (u.uResolution && resolution) (u.uResolution.value as THREE.Vector2).copy(resolution);
+    if (u.uInvViewProj && invViewProj) (u.uInvViewProj.value as THREE.Matrix4).copy(invViewProj);
   }
 
   dispose(): void {

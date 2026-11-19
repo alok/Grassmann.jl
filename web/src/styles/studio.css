@@ -1575,3 +1575,239 @@ body,
   font-size: 12px;
   color: var(--text-dim);
 }
+
+/* Preset Category Carousel & Count */
+.gs-preset-count {
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.gs-cat-carousel {
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.gs-cat-carousel::-webkit-scrollbar {
+  display: none;
+}
+
+.gs-cat-pill {
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 550;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.gs-cat-pill:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.gs-cat-pill.active {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 3D Axis Triad Orientation Gizmo */
+.gs-axis-gizmo {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  pointer-events: auto;
+}
+
+.gs-axis-svg {
+  display: block;
+  filter: drop-shadow(0 4px 12px rgba(2, 6, 18, 0.35));
+}
+
+.gs-axis-ring {
+  fill: rgba(11, 17, 32, 0.56);
+  stroke: rgba(148, 175, 224, 0.24);
+  stroke-width: 1;
+  cursor: pointer;
+}
+
+.gs-axis-ring:hover {
+  stroke: var(--accent);
+}
+
+.gs-cam-presets {
+  display: flex;
+  gap: 3px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 2px;
+  backdrop-filter: blur(12px);
+}
+
+.gs-cam-chip {
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.gs-cam-chip:hover {
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+/* Gallery Daylight Light-Mode Contrast Polish */
+.gs-app[data-theme='light'] .gs-viewport-wrap {
+  background: #e9eff7;
+}
+
+.gs-app[data-theme='light'] .gs-scene-label {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(51, 65, 85, 0.22);
+  color: #0f172a !important;
+}
+
+.gs-app[data-theme='light'] .metric-neg {
+  color: #be123c;
+}
+
+.gs-app[data-theme='light'] .metric-zero {
+  color: #047857;
+}
+
+.gs-app[data-theme='light'] .metric-pos {
+  color: #0369a1;
+}
+
+.gs-app[data-theme='light'] .gs-galc-screen {
+  background: linear-gradient(180deg, #f8fafc, #eef2f7);
+  border-color: rgba(2, 132, 199, 0.3);
+}
+
+.gs-app[data-theme='light'] .gs-galc-display {
+  color: #0369a1;
+}
+
+.gs-app[data-theme='light'] .gs-keycap {
+  background: linear-gradient(180deg, #ffffff, #f1f5f9);
+  color: #0f172a;
+}
+
+.gs-app[data-theme='light'] .gs-keycap-basis {
+  color: #0284c7;
+}
+
+.gs-app[data-theme='light'] .gs-keycap-eval {
+  color: #ffffff;
+}
+
+.gs-app[data-theme='light'] .gs-axis-ring {
+  fill: rgba(255, 255, 255, 0.72);
+  stroke: rgba(51, 65, 85, 0.24);
+}
+
+/* Responsive Layout: 1280×720 (Vision Pro Safari Default) & 900×700 (Compact Split Pane) */
+@media (max-width: 1320px) {
+  .gs-brand-tag,
+  .gs-hint-chip {
+    display: none;
+  }
+
+  .gs-left-pane {
+    max-width: 260px;
+  }
+
+  .gs-right-pane {
+    max-width: 320px;
+  }
+
+  .gs-sparkline {
+    display: none;
+  }
+
+  .gs-topbar {
+    gap: 8px;
+    padding: 0 10px;
+  }
+
+  .gs-mode-btn {
+    padding: 5px 9px;
+    font-size: 11.5px;
+  }
+}
+
+@media (max-width: 1020px) {
+  .gs-telemetry-pill {
+    display: none;
+  }
+
+  .gs-brand-name {
+    font-size: 13px;
+  }
+
+  .gs-left-pane {
+    max-width: 228px;
+  }
+
+  .gs-left-tab-btn {
+    font-size: 10.5px;
+    white-space: nowrap;
+    padding: 8px 2px;
+  }
+
+  .gs-right-pane {
+    max-width: 265px;
+  }
+
+  .gs-vp-toolbar {
+    top: 8px;
+    right: 8px;
+    gap: 4px;
+  }
+
+  .gs-vp-btn {
+    padding: 4px 7px;
+    font-size: 10.5px;
+  }
+
+  .gs-contour-canvas {
+    width: 185px;
+    height: 152px;
+  }
+
+  .gs-wedge-top {
+    max-width: 520px;
+    padding: 8px 11px;
+  }
+
+  .gs-wedge-gesture-guide {
+    display: none;
+  }
+
+  .gs-footer-left {
+    display: none;
+  }
+}

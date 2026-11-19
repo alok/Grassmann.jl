@@ -89,6 +89,7 @@ export class GrassmannStudioApp {
   private lastLeanUs = 0;
   private lastDecodeUs = 0;
   private lastFrame: GsirFrame | null = null;
+  private dispatchedEventLog: string[] = [];
 
   // Coalesced 60fps binary dispatch queue
   private dispatchInFlight = false;
@@ -166,13 +167,13 @@ export class GrassmannStudioApp {
 
     const themeBtn = document.createElement('button');
     themeBtn.type = 'button';
-    themeBtn.className = 'gs-icon-btn';
-    themeBtn.title = 'Toggle Obsidian / Gallery Theme';
+    themeBtn.className = 'gs-icon-btn gs-theme-btn';
+    themeBtn.title = 'Toggle Obsidian / Gallery Daylight Theme';
     themeBtn.textContent = '◐';
     themeBtn.addEventListener('click', () => {
       this.darkTheme = !this.darkTheme;
       this.root.dataset.theme = this.darkTheme ? 'dark' : 'light';
-      this.renderer.setDarkTheme(this.darkTheme);
+      this.renderer.setThemeOverride(this.darkTheme);
     });
 
     const aboutBtn = document.createElement('button');
@@ -415,10 +416,11 @@ export class GrassmannStudioApp {
     // Global keyboard shortcuts (1/2/3/4 modes, Space play/pause, R reset camera, Cmd/Ctrl+Z undo, H hint, Shift+Enter eval)
     window.addEventListener('keydown', this.onGlobalKeyDown);
 
-    // Expose read-only diagnostics handle for Playwright E2E visual audit
+    // Expose read-only diagnostics handle for Playwright E2E visual & interaction audits
     (window as unknown as Record<string, unknown>).__grassmannStudio = {
       getState: () => ({
         mode: this.mode,
+        theme: this.darkTheme ? 'dark' : 'light',
         transportKind: this.transport?.kind ?? null,
         transportLabel: this.transport?.label ?? null,
         lastLeanUs: this.lastLeanUs,
@@ -427,7 +429,15 @@ export class GrassmannStudioApp {
         presetId: this.lastFrame?.meta?.presetId ?? this.activePresetId,
         title: this.lastFrame?.meta?.title ?? null,
         cachedMeshes: this.decoder.getCachedMeshCount(),
+        points: this.lastFrame?.points.map((p) => ({
+          handleId: p.handleId,
+          draggable: p.draggable,
+          pos: p.pos,
+        })) ?? [],
+        inspect: this.lastFrame?.meta?.inspect ?? [],
+        recentEvents: this.dispatchedEventLog.slice(-12),
       }),
+      getHandleScreenPos: (handleId?: number) => this.renderer.getInteractiveHandleScreenPos(handleId),
     };
 
     // Probe WebXR support (Vision Pro / Quest)
@@ -573,11 +583,23 @@ export class GrassmannStudioApp {
     });
     algRow.append(algLabel, this.algebraSelect);
 
-    // Search input
+    // Search input + count badge
+    const searchRow = document.createElement('div');
+    searchRow.className = 'gs-row-gap';
     const search = document.createElement('input');
     search.type = 'search';
     search.className = 'gs-input';
-    search.placeholder = 'Filter presets (e.g. slicing, CGA, STA, Euler)...';
+    search.placeholder = 'Filter presets (slicing, gyroid, CGA, STA)...';
+    const countBadge = document.createElement('span');
+    countBadge.className = 'gs-preset-count mono';
+    searchRow.append(search, countBadge);
+
+    // Horizontally scrollable category filter carousel
+    const categories = ['All', ...Array.from(new Set(STUDIO_PRESETS.map((p) => p.category)))];
+    let selectedCat = 'All';
+    const catBar = document.createElement('div');
+    catBar.className = 'gs-cat-carousel';
+    const catBtns: HTMLButtonElement[] = [];
 
     const listEl = document.createElement('div');
     listEl.className = 'gs-preset-list';
@@ -586,8 +608,10 @@ export class GrassmannStudioApp {
       const q = query.trim().toLowerCase();
       listEl.innerHTML = '';
 
+      let matchedCount = 0;
       const grouped = new Map<string, StudioPreset[]>();
       for (const p of STUDIO_PRESETS) {
+        if (selectedCat !== 'All' && p.category !== selectedCat) continue;
         if (
           q &&
           !p.title.toLowerCase().includes(q) &&
@@ -598,10 +622,13 @@ export class GrassmannStudioApp {
         ) {
           continue;
         }
+        matchedCount++;
         const arr = grouped.get(p.category) ?? [];
         arr.push(p);
         grouped.set(p.category, arr);
       }
+
+      countBadge.textContent = `${matchedCount}`;
 
       for (const [cat, items] of grouped) {
         const catHead = document.createElement('div');
@@ -628,10 +655,24 @@ export class GrassmannStudioApp {
       }
     };
 
+    for (const cat of categories) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `gs-cat-pill${cat === 'All' ? ' active' : ''}`;
+      btn.textContent = cat === 'Implicit & Parametric 3D' ? 'Implicit 3D' : cat;
+      btn.addEventListener('click', () => {
+        selectedCat = cat;
+        catBtns.forEach((b, idx) => b.classList.toggle('active', categories[idx] === cat));
+        renderList(search.value);
+      });
+      catBtns.push(btn);
+      catBar.appendChild(btn);
+    }
+
     search.addEventListener('input', () => renderList(search.value));
     renderList('');
 
-    pane.append(algRow, search, listEl);
+    pane.append(algRow, searchRow, catBar, listEl);
     return pane;
   }
 
@@ -738,6 +779,9 @@ export class GrassmannStudioApp {
 
   private enqueueBinaryEvent(bytes: Uint8Array): void {
     if (!this.transport) return;
+    const kindHex = bytes.byteLength > 0 ? `bin:0x${bytes[0]!.toString(16)}` : 'bin';
+    this.dispatchedEventLog.push(kindHex);
+    if (this.dispatchedEventLog.length > 40) this.dispatchedEventLog.shift();
     this.pendingBinEvent = bytes;
     if (!this.dispatchInFlight) {
       void this.drainBinaryQueue();
@@ -769,6 +813,8 @@ export class GrassmannStudioApp {
       this.offlineBanner.classList.remove('hidden');
       return;
     }
+    this.dispatchedEventLog.push(`json:${ev.op}`);
+    if (this.dispatchedEventLog.length > 40) this.dispatchedEventLog.shift();
     try {
       const t0 = performance.now();
       const frameBytes = await this.transport.dispatchJson(ev);
