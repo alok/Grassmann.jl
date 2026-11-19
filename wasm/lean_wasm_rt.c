@@ -70,8 +70,15 @@ static inline lean_obj_res u64_to_nat(uint64_t v) {
 
 lean_object *lean_alloc_object(size_t sz) {
   size_t *mem = (size_t *)malloc(sizeof(size_t) + sz);
-  if (!mem) abort();
+  if (LEAN_UNLIKELY(!mem)) abort();
   *mem = sz;
+  return (lean_object *)(mem + 1);
+}
+
+static inline lean_object *lean_realloc_object(lean_object *o, size_t new_sz) {
+  size_t *mem = (size_t *)realloc((size_t *)o - 1, sizeof(size_t) + new_sz);
+  if (LEAN_UNLIKELY(!mem)) abort();
+  *mem = new_sz;
   return (lean_object *)(mem + 1);
 }
 
@@ -81,12 +88,14 @@ lean_object *lean_alloc_small_object_core(unsigned sz, unsigned slot_idx) {
 }
 
 void lean_free_object(lean_object *o) {
-  if (o != NULL) {
+  if (LEAN_LIKELY(o != NULL)) {
     free((size_t *)o - 1);
   }
 }
 
+#ifndef GRASSMANN_WASM_INLINE_HEARTBEAT
 void lean_inc_heartbeat(void) {}
+#endif
 
 void lean_internal_panic_out_of_memory(void) {
   fprintf(stderr, "[lean_wasm_rt] out of memory\n");
@@ -130,35 +139,58 @@ void lean_mark_persistent(lean_object *o) {
 void lean_dec_ref_cold(lean_object *o) {
   /*
    * In lean.h, `lean_dec_ref(o)` checks `if (o->m_rc > 1) { o->m_rc--; } else lean_dec_ref_cold(o);`
-   * Therefore when entering here:
-   *   m_rc == 1 => last reference, free recursively!
-   *   m_rc == 0 => persistent / static constant, do NOT free!
+   * Tail-iterative on the last child so long Lists/Trees never blow the 64 KB WASM stack!
    */
-  if (o->m_rc == 0) return;
-  if (o->m_rc > 1) {
-    o->m_rc--;
-    return;
+  for (;;) {
+    if (LEAN_UNLIKELY(o->m_rc == 0)) return;
+    if (LEAN_UNLIKELY(o->m_rc > 1)) {
+      o->m_rc--;
+      return;
+    }
+    uint8_t tag = o->m_tag;
+    lean_object *next = NULL;
+    if (LEAN_LIKELY(tag <= LeanMaxCtorTag)) {
+      unsigned n = lean_ctor_num_objs(o);
+      if (n > 0) {
+        for (unsigned i = 0; i + 1 < n; ++i) {
+          lean_object *c = lean_ctor_get(o, i);
+          if (!lean_is_scalar(c)) {
+            if (c->m_rc > 1) c->m_rc--;
+            else lean_dec_ref_cold(c);
+          }
+        }
+        lean_object *last = lean_ctor_get(o, n - 1);
+        if (!lean_is_scalar(last)) {
+          if (last->m_rc > 1) last->m_rc--;
+          else if (last->m_rc == 1) next = last;
+        }
+      }
+    } else if (tag == LeanArray) {
+      size_t n = lean_array_size(o);
+      lean_object **ptr = lean_array_cptr(o);
+      for (size_t i = 0; i < n; ++i) {
+        lean_object *c = ptr[i];
+        if (!lean_is_scalar(c)) {
+          if (c->m_rc > 1) c->m_rc--;
+          else lean_dec_ref_cold(c);
+        }
+      }
+    } else if (tag == LeanClosure) {
+      unsigned n = lean_closure_num_fixed(o);
+      for (unsigned i = 0; i < n; ++i) {
+        lean_dec(lean_closure_get(o, i));
+      }
+    } else if (tag == LeanRef) {
+      lean_object *v = ((lean_ref_object *)o)->m_value;
+      if (!lean_is_scalar(v)) {
+        if (v->m_rc > 1) v->m_rc--;
+        else if (v->m_rc == 1) next = v;
+      }
+    }
+    free((size_t *)o - 1);
+    if (!next) return;
+    o = next;
   }
-  uint8_t tag = o->m_tag;
-  if (tag <= LeanMaxCtorTag) {
-    unsigned n = lean_ctor_num_objs(o);
-    for (unsigned i = 0; i < n; ++i) {
-      lean_dec(lean_ctor_get(o, i));
-    }
-  } else if (tag == LeanArray) {
-    size_t n = lean_array_size(o);
-    for (size_t i = 0; i < n; ++i) {
-      lean_dec(lean_array_get_core(o, i));
-    }
-  } else if (tag == LeanClosure) {
-    unsigned n = lean_closure_num_fixed(o);
-    for (unsigned i = 0; i < n; ++i) {
-      lean_dec(lean_closure_get(o, i));
-    }
-  } else if (tag == LeanRef) {
-    lean_dec(((lean_ref_object *)o)->m_value);
-  }
-  lean_free_object(o);
 }
 
 /* ============================================================================
@@ -324,9 +356,50 @@ static lean_object *apply_n(lean_object *f, unsigned n, lean_object **args) {
 }
 
 lean_object *lean_apply_1(lean_object *f, lean_object *a1) {
+  if (LEAN_LIKELY(!lean_is_scalar(f))) {
+    unsigned arity = lean_closure_arity(f);
+    unsigned fixed = lean_closure_num_fixed(f);
+    if (LEAN_LIKELY(fixed + 1 == arity)) {
+      void *fn = lean_closure_fun(f);
+      if (arity == 1) {
+        lean_dec_ref(f);
+        return ((lean_object *(*)(lean_object *))fn)(a1);
+      }
+      if (arity == 2) {
+        lean_object *c0 = lean_closure_get(f, 0);
+        lean_inc(c0);
+        lean_dec_ref(f);
+        return ((lean_object *(*)(lean_object *, lean_object *))fn)(c0, a1);
+      }
+      if (arity == 3) {
+        lean_object *c0 = lean_closure_get(f, 0);
+        lean_object *c1 = lean_closure_get(f, 1);
+        lean_inc(c0); lean_inc(c1);
+        lean_dec_ref(f);
+        return ((lean_object *(*)(lean_object *, lean_object *, lean_object *))fn)(c0, c1, a1);
+      }
+    }
+  }
   lean_object *args[1] = {a1}; return apply_n(f, 1, args);
 }
 lean_object *lean_apply_2(lean_object *f, lean_object *a1, lean_object *a2) {
+  if (LEAN_LIKELY(!lean_is_scalar(f))) {
+    unsigned arity = lean_closure_arity(f);
+    unsigned fixed = lean_closure_num_fixed(f);
+    if (LEAN_LIKELY(fixed + 2 == arity)) {
+      void *fn = lean_closure_fun(f);
+      if (arity == 2) {
+        lean_dec_ref(f);
+        return ((lean_object *(*)(lean_object *, lean_object *))fn)(a1, a2);
+      }
+      if (arity == 3) {
+        lean_object *c0 = lean_closure_get(f, 0);
+        lean_inc(c0);
+        lean_dec_ref(f);
+        return ((lean_object *(*)(lean_object *, lean_object *, lean_object *))fn)(c0, a1, a2);
+      }
+    }
+  }
   lean_object *args[2] = {a1, a2}; return apply_n(f, 2, args);
 }
 lean_object *lean_apply_3(lean_object *f, lean_object *a1, lean_object *a2, lean_object *a3) {
@@ -399,11 +472,16 @@ lean_obj_res lean_copy_expand_array_nonlinear(lean_obj_arg a, bool expand) {
 
 lean_object *lean_array_push(lean_obj_arg a, lean_obj_arg v) {
   lean_object *r;
-  if (lean_is_exclusive(a)) {
-    if (lean_array_capacity(a) > lean_array_size(a)) {
+  if (LEAN_LIKELY(lean_is_exclusive(a))) {
+    size_t sz = lean_array_size(a);
+    size_t cap = lean_array_capacity(a);
+    if (LEAN_LIKELY(cap > sz)) {
       r = a;
     } else {
-      r = lean_copy_expand_array_nonlinear(a, true);
+      /* Exclusive in-place realloc avoids O(N) element lean_inc/lean_dec churn! */
+      size_t new_cap = cap == 0 ? 4 : cap * 2;
+      r = lean_realloc_object(a, sizeof(lean_array_object) + new_cap * sizeof(lean_object *));
+      lean_to_array(r)->m_capacity = new_cap;
     }
   } else {
     r = lean_copy_expand_array_nonlinear(a, lean_array_capacity(a) <= lean_array_size(a));
@@ -458,9 +536,13 @@ lean_obj_res lean_float_array_push(lean_obj_arg a, double d) {
   size_t sz = lean_sarray_size(a);
   size_t cap = lean_sarray_capacity(a);
   lean_object *r = a;
-  if (!lean_is_exclusive(a) || sz >= cap) {
+  if (LEAN_UNLIKELY(!lean_is_exclusive(a))) {
     size_t new_cap = sz >= cap ? (cap == 0 ? 4 : cap * 2) : cap;
     r = lean_copy_sarray_nonlinear(a, new_cap);
+  } else if (LEAN_UNLIKELY(sz >= cap)) {
+    size_t new_cap = cap == 0 ? 4 : cap * 2;
+    r = lean_realloc_object(a, sizeof(lean_sarray_object) + new_cap * sizeof(double));
+    lean_to_sarray(r)->m_capacity = new_cap;
   }
   lean_float_array_cptr(r)[sz] = d;
   lean_sarray_set_size(r, sz + 1);
@@ -471,9 +553,13 @@ lean_obj_res lean_byte_array_push(lean_obj_arg a, uint8_t b) {
   size_t sz = lean_sarray_size(a);
   size_t cap = lean_sarray_capacity(a);
   lean_object *r = a;
-  if (!lean_is_exclusive(a) || sz >= cap) {
+  if (LEAN_UNLIKELY(!lean_is_exclusive(a))) {
     size_t new_cap = sz >= cap ? (cap == 0 ? 16 : cap * 2) : cap;
     r = lean_copy_sarray_nonlinear(a, new_cap);
+  } else if (LEAN_UNLIKELY(sz >= cap)) {
+    size_t new_cap = cap == 0 ? 16 : cap * 2;
+    r = lean_realloc_object(a, sizeof(lean_sarray_object) + new_cap);
+    lean_to_sarray(r)->m_capacity = new_cap;
   }
   lean_sarray_cptr(r)[sz] = b;
   lean_sarray_set_size(r, sz + 1);
@@ -520,6 +606,20 @@ static size_t utf8_codepoint_count(const uint8_t *s, size_t byte_len) {
   return count;
 }
 
+static inline lean_obj_res mk_ascii_string(const char *s, size_t sz) {
+  lean_string_object *o = (lean_string_object *)lean_alloc_object(sizeof(lean_string_object) + sz + 1);
+  o->m_header.m_rc = 1;
+  o->m_header.m_cs_sz = 0;
+  o->m_header.m_other = 0;
+  o->m_header.m_tag = LeanString;
+  o->m_size = sz + 1;
+  o->m_capacity = sz + 1;
+  o->m_length = sz;
+  if (sz > 0) memcpy(o->m_data, s, sz);
+  o->m_data[sz] = '\0';
+  return &o->m_header;
+}
+
 lean_obj_res lean_mk_string_from_bytes_unchecked(const char *s, size_t sz) {
   lean_string_object *o = (lean_string_object *)lean_alloc_object(sizeof(lean_string_object) + sz + 1);
   o->m_header.m_rc = 1;
@@ -545,13 +645,19 @@ lean_obj_res lean_string_append(lean_obj_arg s1, b_lean_obj_arg s2) {
   size_t len1 = lean_string_len(s1);
   size_t len2 = lean_string_len(s2);
   size_t total = n1 + n2;
-  if (lean_is_exclusive(s1) && lean_string_capacity(s1) >= total + 1) {
+  if (LEAN_LIKELY(lean_is_exclusive(s1))) {
     lean_string_object *o = lean_to_string(s1);
+    if (LEAN_UNLIKELY(o->m_capacity < total + 1)) {
+      size_t cap = o->m_capacity * 2;
+      if (cap < total + 1) cap = total + 1;
+      o = (lean_string_object *)lean_realloc_object(s1, sizeof(lean_string_object) + cap);
+      o->m_capacity = cap;
+    }
     memcpy(o->m_data + n1, lean_string_cstr(s2), n2);
     o->m_data[total] = '\0';
     o->m_size = total + 1;
     o->m_length = len1 + len2;
-    return s1;
+    return &o->m_header;
   }
   size_t cap = total + 1;
   size_t grow = lean_string_capacity(s1) * 2;
@@ -595,13 +701,19 @@ lean_obj_res lean_string_push_cold(lean_obj_arg s, uint32_t c) {
   size_t n1 = lean_string_size(s) - 1;
   size_t len1 = lean_string_len(s);
   size_t total = n1 + w;
-  if (lean_is_exclusive(s) && lean_string_capacity(s) >= total + 1) {
+  if (LEAN_LIKELY(lean_is_exclusive(s))) {
     lean_string_object *o = lean_to_string(s);
+    if (LEAN_UNLIKELY(o->m_capacity < total + 1)) {
+      size_t cap = o->m_capacity * 2;
+      if (cap < total + 1) cap = total + 16;
+      o = (lean_string_object *)lean_realloc_object(s, sizeof(lean_string_object) + cap);
+      o->m_capacity = cap;
+    }
     memcpy(o->m_data + n1, buf, w);
     o->m_data[total] = '\0';
     o->m_size = total + 1;
     o->m_length = len1 + 1;
-    return s;
+    return &o->m_header;
   }
   size_t cap = lean_string_capacity(s) * 2;
   if (cap < total + 1) cap = total + 16;
@@ -761,7 +873,7 @@ lean_obj_res l_Nat_reprFast(lean_obj_arg n) {
   lean_dec(n);
   char buf[32];
   int len = snprintf(buf, sizeof(buf), "%llu", (unsigned long long)v);
-  return lean_mk_string_from_bytes(buf, (size_t)(len > 0 ? len : 0));
+  return mk_ascii_string(buf, (size_t)(len > 0 ? len : 0));
 }
 
 /* ============================================================================
@@ -789,9 +901,12 @@ uint32_t l_Char_ofNat(b_lean_obj_arg n) {
 uint8_t lean_float_isfinite(double a) { return isfinite(a) ? 1 : 0; }
 
 lean_obj_res lean_float_to_string(double a) {
+  if (isnan(a)) return mk_ascii_string("NaN", 3);
   char buf[64];
-  int n = snprintf(buf, sizeof(buf), "%.16g", a);
-  return lean_mk_string_from_bytes(buf, (size_t)(n > 0 ? n : 0));
+  /* Match Lean 4.36 native runtime `std::to_string(double)` (`%f`, 6 decimals)
+   * for exact native/WASM GSIR `metaJson` & shader parity! */
+  int n = snprintf(buf, sizeof(buf), "%f", a);
+  return mk_ascii_string(buf, (size_t)(n > 0 ? n : 0));
 }
 
 uint8_t lean_uint8_of_big_nat(b_lean_obj_arg a) { return (uint8_t)nat_to_u64(a); }

@@ -71,13 +71,17 @@ for f in "${c_files[@]}"; do
 done
 
 mkdir -p "$dist_dir" "$stage_inc/lean"
-cp "$lean_sysroot/include/lean/lean.h" "$stage_inc/lean/lean.h"
+# Inline no-op lean_inc_heartbeat() in the staged WASM header so every
+# lean_alloc_small_object avoids an empty cross-TU WASM call.
+sed 's/^LEAN_EXPORT void lean_inc_heartbeat(void);$/static inline void lean_inc_heartbeat(void) {}/' \
+  "$lean_sysroot/include/lean/lean.h" > "$stage_inc/lean/lean.h"
 cp "$lean_sysroot/include/lean/version.h" "$stage_inc/lean/version.h"
 cat > "$stage_inc/lean/config.h" << 'EOF'
 #pragma once
 #include <lean/version.h>
 #define LEAN_EMSCRIPTEN 1
 #define LEAN_IS_STAGE0 0
+#define GRASSMANN_WASM_INLINE_HEARTBEAT 1
 EOF
 : > "$stage_inc/lean/lean_gmp.h"
 : > "$stage_inc/lean/lean_libuv.h"
@@ -109,14 +113,53 @@ exported_fns='[
   "_grassmann_cga3_dual_sphere","_grassmann_cga3_dual_plane"
 ]'
 
-echo "[wasm] compiling ${#mods[@]} Lean 4.36 C modules + C ABI shim + lean_wasm_rt.c via emcc -O3"
-emcc -O3 -DNDEBUG -ffunction-sections -fdata-sections -Wl,--gc-sections \
-  -I"$stage_inc" \
-  -I"$repo_root/include" \
-  -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function -Wno-unused-label \
-  "${c_files[@]}" \
-  "$repo_root/c/grassmann_cabi.c" \
-  "$repo_root/wasm/lean_wasm_rt.c" \
+obj_dir="$repo_root/.lake/build/wasm_obj"
+rm -rf "$obj_dir" && mkdir -p "$obj_dir"
+ncpu="$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)"
+
+echo "[wasm] compiling ${#mods[@]} Lean 4.36 C modules + C ABI shim + lean_wasm_rt.c (hybrid -O3 hot / -Oz cold, jobs=${ncpu})"
+wasm_objs=()
+pids=()
+common_cflags=(
+  -DNDEBUG -ffunction-sections -fdata-sections -fvisibility=hidden
+  -I"$stage_inc" -I"$repo_root/include"
+  -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function -Wno-unused-label
+)
+
+for idx in "${!mods[@]}"; do
+  m="${mods[$idx]}"
+  src="${c_files[$idx]}"
+  obj="$obj_dir/$(printf "%02d_%s.o" "$idx" "${m//./_}")"
+  wasm_objs+=("$obj")
+  opt="-Oz"
+  case "$m" in
+    Grassmann.CABI.Kernels|Grassmann.CABI.Alg|Grassmann.Scene.Binary|Grassmann.Eval.Implicit3D|Grassmann.Eval.ImplicitExpr)
+      opt="-O3"
+      ;;
+  esac
+  emcc "$opt" "${common_cflags[@]}" -c "$src" -o "$obj" &
+  pids+=($!)
+  if (( ${#pids[@]} >= ncpu )); then
+    wait "${pids[0]}"
+    pids=("${pids[@]:1}")
+  fi
+done
+
+emcc -O3 "${common_cflags[@]}" -c "$repo_root/c/grassmann_cabi.c" -o "$obj_dir/cabi.o" &
+pids+=($!)
+emcc -O3 "${common_cflags[@]}" -c "$repo_root/wasm/lean_wasm_rt.c" -o "$obj_dir/lean_wasm_rt.o" &
+pids+=($!)
+for pid in "${pids[@]}"; do
+  wait "$pid"
+done
+wasm_objs+=("$obj_dir/cabi.o" "$obj_dir/lean_wasm_rt.o")
+
+echo "[wasm] linking with emcc -Oz --gc-sections (dlmalloc, FILESYSTEM=0, SUPPORT_LONGJMP=0)"
+emcc -Oz -Wl,--gc-sections \
+  -sFILESYSTEM=0 \
+  -sSUPPORT_LONGJMP=0 \
+  -sASSERTIONS=0 \
+  "${wasm_objs[@]}" \
   -sWASM=1 \
   -sALLOW_MEMORY_GROWTH=1 \
   -sINITIAL_MEMORY=33554432 \
