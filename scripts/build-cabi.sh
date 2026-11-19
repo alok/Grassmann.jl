@@ -152,12 +152,19 @@ assert m2 and "lean_mk_empty_float_array(" in m2.group(0), "Missing single preal
 print("[cabi] ALOK-1007 linearity PASS (prealloc FloatArray, direct fget/push, tail goto _start, zero boxing/closures/mul)")
 PY
 
-echo "[cabi] building and running C11 smoke test + benchmark"
+echo "[cabi] building and running C11 smoke test + parity dumper + benchmark"
 cc -std=c11 -O2 -Wall -Wextra -Werror \
   -I"$repo_root/include" \
   "$repo_root/c/cabi_smoke.c" \
   -L"$out_dir" -lgrassmann_cabi -lm \
   -Wl,-rpath,"$out_dir" \
   -o "$out_dir/cabi_smoke"
+
+cc -std=c11 -O2 -Wall -Wextra -Werror \
+  -I"$repo_root/include" \
+  "$repo_root/c/cabi_parity_dump.c" \
+  -L"$out_dir" -lgrassmann_cabi -lm \
+  -Wl,-rpath,"$out_dir" \
+  -o "$out_dir/cabi_parity_dump"
 
 "$out_dir/cabi_smoke"
