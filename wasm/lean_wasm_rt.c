@@ -902,12 +902,17 @@ double l_Float_ofScientific(lean_obj_arg m, uint8_t s, lean_obj_arg e) {
   return s ? (dm / p10) : (dm * p10);
 }
 
+static inline size_t clamp_snprintf_len(int n, size_t cap) {
+  if (n <= 0 || cap == 0) return 0;
+  return ((size_t)n >= cap) ? (cap - 1) : (size_t)n;
+}
+
 lean_obj_res l_Nat_reprFast(lean_obj_arg n) {
   uint64_t v = nat_to_u64(n);
   lean_dec(n);
   char buf[32];
   int len = snprintf(buf, sizeof(buf), "%llu", (unsigned long long)v);
-  return mk_ascii_string(buf, (size_t)(len > 0 ? len : 0));
+  return mk_ascii_string(buf, clamp_snprintf_len(len, sizeof(buf)));
 }
 
 /* ============================================================================
@@ -936,11 +941,13 @@ uint8_t lean_float_isfinite(double a) { return isfinite(a) ? 1 : 0; }
 
 lean_obj_res lean_float_to_string(double a) {
   if (isnan(a)) return mk_ascii_string("NaN", 3);
-  char buf[64];
+  /* 512 bytes fits the longest finite IEEE-754 double in %f (~318 chars) with
+   * strict clamp_snprintf_len guard so truncated snprintf can never OOB-read. */
+  char buf[512];
   /* Match Lean 4.36 native runtime `std::to_string(double)` (`%f`, 6 decimals)
    * for exact native/WASM GSIR `metaJson` & shader parity! */
   int n = snprintf(buf, sizeof(buf), "%f", a);
-  return mk_ascii_string(buf, (size_t)(n > 0 ? n : 0));
+  return mk_ascii_string(buf, clamp_snprintf_len(n, sizeof(buf)));
 }
 
 uint8_t lean_uint8_of_big_nat(b_lean_obj_arg a) { return (uint8_t)nat_to_u64(a); }
@@ -1429,7 +1436,7 @@ lean_obj_res l_Int_repr(b_lean_obj_arg x) {
   int64_t v = int_to_i64(x);
   char buf[32];
   int len = snprintf(buf, sizeof(buf), "%lld", (long long)v);
-  return mk_ascii_string(buf, (size_t)(len > 0 ? len : 0));
+  return mk_ascii_string(buf, clamp_snprintf_len(len, sizeof(buf)));
 }
 
 lean_obj_res l_Char_quote(uint32_t c) {
@@ -1442,7 +1449,7 @@ lean_obj_res l_Char_quote(uint32_t c) {
   else if (c == '\'') len = snprintf(buf, sizeof(buf), "'\\''");
   else if (c >= 32u && c < 127u) len = snprintf(buf, sizeof(buf), "'%c'", (char)c);
   else len = snprintf(buf, sizeof(buf), "'\\u%04x'", (unsigned)c);
-  return mk_ascii_string(buf, (size_t)(len > 0 ? len : 0));
+  return mk_ascii_string(buf, clamp_snprintf_len(len, sizeof(buf)));
 }
 
 lean_obj_res l_Float_repr(double d, b_lean_obj_arg p) {

@@ -604,6 +604,233 @@ private def emitPowGpu (sa : String) (b : Expr) (sb : String) : String :=
         s!"pow(max(1e-6, abs({sa})), {sb})"
   | _ => s!"pow(max(1e-6, abs({sa})), {sb})"
 
+/-- Structural equality on `ImplicitExpr.Expr` (pure `Init`, zero extra `List` symbols). -/
+private def exprEq : Expr → Expr → Bool
+  | .lit a, .lit b => a == b && !a.isNaN && !b.isNaN
+  | .varX, .varX | .varY, .varY | .varZ, .varZ
+  | .varU, .varU | .varV, .varV | .varT, .varT | .varR, .varR => true
+  | .un op1 a1, .un op2 a2 => op1 == op2 && exprEq a1 a2
+  | .bin op1 a1 b1, .bin op2 a2 b2 => op1 == op2 && exprEq a1 a2 && exprEq b1 b2
+  | _, _ => false
+
+/-- Evaluate a unary op on a Float64 constant, returning `some r` only when finite. -/
+private def foldUnaryConst (op : UnaryOp) (v : Float) : Option Float :=
+  let r :=
+    match op with
+    | .neg   => -v
+    | .sq    => v * v
+    | .cube  => v * v * v
+    | .p4    => let v2 := v * v; v2 * v2
+    | .sin   => Float.sin v
+    | .cos   => Float.cos v
+    | .tan   => Float.tan v
+    | .asin  => Float.asin (max (-1.0) (min 1.0 v))
+    | .acos  => Float.acos (max (-1.0) (min 1.0 v))
+    | .atan  => Float.atan v
+    | .sinh  => Float.sinh v
+    | .cosh  => Float.cosh v
+    | .tanh  => Float.tanh v
+    | .exp   => Float.exp (max (-30.0) (min 30.0 v))
+    | .log   => Float.log (max 1e-6 (Float.abs v))
+    | .sqrt  => Float.sqrt (max 0.0 v)
+    | .abs   => Float.abs v
+    | .floor => Float.floor v
+    | .ceil  => Float.ceil v
+    | .sign  => if v > 0.0 then 1.0 else if v < 0.0 then -1.0 else 0.0
+  if r.isFinite then some r else none
+
+/-- Count additive leaf terms inside an expression (capped at `limit + 1`) so
+scalar distribution never explodes deeply nested polynomial products. -/
+private def countSumTerms (e : Expr) (limit : Nat := 16) : Nat :=
+  match e with
+  | .bin .add a b | .bin .sub a b =>
+    let na := countSumTerms a limit
+    if na > limit then limit + 1 else na + countSumTerms b limit
+  | .un .neg a => countSumTerms a limit
+  | _ => 1
+
+private def pushLinearTerm (scale : Float) (term : Expr)
+    (constAcc : Float) (terms : Array (Float × Expr)) : Float × Array (Float × Expr) := Id.run do
+  for i in [:terms.size] do
+    let (oldC, base) := terms[i]!
+    if exprEq base term then
+      return (constAcc, terms.set! i (oldC + scale, base))
+  return (constAcc, terms.push (scale, term))
+
+/-- Flatten linear combinations `(coeff * base)` in Float64, combining like terms
+`a * e ± b * e -> (a ± b) * e` and folding constant offsets before float32 GPU
+codegen eliminates catastrophic float32 cancellation (e.g.
+`1000000*(0.5000004*x - 0.5000001*x) - 0.15` -> `0.3*x - 0.15`). -/
+private partial def collectLinearTerms (scale : Float) (e : Expr)
+    (constAcc : Float) (terms : Array (Float × Expr)) : Float × Array (Float × Expr) :=
+  if scale == 0.0 then (constAcc, terms)
+  else
+    match e with
+    | .lit v =>
+      let prod := scale * v
+      if prod.isFinite then (constAcc + prod, terms) else (constAcc, terms)
+    | .un .neg a => collectLinearTerms (-scale) a constAcc terms
+    | .bin .add a b =>
+      let (c1, t1) := collectLinearTerms scale a constAcc terms
+      collectLinearTerms scale b c1 t1
+    | .bin .sub a b =>
+      let (c1, t1) := collectLinearTerms scale a constAcc terms
+      collectLinearTerms (-scale) b c1 t1
+    | .bin .mul (.lit c) a =>
+      let sc := scale * c
+      if sc.isFinite && countSumTerms a 12 <= 12 then
+        collectLinearTerms sc a constAcc terms
+      else
+        pushLinearTerm scale (.bin .mul (.lit c) a) constAcc terms
+    | .bin .mul a (.lit c) =>
+      let sc := scale * c
+      if sc.isFinite && countSumTerms a 12 <= 12 then
+        collectLinearTerms sc a constAcc terms
+      else
+        pushLinearTerm scale (.bin .mul a (.lit c)) constAcc terms
+    | other => pushLinearTerm scale other constAcc terms
+
+private def rebuildLinearSum (constAcc : Float) (terms : Array (Float × Expr)) : Expr := Id.run do
+  let mut parts : Array (Bool × Expr) := #[]
+  for (c, base) in terms do
+    if c != 0.0 && c.isFinite then
+      if c == 1.0 then
+        parts := parts.push (true, base)
+      else if c == -1.0 then
+        parts := parts.push (false, base)
+      else if c > 0.0 then
+        parts := parts.push (true, .bin .mul (.lit c) base)
+      else
+        parts := parts.push (false, .bin .mul (.lit (-c)) base)
+  if constAcc != 0.0 && constAcc.isFinite then
+    if constAcc > 0.0 then
+      parts := parts.push (true, .lit constAcc)
+    else
+      parts := parts.push (false, .lit (-constAcc))
+  if parts.isEmpty then
+    return .lit 0.0
+  let (pos0, e0) := parts[0]!
+  let mut acc : Expr :=
+    if pos0 then e0
+    else
+      match e0 with
+      | .lit v => .lit (-v)
+      | .bin .mul (.lit c) inner => .bin .mul (.lit (-c)) inner
+      | other => .un .neg other
+  for i in [1:parts.size] do
+    let (pos, ei) := parts[i]!
+    acc := if pos then .bin .add acc ei else .bin .sub acc ei
+  return acc
+
+private def scaleExpr (c : Float) : Expr → Expr
+  | .lit v =>
+    let p := c * v
+    if p.isFinite then .lit p else .bin .mul (.lit c) (.lit v)
+  | .un .neg inner => scaleExpr (-c) inner
+  | .bin .mul (.lit c2) inner =>
+    let p := c * c2
+    if p.isFinite then scaleExpr p inner else .bin .mul (.lit c) (.bin .mul (.lit c2) inner)
+  | other =>
+    if c == 0.0 then .lit 0.0
+    else if c == 1.0 then other
+    else if c == -1.0 then .un .neg other
+    else .bin .mul (.lit c) other
+
+private def simplifyMul (a b : Expr) : Expr :=
+  match a, b with
+  | .lit ca, x => scaleExpr ca x
+  | x, .lit cb => scaleExpr cb x
+  | .bin .mul (.lit c1) x, .bin .mul (.lit c2) y =>
+    let p := c1 * c2
+    if p.isFinite then scaleExpr p (.bin .mul x y) else .bin .mul a b
+  | .bin .mul (.lit c1) x, y => scaleExpr c1 (.bin .mul x y)
+  | x, .bin .mul (.lit c2) y => scaleExpr c2 (.bin .mul x y)
+  | x, y => .bin .mul x y
+
+/-- Bottom-up Float64 algebraic constant-folding & like-term combining pass
+applied before float32 GPU shader emission (GLSL3, WGSL, and Metal MSL). -/
+partial def simplifyExpr : Expr → Expr
+  | .lit v => .lit v
+  | .varX => .varX | .varY => .varY | .varZ => .varZ
+  | .varU => .varU | .varV => .varV | .varT => .varT | .varR => .varR
+  | .un op a =>
+    let a' := simplifyExpr a
+    match a' with
+    | .lit v =>
+      match foldUnaryConst op v with
+      | some r => .lit r
+      | none => .un op a'
+    | _ =>
+      match op, a' with
+      | .neg, .un .neg inner => inner
+      | .neg, .bin .mul (.lit c) inner => simplifyMul (.lit (-c)) inner
+      | .neg, .bin .add _ _ | .neg, .bin .sub _ _ =>
+        let (cAcc, terms) := collectLinearTerms (-1.0) a' 0.0 #[]
+        rebuildLinearSum cAcc terms
+      | _, _ => .un op a'
+  | .bin op a b =>
+    let a' := simplifyExpr a
+    let b' := simplifyExpr b
+    match op with
+    | .add =>
+      let (c1, t1) := collectLinearTerms 1.0 a' 0.0 #[]
+      let (c2, t2) := collectLinearTerms 1.0 b' c1 t1
+      rebuildLinearSum c2 t2
+    | .sub =>
+      let (c1, t1) := collectLinearTerms 1.0 a' 0.0 #[]
+      let (c2, t2) := collectLinearTerms (-1.0) b' c1 t1
+      rebuildLinearSum c2 t2
+    | .mul => simplifyMul a' b'
+    | .div =>
+      match a', b' with
+      | .lit ca, .lit cb =>
+        if Float.abs cb >= 1e-30 && (ca / cb).isFinite then .lit (ca / cb)
+        else .bin .div a' b'
+      | .lit 0.0, _ => .lit 0.0
+      | x, .lit 1.0 => x
+      | x, .lit (-1.0) => simplifyMul (.lit (-1.0)) x
+      | _, _ => .bin .div a' b'
+    | .pow =>
+      match a', b' with
+      | .lit ca, .lit cb =>
+        let kRound := Float.floor (cb + 0.5)
+        if Float.abs (cb - kRound) < 1e-9 then
+          let r :=
+            if ca < 0.0 then
+              let mag := Float.pow (Float.abs ca) kRound
+              if (Float.abs kRound).toUInt64.toNat % 2 == 1 then -mag else mag
+            else Float.pow ca kRound
+          if r.isFinite then .lit r else .bin .pow a' b'
+        else if ca >= 0.0 && (Float.pow ca cb).isFinite then
+          .lit (Float.pow ca cb)
+        else .bin .pow a' b'
+      | _, .lit 0.0 => .lit 1.0
+      | x, .lit 1.0 => x
+      | x, .lit 2.0 => .un .sq x
+      | x, .lit 3.0 => .un .cube x
+      | x, .lit 4.0 => .un .p4 x
+      | _, _ => .bin .pow a' b'
+    | .min =>
+      match a', b' with
+      | .lit ca, .lit cb => .lit (min ca cb)
+      | _, _ => .bin .min a' b'
+    | .max =>
+      match a', b' with
+      | .lit ca, .lit cb => .lit (max ca cb)
+      | _, _ => .bin .max a' b'
+    | .atan2 =>
+      match a', b' with
+      | .lit ca, .lit cb =>
+        let r := Float.atan2 ca cb
+        if r.isFinite then .lit r else .bin .atan2 a' b'
+      | _, _ => .bin .atan2 a' b'
+    | .hypot =>
+      match a', b' with
+      | .lit ca, .lit cb =>
+        let r := Float.sqrt (ca * ca + cb * cb)
+        if r.isFinite then .lit r else .bin .hypot a' b'
+      | _, _ => .bin .hypot a' b'
+
 /-- Emit a compiled `Grassmann.Eval.ImplicitExpr.Expr` as a safe, parenthesized GPU
 scalar expression in GLSL 300 es, WGSL, or Metal MSL. -/
 def emitExprGpu (target : GpuTarget) (e : Expr) (tVar : String) : String :=
@@ -715,7 +942,7 @@ private def clampImplicitBound (bound : Float) : Float :=
 shader (exact ray–AABB `[-bound, bound]³` clipping + sign-change bisection + exact `gl_FragDepth`)
 for any user-typed `f(x,y,z,t)=0`. -/
 def emitImplicitExprGlsl (exprStr : String) (e : Expr) (bound : Float := 1.6) : String :=
-  let body := emitExprGpu .glsl e "uSimTime"
+  let body := emitExprGpu .glsl (simplifyExpr e) "uSimTime"
   let b := clampImplicitBound bound
   let gradH := max 0.0015 (b * 0.001)
   s!"#version 300 es
@@ -952,7 +1179,7 @@ void main() \{
 /-- Emit a complete **WebGPU `WGSL`** implicit-surface raymarching fragment shader with exact
 ray–AABB `[-bound, bound]³` clipping and `tFar < tNear || tFar < 0.0` guard. -/
 def emitImplicitExprWgsl (exprStr : String) (e : Expr) (bound : Float := 1.6) : String :=
-  let body := emitExprWgsl e "u.params.w"
+  let body := emitExprWgsl (simplifyExpr e) "u.params.w"
   let b := clampImplicitBound bound
   let gradH := max 0.0015 (b * 0.001)
   s!"// Auto-generated by Grassmann.Codegen.GPUInit (Implicit 3D: {exprStr} = 0, bound={fmtFloat b})
@@ -1185,7 +1412,7 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> \{
 guard, matching `OPNSMetalRenderer.swift`'s exact `OpnsUniforms` + `product_len` +
 `gsir_lean_opns_compute` contract! -/
 def emitImplicitExprMsl (exprStr : String) (e : Expr) (bound : Float := 1.6) : String :=
-  let body := emitExprGpu .msl e "simTime"
+  let body := emitExprGpu .msl (simplifyExpr e) "simTime"
   let b := clampImplicitBound bound
   let gradH := max 0.0015 (b * 0.001)
   s!"// Auto-generated by Grassmann.Codegen.GPUInit (Implicit 3D: {exprStr} = 0, bound={fmtFloat b})
