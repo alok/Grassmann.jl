@@ -35,6 +35,14 @@ private def twoPiF : Float := 6.28318530717958647692
 private def eF : Float := 2.71828182845904523536
 private def phiF : Float := 1.61803398874989484820
 
+-- Module-initialized Float constants (avoid runtime `lean_float_of_scientific` inside hot loops!)
+private def k0 : Float := 0.0
+private def k1 : Float := 1.0
+private def kNeg1 : Float := -1.0
+private def k40 : Float := 40.0
+private def kNeg40 : Float := -40.0
+private def kEps12 : Float := 1e-12
+
 /-! ## 1. Compiled Zero-Alloc Expression AST -/
 
 inductive UnaryOp where
@@ -160,26 +168,26 @@ private def tokenize (src : String) : Except String (Array Tok) := Id.run do
   | .sin   => Float.sin a
   | .cos   => Float.cos a
   | .tan   => Float.tan a
-  | .asin  => Float.asin (max (-1.0) (min 1.0 a))
-  | .acos  => Float.acos (max (-1.0) (min 1.0 a))
+  | .asin  => Float.asin (max kNeg1 (min k1 a))
+  | .acos  => Float.acos (max kNeg1 (min k1 a))
   | .atan  => Float.atan a
   | .sinh  => Float.sinh a
   | .cosh  => Float.cosh a
   | .tanh  => Float.tanh a
-  | .exp   => Float.exp (max (-40.0) (min 40.0 a))
-  | .log   => Float.log (max 1e-12 (Float.abs a))
-  | .sqrt  => Float.sqrt (max 0.0 a)
+  | .exp   => Float.exp (max kNeg40 (min k40 a))
+  | .log   => Float.log (max kEps12 (Float.abs a))
+  | .sqrt  => Float.sqrt (max k0 a)
   | .abs   => Float.abs a
   | .floor => Float.floor a
   | .ceil  => Float.ceil a
-  | .sign  => if a > 0.0 then 1.0 else if a < 0.0 then -1.0 else 0.0
+  | .sign  => if a > k0 then k1 else if a < k0 then kNeg1 else k0
 
 @[inline] private def evalBinary (op : BinaryOp) (a b : Float) : Float :=
   match op with
   | .add   => a + b
   | .sub   => a - b
   | .mul   => a * b
-  | .div   => if Float.abs b < 1e-12 then 0.0 else a / b
+  | .div   => if Float.abs b < kEps12 then k0 else a / b
   | .pow   => Float.pow a b
   | .atan2 => Float.atan2 a b
   | .min   => min a b
@@ -384,321 +392,312 @@ def foldTime (e : Expr) (t : Float) : Expr :=
   | .bin op a b => mkBin op (foldTime a t) (foldTime b t)
   | other       => other
 
-/-- Compact flat RPN bytecode opcode (eliminates recursive ADT dispatch per grid sample). -/
+/-- Partial-evaluate `z = zVal` once per Z-slice (eliminates all `z`-only trig/pow ops across `n²` points!). -/
+def foldZ (e : Expr) (zVal : Float) : Expr :=
+  match e with
+  | .varZ       => .lit zVal
+  | .un op a    => mkUn op (foldZ a zVal)
+  | .bin op a b => mkBin op (foldZ a zVal) (foldZ b zVal)
+  | other       => other
+
+/-- Partial-evaluate `y = yVal` once per Y-row (eliminates all `(y, z)`-only trig/pow ops across every X-row!). -/
+def foldY (e : Expr) (yVal : Float) : Expr :=
+  match e with
+  | .varY       => .lit yVal
+  | .un op a    => mkUn op (foldY a yVal)
+  | .bin op a b => mkBin op (foldY a yVal) (foldY b yVal)
+  | other       => other
+
+/-- Compact flat RPN bytecode opcode with unboxed zero-payload math primitives (all common
+ops are immediate scalar tags in `Array ExprOp` with ONE C `switch (lean_obj_tag)` jump table!). -/
 inductive ExprOp where
-  | pushLit   (val : Float)
+  | pushLit    (val : Float)
   | pushX | pushY | pushZ | pushU | pushV | pushR
   | pushXSq | pushYSq | pushZSq
-  | un        (op : UnaryOp)
-  | bin       (op : BinaryOp)
-  | addLit    (c : Float)
-  | subLit    (c : Float)
-  | rsubLit   (c : Float)
-  | mulLit    (c : Float)
-  | divLit    (c : Float)
-  | rdivLit   (c : Float)
-  | sinScaled (k : Float)
-  | cosScaled (k : Float)
+  | pushSinX   (k : Float)
+  | pushCosX   (k : Float)
+  | opAdd | opSub | opMul | opDiv
+  | opNeg | opSq | opCube | opP4 | opSin | opCos | opSqrt | opAbs | opTanh
+  | unOther    (op : UnaryOp)
+  | binOther   (op : BinaryOp)
+  | addLit     (c : Float)
+  | subLit     (c : Float)
+  | rsubLit    (c : Float)
+  | mulLit     (c : Float)
+  | divLit     (c : Float)
+  | rdivLit    (c : Float)
+  | sinScaled  (k : Float)
+  | cosScaled  (k : Float)
   deriving Repr, BEq, Inhabited
 
-/-- Compiled flat bytecode program pairing inspectable `ops : Array ExprOp` with raw
-unboxed `opBytes : ByteArray` + `consts : FloatArray` for zero-pointer-chase inner loops. -/
+/-- Compiled flat RPN `Array ExprOp` bytecode program with `t`-constant folding and
+compile-time stack-depth analysis (`maxStack ≤ 4` runs 100% in ARM64/WASM `f64` registers). -/
 structure Bytecode where
   ops      : Array ExprOp
-  opBytes  : ByteArray
-  consts   : FloatArray
   maxStack : Nat
   deriving Inhabited
 
-private def opPushLit   : UInt8 := 0
-private def opPushX     : UInt8 := 1
-private def opPushY     : UInt8 := 2
-private def opPushZ     : UInt8 := 3
-private def opPushU     : UInt8 := 4
-private def opPushV     : UInt8 := 5
-private def opPushR     : UInt8 := 6
-private def opPushXSq   : UInt8 := 7
-private def opPushYSq   : UInt8 := 8
-private def opPushZSq   : UInt8 := 9
-private def opNeg       : UInt8 := 10
-private def opSq        : UInt8 := 11
-private def opCube      : UInt8 := 12
-private def opP4        : UInt8 := 13
-private def opSin       : UInt8 := 14
-private def opCos       : UInt8 := 15
-private def opTan       : UInt8 := 16
-private def opAsin      : UInt8 := 17
-private def opAcos      : UInt8 := 18
-private def opAtan      : UInt8 := 19
-private def opSinh      : UInt8 := 20
-private def opCosh      : UInt8 := 21
-private def opTanh      : UInt8 := 22
-private def opExp       : UInt8 := 23
-private def opLog       : UInt8 := 24
-private def opSqrt      : UInt8 := 25
-private def opAbs       : UInt8 := 26
-private def opFloor     : UInt8 := 27
-private def opCeil      : UInt8 := 28
-private def opSign      : UInt8 := 29
-private def opAdd       : UInt8 := 30
-private def opSub       : UInt8 := 31
-private def opMul       : UInt8 := 32
-private def opDiv       : UInt8 := 33
-private def opPow       : UInt8 := 34
-private def opAtan2     : UInt8 := 35
-private def opMin       : UInt8 := 36
-private def opMax       : UInt8 := 37
-private def opHypot     : UInt8 := 38
-private def opAddLit    : UInt8 := 40
-private def opSubLit    : UInt8 := 41
-private def opRsubLit   : UInt8 := 42
-private def opMulLit    : UInt8 := 43
-private def opDivLit    : UInt8 := 44
-private def opRdivLit   : UInt8 := 45
-private def opSinScaled : UInt8 := 46
-private def opCosScaled : UInt8 := 47
-
-private def unaryByte : UnaryOp → UInt8
-  | .neg   => opNeg   | .sq    => opSq    | .cube  => opCube  | .p4    => opP4
-  | .sin   => opSin   | .cos   => opCos   | .tan   => opTan   | .asin  => opAsin
-  | .acos  => opAcos  | .atan  => opAtan  | .sinh  => opSinh  | .cosh  => opCosh
-  | .tanh  => opTanh  | .exp   => opExp   | .log   => opLog   | .sqrt  => opSqrt
-  | .abs   => opAbs   | .floor => opFloor | .ceil  => opCeil  | .sign  => opSign
-
-private def binaryByte : BinaryOp → UInt8
-  | .add   => opAdd   | .sub   => opSub   | .mul   => opMul   | .div   => opDiv
-  | .pow   => opPow   | .atan2 => opAtan2 | .min   => opMin   | .max   => opMax
-  | .hypot => opHypot
-
 private structure CompileAcc where
   ops      : Array ExprOp := #[]
-  opBytes  : ByteArray    := ByteArray.empty
-  consts   : FloatArray   := FloatArray.empty
   curStack : Nat          := 0
   maxStack : Nat          := 0
 
-private def CompileAcc.emit (acc : CompileAcc) (op : ExprOp) (code : UInt8)
-    (delta : Int) (lit? : Option Float := none) : CompileAcc :=
+private def CompileAcc.emit (acc : CompileAcc) (op : ExprOp) (delta : Int) : CompileAcc :=
   let nextDepth :=
     if delta ≥ 0 then acc.curStack + delta.toNat
     else acc.curStack - (-delta).toNat
   { ops      := acc.ops.push op
-    opBytes  := acc.opBytes.push code
-    consts   := match lit? with | some v => acc.consts.push v | none => acc.consts
     curStack := nextDepth
     maxStack := max acc.maxStack nextDepth }
 
+private def emitUnaryOp (op : UnaryOp) : ExprOp :=
+  match op with
+  | .neg  => .opNeg
+  | .sq   => .opSq
+  | .cube => .opCube
+  | .p4   => .opP4
+  | .sin  => .opSin
+  | .cos  => .opCos
+  | .sqrt => .opSqrt
+  | .abs  => .opAbs
+  | .tanh => .opTanh
+  | other => .unOther other
+
+private def emitBinaryOp (op : BinaryOp) : ExprOp :=
+  match op with
+  | .add  => .opAdd
+  | .sub  => .opSub
+  | .mul  => .opMul
+  | .div  => .opDiv
+  | other => .binOther other
+
 private def emitExprOps (e : Expr) (acc : CompileAcc) : CompileAcc :=
   match e with
-  | .lit v => acc.emit (.pushLit v) opPushLit 1 (some v)
-  | .varX  => acc.emit .pushX opPushX 1
-  | .varY  => acc.emit .pushY opPushY 1
-  | .varZ  => acc.emit .pushZ opPushZ 1
-  | .varU  => acc.emit .pushU opPushU 1
-  | .varV  => acc.emit .pushV opPushV 1
-  | .varT  => acc.emit (.pushLit 0.0) opPushLit 1 (some 0.0)
-  | .varR  => acc.emit .pushR opPushR 1
-  | .un .sq .varX => acc.emit .pushXSq opPushXSq 1
-  | .un .sq .varY => acc.emit .pushYSq opPushYSq 1
-  | .un .sq .varZ => acc.emit .pushZSq opPushZSq 1
-  | .un .sin (.bin .mul a (.lit k)) =>
-    (emitExprOps a acc).emit (.sinScaled k) opSinScaled 0 (some k)
-  | .un .sin (.bin .mul (.lit k) a) =>
-    (emitExprOps a acc).emit (.sinScaled k) opSinScaled 0 (some k)
-  | .un .cos (.bin .mul a (.lit k)) =>
-    (emitExprOps a acc).emit (.cosScaled k) opCosScaled 0 (some k)
-  | .un .cos (.bin .mul (.lit k) a) =>
-    (emitExprOps a acc).emit (.cosScaled k) opCosScaled 0 (some k)
-  | .un op a =>
-    (emitExprOps a acc).emit (.un op) (unaryByte op) 0
-  | .bin .add a (.lit c) => (emitExprOps a acc).emit (.addLit c) opAddLit 0 (some c)
-  | .bin .add (.lit c) b => (emitExprOps b acc).emit (.addLit c) opAddLit 0 (some c)
-  | .bin .sub a (.lit c) => (emitExprOps a acc).emit (.subLit c) opSubLit 0 (some c)
-  | .bin .sub (.lit c) b => (emitExprOps b acc).emit (.rsubLit c) opRsubLit 0 (some c)
-  | .bin .mul a (.lit c) => (emitExprOps a acc).emit (.mulLit c) opMulLit 0 (some c)
-  | .bin .mul (.lit c) b => (emitExprOps b acc).emit (.mulLit c) opMulLit 0 (some c)
-  | .bin .div a (.lit c) => (emitExprOps a acc).emit (.divLit c) opDivLit 0 (some c)
-  | .bin .div (.lit c) b => (emitExprOps b acc).emit (.rdivLit c) opRdivLit 0 (some c)
+  | .lit v => acc.emit (.pushLit v) 1
+  | .varX  => acc.emit .pushX 1
+  | .varY  => acc.emit .pushY 1
+  | .varZ  => acc.emit .pushZ 1
+  | .varU  => acc.emit .pushU 1
+  | .varV  => acc.emit .pushV 1
+  | .varT  => acc.emit (.pushLit k0) 1
+  | .varR  => acc.emit .pushR 1
+  | .un .sq .varX => acc.emit .pushXSq 1
+  | .un .sq .varY => acc.emit .pushYSq 1
+  | .un .sq .varZ => acc.emit .pushZSq 1
+  | .un .sin (.bin .mul .varX (.lit k)) => acc.emit (.pushSinX k) 1
+  | .un .sin (.bin .mul (.lit k) .varX) => acc.emit (.pushSinX k) 1
+  | .un .cos (.bin .mul .varX (.lit k)) => acc.emit (.pushCosX k) 1
+  | .un .cos (.bin .mul (.lit k) .varX) => acc.emit (.pushCosX k) 1
+  | .un .sin (.bin .mul a (.lit k)) => (emitExprOps a acc).emit (.sinScaled k) 0
+  | .un .sin (.bin .mul (.lit k) a) => (emitExprOps a acc).emit (.sinScaled k) 0
+  | .un .cos (.bin .mul a (.lit k)) => (emitExprOps a acc).emit (.cosScaled k) 0
+  | .un .cos (.bin .mul (.lit k) a) => (emitExprOps a acc).emit (.cosScaled k) 0
+  | .un op a => (emitExprOps a acc).emit (emitUnaryOp op) 0
+  | .bin .add a (.lit c) => (emitExprOps a acc).emit (.addLit c) 0
+  | .bin .add (.lit c) b => (emitExprOps b acc).emit (.addLit c) 0
+  | .bin .sub a (.lit c) => (emitExprOps a acc).emit (.subLit c) 0
+  | .bin .sub (.lit c) b => (emitExprOps b acc).emit (.rsubLit c) 0
+  | .bin .mul a (.lit c) => (emitExprOps a acc).emit (.mulLit c) 0
+  | .bin .mul (.lit c) b => (emitExprOps b acc).emit (.mulLit c) 0
+  | .bin .div a (.lit c) => (emitExprOps a acc).emit (.divLit c) 0
+  | .bin .div (.lit c) b => (emitExprOps b acc).emit (.rdivLit c) 0
   | .bin op a b =>
     let acc1 := emitExprOps a acc
     let acc2 := emitExprOps b acc1
-    acc2.emit (.bin op) (binaryByte op) (-1)
+    acc2.emit (emitBinaryOp op) (-1)
 
-/-- Fold time `t` into `e` and compile into flat compact RPN `Bytecode` once before meshing. -/
+/-- Compile an already-folded `Expr` directly into `Bytecode` without redundant `foldTime`. -/
+private def compileFolded (e : Expr) : Bytecode :=
+  let acc := emitExprOps e {}
+  { ops := acc.ops, maxStack := acc.maxStack }
+
+/-- Fold time `t` into `e` and compile into flat compact RPN `Bytecode` (`Array ExprOp`) once before meshing. -/
 def compileToBytecode (e : Expr) (t : Float := 0.0) : Bytecode :=
-  let folded := foldTime e t
-  let acc := emitExprOps folded {}
-  { ops := acc.ops, opBytes := acc.opBytes, consts := acc.consts, maxStack := acc.maxStack }
+  compileFolded (foldTime e t)
+
+private theorem array_usize_le {α : Type} (a : Array α) : a.usize.toNat ≤ a.size := by
+  simpa [Array.usize] using Nat.mod_le a.size USize.size
 
 /-- Fallback dynamic-stack VM for extraordinarily deep expressions (`maxStack > 8`). -/
-private def evalBytecodeDeep (bc : Bytecode) (x y z u v : Float) : Float := Id.run do
-  let bytes := bc.opBytes
-  let consts := bc.consts
-  let n := bytes.size
-  let mut st := FloatArray.emptyWithCapacity (max 16 bc.maxStack)
-  let mut ci : Nat := 0
-  for pc in [:n] do
-    let op := bytes.get! pc
-    if op == opPushLit then
-      st := st.push (consts.get! ci); ci := ci + 1
-    else if op == opPushX then st := st.push x
-    else if op == opPushY then st := st.push y
-    else if op == opPushZ then st := st.push z
-    else if op == opPushU then st := st.push u
-    else if op == opPushV then st := st.push v
-    else if op == opPushR then st := st.push (Float.sqrt (x * x + y * y + z * z))
-    else if op == opPushXSq then st := st.push (x * x)
-    else if op == opPushYSq then st := st.push (y * y)
-    else if op == opPushZSq then st := st.push (z * z)
-    else if op < 30 then
-      let top := st.size - 1
-      let a := st.get! top
-      let res :=
-        if op == opNeg then -a
-        else if op == opSq then a * a
-        else if op == opCube then a * a * a
-        else if op == opP4 then let s := a * a; s * s
-        else if op == opSin then Float.sin a
-        else if op == opCos then Float.cos a
-        else if op == opTan then Float.tan a
-        else if op == opAsin then Float.asin (max (-1.0) (min 1.0 a))
-        else if op == opAcos then Float.acos (max (-1.0) (min 1.0 a))
-        else if op == opAtan then Float.atan a
-        else if op == opSinh then Float.sinh a
-        else if op == opCosh then Float.cosh a
-        else if op == opTanh then Float.tanh a
-        else if op == opExp then Float.exp (max (-40.0) (min 40.0 a))
-        else if op == opLog then Float.log (max 1e-12 (Float.abs a))
-        else if op == opSqrt then Float.sqrt (max 0.0 a)
-        else if op == opAbs then Float.abs a
-        else if op == opFloor then Float.floor a
-        else if op == opCeil then Float.ceil a
-        else if a > 0.0 then 1.0 else if a < 0.0 then -1.0 else 0.0
-      st := st.set! top res
-    else if op < 40 then
-      let bIdx := st.size - 1
-      let aIdx := bIdx - 1
-      let a := st.get! aIdx
-      let b := st.get! bIdx
-      let res :=
-        if op == opAdd then a + b
-        else if op == opSub then a - b
-        else if op == opMul then a * b
-        else if op == opDiv then if Float.abs b < 1e-12 then 0.0 else a / b
-        else if op == opPow then Float.pow a b
-        else if op == opAtan2 then Float.atan2 a b
-        else if op == opMin then min a b
-        else if op == opMax then max a b
-        else Float.sqrt (a * a + b * b)
-      st := st.set! aIdx res
+private def evalBytecodeDeep (ops : Array ExprOp) (maxStack : Nat) (x y z u v : Float) : Float := Id.run do
+  let mut st := FloatArray.emptyWithCapacity (max 16 maxStack)
+  for op in ops do
+    match op with
+    | .pushLit c   => st := st.push c
+    | .pushX       => st := st.push x
+    | .pushY       => st := st.push y
+    | .pushZ       => st := st.push z
+    | .pushU       => st := st.push u
+    | .pushV       => st := st.push v
+    | .pushR       => st := st.push (Float.sqrt (x * x + y * y + z * z))
+    | .pushXSq     => st := st.push (x * x)
+    | .pushYSq     => st := st.push (y * y)
+    | .pushZSq     => st := st.push (z * z)
+    | .pushSinX k  => st := st.push (Float.sin (k * x))
+    | .pushCosX k  => st := st.push (Float.cos (k * x))
+    | .opAdd =>
+      let bIdx := st.size - 1; let aIdx := bIdx - 1
+      st := st.set! aIdx (st.get! aIdx + st.get! bIdx)
       st := { data := st.data.extract 0 (bIdx * 8) }
-    else
-      let c := consts.get! ci; ci := ci + 1
+    | .opSub =>
+      let bIdx := st.size - 1; let aIdx := bIdx - 1
+      st := st.set! aIdx (st.get! aIdx - st.get! bIdx)
+      st := { data := st.data.extract 0 (bIdx * 8) }
+    | .opMul =>
+      let bIdx := st.size - 1; let aIdx := bIdx - 1
+      st := st.set! aIdx (st.get! aIdx * st.get! bIdx)
+      st := { data := st.data.extract 0 (bIdx * 8) }
+    | .opDiv =>
+      let bIdx := st.size - 1; let aIdx := bIdx - 1
+      let b := st.get! bIdx
+      st := st.set! aIdx (if Float.abs b < kEps12 then k0 else st.get! aIdx / b)
+      st := { data := st.data.extract 0 (bIdx * 8) }
+    | .opNeg  => let top := st.size - 1; st := st.set! top (-st.get! top)
+    | .opSq   => let top := st.size - 1; let a := st.get! top; st := st.set! top (a * a)
+    | .opCube => let top := st.size - 1; let a := st.get! top; st := st.set! top (a * a * a)
+    | .opP4   => let top := st.size - 1; let s := st.get! top * st.get! top; st := st.set! top (s * s)
+    | .opSin  => let top := st.size - 1; st := st.set! top (Float.sin (st.get! top))
+    | .opCos  => let top := st.size - 1; st := st.set! top (Float.cos (st.get! top))
+    | .opSqrt => let top := st.size - 1; st := st.set! top (Float.sqrt (max k0 (st.get! top)))
+    | .opAbs  => let top := st.size - 1; st := st.set! top (Float.abs (st.get! top))
+    | .opTanh => let top := st.size - 1; st := st.set! top (Float.tanh (st.get! top))
+    | .unOther uop =>
+      let top := st.size - 1
+      st := st.set! top (evalUnary uop (st.get! top))
+    | .binOther bop =>
+      let bIdx := st.size - 1; let aIdx := bIdx - 1
+      st := st.set! aIdx (evalBinary bop (st.get! aIdx) (st.get! bIdx))
+      st := { data := st.data.extract 0 (bIdx * 8) }
+    | .addLit c    => let top := st.size - 1; st := st.set! top (st.get! top + c)
+    | .subLit c    => let top := st.size - 1; st := st.set! top (st.get! top - c)
+    | .rsubLit c   => let top := st.size - 1; st := st.set! top (c - st.get! top)
+    | .mulLit c    => let top := st.size - 1; st := st.set! top (st.get! top * c)
+    | .divLit c    =>
+      let top := st.size - 1
+      st := st.set! top (if Float.abs c < kEps12 then k0 else st.get! top / c)
+    | .rdivLit c   =>
       let top := st.size - 1
       let a := st.get! top
-      let res :=
-        if op == opAddLit then a + c
-        else if op == opSubLit then a - c
-        else if op == opRsubLit then c - a
-        else if op == opMulLit then a * c
-        else if op == opDivLit then if Float.abs c < 1e-12 then 0.0 else a / c
-        else if op == opRdivLit then if Float.abs a < 1e-12 then 0.0 else c / a
-        else if op == opSinScaled then Float.sin (c * a)
-        else Float.cos (c * a)
-      st := st.set! top res
-  return if st.size > 0 then st.get! 0 else 0.0
+      st := st.set! top (if Float.abs a < kEps12 then k0 else c / a)
+    | .sinScaled k => let top := st.size - 1; st := st.set! top (Float.sin (k * st.get! top))
+    | .cosScaled k => let top := st.size - 1; st := st.set! top (Float.cos (k * st.get! top))
+  return if st.size > 0 then st.get! 0 else k0
 
-/-- Pure tail-recursive register-stack bytecode loop: compiles to a single C `goto _start;`
-loop with 100% unboxed `size_t` & `double` registers (`s0..s7`) and ZERO heap allocations! -/
-private partial def runFastLoop (bytes : ByteArray) (consts : FloatArray)
-    (x y z u v : Float) (pc ci : USize)
-    (s0 s1 s2 s3 s4 s5 s6 s7 : Float) : Float :=
-  if h : pc.toNat < bytes.size then
-    let op := bytes.uget pc h
+/-- Ultra-fast specialized 3D bytecode VM (`maxStack ≤ 4`) using unboxed `USize` PC,
+safe `Array.uget`, single C `switch (lean_obj_tag)` jump table, and 7 `double` args
+fitting 100% in ARM64 `d0..d6` registers with ZERO heap alloc and ZERO `Nat` ops! -/
+private partial def runFastXYZ4 (ops : Array ExprOp) (x y z : Float) (n : USize)
+    (hN : n.toNat ≤ ops.size) (pc : USize) (s0 s1 s2 s3 : Float) : Float :=
+  if h : pc < n then
+    let op := ops.uget pc (Nat.lt_of_lt_of_le (USize.lt_iff_toNat_lt.mp h) hN)
     let pc1 := pc + 1
-    if op < 10 then
-      if op == opPushX then
-        runFastLoop bytes consts x y z u v pc1 ci x s0 s1 s2 s3 s4 s5 s6
-      else if op == opPushY then
-        runFastLoop bytes consts x y z u v pc1 ci y s0 s1 s2 s3 s4 s5 s6
-      else if op == opPushZ then
-        runFastLoop bytes consts x y z u v pc1 ci z s0 s1 s2 s3 s4 s5 s6
-      else if op == opPushLit then
-        let c := if hc : ci.toNat < consts.size then consts.uget ci hc else 0.0
-        runFastLoop bytes consts x y z u v pc1 (ci + 1) c s0 s1 s2 s3 s4 s5 s6
-      else if op == opPushXSq then
-        runFastLoop bytes consts x y z u v pc1 ci (x * x) s0 s1 s2 s3 s4 s5 s6
-      else if op == opPushYSq then
-        runFastLoop bytes consts x y z u v pc1 ci (y * y) s0 s1 s2 s3 s4 s5 s6
-      else if op == opPushZSq then
-        runFastLoop bytes consts x y z u v pc1 ci (z * z) s0 s1 s2 s3 s4 s5 s6
-      else if op == opPushU then
-        runFastLoop bytes consts x y z u v pc1 ci u s0 s1 s2 s3 s4 s5 s6
-      else if op == opPushV then
-        runFastLoop bytes consts x y z u v pc1 ci v s0 s1 s2 s3 s4 s5 s6
-      else
-        runFastLoop bytes consts x y z u v pc1 ci (Float.sqrt (x * x + y * y + z * z)) s0 s1 s2 s3 s4 s5 s6
-    else if op ≥ 40 then
-      let c := if hc : ci.toNat < consts.size then consts.uget ci hc else 0.0
-      let ci1 := ci + 1
-      let r :=
-        if op == opCosScaled then Float.cos (c * s0)
-        else if op == opSinScaled then Float.sin (c * s0)
-        else if op == opAddLit then s0 + c
-        else if op == opSubLit then s0 - c
-        else if op == opRsubLit then c - s0
-        else if op == opMulLit then s0 * c
-        else if op == opDivLit then if Float.abs c < 1e-12 then 0.0 else s0 / c
-        else if Float.abs s0 < 1e-12 then 0.0 else c / s0
-      runFastLoop bytes consts x y z u v pc1 ci1 r s1 s2 s3 s4 s5 s6 s7
-    else if op ≥ 30 then
-      let r :=
-        if op == opAdd then s1 + s0
-        else if op == opMul then s1 * s0
-        else if op == opSub then s1 - s0
-        else if op == opDiv then if Float.abs s0 < 1e-12 then 0.0 else s1 / s0
-        else if op == opPow then Float.pow s1 s0
-        else if op == opAtan2 then Float.atan2 s1 s0
-        else if op == opMin then min s1 s0
-        else if op == opMax then max s1 s0
-        else Float.sqrt (s1 * s1 + s0 * s0)
-      runFastLoop bytes consts x y z u v pc1 ci r s2 s3 s4 s5 s6 s7 0.0
-    else
-      let r :=
-        if op == opSq then s0 * s0
-        else if op == opSin then Float.sin s0
-        else if op == opCos then Float.cos s0
-        else if op == opNeg then -s0
-        else if op == opSqrt then Float.sqrt (max 0.0 s0)
-        else if op == opCube then s0 * s0 * s0
-        else if op == opP4 then let q := s0 * s0; q * q
-        else if op == opAbs then Float.abs s0
-        else if op == opExp then Float.exp (max (-40.0) (min 40.0 s0))
-        else if op == opLog then Float.log (max 1e-12 (Float.abs s0))
-        else if op == opTan then Float.tan s0
-        else if op == opAsin then Float.asin (max (-1.0) (min 1.0 s0))
-        else if op == opAcos then Float.acos (max (-1.0) (min 1.0 s0))
-        else if op == opAtan then Float.atan s0
-        else if op == opSinh then Float.sinh s0
-        else if op == opCosh then Float.cosh s0
-        else if op == opTanh then Float.tanh s0
-        else if op == opFloor then Float.floor s0
-        else if op == opCeil then Float.ceil s0
-        else if s0 > 0.0 then 1.0 else if s0 < 0.0 then -1.0 else 0.0
-      runFastLoop bytes consts x y z u v pc1 ci r s1 s2 s3 s4 s5 s6 s7
+    match op with
+    | .pushLit c   => runFastXYZ4 ops x y z n hN pc1 c s0 s1 s2
+    | .pushX       => runFastXYZ4 ops x y z n hN pc1 x s0 s1 s2
+    | .pushY       => runFastXYZ4 ops x y z n hN pc1 y s0 s1 s2
+    | .pushZ       => runFastXYZ4 ops x y z n hN pc1 z s0 s1 s2
+    | .pushU       => runFastXYZ4 ops x y z n hN pc1 k0 s0 s1 s2
+    | .pushV       => runFastXYZ4 ops x y z n hN pc1 k0 s0 s1 s2
+    | .pushR       => runFastXYZ4 ops x y z n hN pc1 (Float.sqrt (x * x + y * y + z * z)) s0 s1 s2
+    | .pushXSq     => runFastXYZ4 ops x y z n hN pc1 (x * x) s0 s1 s2
+    | .pushYSq     => runFastXYZ4 ops x y z n hN pc1 (y * y) s0 s1 s2
+    | .pushZSq     => runFastXYZ4 ops x y z n hN pc1 (z * z) s0 s1 s2
+    | .pushSinX k  => runFastXYZ4 ops x y z n hN pc1 (Float.sin (k * x)) s0 s1 s2
+    | .pushCosX k  => runFastXYZ4 ops x y z n hN pc1 (Float.cos (k * x)) s0 s1 s2
+    | .opAdd       => runFastXYZ4 ops x y z n hN pc1 (s1 + s0) s2 s3 k0
+    | .opSub       => runFastXYZ4 ops x y z n hN pc1 (s1 - s0) s2 s3 k0
+    | .opMul       => runFastXYZ4 ops x y z n hN pc1 (s1 * s0) s2 s3 k0
+    | .opDiv       =>
+      let r := if Float.abs s0 < kEps12 then k0 else s1 / s0
+      runFastXYZ4 ops x y z n hN pc1 r s2 s3 k0
+    | .opNeg       => runFastXYZ4 ops x y z n hN pc1 (-s0) s1 s2 s3
+    | .opSq        => runFastXYZ4 ops x y z n hN pc1 (s0 * s0) s1 s2 s3
+    | .opCube      => runFastXYZ4 ops x y z n hN pc1 (s0 * s0 * s0) s1 s2 s3
+    | .opP4        => let s := s0 * s0; runFastXYZ4 ops x y z n hN pc1 (s * s) s1 s2 s3
+    | .opSin       => runFastXYZ4 ops x y z n hN pc1 (Float.sin s0) s1 s2 s3
+    | .opCos       => runFastXYZ4 ops x y z n hN pc1 (Float.cos s0) s1 s2 s3
+    | .opSqrt      => runFastXYZ4 ops x y z n hN pc1 (Float.sqrt (max k0 s0)) s1 s2 s3
+    | .opAbs       => runFastXYZ4 ops x y z n hN pc1 (Float.abs s0) s1 s2 s3
+    | .opTanh      => runFastXYZ4 ops x y z n hN pc1 (Float.tanh s0) s1 s2 s3
+    | .unOther uop => runFastXYZ4 ops x y z n hN pc1 (evalUnary uop s0) s1 s2 s3
+    | .binOther b  => runFastXYZ4 ops x y z n hN pc1 (evalBinary b s1 s0) s2 s3 k0
+    | .addLit c    => runFastXYZ4 ops x y z n hN pc1 (s0 + c) s1 s2 s3
+    | .subLit c    => runFastXYZ4 ops x y z n hN pc1 (s0 - c) s1 s2 s3
+    | .rsubLit c   => runFastXYZ4 ops x y z n hN pc1 (c - s0) s1 s2 s3
+    | .mulLit c    => runFastXYZ4 ops x y z n hN pc1 (s0 * c) s1 s2 s3
+    | .divLit c    =>
+      let r := if Float.abs c < kEps12 then k0 else s0 / c
+      runFastXYZ4 ops x y z n hN pc1 r s1 s2 s3
+    | .rdivLit c   =>
+      let r := if Float.abs s0 < kEps12 then k0 else c / s0
+      runFastXYZ4 ops x y z n hN pc1 r s1 s2 s3
+    | .sinScaled k => runFastXYZ4 ops x y z n hN pc1 (Float.sin (k * s0)) s1 s2 s3
+    | .cosScaled k => runFastXYZ4 ops x y z n hN pc1 (Float.cos (k * s0)) s1 s2 s3
+  else s0
+
+/-- General register-stack bytecode loop (`maxStack ≤ 8`) for `(x, y, z, u, v)`. -/
+private partial def runFastLoop (ops : Array ExprOp) (x y z u v : Float) (n : USize)
+    (hN : n.toNat ≤ ops.size) (pc : USize) (s0 s1 s2 s3 s4 s5 s6 s7 : Float) : Float :=
+  if h : pc < n then
+    let op := ops.uget pc (Nat.lt_of_lt_of_le (USize.lt_iff_toNat_lt.mp h) hN)
+    let pc1 := pc + 1
+    match op with
+    | .pushLit c   => runFastLoop ops x y z u v n hN pc1 c s0 s1 s2 s3 s4 s5 s6
+    | .pushX       => runFastLoop ops x y z u v n hN pc1 x s0 s1 s2 s3 s4 s5 s6
+    | .pushY       => runFastLoop ops x y z u v n hN pc1 y s0 s1 s2 s3 s4 s5 s6
+    | .pushZ       => runFastLoop ops x y z u v n hN pc1 z s0 s1 s2 s3 s4 s5 s6
+    | .pushU       => runFastLoop ops x y z u v n hN pc1 u s0 s1 s2 s3 s4 s5 s6
+    | .pushV       => runFastLoop ops x y z u v n hN pc1 v s0 s1 s2 s3 s4 s5 s6
+    | .pushR       => runFastLoop ops x y z u v n hN pc1 (Float.sqrt (x * x + y * y + z * z)) s0 s1 s2 s3 s4 s5 s6
+    | .pushXSq     => runFastLoop ops x y z u v n hN pc1 (x * x) s0 s1 s2 s3 s4 s5 s6
+    | .pushYSq     => runFastLoop ops x y z u v n hN pc1 (y * y) s0 s1 s2 s3 s4 s5 s6
+    | .pushZSq     => runFastLoop ops x y z u v n hN pc1 (z * z) s0 s1 s2 s3 s4 s5 s6
+    | .pushSinX k  => runFastLoop ops x y z u v n hN pc1 (Float.sin (k * x)) s0 s1 s2 s3 s4 s5 s6
+    | .pushCosX k  => runFastLoop ops x y z u v n hN pc1 (Float.cos (k * x)) s0 s1 s2 s3 s4 s5 s6
+    | .opAdd       => runFastLoop ops x y z u v n hN pc1 (s1 + s0) s2 s3 s4 s5 s6 s7 k0
+    | .opSub       => runFastLoop ops x y z u v n hN pc1 (s1 - s0) s2 s3 s4 s5 s6 s7 k0
+    | .opMul       => runFastLoop ops x y z u v n hN pc1 (s1 * s0) s2 s3 s4 s5 s6 s7 k0
+    | .opDiv       =>
+      let r := if Float.abs s0 < kEps12 then k0 else s1 / s0
+      runFastLoop ops x y z u v n hN pc1 r s2 s3 s4 s5 s6 s7 k0
+    | .opNeg       => runFastLoop ops x y z u v n hN pc1 (-s0) s1 s2 s3 s4 s5 s6 s7
+    | .opSq        => runFastLoop ops x y z u v n hN pc1 (s0 * s0) s1 s2 s3 s4 s5 s6 s7
+    | .opCube      => runFastLoop ops x y z u v n hN pc1 (s0 * s0 * s0) s1 s2 s3 s4 s5 s6 s7
+    | .opP4        => let s := s0 * s0; runFastLoop ops x y z u v n hN pc1 (s * s) s1 s2 s3 s4 s5 s6 s7
+    | .opSin       => runFastLoop ops x y z u v n hN pc1 (Float.sin s0) s1 s2 s3 s4 s5 s6 s7
+    | .opCos       => runFastLoop ops x y z u v n hN pc1 (Float.cos s0) s1 s2 s3 s4 s5 s6 s7
+    | .opSqrt      => runFastLoop ops x y z u v n hN pc1 (Float.sqrt (max k0 s0)) s1 s2 s3 s4 s5 s6 s7
+    | .opAbs       => runFastLoop ops x y z u v n hN pc1 (Float.abs s0) s1 s2 s3 s4 s5 s6 s7
+    | .opTanh      => runFastLoop ops x y z u v n hN pc1 (Float.tanh s0) s1 s2 s3 s4 s5 s6 s7
+    | .unOther uop => runFastLoop ops x y z u v n hN pc1 (evalUnary uop s0) s1 s2 s3 s4 s5 s6 s7
+    | .binOther b  => runFastLoop ops x y z u v n hN pc1 (evalBinary b s1 s0) s2 s3 s4 s5 s6 s7 k0
+    | .addLit c    => runFastLoop ops x y z u v n hN pc1 (s0 + c) s1 s2 s3 s4 s5 s6 s7
+    | .subLit c    => runFastLoop ops x y z u v n hN pc1 (s0 - c) s1 s2 s3 s4 s5 s6 s7
+    | .rsubLit c   => runFastLoop ops x y z u v n hN pc1 (c - s0) s1 s2 s3 s4 s5 s6 s7
+    | .mulLit c    => runFastLoop ops x y z u v n hN pc1 (s0 * c) s1 s2 s3 s4 s5 s6 s7
+    | .divLit c    =>
+      let r := if Float.abs c < kEps12 then k0 else s0 / c
+      runFastLoop ops x y z u v n hN pc1 r s1 s2 s3 s4 s5 s6 s7
+    | .rdivLit c   =>
+      let r := if Float.abs s0 < kEps12 then k0 else c / s0
+      runFastLoop ops x y z u v n hN pc1 r s1 s2 s3 s4 s5 s6 s7
+    | .sinScaled k => runFastLoop ops x y z u v n hN pc1 (Float.sin (k * s0)) s1 s2 s3 s4 s5 s6 s7
+    | .cosScaled k => runFastLoop ops x y z u v n hN pc1 (Float.cos (k * s0)) s1 s2 s3 s4 s5 s6 s7
   else s0
 
 /-- Zero-allocation unboxed shift-register bytecode VM (`s0..s7` live purely in `f64` CPU/WASM
-registers with zero heap allocations and zero stack-pointer switches for all `maxStack ≤ 8`!). -/
+registers with unboxed `USize` PC and a single C `switch (tag)` jump table for all `maxStack ≤ 8`!). -/
 def evalBytecode (bc : Bytecode) (x y z u v : Float) : Float :=
   if bc.maxStack > 8 then
-    evalBytecodeDeep bc x y z u v
+    evalBytecodeDeep bc.ops bc.maxStack x y z u v
   else
-    runFastLoop bc.opBytes bc.consts x y z u v 0 0
-      0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
+    runFastLoop bc.ops x y z u v bc.ops.usize (array_usize_le bc.ops) 0 k0 k0 k0 k0 k0 k0 k0 k0
 
 @[inline] def evalBytecodeXYZ (bc : Bytecode) (x y z : Float) : Float :=
-  evalBytecode bc x y z 0.0 0.0
+  if bc.maxStack ≤ 4 then
+    runFastXYZ4 bc.ops x y z bc.ops.usize (array_usize_le bc.ops) 0 k0 k0 k0 k0
+  else
+    evalBytecode bc x y z k0 k0
 
 /-! ## 6. Adaptive Coarse-Probe Bytecode Marching Tetrahedra & Parametric Mesher -/
 
@@ -728,15 +727,15 @@ private def refineBoundsXYZ (f : Float → Float → Float → Float) (bmin bmax
   for iz in [:n] do
     for iy in [:n] do
       for ix in [:n] do
-        let b0 := atV ix iy iz < 0.0
+        let b0 := atV ix iy iz < k0
         let diff :=
-          (atV (ix+1) iy iz < 0.0) != b0 ||
-          (atV ix (iy+1) iz < 0.0) != b0 ||
-          (atV (ix+1) (iy+1) iz < 0.0) != b0 ||
-          (atV ix iy (iz+1) < 0.0) != b0 ||
-          (atV (ix+1) iy (iz+1) < 0.0) != b0 ||
-          (atV ix (iy+1) (iz+1) < 0.0) != b0 ||
-          (atV (ix+1) (iy+1) (iz+1) < 0.0) != b0
+          (atV (ix+1) iy iz < k0) != b0 ||
+          (atV ix (iy+1) iz < k0) != b0 ||
+          (atV (ix+1) (iy+1) iz < k0) != b0 ||
+          (atV ix iy (iz+1) < k0) != b0 ||
+          (atV (ix+1) iy (iz+1) < k0) != b0 ||
+          (atV ix (iy+1) (iz+1) < k0) != b0 ||
+          (atV (ix+1) (iy+1) (iz+1) < k0) != b0
         if diff then
           found := true
           let x0 := bmin.x + Float.ofNat ix * dx; let x1 := x0 + dx
@@ -756,17 +755,18 @@ private def refineBoundsXYZ (f : Float → Float → Float → Float) (bmin bmax
     let rMax : Vec3 := ⟨min bmax.x (hiX + padX), min bmax.y (hiY + padY), min bmax.z (hiZ + padZ)⟩
     return (rMin, rMax)
 
-/-- Parse, `t`-fold, compile to flat RPN bytecode, and mesh an arbitrary user-typed 3D implicit
-equation `f(x, y, z, t) = 0` directly into a watertight CCW `MeshAsset` using unboxed Kuhn
-Marching Tetrahedra with zero-eval 2nd-order interpolated grid gradients! -/
+/-- Parse, `t`-fold, slice-fold `(z, y)` into compact X-row RPN `Array ExprOp` bytecode, and
+mesh an arbitrary user-typed 3D implicit equation `f(x, y, z, t) = 0` directly into a watertight
+CCW `MeshAsset` using exclusive-RC Kuhn Marching Tetrahedra with zero-eval 2nd-order grid gradients! -/
 def evalImplicitExprMesh (exprStr : String) (t : Float := 0.0)
     (bmin : Vec3 := ⟨-1.6, -1.6, -1.6⟩) (bmax : Vec3 := ⟨1.6, 1.6, 1.6⟩)
     (gridN : Nat := 18) (meshId : UInt64 := 5001) (adaptive : Bool := true) :
     Except String MeshAsset := do
-  let expr ← parseExpr exprStr
-  let bc := compileToBytecode expr t
+  let expr0 ← parseExpr exprStr
+  let exprT := foldTime expr0 t
+  let bcFull := compileFolded exprT
   let (useMin, useMax) :=
-    if adaptive then refineBoundsXYZ (fun x y z => evalBytecodeXYZ bc x y z) bmin bmax
+    if adaptive then refineBoundsXYZ (fun x y z => evalBytecodeXYZ bcFull x y z) bmin bmax
     else (bmin, bmax)
   let n' := max 4 (min 40 gridN)
   let n1 := n' + 1
@@ -782,10 +782,13 @@ def evalImplicitExprMesh (exprStr : String) (t : Float := 0.0)
   let mut field := FloatArray.emptyWithCapacity (n1 * n1 * n1)
   for iz in [:n1] do
     let z := zs.get! iz
+    let exprZ := foldZ exprT z
     for iy in [:n1] do
       let y := ys.get! iy
+      let exprYZ := foldY exprZ y
+      let bcRow := compileFolded exprYZ
       for ix in [:n1] do
-        field := field.push (evalBytecodeXYZ bc (xs.get! ix) y z)
+        field := field.push (evalBytecodeXYZ bcRow (xs.get! ix) y z)
   return marchingTetrahedraField field xs ys zs n' n' n' dx dy dz meshId
 
 /-- Reference AST-based implicit mesher kept explicitly for before-vs-after bytecode benchmarks! -/

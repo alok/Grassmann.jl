@@ -34,20 +34,51 @@ open Grassmann.Scene
 private def piF : Float := 3.14159265358979323846
 private def twoPiF : Float := 6.28318530717958647692
 
+-- Module-initialized Float constants (avoid runtime `lean_float_of_scientific` inside hot loops!)
+private def k0 : Float := 0.0
+private def k1 : Float := 1.0
+private def k2 : Float := 2.0
+private def k3 : Float := 3.0
+private def k4 : Float := 4.0
+private def kNeg3 : Float := -3.0
+private def kHalf : Float := 0.5
+private def kNegHalf : Float := -0.5
+private def kQuarter : Float := 0.25
+private def kSqrt3Half : Float := 0.8660254037844386
+private def kEps9 : Float := 1e-9
+private def kEps12 : Float := 1e-12
+private def kEps18 : Float := 1e-18
+private def kIrid035 : Float := 0.35
+private def kIrid24 : Float := 2.4
+private def kIrid13 : Float := 1.3
+private def kIrid045 : Float := 0.45
+private def kIrid048 : Float := 0.48
+private def kIrid042 : Float := 0.42
+private def kIrid052 : Float := 0.52
+private def kIrid038 : Float := 0.38
+private def kIrid062 : Float := 0.62
+private def kIrid036 : Float := 0.36
+
 @[inline] private def clamp01 (x : Float) : Float :=
-  if x < 0.0 then 0.0 else if x > 1.0 then 1.0 else x
+  if x < k0 then k0 else if x > k1 then k1 else x
 
 @[inline] private def isFiniteF (x : Float) : Bool :=
   !x.isNaN && !x.isInf
 
-/-- Smooth iridescent shader-ready vertex color driven by position, normal & curvature. -/
-def iridescentColor (p n : Vec3) (curv : Float := 0.0) (alpha : Float := 1.0) : RGBA :=
-  let h := clamp01 (0.5 + 0.35 * p.y)
-  let c := clamp01 (0.5 + 0.25 * Float.tanh (curv * 0.35))
-  let phase := 2.4 * h + 1.3 * c + 0.45 * (n.x * 0.5 + n.z * 0.5)
-  let r := clamp01 (0.48 + 0.42 * Float.cos (phase + 0.0))
-  let g := clamp01 (0.52 + 0.38 * Float.cos (phase + 2.0943951))
-  let b := clamp01 (0.62 + 0.36 * Float.cos (phase + 4.1887902))
+/-- Smooth iridescent shader-ready vertex color driven by position, normal & curvature.
+Uses exact trig addition `cos(φ ± 2π/3) = -½ cos φ ∓ (√3/2) sin φ` (1 cos + 1 sin instead of 3 cos + tanh). -/
+@[inline] def iridescentColor (p n : Vec3) (curv : Float := 0.0) (alpha : Float := 1.0) : RGBA :=
+  let h := clamp01 (kHalf + kIrid035 * p.y)
+  let cScaled := curv * kIrid035
+  let c := clamp01 (kHalf + kQuarter * (cScaled / (k1 + Float.abs cScaled)))
+  let phase := kIrid24 * h + kIrid13 * c + kIrid045 * (n.x * kHalf + n.z * kHalf)
+  let cp := Float.cos phase
+  let sp := Float.sin phase
+  let halfC := kNegHalf * cp
+  let s32 := kSqrt3Half * sp
+  let r := clamp01 (kIrid048 + kIrid042 * cp)
+  let g := clamp01 (kIrid052 + kIrid038 * (halfC - s32))
+  let b := clamp01 (kIrid062 + kIrid036 * (halfC + s32))
   ⟨r, g, b, clamp01 alpha⟩
 
 /-- Compute FNV-1a dirty hash of a `MeshAsset` from vertex/index counts & sample floats. -/
@@ -76,36 +107,36 @@ scalar `field` grid (`0` extra function evaluations!). Exact for all quadratic f
   let (gx, d2x) :=
     if ix > 0 && ix + 1 < nx1 then
       let fp := field.get! (base + 1); let fm := field.get! (base - 1)
-      ((fp - fm) * inv2Dx, (fp + fm - 2.0 * fc) * invDx2)
+      ((fp - fm) * inv2Dx, (fp + fm - k2 * fc) * invDx2)
     else if ix == 0 && nx1 ≥ 3 then
       let f1 := field.get! (base + 1); let f2 := field.get! (base + 2)
-      ((-3.0 * fc + 4.0 * f1 - f2) * inv2Dx, (fc - 2.0 * f1 + f2) * invDx2)
+      ((kNeg3 * fc + k4 * f1 - f2) * inv2Dx, (fc - k2 * f1 + f2) * invDx2)
     else if ix + 1 == nx1 && nx1 ≥ 3 then
       let f1 := field.get! (base - 1); let f2 := field.get! (base - 2)
-      ((3.0 * fc - 4.0 * f1 + f2) * inv2Dx, (fc - 2.0 * f1 + f2) * invDx2)
-    else (0.0, 0.0)
+      ((k3 * fc - k4 * f1 + f2) * inv2Dx, (fc - k2 * f1 + f2) * invDx2)
+    else (k0, k0)
   let (gy, d2y) :=
     if iy > 0 && iy + 1 < ny1 then
       let fp := field.get! (base + nx1); let fm := field.get! (base - nx1)
-      ((fp - fm) * inv2Dy, (fp + fm - 2.0 * fc) * invDy2)
+      ((fp - fm) * inv2Dy, (fp + fm - k2 * fc) * invDy2)
     else if iy == 0 && ny1 ≥ 3 then
       let f1 := field.get! (base + nx1); let f2 := field.get! (base + 2 * nx1)
-      ((-3.0 * fc + 4.0 * f1 - f2) * inv2Dy, (fc - 2.0 * f1 + f2) * invDy2)
+      ((kNeg3 * fc + k4 * f1 - f2) * inv2Dy, (fc - k2 * f1 + f2) * invDy2)
     else if iy + 1 == ny1 && ny1 ≥ 3 then
       let f1 := field.get! (base - nx1); let f2 := field.get! (base - 2 * nx1)
-      ((3.0 * fc - 4.0 * f1 + f2) * inv2Dy, (fc - 2.0 * f1 + f2) * invDy2)
-    else (0.0, 0.0)
+      ((k3 * fc - k4 * f1 + f2) * inv2Dy, (fc - k2 * f1 + f2) * invDy2)
+    else (k0, k0)
   let (gz, d2z) :=
     if iz > 0 && iz + 1 < nz1 then
       let fp := field.get! (base + slice); let fm := field.get! (base - slice)
-      ((fp - fm) * inv2Dz, (fp + fm - 2.0 * fc) * invDz2)
+      ((fp - fm) * inv2Dz, (fp + fm - k2 * fc) * invDz2)
     else if iz == 0 && nz1 ≥ 3 then
       let f1 := field.get! (base + slice); let f2 := field.get! (base + 2 * slice)
-      ((-3.0 * fc + 4.0 * f1 - f2) * inv2Dz, (fc - 2.0 * f1 + f2) * invDz2)
+      ((kNeg3 * fc + k4 * f1 - f2) * inv2Dz, (fc - k2 * f1 + f2) * invDz2)
     else if iz + 1 == nz1 && nz1 ≥ 3 then
       let f1 := field.get! (base - slice); let f2 := field.get! (base - 2 * slice)
-      ((3.0 * fc - 4.0 * f1 + f2) * inv2Dz, (fc - 2.0 * f1 + f2) * invDz2)
-    else (0.0, 0.0)
+      ((k3 * fc - k4 * f1 + f2) * inv2Dz, (fc - k2 * f1 + f2) * invDz2)
+    else (k0, k0)
   (gx, gy, gz, d2x + d2y + d2z)
 
 private structure MtState where
@@ -140,7 +171,7 @@ private def emitEdgeVertField (st : MtState) (field : FloatArray)
     let va := if swap then vB else vA
     let vb := if swap then vA else vB
     let denom := vb - va
-    let tRaw := if Float.abs denom > 1e-12 then (-va) / denom else 0.5
+    let tRaw := if Float.abs denom > kEps12 then (-va) / denom else kHalf
     let t := clamp01 tRaw
     let pax := xs.get! ax; let pay := ys.get! ay; let paz := zs.get! az
     let px := pax + (xs.get! bx - pax) * t
@@ -153,13 +184,13 @@ private def emitEdgeVertField (st : MtState) (field : FloatArray)
     let gz := gaz + (gbz - gaz) * t
     let nLen := Float.sqrt (gx * gx + gy * gy + gz * gz)
     let n : Vec3 :=
-      if nLen > 1e-9 && isFiniteF nLen then
-        let invN := 1.0 / nLen
+      if nLen > kEps9 && isFiniteF nLen then
+        let invN := k1 / nLen
         ⟨gx * invN, gy * invN, gz * invN⟩
-      else ⟨0.0, 1.0, 0.0⟩
+      else ⟨k0, k1, k0⟩
     let lap := lapA + (lapB - lapA) * t
-    let curv := if isFiniteF lap then lap / (max 0.25 nLen) else 0.0
-    let col := iridescentColor ⟨px, py, pz⟩ n curv
+    let curv := if isFiniteF lap then lap / (max kQuarter nLen) else k0
+    let col := iridescentColor ⟨px, py, pz⟩ n curv k1
     let vid := vertCount
     let positions := positions.push px |>.push py |>.push pz
     let normals   := normals.push n.x |>.push n.y |>.push n.z
@@ -178,14 +209,14 @@ private def pushOrientedTri (st : MtState) (i0 i1 i2 : UInt32) : MtState :=
   let fx := dy1 * dz2 - dz1 * dy2
   let fy := dz1 * dx2 - dx1 * dz2
   let fz := dx1 * dy2 - dy1 * dx2
-  if fx * fx + fy * fy + fz * fz < 1e-18 then
+  if fx * fx + fy * fy + fz * fz < kEps18 then
     ⟨positions, normals, colors, indices, edgeCache, vertCount⟩
   else
     let anx := normals.get! o0 + normals.get! o1 + normals.get! o2
     let any := normals.get! (o0 + 1) + normals.get! (o1 + 1) + normals.get! (o2 + 1)
     let anz := normals.get! (o0 + 2) + normals.get! (o1 + 2) + normals.get! (o2 + 2)
     let indices :=
-      if fx * anx + fy * any + fz * anz ≥ 0.0 then
+      if fx * anx + fy * any + fz * anz ≥ k0 then
         indices.push i0 |>.push i1 |>.push i2
       else
         indices.push i0 |>.push i2 |>.push i1
@@ -204,7 +235,7 @@ private def pushOrientedTri (st : MtState) (i0 i1 i2 : UInt32) : MtState :=
     (ix + (a &&& 1)) (iy + ((a >>> 1) &&& 1)) (iz + ((a >>> 2) &&& 1)) (cornerVal a v0 v1 v2 v3 v4 v5 v6 v7)
     (ix + (b &&& 1)) (iy + ((b >>> 1) &&& 1)) (iz + ((b >>> 2) &&& 1)) (cornerVal b v0 v1 v2 v3 v4 v5 v6 v7)
 
-@[inline] private def emitTetField (st : MtState) (field : FloatArray)
+private def emitTetField (st : MtState) (field : FloatArray)
     (nx1 ny1 nz1 : Nat) (inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 : Float)
     (xs ys zs : FloatArray)
     (ix iy iz : Nat) (v0 v1 v2 v3 v4 v5 v6 v7 : Float)
@@ -260,12 +291,12 @@ def marchingTetrahedraField (field xs ys zs : FloatArray)
   let ny1 := ny' + 1
   let nz1 := nz' + 1
   let totalPts := nx1 * ny1 * nz1
-  let inv2Dx := 0.5 / max 1e-9 dx
-  let inv2Dy := 0.5 / max 1e-9 dy
-  let inv2Dz := 0.5 / max 1e-9 dz
-  let invDx2 := 1.0 / max 1e-12 (dx * dx)
-  let invDy2 := 1.0 / max 1e-12 (dy * dy)
-  let invDz2 := 1.0 / max 1e-12 (dz * dz)
+  let inv2Dx := kHalf / max kEps9 dx
+  let inv2Dy := kHalf / max kEps9 dy
+  let inv2Dz := kHalf / max kEps9 dz
+  let invDx2 := k1 / max kEps12 (dx * dx)
+  let invDy2 := k1 / max kEps12 (dy * dy)
+  let invDz2 := k1 / max kEps12 (dz * dz)
   let mut st : MtState :=
     { positions := FloatArray.emptyWithCapacity 4096
       normals   := FloatArray.emptyWithCapacity 4096
@@ -291,8 +322,8 @@ def marchingTetrahedraField (field xs ys zs : FloatArray)
         let v5 := field.get! (yOff10 + ix + 1)
         let v6 := field.get! (yOff11 + ix)
         let v7 := field.get! (yOff11 + ix + 1)
-        let b0 := v0 < 0.0; let b1 := v1 < 0.0; let b2 := v2 < 0.0; let b3 := v3 < 0.0
-        let b4 := v4 < 0.0; let b5 := v5 < 0.0; let b6 := v6 < 0.0; let b7 := v7 < 0.0
+        let b0 := v0 < k0; let b1 := v1 < k0; let b2 := v2 < k0; let b3 := v3 < k0
+        let b4 := v4 < k0; let b5 := v5 < k0; let b6 := v6 < k0; let b7 := v7 < k0
         let allIn  := b0 && b1 && b2 && b3 && b4 && b5 && b6 && b7
         let allOut := !b0 && !b1 && !b2 && !b3 && !b4 && !b5 && !b6 && !b7
         if !allIn && !allOut then
