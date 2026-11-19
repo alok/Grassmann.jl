@@ -1,19 +1,21 @@
 import Grassmann.CoffeeShop.Presets
 import Grassmann.CoffeeShop.PresetsExtra
 import Grassmann.CoffeeShop.PresetsParity
+import Grassmann.CoffeeShop.PresetsShowcase
 import Grassmann.Eval.ImplicitExpr
 import Grassmann.Codegen.GPUInit
 
 /-!
 # Pure-Lean CoffeeShop Studio Engine (`Grassmann.CoffeeShop.Engine`)
 
-Manages all **69 CoffeeShop presets** (19 flagship + 28 `PresetsExtra` + 22 `PresetsParity`,
-100% parity with the 64-entry `ganja.js` catalog), draggable 3D/2D handles, RK4 rigid-body
-integration, interactive `#pga3d_slicing` cutting plane motors, live GA scripts,
-`z = f(x, y, t)` surfaces, live user-typed 3D implicit equations (`f(x,y,z,t) = 0` via Kuhn
-Marching Tetrahedra OR live `GPUInit` GLSL3/WGSL/MSL raymarching), live parametric 3D
-surfaces, and marching-triangles 2D implicit contours — emitting canonical `SceneFrame`s
-with zero GA logic in JS/Swift.
+Manages all **74 CoffeeShop presets** (19 flagship + 28 `PresetsExtra` + 22 `PresetsParity`
++ 5 `PresetsShowcase` Wave 4B physics/relativity/streamline presets), draggable 3D/2D handles,
+interactive `@param` sliders (`setParam`), KaTeX LaTeX `formula` + `summary` metadata,
+RK4 rigid-body & spherical double-pendulum integration, interactive `#pga3d_slicing` cutting
+plane motors, live GA scripts (`LiveScript` v2), `z = f(x, y, t)` surfaces, live user-typed
+3D implicit equations (`f(x,y,z,t) = 0` via bytecode-accelerated Kuhn Marching Tetrahedra OR
+live `GPUInit` GLSL3/WGSL/MSL raymarching), live parametric 3D surfaces, and marching-triangles
+2D implicit contours — emitting canonical `SceneFrame`s with zero GA logic in JS/Swift.
 
 Credits: Steven De Keninck (`enkimute` / `ganja.js`) & Michael Reed (`chakravala` / `Grassmann.jl`).
 -/
@@ -22,19 +24,22 @@ namespace Grassmann.CoffeeShop
 
 open Grassmann.Scene Grassmann.Scene.Json Grassmann.Eval Grassmann.Eval.ImplicitExpr
 open Grassmann.CoffeeShop.PresetsExtra Grassmann.CoffeeShop.PresetsParity
-open Grassmann.Codegen.GPUInit
+open Grassmann.CoffeeShop.PresetsShowcase Grassmann.Codegen.GPUInit
 
-/-- Serialize all 69 CoffeeShop presets (19 base + 28 extra + 22 parity) into a single
+/-- Serialize all 74 CoffeeShop presets (19 base + 28 extra + 22 parity + 5 showcase) into a single
 strictly `Init`-only JSON array for `grassmann_studio_preset_catalog` & `GET /api/presets`. -/
 def allPresetCatalogJson : String :=
   let fmt (id title category algebra description sampleCode : String) : String :=
+    let (fml, smry) := presetMathMeta id
     objJson #[
       ("id", quote id),
       ("title", quote title),
       ("category", quote category),
       ("algebra", quote algebra),
       ("description", quote description),
-      ("sampleCode", quote sampleCode)
+      ("sampleCode", quote sampleCode),
+      ("formula", quote fml),
+      ("summary", quote smry)
     ]
   let baseItems := presetCatalog.map fun p =>
     fmt p.id p.title p.category p.algebra p.description p.sampleCode
@@ -42,11 +47,13 @@ def allPresetCatalogJson : String :=
     fmt p.id p.title p.category p.algebra p.description p.sampleCode
   let parityItems := parityPresetCatalog.map fun p =>
     fmt p.id p.title p.category p.algebra p.description p.sampleCode
-  arrJson ((baseItems ++ extraItems) ++ parityItems)
+  let showcaseItems := showcasePresetCatalog.map fun p =>
+    fmt p.id p.title p.category p.algebra p.description p.sampleCode
+  arrJson (((baseItems ++ extraItems) ++ parityItems) ++ showcaseItems)
 
-/-- Total preset count across base + extra + parity registries (69). -/
+/-- Total preset count across base + extra + parity + showcase registries (74). -/
 def totalPresetCount : Nat :=
-  presetCatalog.size + extraPresetCatalog.size + parityPresetCatalog.size
+  presetCatalog.size + extraPresetCatalog.size + parityPresetCatalog.size + showcasePresetCatalog.size
 
 /-- Mutable state of the CoffeeShop & Surface studio workspace. -/
 structure CoffeeShopState where
@@ -74,6 +81,7 @@ structure CoffeeShopState where
   eqOverlay            : Option ContourOverlay := none
   handles              : Array (UInt32 × Vec3) := #[]
   coeffOverrides       : Array (UInt32 × UInt32 × Float) := #[]
+  paramOverrides       : Array (String × Float) := #[]
   sliceMotor           : Option Motor3 := none
   customCamera         : Option CameraState := none
   simTime              : Float := 0.0
@@ -82,6 +90,9 @@ structure CoffeeShopState where
   topMotor             : Motor3 := Motor3.identity
   topOmega             : Vec3   := ⟨0.08, 3.2, 0.05⟩ -- Perturbed intermediate axis => Dzhanibekov flip!
   topTrail             : FloatArray := FloatArray.empty
+  -- Persistent RK4 physics state for Wave 4B `pga3d_bouncing_cube` & `pga3d_double_pendulum`
+  cubeState            : BouncingCubeState := initBouncingCubeState 2.6
+  doublePendulum       : DoublePendulumState := initDoublePendulumState 1.0
   deriving Inhabited
 
 def CoffeeShopState.init (presetId : String := "pga3d_slicing") : CoffeeShopState :=
@@ -96,12 +107,15 @@ def loadPreset (st : CoffeeShopState) (presetId : String) : CoffeeShopState :=
     useParametric := false,
     eqOverlay := none,
     handles := #[],
+    paramOverrides := #[],
     sliceMotor := none,
     customCamera := none,
     simTime := 0.0,
     topMotor := Motor3.identity,
     topOmega := ⟨0.08, 3.2, 0.05⟩,
-    topTrail := FloatArray.empty }
+    topTrail := FloatArray.empty,
+    cubeState := initBouncingCubeState 2.6,
+    doublePendulum := initDoublePendulumState 1.0 }
 
 def setHandle (st : CoffeeShopState) (hid : UInt32) (pos : Vec3) : CoffeeShopState :=
   let next :=
@@ -110,7 +124,27 @@ def setHandle (st : CoffeeShopState) (hid : UInt32) (pos : Vec3) : CoffeeShopSta
     | none     => st.handles.push (hid, pos)
   { st with handles := next }
 
-/-- Look up the runnable LiveScript v2 `sampleCode` for any of the 69 registered presets. -/
+/-- Update a live `@param` / `slider(...)` value (used by both interactive presets and LiveScript v2). -/
+def setParam (st : CoffeeShopState) (name : String) (val : Float) : CoffeeShopState :=
+  let nextParams :=
+    match st.paramOverrides.findIdx? fun kv => kv.1 == name with
+    | some idx => st.paramOverrides.set! idx (name, val)
+    | none     => st.paramOverrides.push (name, val)
+  let st1 := { st with paramOverrides := nextParams }
+  if !st1.useCustom && st1.presetId == "pga3d_bouncing_cube" && name == "spin" then
+    let s := max 0.0 (min 8.0 val)
+    let curW := st1.cubeState.omega
+    let curMag := Vec3.norm curW
+    let dir := if curMag > 1e-4 then Vec3.scale (1.0 / curMag) curW else Vec3.normalize ⟨0.72, 0.55, -0.46⟩
+    { st1 with cubeState := { st1.cubeState with omega := Vec3.scale s dir } }
+  else if !st1.useCustom && st1.presetId == "pga3d_double_pendulum" && name == "length" then
+    let l := max 0.4 (min 1.5 val)
+    let d := paramVal nextParams "damping" 0.03 0.0 0.35
+    let g := paramVal nextParams "gravity" 9.8 1.0 20.0
+    { st1 with doublePendulum := stepDoublePendulumRK4 st1.doublePendulum 0.002 l d g }
+  else st1
+
+/-- Look up the runnable LiveScript v2 `sampleCode` for any of the 74 registered presets. -/
 def presetScriptFor (presetId : String) : String :=
   match presetCatalog.find? (·.id == presetId) with
   | some p => p.sampleCode
@@ -120,7 +154,10 @@ def presetScriptFor (presetId : String) : String :=
     | none =>
       match parityPresetCatalog.find? (·.id == presetId) with
       | some p => p.sampleCode
-      | none => ""
+      | none =>
+        match showcasePresetCatalog.find? (·.id == presetId) with
+        | some p => p.sampleCode
+        | none => ""
 
 /-- Live coefficient edit from CoffeeShop's `inspect stash` table: records override and
 maps blade edits directly onto live script multivectors (when in script mode) OR
@@ -147,13 +184,13 @@ def setCoeffOverride (st : CoffeeShopState) (entryIdx bladeIdx : UInt32) (val : 
 
 def setScript (st : CoffeeShopState) (algebra code : String) : CoffeeShopState :=
   -- Evaluate once immediately to update `lastValidScriptFrame` when valid (never losing last good scene on syntax error!)
-  let fresh := evalScriptToFrame algebra code #[] st.simTime 0 #[]
+  let fresh := evalScriptToFrame algebra code #[] st.simTime 0 #[] #[]
   let nextValid :=
     if fresh.diagnostics.isEmpty then some fresh
     else st.lastValidScriptFrame
   { st with
     customAlgebra := algebra, customCode := code,
-    handles := #[], coeffOverrides := #[], eqOverlay := none,
+    handles := #[], coeffOverrides := #[], paramOverrides := #[], eqOverlay := none,
     lastValidScriptFrame := nextValid,
     useCustom := true, useSurface := false, useImplicit := false, useParametric := false }
 
@@ -200,12 +237,12 @@ def setSlicePlane (st : CoffeeShopState) (m : Motor3) : CoffeeShopState :=
 def setCamera (st : CoffeeShopState) (m : Motor3) (fovDeg distance : Float) : CoffeeShopState :=
   { st with customCamera := some { motor := m, fovDeg, distance } }
 
-/-- Advance simulation clock + RK4 physics integrator when active. -/
+/-- Advance simulation clock + RK4 physics integrators when active. -/
 def stepTick (st : CoffeeShopState) (dt timeSec : Float) : CoffeeShopState :=
   let clampedDt := max 0.001 (min 0.05 dt)
   let nextT := if timeSec > 0.0 then timeSec else st.simTime + clampedDt
-  if st.presetId == "pga3d_physics_free_top" && !st.useCustom && !st.useSurface &&
-     !st.useImplicit && !st.useParametric then
+  let inPreset := !st.useCustom && !st.useSurface && !st.useImplicit && !st.useParametric
+  if inPreset && st.presetId == "pga3d_physics_free_top" then
     let (m1, w1) := stepFreeTopRK4 st.topMotor st.topOmega clampedDt
     let tip := Motor3.applyPoint m1 ⟨0.0, 1.15, 0.0⟩
     let trail0 :=
@@ -217,6 +254,18 @@ def stepTick (st : CoffeeShopState) (dt timeSec : Float) : CoffeeShopState :=
       else st.topTrail
     let trail1 := trail0.push tip.x |>.push tip.y |>.push tip.z
     { st with simTime := nextT, topMotor := m1, topOmega := w1, topTrail := trail1 }
+  else if inPreset && st.presetId == "pga3d_bouncing_cube" then
+    let g := paramVal st.paramOverrides "gravity" 9.8 0.5 20.0
+    let e := paramVal st.paramOverrides "restitution" 0.78 0.1 0.98
+    let sp := paramVal st.paramOverrides "spin" 2.6 0.0 8.0
+    let cube1 := stepBouncingCubeRK4 st.cubeState clampedDt g e sp
+    { st with simTime := nextT, cubeState := cube1 }
+  else if inPreset && st.presetId == "pga3d_double_pendulum" then
+    let l := paramVal st.paramOverrides "length" 1.0 0.4 1.5
+    let d := paramVal st.paramOverrides "damping" 0.03 0.0 0.35
+    let g := paramVal st.paramOverrides "gravity" 9.8 1.0 20.0
+    let dp1 := stepDoublePendulumRK4 st.doublePendulum clampedDt l d g
+    { st with simTime := nextT, doublePendulum := dp1 }
   else
     { st with simTime := nextT }
 
@@ -230,6 +279,8 @@ private def buildImplicitGpuFrame (exprStr : String) (seq : UInt64) (t : Float) 
                    basisNames := #["1","e1","e2","e3","e12","e13","e23","I"],
                    basisMetric := #[1,1,1,1,-1,-1,-1,-1] },
       presetId := "implicit_gpu", title := s!"GPU Implicit: {exprStr} = 0",
+      formula := "f(x, y, z, t) = 0,\\qquad \\mathbf{p}_{k+1} = \\mathbf{p}_k + \\tfrac{f(\\mathbf{p}_k)}{\\|\\nabla f\\|}\\,\\mathbf{d}",
+      summary := s!"Real-time Lean-compiled GLSL3/WGSL/MSL sphere-tracing raymarcher for `{exprStr} = 0`.",
       camera := { motor := Motor3.orbitCamera 0.55 (-0.32) 4.6, fovDeg := 45.0, distance := 4.6 } }
   match compileImplicitExprToGpu exprStr "implicit_gpu" with
   | .ok shader =>
@@ -244,7 +295,7 @@ private def buildImplicitGpuFrame (exprStr : String) (seq : UInt64) (t : Float) 
   | .error err =>
     { base with diagnostics := #[err] }
 
-/-- Emit the live `SceneFrame` for the active CoffeeShop preset (all 69 presets),
+/-- Emit the live `SceneFrame` for the active CoffeeShop preset (all 74 presets),
 custom GA script, `z = f(x,y,t)` surface, 3D implicit equation (mesh or GPU raymarcher),
 or 3D parametric surface. -/
 def toSceneFrame (st : CoffeeShopState) (frameSeq : UInt64 := 0) : SceneFrame :=
@@ -267,7 +318,9 @@ def toSceneFrame (st : CoffeeShopState) (frameSeq : UInt64 := 0) : SceneFrame :=
       let base : SceneFrame :=
         { frameSeq, simTime := st.simTime, mode := .surface, is2D := false,
           algebra := algebraMetaOf algName V p q r witt,
-          presetId := "surface_3d", title := s!"z = {st.surfaceExpr}" }
+          presetId := "surface_3d", title := s!"z = {st.surfaceExpr}",
+          formula := "z = f(x, y, t),\\qquad \\mathbf{n} = \\star(T_x \\wedge T_y)",
+          summary := s!"Animated 3D heightfield surface `z = {st.surfaceExpr}` with analytical forward-AD tangent normals." }
       match evalSurfaceMesh st.surfaceExpr st.simTime minX maxX minY maxY st.surfaceGridN 9001 with
       | .ok m =>
         { base with
@@ -276,7 +329,7 @@ def toSceneFrame (st : CoffeeShopState) (frameSeq : UInt64 := 0) : SceneFrame :=
                           color := RGBA.white, useVertexColors := true }] }
       | .error err => { base with diagnostics := #[err] }
     else if st.useCustom then
-      let fr := evalScriptToFrame st.customAlgebra st.customCode st.handles st.simTime frameSeq st.coeffOverrides
+      let fr := evalScriptToFrame st.customAlgebra st.customCode st.handles st.simTime frameSeq st.coeffOverrides st.paramOverrides
       if !fr.diagnostics.isEmpty then
         match st.lastValidScriptFrame with
         | some prev =>
@@ -311,8 +364,15 @@ def toSceneFrame (st : CoffeeShopState) (frameSeq : UInt64 := 0) : SceneFrame :=
           | none =>
             match buildParityPreset other st.handles frameSeq st.simTime with
             | some fr => fr
-            | none => buildPga3dSlicing st.handles st.sliceMotor frameSeq st.simTime
-      if rawP.script.isEmpty then { rawP with script := presetScriptFor st.presetId } else rawP
+            | none =>
+              match buildShowcasePreset other st.cubeState st.doublePendulum st.handles st.paramOverrides frameSeq st.simTime with
+              | some fr => fr
+              | none => buildPga3dSlicing st.handles st.sliceMotor frameSeq st.simTime
+      let withScript := if rawP.script.isEmpty then { rawP with script := presetScriptFor st.presetId } else rawP
+      let (defFml, defSmry) := presetMathMeta withScript.presetId
+      { withScript with
+        formula := if withScript.formula.isEmpty then defFml else withScript.formula,
+        summary := if withScript.summary.isEmpty then defSmry else withScript.summary }
   let f1 := match st.customCamera with
     | some cam => { f0 with camera := cam }
     | none     => f0
