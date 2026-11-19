@@ -156,6 +156,16 @@ def wedgeHudJson (w : WedgeHudState) : String :=
     ("canUndo", if w.canUndo then "true" else "false")
   ]
 
+def paramSpecJson (p : ParamSpec) : String :=
+  objJson #[
+    ("name", quote p.name),
+    ("label", quote (if p.label.isEmpty then p.name else p.label)),
+    ("value", fmtFloat p.value),
+    ("min", fmtFloat p.min),
+    ("max", fmtFloat p.max),
+    ("step", fmtFloat p.step)
+  ]
+
 /-- Emit the canonical `GSIR` v1 `metaJson` UTF-8 JSON chunk for `SceneFrame`. -/
 def toMetaJson (f : SceneFrame) (labelsTbl : Array String) : String :=
   let base : Array (String × String) := #[
@@ -164,6 +174,9 @@ def toMetaJson (f : SceneFrame) (labelsTbl : Array String) : String :=
     ("presetId", quote f.presetId),
     ("title", quote f.title),
     ("script", quote f.script),
+    ("params", arrJson (f.params.map paramSpecJson)),
+    ("formula", quote f.formula),
+    ("summary", quote f.summary),
     ("labels", arrJson (labelsTbl.map quote)),
     ("inspect", arrJson (f.inspect.map inspectEntryJson)),
     ("opnsShaders", arrJson (f.opnsShaders.map opnsShaderJson)),
@@ -505,6 +518,13 @@ def parseInputEventJson (s : String) : Except String InputEvent := do
     let diff := ((j.get? "difficulty").bind JVal.asNum?).getD 1.0
     let seed := ((j.get? "seed").bind JVal.asNum?).getD 0.0
     return .wedgeRandom (dim ≥ 2.5) diff.toUInt32 seed.toUInt64
+  | "setParam" =>
+    let some name := (j.get? "name").bind JVal.asStr? | throw "setParam missing 'name' string"
+    let val :=
+      match (j.get? "value").bind JVal.asNum? with
+      | some v => v
+      | none   => ((j.get? "val").bind JVal.asNum?).getD 0.0
+    return .setParam name val
   | _ => throw s!"unknown InputEvent op: {op}"
 
 end Grassmann.Scene.Json
