@@ -15,7 +15,6 @@
   Public callers include `include/grassmann/cabi.h` (never `<lean/lean.h>`).
 -/
 import Grassmann.CABI.Kernels
-import Grassmann.CABI.ScenePack
 import Grassmann.CABI.Studio
 
 namespace Grassmann.CABI
@@ -244,5 +243,9 @@ def studioDispatchJsonExport (sid : UInt64) (eventJson : String) : IO (Int32 × 
 @[export grassmann_lean_studio_get_frame]
 def studioGetFrameExport (sid : UInt64) : IO (Int32 × ByteArray) :=
   getCachedFrame sid
+
+@[export grassmann_lean_studio_preset_catalog]
+def studioPresetCatalogExport (_ : UInt8) : ByteArray :=
+  getPresetCatalogJson.toUTF8
 
 end Grassmann.CABI

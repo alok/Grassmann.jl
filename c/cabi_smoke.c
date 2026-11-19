@@ -216,6 +216,22 @@ int main(void) {
 
   /* 6. Canonical GSIR v1 Studio Session API + all #17 verification invariants */
   {
+    /* Verify preset catalog export (19 CoffeeShop presets) */
+    uint32_t catNeed = 0;
+    CHECK(grassmann_studio_preset_catalog(NULL, 0, &catNeed) == GSIR_ERR_BUF_SMALL,
+          "preset_catalog size probe");
+    CHECK(catNeed > 1000, "preset catalog non-empty JSON");
+    char *catBuf = (char *)malloc(catNeed + 1);
+    CHECK(catBuf != NULL, "malloc catBuf");
+    uint32_t catGot = 0;
+    CHECK(grassmann_studio_preset_catalog(catBuf, catNeed, &catGot) == GSIR_OK, "preset_catalog ok");
+    catBuf[catGot] = '\0';
+    CHECK(strstr(catBuf, "pga3d_slicing") != NULL &&
+          strstr(catBuf, "cga3d_opns_cyclide") != NULL &&
+          strstr(catBuf, "sta_lorentz_boost") != NULL,
+          "preset catalog lists flagship presets");
+    free(catBuf);
+
     uint64_t sid = grassmann_studio_create();
     CHECK(sid != 0, "studio_create");
 
@@ -226,7 +242,7 @@ int main(void) {
           "small buf returns GSIR_ERR_BUF_SMALL");
     CHECK(need > 64, "need > 64");
 
-    uint32_t cap = need + 65536u;
+    uint32_t cap = need + 131072u;
     uint8_t *buf = (uint8_t *)malloc(cap);
     CHECK(buf != NULL, "malloc frame buf");
 
@@ -235,12 +251,20 @@ int main(void) {
     uint64_t seq0 = 0;
     uint32_t meta0 = 0;
     int hasAssets0 = 0;
-    CHECK(verify_gsir_frame(buf, got, &seq0, &meta0, &hasAssets0) == 0, "verify initial frame");
+    CHECK(verify_gsir_frame(buf, got, &seq0, &meta0, &hasAssets0) == 0, "verify initial sculpted bunny frame");
     CHECK(seq0 == 1, "initial frameSeq == 1");
     CHECK(meta0 > 0, "initial frame carries metaJson");
     CHECK(hasAssets0 == 1, "initial pga3d_slicing frame carries MESH_ASSETS");
 
-    /* Hot binary Tick -> omits unchanged MESH_ASSETS & metaJsonLen == 0! */
+    /* Load static-mesh/static-meta pga3d_objects to verify hot Tick omits BOTH MESH_ASSETS & metaJson! */
+    const char *loadObj = "{\"op\":\"loadPreset\",\"id\":\"pga3d_objects\"}";
+    CHECK(grassmann_studio_dispatch_json(sid, loadObj, (uint32_t)strlen(loadObj), buf, cap, &got) == GSIR_OK,
+          "load pga3d_objects");
+    uint64_t seqObj = 0; uint32_t metaObj = 0; int assetsObj = 0;
+    CHECK(verify_gsir_frame(buf, got, &seqObj, &metaObj, &assetsObj) == 0, "verify objects frame");
+    CHECK(assetsObj == 1 && metaObj > 0, "objects full load has assets & meta");
+
+    /* Hot binary Tick -> GSIR_ERR_BUF_SMALL on tiny buf, then idempotent get_frame! */
     uint8_t tickEv[12] = {0};
     tickEv[0] = 0x02; /* Tick */
     tickEv[1] = 0x00; /* no forceFull */
@@ -255,7 +279,7 @@ int main(void) {
     uint32_t meta1 = 0;
     int hasAssets1 = 0;
     CHECK(verify_gsir_frame(buf, got, &seq1, &meta1, &hasAssets1) == 0, "verify tick frame");
-    CHECK(seq1 == 2, "idempotent get_frame did not double-mutate (seq == 2)");
+    CHECK(seq1 == seqObj + 1, "idempotent get_frame did not double-mutate");
     CHECK(meta1 == 0, "hot tick frame omits unchanged metaJson (metaLen == 0)");
     CHECK(hasAssets1 == 0, "hot tick frame omits cached MESH_ASSETS");
 
@@ -267,27 +291,37 @@ int main(void) {
     uint32_t meta2 = 0;
     int hasAssets2 = 0;
     CHECK(verify_gsir_frame(buf, got, &seq2, &meta2, &hasAssets2) == 0, "verify full snapshot");
-    CHECK(seq2 == 3 && meta2 > 0 && hasAssets2 == 1, "forceFullSnapshot restored assets & meta");
+    CHECK(seq2 == seq1 + 1 && meta2 > 0 && hasAssets2 == 1, "forceFullSnapshot restored assets & meta");
 
-    /* Test JSON preset switching + evalSurface */
-    const char *presets[] = {
-      "{\"op\":\"loadPreset\",\"id\":\"sta_wedge_lab\"}",
-      "{\"op\":\"loadPreset\",\"id\":\"cga3d_spheres\"}",
+    /* Test flagship CoffeeShop presets, Wedge 2D/3D, evalScript, evalSurface, evalEquations, calcEval */
+    const char *events[] = {
+      "{\"op\":\"loadPreset\",\"id\":\"pga3d_slicing\"}",
+      "{\"op\":\"loadPreset\",\"id\":\"pga3d_physics_free_top\"}",
+      "{\"op\":\"loadPreset\",\"id\":\"pga3d_origami\"}",
+      "{\"op\":\"loadPreset\",\"id\":\"pga3d_motor_orbits\"}",
+      "{\"op\":\"loadPreset\",\"id\":\"cga3d_intersections\"}",
+      "{\"op\":\"loadPreset\",\"id\":\"cga3d_spheres_apollonius\"}",
+      "{\"op\":\"loadPreset\",\"id\":\"cga3d_opns_cyclide\"}",
+      "{\"op\":\"loadPreset\",\"id\":\"sta_lorentz_boost\"}",
+      "{\"op\":\"loadPreset\",\"id\":\"sta_maxwell_em\"}",
       "{\"op\":\"loadPreset\",\"id\":\"r3_rational_rotor\"}",
       "{\"op\":\"loadPreset\",\"id\":\"wedge_2d\"}",
       "{\"op\":\"loadPreset\",\"id\":\"wedge_3d\"}",
-      "{\"op\":\"evalSurface\",\"expr\":\"cos(x)*sin(y)\",\"gridN\":24}"
+      "{\"op\":\"evalScript\",\"algebra\":\"PGA3\",\"code\":\"let P = point(1,2,3); P\"}",
+      "{\"op\":\"evalSurface\",\"expr\":\"cos(x)*sin(y)\",\"bounds\":[-2,2,-2,2],\"gridN\":24}",
+      "{\"op\":\"evalEquations\",\"equations\":[\"x^2+y^2-1\",\"y-x\"],\"bounds\":[-2,2,-2,2],\"gridN\":32}",
+      "{\"op\":\"calcEval\",\"mode\":\"STA\",\"expr\":\"e1 * e2\"}"
     };
-    for (size_t i = 0; i < sizeof(presets) / sizeof(presets[0]); ++i) {
+    for (size_t i = 0; i < sizeof(events) / sizeof(events[0]); ++i) {
       int32_t rc = grassmann_studio_dispatch_json(
-          sid, presets[i], (uint32_t)strlen(presets[i]), buf, cap, &got);
+          sid, events[i], (uint32_t)strlen(events[i]), buf, cap, &got);
       if (rc == GSIR_ERR_BUF_SMALL) {
-        cap = got + 65536u;
+        cap = got + 131072u;
         buf = (uint8_t *)realloc(buf, cap);
         rc = grassmann_studio_get_frame(sid, buf, cap, &got);
       }
-      CHECK(rc == GSIR_OK, "dispatch_json preset");
-      CHECK(verify_gsir_frame(buf, got, NULL, NULL, NULL) == 0, "verify preset frame");
+      CHECK(rc == GSIR_OK, "dispatch_json studio event");
+      CHECK(verify_gsir_frame(buf, got, NULL, NULL, NULL) == 0, "verify studio frame");
     }
 
     free(buf);
@@ -328,7 +362,7 @@ int main(void) {
     uint64_t sid = grassmann_studio_create();
     uint32_t cap = 262144u, got = 0;
     uint8_t *buf = (uint8_t *)malloc(cap);
-    const char *sta = "{\"op\":\"loadPreset\",\"id\":\"sta_wedge_lab\"}";
+    const char *sta = "{\"op\":\"loadPreset\",\"id\":\"sta_lorentz_boost\"}";
     grassmann_studio_dispatch_json(sid, sta, (uint32_t)strlen(sta), buf, cap, &got);
     uint8_t drag[20] = {0};
     drag[0] = 0x01; /* DragHandle */

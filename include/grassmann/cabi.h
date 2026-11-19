@@ -52,6 +52,9 @@ extern "C" {
 
 GRASSMANN_API uint32_t grassmann_cabi_version(void);
 GRASSMANN_API int32_t  grassmann_initialize(void);
+/* Initialize ONLY the Grassmann.CABI Lean module when the host runtime
+ * (e.g. LeanVisionOSRuntime) has ALREADY called lean_initialize_runtime_module(). */
+GRASSMANN_API int32_t  grassmann_initialize_module(void);
 GRASSMANN_API int32_t  grassmann_thread_initialize(void);
 GRASSMANN_API int32_t  grassmann_thread_finalize(void);
 
@@ -87,6 +90,12 @@ GRASSMANN_API int32_t grassmann_studio_dispatch_json(
 GRASSMANN_API int32_t grassmann_studio_get_frame(
   uint64_t session,
   uint8_t *outBuf,
+  uint32_t outCap,
+  uint32_t *outLen);
+
+/* Copy the UTF-8 JSON array of all built-in CoffeeShop presets into caller buffer. */
+GRASSMANN_API int32_t grassmann_studio_preset_catalog(
+  char *outBuf,
   uint32_t outCap,
   uint32_t *outLen);
 

@@ -19,7 +19,9 @@ namespace Grassmann.Server
 open Std.Internal.UV.TCP
 open Std.Net
 open Grassmann.CABI
-open Grassmann.CABI.ScenePack
+
+@[inline] private def getU8 (b : ByteArray) (off : Nat) : UInt8 :=
+  if off < b.size then b.get! off else 0
 
 /-! ### Pure-Lean SHA-1 & Base64 (RFC 6455 `Sec-WebSocket-Accept`) -/
 
@@ -330,7 +332,7 @@ private def handleWebSocket (ctx : ServerCtx) (cb : ConnBuf) (wsKey : String) : 
   let ok ← sendBytes cb.sock resp.toUTF8
   if !ok then return
 
-  let sid ← withStudioLock ctx Studio.createSession
+  let sid ← withStudioLock ctx CABI.Studio.createSession
   try
     while true do
       match ← readWsFrame cb with
@@ -345,19 +347,19 @@ private def handleWebSocket (ctx : ServerCtx) (cb : ConnBuf) (wsKey : String) : 
           let _ ← sendBytes cb.sock (encodeWsFrame 0xA payload)
         else if opcode == 0x2 then
           -- Binary GSIR InputEvent -> Binary GSIR v1 frame!
-          let (rc, frame) ← withStudioLock ctx (Studio.dispatchBin sid payload)
+          let (rc, frame) ← withStudioLock ctx (CABI.Studio.dispatchBin sid payload)
           if rc == 0 then
             let sent ← sendBytes cb.sock (encodeWsFrame 0x2 frame)
             if !sent then break
         else if opcode == 0x1 then
           -- Text JSON InputEvent -> Binary GSIR v1 frame!
           let json := String.fromUTF8! payload
-          let (rc, frame) ← withStudioLock ctx (Studio.dispatchJson sid json)
+          let (rc, frame) ← withStudioLock ctx (CABI.Studio.dispatchJson sid json)
           if rc == 0 then
             let sent ← sendBytes cb.sock (encodeWsFrame 0x2 frame)
             if !sent then break
   finally
-    withStudioLock ctx (Studio.destroySession sid)
+    withStudioLock ctx (CABI.Studio.destroySession sid)
 
 /-- Serve static files from `staticDir`, strictly rejecting `..` path traversal. -/
 private def serveStatic (sock : Socket) (staticDir : String) (reqPath : String)
@@ -418,38 +420,40 @@ private def handleClient (ctx : ServerCtx) (client : Socket) : IO Unit := do
         else if method == "GET" && path == "/health" then
           let payload := "{\"ok\":true,\"version\":1,\"protocol\":\"GSIR/1\",\"server\":\"ga-server\",\"cabiVersion\":\"2.0\"}"
           sendHttpResp client "200 OK" "application/json" payload.toUTF8 keepAlive
+        else if method == "GET" && path == "/api/presets" then
+          sendHttpResp client "200 OK" "application/json" CABI.Studio.getPresetCatalogJson.toUTF8 keepAlive
         else if method == "POST" && path == "/api/session" then
-          let sid ← withStudioLock ctx Studio.createSession
+          let sid ← withStudioLock ctx CABI.Studio.createSession
           sendHttpResp client "200 OK" "application/json" s!"\{\"session\":{sid}}".toUTF8 keepAlive
         else if method == "GET" && path == "/api/frame" then
-          let (rc, frame) ← withStudioLock ctx (Studio.getCachedFrame ctx.defaultSid)
+          let (rc, frame) ← withStudioLock ctx (CABI.Studio.getCachedFrame ctx.defaultSid)
           if rc == 0 then sendHttpResp client "200 OK" "application/octet-stream" frame keepAlive
           else sendHttpResp client "404 Not Found" "application/json" "{\"error\":\"bad session\"}".toUTF8 keepAlive
         else if method == "POST" && (path == "/api/dispatch/bin" || path == "/api/event/bin") then
-          let (rc, frame) ← withStudioLock ctx (Studio.dispatchBin ctx.defaultSid body)
+          let (rc, frame) ← withStudioLock ctx (CABI.Studio.dispatchBin ctx.defaultSid body)
           if rc == 0 then sendHttpResp client "200 OK" "application/octet-stream" frame keepAlive
           else sendHttpResp client "400 Bad Request" "application/json" s!"\{\"error\":{rc}}".toUTF8 keepAlive
         else if method == "POST" && (path == "/api/dispatch/json" || path == "/api/event/json") then
-          let (rc, frame) ← withStudioLock ctx (Studio.dispatchJson ctx.defaultSid (String.fromUTF8! body))
+          let (rc, frame) ← withStudioLock ctx (CABI.Studio.dispatchJson ctx.defaultSid (String.fromUTF8! body))
           if rc == 0 then sendHttpResp client "200 OK" "application/octet-stream" frame keepAlive
           else sendHttpResp client "400 Bad Request" "application/json" s!"\{\"error\":{rc}}".toUTF8 keepAlive
         else match parseSessionIdFromPath path with
         | some (sid, "") =>
           if method == "DELETE" then
-            withStudioLock ctx (Studio.destroySession sid)
+            withStudioLock ctx (CABI.Studio.destroySession sid)
             sendHttpResp client "200 OK" "application/json" "{\"ok\":true}".toUTF8 keepAlive
           else
             sendHttpResp client "405 Method Not Allowed" "text/plain" "method not allowed".toUTF8 keepAlive
         | some (sid, "frame") =>
-          let (rc, frame) ← withStudioLock ctx (Studio.getCachedFrame sid)
+          let (rc, frame) ← withStudioLock ctx (CABI.Studio.getCachedFrame sid)
           if rc == 0 then sendHttpResp client "200 OK" "application/octet-stream" frame keepAlive
           else sendHttpResp client "404 Not Found" "application/json" "{\"error\":\"session not found\"}".toUTF8 keepAlive
         | some (sid, "bin") =>
-          let (rc, frame) ← withStudioLock ctx (Studio.dispatchBin sid body)
+          let (rc, frame) ← withStudioLock ctx (CABI.Studio.dispatchBin sid body)
           if rc == 0 then sendHttpResp client "200 OK" "application/octet-stream" frame keepAlive
           else sendHttpResp client "400 Bad Request" "application/json" s!"\{\"error\":{rc}}".toUTF8 keepAlive
         | some (sid, "json") =>
-          let (rc, frame) ← withStudioLock ctx (Studio.dispatchJson sid (String.fromUTF8! body))
+          let (rc, frame) ← withStudioLock ctx (CABI.Studio.dispatchJson sid (String.fromUTF8! body))
           if rc == 0 then sendHttpResp client "200 OK" "application/octet-stream" frame keepAlive
           else sendHttpResp client "400 Bad Request" "application/json" s!"\{\"error\":{rc}}".toUTF8 keepAlive
         | _ =>
@@ -472,9 +476,9 @@ def runSelfTest : IO UInt32 := do
   if got != expected then
     IO.eprintln s!"FAIL: RFC 6455 wsAcceptKey got '{got}', expected '{expected}'"
     return 1
-  let sid ← Studio.createSession
-  let (rc, frame) ← Studio.getCachedFrame sid
-  Studio.destroySession sid
+  let sid ← CABI.Studio.createSession
+  let (rc, frame) ← CABI.Studio.getCachedFrame sid
+  CABI.Studio.destroySession sid
   if rc != 0 || frame.size < 64 then
     IO.eprintln s!"FAIL: Studio initial frame rc={rc} size={frame.size}"
     return 1
@@ -491,7 +495,7 @@ def serve (cfg : ServerConfig) : IO UInt32 := do
   listener.listen 128
 
   let lock ← Std.BaseMutex.new
-  let defaultSid ← Studio.createSession
+  let defaultSid ← CABI.Studio.createSession
   let ctx : ServerCtx := { cfg, studioLock := lock, defaultSid }
 
   IO.println s!"[ga-server] listening on http://{cfg.host}:{cfg.port} (WS: ws://{cfg.host}:{cfg.port}/ws, GSIR v1)"

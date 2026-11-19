@@ -102,6 +102,7 @@ extern lean_obj_res grassmann_lean_studio_destroy(uint64_t);
 extern lean_obj_res grassmann_lean_studio_dispatch_bin(uint64_t, lean_obj_arg);
 extern lean_obj_res grassmann_lean_studio_dispatch_json(uint64_t, lean_obj_arg);
 extern lean_obj_res grassmann_lean_studio_get_frame(uint64_t);
+extern lean_obj_res grassmann_lean_studio_preset_catalog(uint8_t);
 
 /* ============================================================================
  * Internal State & Helpers
@@ -194,7 +195,7 @@ uint32_t grassmann_cabi_version(void) {
   return GRASSMANN_CABI_VERSION;
 }
 
-int32_t grassmann_initialize(void) {
+static int32_t initialize_impl(int init_runtime) {
   STUDIO_LOCK();
   if (g_runtime_state == 1) {
     STUDIO_UNLOCK();
@@ -204,7 +205,9 @@ int32_t grassmann_initialize(void) {
     STUDIO_UNLOCK();
     return GSIR_ERR_NOT_INIT;
   }
-  lean_initialize_runtime_module();
+  if (init_runtime) {
+    lean_initialize_runtime_module();
+  }
   lean_obj_res res = initialize_Grassmann_Grassmann_CABI(1);
   if (!lean_io_result_is_ok(res)) {
     lean_dec(res);
@@ -214,11 +217,21 @@ int32_t grassmann_initialize(void) {
   }
   lean_dec_ref(res);
 #ifndef __EMSCRIPTEN__
-  lean_io_mark_end_initialization();
+  if (init_runtime) {
+    lean_io_mark_end_initialization();
+  }
 #endif
   g_runtime_state = 1;
   STUDIO_UNLOCK();
   return GSIR_OK;
+}
+
+int32_t grassmann_initialize(void) {
+  return initialize_impl(1);
+}
+
+int32_t grassmann_initialize_module(void) {
+  return initialize_impl(0);
 }
 
 int32_t grassmann_thread_initialize(void) {
@@ -317,6 +330,28 @@ int32_t grassmann_studio_get_frame(
   int32_t rc = unpack_studio_io_result(res, outBuf, outCap, outLen);
   STUDIO_UNLOCK();
   return rc;
+}
+
+int32_t grassmann_studio_preset_catalog(
+    char *outBuf,
+    uint32_t outCap,
+    uint32_t *outLen) {
+  int32_t st = require_init();
+  if (st != GSIR_OK) return st;
+  lean_obj_res ba = grassmann_lean_studio_preset_catalog(0);
+  if (ba == NULL || !lean_is_sarray(ba) || lean_sarray_elem_size(ba) != 1) {
+    if (ba != NULL) lean_dec(ba);
+    return GSIR_ERR_BAD_RESULT;
+  }
+  size_t sz = lean_sarray_size(ba);
+  if (outLen != NULL) *outLen = (uint32_t)sz;
+  if (sz > (size_t)outCap || (sz > 0 && outBuf == NULL)) {
+    lean_dec(ba);
+    return GSIR_ERR_BUF_SMALL;
+  }
+  if (sz > 0) memcpy(outBuf, lean_sarray_cptr(ba), sz);
+  lean_dec(ba);
+  return GSIR_OK;
 }
 
 /* ============================================================================

@@ -128,7 +128,15 @@ try {
   const opt = await httpReq(agent, "OPTIONS", "/api/frame");
   assert.equal(opt.status, 204);
 
-  // 2. Session lifecycle + binary GSIR frames
+  // 1b. Full Lean preset catalog endpoint (/api/presets)
+  const cat = await httpReq(agent, "GET", "/api/presets");
+  assert.equal(cat.status, 200);
+  const catalog = JSON.parse(cat.body.toString("utf8"));
+  assert.ok(Array.isArray(catalog) && catalog.length === 19, `expected 19 presets, got ${catalog.length}`);
+  assert.ok(catalog.some((p) => p.id === "pga3d_slicing"));
+  assert.ok(catalog.some((p) => p.id === "sta_lorentz_boost"));
+
+  // 2. Session lifecycle + binary GSIR frames (sculpted bunny + pga3d_objects delta cache + STA)
   const cr = await httpReq(agent, "POST", "/api/session");
   assert.equal(cr.status, 200);
   const { session } = JSON.parse(cr.body.toString("utf8"));
@@ -137,19 +145,24 @@ try {
   const fr0 = await httpReq(agent, "GET", `/api/session/${session}/frame`);
   assert.equal(fr0.status, 200);
   assert.equal(fr0.headers["content-type"], "application/octet-stream");
+  assert.ok(fr0.body.byteLength >= 100000, `expected sculpted bunny GSIR >= 100KB, got ${fr0.body.byteLength}`);
   const g0 = parseGSIR(new Uint8Array(fr0.body.buffer, fr0.body.byteOffset, fr0.body.byteLength));
   assert.equal(g0.meta.presetId, "pga3d_slicing");
 
+  // Load pga3d_objects, then verify hot Tick omits unchanged metaJson AND cached MESH_ASSETS
+  const objLoad = await httpReq(agent, "POST", `/api/session/${session}/json`,
+    Buffer.from(JSON.stringify({ op: "loadPreset", id: "pga3d_objects" })), "application/json");
+  assert.equal(objLoad.status, 200);
   const fr1 = await httpReq(agent, "POST", `/api/session/${session}/bin`, Buffer.from(makeTickEvent(0.016, 0.5)));
   assert.equal(fr1.status, 200);
   const g1 = parseGSIR(new Uint8Array(fr1.body.buffer, fr1.body.byteOffset, fr1.body.byteLength));
   assert.equal(g1.metaJsonLen, 0, "HTTP hot tick omits unchanged metaJson");
 
   const fr2 = await httpReq(agent, "POST", `/api/session/${session}/json`,
-    Buffer.from(JSON.stringify({ op: "loadPreset", id: "sta_wedge_lab" })), "application/json");
+    Buffer.from(JSON.stringify({ op: "loadPreset", id: "sta_lorentz_boost" })), "application/json");
   assert.equal(fr2.status, 200);
   const g2 = parseGSIR(new Uint8Array(fr2.body.buffer, fr2.body.byteOffset, fr2.body.byteLength));
-  assert.equal(g2.meta.presetId, "sta_wedge_lab");
+  assert.equal(g2.meta.presetId, "sta_lorentz_boost");
 
   const del = await httpReq(agent, "DELETE", `/api/session/${session}`);
   assert.equal(del.status, 200);
@@ -161,7 +174,7 @@ try {
   assert.equal(defFr.status, 200);
   parseGSIR(new Uint8Array(defFr.body.buffer, defFr.body.byteOffset, defFr.body.byteLength));
   const evJson = await httpReq(agent, "POST", "/api/event/json",
-    Buffer.from(JSON.stringify({ op: "loadPreset", id: "sta_wedge_lab" })), "application/json");
+    Buffer.from(JSON.stringify({ op: "loadPreset", id: "sta_lorentz_boost" })), "application/json");
   assert.equal(evJson.status, 200);
 
   // 4. Static asset serving + path traversal rejection
@@ -203,8 +216,8 @@ try {
     ws.send(payload);
   });
 
-  const ws0 = parseGSIR(await wsRpc(JSON.stringify({ op: "loadPreset", id: "sta_wedge_lab" })));
-  assert.equal(ws0.meta.presetId, "sta_wedge_lab");
+  const ws0 = parseGSIR(await wsRpc(JSON.stringify({ op: "loadPreset", id: "sta_lorentz_boost" })));
+  assert.equal(ws0.meta.presetId, "sta_lorentz_boost");
 
   const N_WS = 500;
   const tWs0 = performance.now();

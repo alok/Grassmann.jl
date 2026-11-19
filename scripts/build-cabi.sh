@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # scripts/build-cabi.sh — Build standalone Init-only Grassmann C ABI library
-# Produces a tiny ~2–5 MB standalone dylib (vs 182–264 MB with Lean compiler!)
-# with ZERO libleanshared / libLean / libStd / libLake dependencies, and runs
-# the C++17 header probe + C11 verification & latency benchmark suite.
+# Links ALL 25 Init-only modules (direct GA kernels + full Grassmann.Studio:
+# 19 CoffeeShop presets, sculpted bunny #pga3d_slicing, 16 Wedge 2D+3D levels,
+# GA script evaluator, AD surfaces, marching-triangles contours, GAlculator,
+# R3 rational rotors, WGSL/GLSL/MSL GPU shader codegen) into a tiny standalone
+# dylib with ZERO libleanshared / libLean / libStd / libLake / libssl deps!
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,19 +16,44 @@ lean_sysroot="$(lake --dir "$repo_root" env lean --print-prefix)"
 lean_libdir="$lean_sysroot/lib/lean"
 lean_extlib="$lean_sysroot/lib"
 
-echo "[cabi] building Init-only Lean export objects (--wfail)"
-LAKE_CACHE_DIR='' lake --dir "$repo_root" --no-cache build --wfail \
-  'Grassmann.CABI.Kernels:o.export' \
-  'Grassmann.CABI.ScenePack:o.export' \
-  'Grassmann.CABI.Studio:o.export' \
-  'Grassmann.CABI:o.export'
-
-objs=(
-  "$repo_root/.lake/build/ir/Grassmann/CABI/Kernels.c.o.export"
-  "$repo_root/.lake/build/ir/Grassmann/CABI/ScenePack.c.o.export"
-  "$repo_root/.lake/build/ir/Grassmann/CABI/Studio.c.o.export"
-  "$repo_root/.lake/build/ir/Grassmann/CABI.c.o.export"
+mods=(
+  Grassmann.CABI.Kernels
+  Grassmann.CABI.Alg
+  Grassmann.Scene.Types
+  Grassmann.Scene.Json
+  Grassmann.Scene.Binary
+  Grassmann.Scene
+  Grassmann.Eval.Parser
+  Grassmann.Eval.Contour
+  Grassmann.Eval.Engine
+  Grassmann.Eval.Calc
+  Grassmann.Eval
+  Grassmann.Wedge.Types
+  Grassmann.Wedge.Levels2D
+  Grassmann.Wedge.Levels3D
+  Grassmann.Wedge.Engine
+  Grassmann.Wedge
+  Grassmann.CoffeeShop.Mesh
+  Grassmann.Codegen.GPU
+  Grassmann.Codegen
+  Grassmann.CoffeeShop.Presets
+  Grassmann.CoffeeShop.Engine
+  Grassmann.CoffeeShop
+  Grassmann.Studio
+  Grassmann.CABI.Studio
+  Grassmann.CABI
 )
+
+targets=()
+objs=()
+for m in "${mods[@]}"; do
+  targets+=("${m}:o.export")
+  objs+=("$repo_root/.lake/build/ir/${m//.//}.c.o.export")
+done
+
+echo "[cabi] building ${#mods[@]} strictly Init-only Lean export objects (--wfail)"
+LAKE_CACHE_DIR='' lake --dir "$repo_root" --no-cache build --wfail "${targets[@]}"
+
 for obj in "${objs[@]}"; do
   [[ -f "$obj" ]] || { echo "missing object: $obj" >&2; exit 1; }
 done
@@ -45,7 +72,8 @@ cc -std=c11 -O3 -DNDEBUG -fPIC -fvisibility=hidden -Wall -Wextra -Werror \
   -c "$repo_root/c/grassmann_cabi.c" \
   -o "$out_dir/grassmann_cabi.o"
 
-# Build static archive (for SwiftPM / visionOS / Xcode embedding)
+# Build static archive (for host embedding)
+rm -f "$out_dir/libgrassmann_cabi.a"
 ar rcs "$out_dir/libgrassmann_cabi.a" "$out_dir/grassmann_cabi.o" "${objs[@]}"
 
 case "$(uname -s)" in
