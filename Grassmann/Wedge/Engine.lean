@@ -40,7 +40,14 @@ def loadCustomLevel (lvl : WedgeLevel) (levelIdx : Nat := 0) (isCustom : Bool :=
     items := it3, nextId := id3,
     moves := 0, elapsedSec := 0.0, timerStarted := false,
     lastOp := "", previewOp := "", previewElem := none,
-    selectedIds := #[], showHints := true, solved := false, undoStack := #[] }
+    selectedIds := #[], showHints := true, solved := false, customCamera := none, undoStack := #[] }
+
+/-- Apply an explicit client `SetCamera` override in Wedge mode (preserving exact `motor`,
+`fovDeg`, `distance`, and 2D ortho framing across subsequent renders & snapshots). -/
+def setCamera (st : WedgeState) (m : Motor3) (fovDeg distance : Float) : WedgeState :=
+  let is2D := st.dim == .dim2D
+  let orthoScale := if is2D then max 0.2 (distance / 4.2) else 1.0
+  { st with customCamera := some { motor := m, fovDeg, distance, orthoScale, isOrtho := is2D } }
 
 /-- Load a specific level index (0-based into `allLevels`, clamped). -/
 def loadLevel (idx : Nat) : WedgeState :=
@@ -319,8 +326,11 @@ def toSceneFrame (st : WedgeState) (frameSeq : UInt64 := 0) (simTime : Float := 
       formula := wFormula,
       summary := wSummary,
       camera :=
-        if is3D then { motor := Motor3.orbitCamera 0.55 (-0.34) 5.4, fovDeg := 45.0, distance := 5.4 }
-        else { motor := Motor3.translator 0.0 0.0 (-4.2), orthoScale := 1.0, isOrtho := true } }
+        match st.customCamera with
+        | some cam => cam
+        | none =>
+          if is3D then { motor := Motor3.orbitCamera 0.55 (-0.34) 5.4, fovDeg := 45.0, distance := 5.4 }
+          else { motor := Motor3.translator 0.0 0.0 (-4.2), orthoScale := 1.0, isOrtho := true } }
   -- Animated green gesture indicator arrows for Tutorial Cards (while untouched)
   if !st.tutorialGlyph.isEmpty && st.moves == 0 && !st.solved && lvl.givens.size ≥ 2 then
     let pulse := 0.15 + 0.35 * (0.5 + 0.5 * Float.sin (simTime * 2.4))
