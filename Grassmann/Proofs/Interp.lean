@@ -131,31 +131,66 @@ theorem get_rows₁ (p : Plan) (ha : p.Aligned) (x : Packed.Arr α) (k c : Nat) 
       rw [size_rows₁, show k - c = 0 by omega] at hi; omega
     rw [get_congr (by rw [rows₁, ite_eq_right hc]) i hi, dite_eq_left this]
 
+private theorem values_get_set {k : Nat} (v : Values α k) (j : Fin k) (x : α) (i : Fin k) :
+    (v.set j x).get i = if j.1 = i.1 then x else v.get i :=
+  Packed.get_set v.data ⟨j.1, by rw [v.size_eq]; exact j.2⟩ x i.1
+    (by rw [Packed.size_set, v.size_eq]; exact i.2)
+
+/-- What `fill₂` leaves at position `i`. -/
+theorem get_fill₂ {k : Nat} (p : Plan) (ha : p.Aligned) (x y : Packed.Arr α) (c : Nat)
+    (out : Values α k) (i : Fin k) :
+    (fill₂ p ha x y c out).get i =
+      if c ≤ i.1 then row₂ p ha x y (rowE p i.1) (rowE_le _ _) (rowS p i.1) Coeff.zero
+      else out.get i := by
+  induction c, out using fill₂.induct (k := k) p ha x y with
+  | case1 c out hc s e ih =>
+    rw [fill₂, dite_eq_left hc, ih]
+    by_cases hci : c + 1 ≤ i.1
+    · rw [ite_eq_left hci, ite_eq_left (by omega)]
+    · by_cases heq : c = i.1
+      · rw [ite_eq_right (by omega), ite_eq_left (by omega)]
+        subst heq
+        rw [values_get_set, ite_eq_left rfl]
+        rfl
+      · rw [ite_eq_right hci, ite_eq_right (by omega), values_get_set, ite_eq_right heq]
+  | case2 c out hc =>
+    rw [fill₂, dite_eq_right hc, ite_eq_right (by omega)]
+
+/-- What `fill₁` leaves at position `i`. -/
+theorem get_fill₁ {k : Nat} (p : Plan) (ha : p.Aligned) (x : Packed.Arr α) (c : Nat)
+    (out : Values α k) (i : Fin k) :
+    (fill₁ p ha x c out).get i =
+      if c ≤ i.1 then row₁ p ha x (rowE p i.1) (rowE_le _ _) (rowS p i.1) Coeff.zero
+      else out.get i := by
+  induction c, out using fill₁.induct (k := k) p ha x with
+  | case1 c out hc s e ih =>
+    rw [fill₁, dite_eq_left hc, ih]
+    by_cases hci : c + 1 ≤ i.1
+    · rw [ite_eq_left hci, ite_eq_left (by omega)]
+    · by_cases heq : c = i.1
+      · rw [ite_eq_right (by omega), ite_eq_left (by omega)]
+        subst heq
+        rw [values_get_set, ite_eq_left rfl]
+        rfl
+      · rw [ite_eq_right hci, ite_eq_right (by omega), values_get_set, ite_eq_right heq]
+  | case2 c out hc =>
+    rw [fill₁, dite_eq_right hc, ite_eq_right (by omega)]
+
 /-- **The binary interpreter, exactly:** output `c` of `eval₂ p x y` is the fold
 of row `c` from `Coeff.zero`, in the plan's entry order (every coefficient
 type; at `Float` this fixes the rounding). -/
 theorem get_eval₂ {n m k : Nat} (p : Plan) (ha : p.Aligned) (x : Values α n) (y : Values α m) (c : Fin k) :
     (p.eval₂ x y : Values α k).get c =
       row₂ p ha x.data y.data (rowE p c) (rowE_le _ _) (rowS p c) Coeff.zero := by
-  have hs := size_rows₂ p ha x.data y.data k 0 (Packed.mkEmpty k)
-  rw [Packed.size_mkEmpty] at hs
-  unfold eval₂ finish
-  rw [dite_eq_left ha, dite_eq_left (by omega)]
-  show Packed.get _ ⟨c.1, _⟩ = _
-  rw [get_rows₂, dite_eq_right (by rw [Packed.size_mkEmpty]; omega)]
-  simp [Packed.size_mkEmpty]
+  unfold eval₂
+  rw [dite_eq_left ha, get_fill₂, ite_eq_left (Nat.zero_le _)]
 
 /-- **The unary interpreter, exactly.** -/
 theorem get_eval₁ {n k : Nat} (p : Plan) (ha : p.Aligned) (x : Values α n) (c : Fin k) :
     (p.eval₁ x : Values α k).get c =
       row₁ p ha x.data (rowE p c) (rowE_le _ _) (rowS p c) Coeff.zero := by
-  have hs := size_rows₁ p ha x.data k 0 (Packed.mkEmpty k)
-  rw [Packed.size_mkEmpty] at hs
-  unfold eval₁ finish
-  rw [dite_eq_left ha, dite_eq_left (by omega)]
-  show Packed.get _ ⟨c.1, _⟩ = _
-  rw [get_rows₁, dite_eq_right (by rw [Packed.size_mkEmpty]; omega)]
-  simp [Packed.size_mkEmpty]
+  unfold eval₁
+  rw [dite_eq_left ha, get_fill₁, ite_eq_left (Nat.zero_le _)]
 
 end Exact
 
