@@ -1,0 +1,327 @@
+// Lean WASM C ABI Transport
+// Talks directly to grassmann.wasm via the canonical C ABI:
+//   grassmann_studio_create() -> u64
+//   grassmann_studio_destroy(u64)
+//   grassmann_studio_dispatch_bin(u64, eventPtr, eventLen, outPtr, outCap, outLenPtr) -> i32
+//   grassmann_studio_dispatch_json(u64, jsonPtr, jsonLen, outPtr, outCap, outLenPtr) -> i32
+//   grassmann_studio_get_frame(u64, outPtr, outCap, outLenPtr) -> i32  (#17 Fix #2)
+//
+// Zero per-frame heap allocations: reuses a single caller-owned WASM output buffer, growing
+// once on GSIR_ERR_BUF_SMALL (-3) and reading via grassmann_studio_get_frame (never double-mutating!).
+
+import { encodeTick } from '../gsir/encoder';
+import { GsirStatus, type JsonInputEvent } from '../gsir/types';
+import type { StudioTransport } from './types';
+
+export interface GrassmannWasmExports {
+  memory: WebAssembly.Memory;
+  malloc?: (bytes: number) => number;
+  _malloc?: (bytes: number) => number;
+  free?: (ptr: number) => void;
+  _free?: (ptr: number) => void;
+  grassmann_studio_create?: () => bigint | number;
+  _grassmann_studio_create?: () => bigint | number;
+  grassmann_studio_destroy?: (session: bigint) => void;
+  _grassmann_studio_destroy?: (session: bigint) => void;
+  grassmann_studio_dispatch_bin?: (
+    session: bigint,
+    eventPtr: number,
+    eventLen: number,
+    outPtr: number,
+    outCap: number,
+    outLenPtr: number
+  ) => number;
+  _grassmann_studio_dispatch_bin?: (
+    session: bigint,
+    eventPtr: number,
+    eventLen: number,
+    outPtr: number,
+    outCap: number,
+    outLenPtr: number
+  ) => number;
+  grassmann_studio_dispatch_json?: (
+    session: bigint,
+    jsonPtr: number,
+    jsonLen: number,
+    outPtr: number,
+    outCap: number,
+    outLenPtr: number
+  ) => number;
+  _grassmann_studio_dispatch_json?: (
+    session: bigint,
+    jsonPtr: number,
+    jsonLen: number,
+    outPtr: number,
+    outCap: number,
+    outLenPtr: number
+  ) => number;
+  grassmann_studio_get_frame?: (
+    session: bigint,
+    outPtr: number,
+    outCap: number,
+    outLenPtr: number
+  ) => number;
+  _grassmann_studio_get_frame?: (
+    session: bigint,
+    outPtr: number,
+    outCap: number,
+    outLenPtr: number
+  ) => number;
+}
+
+export interface WasmTransportOptions {
+  /** URL to compiled grassmann.wasm (default: './grassmann.wasm') */
+  wasmUrl?: string;
+  /** Optional Emscripten module loader (if glue JS provides createGrassmannModule) */
+  loadExports?: () => Promise<GrassmannWasmExports>;
+  /** Initial caller-owned output buffer capacity in bytes (default: 256 KB) */
+  initialOutCap?: number;
+  /** Initial reusable input scratch buffer capacity in bytes (default: 16 KB) */
+  initialInCap?: number;
+}
+
+interface ResolvedExports {
+  memory: WebAssembly.Memory;
+  malloc: (bytes: number) => number;
+  free: (ptr: number) => void;
+  create: () => bigint;
+  destroy: (session: bigint) => void;
+  dispatchBin: (
+    session: bigint,
+    eventPtr: number,
+    eventLen: number,
+    outPtr: number,
+    outCap: number,
+    outLenPtr: number
+  ) => number;
+  dispatchJson: (
+    session: bigint,
+    jsonPtr: number,
+    jsonLen: number,
+    outPtr: number,
+    outCap: number,
+    outLenPtr: number
+  ) => number;
+  getFrame: (session: bigint, outPtr: number, outCap: number, outLenPtr: number) => number;
+}
+
+const textEncoder = new TextEncoder();
+
+function resolveExports(raw: GrassmannWasmExports): ResolvedExports {
+  const malloc = raw.malloc ?? raw._malloc;
+  const free = raw.free ?? raw._free;
+  const createRaw = raw.grassmann_studio_create ?? raw._grassmann_studio_create;
+  const destroy = raw.grassmann_studio_destroy ?? raw._grassmann_studio_destroy;
+  const dispatchBin = raw.grassmann_studio_dispatch_bin ?? raw._grassmann_studio_dispatch_bin;
+  const dispatchJson = raw.grassmann_studio_dispatch_json ?? raw._grassmann_studio_dispatch_json;
+  const getFrame = raw.grassmann_studio_get_frame ?? raw._grassmann_studio_get_frame;
+
+  if (!raw.memory || !malloc || !free || !createRaw || !destroy || !dispatchBin || !dispatchJson || !getFrame) {
+    throw new Error(
+      'grassmann.wasm is missing one or more required C ABI exports: ' +
+        'memory, malloc, free, grassmann_studio_{create,destroy,dispatch_bin,dispatch_json,get_frame}'
+    );
+  }
+
+  return {
+    memory: raw.memory,
+    malloc,
+    free,
+    create: () => BigInt(createRaw()),
+    destroy,
+    dispatchBin,
+    dispatchJson,
+    getFrame,
+  };
+}
+
+export class WasmTransport implements StudioTransport {
+  readonly kind = 'wasm' as const;
+  readonly label: string;
+
+  private readonly wasmUrl: string;
+  private readonly loadExportsFn?: () => Promise<GrassmannWasmExports>;
+  private exports: ResolvedExports | null = null;
+  private session = 0n;
+
+  // Caller-owned reusable buffers in WASM linear memory
+  private inPtr = 0;
+  private inCap = 0;
+  private outPtr = 0;
+  private outCap = 0;
+  private outLenPtr = 0;
+
+  private readonly initialOutCap: number;
+  private readonly initialInCap: number;
+
+  constructor(options: WasmTransportOptions = {}) {
+    this.wasmUrl = options.wasmUrl ?? './grassmann.wasm';
+    this.loadExportsFn = options.loadExports;
+    this.initialOutCap = Math.max(4096, options.initialOutCap ?? 256 * 1024);
+    this.initialInCap = Math.max(1024, options.initialInCap ?? 16 * 1024);
+    this.label = `Lean WASM (${this.wasmUrl})`;
+  }
+
+  async connect(signal?: AbortSignal): Promise<Uint8Array> {
+    if (this.exports && this.session !== 0n) {
+      return this.getFrame();
+    }
+
+    let raw: GrassmannWasmExports;
+    if (this.loadExportsFn) {
+      raw = await this.loadExportsFn();
+    } else {
+      const resp = await fetch(this.wasmUrl, { signal });
+      if (!resp.ok) {
+        throw new Error(`Failed to fetch ${this.wasmUrl} (HTTP ${resp.status})`);
+      }
+      const bytes = await resp.arrayBuffer();
+      const instantiated = await WebAssembly.instantiate(bytes, {
+        env: {
+          emscripten_notify_memory_growth: () => {
+            // Buffer views are always refreshed via exports.memory.buffer
+          },
+        },
+      });
+      raw = instantiated.instance.exports as unknown as GrassmannWasmExports;
+    }
+
+    const ex = resolveExports(raw);
+    this.exports = ex;
+    this.session = ex.create();
+    if (this.session === 0n) {
+      throw new Error('grassmann_studio_create returned null session handle (0)');
+    }
+
+    this.outLenPtr = ex.malloc(8);
+    this.ensureInCapacity(this.initialInCap);
+    this.ensureOutCapacity(this.initialOutCap);
+
+    // Fetch initial full snapshot frame
+    return this.dispatchBin(encodeTick(0, 0, true));
+  }
+
+  async dispatchBin(event: Uint8Array): Promise<Uint8Array> {
+    const ex = this.requireReady();
+    this.ensureInCapacity(event.byteLength);
+    new Uint8Array(ex.memory.buffer, this.inPtr, event.byteLength).set(event);
+
+    const rc = ex.dispatchBin(
+      this.session,
+      this.inPtr,
+      event.byteLength,
+      this.outPtr,
+      this.outCap,
+      this.outLenPtr
+    );
+    return this.finalizeFrameCall(rc, 'dispatch_bin');
+  }
+
+  async dispatchJson(event: JsonInputEvent): Promise<Uint8Array> {
+    const ex = this.requireReady();
+    const jsonBytes = textEncoder.encode(JSON.stringify(event));
+    this.ensureInCapacity(jsonBytes.byteLength);
+    new Uint8Array(ex.memory.buffer, this.inPtr, jsonBytes.byteLength).set(jsonBytes);
+
+    const rc = ex.dispatchJson(
+      this.session,
+      this.inPtr,
+      jsonBytes.byteLength,
+      this.outPtr,
+      this.outCap,
+      this.outLenPtr
+    );
+    return this.finalizeFrameCall(rc, 'dispatch_json');
+  }
+
+  async getFrame(): Promise<Uint8Array> {
+    const ex = this.requireReady();
+    const rc = ex.getFrame(this.session, this.outPtr, this.outCap, this.outLenPtr);
+    return this.finalizeFrameCall(rc, 'get_frame');
+  }
+
+  dispose(): void {
+    if (this.exports) {
+      if (this.session !== 0n) {
+        this.exports.destroy(this.session);
+        this.session = 0n;
+      }
+      if (this.inPtr !== 0) {
+        this.exports.free(this.inPtr);
+        this.inPtr = 0;
+        this.inCap = 0;
+      }
+      if (this.outPtr !== 0) {
+        this.exports.free(this.outPtr);
+        this.outPtr = 0;
+        this.outCap = 0;
+      }
+      if (this.outLenPtr !== 0) {
+        this.exports.free(this.outLenPtr);
+        this.outLenPtr = 0;
+      }
+      this.exports = null;
+    }
+  }
+
+  private requireReady(): ResolvedExports {
+    if (!this.exports || this.session === 0n) {
+      throw new Error('WasmTransport is not connected');
+    }
+    return this.exports;
+  }
+
+  private ensureInCapacity(needed: number): void {
+    const ex = this.requireReady();
+    if (needed <= this.inCap && this.inPtr !== 0) return;
+    if (this.inPtr !== 0) ex.free(this.inPtr);
+    const nextCap = Math.max(needed, this.inCap * 2, 4096);
+    this.inPtr = ex.malloc(nextCap);
+    this.inCap = nextCap;
+  }
+
+  private ensureOutCapacity(needed: number): void {
+    const ex = this.requireReady();
+    if (needed <= this.outCap && this.outPtr !== 0) return;
+    if (this.outPtr !== 0) ex.free(this.outPtr);
+    // Align capacity up to 8 bytes
+    const nextCap = (Math.max(needed, this.outCap * 2, 4096) + 7) & ~7;
+    this.outPtr = ex.malloc(nextCap);
+    this.outCap = nextCap;
+  }
+
+  private readOutLen(): number {
+    const ex = this.requireReady();
+    const dv = new DataView(ex.memory.buffer, this.outLenPtr, 4);
+    return dv.getUint32(0, true);
+  }
+
+  /**
+   * Handles C ABI return codes.
+   * On GSIR_ERR_BUF_SMALL (-3): grows the reusable outBuf ONCE and calls
+   * grassmann_studio_get_frame (NEVER re-invoking dispatch_* so state is never double-mutated!).
+   */
+  private finalizeFrameCall(rc: number, opName: string): Uint8Array {
+    const ex = this.requireReady();
+    let status = rc;
+
+    if (status === GsirStatus.ERR_BUF_SMALL) {
+      const required = this.readOutLen();
+      if (required === 0) {
+        throw new Error(`WASM ${opName} returned GSIR_ERR_BUF_SMALL with required size 0`);
+      }
+      this.ensureOutCapacity(required);
+      status = ex.getFrame(this.session, this.outPtr, this.outCap, this.outLenPtr);
+    }
+
+    if (status !== GsirStatus.OK) {
+      throw new Error(`WASM ${opName} failed with status ${status}`);
+    }
+
+    const len = this.readOutLen();
+    // Copy out into a standalone 8-byte-aligned Uint8Array so WASM memory growth/reuse cannot detach it
+    const copy = new Uint8Array(len);
+    copy.set(new Uint8Array(ex.memory.buffer, this.outPtr, len));
+    return copy;
+  }
+}
