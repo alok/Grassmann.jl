@@ -49,29 +49,29 @@ private def hasVisualGeometry (f : SceneFrame) : Bool :=
   !f.segments.isEmpty || !f.curves.isEmpty || !f.meshRefs.isEmpty ||
   !f.flowFields.isEmpty || !f.opnsUniforms.isEmpty
 
-/-! ## 1. All 74 Unique Presets + All 16 Wedge Levels KaTeX Metadata -/
+/-! ## 1. All 77 Unique Presets + All 17 Wedge Levels KaTeX Metadata -/
 
 def testAll74PresetsAndWedgeMeta : IO Unit := do
-  assertTrue s!"totalPresetCount == 74 (got {totalPresetCount})" (totalPresetCount == 74)
+  assertTrue s!"totalPresetCount == 77 (got {totalPresetCount})" (totalPresetCount == 77)
   let allIds : Array String :=
     presetCatalog.map (·.id) ++
     extraPresetCatalog.map (·.id) ++
     parityPresetCatalog.map (·.id) ++
     showcasePresetCatalog.map (·.id)
-  assertTrue "allIds.size == 74" (allIds.size == 74)
-  -- Check strict uniqueness across all 74 preset IDs
+  assertTrue "allIds.size == 77" (allIds.size == 77)
+  -- Check strict uniqueness across all 77 preset IDs
   let mut seen : Array String := #[]
   for id in allIds do
     assertTrue s!"unique preset id '{id}'" (!seen.contains id)
     seen := seen.push id
-  -- Verify `presetCatalogJson` parses as a 74-element JSON array
+  -- Verify `presetCatalogJson` parses as a 77-element JSON array
   match parseJson Studio.presetCatalogJson with
   | .error e => throw (IO.userError s!"presetCatalogJson invalid JSON: {e}")
   | .ok (.arr items) =>
-    assertTrue s!"presetCatalogJson has 74 items (got {items.size})" (items.size == 74)
+    assertTrue s!"presetCatalogJson has 77 items (got {items.size})" (items.size == 77)
   | .ok _ => throw (IO.userError "presetCatalogJson is not a JSON array")
 
-  -- Load & validate EVERY ONE of the 74 presets (GSIR v1 + geometry + KaTeX formula + summary!)
+  -- Load & validate EVERY ONE of the 77 presets (GSIR v1 + geometry + KaTeX formula + summary!)
   for id in allIds do
     let cs := CoffeeShop.loadPreset {} id
     let fr := CoffeeShop.toSceneFrame cs 1
@@ -88,8 +88,8 @@ def testAll74PresetsAndWedgeMeta : IO Unit := do
     | .error e => throw (IO.userError s!"preset {id} GSIR invalid: {e}")
     | .ok _ => assertTrue s!"preset {id}: 8B aligned" (raw.size % 8 == 0)
 
-  -- Verify ALL 16 Wedge 2D/3D campaign levels emit non-empty KaTeX formula & summary!
-  assertTrue "16 Wedge levels" (Wedge.allLevels.size == 16)
+  -- Verify ALL 17 Wedge 2D/3D campaign levels emit non-empty KaTeX formula & summary!
+  assertTrue "17 Wedge levels" (Wedge.allLevels.size == 17)
   for idx in [:Wedge.allLevels.size] do
     let ws := Wedge.loadLevel idx
     let wf := Wedge.toSceneFrame ws (idx + 1).toUInt64 0.5
@@ -311,7 +311,7 @@ def benchBytecodeVsAst : IO Unit := do
 
 def runAll : IO Unit := do
   testAll74PresetsAndWedgeMeta
-  IO.println "PASS [1/5] All 74 unique CoffeeShop presets + 16 Wedge levels emit valid 8B GSIR v1 + non-empty KaTeX formula & summary"
+  IO.println "PASS [1/5] All 77 unique CoffeeShop presets + 17 Wedge levels emit valid 8B GSIR v1 + non-empty KaTeX formula & summary"
   testFiveShowcasePresetsAndSetParam
   IO.println "PASS [2/5] All 5 Wave 4B showstopper presets (Bouncing Cube, Double Pendulum, Terrell-Penrose, Maxwell & Hopf RK4 streamlines) + live setParam"
   testLiveScriptSlidersAndShowcaseScripts

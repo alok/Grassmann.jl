@@ -23,7 +23,9 @@ open Grassmann.Scene Grassmann.Eval
 /-- Populate a playable `WedgeState` from any `WedgeLevel` (campaign, tutorial card, or
 procedural challenge). -/
 def loadCustomLevel (lvl : WedgeLevel) (levelIdx : Nat := 0) (isCustom : Bool := true)
-    (tutorialGlyph : String := "") (tutorialCopy : String := "") : WedgeState :=
+    (tutorialGlyph : String := "") (tutorialCopy : String := "")
+    (tutorialId : String := "") (isRandom : Bool := false)
+    (randomSeed : UInt64 := 0) (randomDifficulty : UInt32 := 0) : WedgeState :=
   let rec pushList (xs : Array (PgaElem × String)) (role : WedgeRole)
       (nextId : UInt32) (acc : Array BoardItem) : Array BoardItem × UInt32 :=
     xs.foldl (init := (acc, nextId)) fun (a, nid) (el, lbl) =>
@@ -33,7 +35,8 @@ def loadCustomLevel (lvl : WedgeLevel) (levelIdx : Nat := 0) (isCustom : Bool :=
   let (it3, id3) := pushList lvl.givens .given id2 it2
   { dim := lvl.dim, levelIdx,
     customLevel := if isCustom then some lvl else none,
-    tutorialGlyph, tutorialCopy,
+    tutorialGlyph, tutorialCopy, tutorialId,
+    isRandom, randomSeed, randomDifficulty,
     items := it3, nextId := id3,
     moves := 0, elapsedSec := 0.0, timerStarted := false,
     lastOp := "", previewOp := "", previewElem := none,
@@ -50,13 +53,14 @@ def loadTutorial (id : String) : WedgeState :=
   let card :=
     (Tutorials.tutorialCards.find? fun c => c.id == id).getD (Tutorials.getTutorialCard 0)
   let copy := s!"{card.headline} — {card.body}"
-  loadCustomLevel card.miniLevel 0 true card.gestureGlyph copy
+  loadCustomLevel card.miniLevel 0 true card.gestureGlyph copy card.id
 
 /-- Generate and load a deterministic SplitMix64 procedural 2D or 3D Wedge challenge. -/
 def loadRandomChallenge (is3D : Bool) (difficulty : Nat) (seed : UInt64) : WedgeState :=
   let dim : WedgeDim := if is3D then .dim3D else .dim2D
-  let lvl := Tutorials.generateChallenge seed dim (min 2 difficulty)
-  loadCustomLevel lvl 0 true
+  let diff := min 2 difficulty
+  let lvl := Tutorials.generateChallenge seed dim diff
+  loadCustomLevel lvl 0 true "" "" "" true seed diff.toUInt32
 
 /-- Initial state for Wedge 2D (Level 1) or Wedge 3D (Level 10). -/
 def initState (start3D : Bool := false) : WedgeState :=
@@ -185,7 +189,7 @@ def stepAction (st : WedgeState) (act : WedgeActionKind) (arg : UInt32 := 0) : W
     else st
   | .reset =>
     match st.customLevel with
-    | some lvl => loadCustomLevel lvl st.levelIdx true st.tutorialGlyph st.tutorialCopy
+    | some lvl => loadCustomLevel lvl st.levelIdx true st.tutorialGlyph st.tutorialCopy st.tutorialId st.isRandom st.randomSeed st.randomDifficulty
     | none     => loadLevel st.levelIdx
   | .next  => loadLevel (min (allLevels.size - 1) (st.levelIdx + 1))
   | .prev  => loadLevel (if st.levelIdx > 0 then st.levelIdx - 1 else 0)
@@ -284,6 +288,8 @@ private def wedgeMathMeta (lvl : WedgeLevel) (is3D : Bool) : String × String :=
            "Finds the tetrahedron circumcenter as the triple meet of three perpendicular bisector planes in PGA3.")
   | 16 => ("M = ((C \\vee D)\\rfloor(A+B)) \\wedge ((B \\vee D)\\rfloor(A+C)) \\wedge ((A \\vee B)\\rfloor(C+D))",
            "Constructs the 3D Monge point where planes through edge midpoints perpendicular to opposite edges concur.")
+  | 17 => ("G = (A+B)+(C+D),\\qquad O = \\bigwedge \\Pi_{\\perp},\\qquad \\ell_{\\text{Euler}} = O \\vee G",
+           "Grand finale in PGA3: joins the tetrahedron circumcenter O and centroid G into the 3D Euler axis (which also passes through the Monge point M!).")
   | _  =>
     if is3D then
       ("A \\vee B,\\quad \\Pi_1 \\wedge \\Pi_2,\\quad X \\rfloor Y \\in \\mathrm{Cl}_{3,0,1}",
@@ -357,7 +363,12 @@ def toSceneFrame (st : WedgeState) (frameSeq : UInt64 := 0) (simTime : Float := 
       elapsedMs := (st.elapsedSec * 1000.0).toUInt32,
       lastOp := st.lastOp, previewOp := st.previewOp,
       hintText := lvl.hintText, solved := st.solved,
-      canUndo := !st.undoStack.isEmpty }
+      canUndo := !st.undoStack.isEmpty,
+      isRandom := st.isRandom,
+      seedStr := if st.isRandom then toString st.randomSeed.toNat else "",
+      difficulty := st.randomDifficulty,
+      dim := if is3D then 3 else 2,
+      tutorialId := st.tutorialId }
   return { f with wedgeHud := some hud }
 
 end Grassmann.Wedge

@@ -108,10 +108,15 @@ with its initial `GSIR` v1 frame pre-cached. -/
 def create : StudioSession :=
   renderAndCache {} true
 
-/-- Return the unified catalog of ALL 74 CoffeeShop presets (19 base + 28 extra + 22 parity + 5 showcase)
+/-- Return the unified catalog of ALL 77 CoffeeShop presets (19 base + 28 extra + 22 parity + 8 showcase)
 as a strictly `Init`-only JSON array string. -/
 def presetCatalogJson : String :=
   CoffeeShop.allPresetCatalogJson
+
+/-- Return the curated 6-stop interactive Guided GA Tour catalog (`0..5`) as a strictly `Init`-only
+JSON array string (single source of truth for Web Studio & Apple Vision Pro / macOS). -/
+def tourCatalogJson : String :=
+  CoffeeShop.Tour.tourCatalogJson
 
 /-- Apply a typed `InputEvent` ONCE, re-render, and cache the resulting `GSIR` v1 binary frame. -/
 def dispatchEvent (st : StudioSession) (ev : InputEvent) (forceSnap : Bool := false) :
@@ -142,8 +147,11 @@ def dispatchEvent (st : StudioSession) (ev : InputEvent) (forceSnap : Bool := fa
       else
         ({ st with active := .coffeeShop, coffee := CoffeeShop.loadPreset st.coffee id }, true)
     | .wedgeGesture idA idB dirA dirB holdA holdB isPrev =>
-      ({ st with active := .wedge,
-                 wedge := Wedge.stepGesture st.wedge idA idB dirA dirB holdA holdB isPrev }, forceSnap)
+      -- Strictly mode-gated: never let an accidental tap/drag in CoffeeShop/Calculator hijack into Wedge!
+      if st.active == .wedge then
+        ({ st with wedge := Wedge.stepGesture st.wedge idA idB dirA dirB holdA holdB isPrev }, forceSnap)
+      else
+        (st, false)
     | .wedgeAction act arg =>
       ({ st with active := .wedge, wedge := Wedge.stepAction st.wedge act arg }, true)
     | .calcKey key =>
@@ -172,6 +180,25 @@ def dispatchEvent (st : StudioSession) (ev : InputEvent) (forceSnap : Bool := fa
                  wedge := Wedge.loadRandomChallenge is3D difficulty.toNat effectiveSeed }, true)
     | .setParam name val =>
       ({ st with coffee := CoffeeShop.setParam st.coffee name val }, forceSnap)
+    | .loadTourStop idx =>
+      let stop := CoffeeShop.Tour.getTourStop idx.toNat
+      if stop.mode == "wedge" || stop.presetId == "wedge_2d" then
+        ({ st with active := .wedge, wedge := Wedge.initState false }, true)
+      else if stop.presetId == "wedge_3d" then
+        ({ st with active := .wedge, wedge := Wedge.initState true }, true)
+      else
+        ({ st with active := .coffeeShop, coffee := CoffeeShop.loadPreset st.coffee stop.presetId }, true)
+    | .resetTime =>
+      match st.active with
+      | .coffeeShop => ({ st with coffee := CoffeeShop.resetTime st.coffee }, true)
+      | .wedge      => ({ st with wedge := { st.wedge with elapsedSec := 0.0, timerStarted := false } }, true)
+      | .calculator => ({ st with coffee := { st.coffee with simTime := 0.0 } }, true)
+    | .seekTime timeSec =>
+      let t := max 0.0 timeSec
+      match st.active with
+      | .coffeeShop => ({ st with coffee := CoffeeShop.seekTime st.coffee t }, forceSnap)
+      | .wedge      => ({ st with wedge := { st.wedge with elapsedSec := t } }, forceSnap)
+      | .calculator => ({ st with coffee := { st.coffee with simTime := t } }, forceSnap)
     | .snapshot =>
       (st, true)
   renderAndCache st1 forceFull

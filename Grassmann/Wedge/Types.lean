@@ -156,9 +156,19 @@ def dotProject : PgaElem → PgaElem → Option PgaElem
     mkLine2 (-b) a (b * x - a * y)
   | .plane3 n _, .pt3 p =>
     mkLine3 n (Vec3.cross p n)
+  | .pt3 p, .plane3 n _ =>
+    -- Symmetric ergonomics if player holds plane and drags point toward it
+    mkLine3 n (Vec3.cross p n)
   | .line3 dir _, .pt3 p =>
     mkPlane3 dir (-(Vec3.dot dir p))
+  | .pt3 p, .line3 dir _ =>
+    -- Symmetric ergonomics if player holds line and drags point toward it
+    mkPlane3 dir (-(Vec3.dot dir p))
   | .plane3 n _, .line3 dir mom =>
+    let n' := Vec3.cross n dir
+    let orig := line3Origin dir mom
+    mkPlane3 n' (-(Vec3.dot n' orig))
+  | .line3 dir mom, .plane3 n _ =>
     let n' := Vec3.cross n dir
     let orig := line3Origin dir mom
     mkPlane3 n' (-(Vec3.dot n' orig))
@@ -215,9 +225,13 @@ structure WedgeState where
   dim           : WedgeDim := .dim2D
   levelIdx      : Nat      := 0
   customLevel   : Option WedgeLevel := none
-  tutorialGlyph : String   := ""
-  tutorialCopy  : String   := ""
-  items         : Array BoardItem := #[]
+  tutorialGlyph    : String   := ""
+  tutorialCopy     : String   := ""
+  tutorialId       : String   := ""
+  isRandom         : Bool     := false
+  randomSeed       : UInt64   := 0
+  randomDifficulty : UInt32   := 0
+  items            : Array BoardItem := #[]
   nextId        : UInt32   := 1
   moves         : UInt32   := 0
   elapsedSec    : Float    := 0.0

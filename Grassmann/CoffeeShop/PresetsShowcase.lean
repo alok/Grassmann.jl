@@ -1,14 +1,16 @@
 import Grassmann.Scene.Types
 import Grassmann.Scene.Json
 import Grassmann.CoffeeShop.Mesh
+import Grassmann.Eval.ImplicitExpr
+import Grassmann.Codegen.GPUInit
 
 /-!
-# Wave 4B Showstopper 3D Physics, Relativity & Streamline Presets + 74-Preset KaTeX Metadata
+# Wave 4B & Wave 6C Showstopper 3D Physics, Relativity, GPU Raymarching & Streamline Presets + 77-Preset KaTeX Metadata
 
 Strictly `Init`-only (ZERO `Lean.*`, ZERO `Std.*`, ZERO `DirectSum`, ZERO `sorry`/axioms) so
 every preset links cleanly into both the standalone C ABI dylib/XCFramework and the Emscripten WASM bundle!
 
-Adds **5 Showstopper Interactive 3D Presets** (bringing total studio catalog to **74 presets**):
+Adds **8 Showstopper Interactive 3D Presets** (bringing total studio catalog to **77 presets**):
 1. `pga3d_bouncing_cube` — Real-time PGA3 motor RK4 rigid-body bouncing cube with 8-corner
    floor impulse collisions, angular momentum bivector disk + arrow, bounce trail, and live
    `gravity` / `restitution` / `spin` `@param` sliders!
@@ -22,15 +24,23 @@ Adds **5 Showstopper Interactive 3D Presets** (bringing total studio catalog to 
    (`0x0D FLOW_PARTICLES`) + glowing Faraday bivector disks (`F = E + IB`) + `frequency` / `dipole` / `bScale` sliders!
 5. `pga3d_hopf_streamlines` — 3D RK4-advected Hopf fibration (`S³ → ℝ³`) + PGA3 Chasles screw-motor
    particle flow ribbons (`0x0D FLOW_PARTICLES`) + Villarceau guide fibers + `pitch` / `twist` / `flowSpeed` sliders!
+6. `implicit_barth_sextic` — Iconic degree-6 **Barth Sextic** (`4(φ²x²-y²)(φ²y²-z²)(φ²z²-x²) - (1+2φ)(x²+y²+z²-1)² = c`)
+   with BOTH live `GPUInit` infinite-resolution GLSL3/WGSL/MSL sphere-tracer AND fast bytecode
+   Marching Tetrahedra mesh + live `phi`/`iso` `@param` sliders!
+7. `cga3d_dupin_cyclide_raymarch` — Live `GPUInit` sphere-traced **3D CGA Dupin Cyclide** with
+   interactive `majorR`/`minorR`/`eccentricity` `@param` sliders and glowing orthogonal focal ellipse + hyperbola!
+8. `pga3d_gears_kinematics` — Meshing 3D PGA3 rigid-body involute-style 3-gear train driven by
+   composed PGA3 rotational motors with live `speed` & `ratio` `@param` sliders!
 
-Also provides `presetMathMeta` with crisp KaTeX LaTeX `formula` and 1-sentence `summary` for ALL **74 presets**.
+Also provides `presetMathMeta` with crisp KaTeX LaTeX `formula` and 1-sentence `summary` for ALL **77 presets**.
 
 Credits: Michael Reed (`chakravala` / `Grassmann.jl`) & Steven De Keninck (`enkimute` / `ganja.js`).
 -/
 
 namespace Grassmann.CoffeeShop.PresetsShowcase
 
-open Grassmann.Scene Grassmann.CoffeeShop.Mesh
+open Grassmann.Scene Grassmann.Scene.Json Grassmann.CoffeeShop.Mesh
+open Grassmann.Eval.ImplicitExpr Grassmann.Codegen.GPUInit
 
 private def piF : Float := 3.14159265358979323846
 private def twoPiF : Float := 6.28318530717958647692
@@ -882,7 +892,348 @@ def buildPga3dHopfStreamlines (handles : Array (UInt32 × Vec3))
         formatted := s!"{twist} e13 + {pitch} e02 · 324 RK4 streaks", editable := false }
     ] }
 
-/-! ## Showcase Catalog (5 Showstopper Presets → 74 Total Across Studio!) -/
+/-! ## 6. `implicit_barth_sextic` — Barth Sextic Algebraic Surface (GPU Raymarch + Bytecode MT) -/
+
+/-- Format a finite `Float` to a clean decimal literal for `ImplicitExpr` / `GPUInit` shaders. -/
+private def fmtExprNum (x : Float) : String :=
+  if !x.isFinite || x.isNaN || Float.abs x < 1e-9 then "0.0"
+  else
+    let neg := x < 0.0
+    let ax := Float.abs x
+    let scaled := (ax * 10000.0 + 0.5).toUInt64.toNat
+    let intPart := scaled / 10000
+    let fracPart := scaled % 10000
+    let pad4 (n : Nat) : String :=
+      let s := toString n
+      if s.length == 1 then "000" ++ s
+      else if s.length == 2 then "00" ++ s
+      else if s.length == 3 then "0" ++ s
+      else s
+    let body := s!"{intPart}.{pad4 fracPart}"
+    if neg then "-" ++ body else body
+
+/-- **6. `implicit_barth_sextic`** — Iconic degree-6 Barth Sextic with 65 icosahedral ordinary
+double points: BOTH live `GPUInit` GLSL3/WGSL/MSL sphere-tracer AND fast bytecode Marching Tetrahedra
+mesh + interactive `phi` & `iso` `@param` sliders! -/
+def buildImplicitBarthSextic (handles : Array (UInt32 × Vec3))
+    (overrides : Array (String × Float)) (seq : UInt64 := 0) (t : Float := 0.0) : SceneFrame := Id.run do
+  let f := mkShowcaseBase "implicit_barth_sextic"
+    "Barth Sextic (GPU Raymarch + Bytecode MT)" "R3" seq t 4.8
+  let phi := paramVal overrides "phi" 1.618034 1.1 2.1
+  let iso := paramVal overrides "iso" 0.0 (-0.35) 0.35
+  let p2 := phi * phi
+  let w := 1.0 + 2.0 * phi
+  let exprStr :=
+    s!"4*({fmtExprNum p2}*x^2 - y^2)*({fmtExprNum p2}*y^2 - z^2)*({fmtExprNum p2}*z^2 - x^2) - {fmtExprNum w}*(x^2 + y^2 + z^2 - 1)^2 - ({fmtExprNum iso})"
+  let shaders : Array OpnsShaderSource :=
+    match compileImplicitExprToGpu exprStr "barth_sextic" 1.65 with
+    | .ok sh => #[sh]
+    | .error _ => #[]
+  let (meshAssets, meshRefs, meshStats) : Array MeshAsset × Array MeshRefPrim × String :=
+    match evalImplicitExprMesh exprStr 0.0 ⟨-1.65, -1.65, -1.65⟩ ⟨1.65, 1.65, 1.65⟩ 16 7420 false with
+    | .ok m =>
+      (#[m],
+       #[{ meshId := m.meshId, dirtyHash := m.dirtyHash,
+           motor := Motor3.identity,
+           color := ⟨0.98, 0.80, 0.38, 0.24⟩,
+           wireframe := true, useVertexColors := false }],
+       s!"{m.positions.size / 3} verts, {m.indices.size / 3} tris")
+    | .error _ => (#[], #[], "mesh err")
+  -- 12 icosahedral symmetry poles `(±1, ±φ, 0)` cyclic normalized onto the unit sphere
+  let invR := 1.0 / Float.sqrt (1.0 + phi * phi)
+  let a := invR; let b := phi * invR
+  let icoPts : Array Vec3 := #[
+    ⟨a, b, 0.0⟩, ⟨-a, b, 0.0⟩, ⟨a, -b, 0.0⟩, ⟨-a, -b, 0.0⟩,
+    ⟨0.0, a, b⟩, ⟨0.0, -a, b⟩, ⟨0.0, a, -b⟩, ⟨0.0, -a, -b⟩,
+    ⟨b, 0.0, a⟩, ⟨-b, 0.0, a⟩, ⟨b, 0.0, -a⟩, ⟨-b, 0.0, -a⟩
+  ]
+  let ctrl := hPos handles 0 ⟨0.0, 1.55, 0.0⟩
+  let mut pts : Array PointPrim := #[
+    { handleId := 0, pos := ctrl, radius := 0.075, color := RGBA.cyan,
+      role := { draggable := true }, label := "Symmetry Probe" }
+  ]
+  for k in [:icoPts.size] do
+    pts := pts.push {
+      handleId := (10 + k).toUInt32, pos := icoPts[k]!, radius := 0.042,
+      color := RGBA.amber, label := if k == 0 then "A₅ Pole" else ""
+    }
+  let params : Array ParamSpec := #[
+    { name := "phi", label := "Golden Ratio φ", value := phi, min := 1.1, max := 2.1, step := 0.01 },
+    { name := "iso", label := "Iso-Level c", value := iso, min := -0.35, max := 0.35, step := 0.01 }
+  ]
+  return { f with
+    params,
+    opnsShaders := shaders,
+    opnsUniforms := if shaders.isEmpty then #[] else #[{
+      shaderIdx := 0, grade := 0, coeffs := FloatArray.empty,
+      thresh := 0.002, maxSteps := 128, stepSize := 0.01,
+      color := ⟨0.96, 0.72, 0.28, 0.96⟩, isIPNS := false
+    }],
+    meshAssets,
+    meshRefs,
+    points := pts,
+    inspect := #[
+      { idx := 0, name := "Barth Sextic", grade := 0,
+        formatted := s!"φ={fmtExprNum phi}, c={fmtExprNum iso} · 65 double points · {meshStats}",
+        editable := false },
+      { idx := 1, name := "GPU Raymarcher", grade := 0,
+        formatted := if shaders.isEmpty then "err" else s!"WGSL+GLSL3+MSL ({shaders[0]!.hash})",
+        editable := false }
+    ] }
+
+/-! ## 7. `cga3d_dupin_cyclide_raymarch` — CGA3 Dupin Cyclide (GPU Sphere-Tracer + Focal Conics) -/
+
+/-- **7. `cga3d_dupin_cyclide_raymarch`** — Sphere-traced 3D CGA Dupin Cyclide with interactive
+`majorR`/`minorR`/`eccentricity` `@param` sliders and glowing orthogonal focal ellipse + hyperbola! -/
+def buildCga3dDupinCyclideRaymarch (handles : Array (UInt32 × Vec3))
+    (overrides : Array (String × Float)) (seq : UInt64 := 0) (t : Float := 0.0) : SceneFrame := Id.run do
+  let f := mkShowcaseBase "cga3d_dupin_cyclide_raymarch"
+    "3D CGA Dupin Cyclide (GPU Raymarch + Focal Conics)" "CGA3" seq t 5.0
+  let a := paramVal overrides "majorR" 1.05 0.65 1.45
+  let d := paramVal overrides "minorR" 0.48 0.20 0.85
+  let ecc := paramVal overrides "eccentricity" 0.42 0.0 0.72
+  let c := ecc * a
+  let b2 := max 0.04 (a * a - c * c)
+  let b := Float.sqrt b2
+  let k1 := b2 - d * d
+  let cd := c * d
+  let bound := max 1.65 (a + d + 0.25)
+  let exprStr :=
+    s!"(x^2 + y^2 + z^2 + ({fmtExprNum k1}))^2 - 4*({fmtExprNum a}*x - ({fmtExprNum cd}))^2 - {fmtExprNum (4.0 * b2)}*z^2"
+  let shaders : Array OpnsShaderSource :=
+    match compileImplicitExprToGpu exprStr "cga3_dupin_cyclide" bound with
+    | .ok sh => #[sh]
+    | .error _ => #[]
+  let (meshAssets, meshRefs) : Array MeshAsset × Array MeshRefPrim :=
+    match evalImplicitExprMesh exprStr 0.0 ⟨-bound, -bound, -bound⟩ ⟨bound, bound, bound⟩ 14 7421 false with
+    | .ok m =>
+      (#[m],
+       #[{ meshId := m.meshId, dirtyHash := m.dirtyHash,
+           motor := Motor3.identity,
+           color := ⟨0.36, 0.88, 1.0, 0.20⟩,
+           wireframe := true, useVertexColors := false }])
+    | .error _ => (#[], #[])
+  -- Glowing focal ellipse in horizontal `y = 0` plane: `(a cos θ, 0, b sin θ)`
+  let mut ellPts : Array Vec3 := #[]
+  for i in [:65] do
+    let th := twoPiF * Float.ofNat i / 64.0
+    ellPts := ellPts.push ⟨a * Float.cos th, 0.0, b * Float.sin th⟩
+  -- Two glowing focal hyperbola branches in `z = 0` plane: `(±c cosh s, b sinh s, 0)`
+  let mut hypPos : Array Vec3 := #[]
+  let mut hypNeg : Array Vec3 := #[]
+  let cEff := max 0.03 c
+  for i in [:41] do
+    let s := -1.1 + 2.2 * Float.ofNat i / 40.0
+    let ch := Float.cosh s
+    let sh := Float.sinh s
+    hypPos := hypPos.push ⟨cEff * ch, b * sh, 0.0⟩
+    hypNeg := hypNeg.push ⟨-cEff * ch, b * sh, 0.0⟩
+  let probe := hPos handles 0 ⟨a * Float.cos (t * 0.6), 0.0, b * Float.sin (t * 0.6)⟩
+  let rThin := max 0.06 (Float.abs (d - c))
+  let rThick := d + c
+  let params : Array ParamSpec := #[
+    { name := "majorR", label := "Major Radius a", value := a, min := 0.65, max := 1.45, step := 0.02 },
+    { name := "minorR", label := "Tube Radius d", value := d, min := 0.20, max := 0.85, step := 0.02 },
+    { name := "eccentricity", label := "Eccentricity c/a", value := ecc, min := 0.0, max := 0.72, step := 0.02 }
+  ]
+  return { f with
+    params,
+    opnsShaders := shaders,
+    opnsUniforms := if shaders.isEmpty then #[] else #[{
+      shaderIdx := 0, grade := 0, coeffs := FloatArray.empty,
+      thresh := 0.002, maxSteps := 112, stepSize := 0.01,
+      color := ⟨0.32, 0.84, 0.98, 0.94⟩, isIPNS := false
+    }],
+    meshAssets,
+    meshRefs,
+    curves := #[
+      curveFromVecs ellPts RGBA.amber 3.2 true,
+      curveFromVecs hypPos RGBA.coral 3.0 false,
+      curveFromVecs hypNeg RGBA.violet 3.0 false
+    ],
+    circles := #[
+      { center := ⟨a, 0.0, 0.0⟩, u := ⟨1.0, 0.0, 0.0⟩, v := ⟨0.0, 1.0, 0.0⟩,
+        radius := rThin, width := 2.2, color := RGBA.green, label := "Waist C₁" },
+      { center := ⟨-a, 0.0, 0.0⟩, u := ⟨1.0, 0.0, 0.0⟩, v := ⟨0.0, 1.0, 0.0⟩,
+        radius := rThick, width := 2.2, color := RGBA.cyan, label := "Crest C₂" }
+    ],
+    points := #[
+      { handleId := 0, pos := probe, radius := 0.08, color := RGBA.green, role := { draggable := true }, label := "Focal Orbit" },
+      { handleId := 10, pos := ⟨c, 0.0, 0.0⟩, radius := 0.065, color := RGBA.coral, label := "+c Focus" },
+      { handleId := 11, pos := ⟨-c, 0.0, 0.0⟩, radius := 0.065, color := RGBA.violet, label := "-c Focus" }
+    ],
+    inspect := #[
+      { idx := 0, name := "Dupin Cyclide", grade := 4,
+        formatted := s!"a={fmtExprNum a}, b={fmtExprNum b}, c={fmtExprNum c}, d={fmtExprNum d}",
+        editable := false },
+      { idx := 1, name := "GPU Raymarcher", grade := 0,
+        formatted := if shaders.isEmpty then "err" else s!"WGSL+GLSL3+MSL ({shaders[0]!.hash})",
+        editable := false }
+    ] }
+
+/-! ## 8. `pga3d_gears_kinematics` — 3D PGA Meshing Involute Gear Train (Composed Screw Motors) -/
+
+/-- Build a watertight outward-CCW 3D involute-style spur gear mesh with tooth flanks,
+beveled tips, roots, and central shaft bore purely in Lean (`Init`-only). -/
+private def buildInvoluteGearMesh (teeth : Nat) (pitchR thick : Float)
+    (baseCol : RGBA) (meshId : UInt64) : MeshAsset := Id.run do
+  let z := max 6 teeth
+  let zF := Float.ofNat z
+  let modM := (2.0 * pitchR) / zF
+  let rOut := pitchR + 0.78 * modM
+  let rRoot := max (0.30 * pitchR) (pitchR - 0.98 * modM)
+  let rHub := max 0.11 (0.28 * pitchR)
+  let hz := 0.5 * thick
+  let stepsPerTooth := 4
+  let nSeg := z * stepsPerTooth
+  -- Profile radii per tooth phase: [root, pitch-flank, tip, tip]
+  let profR (step : Nat) : Float :=
+    match step % 4 with
+    | 0 => rRoot
+    | 1 => rOut
+    | 2 => rOut
+    | _ => rRoot
+  let profAng (i : Nat) : Float :=
+    let toothIdx := i / 4
+    let sub := i % 4
+    let baseA := twoPiF * Float.ofNat toothIdx / zF
+    let stepA := twoPiF / zF
+    let frac :=
+      match sub with
+      | 0 => 0.08
+      | 1 => 0.30
+      | 2 => 0.62
+      | _ => 0.84
+    baseA + frac * stepA
+  let tipCol : RGBA := ⟨min 1.0 (baseCol.r * 1.18), min 1.0 (baseCol.g * 1.18), min 1.0 (baseCol.b * 1.18), 1.0⟩
+  let rootCol : RGBA := ⟨baseCol.r * 0.72, baseCol.g * 0.72, baseCol.b * 0.72, 1.0⟩
+  let hubCol : RGBA := ⟨0.24, 0.28, 0.36, 1.0⟩
+  let mut mb : MeshBuilder := {}
+  -- Add ring vertices: [0..nSeg-1] outer front (+hz), [nSeg..2*nSeg-1] outer back (-hz),
+  -- [2*nSeg..3*nSeg-1] inner bore front (+hz), [3*nSeg..4*nSeg-1] inner bore back (-hz)
+  for i in [:nSeg] do
+    let a := profAng i; let r := profR i
+    let c := if i % 4 == 1 || i % 4 == 2 then tipCol else rootCol
+    let (mb1, _) := mb.addVertex ⟨r * Float.cos a, r * Float.sin a, hz⟩ c
+    mb := mb1
+  for i in [:nSeg] do
+    let a := profAng i; let r := profR i
+    let c := if i % 4 == 1 || i % 4 == 2 then tipCol else rootCol
+    let (mb1, _) := mb.addVertex ⟨r * Float.cos a, r * Float.sin a, -hz⟩ c
+    mb := mb1
+  for i in [:nSeg] do
+    let a := profAng i
+    let (mb1, _) := mb.addVertex ⟨rHub * Float.cos a, rHub * Float.sin a, hz⟩ hubCol
+    mb := mb1
+  for i in [:nSeg] do
+    let a := profAng i
+    let (mb1, _) := mb.addVertex ⟨rHub * Float.cos a, rHub * Float.sin a, -hz⟩ hubCol
+    mb := mb1
+  for i in [:nSeg] do
+    let j := (i + 1) % nSeg
+    let of0 := i.toUInt32; let of1 := j.toUInt32
+    let ob0 := (nSeg + i).toUInt32; let ob1 := (nSeg + j).toUInt32
+    let if0 := (2 * nSeg + i).toUInt32; let if1 := (2 * nSeg + j).toUInt32
+    let ib0 := (3 * nSeg + i).toUInt32; let ib1 := (3 * nSeg + j).toUInt32
+    -- Front annular face (+Z normal, CCW)
+    mb := mb.addTri if0 of0 of1 |>.addTri if0 of1 if1
+    -- Back annular face (-Z normal, CCW from back)
+    mb := mb.addTri ib0 ob1 ob0 |>.addTri ib0 ib1 ob1
+    -- Outer tooth perimeter wall (outward normal)
+    mb := mb.addTri of0 ob0 ob1 |>.addTri of0 ob1 of1
+    -- Inner bore wall (inward normal toward shaft center)
+    mb := mb.addTri if0 if1 ib1 |>.addTri if0 ib1 ib0
+  return mb.finalize meshId
+
+private def driveGear12Asset : MeshAsset :=
+  buildInvoluteGearMesh 12 0.56 0.22 RGBA.cyan 7431
+
+private def pinionGear9Asset : MeshAsset :=
+  buildInvoluteGearMesh 9 0.42 0.22 RGBA.coral 7433
+
+/-- **8. `pga3d_gears_kinematics`** — Meshing 3D PGA3 involute-style 3-gear train driven by
+composed PGA3 rotational motors with live `speed` & `ratio` `@param` sliders! -/
+def buildPga3dGearsKinematics (handles : Array (UInt32 × Vec3))
+    (overrides : Array (String × Float)) (seq : UInt64 := 0) (t : Float := 0.0) : SceneFrame :=
+  let f := mkShowcaseBase "pga3d_gears_kinematics"
+    "3D PGA Meshing Involute Gear Train (Composed Motors)" "PGA3" seq t 5.2
+  let speed := paramVal overrides "speed" 1.4 (-4.0) 4.0
+  let ratio := paramVal overrides "ratio" 1.5 0.5 2.0
+  let z1 : Nat := 12
+  let r1 : Float := 0.56
+  let z2 : Nat := max 6 (min 24 ((12.0 * ratio + 0.5).toUInt32.toNat))
+  let actualRatio := Float.ofNat z2 / Float.ofNat z1
+  let r2 : Float := r1 * actualRatio
+  let z3 : Nat := 9
+  let r3 : Float := r1 * (Float.ofNat z3 / Float.ofNat z1)
+  let gear2Asset := buildInvoluteGearMesh z2 r2 0.22 RGBA.amber (7440 + z2.toUInt64)
+  -- Draggable handle 0 scrubs extra phase offset cleanly
+  let phaseH := hPos handles 0 ⟨0.0, -1.25, 0.0⟩
+  let theta1 := speed * t + phaseH.x * 1.4
+  let theta2 := -(theta1 / actualRatio) + piF / Float.ofNat z2
+  let theta3 := -(Float.ofNat z1 / Float.ofNat z3) * theta1 + piF / (2.0 * Float.ofNat z3)
+  let c1 : Vec3 := ⟨-r1, 0.0, 0.0⟩
+  let c2 : Vec3 := ⟨r2, 0.0, 0.0⟩
+  let c3 : Vec3 := ⟨-r1, r1 + r3, 0.0⟩
+  let m1 := Motor3.mul (Motor3.translator c1.x c1.y c1.z) (Motor3.rotorAxis ⟨0.0, 0.0, 1.0⟩ theta1)
+  let m2 := Motor3.mul (Motor3.translator c2.x c2.y c2.z) (Motor3.rotorAxis ⟨0.0, 0.0, 1.0⟩ theta2)
+  let m3 := Motor3.mul (Motor3.translator c3.x c3.y c3.z) (Motor3.rotorAxis ⟨0.0, 0.0, 1.0⟩ theta3)
+  let w2 := -speed / actualRatio
+  let w3 := -(Float.ofNat z1 / Float.ofNat z3) * speed
+  let params : Array ParamSpec := #[
+    { name := "speed", label := "Drive Speed ω", value := speed, min := -4.0, max := 4.0, step := 0.1 },
+    { name := "ratio", label := "Gear Ratio Z₂/Z₁", value := ratio, min := 0.5, max := 2.0, step := 0.1 }
+  ]
+  { f with
+    params,
+    meshAssets := #[driveGear12Asset, gear2Asset, pinionGear9Asset],
+    meshRefs := #[
+      { meshId := driveGear12Asset.meshId, dirtyHash := driveGear12Asset.dirtyHash,
+        motor := m1, color := RGBA.white, useVertexColors := true },
+      { meshId := gear2Asset.meshId, dirtyHash := gear2Asset.dirtyHash,
+        motor := m2, color := RGBA.white, useVertexColors := true },
+      { meshId := pinionGear9Asset.meshId, dirtyHash := pinionGear9Asset.dirtyHash,
+        motor := m3, color := RGBA.white, useVertexColors := true }
+    ],
+    circles := #[
+      { center := c1, u := ⟨1.0, 0.0, 0.0⟩, v := ⟨0.0, 1.0, 0.0⟩, radius := r1, width := 2.2,
+        color := ⟨0.20, 0.90, 1.0, 0.80⟩, label := s!"Pitch₁ (Z={z1})" },
+      { center := c2, u := ⟨1.0, 0.0, 0.0⟩, v := ⟨0.0, 1.0, 0.0⟩, radius := r2, width := 2.2,
+        color := ⟨1.0, 0.78, 0.24, 0.80⟩, label := s!"Pitch₂ (Z={z2})" },
+      { center := c3, u := ⟨1.0, 0.0, 0.0⟩, v := ⟨0.0, 1.0, 0.0⟩, radius := r3, width := 2.2,
+        color := ⟨1.0, 0.44, 0.48, 0.80⟩, label := s!"Pitch₃ (Z={z3})" }
+    ],
+    lines := #[
+      { origin := c1, dir := ⟨0.0, 0.0, 1.0⟩, clip := 1.1, width := 2.4, color := RGBA.cyan, label := "Axis₁" },
+      { origin := c2, dir := ⟨0.0, 0.0, 1.0⟩, clip := 1.1, width := 2.4, color := RGBA.amber, label := "Axis₂" },
+      { origin := c3, dir := ⟨0.0, 0.0, 1.0⟩, clip := 1.1, width := 2.4, color := RGBA.coral, label := "Axis₃" }
+    ],
+    bivectorDisks := #[
+      { origin := ⟨c1.x, c1.y, 0.26⟩, u := ⟨1.0, 0.0, 0.0⟩, v := ⟨0.0, 1.0, 0.0⟩,
+        area := 0.22 + 0.08 * Float.abs speed, color := ⟨0.20, 0.90, 1.0, 0.42⟩,
+        isDisk := true, orientationArrow := true },
+      { origin := ⟨c2.x, c2.y, 0.26⟩, u := ⟨1.0, 0.0, 0.0⟩, v := ⟨0.0, 1.0, 0.0⟩,
+        area := 0.22 + 0.08 * Float.abs w2, color := ⟨1.0, 0.78, 0.24, 0.42⟩,
+        isDisk := true, orientationArrow := true },
+      { origin := ⟨c3.x, c3.y, 0.26⟩, u := ⟨1.0, 0.0, 0.0⟩, v := ⟨0.0, 1.0, 0.0⟩,
+        area := 0.18 + 0.06 * Float.abs w3, color := ⟨1.0, 0.44, 0.48, 0.42⟩,
+        isDisk := true, orientationArrow := true }
+    ],
+    points := #[
+      { handleId := 0, pos := phaseH, radius := 0.085, color := RGBA.green, role := { draggable := true }, label := "Phase Scrub" },
+      { handleId := 10, pos := Vec3.zero, radius := 0.065, color := RGBA.white, label := "Pitch Contact₁₂" },
+      { handleId := 11, pos := ⟨-r1, r1, 0.0⟩, radius := 0.065, color := RGBA.white, label := "Pitch Contact₁₃" }
+    ],
+    inspect := #[
+      { idx := 0, name := "Gear Ratios", grade := 2,
+        formatted := s!"Z₁={z1}, Z₂={z2}, Z₃={z3} · ω₂/ω₁ = -{fmtExprNum (1.0 / actualRatio)}",
+        editable := false },
+      { idx := 1, name := "Motors", grade := 2,
+        formatted := s!"M₁=T({fmtExprNum c1.x})R({fmtExprNum theta1}), M₂=T({fmtExprNum c2.x})R({fmtExprNum theta2})",
+        editable := false }
+    ] }
+
+/-! ## Showcase Catalog (8 Showstopper Presets → 77 Total Across Studio!) -/
 
 def showcasePresetCatalog : Array ShowcasePresetInfo := #[
   { id := "pga3d_bouncing_cube", title := "3D PGA Bouncing Cube (RK4 Impulse)", category := "3D PGA", algebra := "PGA3",
@@ -899,27 +1250,39 @@ def showcasePresetCatalog : Array ShowcasePresetInfo := #[
     sampleCode := "@basis STA\n@param frequency = 1.2 (0.2..3.5, 0.1)\n@param dipole = 1.0 (0.3..2.0, 0.05)\nlet E = dipole * cos(frequency * t) * et * ey\nlet B = dipole * sin(frequency * t) * ex * ez\nlet F = E + B" },
   { id := "pga3d_hopf_streamlines", title := "3D PGA Hopf & Screw-Motor Flow Ribbons", category := "3D PGA", algebra := "PGA3",
     description := "324 RK4-advected particle flow ribbons blending linked S³→ℝ³ Hopf fibration fibers with PGA3 Chasles screw-motor velocity fields.",
-    sampleCode := "@basis PGA3\n@param pitch = 0.35 (-1.2..1.2, 0.05)\n@param twist = 1.5 (0.2..3.5, 0.1)\nlet L = (twist * e13 + pitch * e02).Normalized\nlet P0 = point(0.95, -0.5, 0)\nlet ribbon = curve([exp(i * 0.15 * L) >>> P0 for i in 0..36])" }
+    sampleCode := "@basis PGA3\n@param pitch = 0.35 (-1.2..1.2, 0.05)\n@param twist = 1.5 (0.2..3.5, 0.1)\nlet L = (twist * e13 + pitch * e02).Normalized\nlet P0 = point(0.95, -0.5, 0)\nlet ribbon = curve([exp(i * 0.15 * L) >>> P0 for i in 0..36])" },
+  { id := "implicit_barth_sextic", title := "Barth Sextic (GPU Raymarch + Bytecode MT)", category := "Surfaces", algebra := "R3",
+    description := "Iconic degree-6 Barth Sextic algebraic surface with 65 icosahedral ordinary double points rendered via live GPU raymarching + bytecode Marching Tetrahedra.",
+    sampleCode := "@basis R3\n@param phi = 1.618 (1.1..2.1, 0.01)\n@param iso = 0.0 (-0.35..0.35, 0.01)\nlet surf = opns(\"4*(2.618*x^2-y^2)*(2.618*y^2-z^2)*(2.618*z^2-x^2) - 4.236*(x^2+y^2+z^2-1)^2\")" },
+  { id := "cga3d_dupin_cyclide_raymarch", title := "3D CGA Dupin Cyclide (GPU Raymarch + Focal Conics)", category := "3D CGA", algebra := "CGA3",
+    description := "Sphere-traced 3D CGA Dupin Cyclide with live majorR/minorR/eccentricity sliders and glowing orthogonal focal ellipse and hyperbola.",
+    sampleCode := "@basis CGA3\n@param majorR = 1.05 (0.65..1.45, 0.02)\n@param minorR = 0.48 (0.20..0.85, 0.02)\n@param eccentricity = 0.42 (0.0..0.72, 0.02)\nlet S = opns(\"(x^2+y^2+z^2+0.68)^2 - 4*(1.05*x-0.21)^2 - 3.63*z^2\")" },
+  { id := "pga3d_gears_kinematics", title := "3D PGA Meshing Involute Gear Train", category := "3D PGA", algebra := "PGA3",
+    description := "Three meshing 3D involute-style rigid gears driven by composed PGA3 rotational motors with live speed and gear-ratio sliders.",
+    sampleCode := "@basis PGA3\n@param speed = 1.4 (-4..4, 0.1)\n@param ratio = 1.5 (0.5..2.0, 0.1)\nlet M1 = translator(-0.56, 0, 0) * motor(0, 0, 1, speed * t, 0)\nlet M2 = translator(0.56 * ratio, 0, 0) * motor(0, 0, 1, -speed * t / ratio, 0)\nlet g1 = transform(mesh(\"torus\"), M1)\nlet g2 = transform(mesh(\"torus\"), M2)" }
 ]
 
 def showcasePresetIds : Array String := showcasePresetCatalog.map (·.id)
 
-/-- Dispatch any of the 5 Wave 4B showstopper presets by ID. -/
+/-- Dispatch any of the 8 Wave 4B & Wave 6C showstopper presets by ID. -/
 def buildShowcasePreset (id : String) (cube : BouncingCubeState) (dp : DoublePendulumState)
     (handles : Array (UInt32 × Vec3)) (overrides : Array (String × Float))
     (seq : UInt64 := 0) (t : Float := 0.0) : Option SceneFrame :=
   match id with
-  | "pga3d_bouncing_cube"     => some (buildPga3dBouncingCube cube handles overrides seq t)
-  | "pga3d_double_pendulum"   => some (buildPga3dDoublePendulum dp handles overrides seq t)
-  | "sta_terrell_penrose"     => some (buildStaTerrellPenrose handles overrides seq t)
-  | "sta_maxwell_streamlines" => some (buildStaMaxwellStreamlines handles overrides seq t)
-  | "pga3d_hopf_streamlines"  => some (buildPga3dHopfStreamlines handles overrides seq t)
-  | _                         => none
+  | "pga3d_bouncing_cube"          => some (buildPga3dBouncingCube cube handles overrides seq t)
+  | "pga3d_double_pendulum"        => some (buildPga3dDoublePendulum dp handles overrides seq t)
+  | "sta_terrell_penrose"          => some (buildStaTerrellPenrose handles overrides seq t)
+  | "sta_maxwell_streamlines"      => some (buildStaMaxwellStreamlines handles overrides seq t)
+  | "pga3d_hopf_streamlines"       => some (buildPga3dHopfStreamlines handles overrides seq t)
+  | "implicit_barth_sextic"        => some (buildImplicitBarthSextic handles overrides seq t)
+  | "cga3d_dupin_cyclide_raymarch" => some (buildCga3dDupinCyclideRaymarch handles overrides seq t)
+  | "pga3d_gears_kinematics"       => some (buildPga3dGearsKinematics handles overrides seq t)
+  | _                              => none
 
-/-! ## Complete 74-Preset KaTeX LaTeX `formula` & 1-Sentence `summary` Registry -/
+/-! ## Complete 77-Preset KaTeX LaTeX `formula` & 1-Sentence `summary` Registry -/
 
-/-- Canonical KaTeX LaTeX `formula` + crisp 1-sentence human `summary` for ALL **74 presets**
-(19 base + 28 extra + 22 parity + 5 showcase). Every preset returns non-empty `(formula, summary)`. -/
+/-- Canonical KaTeX LaTeX `formula` + crisp 1-sentence human `summary` for ALL **77 presets**
+(19 base + 28 extra + 22 parity + 8 showcase). Every preset returns non-empty `(formula, summary)`. -/
 def presetMathMeta (presetId : String) : String × String :=
   match presetId with
   -- 19 Base Flagship Presets
@@ -1148,6 +1511,16 @@ def presetMathMeta (presetId : String) : String × String :=
   | "pga3d_hopf_streamlines" =>
     ("M(s) = \\exp\\!\\left(\\tfrac{s}{2}(k\\,L + h\\,e_0 L)\\right),\\qquad \\mathbf{v}_{\\text{Hopf}} = \\big(z+xy,\\;\\tfrac{1-x^2+y^2-z^2}{2},\\;-x+yz\\big)",
      "3D RK4-advected particle flow ribbons blending linked S³→ℝ³ Hopf fibration fibers with PGA3 Chasles screw-motor velocity fields.")
+  -- 3 Wave 6C Showstopper Presets
+  | "implicit_barth_sextic" =>
+    ("4(\\varphi^2 x^2 - y^2)(\\varphi^2 y^2 - z^2)(\\varphi^2 z^2 - x^2) - (1+2\\varphi)(x^2+y^2+z^2-1)^2 = c",
+     "Iconic degree-6 Barth Sextic algebraic surface with 65 icosahedral ordinary double points rendered via infinite-resolution GPU raymarching and bytecode Marching Tetrahedra.")
+  | "cga3d_dupin_cyclide_raymarch" =>
+    ("(x^2+y^2+z^2+b^2-d^2)^2 - 4(ax - cd)^2 - 4b^2 z^2 = 0,\\qquad a^2 = b^2 + c^2",
+     "Sphere-traced 3D CGA Dupin Cyclide (conformal inversion of a torus) surrounded by its glowing orthogonal focal ellipse and focal hyperbola.")
+  | "pga3d_gears_kinematics" =>
+    ("M_k(t) = T(\\mathbf{c}_k)\\,\\exp\\!\\left(-\\tfrac{\\theta_k(t)}{2}\\,e_{12}\\right),\\qquad \\frac{\\omega_2}{\\omega_1} = -\\frac{Z_1}{Z_2}",
+     "Meshing 3D involute-style gear train driven by composed PGA3 rotational motors with live drive speed and gear ratio sliders.")
   | _ =>
     ("a b = a \\cdot b + a \\wedge b \\in \\mathrm{Cl}_{p,q,r}",
      "Interactive Geometric Algebra visualization computed purely in Lean 4 and streamed via SceneIR v1.")
