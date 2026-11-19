@@ -199,6 +199,7 @@ export class GrassmannSceneRenderer {
   private isOrtho = false;
   private orthoScale = 3.0;
   private lastCameraSyncMs = 0;
+  private suppressCameraSync = false;
   private width = 800;
   private height = 600;
   private simTime = 0;
@@ -1018,41 +1019,51 @@ export class GrassmannSceneRenderer {
       if (wantOrtho) this.updateCameraProjection(this.width, this.height);
       return;
     }
-    this.isOrtho = wantOrtho;
-    this.activeCamera = wantOrtho ? this.orthoCamera : this.perspCamera;
-    this.controls.object = this.activeCamera;
-    this.controls.enableRotate = !wantOrtho;
-    this.renderPass.camera = this.activeCamera;
-    this.updateCameraProjection(this.width, this.height);
-    if (wantOrtho) {
-      this.orthoCamera.position.set(0, 0, 10);
-      this.controls.target.set(0, 0, 0);
+    this.suppressCameraSync = true;
+    try {
+      this.isOrtho = wantOrtho;
+      this.activeCamera = wantOrtho ? this.orthoCamera : this.perspCamera;
+      this.controls.object = this.activeCamera;
+      this.controls.enableRotate = !wantOrtho;
+      this.renderPass.camera = this.activeCamera;
+      this.updateCameraProjection(this.width, this.height);
+      if (wantOrtho) {
+        this.orthoCamera.position.set(0, 0, 10);
+        this.controls.target.set(0, 0, 0);
+      }
+      this.controls.update();
+    } finally {
+      this.suppressCameraSync = false;
     }
-    this.controls.update();
   }
 
   private applyLeanCamera(viewMat4: Float32Array, distance: number, wantOrtho: boolean): void {
-    if (wantOrtho) {
-      this.orthoCamera.position.set(0, 0, 10);
-      this.controls.target.set(0, 0, 0);
-      this.controls.update();
-      return;
-    }
-    // Check if viewMat4 is non-degenerate (invertible) and not identity
-    const m = new THREE.Matrix4().fromArray(viewMat4);
-    const det = m.determinant();
-    if (Math.abs(det) > 1e-5) {
-      const inv = m.clone().invert();
-      const pos = new THREE.Vector3();
-      const quat = new THREE.Quaternion();
-      const scale = new THREE.Vector3();
-      inv.decompose(pos, quat, scale);
-      if (pos.lengthSq() > 1e-4) {
-        this.perspCamera.position.copy(pos);
-        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(quat);
-        this.controls.target.copy(pos).addScaledVector(forward, Math.max(0.5, distance || 5.0));
+    this.suppressCameraSync = true;
+    try {
+      if (wantOrtho) {
+        this.orthoCamera.position.set(0, 0, 10);
+        this.controls.target.set(0, 0, 0);
         this.controls.update();
+        return;
       }
+      // Check if viewMat4 is non-degenerate (invertible) and not identity
+      const m = new THREE.Matrix4().fromArray(viewMat4);
+      const det = m.determinant();
+      if (Math.abs(det) > 1e-5) {
+        const inv = m.clone().invert();
+        const pos = new THREE.Vector3();
+        const quat = new THREE.Quaternion();
+        const scale = new THREE.Vector3();
+        inv.decompose(pos, quat, scale);
+        if (pos.lengthSq() > 1e-4) {
+          this.perspCamera.position.copy(pos);
+          const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(quat);
+          this.controls.target.copy(pos).addScaledVector(forward, Math.max(0.5, distance || 5.0));
+          this.controls.update();
+        }
+      }
+    } finally {
+      this.suppressCameraSync = false;
     }
   }
 
@@ -1285,6 +1296,7 @@ export class GrassmannSceneRenderer {
   }
 
   private maybeEmitCameraChange(force = false): void {
+    if (this.suppressCameraSync) return;
     const now = performance.now();
     if (!force && now - this.lastCameraSyncMs < 50) return;
     this.lastCameraSyncMs = now;

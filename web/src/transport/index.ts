@@ -30,7 +30,7 @@ export function resolveTransportConfigFromEnv(): AutoConnectConfig {
 
   return {
     serverUrl: queryServer ?? envServer ?? 'http://127.0.0.1:8787',
-    wasmUrl: queryWasm ?? envWasm ?? './grassmann.wasm',
+    wasmUrl: queryWasm ?? envWasm ?? './wasm/grassmann_raw.mjs',
     preferred,
   };
 }
@@ -42,25 +42,31 @@ export function resolveTransportConfigFromEnv(): AutoConnectConfig {
 export async function connectLeanBackend(
   config: AutoConnectConfig
 ): Promise<{ transport: StudioTransport; initialFrame: Uint8Array }> {
-  const order: Array<'wasm' | 'server'> =
-    config.preferred === 'wasm'
-      ? ['wasm']
-      : config.preferred === 'server'
-        ? ['server']
-        : // Auto: on localhost try native ga-server first, then WASM; on deployed hosts try WASM first
-          typeof window !== 'undefined' &&
-            (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-          ? ['server', 'wasm']
-          : ['wasm', 'server'];
+  const wasmCandidates = Array.from(
+    new Set([config.wasmUrl ?? './wasm/grassmann_raw.mjs', './grassmann.wasm'])
+  );
+
+  const candidates: Array<() => StudioTransport> = [];
+  const isLocal =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+  if (config.preferred === 'server') {
+    candidates.push(() => new ServerTransport({ baseUrl: config.serverUrl }));
+  } else if (config.preferred === 'wasm') {
+    for (const url of wasmCandidates) candidates.push(() => new WasmTransport({ wasmUrl: url }));
+  } else if (isLocal) {
+    candidates.push(() => new ServerTransport({ baseUrl: config.serverUrl }));
+    for (const url of wasmCandidates) candidates.push(() => new WasmTransport({ wasmUrl: url }));
+  } else {
+    for (const url of wasmCandidates) candidates.push(() => new WasmTransport({ wasmUrl: url }));
+    candidates.push(() => new ServerTransport({ baseUrl: config.serverUrl }));
+  }
 
   const errors: string[] = [];
 
-  for (const kind of order) {
-    const transport: StudioTransport =
-      kind === 'server'
-        ? new ServerTransport({ baseUrl: config.serverUrl })
-        : new WasmTransport({ wasmUrl: config.wasmUrl });
-
+  for (const makeTransport of candidates) {
+    const transport = makeTransport();
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 2200);
@@ -72,7 +78,7 @@ export async function connectLeanBackend(
       }
     } catch (err) {
       transport.dispose();
-      errors.push(`${kind}: ${(err as Error).message}`);
+      errors.push(`${transport.label}: ${(err as Error).message}`);
     }
   }
 

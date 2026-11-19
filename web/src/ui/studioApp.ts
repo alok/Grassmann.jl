@@ -1,0 +1,839 @@
+// Master Studio Application Orchestrator
+// Coordinates:
+// - Pluggable Lean StudioTransport (Native ga-server HTTP/WS | Lean WASM C ABI | Static .gsir snapshot)
+// - Stateful GsirSessionDecoder (dirtyHash mesh cache + metaJsonLen=0 delta + opnsShaders cache)
+// - GrassmannSceneRenderer (Three.js PBR/Fresnel/OPNS/Line2/Contour PiP/WebXR)
+// - 4 Cohesive Studio Modes: CoffeeShop IDE, Wedge 2D/3D, LeanCalculator 3D, GAlculator
+
+import katex from 'katex';
+import { StudioAudioSynth } from '../audio/synth';
+import {
+  GsirSessionDecoder,
+  buildAllSectionsFixtureBytes,
+  encodeDragHandle,
+  encodeEditCoeff,
+  encodeSetCamera,
+  encodeTick,
+  encodeWedgeAction,
+  encodeWedgeGesture,
+  type GsirFrame,
+  type JsonInputEvent,
+  type WedgeActionCodeValue,
+} from '../gsir';
+import { GrassmannSceneRenderer } from '../render';
+import {
+  ServerTransport,
+  StaticGsirTransport,
+  WasmTransport,
+  connectLeanBackend,
+  resolveTransportConfigFromEnv,
+  type StudioTransport,
+} from '../transport';
+import { CalculatorStudioPanel } from './calculatorPanel';
+import { CoffeeShopCodeEditor } from './codeEditor';
+import { InspectStashPanel } from './inspectPanel';
+import { createAboutModal, createConnectionModal } from './modals';
+import { KATEX_CHEAT_SHEET, STUDIO_PRESETS, type StudioPreset } from './presets';
+import { MyStashPanel } from './stashPanel';
+import { WedgeGameHud } from './wedgeHud';
+
+export type StudioMode = 'coffeeshop' | 'wedge' | 'calculator' | 'galculator';
+type LeftTab = 'presets' | 'stash' | 'inspect' | 'help';
+
+export class GrassmannStudioApp {
+  private readonly root: HTMLElement;
+  private readonly decoder = new GsirSessionDecoder();
+  private readonly synth = new StudioAudioSynth();
+  private transport: StudioTransport | null = null;
+  private readonly renderer: GrassmannSceneRenderer;
+
+  private readonly codeEditor: CoffeeShopCodeEditor;
+  private readonly inspectPanel: InspectStashPanel;
+  private readonly stashPanel: MyStashPanel;
+  private readonly wedgeHud: WedgeGameHud;
+  private readonly calcPanel: CalculatorStudioPanel;
+  private readonly connModal: ReturnType<typeof createConnectionModal>;
+  private readonly aboutModal: ReturnType<typeof createAboutModal>;
+
+  // Layout elements
+  private readonly leftPane: HTMLElement;
+  private readonly leftGutter: HTMLDivElement;
+  private readonly rightPane: HTMLElement;
+  private readonly rightGutter: HTMLDivElement;
+  private readonly statusPill: HTMLButtonElement;
+  private readonly telemetryPill: HTMLDivElement;
+  private readonly xrBtn: HTMLButtonElement;
+  private readonly offlineBanner: HTMLDivElement;
+  private readonly modeButtons = new Map<StudioMode, HTMLButtonElement>();
+  private readonly leftTabButtons = new Map<LeftTab, HTMLButtonElement>();
+  private readonly leftTabPanes = new Map<LeftTab, HTMLDivElement>();
+  private readonly algebraSelect: HTMLSelectElement;
+
+  // State
+  private mode: StudioMode = 'coffeeshop';
+  private activeAlgebra = 'PGA3';
+  private activePresetId = 'pga3d_slicing';
+  private darkTheme = true;
+  private gridVisible = true;
+  private wireframe = false;
+  private animRunning = false;
+  private animTimeSec = 0;
+  private lastAnimTickMs = 0;
+  private animRafId = 0;
+  private lastLeanUs = 0;
+  private lastDecodeUs = 0;
+  private lastFrame: GsirFrame | null = null;
+
+  // Coalesced 60fps binary dispatch queue
+  private dispatchInFlight = false;
+  private pendingBinEvent: Uint8Array | null = null;
+
+  constructor(root: HTMLElement) {
+    this.root = root;
+    this.root.className = 'gs-app';
+    this.root.dataset.theme = 'dark';
+
+    const envCfg = resolveTransportConfigFromEnv();
+
+    // =========================================================================
+    // 1. Top Studio Header Bar
+    // =========================================================================
+    const topBar = document.createElement('header');
+    topBar.className = 'gs-topbar';
+
+    const brand = document.createElement('div');
+    brand.className = 'gs-brand';
+    brand.innerHTML =
+      '<span class="gs-brand-mark">⋀</span>' +
+      '<span class="gs-brand-name">Grassmann Studio</span>' +
+      '<span class="gs-brand-tag">Lean 4 · GSIR v1</span>';
+
+    // 4 Cohesive Mode Switcher
+    const modeNav = document.createElement('nav');
+    modeNav.className = 'gs-mode-nav';
+    const modeDefs: Array<{ id: StudioMode; label: string }> = [
+      { id: 'coffeeshop', label: 'CoffeeShop IDE' },
+      { id: 'wedge', label: 'Wedge 2D/3D' },
+      { id: 'calculator', label: 'LeanCalculator 3D' },
+      { id: 'galculator', label: 'GAlculator' },
+    ];
+    for (const m of modeDefs) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'gs-mode-btn';
+      btn.textContent = m.label;
+      btn.addEventListener('click', () => this.setMode(m.id));
+      modeNav.appendChild(btn);
+      this.modeButtons.set(m.id, btn);
+    }
+
+    // Right status & utility controls
+    const topRight = document.createElement('div');
+    topRight.className = 'gs-topbar-right';
+
+    this.telemetryPill = document.createElement('div');
+    this.telemetryPill.className = 'gs-telemetry-pill mono';
+    this.telemetryPill.textContent = '60 FPS · 0 µs';
+
+    this.statusPill = document.createElement('button');
+    this.statusPill.type = 'button';
+    this.statusPill.className = 'gs-status-pill connecting';
+    this.statusPill.textContent = 'Connecting Lean…';
+    this.statusPill.addEventListener('click', () => this.connModal.open());
+
+    this.xrBtn = document.createElement('button');
+    this.xrBtn.type = 'button';
+    this.xrBtn.className = 'gs-btn gs-btn-accent hidden';
+    this.xrBtn.textContent = 'Enter XR';
+    this.xrBtn.addEventListener('click', () => {
+      void this.renderer.xr.toggleSession().then((active) => {
+        this.xrBtn.textContent = active ? 'Exit XR' : 'Enter XR';
+      });
+    });
+
+    const themeBtn = document.createElement('button');
+    themeBtn.type = 'button';
+    themeBtn.className = 'gs-icon-btn';
+    themeBtn.title = 'Toggle Obsidian / Gallery Theme';
+    themeBtn.textContent = '◐';
+    themeBtn.addEventListener('click', () => {
+      this.darkTheme = !this.darkTheme;
+      this.root.dataset.theme = this.darkTheme ? 'dark' : 'light';
+      this.renderer.setDarkTheme(this.darkTheme);
+    });
+
+    const aboutBtn = document.createElement('button');
+    aboutBtn.type = 'button';
+    aboutBtn.className = 'gs-icon-btn';
+    aboutBtn.title = 'About & Credits';
+    aboutBtn.textContent = '?';
+    aboutBtn.addEventListener('click', () => this.aboutModal.open());
+
+    topRight.append(this.telemetryPill, this.statusPill, this.xrBtn, themeBtn, aboutBtn);
+    topBar.append(brand, modeNav, topRight);
+
+    // =========================================================================
+    // 2. Main 3-Pane Resizable Workspace
+    // =========================================================================
+    const workspace = document.createElement('main');
+    workspace.className = 'gs-workspace';
+
+    // Left Sidebar
+    this.leftPane = document.createElement('aside');
+    this.leftPane.className = 'gs-pane gs-left-pane';
+    this.leftPane.style.width = '310px';
+
+    const leftTabsBar = document.createElement('div');
+    leftTabsBar.className = 'gs-left-tabs';
+    const lTabs: Array<{ id: LeftTab; label: string }> = [
+      { id: 'presets', label: 'Presets' },
+      { id: 'stash', label: 'My Stash' },
+      { id: 'inspect', label: 'Inspect' },
+      { id: 'help', label: '?' },
+    ];
+    for (const t of lTabs) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'gs-left-tab-btn';
+      btn.textContent = t.label;
+      btn.addEventListener('click', () => this.selectLeftTab(t.id));
+      leftTabsBar.appendChild(btn);
+      this.leftTabButtons.set(t.id, btn);
+    }
+
+    const leftBody = document.createElement('div');
+    leftBody.className = 'gs-left-body';
+
+    // Tab 1: Presets & Algebras
+    this.algebraSelect = document.createElement('select');
+    const presetsPane = this.buildPresetsPane();
+
+    // Tab 2: My Stash
+    const stashPane = document.createElement('div');
+    stashPane.className = 'gs-left-pane-content hidden';
+    this.stashPanel = new MyStashPanel({
+      getCurrentSketch: () => ({
+        title: this.lastFrame?.meta?.title ?? this.activePresetId,
+        algebra: this.activeAlgebra,
+        code: this.codeEditor.getCode(),
+        thumbnail: this.renderer.exportPng(360, 220),
+      }),
+      onLoadSketch: (entry) => {
+        this.activeAlgebra = entry.algebra;
+        this.algebraSelect.value = entry.algebra;
+        this.codeEditor.setCode(entry.code);
+        void this.dispatchJson({ op: 'evalScript', algebra: entry.algebra, code: entry.code });
+      },
+      onExportPng: (w, h) => this.downloadDataUrl(this.renderer.exportPng(w, h), `grassmann-${Date.now()}.png`),
+      onExportSvg: (w, h) => {
+        const svg = this.renderer.exportSvg(w, h);
+        const blob = new Blob([svg], { type: 'image/svg+xml' });
+        this.downloadDataUrl(URL.createObjectURL(blob), `grassmann-${Date.now()}.svg`);
+      },
+      onShareUrl: () => this.buildShareUrl(),
+      onLoadGsirFile: (bytes, name) => this.loadStaticGsirBytes(bytes, name),
+      onLoadScriptFile: (code) => {
+        this.codeEditor.setCode(code);
+        void this.dispatchJson({ op: 'evalScript', algebra: this.activeAlgebra, code });
+      },
+    });
+    stashPane.appendChild(this.stashPanel.element);
+
+    // Tab 3: Inspect Stash
+    const inspectPane = document.createElement('div');
+    inspectPane.className = 'gs-left-pane-content hidden';
+    this.inspectPanel = new InspectStashPanel({
+      onEditCoeff: (entryIdx, bladeIdx, val) => {
+        this.enqueueBinaryEvent(encodeEditCoeff(entryIdx, bladeIdx, val));
+      },
+    });
+    inspectPane.appendChild(this.inspectPanel.element);
+
+    // Tab 4: ? KaTeX Cheat Sheet
+    const helpPane = this.buildHelpPane();
+
+    this.leftTabPanes.set('presets', presetsPane);
+    this.leftTabPanes.set('stash', stashPane);
+    this.leftTabPanes.set('inspect', inspectPane);
+    this.leftTabPanes.set('help', helpPane);
+
+    leftBody.append(presetsPane, stashPane, inspectPane, helpPane);
+    this.leftPane.append(leftTabsBar, leftBody);
+
+    // Left Draggable Gutter (double-click collapses)
+    this.leftGutter = this.createSplitGutter('left', this.leftPane, 220, 480, 310);
+
+    // Center 3D Viewport
+    const viewportWrap = document.createElement('section');
+    viewportWrap.className = 'gs-viewport-wrap';
+
+    const canvasHost = document.createElement('div');
+    canvasHost.className = 'gs-canvas-host';
+    viewportWrap.appendChild(canvasHost);
+
+    // Floating Viewport Quick Toolbar (top-right inside viewport)
+    const vpTools = document.createElement('div');
+    vpTools.className = 'gs-vp-toolbar';
+    vpTools.append(
+      this.makeVpBtn('Grid', () => {
+        this.gridVisible = !this.gridVisible;
+        this.renderer.setGridVisible(this.gridVisible);
+      }),
+      this.makeVpBtn('Wire', () => {
+        this.wireframe = !this.wireframe;
+        this.renderer.setWireframeOverride(this.wireframe);
+        if (this.lastFrame) this.renderer.applyFrame(this.lastFrame, this.decoder);
+      }),
+      this.makeVpBtn('Reset View', () => this.renderer.resetCamera()),
+      this.makeVpBtn('PNG', () =>
+        this.downloadDataUrl(this.renderer.exportPng(1600, 1000), `grassmann-${Date.now()}.png`)
+      )
+    );
+    viewportWrap.appendChild(vpTools);
+
+    // Offline / Connect Banner inside viewport
+    this.offlineBanner = document.createElement('div');
+    this.offlineBanner.className = 'gs-offline-banner hidden';
+    const offText = document.createElement('span');
+    offText.innerHTML =
+      '<strong>Lean 4 backend not connected.</strong> Start <code>lake exe ga-server</code> (<code>:8787</code>), load <code>grassmann.wasm</code>, or inspect a static GSIR binary fixture.';
+    const offConnBtn = document.createElement('button');
+    offConnBtn.type = 'button';
+    offConnBtn.className = 'gs-btn gs-btn-primary';
+    offConnBtn.textContent = 'Connect / Options';
+    offConnBtn.addEventListener('click', () => this.connModal.open());
+    const offFixBtn = document.createElement('button');
+    offFixBtn.type = 'button';
+    offFixBtn.className = 'gs-btn gs-btn-ghost';
+    offFixBtn.textContent = 'Inspect Static GSIR Fixture';
+    offFixBtn.addEventListener('click', () => {
+      this.loadStaticGsirBytes(buildAllSectionsFixtureBytes(), 'All-Sections Static GSIR Fixture');
+    });
+    this.offlineBanner.append(offText, offConnBtn, offFixBtn);
+    viewportWrap.appendChild(this.offlineBanner);
+
+    // Wedge 2D/3D Game HUD overlay inside viewport
+    this.wedgeHud = new WedgeGameHud(this.synth, {
+      onAction: (action: WedgeActionCodeValue, arg = 0) => {
+        this.enqueueBinaryEvent(encodeWedgeAction(action, arg));
+      },
+      onClearSelection: () => this.renderer.clearWedgeSelection(),
+    });
+    viewportWrap.appendChild(this.wedgeHud.element);
+
+    // Right Pane (hosts Code Editor in CoffeeShop mode OR Calculator/GAlculator in Calc modes)
+    this.rightPane = document.createElement('aside');
+    this.rightPane.className = 'gs-pane gs-right-pane';
+    this.rightPane.style.width = '380px';
+
+    this.codeEditor = new CoffeeShopCodeEditor({
+      onRun: (code) => {
+        void this.dispatchJson({ op: 'evalScript', algebra: this.activeAlgebra, code });
+      },
+    });
+    this.codeEditor.setCode(STUDIO_PRESETS[0]!.defaultCode);
+
+    this.calcPanel = new CalculatorStudioPanel({
+      onDispatchJson: (ev) => void this.dispatchJson(ev),
+      onToggleAnim: (running) => this.setAnimationRunning(running),
+    });
+    this.calcPanel.element.classList.add('hidden');
+
+    this.rightPane.append(this.codeEditor.element, this.calcPanel.element);
+
+    // Right Draggable Gutter
+    this.rightGutter = this.createSplitGutter('right', this.rightPane, 260, 620, 380);
+
+    workspace.append(this.leftPane, this.leftGutter, viewportWrap, this.rightGutter, this.rightPane);
+
+    // =========================================================================
+    // 3. Attribution Footer Bar
+    // =========================================================================
+    const footer = document.createElement('footer');
+    footer.className = 'gs-footer';
+    footer.innerHTML =
+      '<div class="gs-footer-left"><span>Pure Lean 4 GSIR v1 Engine</span><span class="sep">·</span><span>Zero JS GA Math</span></div>' +
+      '<div class="gs-footer-credits">Credits: <strong>Michael Reed</strong> (<code>chakravala</code> / Grassmann.jl) &amp; <strong>Steven De Keninck</strong> (<code>enkimute</code> / ganja.js)</div>';
+
+    // Modals
+    this.connModal = createConnectionModal(
+      envCfg.serverUrl ?? 'http://127.0.0.1:8787',
+      envCfg.wasmUrl ?? './grassmann.wasm',
+      {
+        onConnectServer: (url) => void this.connectTransport(new ServerTransport({ baseUrl: url })),
+        onConnectWasm: (url) => void this.connectTransport(new WasmTransport({ wasmUrl: url })),
+        onInspectStaticFixture: () =>
+          this.loadStaticGsirBytes(buildAllSectionsFixtureBytes(), 'All-Sections Static GSIR Fixture'),
+      }
+    );
+    this.aboutModal = createAboutModal();
+
+    this.root.append(topBar, workspace, footer, this.connModal.element, this.aboutModal.element);
+
+    // =========================================================================
+    // 4. Initialize Three.js Scene Renderer
+    // =========================================================================
+    this.renderer = new GrassmannSceneRenderer(canvasHost, {
+      onDragHandle: (handleId, pos) => {
+        this.enqueueBinaryEvent(encodeDragHandle(handleId, pos[0], pos[1], pos[2]));
+      },
+      onWedgeGesture: (idA, idB, dirA, dirB, isPreview) => {
+        this.enqueueBinaryEvent(encodeWedgeGesture(idA, idB, dirA, dirB, isPreview));
+      },
+      onWedgeSelectSound: () => this.synth.play('select'),
+      onCameraChange: (motor, fovDeg, distance) => {
+        if (this.transport && this.transport.kind !== 'fixture') {
+          this.enqueueBinaryEvent(encodeSetCamera(motor, fovDeg, distance));
+        }
+      },
+      onTelemetry: ({ fps, renderUs, cachedMeshes }) => {
+        const leanStr = this.lastLeanUs > 0 ? ` · Lean ${Math.round(this.lastLeanUs)}µs` : '';
+        this.telemetryPill.textContent =
+          `${fps} FPS · Dec ${Math.round(this.lastDecodeUs)}µs · Rnd ${Math.round(renderUs)}µs${leanStr} · ${cachedMeshes}m`;
+      },
+    });
+
+    // Probe WebXR support (Vision Pro / Quest)
+    void this.renderer.xr.detectSupport().then((mode) => {
+      if (mode) {
+        this.xrBtn.textContent = mode === 'immersive-ar' ? 'Enter AR' : 'Enter VR';
+        this.xrBtn.classList.remove('hidden');
+      }
+    });
+
+    this.selectLeftTab('presets');
+    this.setMode('coffeeshop', false);
+
+    // Auto-connect to Lean backend (native ga-server / compiled grassmann.wasm)
+    void this.autoConnect(envCfg);
+  }
+
+  private async autoConnect(cfg: ReturnType<typeof resolveTransportConfigFromEnv>): Promise<void> {
+    this.setStatus('connecting', 'Connecting Lean…');
+    try {
+      const { transport, initialFrame } = await connectLeanBackend(cfg);
+      this.transport?.dispose();
+      this.transport = transport;
+      this.decoder.reset();
+      this.offlineBanner.classList.add('hidden');
+      this.setStatus('connected', transport.label);
+      this.ingestRawFrame(initialFrame, true);
+      this.applyUrlHashOnConnect();
+    } catch (err) {
+      this.setStatus('error', 'Lean Offline · Connect');
+      this.offlineBanner.classList.remove('hidden');
+      console.info('[Grassmann Studio] No live Lean backend detected:', (err as Error).message);
+    }
+  }
+
+  private async connectTransport(next: StudioTransport): Promise<void> {
+    this.setStatus('connecting', `Connecting ${next.label}…`);
+    try {
+      const t0 = performance.now();
+      const bytes = await next.connect();
+      this.lastLeanUs = (performance.now() - t0) * 1000;
+      this.transport?.dispose();
+      this.transport = next;
+      this.decoder.reset();
+      this.offlineBanner.classList.add('hidden');
+      this.setStatus('connected', next.label);
+      this.ingestRawFrame(bytes, true);
+    } catch (err) {
+      next.dispose();
+      this.setStatus('error', 'Connection Failed');
+      this.connModal.open((err as Error).message);
+    }
+  }
+
+  private loadStaticGsirBytes(bytes: Uint8Array, label: string): void {
+    const tr = new StaticGsirTransport(bytes, label);
+    this.transport?.dispose();
+    this.transport = tr;
+    this.decoder.reset();
+    this.offlineBanner.classList.add('hidden');
+    this.setStatus('connected', `Snapshot · ${label}`);
+    this.ingestRawFrame(bytes, true);
+  }
+
+  private setMode(next: StudioMode, notifyLean = true): void {
+    this.mode = next;
+    for (const [id, btn] of this.modeButtons) {
+      btn.classList.toggle('active', id === next);
+    }
+
+    const showLeft = next === 'coffeeshop' || next === 'calculator';
+    const showRight = next !== 'wedge';
+
+    this.leftPane.classList.toggle('hidden', !showLeft);
+    this.leftGutter.classList.toggle('hidden', !showLeft);
+    this.rightPane.classList.toggle('hidden', !showRight);
+    this.rightGutter.classList.toggle('hidden', !showRight);
+
+    this.codeEditor.element.classList.toggle('hidden', next !== 'coffeeshop');
+    this.calcPanel.element.classList.toggle('hidden', next !== 'calculator' && next !== 'galculator');
+
+    if (next === 'galculator') {
+      this.calcPanel.selectSubTab('galc');
+    } else if (next === 'calculator') {
+      this.calcPanel.selectSubTab('sta');
+    }
+
+    this.wedgeHud.update(this.lastFrame?.meta?.wedge, next === 'wedge');
+
+    if (notifyLean && this.transport && this.transport.kind !== 'fixture') {
+      if (next === 'wedge') {
+        void this.dispatchJson({ op: 'loadPreset', id: 'game_wedge', forceFullSnapshot: true });
+      } else if (next === 'calculator') {
+        void this.dispatchJson({ op: 'loadPreset', id: 'timespace_lorentz', forceFullSnapshot: true });
+      }
+    }
+  }
+
+  private selectLeftTab(tab: LeftTab): void {
+    for (const [id, btn] of this.leftTabButtons) {
+      btn.classList.toggle('active', id === tab);
+    }
+    for (const [id, pane] of this.leftTabPanes) {
+      pane.classList.toggle('hidden', id !== tab);
+    }
+  }
+
+  private buildPresetsPane(): HTMLDivElement {
+    const pane = document.createElement('div');
+    pane.className = 'gs-left-pane-content';
+
+    // Algebra selector pill
+    const algRow = document.createElement('div');
+    algRow.className = 'gs-algebra-bar';
+    const algLabel = document.createElement('label');
+    algLabel.textContent = 'Algebra';
+    this.algebraSelect.className = 'gs-select';
+    for (const alg of ['PGA3', 'PGA2', 'CGA3', 'CGA2', 'STA', 'R3', 'Complex', 'Dual', 'Quaternion']) {
+      const opt = document.createElement('option');
+      opt.value = alg;
+      opt.textContent = alg === 'STA' ? 'STA Cl(3,1) −+++' : alg;
+      this.algebraSelect.appendChild(opt);
+    }
+    this.algebraSelect.value = this.activeAlgebra;
+    this.algebraSelect.addEventListener('change', () => {
+      this.activeAlgebra = this.algebraSelect.value;
+    });
+    algRow.append(algLabel, this.algebraSelect);
+
+    // Search input
+    const search = document.createElement('input');
+    search.type = 'search';
+    search.className = 'gs-input';
+    search.placeholder = 'Filter presets (e.g. slicing, CGA, STA, Euler)...';
+
+    const listEl = document.createElement('div');
+    listEl.className = 'gs-preset-list';
+
+    const renderList = (query: string) => {
+      const q = query.trim().toLowerCase();
+      listEl.innerHTML = '';
+
+      const grouped = new Map<string, StudioPreset[]>();
+      for (const p of STUDIO_PRESETS) {
+        if (
+          q &&
+          !p.title.toLowerCase().includes(q) &&
+          !p.id.toLowerCase().includes(q) &&
+          !p.algebra.toLowerCase().includes(q) &&
+          !p.category.toLowerCase().includes(q) &&
+          !p.description.toLowerCase().includes(q)
+        ) {
+          continue;
+        }
+        const arr = grouped.get(p.category) ?? [];
+        arr.push(p);
+        grouped.set(p.category, arr);
+      }
+
+      for (const [cat, items] of grouped) {
+        const catHead = document.createElement('div');
+        catHead.className = 'gs-preset-category';
+        catHead.textContent = cat;
+        listEl.appendChild(catHead);
+
+        for (const p of items) {
+          const card = document.createElement('button');
+          card.type = 'button';
+          card.className = `gs-preset-card${p.id === this.activePresetId ? ' active' : ''}`;
+          card.innerHTML =
+            `<div class="gs-preset-card-head">` +
+            `<span class="gs-preset-title">${p.title}</span>` +
+            `<span class="gs-preset-sig">${p.badge ? `<em>${p.badge}</em> · ` : ''}${p.signature}</span>` +
+            `</div>` +
+            `<div class="gs-preset-desc">${p.description}</div>`;
+          card.addEventListener('click', () => {
+            this.loadPreset(p);
+            renderList(search.value);
+          });
+          listEl.appendChild(card);
+        }
+      }
+    };
+
+    search.addEventListener('input', () => renderList(search.value));
+    renderList('');
+
+    pane.append(algRow, search, listEl);
+    return pane;
+  }
+
+  private buildHelpPane(): HTMLDivElement {
+    const pane = document.createElement('div');
+    pane.className = 'gs-left-pane-content hidden';
+
+    const title = document.createElement('div');
+    title.className = 'gs-section-mini-title';
+    title.textContent = 'GA Operator & Notation Reference';
+    pane.appendChild(title);
+
+    for (const item of KATEX_CHEAT_SHEET) {
+      const row = document.createElement('div');
+      row.className = 'gs-help-row';
+      const mathEl = document.createElement('div');
+      mathEl.className = 'gs-help-math';
+      try {
+        mathEl.innerHTML = katex.renderToString(item.latex, { throwOnError: false });
+      } catch {
+        mathEl.textContent = item.latex;
+      }
+      const meta = document.createElement('div');
+      meta.className = 'gs-help-meta';
+      meta.innerHTML = `<code class="mono">${item.syntax}</code><span>${item.meaning}</span>`;
+      row.append(mathEl, meta);
+      pane.appendChild(row);
+    }
+
+    const keys = document.createElement('div');
+    keys.className = 'gs-help-shortcuts';
+    keys.innerHTML =
+      '<strong>Studio Shortcuts</strong>' +
+      '<div><kbd>⇧ Enter</kbd> Evaluate script in Lean</div>' +
+      '<div><kbd>Select Number</kbd> Inline drag-to-scrub slider</div>' +
+      '<div><kbd>Select 0xRRGGBB</kbd> Inline hex color picker</div>' +
+      '<div><kbd>Double-click Gutter</kbd> Collapse / restore pane</div>';
+    pane.appendChild(keys);
+
+    return pane;
+  }
+
+  private loadPreset(preset: StudioPreset): void {
+    this.activePresetId = preset.id;
+    this.activeAlgebra = preset.algebra;
+    this.algebraSelect.value = preset.algebra;
+    this.codeEditor.setCode(preset.defaultCode);
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', `#${preset.id}`);
+    }
+    void this.dispatchJson({ op: 'loadPreset', id: preset.id, forceFullSnapshot: true });
+  }
+
+  private applyUrlHashOnConnect(): void {
+    if (typeof window === 'undefined' || !window.location.hash) return;
+    const raw = window.location.hash.slice(1).trim();
+    if (!raw) return;
+
+    if (raw.includes('=')) {
+      const params = new URLSearchParams(raw);
+      const presetId = params.get('preset');
+      const code = params.get('code');
+      const alg = params.get('alg');
+      if (presetId) {
+        const found = STUDIO_PRESETS.find((p) => p.id === presetId);
+        if (found) this.loadPreset(found);
+        else void this.dispatchJson({ op: 'loadPreset', id: presetId, forceFullSnapshot: true });
+      } else if (code) {
+        if (alg) {
+          this.activeAlgebra = alg;
+          this.algebraSelect.value = alg;
+        }
+        this.codeEditor.setCode(code);
+        void this.dispatchJson({ op: 'evalScript', algebra: this.activeAlgebra, code });
+      }
+      return;
+    }
+
+    // Direct CoffeeShop bookmark hash like #pga3d_slicing
+    const cleanId = raw.split('&')[0]!;
+    if (cleanId === 'game_wedge') {
+      this.setMode('wedge', true);
+      return;
+    }
+    const preset = STUDIO_PRESETS.find((p) => p.id === cleanId);
+    if (preset) {
+      this.loadPreset(preset);
+    } else {
+      void this.dispatchJson({ op: 'loadPreset', id: cleanId, forceFullSnapshot: true });
+    }
+  }
+
+  private buildShareUrl(): string {
+    const params = new URLSearchParams();
+    params.set('alg', this.activeAlgebra);
+    params.set('code', this.codeEditor.getCode());
+    const url = `${window.location.origin}${window.location.pathname}#${params.toString()}`;
+    window.history.replaceState(null, '', `#${params.toString()}`);
+    return url;
+  }
+
+  private enqueueBinaryEvent(bytes: Uint8Array): void {
+    if (!this.transport) return;
+    this.pendingBinEvent = bytes;
+    if (!this.dispatchInFlight) {
+      void this.drainBinaryQueue();
+    }
+  }
+
+  private async drainBinaryQueue(): Promise<void> {
+    if (!this.transport || this.dispatchInFlight) return;
+    this.dispatchInFlight = true;
+    try {
+      while (this.pendingBinEvent && this.transport) {
+        const next = this.pendingBinEvent;
+        this.pendingBinEvent = null;
+        const t0 = performance.now();
+        const frameBytes = await this.transport.dispatchBin(next);
+        this.lastLeanUs = (performance.now() - t0) * 1000;
+        this.ingestRawFrame(frameBytes, false);
+      }
+    } catch (err) {
+      this.setStatus('error', `Dispatch err: ${(err as Error).message}`);
+    } finally {
+      this.dispatchInFlight = false;
+    }
+  }
+
+  private async dispatchJson(ev: JsonInputEvent): Promise<void> {
+    if (!this.transport) {
+      this.offlineBanner.classList.remove('hidden');
+      return;
+    }
+    try {
+      const t0 = performance.now();
+      const frameBytes = await this.transport.dispatchJson(ev);
+      this.lastLeanUs = (performance.now() - t0) * 1000;
+      this.ingestRawFrame(frameBytes, ev.op === 'loadPreset');
+    } catch (err) {
+      this.setStatus('error', `Error: ${(err as Error).message}`);
+    }
+  }
+
+  private ingestRawFrame(bytes: Uint8Array, syncCamera: boolean): void {
+    try {
+      const frame = this.decoder.decode(bytes);
+      this.lastFrame = frame;
+      this.lastDecodeUs = frame.decodeTimeUs;
+      this.renderer.applyFrame(frame, this.decoder, syncCamera);
+      this.inspectPanel.update(frame);
+      this.codeEditor.setDiagnostics(frame.meta?.diagnostics);
+      this.calcPanel.updateCalcState(frame.meta?.calc);
+      this.wedgeHud.update(frame.meta?.wedge, this.mode === 'wedge' || Boolean(frame.meta?.wedge));
+    } catch (err) {
+      this.codeEditor.setDiagnostics([{ severity: 'error', message: (err as Error).message }]);
+    }
+  }
+
+  private setAnimationRunning(running: boolean): void {
+    this.animRunning = running;
+    if (running) {
+      this.lastAnimTickMs = performance.now();
+      const step = () => {
+        if (!this.animRunning) return;
+        const now = performance.now();
+        const dt = Math.min(0.1, Math.max(0.001, (now - this.lastAnimTickMs) * 0.001));
+        this.lastAnimTickMs = now;
+        this.animTimeSec += dt;
+        this.enqueueBinaryEvent(encodeTick(dt, this.animTimeSec));
+        this.animRafId = requestAnimationFrame(step);
+      };
+      this.animRafId = requestAnimationFrame(step);
+    } else if (this.animRafId) {
+      cancelAnimationFrame(this.animRafId);
+      this.animRafId = 0;
+    }
+  }
+
+  private setStatus(state: 'connecting' | 'connected' | 'error', text: string): void {
+    this.statusPill.className = `gs-status-pill ${state}`;
+    this.statusPill.textContent = text;
+  }
+
+  private makeVpBtn(label: string, onClick: () => void): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'gs-vp-btn';
+    btn.textContent = label;
+    btn.addEventListener('click', onClick);
+    return btn;
+  }
+
+  private createSplitGutter(
+    side: 'left' | 'right',
+    pane: HTMLElement,
+    minW: number,
+    maxW: number,
+    defaultW: number
+  ): HTMLDivElement {
+    const gutter = document.createElement('div');
+    gutter.className = 'gs-gutter';
+    gutter.title = 'Drag to resize · Double-click to collapse';
+    let collapsed = false;
+    let savedWidth = defaultW;
+
+    gutter.addEventListener('dblclick', () => {
+      collapsed = !collapsed;
+      if (collapsed) {
+        savedWidth = pane.getBoundingClientRect().width || defaultW;
+        pane.style.width = '0px';
+        pane.classList.add('collapsed');
+      } else {
+        pane.classList.remove('collapsed');
+        pane.style.width = `${savedWidth}px`;
+      }
+    });
+
+    gutter.addEventListener('pointerdown', (ev) => {
+      ev.preventDefault();
+      gutter.classList.add('dragging');
+      const startX = ev.clientX;
+      const startW = pane.getBoundingClientRect().width;
+      const onMove = (me: PointerEvent) => {
+        const delta = side === 'left' ? me.clientX - startX : startX - me.clientX;
+        const nextW = Math.max(minW, Math.min(maxW, startW + delta));
+        collapsed = false;
+        pane.classList.remove('collapsed');
+        pane.style.width = `${nextW}px`;
+      };
+      const onUp = () => {
+        gutter.classList.remove('dragging');
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
+
+    return gutter;
+  }
+
+  private downloadDataUrl(url: string, filename: string): void {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  dispose(): void {
+    this.setAnimationRunning(false);
+    this.transport?.dispose();
+    this.renderer.dispose();
+    this.codeEditor.dispose();
+    this.synth.dispose();
+  }
+}

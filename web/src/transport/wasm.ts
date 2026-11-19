@@ -1,10 +1,15 @@
 // Lean WASM C ABI Transport
-// Talks directly to grassmann.wasm via the canonical C ABI:
+// Talks directly to compiled Lean 4.36 Grassmann WASM via the canonical C ABI:
+//   grassmann_initialize() -> i32   (called automatically when exported!)
 //   grassmann_studio_create() -> u64
 //   grassmann_studio_destroy(u64)
 //   grassmann_studio_dispatch_bin(u64, eventPtr, eventLen, outPtr, outCap, outLenPtr) -> i32
 //   grassmann_studio_dispatch_json(u64, jsonPtr, jsonLen, outPtr, outCap, outLenPtr) -> i32
 //   grassmann_studio_get_frame(u64, outPtr, outCap, outLenPtr) -> i32  (#17 Fix #2)
+//
+// Supports BOTH:
+//   1. Emscripten ES module factories (`grassmann_raw.mjs` / `grassmann_wasm.mjs` exporting HEAPU8 + _grassmann_*)
+//   2. Standalone `.wasm` modules (`WebAssembly.instantiate`)
 //
 // Zero per-frame heap allocations: reuses a single caller-owned WASM output buffer, growing
 // once on GSIR_ERR_BUF_SMALL (-3) and reading via grassmann_studio_get_frame (never double-mutating!).
@@ -14,11 +19,15 @@ import { GsirStatus, type JsonInputEvent } from '../gsir/types';
 import type { StudioTransport } from './types';
 
 export interface GrassmannWasmExports {
-  memory: WebAssembly.Memory;
+  memory?: WebAssembly.Memory;
+  wasmMemory?: WebAssembly.Memory;
+  HEAPU8?: Uint8Array;
   malloc?: (bytes: number) => number;
   _malloc?: (bytes: number) => number;
   free?: (ptr: number) => void;
   _free?: (ptr: number) => void;
+  grassmann_initialize?: () => number;
+  _grassmann_initialize?: () => number;
   grassmann_studio_create?: () => bigint | number;
   _grassmann_studio_create?: () => bigint | number;
   grassmann_studio_destroy?: (session: bigint) => void;
@@ -70,9 +79,9 @@ export interface GrassmannWasmExports {
 }
 
 export interface WasmTransportOptions {
-  /** URL to compiled grassmann.wasm (default: './grassmann.wasm') */
+  /** URL to compiled grassmann.wasm or Emscripten grassmann_raw.mjs (default: './wasm/grassmann_raw.mjs') */
   wasmUrl?: string;
-  /** Optional Emscripten module loader (if glue JS provides createGrassmannModule) */
+  /** Optional custom exports loader (used by tests or embedded Emscripten glue) */
   loadExports?: () => Promise<GrassmannWasmExports>;
   /** Initial caller-owned output buffer capacity in bytes (default: 256 KB) */
   initialOutCap?: number;
@@ -81,9 +90,10 @@ export interface WasmTransportOptions {
 }
 
 interface ResolvedExports {
-  memory: WebAssembly.Memory;
+  getMemoryBuffer: () => ArrayBuffer;
   malloc: (bytes: number) => number;
   free: (ptr: number) => void;
+  initialize?: () => number;
   create: () => bigint;
   destroy: (session: bigint) => void;
   dispatchBin: (
@@ -110,23 +120,31 @@ const textEncoder = new TextEncoder();
 function resolveExports(raw: GrassmannWasmExports): ResolvedExports {
   const malloc = raw.malloc ?? raw._malloc;
   const free = raw.free ?? raw._free;
+  const initialize = raw.grassmann_initialize ?? raw._grassmann_initialize;
   const createRaw = raw.grassmann_studio_create ?? raw._grassmann_studio_create;
   const destroy = raw.grassmann_studio_destroy ?? raw._grassmann_studio_destroy;
   const dispatchBin = raw.grassmann_studio_dispatch_bin ?? raw._grassmann_studio_dispatch_bin;
   const dispatchJson = raw.grassmann_studio_dispatch_json ?? raw._grassmann_studio_dispatch_json;
   const getFrame = raw.grassmann_studio_get_frame ?? raw._grassmann_studio_get_frame;
 
-  if (!raw.memory || !malloc || !free || !createRaw || !destroy || !dispatchBin || !dispatchJson || !getFrame) {
+  const hasMem = Boolean(raw.memory || raw.wasmMemory || raw.HEAPU8);
+  if (!hasMem || !malloc || !free || !createRaw || !destroy || !dispatchBin || !dispatchJson || !getFrame) {
     throw new Error(
       'grassmann.wasm is missing one or more required C ABI exports: ' +
-        'memory, malloc, free, grassmann_studio_{create,destroy,dispatch_bin,dispatch_json,get_frame}'
+        'memory/HEAPU8, malloc, free, grassmann_studio_{create,destroy,dispatch_bin,dispatch_json,get_frame}'
     );
   }
 
   return {
-    memory: raw.memory,
+    getMemoryBuffer: () => {
+      if (raw.memory) return raw.memory.buffer;
+      if (raw.wasmMemory) return raw.wasmMemory.buffer;
+      if (raw.HEAPU8) return raw.HEAPU8.buffer as ArrayBuffer;
+      throw new Error('WASM linear memory unavailable');
+    },
     malloc,
     free,
+    initialize,
     create: () => BigInt(createRaw()),
     destroy,
     dispatchBin,
@@ -170,6 +188,14 @@ export class WasmTransport implements StudioTransport {
     let raw: GrassmannWasmExports;
     if (this.loadExportsFn) {
       raw = await this.loadExportsFn();
+    } else if (this.wasmUrl.endsWith('.mjs') || this.wasmUrl.endsWith('.js')) {
+      const modNs = (await import(/* @vite-ignore */ this.wasmUrl)) as {
+        default?: (opts?: Record<string, unknown>) => Promise<GrassmannWasmExports>;
+      };
+      if (typeof modNs.default !== 'function') {
+        throw new Error(`Emscripten glue module at ${this.wasmUrl} has no default factory export`);
+      }
+      raw = await modNs.default({});
     } else {
       const resp = await fetch(this.wasmUrl, { signal });
       if (!resp.ok) {
@@ -179,7 +205,7 @@ export class WasmTransport implements StudioTransport {
       const instantiated = await WebAssembly.instantiate(bytes, {
         env: {
           emscripten_notify_memory_growth: () => {
-            // Buffer views are always refreshed via exports.memory.buffer
+            // Views always re-read getMemoryBuffer() dynamically
           },
         },
       });
@@ -187,6 +213,13 @@ export class WasmTransport implements StudioTransport {
     }
 
     const ex = resolveExports(raw);
+    if (ex.initialize) {
+      const initRc = ex.initialize();
+      if (initRc !== GsirStatus.OK) {
+        throw new Error(`grassmann_initialize failed with status ${initRc}`);
+      }
+    }
+
     this.exports = ex;
     this.session = ex.create();
     if (this.session === 0n) {
@@ -204,7 +237,7 @@ export class WasmTransport implements StudioTransport {
   async dispatchBin(event: Uint8Array): Promise<Uint8Array> {
     const ex = this.requireReady();
     this.ensureInCapacity(event.byteLength);
-    new Uint8Array(ex.memory.buffer, this.inPtr, event.byteLength).set(event);
+    new Uint8Array(ex.getMemoryBuffer(), this.inPtr, event.byteLength).set(event);
 
     const rc = ex.dispatchBin(
       this.session,
@@ -221,7 +254,7 @@ export class WasmTransport implements StudioTransport {
     const ex = this.requireReady();
     const jsonBytes = textEncoder.encode(JSON.stringify(event));
     this.ensureInCapacity(jsonBytes.byteLength);
-    new Uint8Array(ex.memory.buffer, this.inPtr, jsonBytes.byteLength).set(jsonBytes);
+    new Uint8Array(ex.getMemoryBuffer(), this.inPtr, jsonBytes.byteLength).set(jsonBytes);
 
     const rc = ex.dispatchJson(
       this.session,
@@ -284,7 +317,6 @@ export class WasmTransport implements StudioTransport {
     const ex = this.requireReady();
     if (needed <= this.outCap && this.outPtr !== 0) return;
     if (this.outPtr !== 0) ex.free(this.outPtr);
-    // Align capacity up to 8 bytes
     const nextCap = (Math.max(needed, this.outCap * 2, 4096) + 7) & ~7;
     this.outPtr = ex.malloc(nextCap);
     this.outCap = nextCap;
@@ -292,7 +324,7 @@ export class WasmTransport implements StudioTransport {
 
   private readOutLen(): number {
     const ex = this.requireReady();
-    const dv = new DataView(ex.memory.buffer, this.outLenPtr, 4);
+    const dv = new DataView(ex.getMemoryBuffer(), this.outLenPtr, 4);
     return dv.getUint32(0, true);
   }
 
@@ -319,9 +351,8 @@ export class WasmTransport implements StudioTransport {
     }
 
     const len = this.readOutLen();
-    // Copy out into a standalone 8-byte-aligned Uint8Array so WASM memory growth/reuse cannot detach it
     const copy = new Uint8Array(len);
-    copy.set(new Uint8Array(ex.memory.buffer, this.outPtr, len));
+    copy.set(new Uint8Array(ex.getMemoryBuffer(), this.outPtr, len));
     return copy;
   }
 }
