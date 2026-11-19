@@ -37,14 +37,21 @@ once-cell overhead (especially for exponents beyond `10⁻²²` like `1e-24`). B
 `Values` via `Values.set` on a cached zero template does a single copy + inline unboxed stores
 instead of out-of-line `lean_float_array_push` calls. -/
 
+/-- Default motor validity tolerance (`1e-9`), hoisted to avoid per-call `Float.ofScientific`. -/
+def defaultMotorTol : Float := 1e-9
+
+private def defaultStitchEps : Float := 1e-4
+
 private def f0 : Float := 0.0
 private def f1 : Float := 1.0
 private def f2 : Float := 2.0
+private def f3 : Float := 3.0
 private def fNeg2 : Float := -2.0
 private def fHalf : Float := 0.5
 private def fNegHalf : Float := -0.5
 private def f6 : Float := 6.0
 private def f09 : Float := 0.9
+private def eps7 : Float := 1e-7
 private def eps12 : Float := 1e-12
 private def eps15 : Float := 1e-15
 private def eps18 : Float := 1e-18
@@ -297,7 +304,7 @@ def normalizeLine3 (l : Line3) : Line3 :=
 /-! ## PGA3 Motors: Constructors, Study Normalization, Closed-Form `Exp`/`Log`/SLERP -/
 
 /-- Identity `PGA3` motor `1`. -/
-@[inline] def identityMotor3 : Motor3 := ⟨vals8 1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0⟩
+@[inline] def identityMotor3 : Motor3 := ⟨vals8 f1 f0 f0 f0 f0 f0 f0 f0⟩
 
 /-- Embed a `PGA3` Plücker bivector `Line3` directly as a pure-grade-2 `Motor3`. -/
 @[inline] def line3ToMotor3 (b : Line3) : Motor3 :=
@@ -328,15 +335,17 @@ def normalizeLine3 (l : Line3) : Line3 :=
 
 /-- Check whether `m` is a valid rigid motor within tolerance `tol` (positive norm and Study
 condition `|2·study| ≤ tol · normSq`, salvaging the v1 CABI check). -/
-@[inline] def motorIsValid (m : Motor3) (tol : Float := 1e-9) : Bool :=
+@[inline] def motorIsValid (m : Motor3) (tol : Float := defaultMotorTol) : Bool :=
   let q := motorNormSq m
   let st := motorStudy m
   q.isFinite && st.isFinite && q > tol && (2.0 * st).abs ≤ tol * q
 
 /-- Project and normalize a `PGA3` motor onto the Study quadric so `M * ~M = 1` exactly. -/
 @[inline] def normalizeMotor3 (m : Motor3) : Motor3 :=
-  let s := m.v.get! 0; let e01 := m.v.get! 1; let e02 := m.v.get! 2; let e03 := m.v.get! 3
-  let e12 := m.v.get! 4; let e13 := m.v.get! 5; let e23 := m.v.get! 6; let e0123 := m.v.get! 7
+  let s := m.v.get ⟨0, by decide⟩; let e01 := m.v.get ⟨1, by decide⟩
+  let e02 := m.v.get ⟨2, by decide⟩; let e03 := m.v.get ⟨3, by decide⟩
+  let e12 := m.v.get ⟨4, by decide⟩; let e13 := m.v.get ⟨5, by decide⟩
+  let e23 := m.v.get ⟨6, by decide⟩; let e0123 := m.v.get ⟨7, by decide⟩
   let q := s * s + e12 * e12 + e13 * e13 + e23 * e23
   if q < eps18 then identityMotor3
   else
@@ -355,8 +364,8 @@ condition `|2·study| ≤ tol · normSq`, salvaging the v1 CABI check). -/
 /-- Closed-form `O(1)` exponential `exp(B)` of any `PGA3` bivector `B = [e01, e02, e03, e12, e13, e23]`
 (handles pure rotations, pure translations, and general Chasles screws without series loops). -/
 @[inline] def motorExp (b : Line3) : Motor3 :=
-  let b01 := b.v.get! 0; let b02 := b.v.get! 1; let b03 := b.v.get! 2
-  let b12 := b.v.get! 3; let b13 := b.v.get! 4; let b23 := b.v.get! 5
+  let b01 := b.v.get ⟨0, by decide⟩; let b02 := b.v.get ⟨1, by decide⟩; let b03 := b.v.get ⟨2, by decide⟩
+  let b12 := b.v.get ⟨3, by decide⟩; let b13 := b.v.get ⟨4, by decide⟩; let b23 := b.v.get ⟨5, by decide⟩
   let θ2 := b12 * b12 + b13 * b13 + b23 * b23
   if θ2 < eps24 then
     -- Pure translation (B² = 0)
@@ -379,38 +388,141 @@ condition `|2·study| ≤ tol · normSq`, salvaging the v1 CABI check). -/
       (p * a)⟩
 
 /-- Closed-form `O(1)` principal logarithm `log(M)` of a unit `PGA3` motor `M`, satisfying
-`motorExp (motorLog M) = ±M` (choosing the shortest-path branch with `s ≥ 0`). -/
+`motorExp (motorLog M) = ±M` (choosing the shortest-path branch with `s ≥ 0`).
+Uses the exact dual-angle decomposition `M = (cos θ + ε·h·sin θ) + (sin θ + ε·h·cos θ)·L` in
+unboxed FP registers (single `vals6` allocation, single division `1/u`). -/
 @[inline] def motorLog (m : Motor3) : Line3 :=
-  let m := normalizeMotor3 m
-  let flip := if m.v.get! 0 < f0 then -f1 else f1
-  let s := flip * m.v.get! 0
-  let e01 := flip * m.v.get! 1; let e02 := flip * m.v.get! 2; let e03 := flip * m.v.get! 3
-  let e12 := flip * m.v.get! 4; let e13 := flip * m.v.get! 5; let e23 := flip * m.v.get! 6
-  let e0123 := flip * m.v.get! 7
-  let u2 := e12 * e12 + e13 * e13 + e23 * e23
-  if u2 < eps24 then
-    -- Pure translation
-    let invS := if s.abs < eps15 then f1 else f1 / s
-    ⟨vals6 (e01 * invS) (e02 * invS) (e03 * invS) f0 f0 f0⟩
+  let s0 := m.v.get ⟨0, by decide⟩; let e01_0 := m.v.get ⟨1, by decide⟩
+  let e02_0 := m.v.get ⟨2, by decide⟩; let e03_0 := m.v.get ⟨3, by decide⟩
+  let e12_0 := m.v.get ⟨4, by decide⟩; let e13_0 := m.v.get ⟨5, by decide⟩
+  let e23_0 := m.v.get ⟨6, by decide⟩; let e0123_0 := m.v.get ⟨7, by decide⟩
+  let q := s0 * s0 + e12_0 * e12_0 + e13_0 * e13_0 + e23_0 * e23_0
+  if q < eps18 then ⟨zeroV6⟩
   else
-    let u := Float.sqrt u2
-    let θ := Float.atan2 u s
-    let invA := θ / u
-    let b12 := e12 * invA; let b13 := e13 * invA; let b23 := e23 * invA
-    let p := e0123 * invA
-    let a := u / θ
-    let k := p * (a - s) / (θ * θ)
-    ⟨vals6
-      ((e01 + k * b23) * invA)
-      ((e02 - k * b13) * invA)
-      ((e03 + k * b12) * invA)
-      b12 b13 b23⟩
+    let invN0 := if (q - f1).abs < eps7 then fHalf * (f3 - q) else f1 / Float.sqrt q
+    let invQ := if (q - f1).abs < eps7 then f2 - q else f1 / q
+    let invN := if s0 < f0 then -invN0 else invN0
+    let d := -(s0 * e0123_0 - e01_0 * e23_0 + e02_0 * e13_0 - e03_0 * e12_0) * invQ
+    let s := s0 * invN
+    let e01 := (e01_0 - e23_0 * d) * invN
+    let e02 := (e02_0 + e13_0 * d) * invN
+    let e03 := (e03_0 - e12_0 * d) * invN
+    let e12 := e12_0 * invN
+    let e13 := e13_0 * invN
+    let e23 := e23_0 * invN
+    let e0123 := (e0123_0 + s0 * d) * invN
+    let u2 := e12 * e12 + e13 * e13 + e23 * e23
+    if u2 < eps24 then
+      let invS := if s.abs < eps15 then f1 else f1 / s
+      ⟨vals6 (e01 * invS) (e02 * invS) (e03 * invS) f0 f0 f0⟩
+    else
+      let u := Float.sqrt u2
+      let invU := f1 / u
+      let θ := Float.atan2 u s
+      let l12 := e12 * invU; let l13 := e13 * invU; let l23 := e23 * invU
+      let h := e0123 * invU
+      let hs := h * s
+      let l01 := (e01 - hs * l23) * invU
+      let l02 := (e02 + hs * l13) * invU
+      let l03 := (e03 - hs * l12) * invU
+      ⟨vals6
+        (θ * l01 + h * l23)
+        (θ * l02 - h * l13)
+        (θ * l03 + h * l12)
+        (θ * l12) (θ * l13) (θ * l23)⟩
 
-/-- Screw Linear Interpolation (ScLERP) between two `PGA3` motors: `m1 * exp(t · log(~m1 * m2))`. -/
-@[inline] def motorSlerp (m1 m2 : Motor3) (t : Float) : Motor3 :=
-  let rel : Motor3 := (~m1) * m2
-  let logRel := motorLog rel
-  normalizeMotor3 (m1 * motorExp (t • logRel))
+/-- Screw Linear Interpolation (ScLERP) between two `PGA3` motors: `m1 * exp(t · log(~m1 * m2))`.
+Fused dual-angle power `m1 * exp(t·(θ + ε·h)·L)` entirely in unboxed FP registers (single `vals8`
+output allocation, single `sqrt` + single `fdiv` on unit motors, zero boxing). -/
+def motorSlerp (m1 m2 : Motor3) (t : Float) : Motor3 :=
+  let a0 := m1.v.get ⟨0, by decide⟩; let a1 := m1.v.get ⟨1, by decide⟩
+  let a2 := m1.v.get ⟨2, by decide⟩; let a3 := m1.v.get ⟨3, by decide⟩
+  let a4 := m1.v.get ⟨4, by decide⟩; let a5 := m1.v.get ⟨5, by decide⟩
+  let a6 := m1.v.get ⟨6, by decide⟩; let a7 := m1.v.get ⟨7, by decide⟩
+  let b0 := m2.v.get ⟨0, by decide⟩; let b1 := m2.v.get ⟨1, by decide⟩
+  let b2 := m2.v.get ⟨2, by decide⟩; let b3 := m2.v.get ⟨3, by decide⟩
+  let b4 := m2.v.get ⟨4, by decide⟩; let b5 := m2.v.get ⟨5, by decide⟩
+  let b6 := m2.v.get ⟨6, by decide⟩; let b7 := m2.v.get ⟨7, by decide⟩
+  -- 1. Relative motor rel = (~m1) * m2 in unboxed registers
+  let r0_0 := a0 * b0 + a4 * b4 + a5 * b5 + a6 * b6
+  let r1_0 := a0 * b1 - a1 * b0 + a2 * b4 + a3 * b5 - a4 * b2 - a5 * b3 + a6 * b7 - a7 * b6
+  let r2_0 := a0 * b2 - a1 * b4 - a2 * b0 + a3 * b6 + a4 * b1 - a5 * b7 - a6 * b3 + a7 * b5
+  let r3_0 := a0 * b3 - a1 * b5 - a2 * b6 - a3 * b0 + a4 * b7 + a5 * b1 + a6 * b2 - a7 * b4
+  let r4_0 := a0 * b4 - a4 * b0 + a5 * b6 - a6 * b5
+  let r5_0 := a0 * b5 - a4 * b6 - a5 * b0 + a6 * b4
+  let r6_0 := a0 * b6 + a4 * b5 - a5 * b4 - a6 * b0
+  let r7_0 := a0 * b7 - a1 * b6 + a2 * b5 - a3 * b4 - a4 * b3 + a5 * b2 - a6 * b1 + a7 * b0
+  -- 2. Study-normalize rel with shortest-path flip (r0 ≥ 0); Newton rsqrt fast path for unit motors
+  let rq := r0_0 * r0_0 + r4_0 * r4_0 + r5_0 * r5_0 + r6_0 * r6_0
+  let finish := fun (d0 d1 d2 d3 d4 d5 d6 d7 : Float) =>
+    -- 4. Compose o = m1 * delta and Study-normalize in registers
+    let o0 := a0 * d0 - a4 * d4 - a5 * d5 - a6 * d6
+    let o1 := a0 * d1 + a1 * d0 - a2 * d4 - a3 * d5 + a4 * d2 + a5 * d3 - a6 * d7 - a7 * d6
+    let o2 := a0 * d2 + a1 * d4 + a2 * d0 - a3 * d6 - a4 * d1 + a5 * d7 + a6 * d3 + a7 * d5
+    let o3 := a0 * d3 + a1 * d5 + a2 * d6 + a3 * d0 - a4 * d7 - a5 * d1 - a6 * d2 - a7 * d4
+    let o4 := a0 * d4 + a4 * d0 - a5 * d6 + a6 * d5
+    let o5 := a0 * d5 + a4 * d6 + a5 * d0 - a6 * d4
+    let o6 := a0 * d6 - a4 * d5 + a5 * d4 + a6 * d0
+    let o7 := a0 * d7 + a1 * d6 - a2 * d5 + a3 * d4 + a4 * d3 - a5 * d2 + a6 * d1 + a7 * d0
+    let oq := o0 * o0 + o4 * o4 + o5 * o5 + o6 * o6
+    if oq < eps18 then identityMotor3
+    else
+      let invOq := if (oq - f1).abs < eps7 then fHalf * (f3 - oq) else f1 / Float.sqrt oq
+      let invOqSq := if (oq - f1).abs < eps7 then f2 - oq else f1 / oq
+      let sd := -(o0 * o7 - o1 * o6 + o2 * o5 - o3 * o4) * invOqSq
+      ⟨vals8
+        (o0 * invOq)
+        ((o1 - o6 * sd) * invOq)
+        ((o2 + o5 * sd) * invOq)
+        ((o3 - o4 * sd) * invOq)
+        (o4 * invOq)
+        (o5 * invOq)
+        (o6 * invOq)
+        ((o7 + o0 * sd) * invOq)⟩
+  if rq < eps18 then
+    finish f1 f0 f0 f0 f0 f0 f0 f0
+  else
+    let invRq0 := if (rq - f1).abs < eps7 then fHalf * (f3 - rq) else f1 / Float.sqrt rq
+    let invRqSq := if (rq - f1).abs < eps7 then f2 - rq else f1 / rq
+    let invRq := if r0_0 < f0 then -invRq0 else invRq0
+    let rd := -(r0_0 * r7_0 - r1_0 * r6_0 + r2_0 * r5_0 - r3_0 * r4_0) * invRqSq
+    let r0 := r0_0 * invRq
+    let r1 := (r1_0 - r6_0 * rd) * invRq
+    let r2 := (r2_0 + r5_0 * rd) * invRq
+    let r3 := (r3_0 - r4_0 * rd) * invRq
+    let r4 := r4_0 * invRq
+    let r5 := r5_0 * invRq
+    let r6 := r6_0 * invRq
+    let r7 := (r7_0 + r0_0 * rd) * invRq
+    -- 3. Fused dual-angle power delta = exp(t * (θ + ε·h) · L) in registers
+    let u2 := r4 * r4 + r5 * r5 + r6 * r6
+    if u2 < eps24 then
+      let invS := if r0.abs < eps15 then t else t / r0
+      finish f1 (r1 * invS) (r2 * invS) (r3 * invS) f0 f0 f0 f0
+    else
+      let u := Float.sqrt u2
+      let invU := f1 / u
+      let θ := Float.atan2 u r0
+      let l12 := r4 * invU; let l13 := r5 * invU; let l23 := r6 * invU
+      let h := r7 * invU
+      let hr0 := h * r0
+      let l01 := (r1 - hr0 * l23) * invU
+      let l02 := (r2 + hr0 * l13) * invU
+      let l03 := (r3 - hr0 * l12) * invU
+      let θt := t * θ
+      let ht := t * h
+      let ct := Float.cos θt
+      let st := Float.sin θt
+      let htct := ht * ct
+      finish
+        ct
+        (st * l01 + htct * l23)
+        (st * l02 - htct * l13)
+        (st * l03 + htct * l12)
+        (st * l12)
+        (st * l13)
+        (st * l23)
+        (ht * st)
 
 /-- Split a general `PGA3` bivector `B` into commuting pure-rotation and pure-translation
 bivectors `(B_rot, B_trans)` such that `B = B_rot + B_trans` and `B_rot * B_trans = B_trans * B_rot`
@@ -443,8 +555,10 @@ def bivectorSplit (b : Line3) : Line3 × Line3 :=
 RealityKit) representing `p ↦ M >>> p` for a `PGA3` motor `M` in wire order
 `[s, e01, e02, e03, e12, e13, e23, e0123]`. -/
 def motorToMat4 (m : Motor3) : FloatArray :=
-  let s := m.v.get! 0; let e01 := m.v.get! 1; let e02 := m.v.get! 2; let e03 := m.v.get! 3
-  let e12 := m.v.get! 4; let e13 := m.v.get! 5; let e23 := m.v.get! 6; let e0123 := m.v.get! 7
+  let s := m.v.get ⟨0, by decide⟩; let e01 := m.v.get ⟨1, by decide⟩
+  let e02 := m.v.get ⟨2, by decide⟩; let e03 := m.v.get ⟨3, by decide⟩
+  let e12 := m.v.get ⟨4, by decide⟩; let e13 := m.v.get ⟨5, by decide⟩
+  let e23 := m.v.get ⟨6, by decide⟩; let e0123 := m.v.get ⟨7, by decide⟩
   let q := s * s + e12 * e12 + e13 * e13 + e23 * e23
   if q < eps18 then
     idMat4
@@ -470,17 +584,17 @@ def motorToMat4 (m : Motor3) : FloatArray :=
     let a := (((a.set! 8 r02).set! 9 r12).set! 10 r22).set! 11 f0
     (((a.set! 12 tx).set! 13 ty).set! 14 tz).set! 15 f1
 
-/-- Tail-recursive flat XYZ batch transform loop (`3*k` floats). -/
+/-- Tail-recursive flat XYZ batch transform loop (`3*k` floats, direct inline `fget` + `push`). -/
 private def transformXYZLoop (r00 r01 r02 tx r10 r11 r12 ty r20 r21 r22 tz : Float)
-    (xyz : FloatArray) (i n : Nat) (out : FloatArray) : FloatArray :=
-  if i + 2 < n then
-    let x := xyz.get! i
-    let y := xyz.get! (i + 1)
-    let z := xyz.get! (i + 2)
+    (xyz : FloatArray) (i n : Nat) (hn : n ≤ xyz.size) (out : FloatArray) : FloatArray :=
+  if h : i + 2 < n then
+    let x := xyz.get (i) (by omega)
+    let y := xyz.get (i + 1) (by omega)
+    let z := xyz.get (i + 2) (by omega)
     let ox := r00 * x + r01 * y + r02 * z + tx
     let oy := r10 * x + r11 * y + r12 * z + ty
     let oz := r20 * x + r21 * y + r22 * z + tz
-    transformXYZLoop r00 r01 r02 tx r10 r11 r12 ty r20 r21 r22 tz xyz (i + 3) n
+    transformXYZLoop r00 r01 r02 tx r10 r11 r12 ty r20 r21 r22 tz xyz (i + 3) n hn
       (((out.push ox).push oy).push oz)
   else out
 termination_by n - i
@@ -494,7 +608,7 @@ def transformXYZBatch (m : Motor3) (xyz : FloatArray) : FloatArray :=
     (mat.get! 0) (mat.get! 4) (mat.get! 8)  (mat.get! 12)
     (mat.get! 1) (mat.get! 5) (mat.get! 9)  (mat.get! 13)
     (mat.get! 2) (mat.get! 6) (mat.get! 10) (mat.get! 14)
-    xyz 0 n (FloatArray.emptyWithCapacity n)
+    xyz 0 n (Nat.le_refl n) (FloatArray.emptyWithCapacity n)
 
 /-! ## PGA3 Rigid-Body Dynamics (`Adapode` RK4 Compatible) -/
 
@@ -638,7 +752,16 @@ structure MeshSliceResult where
   planeV : Float × Float × Float
   deriving Inhabited
 
-/-- Append one CCW triangle `(a, b, c)` with its normalized face normal to a `ClippedMesh`. -/
+/-- Append one CCW triangle `(a, b, c)` with precomputed unit face normal `(ux, uy, uz)`. -/
+@[inline] private def pushTriWithNormal (m : ClippedMesh)
+    (ax ay az bx by_ bz cx cy cz ux uy uz : Float) : ClippedMesh :=
+  let base := (m.positions.size / 3).toUInt32
+  let pos := ((((((((m.positions.push ax).push ay).push az).push bx).push by_).push bz).push cx).push cy).push cz
+  let nrm := ((((((((m.normals.push ux).push uy).push uz).push ux).push uy).push uz).push ux).push uy).push uz
+  let idx := ((m.indices.push base).push (base + 1)).push (base + 2)
+  ⟨pos, nrm, idx⟩
+
+/-- Append one CCW triangle `(a, b, c)` with its normalized face normal (zero tuple boxing). -/
 private def pushTri (m : ClippedMesh)
     (ax ay az bx by_ bz cx cy cz : Float) : ClippedMesh :=
   let e1x := bx - ax; let e1y := by_ - ay; let e1z := bz - az
@@ -646,31 +769,25 @@ private def pushTri (m : ClippedMesh)
   let nx := e1y * e2z - e1z * e2y
   let ny := e1z * e2x - e1x * e2z
   let nz := e1x * e2y - e1y * e2x
-  let len := Float.sqrt (nx * nx + ny * ny + nz * nz)
-  let (ux, uy, uz) :=
-    if len < 1e-15 then (0.0, 1.0, 0.0)
-    else let invL := 1.0 / len; (nx * invL, ny * invL, nz * invL)
-  let base := (m.positions.size / 3).toUInt32
-  let pos := ((((((((m.positions.push ax).push ay).push az).push bx).push by_).push bz).push cx).push cy).push cz
-  let nrm := ((((((((m.normals.push ux).push uy).push uz).push ux).push uy).push uz).push ux).push uy).push uz
-  let idx := ((m.indices.push base).push (base + 1)).push (base + 2)
-  ⟨pos, nrm, idx⟩
+  let len2 := nx * nx + ny * ny + nz * nz
+  if len2 < eps24 then
+    pushTriWithNormal m ax ay az bx by_ bz cx cy cz f0 f1 f0
+  else
+    let invL := f1 / Float.sqrt len2
+    pushTriWithNormal m ax ay az bx by_ bz cx cy cz (nx * invL) (ny * invL) (nz * invL)
 
-/-- Exact edge-plane intersection point `π ∧ (P_i ∨ P_j)` for a straddling edge with signed
-distances `di, dj` (`di` and `dj` of opposite sign). -/
-@[inline] private def edgeCutPoint (ax ay az da bx by_ bz db : Float) : Float × Float × Float :=
-  let denom := da - db
-  let t := if denom.abs < 1e-15 then 0.5 else da / denom
-  (ax + t * (bx - ax), ay + t * (by_ - ay), az + t * (bz - az))
-
-/-- Clip a triangle where vertex `0` is alone on its side (`da ≥ 0` iff `alonePos`), preserving CCW
-winding `(0, 1, 2)` on both halves, and emit the exact cut segment. -/
+/-- Clip a triangle where vertex `0` is alone on its side (`d0 ≥ 0` iff `alonePos`), preserving CCW
+winding `(0, 1, 2)` on both halves, and emit the exact cut segment (zero tuple boxing). -/
 private def splitStraddlingTri (pos neg : ClippedMesh) (segs : FloatArray)
     (alonePos : Bool)
     (x0 y0 z0 d0 x1 y1 z1 d1 x2 y2 z2 d2 : Float) :
     ClippedMesh × ClippedMesh × FloatArray :=
-  let (p1x, p1y, p1z) := edgeCutPoint x0 y0 z0 d0 x1 y1 z1 d1
-  let (p2x, p2y, p2z) := edgeCutPoint x0 y0 z0 d0 x2 y2 z2 d2
+  let denom1 := d0 - d1
+  let t1 := if denom1.abs < eps15 then fHalf else d0 / denom1
+  let p1x := x0 + t1 * (x1 - x0); let p1y := y0 + t1 * (y1 - y0); let p1z := z0 + t1 * (z1 - z0)
+  let denom2 := d0 - d2
+  let t2 := if denom2.abs < eps15 then fHalf else d0 / denom2
+  let p2x := x0 + t2 * (x2 - x0); let p2y := y0 + t2 * (y2 - y0); let p2z := z0 + t2 * (z2 - z0)
   let segs := (((((segs.push p1x).push p1y).push p1z).push p2x).push p2y).push p2z
   if alonePos then
     let pos := pushTri pos x0 y0 z0 p1x p1y p1z p2x p2y p2z
@@ -683,116 +800,168 @@ private def splitStraddlingTri (pos neg : ClippedMesh) (segs : FloatArray)
     let pos := pushTri pos p1x p1y p1z x2 y2 z2 p2x p2y p2z
     (pos, neg, segs)
 
-/-- Tail-recursive triangle-slicing pass across `indices`. -/
-private def sliceLoop (π : Plane3) (positions : FloatArray) (indices : Array UInt32)
-    (t triCount : Nat) (pos neg : ClippedMesh) (segs : FloatArray) :
-    ClippedMesh × ClippedMesh × FloatArray :=
-  if t < triCount then
-    let i0 := (indices[3 * t]!).toNat * 3
-    let i1 := (indices[3 * t + 1]!).toNat * 3
-    let i2 := (indices[3 * t + 2]!).toNat * 3
-    let x0 := positions.get! i0;     let y0 := positions.get! (i0 + 1); let z0 := positions.get! (i0 + 2)
-    let x1 := positions.get! i1;     let y1 := positions.get! (i1 + 1); let z1 := positions.get! (i1 + 2)
-    let x2 := positions.get! i2;     let y2 := positions.get! (i2 + 1); let z2 := positions.get! (i2 + 2)
-    let d0 := signedDistPlanePoint π x0 y0 z0
-    let d1 := signedDistPlanePoint π x1 y1 z1
-    let d2 := signedDistPlanePoint π x2 y2 z2
-    let p0 := d0 ≥ 0.0; let p1 := d1 ≥ 0.0; let p2 := d2 ≥ 0.0
-    if p0 && p1 && p2 then
-      sliceLoop π positions indices (t + 1) triCount (pushTri pos x0 y0 z0 x1 y1 z1 x2 y2 z2) neg segs
-    else if !p0 && !p1 && !p2 then
-      sliceLoop π positions indices (t + 1) triCount pos (pushTri neg x0 y0 z0 x1 y1 z1 x2 y2 z2) segs
-    else if p0 != p1 && p0 != p2 then
-      let (pos, neg, segs) := splitStraddlingTri pos neg segs p0 x0 y0 z0 d0 x1 y1 z1 d1 x2 y2 z2 d2
-      sliceLoop π positions indices (t + 1) triCount pos neg segs
-    else if p1 != p0 && p1 != p2 then
-      let (pos, neg, segs) := splitStraddlingTri pos neg segs p1 x1 y1 z1 d1 x2 y2 z2 d2 x0 y0 z0 d0
-      sliceLoop π positions indices (t + 1) triCount pos neg segs
+/-- Fast inlined bounds-checked read from a `FloatArray` (compiles to `if (i < sz) fget`). -/
+@[inline] private def fget0 (a : FloatArray) (i : Nat) : Float :=
+  if h : i < a.size then a.get (i) (h) else f0
+
+/-- Tail-recursive triangle-slicing pass across `indices` with plane `(pd, pnx, pny, pnz)` hoisted
+into unboxed FP registers (structural recursion on remaining triangles for instant elaboration). -/
+private def sliceLoop (pd pnx pny pnz : Float) (positions : FloatArray) (indices : Array UInt32)
+    (t triCount : Nat) (hIdx : 3 * triCount ≤ indices.size)
+    (pos neg : ClippedMesh) (segs : FloatArray) :
+    Nat → ClippedMesh × ClippedMesh × FloatArray
+  | 0 => (pos, neg, segs)
+  | rem + 1 =>
+    if ht : t < triCount then
+      let i0 := (indices[3 * t]'(by omega)).toNat * 3
+      let i1 := (indices[3 * t + 1]'(by omega)).toNat * 3
+      let i2 := (indices[3 * t + 2]'(by omega)).toNat * 3
+      let x0 := fget0 positions i0;     let y0 := fget0 positions (i0 + 1); let z0 := fget0 positions (i0 + 2)
+      let x1 := fget0 positions i1;     let y1 := fget0 positions (i1 + 1); let z1 := fget0 positions (i1 + 2)
+      let x2 := fget0 positions i2;     let y2 := fget0 positions (i2 + 1); let z2 := fget0 positions (i2 + 2)
+      let d0 := pnx * x0 + pny * y0 + pnz * z0 + pd
+      let d1 := pnx * x1 + pny * y1 + pnz * z1 + pd
+      let d2 := pnx * x2 + pny * y2 + pnz * z2 + pd
+      let p0 := d0 ≥ f0; let p1 := d1 ≥ f0; let p2 := d2 ≥ f0
+      if p0 && p1 && p2 then
+        sliceLoop pd pnx pny pnz positions indices (t + 1) triCount hIdx
+          (pushTri pos x0 y0 z0 x1 y1 z1 x2 y2 z2) neg segs rem
+      else if !p0 && !p1 && !p2 then
+        sliceLoop pd pnx pny pnz positions indices (t + 1) triCount hIdx
+          pos (pushTri neg x0 y0 z0 x1 y1 z1 x2 y2 z2) segs rem
+      else if p0 != p1 && p0 != p2 then
+        let (pos, neg, segs) := splitStraddlingTri pos neg segs p0 x0 y0 z0 d0 x1 y1 z1 d1 x2 y2 z2 d2
+        sliceLoop pd pnx pny pnz positions indices (t + 1) triCount hIdx pos neg segs rem
+      else if p1 != p0 && p1 != p2 then
+        let (pos, neg, segs) := splitStraddlingTri pos neg segs p1 x1 y1 z1 d1 x2 y2 z2 d2 x0 y0 z0 d0
+        sliceLoop pd pnx pny pnz positions indices (t + 1) triCount hIdx pos neg segs rem
+      else
+        let (pos, neg, segs) := splitStraddlingTri pos neg segs p2 x2 y2 z2 d2 x0 y0 z0 d0 x1 y1 z1 d1
+        sliceLoop pd pnx pny pnz positions indices (t + 1) triCount hIdx pos neg segs rem
+    else (pos, neg, segs)
+
+/-- Create a zero-initialized `ByteArray` of length `n` (tail-recursive, unboxed). -/
+private def mkZeroBytes (rem : Nat) (acc : ByteArray) : ByteArray :=
+  match rem with
+  | 0 => acc
+  | r + 1 => mkZeroBytes r (acc.push 0)
+
+/-- Unboxed state returned by `stitchPass` (keeps `ex`/`ey` in scalar fields, zero `lean_box_float`). -/
+private structure StitchState where
+  used : ByteArray
+  pts : FloatArray
+  ex : Float
+  ey : Float
+  moved : Bool
+
+/-- Scan unused 2D segments `[j .. segCount)` for one touching `(ex, ey)` within `eps2`,
+extending `pts` in-place (tail-recursive, unboxed FP registers, zero boxing). -/
+private def stitchPass (segs2D : FloatArray) (segCount : Nat) (hSeg : 4 * segCount ≤ segs2D.size)
+    (eps2 : Float) (j : Nat) (ex ey : Float) (used : ByteArray) (pts : FloatArray)
+    (moved : Bool) : StitchState :=
+  if hj : j < segCount then
+    if used.get! j == 0 then
+      let base := 4 * j
+      let jx0 := segs2D.get (base) (by omega)
+      let jy0 := segs2D.get (base + 1) (by omega)
+      let jx1 := segs2D.get (base + 2) (by omega)
+      let jy1 := segs2D.get (base + 3) (by omega)
+      let dx0 := jx0 - ex; let dy0 := jy0 - ey
+      if dx0 * dx0 + dy0 * dy0 ≤ eps2 then
+        stitchPass segs2D segCount hSeg eps2 (j + 1) jx1 jy1
+          (used.set! j 1) ((pts.push jx1).push jy1) true
+      else
+        let dx1 := jx1 - ex; let dy1 := jy1 - ey
+        if dx1 * dx1 + dy1 * dy1 ≤ eps2 then
+          stitchPass segs2D segCount hSeg eps2 (j + 1) jx0 jy0
+            (used.set! j 1) ((pts.push jx0).push jy0) true
+        else
+          stitchPass segs2D segCount hSeg eps2 (j + 1) ex ey used pts moved
     else
-      let (pos, neg, segs) := splitStraddlingTri pos neg segs p2 x2 y2 z2 d2 x0 y0 z0 d0 x1 y1 z1 d1
-      sliceLoop π positions indices (t + 1) triCount pos neg segs
-  else (pos, neg, segs)
-termination_by triCount - t
+      stitchPass segs2D segCount hSeg eps2 (j + 1) ex ey used pts moved
+  else ⟨used, pts, ex, ey, moved⟩
+termination_by segCount - j
+
+/-- Repeat `stitchPass` until no more unused segments attach to `(ex, ey)` (bounded by `fuel`). -/
+private def stitchGrow (segs2D : FloatArray) (segCount : Nat) (hSeg : 4 * segCount ≤ segs2D.size)
+    (eps2 : Float) (fuel : Nat) (ex ey : Float) (used : ByteArray) (pts : FloatArray) :
+    ByteArray × FloatArray :=
+  match fuel with
+  | 0 => (used, pts)
+  | f + 1 =>
+    let st := stitchPass segs2D segCount hSeg eps2 0 ex ey used pts false
+    if st.moved then stitchGrow segs2D segCount hSeg eps2 f st.ex st.ey st.used st.pts
+    else (st.used, st.pts)
+
+/-- Copy `k` 2D points from `src` in reverse order into `dst` (tail-recursive, unboxed). -/
+private def copyPtsRev (src : FloatArray) (k : Nat) (hk : 2 * k ≤ src.size) (dst : FloatArray) :
+    FloatArray :=
+  match k with
+  | 0 => dst
+  | k' + 1 =>
+    let idx := 2 * k'
+    copyPtsRev src k' (by omega) ((dst.push (src.get (idx) (by omega))).push (src.get (idx + 1) (by omega)))
+
+/-- Copy `src[i .. n)` floats into `dst` (tail-recursive, unboxed). -/
+private def copyFloats (src : FloatArray) (i n : Nat) (hn : n ≤ src.size) (dst : FloatArray) :
+    FloatArray :=
+  if hi : i < n then
+    copyFloats src (i + 1) n hn (dst.push (src.get (i) (by omega)))
+  else dst
+termination_by n - i
+
+/-- Outer tail-recursive loop assembling stitched 2D contour polylines. -/
+private def stitchOuter (segs2D : FloatArray) (segCount : Nat) (hSeg : 4 * segCount ≤ segs2D.size)
+    (eps2 : Float) (startIdx : Nat) (used : ByteArray) (polylines : Array FloatArray) :
+    Array FloatArray :=
+  if hs : startIdx < segCount then
+    if used.get! startIdx == 0 then
+      let used := used.set! startIdx 1
+      let base := 4 * startIdx
+      let ax := segs2D.get (base) (by omega)
+      let ay := segs2D.get (base + 1) (by omega)
+      let bx := segs2D.get (base + 2) (by omega)
+      let by_ := segs2D.get (base + 3) (by omega)
+      let fwd0 := ((((FloatArray.emptyWithCapacity 32).push ax).push ay).push bx).push by_
+      let (used, fwd) := stitchGrow segs2D segCount hSeg eps2 segCount bx by_ used fwd0
+      let (used, bwd) := stitchGrow segs2D segCount hSeg eps2 segCount ax ay used (FloatArray.emptyWithCapacity 8)
+      let packed :=
+        if bwd.size == 0 then fwd
+        else
+          let bwdPts := bwd.size / 2
+          let dst := FloatArray.emptyWithCapacity (bwdPts * 2 + fwd.size)
+          let dst := copyPtsRev bwd bwdPts (by omega) dst
+          copyFloats fwd 0 fwd.size (Nat.le_refl _) dst
+      stitchOuter segs2D segCount hSeg eps2 (startIdx + 1) used (polylines.push packed)
+    else
+      stitchOuter segs2D segCount hSeg eps2 (startIdx + 1) used polylines
+  else polylines
+termination_by segCount - startIdx
 
 /-- Stitch 2D unordered segments `[ax, ay, bx, by, …]` into ordered contiguous polylines
-(stored in packed `FloatArray`s `[x₀, y₀, x₁, y₁, …]`). -/
-private def stitch2DPolylines (segs2D : FloatArray) (eps : Float := 1e-4) : Array FloatArray := Id.run do
+(stored in packed `FloatArray`s `[x₀, y₀, x₁, y₁, …]`), completely tail-recursive and unboxed. -/
+private def stitch2DPolylines (segs2D : FloatArray) (eps : Float := defaultStitchEps) : Array FloatArray :=
   let segCount := segs2D.size / 4
-  if segCount == 0 then return #[]
-  let eps2 := eps * eps
-  let mut used := Array.replicate segCount false
-  let mut polylines : Array FloatArray := #[]
-  for startIdx in [0:segCount] do
-    if !used[startIdx]! then
-      used := used.set! startIdx true
-      let ax := segs2D.get! (4 * startIdx)
-      let ay := segs2D.get! (4 * startIdx + 1)
-      let bx := segs2D.get! (4 * startIdx + 2)
-      let by_ := segs2D.get! (4 * startIdx + 3)
-      -- Grow forward from (bx, by_) into packed FloatArray
-      let mut fwd := ((((FloatArray.emptyWithCapacity 16).push ax).push ay).push bx).push by_
-      let mut ex := bx; let mut ey := by_
-      let mut progress := true
-      while progress do
-        progress := false
-        for j in [0:segCount] do
-          if !used[j]! then
-            let jx0 := segs2D.get! (4 * j);     let jy0 := segs2D.get! (4 * j + 1)
-            let jx1 := segs2D.get! (4 * j + 2); let jy1 := segs2D.get! (4 * j + 3)
-            let d0 := (jx0 - ex) * (jx0 - ex) + (jy0 - ey) * (jy0 - ey)
-            let d1 := (jx1 - ex) * (jx1 - ex) + (jy1 - ey) * (jy1 - ey)
-            if d0 ≤ eps2 then
-              used := used.set! j true
-              fwd := (fwd.push jx1).push jy1
-              ex := jx1; ey := jy1; progress := true
-            else if d1 ≤ eps2 then
-              used := used.set! j true
-              fwd := (fwd.push jx0).push jy0
-              ex := jx0; ey := jy0; progress := true
-      -- Grow backward from (ax, ay) into packed FloatArray
-      let mut bwd := FloatArray.emptyWithCapacity 8
-      let mut sx := ax; let mut sy := ay
-      progress := true
-      while progress do
-        progress := false
-        for j in [0:segCount] do
-          if !used[j]! then
-            let jx0 := segs2D.get! (4 * j);     let jy0 := segs2D.get! (4 * j + 1)
-            let jx1 := segs2D.get! (4 * j + 2); let jy1 := segs2D.get! (4 * j + 3)
-            let d0 := (jx0 - sx) * (jx0 - sx) + (jy0 - sy) * (jy0 - sy)
-            let d1 := (jx1 - sx) * (jx1 - sx) + (jy1 - sy) * (jy1 - sy)
-            if d0 ≤ eps2 then
-              used := used.set! j true
-              bwd := (bwd.push jx1).push jy1
-              sx := jx1; sy := jy1; progress := true
-            else if d1 ≤ eps2 then
-              used := used.set! j true
-              bwd := (bwd.push jx0).push jy0
-              sx := jx0; sy := jy0; progress := true
-      -- Pack bwd.reverse ++ fwd into flat FloatArray
-      let bwdPts := bwd.size / 2
-      let fwdPts := fwd.size / 2
-      let mut packed := FloatArray.emptyWithCapacity ((bwdPts + fwdPts) * 2)
-      for k in [0:bwdPts] do
-        let idx := (bwdPts - 1 - k) * 2
-        packed := (packed.push (bwd.get! idx)).push (bwd.get! (idx + 1))
-      for k in [0:fwdPts] do
-        let idx := k * 2
-        packed := (packed.push (fwd.get! idx)).push (fwd.get! (idx + 1))
-      polylines := polylines.push packed
-  return polylines
+  if segCount == 0 then #[]
+  else
+    let used := mkZeroBytes segCount (ByteArray.emptyWithCapacity segCount)
+    stitchOuter segs2D segCount (by omega) (eps * eps) 0 used #[]
 
 /-- Project 3D slice segments `[ax, ay, az, bx, by, bz, …]` into plane 2D coordinates `(u, v)`. -/
 private def projectSegs2DLoop (ox oy oz ux uy uz vx vy vz : Float)
-    (segs3D : FloatArray) (i n : Nat) (out : FloatArray) : FloatArray :=
-  if i + 5 < n then
-    let ax := segs3D.get! i - ox;     let ay := segs3D.get! (i + 1) - oy; let az := segs3D.get! (i + 2) - oz
-    let bx := segs3D.get! (i + 3) - ox; let by_ := segs3D.get! (i + 4) - oy; let bz := segs3D.get! (i + 5) - oz
+    (segs3D : FloatArray) (i n : Nat) (hn : n ≤ segs3D.size) (out : FloatArray) : FloatArray :=
+  if h : i + 5 < n then
+    let ax := segs3D.get (i) (by omega) - ox
+    let ay := segs3D.get (i + 1) (by omega) - oy
+    let az := segs3D.get (i + 2) (by omega) - oz
+    let bx := segs3D.get (i + 3) (by omega) - ox
+    let by_ := segs3D.get (i + 4) (by omega) - oy
+    let bz := segs3D.get (i + 5) (by omega) - oz
     let au := ax * ux + ay * uy + az * uz
     let av := ax * vx + ay * vy + az * vz
     let bu := bx * ux + by_ * uy + bz * uz
     let bv := bx * vx + by_ * vy + bz * vz
-    projectSegs2DLoop ox oy oz ux uy uz vx vy vz segs3D (i + 6) n
+    projectSegs2DLoop ox oy oz ux uy uz vx vy vz segs3D (i + 6) n hn
       ((((out.push au).push av).push bu).push bv)
   else out
 termination_by n - i
@@ -803,14 +972,23 @@ contour polylines in the plane's orthonormal frame. -/
 def sliceMeshByPlane (positions : FloatArray) (indices : Array UInt32) (π : Plane3) :
     MeshSliceResult :=
   let π := normalizePlane3 π
+  let pd := π.v.get! 0; let pnx := π.v.get! 1; let pny := π.v.get! 2; let pnz := π.v.get! 3
   let triCount := indices.size / 3
-  let emptyMesh : ClippedMesh := ⟨FloatArray.empty, FloatArray.empty, #[]⟩
-  let (pos, neg, segs3D) := sliceLoop π positions indices 0 triCount emptyMesh emptyMesh FloatArray.empty
-  let (origin, u, v) := (plane3Frame? π).getD ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0))
+  let estFloats := triCount * 6
+  let estIdx := triCount * 2
+  let estSegs := min (triCount * 3) 2048
+  let initPos : ClippedMesh :=
+    ⟨FloatArray.emptyWithCapacity estFloats, FloatArray.emptyWithCapacity estFloats, Array.mkEmpty estIdx⟩
+  let initNeg : ClippedMesh :=
+    ⟨FloatArray.emptyWithCapacity estFloats, FloatArray.emptyWithCapacity estFloats, Array.mkEmpty estIdx⟩
+  let (pos, neg, segs3D) :=
+    sliceLoop pd pnx pny pnz positions indices 0 triCount (by omega)
+      initPos initNeg (FloatArray.emptyWithCapacity estSegs) triCount
+  let (origin, u, v) := (plane3Frame? π).getD ((f0, f0, f0), (f1, f0, f0), (f0, f1, f0))
   let (ox, oy, oz) := origin
   let (ux, uy, uz) := u
   let (vx, vy, vz) := v
-  let segs2D := projectSegs2DLoop ox oy oz ux uy uz vx vy vz segs3D 0 segs3D.size
+  let segs2D := projectSegs2DLoop ox oy oz ux uy uz vx vy vz segs3D 0 segs3D.size (Nat.le_refl _)
     (FloatArray.emptyWithCapacity ((segs3D.size / 6) * 4))
   let polylines2D := stitch2DPolylines segs2D
   { posHalf := pos, negHalf := neg, contourSegments3D := segs3D,

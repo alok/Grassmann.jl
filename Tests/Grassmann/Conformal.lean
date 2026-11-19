@@ -242,6 +242,35 @@ def checkInterprete : Tests.Gen Tally := do
                   near nrm.1.abs 1.0 1e-5 && near rad (Float.sqrt 3.0) 1e-5)
       "interpreteCGA3 imaginary circle from disjoint spheres"
   | _ => t := t.bad "interpreteCGA3 imaginary circle wrong kind"
+  -- OPNS grade-4 sphere & plane, IPNS grade-3 pointPair, IPNS grade-4 point
+  let spOpns : Multivector CGA3 Float := undual spReal.toMultivector
+  match interpreteCGA3 spOpns with
+  | .sphere (cx, cy, cz) rad false =>
+    t := t.check (near cx 1.0 1e-6 && near cy (-2.0) 1e-6 && near cz 3.0 1e-6 && near rad 2.5 1e-6)
+      "interpreteCGA3 OPNS grade-4 sphere"
+  | _ => t := t.bad "interpreteCGA3 OPNS grade-4 sphere wrong kind"
+  let plOpns : Chain CGA3 4 Float := (((point3 0.0 2.5 0.0 ∧ point3 1.0 2.5 0.0) ∧ point3 0.0 2.5 1.0) ∧ inf CGA3)
+  match interpreteCGA3 plOpns.toMultivector with
+  | .plane (cx, cy, cz) (nx, ny, nz) =>
+    t := t.check (near cx 0.0 1e-6 && near cy 2.5 1e-6 && near cz 0.0 1e-6 &&
+                  near nx 0.0 1e-6 && near ny.abs 1.0 1e-6 && near nz 0.0 1e-6)
+      "interpreteCGA3 OPNS grade-4 plane"
+  | _ => t := t.bad "interpreteCGA3 OPNS grade-4 plane wrong kind"
+  let ppIpns : Multivector CGA3 Float := dual pp.toMultivector
+  match interpreteCGA3 ppIpns (isIPNS := true) with
+  | .pointPair a b false =>
+    let ok := (near a.1 1.5 && near a.2.1 (-2.0) && near a.2.2 0.75 &&
+               near b.1 (-0.5) && near b.2.1 1.0 && near b.2.2 2.25) ||
+              (near b.1 1.5 && near b.2.1 (-2.0) && near b.2.2 0.75 &&
+               near a.1 (-0.5) && near a.2.1 1.0 && near a.2.2 2.25)
+    t := t.check ok "interpreteCGA3 IPNS grade-3 pointPair matches OPNS"
+  | _ => t := t.bad "interpreteCGA3 IPNS grade-3 pointPair wrong kind"
+  let ptIpns : Multivector CGA3 Float := dual pA.toMultivector
+  match interpreteCGA3 ptIpns (isIPNS := true) with
+  | .point (x, y, z) =>
+    t := t.check (near x 1.5 1e-6 && near y (-2.0) 1e-6 && near z 0.75 1e-6)
+      "interpreteCGA3 IPNS grade-4 point"
+  | _ => t := t.bad "interpreteCGA3 IPNS grade-4 point wrong kind"
   -- 7. CGA2 circle & line
   let c2 : Chain CGA2 3 Float := (point2 1.0 0.0 ∧ point2 0.0 1.0) ∧ point2 (-1.0) 0.0
   match interpreteCGA2 c2.toMultivector with

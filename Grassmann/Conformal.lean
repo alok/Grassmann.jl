@@ -44,6 +44,9 @@ variable {V : TensorBundle} [Kernels V]
 /-- A conformal vector: point, dual sphere or dual plane. -/
 abbrev CVec (V : TensorBundle) := Chain V 1 Float
 
+/-- Default geometric classification tolerance (`1e-9`), hoisted to avoid per-call `Float.ofScientific`. -/
+def defaultTol : Float := 1e-9
+
 private def f0 : Float := 0.0
 private def f1 : Float := 1.0
 private def f2 : Float := 2.0
@@ -372,26 +375,37 @@ inductive ConformalObject where
   | tangent (pos normal : Float × Float × Float)
   deriving Repr, Inhabited
 
-/-- Squared Euclidean L2 norm of a `FloatArray` (tail-recursive, unboxed). -/
-private def arrNormSq (d : FloatArray) (i n : Nat) (acc : Float) : Float :=
-  if i < n then
-    let v := d.get! i
-    arrNormSq d (i + 1) n (acc + v * v)
+/-- Squared Euclidean L2 norm of a `FloatArray` slice `[i .. n)` (tail-recursive, unboxed `fget`). -/
+private def arrNormSqFast (d : FloatArray) (i n : Nat) (hn : n ≤ d.size) (acc : Float) : Float :=
+  if h : i < n then
+    let v := d.get (i) (by omega)
+    arrNormSqFast d (i + 1) n hn (acc + v * v)
   else acc
 termination_by n - i
 
+/-- Squared Euclidean L2 norm of a `FloatArray` (tail-recursive, unboxed). -/
+@[inline] private def arrNormSq (d : FloatArray) (i n : Nat) (acc : Float) : Float :=
+  if hn : n ≤ d.size then arrNormSqFast d i n hn acc
+  else arrNormSqFast d i d.size (Nat.le_refl _) acc
+
 @[inline] private def chainNormSq {V : TensorBundle} {G : Nat} (c : Chain V G Float) : Float :=
-  arrNormSq c.v.data 0 c.v.data.size 0.0
+  arrNormSqFast c.v.data 0 c.v.data.size (Nat.le_refl _) 0.0
+
+/-- Unrolled squared L2 norm of 5 consecutive floats `d[o .. o+4]`. -/
+@[inline] private def sumSq5 (d : FloatArray) (o : Nat) (h : o + 5 ≤ d.size) : Float :=
+  let a := d.get (o) (by omega); let b := d.get (o + 1) (by omega)
+  let c := d.get (o + 2) (by omega); let e := d.get (o + 3) (by omega)
+  let f := d.get (o + 4) (by omega)
+  a * a + b * b + c * c + e * e + f * f
 
 /-- Find the dominant grade (`1 .. 4`) of a `CGA3` multivector by L2 energy directly on its
 packed grade-major storage (`[0]`, `[1..6)`, `[6..16)`, `[16..26)`, `[26..31)`) with zero
-allocations. -/
-@[inline] private def dominantGradeCGA3 (m : Multivector CGA3 Float) : Nat × Float :=
-  let d := m.v.data
-  let e1 := arrNormSq d 1 6 f0
-  let e2 := arrNormSq d 6 16 f0
-  let e3 := arrNormSq d 16 26 f0
-  let e4 := arrNormSq d 26 31 f0
+allocations and fully unrolled inline `fget` reads. -/
+@[inline] private def dominantGradeCGA3 (d : FloatArray) (h31 : 31 ≤ d.size) : Nat × Float :=
+  let e1 := sumSq5 d 1 (by omega)
+  let e2 := sumSq5 d 6 (by omega) + sumSq5 d 11 (by omega)
+  let e3 := sumSq5 d 16 (by omega) + sumSq5 d 21 (by omega)
+  let e4 := sumSq5 d 26 h31
   let (g, e) := if e2 > e1 then (2, e2) else (1, e1)
   let (g, e) := if e3 > e then (3, e3) else (g, e)
   if e4 > e then (4, e4) else (g, e)
@@ -414,142 +428,181 @@ allocations. -/
     if r2 ≥ f0 then .sphere (cx, cy, cz) (Float.sqrt r2) false
     else .sphere (cx, cy, cz) (Float.sqrt (-r2)) true
 
+/-- Unboxed zero-allocation classifier for an OPNS grade-2 `CGA3` blade `[t0..t9]`:
+flat point, real/imaginary point-pair, or tangent dipole. -/
+@[inline] private def decodeGrade2CGA3 (t0 t1 t2 t3 t4 t5 t6 t7 t8 t9 tol : Float) :
+    ConformalObject :=
+  let n2 := t0 * t0 + t1 * t1 + t2 * t2 + t3 * t3 + t4 * t4 +
+            t5 * t5 + t6 * t6 + t7 * t7 + t8 * t8 + t9 * t9
+  let tol2 := tol * tol
+  if n2 < tol2 then .empty
+  else
+    let w := t4 * t4 + t5 * t5 + t6 * t6
+    let flat2Norm2 := w + t7 * t7 + t8 * t8 + t9 * t9
+    let thr := tol2 * n2
+    if flat2Norm2 ≤ thr then
+      -- Flat point `P ∧ ∞`: slots [0..3] are (-w, -w*x, -w*y, -w*z)
+      if t0.abs < tol then .empty
+      else
+        let invT0 := f1 / t0
+        .point (t1 * invT0, t2 * invT0, t3 * invT0)
+    else if w < eps12 then .empty
+    else
+      -- Exact contractions: disc = -(T⋅T)₀, F = T⋅∞ = t0·∞ - t4·e₁ - t5·e₂ - t6·e₃, TF = T⋅F
+      let disc := t0 * t0 + f2 * (t1 * t4 + t2 * t5 + t3 * t6) - (t7 * t7 + t8 * t8 + t9 * t9)
+      let invW := f1 / w
+      let cx := (-t4 * t0 + t7 * t5 + t8 * t6) * invW
+      let cy := (-t5 * t0 - t7 * t4 + t9 * t6) * invW
+      let cz := (-t6 * t0 - t8 * t4 - t9 * t5) * invW
+      if disc > thr then
+        let k := Float.sqrt disc * invW
+        let dx := -t4 * k; let dy := -t5 * k; let dz := -t6 * k
+        .pointPair (cx + dx, cy + dy, cz + dz) (cx - dx, cy - dy, cz - dz) false
+      else if disc < -thr then
+        let k := Float.sqrt (-disc) * invW
+        let dx := -t4 * k; let dy := -t5 * k; let dz := -t6 * k
+        .pointPair (cx + dx, cy + dy, cz + dz) (cx - dx, cy - dy, cz - dz) true
+      else
+        let fl := Float.sqrt w
+        if fl < tol then .point (cx, cy, cz)
+        else
+          let invF := f1 / fl
+          .dipole (cx, cy, cz) (-t4 * invF, -t5 * invF, -t6 * invF)
+
 /-- Classify an OPNS grade-2 blade `T` in `CGA3`: flat point, real/imaginary point-pair, or
 tangent dipole. -/
-def interpreteCGA3Grade2 (T : Chain CGA3 2 Float) (tol : Float := 1e-9) : ConformalObject :=
-  let n2 := chainNormSq T
-  if n2 < tol * tol then .empty
+def interpreteCGA3Grade2 (T : Chain CGA3 2 Float) (tol : Float := defaultTol) : ConformalObject :=
+  let d := T.v.data
+  decodeGrade2CGA3
+    (d.get! 0) (d.get! 1) (d.get! 2) (d.get! 3) (d.get! 4)
+    (d.get! 5) (d.get! 6) (d.get! 7) (d.get! 8) (d.get! 9) tol
+
+/-- Unboxed zero-allocation classifier for an OPNS grade-3 `CGA3` blade `[c0..c9]`:
+line, real/imaginary circle, or tangent bivector. -/
+@[inline] private def decodeGrade3CGA3 (c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 tol : Float) :
+    ConformalObject :=
+  let n2 := c0 * c0 + c1 * c1 + c2 * c2 + c3 * c3 + c4 * c4 +
+            c5 * c5 + c6 * c6 + c7 * c7 + c8 * c8 + c9 * c9
+  let tol2 := tol * tol
+  if n2 < tol2 then .empty
   else
-    let flat : Chain CGA3 3 Float := T ∧ inf CGA3
-    if chainNormSq flat ≤ tol * tol * n2 then
-      -- Flat point `P ∧ ∞`: slots [0..3] are (-w, -w*x, -w*y, -w*z)
-      let w := T.v.get! 0
-      if w.abs < tol then .empty
-      else .point (T.v.get! 1 / w, T.v.get! 2 / w, T.v.get! 3 / w)
-    else
-      let disc := -((T ⋅ T : Chain CGA3 (2 - 2) Float).v.get! 0)
-      let F : CVec CGA3 := T ⋅ inf CGA3
-      let TF : CVec CGA3 := T ⋅ F
-      if disc > tol * tol * n2 then
-        let k := Float.sqrt disc
-        match down3? (TF + k • F), down3? (TF - k • F) with
-        | some a, some b => .pointPair a b false
-        | _, _ => .empty
-      else if disc < -(tol * tol * n2) then
-        -- Imaginary point pair: center = down3? TF, half-axis from F
-        match down3? TF with
-        | some (cx, cy, cz) =>
-          let w := weight TF
-          if w.abs < tol then .empty
-          else
-            let k := Float.sqrt (-disc) / w.abs
-            let dx := F.v.get! 2 * k; let dy := F.v.get! 3 * k; let dz := F.v.get! 4 * k
-            .pointPair (cx + dx, cy + dy, cz + dz) (cx - dx, cy - dy, cz - dz) true
-        | none => .empty
+    let nSq := c6 * c6 + c7 * c7 + c8 * c8
+    let flatNorm2 := nSq + c9 * c9
+    if flatNorm2 ≤ tol2 * n2 then
+      -- Line `P1 ∧ P2 ∧ ∞`: slots [0..2] = (dx, dy, dz), [3..5] = (mz, -my, mx)
+      let d2 := c0 * c0 + c1 * c1 + c2 * c2
+      if d2 < tol2 then .empty
       else
-        -- Null tangent vector / dipole (`T² ≈ 0`)
-        match down3? TF with
-        | some pos =>
-          let fx := F.v.get! 2; let fy := F.v.get! 3; let fz := F.v.get! 4
-          let fl := Float.sqrt (fx * fx + fy * fy + fz * fz)
-          if fl < tol then .point pos
-          else let invF := 1.0 / fl; .dipole pos (fx * invF, fy * invF, fz * invF)
-        | none => .empty
+        let mx := c5; let my := -c4; let mz := c3
+        let invD2 := f1 / d2
+        let invD := Float.sqrt invD2
+        let ox := (c1 * mz - c2 * my) * invD2
+        let oy := (c2 * mx - c0 * mz) * invD2
+        let oz := (c0 * my - c1 * mx) * invD2
+        .line (ox, oy, oz) (c0 * invD, c1 * invD, c2 * invD)
+    else if nSq < tol2 || f2 * nSq < eps12 then .empty
+    else
+      -- Closed-form circle / tangent bivector directly from C's 10 coordinates:
+      -- flat = C ∧ ∞ = [-c6, -c7, -c8, -c9, 0], dual(flat)₁ normal = (-c8, c7, -c6) / √nSq,
+      -- (flat*flat)₀ = -nSq, (C*C)₀ = c0²+c1²+c2²+2(c3·c6+c4·c7+c5·c8)-c9²,
+      -- ((C*∞)*C)₁ has weight 2·nSq and center (-c1·c6-c2·c7+c8·c9, c0·c6-c2·c8-c7·c9, c0·c7+c1·c8+c6·c9)/nSq.
+      let invN := f1 / Float.sqrt nSq
+      let nx := -c8 * invN; let ny := c7 * invN; let nz := -c6 * invN
+      let cSq := c0 * c0 + c1 * c1 + c2 * c2 + f2 * (c3 * c6 + c4 * c7 + c5 * c8) - c9 * c9
+      let invNSq := f1 / nSq
+      let r2 := cSq * invNSq
+      let cx := (-c1 * c6 - c2 * c7 + c8 * c9) * invNSq
+      let cy := ( c0 * c6 - c2 * c8 - c7 * c9) * invNSq
+      let cz := ( c0 * c7 + c1 * c8 + c6 * c9) * invNSq
+      if r2.abs ≤ tol then .tangent (cx, cy, cz) (nx, ny, nz)
+      else if r2 > f0 then .circle (cx, cy, cz) (nx, ny, nz) (Float.sqrt r2) false
+      else .circle (cx, cy, cz) (nx, ny, nz) (Float.sqrt (-r2)) true
 
 /-- Classify an OPNS grade-3 blade `C` in `CGA3`: line, real/imaginary circle, or tangent bivector. -/
-def interpreteCGA3Grade3 (C : Chain CGA3 3 Float) (tol : Float := 1e-9) : ConformalObject :=
-  let n2 := chainNormSq C
+def interpreteCGA3Grade3 (C : Chain CGA3 3 Float) (tol : Float := defaultTol) : ConformalObject :=
+  let d := C.v.data
+  decodeGrade3CGA3
+    (d.get! 0) (d.get! 1) (d.get! 2) (d.get! 3) (d.get! 4)
+    (d.get! 5) (d.get! 6) (d.get! 7) (d.get! 8) (d.get! 9) tol
+
+/-- Unboxed zero-allocation classifier for an OPNS grade-4 `CGA3` blade `[s0..s4]`:
+plane or real/imaginary sphere via exact `dual(S)₁ = [s3, -s4, s2, -s1, s0]`. -/
+@[inline] private def decodeGrade4CGA3 (s0 s1 s2 s3 s4 tol : Float) : ConformalObject :=
+  let n2 := s0 * s0 + s1 * s1 + s2 * s2 + s3 * s3 + s4 * s4
   if n2 < tol * tol then .empty
-  else
-    let flat : Chain CGA3 4 Float := C ∧ inf CGA3
-    if chainNormSq flat ≤ tol * tol * n2 then
-      -- Line `P1 ∧ P2 ∧ ∞`: slots [0..2] = (dx, dy, dz), [3..5] = (mz, -my, mx)
-      let dx := C.v.get! 0; let dy := C.v.get! 1; let dz := C.v.get! 2
-      let d2 := dx * dx + dy * dy + dz * dz
-      if d2 < tol * tol then .empty
-      else
-        let mx := C.v.get! 5; let my := -(C.v.get! 4); let mz := C.v.get! 3
-        let invD2 := 1.0 / d2
-        let invD := Float.sqrt invD2
-        let ox := (dy * mz - dz * my) * invD2
-        let oy := (dz * mx - dx * mz) * invD2
-        let oz := (dx * my - dy * mx) * invD2
-        .line (ox, oy, oz) (dx * invD, dy * invD, dz * invD)
-    else
-      -- Circle or tangent bivector: carrier plane is `dual (C ∧ ∞)`
-      let π : CVec CGA3 := (dual flat.toMultivector).grade 1
-      let normal := match planeNormalDistance? π with
-        | some (nv, _) => (nv.v.get! 2, nv.v.get! 3, nv.v.get! 4)
-        | none => (0.0, 0.0, 1.0)
-      let cSq := (C * C).v.get! 0
-      let fSq := (flat * flat).v.get! 0
-      if fSq.abs < tol * tol then .empty
-      else
-        let r2 := -cSq / fSq
-        let centerHalf := (C * inf CGA3) * C
-        match down3? (centerHalf.grade 1) with
-        | none => .empty
-        | some ctr =>
-          if r2.abs ≤ tol then .tangent ctr normal
-          else if r2 > 0.0 then .circle ctr normal (Float.sqrt r2) false
-          else .circle ctr normal (Float.sqrt (-r2)) true
+  else decodeIPNSGrade1CGA3 s3 (-s4) s2 (-s1) s0 tol
 
 /-- Classify an OPNS grade-4 blade `S` in `CGA3`: plane or real/imaginary sphere. -/
-def interpreteCGA3Grade4 (S : Chain CGA3 4 Float) (tol : Float := 1e-9) : ConformalObject :=
-  let n2 := chainNormSq S
-  if n2 < tol * tol then .empty
-  else
-    let s : CVec CGA3 := (dual S.toMultivector).grade 1
-    let w := weight s
-    if w.abs < tol then
-      match planeNormalDistance? s with
-      | some (nv, δ) =>
-        let nx := nv.v.get! 2; let ny := nv.v.get! 3; let nz := nv.v.get! 4
-        .plane (δ * nx, δ * ny, δ * nz) (nx, ny, nz)
-      | none => .empty
-    else
-      match sphereCenterRadius2? s with
-      | some (cv, r2) =>
-        let ctr := (cv.v.get! 2, cv.v.get! 3, cv.v.get! 4)
-        if r2 ≥ 0.0 then .sphere ctr (Float.sqrt r2) false
-        else .sphere ctr (Float.sqrt (-r2)) true
-      | none => .empty
+def interpreteCGA3Grade4 (S : Chain CGA3 4 Float) (tol : Float := defaultTol) : ConformalObject :=
+  let d := S.v.data
+  decodeGrade4CGA3 (d.get! 0) (d.get! 1) (d.get! 2) (d.get! 3) (d.get! 4) tol
 
 /-- Classify any OPNS (or IPNS when `isIPNS := true`) `Multivector CGA3 Float` into its exact
 3D Euclidean primitive (`point`, `pointPair`, `line`, `circle`, `plane`, `sphere`, `dipole`,
-`tangent`, or `empty`). -/
-def interpreteCGA3 (X : Multivector CGA3 Float) (isIPNS : Bool := false) (tol : Float := 1e-9) :
+`tangent`, or `empty`) with zero intermediate `FloatArray` allocations. -/
+def interpreteCGA3 (X : Multivector CGA3 Float) (isIPNS : Bool := false) (tol : Float := defaultTol) :
     ConformalObject :=
-  if isIPNS then
-    let (g0, e0) := dominantGradeCGA3 X
-    if e0 < tol * tol then .empty
-    else if g0 == 1 then
-      -- Direct zero-allocation fast path for IPNS dual spheres & planes (avoids undual+dual!)
-      let d := X.v.data
-      decodeIPNSGrade1CGA3 (d.get! 1) (d.get! 2) (d.get! 3) (d.get! 4) (d.get! 5) tol
-    else
-      let opns := undual X
-      let (g, e) := dominantGradeCGA3 opns
-      if e < tol * tol then .empty
-      else match g with
-      | 1 => match down3? (opns.grade 1) with | some p => .point p | none => .empty
-      | 2 => interpreteCGA3Grade2 (opns.grade 2) tol
-      | 3 => interpreteCGA3Grade3 (opns.grade 3) tol
-      | 4 => interpreteCGA3Grade4 (opns.grade 4) tol
-      | _ => .empty
-  else
-    let (g, e) := dominantGradeCGA3 X
+  let d := X.v.data
+  if h31 : 31 ≤ d.size then
+    let (g, e) := dominantGradeCGA3 d h31
     if e < tol * tol then .empty
-    else match g with
-    | 1 => match down3? (X.grade 1) with | some p => .point p | none => .empty
-    | 2 => interpreteCGA3Grade2 (X.grade 2) tol
-    | 3 => interpreteCGA3Grade3 (X.grade 3) tol
-    | 4 => interpreteCGA3Grade4 (X.grade 4) tol
-    | _ => .empty
+    else if isIPNS then
+      match g with
+      | 1 =>
+        decodeIPNSGrade1CGA3
+          (d.get (1) (by omega)) (d.get (2) (by omega)) (d.get (3) (by omega))
+          (d.get (4) (by omega)) (d.get (5) (by omega)) tol
+      | 2 =>
+        decodeGrade3CGA3
+          (-(d.get (15) (by omega))) (d.get (14) (by omega)) (-(d.get (13) (by omega)))
+          (d.get (9) (by omega)) (-(d.get (8) (by omega))) (d.get (7) (by omega))
+          (-(d.get (12) (by omega))) (d.get (11) (by omega)) (-(d.get (10) (by omega)))
+          (d.get (6) (by omega)) tol
+      | 3 =>
+        decodeGrade2CGA3
+          (-(d.get (25) (by omega))) (-(d.get (21) (by omega))) (d.get (20) (by omega))
+          (-(d.get (19) (by omega))) (d.get (24) (by omega)) (-(d.get (23) (by omega)))
+          (d.get (22) (by omega)) (d.get (18) (by omega)) (-(d.get (17) (by omega)))
+          (d.get (16) (by omega)) tol
+      | 4 =>
+        let w := d.get (30) (by omega)
+        if w.abs < eps12 then .empty
+        else
+          let invW := f1 / w
+          .point (-(d.get (28) (by omega)) * invW, d.get (27) (by omega) * invW,
+                  -(d.get (26) (by omega)) * invW)
+      | _ => .empty
+    else
+      match g with
+      | 1 =>
+        let w := d.get (2) (by omega)
+        if w.abs < eps12 then .empty
+        else
+          let invW := f1 / w
+          .point (d.get (3) (by omega) * invW, d.get (4) (by omega) * invW,
+                  d.get (5) (by omega) * invW)
+      | 2 =>
+        decodeGrade2CGA3
+          (d.get (6) (by omega)) (d.get (7) (by omega)) (d.get (8) (by omega))
+          (d.get (9) (by omega)) (d.get (10) (by omega)) (d.get (11) (by omega))
+          (d.get (12) (by omega)) (d.get (13) (by omega)) (d.get (14) (by omega))
+          (d.get (15) (by omega)) tol
+      | 3 =>
+        decodeGrade3CGA3
+          (d.get (16) (by omega)) (d.get (17) (by omega)) (d.get (18) (by omega))
+          (d.get (19) (by omega)) (d.get (20) (by omega)) (d.get (21) (by omega))
+          (d.get (22) (by omega)) (d.get (23) (by omega)) (d.get (24) (by omega))
+          (d.get (25) (by omega)) tol
+      | 4 =>
+        decodeGrade4CGA3
+          (d.get (26) (by omega)) (d.get (27) (by omega)) (d.get (28) (by omega))
+          (d.get (29) (by omega)) (d.get (30) (by omega)) tol
+      | _ => .empty
+  else .empty
 
 /-- Classify any OPNS (or IPNS when `isIPNS := true`) `Multivector CGA2 Float` into a 2D
 primitive embedded in the `z = 0` plane (`point`, `pointPair`, `line`, `circle`, `dipole`, `empty`). -/
-def interpreteCGA2 (X : Multivector CGA2 Float) (isIPNS : Bool := false) (tol : Float := 1e-9) :
+def interpreteCGA2 (X : Multivector CGA2 Float) (isIPNS : Bool := false) (tol : Float := defaultTol) :
     ConformalObject :=
   let opns := if isIPNS then undual X else X
   let e1 := chainNormSq (opns.grade 1)

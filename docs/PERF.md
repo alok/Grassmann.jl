@@ -779,3 +779,46 @@ in `interpreteCGA3` produced huge speedups (`lake exe bench grassmann`, min ns/o
 | `conformal/dualSphere3` | 82.7 ns | **12.2 ns** | 6.8× |
 | `conformal/interpreteCGA3 sphere` | 837.7 ns | **86.1 ns** | 9.7× |
 | `conformal/interpreteCGA3 circle` | 654.1 ns | **544.2 ns** | 1.2× |
+
+## 2026-11-19 (Wave 2): closed-form `interpreteCGA3`, fused dual-angle `motorSlerp`, zero-boxing `sliceMeshByPlane` & `ALOK-1007` linearity guard
+
+Eliminated all remaining intermediate multivector allocations, per-call default-arg
+`Float.ofScientific` parsing, bounds-check join-point ladders (`Values.get!`), and `Id.run do`
+`let mut` Float boxing across `Grassmann.Conformal` and `Grassmann.Projective`:
+
+- **`interpreteCGA3` (`Grassmann/Conformal.lean`)**: Replaced OPNS/IPNS `dual`/`undual`/`∧`/`*`
+  multivector products with exact closed-form scalar formulas (`decodeGrade2CGA3`,
+  `decodeGrade3CGA3`, `decodeGrade4CGA3`, direct `undual` index permutations for `isIPNS := true`),
+  unrolled `dominantGradeCGA3`, and hoisted `defaultTol : Float := 1e-9`.
+- **`motorSlerp` & `motorLog` (`Grassmann/Projective.lean`)**: Fused `(~m1) * m2`, shortest-path
+  Study normalization (Newton reciprocal-sqrt fast path for unit motors), dual-angle power
+  `exp(t·(θ + ε·h)·L)` (1 `sqrt`, 1 `fdiv`, 1 `atan2`, 1 `sin`, 1 `cos`), and `m1 * delta` into a
+  single `vals8` allocation using checked `Values.get ⟨i, by decide⟩` (zero bounds-check ladders).
+- **`sliceMeshByPlane` & `transformXYZBatch` (`Grassmann/Projective.lean`)**: Hoisted plane
+  coefficients into scalar registers, pre-allocated half-mesh/segment buffers, replaced `Id.run do`
+  in `stitch2DPolylines` with pure tail-recursive unboxed loops over `ByteArray`/`FloatArray`
+  returning monomorphic `StitchState` (zero `lean_box_float`), and switched `transformXYZLoop` to
+  direct inline `FloatArray.get` (`lean_float_array_fget`).
+- **`ALOK-1007` Codegen Guard (`scripts/check_packed_linearity.py`)**: Automated audit over
+  generated `+Mod:c` verifying zero `lean_box_float`, zero `lean_alloc_closure`, zero
+  `l_Float_ofScientific`, single `lean_mk_empty_float_array`, direct `fget`/`fset`/`push`, tail
+  `goto _start;` loops, and strict `Init`-only `runtime_initialize_*` closure across all 11 core
+  runtime targets (98 transitive local modules).
+
+`lake exe bench --filter projective --filter conformal grassmann` (Apple M4 Max, min ns/op):
+
+| case | Wave 1 | Wave 2 | speedup |
+|---|---:|---:|---:|
+| `conformal/interpreteCGA3 circle` | 544.2 ns | **70.3 ns** | **7.7×** |
+| `conformal/interpreteCGA3 pointPair` | — | **70.2 ns** | new |
+| `conformal/interpreteCGA3 line` | — | **67.0 ns** | new |
+| `conformal/interpreteCGA3 plane` | — | **68.5 ns** | new |
+| `conformal/interpreteCGA3 sphere` | 86.1 ns | **36.5 ns** | **2.4×** |
+| `projective/motorSlerp` | 168.6 ns | **55.8 ns** | **3.0×** |
+| `projective/motorExp` | 17.9 ns | **17.3 ns** | 1.0× |
+| `projective/motorLog` | 47.6 ns | **36.6 ns** | **1.3×** |
+| `projective/normalizeMotor3` | 11.9 ns | **10.6 ns** | 1.1× |
+| `projective/transformXYZBatch` | 3.93 ns/pt | **3.34 ns/pt** | **1.2×** |
+| `projective/rigidBodyStepRK4` | 1.00 µs | **992.5 ns** | 1.0× |
+| `projective/sliceMeshByPlane` (12 tris) | 4.69 µs | **3.16 µs** | **1.5×** |
+| `projective/sliceMeshByPlane` (960 tris) | — | **54.0 µs** | new |

@@ -299,7 +299,7 @@ def checkPGA3Motors : Tests.Gen Tally := do
       t := t.check (near3 (batchOut.get! 0, batchOut.get! 1, batchOut.get! 2) gotGA 1e-8)
         "PGA3 transformXYZBatch matches M >>> P"
     | none => t := t.bad "PGA3 M >>> P none"
-    -- SLERP endpoints & midpoint norm
+    -- SLERP endpoints, general pair, antipodal sign-flip, & midpoint norm
     let mMid := motorSlerp identityMotor3 m 0.5
     t := t.check (motorIsValid mMid 1e-8) "PGA3 motorSlerp midpoint valid"
     let mMid2 : Motor3 := mMid * mMid
@@ -307,6 +307,23 @@ def checkPGA3Motors : Tests.Gen Tally := do
                    m.v.get! 5 * mMid2.v.get! 5 + m.v.get! 6 * mMid2.v.get! 6 < 0.0 then -1.0 else 1.0
     t := t.check ((List.range 8).all fun i => near (mMid2.v.get! i) (sgn2 * m.v.get! i) 1e-6)
       "PGA3 (motorSlerp 1 M 0.5)² = ±M"
+    let mAt0 := motorSlerp m mFast 0.0
+    let mAt1 := motorSlerp m mFast 1.0
+    let mFlip := motorSlerp m ((-1.0 : Float) • m) 0.5
+    let sgn1 := if mFast.v.get! 0 * mAt1.v.get! 0 + mFast.v.get! 4 * mAt1.v.get! 4 +
+                   mFast.v.get! 5 * mAt1.v.get! 5 + mFast.v.get! 6 * mAt1.v.get! 6 < 0.0 then -1.0 else 1.0
+    let sgnF := if m.v.get! 0 * mFlip.v.get! 0 + m.v.get! 4 * mFlip.v.get! 4 +
+                   m.v.get! 5 * mFlip.v.get! 5 + m.v.get! 6 * mFlip.v.get! 6 < 0.0 then -1.0 else 1.0
+    t := t.check ((List.range 8).all fun i =>
+        near (mAt0.v.get! i) (m.v.get! i) 1e-7 &&
+        near (mAt1.v.get! i) (sgn1 * mFast.v.get! i) 1e-6 &&
+        near (mFlip.v.get! i) (sgnF * m.v.get! i) 1e-7)
+      "PGA3 motorSlerp endpoints (t=0, t=1) and antipodal shortest-path M↔-M"
+    -- Pure translation SLERP
+    let mTrMid := motorSlerp identityMotor3 tr 0.5
+    match point3Coords? (applyMotor3Point mTrMid (mkPoint3 0.0 0.0 0.0)) with
+    | some got => t := t.check (near3 got (0.5 * dx, 0.5 * dy, 0.5 * dz) 1e-8) "PGA3 pure translation SLERP"
+    | none => t := t.bad "PGA3 pure translation SLERP none"
   return t
 
 /-- Check rigid-body RK4 dynamics (energy & Study norm conservation) and PGA3 mesh slicing. -/
@@ -377,6 +394,40 @@ def checkPhysicsAndSlicing : Tests.Gen Tally := do
   t := t.check (resMiss.posHalf.indices.size == 0 && resMiss.negHalf.indices.size == 36 &&
                 resMiss.contourPolylines2D.isEmpty)
     "non-intersecting slice keeps full mesh on negative side with 0 contours"
+  -- 2d. 960-triangle UV sphere equatorial cut y = 0.05 -> 1 closed circle of perimeter ≈ 2π
+  let pi := Float.acos (-1.0)
+  let lat := 20; let lon := 24
+  let mut sphPos := FloatArray.emptyWithCapacity ((lat + 1) * lon * 3)
+  for i in [0:lat + 1] do
+    let phi := pi * i.toFloat / lat.toFloat
+    let sp := Float.sin phi; let cp := Float.cos phi
+    for j in [0:lon] do
+      let theta := 2.0 * pi * j.toFloat / lon.toFloat
+      sphPos := ((sphPos.push (sp * Float.cos theta)).push cp).push (sp * Float.sin theta)
+  let mut sphIdx := Array.emptyWithCapacity (lat * lon * 6)
+  for i in [0:lat] do
+    for j in [0:lon] do
+      let j1 := (j + 1) % lon
+      let a := (i * lon + j).toUInt32; let b := ((i + 1) * lon + j).toUInt32
+      let c := ((i + 1) * lon + j1).toUInt32; let d := (i * lon + j1).toUInt32
+      sphIdx := (((((sphIdx.push a).push b).push c).push a).push c).push d
+  let resSph := sliceMeshByPlane sphPos sphIdx (mkPlane3 0.0 1.0 0.0 (-0.05))
+  t := t.check (resSph.posHalf.indices.size > 0 && resSph.negHalf.indices.size > 0 &&
+                resSph.contourPolylines2D.size == 1)
+    "960-tri sphere slice stitches into 1 closed contour loop"
+  if h : 0 < resSph.contourPolylines2D.size then
+    let poly := resSph.contourPolylines2D[0]'h
+    let nPts := poly.size / 2
+    let mut perim := 0.0
+    for k in [0:nPts - 1] do
+      let dx := poly.get! (2 * (k + 1)) - poly.get! (2 * k)
+      let dy := poly.get! (2 * (k + 1) + 1) - poly.get! (2 * k + 1)
+      perim := perim + Float.sqrt (dx * dx + dy * dy)
+    let closed := near (poly.get! 0) (poly.get! (2 * (nPts - 1))) 1e-4 &&
+                  near (poly.get! 1) (poly.get! (2 * (nPts - 1) + 1)) 1e-4
+    let expectedPerim := 2.0 * pi * Float.sqrt (1.0 - 0.05 * 0.05)
+    t := t.check (closed && (perim - expectedPerim).abs < 0.08)
+      s!"960-tri sphere contour closed with perimeter ≈ 2πr ({perim} vs {expectedPerim})"
   return t
 
 /-- Run the `grassmann/projective` suite. -/
