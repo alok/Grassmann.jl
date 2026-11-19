@@ -42,6 +42,7 @@ mods=(
   Grassmann.CoffeeShop.Presets
   Grassmann.CoffeeShop.PresetsExtra
   Grassmann.CoffeeShop.PresetsParity
+  Grassmann.CoffeeShop.PresetsShowcase
   Grassmann.CoffeeShop.Engine
   Grassmann.CoffeeShop
   Grassmann.Studio
@@ -194,7 +195,7 @@ cat > "$dist_dir/wasm-manifest.json" << EOF
   "wrapperFile": "grassmann_wasm.mjs",
   "bytes": ${wasm_bytes},
   "gzipBytes": ${gz_bytes},
-  "presetCount": 69
+  "presetCount": 74
 }
 EOF
 
@@ -202,5 +203,5 @@ echo "[wasm] built artifacts (content hash=${wasm_hash}):"
 ls -lh "$dist_dir/grassmann.wasm" "$dist_dir/grassmann.mjs" "$dist_dir/$fp_wasm" "$dist_dir/$fp_mjs" "$dist_dir/grassmann_wasm.mjs" "$dist_dir/wasm-manifest.json"
 echo "[wasm] gzipped wasm size: ${gz_bytes} bytes ($((gz_bytes / 1024)).$(((gz_bytes % 1024) * 10 / 1024)) KB)"
 
-echo "[wasm] running full Node.js verification + benchmark suite (all 69 presets + Implicit3D/GPU + Wedge Tutorials/Random)"
+echo "[wasm] running full Node.js verification + benchmark suite (all 74 presets + @param + KaTeX + Bytecode Implicit3D/GPU + LiveScript v2 + Wedge)"
 node "$repo_root/wasm/test_wasm.mjs"

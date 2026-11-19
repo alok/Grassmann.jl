@@ -43,6 +43,7 @@ mods=(
   Grassmann.CoffeeShop.Presets
   Grassmann.CoffeeShop.PresetsExtra
   Grassmann.CoffeeShop.PresetsParity
+  Grassmann.CoffeeShop.PresetsShowcase
   Grassmann.CoffeeShop.Engine
   Grassmann.CoffeeShop
   Grassmann.Studio

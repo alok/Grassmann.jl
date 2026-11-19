@@ -1490,3 +1490,33 @@ void lean_internal_panic(char const *msg) {
   fprintf(stderr, "[lean_wasm_rt] panic: %s\n", msg ? msg : "(null)");
   abort();
 }
+
+/* Wave 5A additions for Bytecode ImplicitExpr VM */
+lean_obj_res l_Int_toNat(b_lean_obj_arg a) {
+  int64_t v = int_to_i64(a);
+  return v <= 0 ? lean_box(0) : u64_to_nat((uint64_t)v);
+}
+
+lean_obj_res lean_float_array_data(lean_obj_arg a) {
+  size_t sz = lean_sarray_size(a);
+  lean_obj_res r = lean_alloc_array(sz, sz);
+  const double *src = lean_float_array_cptr(a);
+  lean_object **dst = lean_array_cptr(r);
+  for (size_t i = 0; i < sz; ++i) {
+    dst[i] = lean_box_float(src[i]);
+  }
+  lean_dec(a);
+  return r;
+}
+
+lean_obj_res lean_float_array_mk(lean_obj_arg a) {
+  size_t sz = lean_array_size(a);
+  lean_obj_res r = lean_alloc_sarray(sizeof(double), sz, sz);
+  lean_object **src = lean_array_cptr(a);
+  double *dst = lean_float_array_cptr(r);
+  for (size_t i = 0; i < sz; ++i) {
+    dst[i] = lean_unbox_float(src[i]);
+  }
+  lean_dec(a);
+  return r;
+}
