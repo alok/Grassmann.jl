@@ -661,6 +661,13 @@ private partial def parseStmt (st : ParseSt) : Except String (Expr × ParseSt) :
       else
         let (rhs, st3) ← parseExpr 0 st2.bump.skipSeps
         return (.letBind name rhs, st3)
+    | some (.blade pfx sub) =>
+      let name := s!"{pfx}{sub}"
+      let st2 := st1.bump
+      if st2.peek != some (.op "=") then parseErr st2 s!"expected '=' after let {name}"
+      else
+        let (rhs, st3) ← parseExpr 0 st2.bump.skipSeps
+        return (.letBind name rhs, st3)
     | _ => parseErr st1 "expected identifier after 'let'"
   | _ =>
     let (lhs, st1) ← parseExpr 0 st
@@ -668,6 +675,7 @@ private partial def parseStmt (st : ParseSt) : Except String (Expr × ParseSt) :
       let (rhs, st2) ← parseExpr 0 st1.bump.skipSeps
       match lhs with
       | .ident name => return (.eq (.ident name) rhs, st2)
+      | .blade pfx sub => return (.eq (.ident s!"{pfx}{sub}") rhs, st2)
       | _ => return (.eq lhs rhs, st2)
     else
       return (lhs, st1)

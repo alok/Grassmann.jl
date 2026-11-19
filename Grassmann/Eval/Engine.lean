@@ -506,6 +506,7 @@ structure ScriptEnv (V : AlgSpace) where
   activeColor    : Option RGBA := none
   nextHandleId   : UInt32 := 0
   nextMeshId     : UInt64 := 7100
+  consumedMeshIds : Array UInt64 := #[]
   topBindIdx     : UInt32 := 0
   loopDepth      : Nat := 0
   callDepth      : Nat := 0
@@ -678,12 +679,16 @@ partial def evalScriptVal {V : AlgSpace} (env : ScriptEnv V) (e : Expr) :
     return (.color rgba hex, { env with activeColor := some rgba })
   | .str s        => return (.str s, env)
   | .blade pfx sub =>
-    match bladeSubToBits V env.zeroIndexed sub with
-    | some bits =>
-      let b : MV V := if bits == 0 then MV.one else MV.blade bits
-      if pfx == 'E' then return (.mv (MV.complementright b), env)
-      else return (.mv b, env)
-    | none => throw s!"invalid blade literal '{pfx}{sub}' in {V}"
+    -- If user explicitly shadowed e.g. `let v1 = ...`, honor local variable binding first!
+    match env.lookup? s!"{pfx}{sub}" with
+    | some v => return (v, env)
+    | none =>
+      match bladeSubToBits V env.zeroIndexed sub with
+      | some bits =>
+        let b : MV V := if bits == 0 then MV.one else MV.blade bits
+        if pfx == 'E' then return (.mv (MV.complementright b), env)
+        else return (.mv b, env)
+      | none => throw s!"invalid blade literal '{pfx}{sub}' in {V}"
   | .ident name =>
     match env.lookup? name with
     | some v => return (v, env)
@@ -1148,9 +1153,15 @@ partial def evalScriptVal {V : AlgSpace} (env : ScriptEnv V) (e : Expr) :
         if vals.size ≥ 2 then
           match vals[0]!, vals[1]! with
           | .mesh asset m0, .mv mMV .. =>
-            return (.mesh asset (Motor3.mul (extractMotor3 mMV) m0), envCur)
+            let newId := envCur.nextMeshId
+            let envNext := { envCur with nextMeshId := newId + 1,
+                                         consumedMeshIds := envCur.consumedMeshIds.push asset.meshId }
+            return (.mesh { asset with meshId := newId } (Motor3.mul (extractMotor3 mMV) m0), envNext)
           | .mv mMV .., .mesh asset m0 =>
-            return (.mesh asset (Motor3.mul (extractMotor3 mMV) m0), envCur)
+            let newId := envCur.nextMeshId
+            let envNext := { envCur with nextMeshId := newId + 1,
+                                         consumedMeshIds := envCur.consumedMeshIds.push asset.meshId }
+            return (.mesh { asset with meshId := newId } (Motor3.mul (extractMotor3 mMV) m0), envNext)
           | _, _ => throw "transform(mesh, motor) expects a mesh and a motor"
         else throw "transform(mesh, motor) expects 2 arguments"
       | "slice" =>
@@ -1164,7 +1175,10 @@ partial def evalScriptVal {V : AlgSpace} (env : ScriptEnv V) (e : Expr) :
               let res := sliceMeshByPlane asset nrm d idLo idHi
               let ctr := Vec3.scale (-d) nrm
               let (pu, pv) := Vec3.orthonormalBasis nrm
-              return (.sliced res ctr pu pv, { envCur with nextMeshId := idLo + 2 })
+              let envNext :=
+                { envCur with nextMeshId := idLo + 2,
+                              consumedMeshIds := envCur.consumedMeshIds.push asset.meshId }
+              return (.sliced res ctr pu pv, envNext)
             | none => throw "slice(mesh, plane): second argument is not a valid plane"
           | _, _ => throw "slice(mesh, plane) expects a mesh and a plane multivector"
         else throw "slice(mesh, plane) expects 2 arguments"
@@ -1674,8 +1688,13 @@ def evalScriptToFrame (algebraSpec : String) (code : String)
         let mut idx := 0
         for name in finalEnv.order do
           if let some v := finalEnv.lookup? name then
-            let cOpt := ((finalEnv.varColors.find? fun kv => kv.1 == name).bind (·.2))
-            f := appendScriptVal f name idx zeroIdx cOpt true v
+            let skipConsumed :=
+              match v with
+              | .mesh asset _ => finalEnv.consumedMeshIds.contains asset.meshId
+              | _ => false
+            if !skipConsumed then
+              let cOpt := ((finalEnv.varColors.find? fun kv => kv.1 == name).bind (·.2))
+              f := appendScriptVal f name idx zeroIdx cOpt true v
             idx := idx + 1
         if finalEnv.order.isEmpty then
           f := appendScriptVal f "ans" 0 zeroIdx finalEnv.activeColor true lastVal
