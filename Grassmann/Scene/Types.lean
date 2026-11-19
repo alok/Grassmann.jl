@@ -221,10 +221,10 @@ def toAffine (m : Motor3) : Vec3 × Vec3 × Vec3 × Vec3 :=
   let r0 : Vec3 := ⟨1.0 - 2.0 * (yy + zz), 2.0 * (xy - wz),       2.0 * (xz + wy)⟩
   let r1 : Vec3 := ⟨2.0 * (xy + wz),       1.0 - 2.0 * (xx + zz), 2.0 * (yz - wx)⟩
   let r2 : Vec3 := ⟨2.0 * (xz - wy),       2.0 * (yz + wx),       1.0 - 2.0 * (xx + yy)⟩
-  -- Translation from ideal part: T_m * R_m = m => t = -2 * (ideal_vec) * ~R_m
-  let tx := -2.0 * (mn.s * mn.e01 - mn.e12 * mn.e02 - mn.e13 * mn.e03 - mn.e23 * mn.e0123)
-  let ty := -2.0 * (mn.s * mn.e02 + mn.e12 * mn.e01 - mn.e23 * mn.e03 + mn.e13 * mn.e0123)
-  let tz := -2.0 * (mn.s * mn.e03 + mn.e13 * mn.e01 + mn.e23 * mn.e02 - mn.e12 * mn.e0123)
+  -- Translation from ideal part: T = M * ~R => t = -2 * (T.e01, T.e02, T.e03)
+  let tx := -2.0 * (mn.s * mn.e01 + mn.e02 * mn.e12 + mn.e03 * mn.e13 + mn.e0123 * mn.e23)
+  let ty := -2.0 * (mn.s * mn.e02 - mn.e01 * mn.e12 + mn.e03 * mn.e23 - mn.e0123 * mn.e13)
+  let tz := -2.0 * (mn.s * mn.e03 - mn.e01 * mn.e13 - mn.e02 * mn.e23 + mn.e0123 * mn.e12)
   (r0, r1, r2, ⟨tx, ty, tz⟩)
 
 /-- Apply motor `m` to a 3D point `p`. -/

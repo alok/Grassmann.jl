@@ -39,6 +39,22 @@ def loadLevel (idx : Nat) : WedgeState :=
 def initState (start3D : Bool := false) : WedgeState :=
   loadLevel (if start3D then levels2D.size else 0)
 
+/-- Canonical separation axis pointing from `elB` toward `elA`.
+Uses `anchorA - anchorB` when anchors are distinct, falling back to the normal difference
+`nA - nB` when two lines/planes share the same anchor (e.g. passing through the origin). -/
+def separationAxis (elA elB : PgaElem) : Vec3 :=
+  let ab := Vec3.sub elA.anchor elB.anchor
+  let abLen := Vec3.norm ab
+  if abLen ≥ 1e-6 then Vec3.scale (1.0 / abLen) ab
+  else
+    let normalOf : PgaElem → Vec3
+      | .line2 a b _  => ⟨a, b, 0.0⟩
+      | .plane3 n _   => n
+      | .line3 d _    => d
+      | _             => ⟨1.0, 0.0, 0.0⟩
+    let dn := Vec3.sub (normalOf elA) (normalOf elB)
+    if Vec3.norm dn ≥ 1e-6 then Vec3.normalize dn else ⟨1.0, 0.0, 0.0⟩
+
 /-- Classify a 2-element gesture strictly in Lean (matching `example_game_wedge.html:114-133`
 and lifting seamlessly to 3D PGA).
 Returns `some (opName, resultingElem)` or `none` if invalid/ambiguous. -/
@@ -49,9 +65,7 @@ def classifyGesture (elA elB : PgaElem) (dirA dirB : Vec3)
   -- Lean owns the hold threshold (`< 0.1`), honoring explicit spatial pinch-hold too
   let holdA := holdHintA || lenA < 0.1
   let holdB := holdHintB || lenB < 0.1
-  let ab := Vec3.sub elA.anchor elB.anchor
-  let abLen := Vec3.norm ab
-  let uAB := if abLen < 1e-6 then ⟨1.0, 0.0, 0.0⟩ else Vec3.scale (1.0 / abLen) ab
+  let uAB := separationAxis elA elB
   let cosA := if holdA then 0.0 else Vec3.dot (Vec3.neg uAB) (Vec3.scale (1.0 / lenA) dirA)
   let cosB := if holdB then 0.0 else Vec3.dot uAB (Vec3.scale (1.0 / lenB) dirB)
   let aOut := !holdA && cosA < 0.0

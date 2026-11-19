@@ -81,20 +81,21 @@ def levels3D : Array WedgeLevel :=
   let axis15 := meet3 pbAB15 pbAC15
   let circ15 := meet3 axis15 pbAD15
 
-  -- L16: 3D Monge Point (meet of orthogonal planes through opposite edge midpoints)
+  -- L16: 3D Monge Point (meet of 3 linearly independent Monge planes through opposite edge midpoints:
+  -- edge CD ⊥ through mid(AB), edge BD ⊥ through mid(AC), edge AB ⊥ through mid(CD)!)
   let A16 := p3 1.1 0.9 0.5
   let B16 := p3 (-1.0) 0.7 0.7
   let C16 := p3 0.3 (-1.0) 0.6
   let D16 := p3 (-0.2) (-0.1) (-1.1)
   let eCD16 := join3 C16 D16
   let eBD16 := join3 B16 D16
-  let eBC16 := join3 B16 C16
+  let eAB16 := join3 A16 B16
   let mAB16 := add3 A16 B16
   let mAC16 := add3 A16 C16
-  let mAD16 := add3 A16 D16
+  let mCD16 := add3 C16 D16
   let mp1 := dot3 eCD16 mAB16
   let mp2 := dot3 eBD16 mAC16
-  let mp3 := dot3 eBC16 mAD16
+  let mp3 := dot3 eAB16 mCD16
   let mongeLine16 := meet3 mp1 mp2
   let mongePt16 := meet3 mongeLine16 mp3
 
@@ -151,7 +152,7 @@ def levels3D : Array WedgeLevel :=
     { number := 16, dim := .dim3D
       title := "L16 · 3D Monge Point"
       goal := "Construct the Monge point where planes through each edge midpoint ⊥ to the opposite edge concur!"
-      hintText := "Dot opposite edge (C&D) onto midpoint (A+B) for plane 1; repeat for (B&D)<<(A+C) and (B&C)<<(A+D); Meet all three!"
+      hintText := "Dot opposite edges onto midpoints: (C&D)<<(A+B), (B&D)<<(A+C), and (A&B)<<(C+D); Meet all three planes!"
       givens := #[(A16, "A"), (B16, "B"), (C16, "C"), (D16, "D")]
       hints := #[(mAB16, "A+B"), (mp1, "(C&D)<<(A+B)"), (mongeLine16, "Monge Axis")]
       targets := #[(mongePt16, "Monge Point")] }

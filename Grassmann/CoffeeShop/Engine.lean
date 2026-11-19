@@ -25,6 +25,7 @@ structure CoffeeShopState where
   useSurface     : Bool   := false
   eqOverlay      : Option ContourOverlay := none
   handles        : Array (UInt32 × Vec3) := #[]
+  coeffOverrides : Array (UInt32 × UInt32 × Float) := #[]
   sliceMotor     : Option Motor3 := none
   customCamera   : Option CameraState := none
   simTime        : Float := 0.0
@@ -57,6 +58,25 @@ def setHandle (st : CoffeeShopState) (hid : UInt32) (pos : Vec3) : CoffeeShopSta
     | some idx => st.handles.set! idx (hid, pos)
     | none     => st.handles.push (hid, pos)
   { st with handles := next }
+
+/-- Live coefficient edit from CoffeeShop's `inspect stash` table: records override and
+maps blade edits directly onto interactive handles (`0..2` → `x/y/z`) or `#pga3d_slicing` plane! -/
+def setCoeffOverride (st : CoffeeShopState) (entryIdx bladeIdx : UInt32) (val : Float) :
+    CoffeeShopState :=
+  let nextOv :=
+    match st.coeffOverrides.findIdx? fun x => x.1 == entryIdx && x.2.1 == bladeIdx with
+    | some idx => st.coeffOverrides.set! idx (entryIdx, bladeIdx, val)
+    | none     => st.coeffOverrides.push (entryIdx, bladeIdx, val)
+  let cur := hPos st.handles entryIdx Vec3.zero
+  let nextPos : Vec3 :=
+    match bladeIdx.toNat % 3 with
+    | 0 => { cur with x := val }
+    | 1 => { cur with y := val }
+    | _ => { cur with z := val }
+  let st1 := setHandle { st with coeffOverrides := nextOv } entryIdx nextPos
+  if st.presetId == "pga3d_slicing" && entryIdx == 0 then
+    { st1 with sliceMotor := none }
+  else st1
 
 def setScript (st : CoffeeShopState) (algebra code : String) : CoffeeShopState :=
   { st with customAlgebra := algebra, customCode := code, useCustom := true, useSurface := false }
