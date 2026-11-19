@@ -234,9 +234,10 @@ def makePointMV (V : AlgSpace) (zeroIndexed : Bool) (x y z : Float) : MV V :=
     let p := MV.add p (MV.single 11 y)
     MV.add p (MV.single 7 (-z))
   else if zeroIndexed && V.n == 3 then
+    -- Canonical PGA2 point P(x, y) = e12 + y*e01 - x*e02 (matching CABI/Kernels.lean:376 so (a*e1+b*e2+c*e0) ^ P = (ax+by+c)e012)
     let p := MV.single 6 1.0
-    let p := MV.add p (MV.single 3 (-x))
-    MV.add p (MV.single 5 y)
+    let p := MV.add p (MV.single 3 y)
+    MV.add p (MV.single 5 (-x))
   else if V.hasconformal && V.n == 5 then
     let r2 := 0.5 * (x * x + y * y + z * z)
     let p := MV.single 1 r2
@@ -266,7 +267,7 @@ def extractPointVec3 {V : AlgSpace} (zeroIndexed : Bool) (x : MV V) : Option Vec
     if Float.abs w > 1e-6 then some ⟨-x.coeff 13 / w, x.coeff 11 / w, -x.coeff 7 / w⟩ else none
   else if zeroIndexed && V.n == 3 then
     let w := x.coeff 6
-    if Float.abs w > 1e-6 then some ⟨-x.coeff 3 / w, x.coeff 5 / w, 0.0⟩ else none
+    if Float.abs w > 1e-6 then some ⟨-x.coeff 5 / w, x.coeff 3 / w, 0.0⟩ else none
   else if V.hasconformal && V.n == 5 then
     let w := x.coeff 2
     if Float.abs w > 1e-6 then some ⟨x.coeff 4 / w, x.coeff 8 / w, x.coeff 16 / w⟩ else none
@@ -1382,12 +1383,12 @@ def appendClassifiedWith {V : AlgSpace} (f : SceneFrame) (name : String) (idx : 
             color := ⟨col.r, col.g, col.b, 0.24⟩, label := name } }
       else f
     else f
-  -- 2. PGA2: D"0,1,1" (bit0=e0, bit1=e1, bit2=e2)
+  -- 2. PGA2: D"0,1,1" (bit0=e0, bit1=e1, bit2=e2); P(x,y) = e12 + y*e01 - x*e02
   else if zeroIndexed && V.n == 3 then
     let w := x.coeff 6 -- e12
     if g == 2 && Float.abs w > 1e-6 then
-      let px := -x.coeff 3 / w
-      let py :=  x.coeff 5 / w
+      let px := -x.coeff 5 / w
+      let py :=  x.coeff 3 / w
       { f with points := f.points.push {
           handleId := hid, pos := ⟨px, py, 0.0⟩, radius := 0.075,
           color := col, role := { draggable }, label := name } }
@@ -1430,6 +1431,19 @@ def appendClassifiedWith {V : AlgSpace} (f : SceneFrame) (name : String) (idx : 
               center, u, v, extent := 2.2,
               color := ⟨col.r, col.g, col.b, 0.24⟩, label := name } }
         else f
+    -- Exact off-origin 3D flat line extractor from grade-3 OPNS blade `L = A ^ B ^ ni`:
+    -- In Witt basis (`1=ni, 2=no, 4=e1, 8=e2, 16=e3`):
+    --   direction `d = b - a = (coeff 7, coeff 11, coeff 19)` (`ni^no^e_k`)
+    --   moment    `m = a × b = (coeff 25, -coeff 21, coeff 13)` (`ni^e_i^e_j`)
+    --   closest-to-origin point `orig = (d × m) / ‖d‖² = a - ((a·d)/‖d‖²) d` (scale & sign invariant!).
+    let extractCga3FlatLine (l3 : MV V) : Option (Vec3 × Vec3) :=
+      let d : Vec3 := ⟨l3.coeff 7, l3.coeff 11, l3.coeff 19⟩
+      let d2 := Vec3.normSq d
+      if d2 > 1e-8 then
+        let m : Vec3 := ⟨l3.coeff 25, -l3.coeff 21, l3.coeff 13⟩
+        let orig := Vec3.scale (1.0 / d2) (Vec3.cross d m)
+        some (orig, Vec3.scale (1.0 / Float.sqrt d2) d)
+      else none
     let classifyPairOrCircle (b : MV V) (asCircle : Bool) : SceneFrame :=
       -- Exact Witt center `C = b * ni * b` and direction `d = ni ⌋ b`!
       let cPt := MV.mul (MV.mul b ni) b
@@ -1456,10 +1470,15 @@ def appendClassifiedWith {V : AlgSpace} (f : SceneFrame) (name : String) (idx : 
               p1, p2, radius := 0.075, color := col, imaginary := r2 < 0.0,
               showLink := true, label := name } }
       else if dNorm2 > 1e-8 then
-        -- Flat line (dual or primal)
-        let dir := Vec3.scale (1.0 / Float.sqrt dNorm2) dEuc
-        { f with lines := f.lines.push {
-            origin := Vec3.zero, dir, clip := 3.0, width := 2.4, color := col, label := name } }
+        -- Flat line (dual IPNS `P1 ^ P2` → dualize to OPNS grade-3 to recover exact off-origin point!)
+        match extractCga3FlatLine (MV.complementright b) with
+        | some (orig, dir) =>
+          { f with lines := f.lines.push {
+              origin := orig, dir, clip := 3.2, width := 2.4, color := col, label := name } }
+        | none =>
+          let dir := Vec3.scale (1.0 / Float.sqrt dNorm2) dEuc
+          { f with lines := f.lines.push {
+              origin := Vec3.zero, dir, clip := 3.0, width := 2.4, color := col, label := name } }
       else f
     if g == 1 then
       classifyDual1 x
@@ -1468,20 +1487,16 @@ def appendClassifiedWith {V : AlgSpace} (f : SceneFrame) (name : String) (idx : 
     else if g == 2 then
       classifyPairOrCircle x isDualRound
     else if g == 3 then
-      -- Grade-3 OPNS circle `A^B^C` (or line `A^B^ni` if flat)
-      let dualB := MV.complementright x
+      -- Grade-3 OPNS circle `A^B^C` (or flat 3D line `A^B^ni` when `x ^ ni = 0`)
       let flat := MV.wedge x ni
       if ganjaNorm flat < 1e-4 then
-        -- Flat 3D line `A ^ B ^ ni`: direction is `e∞ ⌋ (e∅ ⌋ x)` or dual normal
-        let lDir : Vec3 := ⟨x.coeff 12, -x.coeff 20, x.coeff 24⟩
-        let d2 := Vec3.normSq lDir
-        if d2 > 1e-8 then
+        match extractCga3FlatLine x with
+        | some (orig, dir) =>
           { f with lines := f.lines.push {
-              origin := Vec3.zero, dir := Vec3.normalize lDir, clip := 3.2, width := 2.4,
-              color := col, label := name } }
-        else classifyPairOrCircle dualB true
+              origin := orig, dir, clip := 3.2, width := 2.4, color := col, label := name } }
+        | none => classifyPairOrCircle (MV.complementright x) true
       else
-        classifyPairOrCircle dualB true
+        classifyPairOrCircle (MV.complementright x) true
     else f
   -- 4. Witt CGA2: S"∞∅++" (bit0=∞, bit1=∅, bit2=e1, bit3=e2)
   else if V.hasconformal && V.n == 4 then
