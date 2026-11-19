@@ -735,3 +735,19 @@ target.
 
 The mesher still keeps its triangulation in the `HashMap`-based `Delaunay.Mesh`. Porting its
 refinement to the half-edge arrays is the next speed-up.
+
+## 2026-11-19: cached permutation tables for `convertLayout` (`Grassmann/Types/Dims.lean`)
+
+`convertLayout` previously evaluated `Values.ofFn` through an unspecialized closure that recomputed
+`la.contains` and `la.rank` per blade and boxed every `Float` coefficient. Replacing it via a
+kernel-checked `@[csimp]` (`convertLayout_eq_fast`) with `convertLayoutFast` — an `@[inline, specialize]`
+tail-recursive `applyPermLoop` reading from a flat `Array`-cached `(n, la, lc)` index map (`n ≤ 8`,
+zero hashing, pure `Init`) — eliminates closure/boxing overhead across all spaces (including arbitrary
+`Cl(p,q,r)`):
+
+| case (`lake exe bench --smoke grassmann`, Apple M4 Max) | before | after | speedup |
+|---|---|---|---|
+| `ℝ3/grade 2 of Multivector` | 247.1 ns | 16.9 ns | 14.6× |
+| `STA/grade 2 of Multivector` | 447.3 ns | 22.9 ns | 19.5× |
+| `PGA3/grade 2 of Multivector` | 441.4 ns | 22.2 ns | 19.9× |
+| `CGA3/grade 2 of Multivector` | 706.5 ns | 26.0 ns | 27.2× |
