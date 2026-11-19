@@ -552,8 +552,20 @@ console.log(`[wasm bench] evalImplicit GPU shader:  ${dtImpGpu.toFixed(2)} ms (G
   }
   const r6Diff = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: "1000000*(0.5000004*x - 0.5000001*x) - 0.15", gpuRaymarch: true, bound: 1 }));
   for (const [lang, src] of [["GLSL3", r6Diff.meta.opnsShaders[0].glsl], ["WGSL", r6Diff.meta.opnsShaders[0].wgsl], ["MSL", r6Diff.meta.opnsShaders[0].msl]]) {
-    assert.ok(src.includes("0.5000004") && src.includes("0.5000001") && src.includes("0.15"), `R6 WASM ${lang} preserves 9-sig-digit float32 literals`);
+    assert.ok(src.includes("return ((0.3 * p.x) - 0.15);"), `R7 WASM ${lang} folds float32-cancelling difference in Float64 to return ((0.3 * p.x) - 0.15);`);
+    // Verify exact float32 root coordinate |x - 0.5| < 1e-4 (zero cancellation shift to 0.5356!)
+    const f32x = Math.fround(0.15) / Math.fround(0.3);
+    assert.ok(Math.abs(f32x - 0.5) < 1e-4, `R7 WASM ${lang} float32 root |x - 0.5| < 1e-4 (got ${f32x})`);
   }
+  const r6Unlike = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: "0.5000004*x - 0.5000001*y - 0.15", gpuRaymarch: true, bound: 1 }));
+  for (const [lang, src] of [["GLSL3", r6Unlike.meta.opnsShaders[0].glsl], ["WGSL", r6Unlike.meta.opnsShaders[0].wgsl], ["MSL", r6Unlike.meta.opnsShaders[0].msl]]) {
+    assert.ok(src.includes("0.5000004") && src.includes("0.5000001") && src.includes("0.15"), `R7 WASM ${lang} preserves 9-sig-digit float32 literals on unlike variables`);
+  }
+  // Stress-test lean_float_to_string on 1e308 (316-char %f string -> previously risked snprintf OOB read!)
+  const r7Huge = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: "1e308*x - 1e308", gpuRaymarch: true, bound: 1 }));
+  assert.ok(r7Huge.meta.opnsShaders.length === 1 && r7Huge.meta.opnsShaders[0].glsl.includes("3.4e38"), "R7 WASM 1e308 GPU shader handled safely");
+  const r7CalcHuge = parseGSIR(sess.dispatchJson({ op: "calcEval", mode: "R3", expr: "1e150 * 1e150 * 1e8" }));
+  assert.ok(r7CalcHuge.meta.calc && r7CalcHuge.meta.calc.display.length > 0, "R7 WASM lean_float_to_string(1e308) safe without snprintf OOB read");
   const r6Pos = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: "(x-0.12345)^2 + 0.0001*(0.0001 + x*x*0.0001)*0.1", gpuRaymarch: true, bound: 1 }));
   for (const [lang, src] of [["GLSL3", r6Pos.meta.opnsShaders[0].glsl], ["WGSL", r6Pos.meta.opnsShaders[0].wgsl], ["MSL", r6Pos.meta.opnsShaders[0].msl]]) {
     assert.ok(src.includes("k < 32") && src.includes("gMin <= 1e-8") && src.includes("gMin <= 1e-5"), `R6 WASM ${lang} tightened 32-step + local-bracket gs_refine_min`);

@@ -220,10 +220,16 @@ def testScientificFloatFormatting : IO Unit := do
     assertTrue s!"{lang} R6 0.0000001*x - 0.00000005 emits 1.0e-7 and 5.0e-8"
       (hasSubstr src "1.0e-7" && hasSubstr src "5.0e-8" && !hasSubstr src "e0")
 
-  -- Dots Round-6 P1b: 9-sig-digit precision preservation 1000000*(0.5000004*x - 0.5000001*x) - 0.15
+  -- Dots Round-6/7 P1b: Float64 like-term combining eliminates float32 cancellation on
+  -- 1000000*(0.5000004*x - 0.5000001*x) - 0.15 -> (0.3 * p.x) - 0.15 (hits EXACT x = 0.500000!),
+  -- while unlike variables 0.5000004*x - 0.5000001*y - 0.15 preserve full 9-sig-digit literals!
   let shR6Diff ← IO.ofExcept (compileImplicitExprToGpu "1000000*(0.5000004*x - 0.5000001*x) - 0.15" "r6_9sig" 1.0)
   for (lang, src) in #[("GLSL3", shR6Diff.glsl), ("WGSL", shR6Diff.wgsl), ("MSL", shR6Diff.msl)] do
-    assertTrue s!"{lang} R6 preserves distinct 0.5000004 and 0.5000001 (9 sig-digits)"
+    assertTrue s!"{lang} R7 Float64 simplifyExpr folds 1000000*(0.5000004*x - 0.5000001*x) - 0.15 to return ((0.3 * p.x) - 0.15);"
+      (hasSubstr src "return ((0.3 * p.x) - 0.15);")
+  let shR6Unlike ← IO.ofExcept (compileImplicitExprToGpu "0.5000004*x - 0.5000001*y - 0.15" "r6_unlike" 1.0)
+  for (lang, src) in #[("GLSL3", shR6Unlike.glsl), ("WGSL", shR6Unlike.wgsl), ("MSL", shR6Unlike.msl)] do
+    assertTrue s!"{lang} R7 preserves distinct 9-sig-digit 0.5000004 and 0.5000001 on unlike variables"
       (hasSubstr src "0.5000004" && hasSubstr src "0.5000001" && hasSubstr src "0.15")
 
   -- CPU Marching Tetrahedra parity for tiny outside vs inside & 9-sig-digit diff
@@ -290,9 +296,9 @@ def testRepeatedRootAndThinTwoSheet : IO Unit := do
   match mirrorRaymarchR5 (fun p => 1e-7 * p.x - 5e-8) ⟨-2, 0, 0⟩ ⟨1, 0, 0⟩ 1.0 with
   | some (tHit, _) => assertTrue s!"R6 1e-7*x - 5e-8 hits x≈0.5 (got x={-2.0 + tHit})" (near (-2.0 + tHit) 0.5 5e-4)
   | none => throw (IO.userError "FAIL [R6 1e-7*x - 5e-8 missed]")
-  match mirrorRaymarchR5 (fun p => 1000000.0 * (0.5000004 * p.x - 0.5000001 * p.x) - 0.15) ⟨-2, 0, 0⟩ ⟨1, 0, 0⟩ 1.0 with
-  | some (tHit, _) => assertTrue s!"R6 1e6*(0.5000004*x - 0.5000001*x) - 0.15 hits x≈0.5 (got x={-2.0 + tHit})" (near (-2.0 + tHit) 0.5 5e-4)
-  | none => throw (IO.userError "FAIL [R6 9-sig-digit diff plane missed]")
+  match mirrorRaymarchR5 (fun p => 0.3 * p.x - 0.15) ⟨-2, 0, 0⟩ ⟨1, 0, 0⟩ 1.0 with
+  | some (tHit, _) => assertTrue s!"R7 folded 0.3*x - 0.15 hits exact x=0.5 (|x-0.5|<1e-4, got x={-2.0 + tHit})" (near (-2.0 + tHit) 0.5 1e-4)
+  | none => throw (IO.userError "FAIL [R7 folded 0.3*x - 0.15 plane missed]")
 
   -- 2c. Repeated root (x - 0.12345)^2 (@ b=1 & b=20) & scaled 1e-7*(x - 0.12345)^2 @ bound=1
   match mirrorRaymarchR5 (fun p => (p.x - 0.12345) * (p.x - 0.12345)) ⟨-2, 0, 0⟩ ⟨1, 0, 0⟩ 1.0 with
