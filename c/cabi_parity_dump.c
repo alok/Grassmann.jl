@@ -236,6 +236,17 @@ int main(void) {
   assert(dispatch_json_grow(sid, "{\"op\":\"calcEval\",\"mode\":\"STA\",\"expr\":\"e1 * e2\"}", &buf, &cap, &got) == GSIR_OK);
   print_gsir_summary("calc_sta", buf, got, 1);
 
+  /* Wave 4B Showcase + @param + 0x0D FLOW_PARTICLES parity */
+  assert(dispatch_json_grow(sid, "{\"op\":\"loadPreset\",\"id\":\"sta_terrell_penrose\"}", &buf, &cap, &got) == GSIR_OK);
+  assert(dispatch_json_grow(sid, "{\"op\":\"setParam\",\"name\":\"beta\",\"value\":0.85}", &buf, &cap, &got) == GSIR_OK);
+  print_gsir_summary("terrell_penrose_param", buf, got, 1);
+
+  assert(dispatch_json_grow(sid, "{\"op\":\"loadPreset\",\"id\":\"sta_maxwell_streamlines\"}", &buf, &cap, &got) == GSIR_OK);
+  print_gsir_summary("maxwell_streamlines", buf, got, 1);
+
+  assert(dispatch_json_grow(sid, "{\"op\":\"loadPreset\",\"id\":\"pga3d_bouncing_cube\"}", &buf, &cap, &got) == GSIR_OK);
+  print_gsir_summary("bouncing_cube", buf, got, 1);
+
   /* 4. Native Microbenchmarks */
   const int N_M = 200000;
   double t0 = now_ms();

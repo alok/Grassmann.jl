@@ -162,6 +162,16 @@ function compareFrameParity(name, ref, other, label) {
     if (ref.meta.calc) {
       assert.equal(other.meta.calc.display, ref.meta.calc.display, `${label}.${name}: calc.display`);
     }
+    if (ref.meta.formula) {
+      assert.equal(other.meta.formula, ref.meta.formula, `${label}.${name}: KaTeX formula`);
+    }
+    if (ref.meta.params && ref.meta.params.length > 0) {
+      assert.equal(other.meta.params.length, ref.meta.params.length, `${label}.${name}: params.length`);
+      for (let i = 0; i < ref.meta.params.length; i++) {
+        assert.equal(other.meta.params[i].name, ref.meta.params[i].name, `${label}.${name}: params[${i}].name`);
+        assertNear(ref.meta.params[i].value, other.meta.params[i].value, 1e-4, `${label}.${name}: params[${i}].value`);
+      }
+    }
   }
 }
 
@@ -198,7 +208,8 @@ for (const [k, natArr] of Object.entries(nativeOut.kernels)) {
 }
 
 const wasmCatalog = wasm.presetCatalog();
-assert.deepEqual(wasmCatalog.map(p => p.id), nativeOut.catalog.map(p => p.id), "Native vs WASM 69-preset catalog IDs");
+assert.equal(nativeOut.catalog.length, 74, `expected 74 native presets, got ${nativeOut.catalog.length}`);
+assert.deepEqual(wasmCatalog.map(p => p.id), nativeOut.catalog.map(p => p.id), "Native vs WASM 74-preset catalog IDs");
 
 const wsess = wasm.createStudioSession();
 const wasmFrames = {};
@@ -219,6 +230,10 @@ wasmFrames.wedge_l1_solved = summarizeGsir(wsess.dispatchBin(makeWedgeSolveBin()
 wasmFrames.wedge_tutorial_t1 = summarizeGsir(wsess.dispatchJson({ op: "wedgeTutorial", id: "T1" }));
 wasmFrames.wedge_random_3d = summarizeGsir(wsess.dispatchJson({ op: "wedgeRandom", dim: 3, difficulty: 1, seed: 42 }));
 wasmFrames.calc_sta = summarizeGsir(wsess.dispatchJson({ op: "calcEval", mode: "STA", expr: "e1 * e2" }));
+wsess.dispatchJson({ op: "loadPreset", id: "sta_terrell_penrose" });
+wasmFrames.terrell_penrose_param = summarizeGsir(wsess.dispatchJson({ op: "setParam", name: "beta", value: 0.85 }));
+wasmFrames.maxwell_streamlines = summarizeGsir(wsess.dispatchJson({ op: "loadPreset", id: "sta_maxwell_streamlines" }));
+wasmFrames.bouncing_cube = summarizeGsir(wsess.dispatchJson({ op: "loadPreset", id: "pga3d_bouncing_cube" }));
 
 for (const name of Object.keys(nativeOut.frames)) {
   compareFrameParity(name, nativeOut.frames[name], wasmFrames[name], "wasm");
@@ -301,6 +316,10 @@ if (fs.existsSync(serverBin)) {
     srvFrames.wedge_tutorial_t1 = summarizeGsir(await rpc(JSON.stringify({ op: "wedgeTutorial", id: "T1" })));
     srvFrames.wedge_random_3d = summarizeGsir(await rpc(JSON.stringify({ op: "wedgeRandom", dim: 3, difficulty: 1, seed: 42 })));
     srvFrames.calc_sta = summarizeGsir(await rpc(JSON.stringify({ op: "calcEval", mode: "STA", expr: "e1 * e2" })));
+    await rpc(JSON.stringify({ op: "loadPreset", id: "sta_terrell_penrose" }));
+    srvFrames.terrell_penrose_param = summarizeGsir(await rpc(JSON.stringify({ op: "setParam", name: "beta", value: 0.85 })));
+    srvFrames.maxwell_streamlines = summarizeGsir(await rpc(JSON.stringify({ op: "loadPreset", id: "sta_maxwell_streamlines" })));
+    srvFrames.bouncing_cube = summarizeGsir(await rpc(JSON.stringify({ op: "loadPreset", id: "pga3d_bouncing_cube" })));
 
     for (const name of Object.keys(nativeOut.frames)) {
       compareFrameParity(name, nativeOut.frames[name], srvFrames[name], "ga-server");
@@ -322,7 +341,7 @@ if (fs.existsSync(serverBin)) {
 }
 
 console.log("\n=== 3-Way Cross-Parity & Benchmark Report (Native C ABI vs Lean WASM vs ga-server) ===");
-console.log(`Parity: 7 numeric GA kernels (tol <= 1e-12), 69/69 catalog IDs, ${Object.keys(nativeOut.frames).length} GSIR v1 scenes (bbox tol <= 1e-4): ALL IDENTICAL PASS!`);
+console.log(`Parity: 7 numeric GA kernels (tol <= 1e-12), 74/74 catalog IDs, ${Object.keys(nativeOut.frames).length} GSIR v1 scenes (bbox tol <= 1e-4, KaTeX & @param exact): ALL IDENTICAL PASS!`);
 console.log(`WASM artifact: ${manifest.wasmFile} (${(manifest.bytes / 1024).toFixed(1)} KB raw / ${(manifest.gzipBytes / 1024).toFixed(1)} KB gz)`);
 console.log("| Metric | Native C ABI (dylib) | Lean 4.36 WASM | Pure-Lean ga-server (WS) |");
 console.log("|---|---:|---:|---:|");

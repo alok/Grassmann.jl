@@ -128,16 +128,19 @@ try {
   const opt = await httpReq(agent, "OPTIONS", "/api/frame");
   assert.equal(opt.status, 204);
 
-  // 1b. Full Lean preset catalog endpoint (/api/presets — all 69 presets!)
+  // 1b. Full Lean preset catalog endpoint (/api/presets — all 74 presets!)
   const cat = await httpReq(agent, "GET", "/api/presets");
   assert.equal(cat.status, 200);
   const catalog = JSON.parse(cat.body.toString("utf8"));
-  assert.ok(Array.isArray(catalog) && catalog.length === 69, `expected 69 presets, got ${catalog.length}`);
-  assert.equal(new Set(catalog.map((p) => p.id)).size, 69, "all 69 preset IDs unique");
+  assert.ok(Array.isArray(catalog) && catalog.length === 74, `expected 74 presets, got ${catalog.length}`);
+  assert.equal(new Set(catalog.map((p) => p.id)).size, 74, "all 74 preset IDs unique");
   assert.ok(catalog.some((p) => p.id === "pga3d_slicing"));
   assert.ok(catalog.some((p) => p.id === "pga3d_slicing_hq"));
   assert.ok(catalog.some((p) => p.id === "implicit_gyroid"));
   assert.ok(catalog.some((p) => p.id === "sta_lorentz_boost"));
+  assert.ok(catalog.some((p) => p.id === "sta_terrell_penrose"));
+  assert.ok(catalog.some((p) => p.id === "sta_maxwell_streamlines"));
+  assert.ok(catalog.some((p) => p.id === "pga3d_bouncing_cube"));
 
   // 2. Session lifecycle + binary GSIR frames (sculpted bunny + pga3d_objects delta cache + STA)
   const cr = await httpReq(agent, "POST", "/api/session");

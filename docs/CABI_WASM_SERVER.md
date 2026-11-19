@@ -8,9 +8,9 @@ Credits: Michael Reed (`chakravala` / `Grassmann.jl`) and Steven De Keninck (`en
 
 ## 1. Strictly `Init`-Only 31-Module `Grassmann.Studio` + Native C ABI (`scripts/build-cabi.sh`)
 
-- **Strict `Init`-only Lean leaf**: All **31 modules** (`Grassmann.CABI.{Kernels,Alg,Studio}`, `Grassmann.CABI`, `Grassmann.Scene.*`, `Grassmann.Eval.{Parser,Contour,Engine,Calc,Implicit3D,ImplicitExpr}`, `Grassmann.Wedge.{Types,Levels2D,Levels3D,Tutorials,Engine}`, `Grassmann.Codegen.{GPU,GPUInit}`, `Grassmann.CoffeeShop.{Mesh,Presets,PresetsExtra,PresetsParity,Engine}`, `Grassmann.Studio`) import **ONLY `Init.*`** — zero `Lean.*`, `Lake.*`, `Std.*`, `DirectSum`, `Lean.Data.Json`, or elaborator imports.
+- **Strict `Init`-only Lean leaf**: All **32 modules** (`Grassmann.CABI.{Kernels,Alg,Studio}`, `Grassmann.CABI`, `Grassmann.Scene.*`, `Grassmann.Eval.{Parser,Contour,Engine,Calc,Implicit3D,ImplicitExpr}`, `Grassmann.Wedge.{Types,Levels2D,Levels3D,Tutorials,Engine}`, `Grassmann.Codegen.{GPU,GPUInit}`, `Grassmann.CoffeeShop.{Mesh,Presets,PresetsExtra,PresetsParity,PresetsShowcase,Engine}`, `Grassmann.Studio`) import **ONLY `Init.*`** — zero `Lean.*`, `Lake.*`, `Std.*`, `DirectSum`, `Lean.Data.Json`, or elaborator imports.
 - **Full Unified Engine Included**:
-  - **69 CoffeeShop presets** (19 base + 28 `PresetsExtra` + 22 `PresetsParity` — **100%+ parity** with the 64-entry `ganja.js` catalog across all 15+ algebra families, including sculpted 3D bunny `#pga3d_slicing` & `#pga3d_slicing_hq` bunny/trefoil-knot live slicer, `implicit_{gyroid,metaballs,schwarz_p,genus2}`, `param_{klein_bottle,mobius_strip,boys_surface,enneper_superquadric}`, `MGA Cl(4,4)`, `CSGA Cl(5,3)`, `QCGA Cl(9,6)`, `C2DGA Cl(9,7)`, Platonic Solids Gallery, `cga3d_opns_cyclide`, `sta_*`).
+  - **74 CoffeeShop presets** (19 base + 28 `PresetsExtra` + 22 `PresetsParity` + 5 `PresetsShowcase` physics/relativity/streamline showstoppers: `pga3d_bouncing_cube`, `pga3d_double_pendulum`, `sta_terrell_penrose`, `sta_maxwell_streamlines`, `pga3d_hopf_streamlines`), all with KaTeX `formula` + `summary` metadata and interactive `@param` sliders (`setParam`).
   - **Live User-Typed 3D Implicit & Parametric Evaluator**:
     - `{"op":"evalImplicit","expr":"...","gpuRaymarch":bool}` — adaptive 6-tet Kuhn Marching Tetrahedra (`gpuRaymarch: false`) OR live `GPUInit` GLSL 300 es / WGSL / Metal MSL raymarching shader compilation (`gpuRaymarch: true`).
     - `{"op":"evalParametric","fx":"...","fy":"...","fz":"..."}` — live user-typed parametric 3D surface mesher.
@@ -75,12 +75,12 @@ node scripts/test-ga-server.mjs
 
 ---
 
-## 5. Measured Wave 3B Unified Benchmarks (31 `Init`-Only Modules, 69 Presets + LiveScript v2, M4 Max)
+## 5. Measured Wave 5A Unified Benchmarks (32 `Init`-Only Modules, 74 Presets + Bytecode MT + `@param`, M4 Max)
 
 | Target | Artifact Size | Key Verified Latency / Metrics |
 |---|---|---|
-| Native C ABI (`libgrassmann_cabi.dylib`) | **4.9 MB** (`5,153,608 B`, `libc++` + `libSystem` only) | `pga3_motor_compose` **36.8 ns**, `apply_xyz_batch` **7.12 ns/pt** (`0.20 ns/pt` shim 2× memcpy), `DragHandle→GSIR` **29.66 µs/frame** (33,718 fps max); `ALOK-1007` linearity PASS |
-| Emscripten WASM (`grassmann.<hash>.wasm`) | **1.8 MB raw / 472.5 KB gz** (`a60f037ad8`, `wasm-manifest.json`) | ALL **69 presets** + sculpted bunny (`1754` verts, `10` contours, editable `metaJson.script`), **LiveScript v2** + reactive `DragHandle`, symmetric Gyroid `16³` (`3959` verts / `7404` tris, `[-1.60,1.60]³`) **19.70 ms**, `GPUInit` GLSL3+WGSL+MSL **1.80 ms**, `motor_compose` **58.3 ns**, `DragHandle→GSIR` **83.09 µs/frame** (12,035 fps max) |
-| Apple 3-Platform XCFramework (`GrassmannCABI.xcframework`) | `macos` **5.7 MB**, `xrsim` **6.1 MB**, `xros` **6.1 MB** | Live-linked ZERO warnings against `LeanVisionOSRuntime.xcframework` on ALL 3 platforms (`15M` macOS, `17M` xrsim, `17M` xros), live exec `170,136 B` bunny + `21,539 B` 69-preset catalog |
-| Pure-Lean `ga-server` (`lake exe ga-server`) | Standalone native binary | RFC 6455 WS **104.2 µs/frame** (9,593 fps max), HTTP/1.1 keep-alive **143.7 µs/req**, `GET /api/presets` (69 presets) |
+| Native C ABI (`libgrassmann_cabi.dylib`) | **5.4 MB** (`5,677,736 B`, `libc++` + `libSystem` only) | `pga3_motor_compose` **36.0–36.9 ns**, `apply_xyz_batch` **7.46 ns/pt** (`ALOK-1007` PASS), `DragHandle→GSIR` **37.4–43.5 µs/frame**, bytecode Gyroid `16³` **1.74 ms** (**8.4× faster**), `GPUInit` **0.37 ms** |
+| Hybrid `-O3`/`-Oz` Emscripten WASM (`grassmann.<hash>.wasm`) | **1.44 MB raw / 434.5 KB gz** (`cbaef49869`, `wasm-manifest.json`) | ALL **74 unique presets** + KaTeX `formula`/`summary` + `@param`/`setParam` + `0x0D FLOW_PARTICLES` + **LiveScript v2**, bytecode Gyroid `16³` (`3959` verts / `7404` tris, `[-1.60,1.60]³`) **3.90 ms avg** (`5.44 ms` cold, **5.1× faster**!), `GPUInit` GLSL3+WGSL+MSL **1.41–1.50 ms**, `motor_compose` **57.2 ns**, `DragHandle→GSIR` **90.1–93.2 µs/frame** (10.7k fps) |
+| Apple 3-Platform XCFramework (`GrassmannCABI.xcframework`) | `macos` **6.8 MB**, `xrsim` **7.2 MB**, `xros` **7.3 MB** | Live-linked ZERO warnings against `LeanVisionOSRuntime.xcframework` on ALL 3 platforms (`16M` macOS, `18M` xrsim, `18M` xros), live exec `170,416 B` bunny + `42,331 B` 74-preset catalog |
+| Pure-Lean `ga-server` (`lake exe ga-server`) | Standalone native binary | RFC 6455 WS **115.9 µs/frame**, HTTP/1.1 keep-alive **154.6 µs/req**, bytecode Gyroid `16³` **2.30 ms**, `GET /api/presets` (74 presets); 3-way parity (`scripts/bench-cabi-wasm.mjs`) **ALL 14 GSIR SCENES + 7 KERNELS + 74/74 PRESETS IDENTICAL PASS** |
 

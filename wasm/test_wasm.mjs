@@ -9,7 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // 0. Verify content-fingerprinted wasm-manifest.json + hashed asset load!
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "dist/wasm-manifest.json"), "utf8"));
 assert.equal(manifest.version, 1, "wasm-manifest version");
-assert.equal(manifest.presetCount, 69, "wasm-manifest presetCount");
+assert.equal(manifest.presetCount, 74, "wasm-manifest presetCount");
 assert.ok(/^[0-9a-f]{10}$/.test(manifest.hash), "wasm-manifest 10-hex hash");
 assert.ok(fs.existsSync(path.join(__dirname, "dist", manifest.wasmFile)), "fingerprinted .wasm exists");
 assert.ok(fs.existsSync(path.join(__dirname, "dist", manifest.loaderFile)), "fingerprinted .mjs exists");
@@ -93,12 +93,12 @@ assertNear(back[0], 1.5, 1e-12, "WASM CGA3 down.x");
 assertNear(back[1], -2.25, 1e-12, "WASM CGA3 down.y");
 assertNear(back[2], 0.75, 1e-12, "WASM CGA3 down.z");
 
-// 5. Full Preset Catalog (ALL 69 CoffeeShop Presets — 100% ganja.js parity!)
+// 5. Full Preset Catalog (ALL 74 CoffeeShop Presets — 69 + 5 Wave 4B Showcase!)
 const catalog = g.presetCatalog();
-assert.equal(catalog.length, 69, `expected 69 presets, got ${catalog.length}`);
+assert.equal(catalog.length, 74, `expected 74 presets, got ${catalog.length}`);
 const uniqueIds = new Set(catalog.map(p => p.id));
-assert.equal(uniqueIds.size, 69, "zero duplicate preset IDs across 69-preset catalog");
-console.log(`[wasm test] loaded full Lean preset catalog: ${catalog.length} presets (69 unique)`);
+assert.equal(uniqueIds.size, 74, "zero duplicate preset IDs across 74-preset catalog");
+console.log(`[wasm test] loaded full Lean preset catalog: ${catalog.length} presets (74 unique)`);
 
 // 6. Full Unified Grassmann.Studio Session in WASM!
 const sess = g.createStudioSession();
@@ -133,13 +133,23 @@ assert.ok(contourSec, "pga3d_slicing has CONTOUR_OVERLAY");
   console.log(`[wasm test] sculpted bunny verified: ${vCount} verts, span=(${spanX.toFixed(2)}, ${spanY.toFixed(2)}, ${spanZ.toFixed(2)}), ${polyCount} slice contours, script=${f0.meta.script.length} chars`);
 }
 
-// Exercise EVERY SINGLE preset (all 69!) in compiled Lean WASM!
+// Exercise EVERY SINGLE preset (all 74!) + verify KaTeX formula & summary in compiled Lean WASM!
 let foundOpnsGlsl = false;
+let showcaseVerified = 0;
 for (const item of catalog) {
   const frRaw = sess.dispatchJson({ op: "loadPreset", id: item.id });
   const fr = parseGSIR(frRaw);
   assert.ok(fr.meta !== null, `meta present for preset ${item.id}`);
   assert.equal(fr.meta.presetId, item.id, `presetId matches ${item.id}`);
+  assert.ok(typeof fr.meta.formula === "string" && fr.meta.formula.length > 0, `KaTeX formula present for ${item.id}`);
+  assert.ok(typeof fr.meta.summary === "string" && fr.meta.summary.length > 0, `summary present for ${item.id}`);
+  if (["pga3d_bouncing_cube", "pga3d_double_pendulum", "sta_terrell_penrose", "sta_maxwell_streamlines", "pga3d_hopf_streamlines"].includes(item.id)) {
+    assert.ok(Array.isArray(fr.meta.params) && fr.meta.params.length >= 2, `showcase @param sliders present for ${item.id}`);
+    if (item.id === "sta_maxwell_streamlines" || item.id === "pga3d_hopf_streamlines") {
+      assert.ok(fr.sections.some(s => s.kind === 0x0D), `${item.id} emits 0x0D FLOW_PARTICLES`);
+    }
+    showcaseVerified++;
+  }
   if (item.id === "cga3d_opns_cyclide") {
     assert.ok(fr.meta.opnsShaders && fr.meta.opnsShaders.length > 0, "OPNS shader emitted");
     assert.ok(fr.meta.opnsShaders[0].glsl.includes("uniform mat4 projectionMatrix;"), "GLSL3 has projectionMatrix");
@@ -158,7 +168,22 @@ for (const item of catalog) {
     foundOpnsGlsl = true;
   }
 }
+assert.equal(showcaseVerified, 5, "verified all 5 Wave 4B showstopper physics/relativity/streamline presets");
 assert.ok(foundOpnsGlsl, "verified cga3d_opns_cyclide GPUInit WGSL/GLSL3/MSL shader emission in WASM");
+
+// Live @param / setParam verification on sta_terrell_penrose & pga3d_bouncing_cube!
+{
+  const tp0 = parseGSIR(sess.dispatchJson({ op: "loadPreset", id: "sta_terrell_penrose" }));
+  const beta0 = tp0.meta.params.find(p => p.name === "beta");
+  assert.ok(beta0, "sta_terrell_penrose exposes beta @param");
+  const tp1 = parseGSIR(sess.dispatchJson({ op: "setParam", name: "beta", value: 0.85 }));
+  const beta1 = tp1.meta.params.find(p => p.name === "beta");
+  assertNear(beta1.value, 0.85, 1e-4, "setParam updated sta_terrell_penrose beta to 0.85");
+  const bc0 = parseGSIR(sess.dispatchJson({ op: "loadPreset", id: "pga3d_bouncing_cube" }));
+  assert.ok(bc0.meta.params.some(p => p.name === "gravity"), "pga3d_bouncing_cube exposes gravity @param");
+  const bc1 = parseGSIR(sess.dispatchJson({ op: "setParam", name: "gravity", value: 15.0 }));
+  assertNear(bc1.meta.params.find(p => p.name === "gravity").value, 15.0, 1e-4, "setParam updated gravity to 15.0");
+}
 
 // Hot binary Tick on static-mesh pga3d_objects -> omits BOTH MESH_ASSETS & metaJson!
 const obj0 = parseGSIR(sess.dispatchJson({ op: "loadPreset", id: "pga3d_objects" }));
@@ -267,7 +292,11 @@ assert.ok(gyMeshSec, "evalImplicit mesh emitted CCW MESH_ASSETS");
   }
   assert.ok(gx0 < -1.0 && gx1 > 1.0 && gy0 < -1.0 && gy1 > 1.0 && gz0 < -1.0 && gz1 > 1.0,
     `symmetric Gyroid expected spanning [-1,+1]^3, got x=[${gx0.toFixed(2)},${gx1.toFixed(2)}] y=[${gy0.toFixed(2)},${gy1.toFixed(2)}] z=[${gz0.toFixed(2)},${gz1.toFixed(2)}]`);
-  console.log(`[wasm bench] evalImplicit gyroid 16^3: ${dtImpMesh.toFixed(2)} ms (${sImpMesh.meta.inspect[0].formatted}, sym=[${gx0.toFixed(2)},${gx1.toFixed(2)}])`);
+  // Measure warmed 5x average for bytecode Marching Tetrahedra in WASM!
+  const tWarm0 = performance.now();
+  for (let k = 0; k < 5; k++) sess.dispatchJson({ op: "evalImplicit", expr: gyroidExpr, gpuRaymarch: false, gridN: 16 });
+  const dtWarm = (performance.now() - tWarm0) / 5;
+  console.log(`[wasm bench] evalImplicit gyroid 16^3: ${dtWarm.toFixed(2)} ms avg (${dtImpMesh.toFixed(2)} ms cold; ${sImpMesh.meta.inspect[0].formatted}, sym=[${gx0.toFixed(2)},${gx1.toFixed(2)}])`);
 }
 
 // User-typed 3D Implicit Equation (GPUInit GLSL3 + WGSL + Metal MSL raymarcher!)
@@ -333,4 +362,4 @@ const dtFrames = performance.now() - t1;
 console.log(`[wasm bench] studio_drag_gsir_frame: ${((dtFrames * 1e3) / N_FRAMES).toFixed(2)} us/frame (${lastSize} B/frame, ${Math.round(N_FRAMES / (dtFrames / 1000))} fps max)`);
 
 sess.destroy();
-console.log("[wasm test] ALL 69 PRESETS + IMPLICIT3D/GPU + PARAMETRIC + WEDGE TUTORIALS/RANDOM + EVAL + OPNS PASSED IN WASM!");
+console.log("[wasm test] ALL 74 PRESETS + @PARAM + KATEX + BYTECODE IMPLICIT3D/GPU + LIVESCRIPT V2 + WEDGE PASSED IN WASM!");
