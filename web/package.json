@@ -14,6 +14,7 @@
     "audit:visual": "node scripts/visual-audit.mjs",
     "test:e2e": "node scripts/interaction-e2e.mjs",
     "audit:wave3": "node scripts/wave3-audit.mjs",
+    "audit:wave8": "WAVE8_FIXPOINT=1 node scripts/wave3-audit.mjs",
     "audit:stress": "node scripts/stress-audit.mjs",
     "audit:vercel": "node scripts/vercel-audit.mjs",
     "stage:wasm": "node scripts/stage-wasm.mjs"

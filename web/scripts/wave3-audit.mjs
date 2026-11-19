@@ -569,10 +569,94 @@ async function main() {
     assert(sSeed1.wedge?.isRandom === true && sSeed1.wedge?.seedStr === '9007199254740993', `Expected restored wedge seedStr === '9007199254740993', got ${JSON.stringify(sSeed1.wedge)}`);
     console.log(`[wave3] Wave 7A Lossless 64-bit seedStr Round-Trip PASS | seedStr=${sSeed1.wedge.seedStr}`);
 
+    // 12. Wave 8B/8C Dots Round-3 Fixpoint Verification Suite (36/36 full suite!)
+    const runWave8 = process.env.WAVE8_FIXPOINT !== '0' && !process.argv.includes('--no-wave8');
+    if (runWave8) {
+      await page.locator('.gs-mode-btn', { hasText: 'CoffeeShop IDE' }).click();
+      await page.waitForTimeout(250);
+
+      // 12a. Signed/odd integer power in GPU raymarch: x^5 + 1 = 0 (x = -1 MUST be visible!)
+      await page.evaluate(() =>
+        window.__grassmannStudio.dispatchJson({
+          op: 'evalImplicit',
+          expr: 'x^5 + 1',
+          gpuRaymarch: true,
+          bound: 2,
+          gridN: 16,
+          forceFullSnapshot: true,
+        })
+      );
+      const sOdd = await snap('w8-01-signed-odd-power.png');
+      assert(sOdd.opnsCount >= 1, `Expected GPU OPNS shader for x^5+1, got ${sOdd.opnsCount}`);
+      const cOdd = await measureCanvas(page);
+      assert(cOdd.variance >= 100 && cOdd.distinctColors >= 20, `Expected visible x^5+1 plane at x=-1, got ${JSON.stringify(cOdd)}`);
+      console.log(`[wave3] Wave 8 Signed Odd Power (x^5+1) PASS | canvas=`, cOdd);
+
+      // 12b. Exact AABB [-bound, bound]^3 clipping: x - 1.5 @ bound=1 MUST clip empty, x - 15 @ bound=20 MUST render visibly!
+      await page.evaluate(() =>
+        window.__grassmannStudio.dispatchJson({
+          op: 'evalImplicit',
+          expr: 'x - 1.5',
+          gpuRaymarch: true,
+          bound: 1,
+          gridN: 16,
+          forceFullSnapshot: true,
+        })
+      );
+      await page.waitForTimeout(550);
+      await page.screenshot({ path: path.join(OUT_DIR, 'w8-02a-bound1-clipped.png') });
+      const cClip1 = await measureCanvas(page);
+      assert(cClip1.variance < 120, `Expected x-1.5 @ bound=1 clipped outside [-1,1]^3 AABB (empty), got ${JSON.stringify(cClip1)}`);
+
+      await page.evaluate(() =>
+        window.__grassmannStudio.dispatchJson({
+          op: 'evalImplicit',
+          expr: 'x - 15',
+          gpuRaymarch: true,
+          bound: 20,
+          gridN: 16,
+          forceFullSnapshot: true,
+        })
+      );
+      const sBound20 = await snap('w8-02b-bound20-plane.png');
+      assert(sBound20.opnsCount >= 1, `Expected GPU OPNS shader for x-15 @ bound=20, got ${sBound20.opnsCount}`);
+      const cBound20 = await measureCanvas(page);
+      assert(cBound20.variance >= 120 && cBound20.distinctColors >= 20, `Expected visible x-15 plane at bound=20, got ${JSON.stringify(cBound20)}`);
+      console.log(`[wave3] Wave 8 AABB Clipping (bound=1 empty var=${cClip1.variance}, bound=20 visible var=${cBound20.variance}) PASS`);
+
+      // 12c. Deterministic RK4 seekTime(2.5) replay on pga3d_bouncing_cube (visibly moves pose away from t=0!)
+      await page.evaluate(() =>
+        window.__grassmannStudio.dispatchJson({ op: 'loadPreset', id: 'pga3d_bouncing_cube', forceFullSnapshot: true })
+      );
+      await page.waitForTimeout(450);
+      const sCube0 = await page.evaluate(() => window.__grassmannStudio.getState());
+      const mat0 = sCube0.meshRefMatrices?.[0]?.mat4 ?? [];
+      assert(mat0.length === 16, `Expected bouncing cube meshRef matrix at t=0, got ${mat0.length}`);
+      await page.evaluate(() => window.__grassmannStudio.dispatchJson({ op: 'seekTime', t: 2.5, forceFullSnapshot: true }));
+      const sCube25 = await snap('w8-03-bouncing-cube-seek25.png');
+      assert(Math.abs(sCube25.simTime - 2.5) < 0.05, `Expected simTime=2.5 after seekTime, got ${sCube25.simTime}`);
+      const mat25 = sCube25.meshRefMatrices?.[0]?.mat4 ?? [];
+      const maxMatDelta = mat0.reduce((mx, v, i) => Math.max(mx, Math.abs(v - (mat25[i] ?? v))), 0);
+      assert(maxMatDelta > 0.05, `Expected seekTime(2.5) to replay RK4 and move bouncing cube (maxMatDelta=${maxMatDelta})`);
+      console.log(`[wave3] Wave 8 Deterministic RK4 seekTime(2.5) PASS | maxMatDelta=${maxMatDelta.toFixed(3)}`);
+
+      // 12d. Non-overlapping meshing 3D involute gears (pga3d_gears_kinematics)
+      await page.evaluate(() =>
+        window.__grassmannStudio.dispatchJson({ op: 'loadPreset', id: 'pga3d_gears_kinematics', forceFullSnapshot: true })
+      );
+      const sGears8 = await snap('w8-04-gears-meshing.png');
+      assert(sGears8.meshCount >= 3, `Expected 3 meshing 3D involute gears, got ${sGears8.meshCount}`);
+      console.log(`[wave3] Wave 8 Involute Meshing Gears Visual Snapshot PASS | meshes=${sGears8.meshCount}`);
+    }
+
     assert(consoleErrors.length === 0, `Console errors: ${JSON.stringify(consoleErrors)}`);
     assert(consoleWarnings.length === 0, `WebGL/Shader warnings: ${JSON.stringify(consoleWarnings)}`);
     assert(pageErrors.length === 0, `Page errors: ${JSON.stringify(pageErrors)}`);
-    console.log('[wave3] ALL 32 FULL-STUDIO 77-PRESET + WAVE 7A SHOWCASE + TOUR + L17 + DOTS FIXES E2E CHECKS PASSED (0 console/shader/page errors)!');
+    console.log(
+      runWave8
+        ? '[wave3] ALL 36 FULL-STUDIO 77-PRESET + WAVE 8 FIXPOINT R3 E2E CHECKS PASSED (0 console/shader/page errors)!'
+        : '[wave3] ALL 32 FULL-STUDIO 77-PRESET + WAVE 7A SHOWCASE + TOUR + L17 + DOTS FIXES E2E CHECKS PASSED (0 console/shader/page errors)!'
+    );
   } finally {
     if (browser) await browser.close();
     preview.kill('SIGTERM');

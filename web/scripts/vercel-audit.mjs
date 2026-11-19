@@ -162,12 +162,39 @@ async function main() {
     assert(Number(sLiveEdit.frameSeq) > Number(sCold.frameSeq) && sLiveEdit.diagnostics.length === 0, `LiveScript v2 edit failed over HTTPS: ${JSON.stringify(sLiveEdit.diagnostics)}`);
     console.log(`[vercel] 1b. LiveScript v2 Live Edit PASS (seq ${sCold.frameSeq} -> ${sLiveEdit.frameSeq})`);
 
-    // 2. Warm Reload (browser HTTP cache enabled!) -> verify zero stale-cache failure (cbaef49869 -> e3d4772aca)
+    // 2. Warm Reload (browser HTTP cache enabled!) -> verify zero stale-cache failure (e3d4772aca -> 72255f38c6)
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForTimeout(800);
     const sWarm = await page.evaluate(() => window.__grassmannStudio.getState());
     assert(sWarm.transportKind === 'wasm' && sWarm.presetCount >= 77 && sWarm.leanTourCount === 6 && sWarm.transportLabel.includes(manifest.hash), `Warm reload failed: ${JSON.stringify(sWarm)}`);
     console.log(`[vercel] 2. Warm Cached Reload PASS | ${sWarm.presetCount} presets | ${sWarm.leanTourCount} tour stops | ${sWarm.transportLabel}`);
+
+    // 2a. Wave 8C Live HTTPS Fixpoint R3 Checks: signed x^5+1 GPU raymarch, AABB bound=20 x-15 visible, RK4 seekTime(2.5) cube pose!
+    await page.evaluate(() =>
+      window.__grassmannStudio.dispatchJson({ op: 'evalImplicit', expr: 'x^5 + 1', gpuRaymarch: true, bound: 2, gridN: 16, forceFullSnapshot: true })
+    );
+    await page.waitForTimeout(550);
+    const cOddHttps = await measureCanvas(page);
+    assert(cOddHttps.variance >= 100 && cOddHttps.distinctColors >= 20, `Expected visible signed x^5+1 over HTTPS, got ${JSON.stringify(cOddHttps)}`);
+    await page.evaluate(() =>
+      window.__grassmannStudio.dispatchJson({ op: 'evalImplicit', expr: 'x - 15', gpuRaymarch: true, bound: 20, gridN: 16, forceFullSnapshot: true })
+    );
+    await page.waitForTimeout(550);
+    const cBound20Https = await measureCanvas(page);
+    assert(cBound20Https.variance >= 120 && cBound20Https.distinctColors >= 20, `Expected visible x-15 @ bound=20 over HTTPS, got ${JSON.stringify(cBound20Https)}`);
+    await page.evaluate(() =>
+      window.__grassmannStudio.dispatchJson({ op: 'loadPreset', id: 'pga3d_bouncing_cube', forceFullSnapshot: true })
+    );
+    await page.waitForTimeout(400);
+    const sCube0H = await page.evaluate(() => window.__grassmannStudio.getState());
+    const mat0H = sCube0H.meshRefMatrices?.[0]?.mat4 ?? [];
+    await page.evaluate(() => window.__grassmannStudio.dispatchJson({ op: 'seekTime', t: 2.5, forceFullSnapshot: true }));
+    await page.waitForTimeout(400);
+    const sCube25H = await page.evaluate(() => window.__grassmannStudio.getState());
+    const mat25H = sCube25H.meshRefMatrices?.[0]?.mat4 ?? [];
+    const maxDeltaH = mat0H.reduce((mx, v, i) => Math.max(mx, Math.abs(v - (mat25H[i] ?? v))), 0);
+    assert(Math.abs(sCube25H.simTime - 2.5) < 0.05 && maxDeltaH > 0.05, `Expected deterministic RK4 seekTime(2.5) over HTTPS, simTime=${sCube25H.simTime} delta=${maxDeltaH}`);
+    console.log(`[vercel] 2a. Wave 8C Fixpoint R3 HTTPS PASS | x^5+1 var=${cOddHttps.variance} | x-15@b20 var=${cBound20Https.variance} | seekTime(2.5) delta=${maxDeltaH.toFixed(3)}`);
 
     // 2b. Wave 7A Live HTTPS Showcase Check: 77-card Gallery + Barth Sextic + Involute Gears + Terrell-Penrose + Maxwell Streamlines + resetTime === 0!
     await page.locator('.gs-vp-btn', { hasText: /Gallery/ }).click();

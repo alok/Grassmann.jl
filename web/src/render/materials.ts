@@ -320,6 +320,29 @@ function parseBladeArraySize(rawGlsl: string): number {
   return m ? Math.max(1, Number.parseInt(m[1]!, 10)) : 0;
 }
 
+/**
+ * Computes the world-space edge length of the OPNS/IPNS raymarching proxy box.
+ * Always >= 120 (half-extent >= 60, safely >= 2.5 * bound for all bounds up to 20)
+ * and scales dynamically to >= 6 * bound (half-extent >= 3 * bound) if an even
+ * larger bound is parsed from Lean's shader metadata or caller hint.
+ */
+export function computeOpnsProxyBoxSize(rawGlsl?: string, boundHint?: number): number {
+  let detected = typeof boundHint === 'number' && Number.isFinite(boundHint) ? Math.max(0, boundHint) : 0;
+  if (rawGlsl) {
+    const commentBound = /bound\s*=\s*([0-9]+(?:\.[0-9]+)?)/i.exec(rawGlsl);
+    if (commentBound) {
+      const parsed = Number.parseFloat(commentBound[1]!);
+      if (Number.isFinite(parsed)) detected = Math.max(detected, parsed);
+    }
+    const boxVecBound = /\bbMax\s*=\s*vec3\(\s*([0-9]+(?:\.[0-9]+)?)/.exec(rawGlsl);
+    if (boxVecBound) {
+      const parsed = Number.parseFloat(boxVecBound[1]!);
+      if (Number.isFinite(parsed)) detected = Math.max(detected, parsed);
+    }
+  }
+  return Math.max(120, Math.ceil(detected * 6));
+}
+
 function wrapLeanOpnsGlsl(rawGlsl: string): string {
   // If Lean emitted a full fragment shader with `void main()`, use it directly.
   if (/\bvoid\s+main\s*\(/.test(rawGlsl)) {

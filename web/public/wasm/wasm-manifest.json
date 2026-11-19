@@ -1,14 +1,14 @@
 {
   "version": 1,
-  "hash": "e3d4772aca",
-  "wasmFile": "grassmann.e3d4772aca.wasm",
-  "loaderFile": "grassmann.e3d4772aca.mjs",
+  "hash": "72255f38c6",
+  "wasmFile": "grassmann.72255f38c6.wasm",
+  "loaderFile": "grassmann.72255f38c6.mjs",
   "canonicalWasmFile": "grassmann.wasm",
   "canonicalLoaderFile": "grassmann.mjs",
   "wrapperFile": "grassmann_wasm.mjs",
-  "bytes": 1539454,
-  "gzipBytes": 464007,
+  "bytes": 1554826,
+  "gzipBytes": 467860,
   "presetCount": 77,
-  "mjs": "./grassmann.e3d4772aca.mjs",
-  "wasm": "./grassmann.e3d4772aca.wasm"
+  "mjs": "./grassmann.72255f38c6.mjs",
+  "wasm": "./grassmann.72255f38c6.wasm"
 }

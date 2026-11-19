@@ -176,8 +176,9 @@ export class CalculatorStudioPanel {
       this.syncImplicitToggle?.();
     }
     if (typeof bound === 'number' && Number.isFinite(bound) && bound > 0) {
-      this.implicitBound = bound;
-      if (this.implicitBoundInput) this.implicitBoundInput.value = String(bound);
+      const clamped = Math.max(0.5, Math.min(20, bound));
+      this.implicitBound = clamped;
+      if (this.implicitBoundInput) this.implicitBoundInput.value = String(clamped);
     }
   }
 
@@ -453,8 +454,9 @@ export class CalculatorStudioPanel {
     this.syncImplicitToggle = syncToggle;
     const emitImplicit = () => {
       const parsedBound = Number.parseFloat(boundInput.value);
-      const b = Number.isFinite(parsedBound) && parsedBound > 0.1 ? Math.min(20, parsedBound) : this.implicitBound;
+      const b = Number.isFinite(parsedBound) ? Math.max(0.5, Math.min(20, parsedBound)) : this.implicitBound;
       this.implicitBound = b;
+      boundInput.value = String(b);
       this.callbacks.onDispatchJson({
         op: 'evalImplicit',
         expr: exprInput.value.trim(),
