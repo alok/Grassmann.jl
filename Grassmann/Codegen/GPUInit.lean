@@ -686,18 +686,35 @@ float eval_implicit(vec3 p) \{
 }
 
 vec2 intersectBox(vec3 ro, vec3 rd, float b) \{
-  vec3 safeRd = vec3(
-    abs(rd.x) < 1e-8 ? (rd.x < 0.0 ? -1e-8 : 1e-8) : rd.x,
-    abs(rd.y) < 1e-8 ? (rd.y < 0.0 ? -1e-8 : 1e-8) : rd.y,
-    abs(rd.z) < 1e-8 ? (rd.z < 0.0 ? -1e-8 : 1e-8) : rd.z
-  );
-  vec3 invD = 1.0 / safeRd;
-  vec3 t0 = (-vec3(b) - ro) * invD;
-  vec3 t1 = ( vec3(b) - ro) * invD;
-  vec3 tMinV = min(t0, t1);
-  vec3 tMaxV = max(t0, t1);
-  float tNear = max(max(tMinV.x, tMinV.y), tMinV.z);
-  float tFar  = min(min(tMaxV.x, tMaxV.y), tMaxV.z);
+  float tNear = -1e30;
+  float tFar = 1e30;
+  if (abs(rd.x) < 1e-12) \{
+    if (ro.x < -b || ro.x > b) return vec2(1.0, -1.0);
+  } else \{
+    float invX = 1.0 / rd.x;
+    float t0x = (-b - ro.x) * invX;
+    float t1x = ( b - ro.x) * invX;
+    tNear = max(tNear, min(t0x, t1x));
+    tFar  = min(tFar,  max(t0x, t1x));
+  }
+  if (abs(rd.y) < 1e-12) \{
+    if (ro.y < -b || ro.y > b) return vec2(1.0, -1.0);
+  } else \{
+    float invY = 1.0 / rd.y;
+    float t0y = (-b - ro.y) * invY;
+    float t1y = ( b - ro.y) * invY;
+    tNear = max(tNear, min(t0y, t1y));
+    tFar  = min(tFar,  max(t0y, t1y));
+  }
+  if (abs(rd.z) < 1e-12) \{
+    if (ro.z < -b || ro.z > b) return vec2(1.0, -1.0);
+  } else \{
+    float invZ = 1.0 / rd.z;
+    float t0z = (-b - ro.z) * invZ;
+    float t1z = ( b - ro.z) * invZ;
+    tNear = max(tNear, min(t0z, t1z));
+    tFar  = min(tFar,  max(t0z, t1z));
+  }
   if (tFar < tNear || tFar < 0.0) return vec2(1.0, -1.0);
   return vec2(max(0.0, tNear), tFar);
 }
@@ -712,31 +729,39 @@ void main() \{
   float dt = (hitRange.y - hitRange.x) / float(steps);
   float tPrev = hitRange.x;
   float fPrev = eval_implicit(ro + rd * tPrev);
-  bool hit = false;
+  bool hit = (fPrev == 0.0);
   float tHit = tPrev;
 
-  for (int i = 1; i <= 160; i++) \{
-    if (i > steps) break;
-    float tCur = hitRange.x + dt * float(i);
-    float fCur = eval_implicit(ro + rd * tCur);
-    if ((fPrev <= 0.0 && fCur >= 0.0) || (fPrev >= 0.0 && fCur <= 0.0) || abs(fCur) < max(0.001, uThresh)) \{
-      // 6-step bisection refinement for razor-sharp algebraic silhouettes
-      float lo = tPrev, hi = tCur, fLo = fPrev;
-      for (int k = 0; k < 6; k++) \{
-        float mid = 0.5 * (lo + hi);
-        float fMid = eval_implicit(ro + rd * mid);
-        if ((fLo <= 0.0 && fMid <= 0.0) || (fLo >= 0.0 && fMid >= 0.0)) \{
-          lo = mid; fLo = fMid;
-        } else \{
-          hi = mid;
-        }
+  if (!hit) \{
+    for (int i = 1; i <= 160; i++) \{
+      if (i > steps) break;
+      float tCur = (i == steps) ? hitRange.y : (hitRange.x + dt * float(i));
+      float fCur = eval_implicit(ro + rd * tCur);
+      // Strictly scale-invariant zero-set crossing (invariant under f -> c*f for all c > 0)
+      if (fCur == 0.0) \{
+        tHit = tCur;
+        hit = true;
+        break;
       }
-      tHit = 0.5 * (lo + hi);
-      hit = true;
-      break;
+      if ((fPrev < 0.0 && fCur > 0.0) || (fPrev > 0.0 && fCur < 0.0)) \{
+        // 6-step bisection refinement for razor-sharp algebraic silhouettes
+        float lo = tPrev, hi = tCur, fLo = fPrev;
+        for (int k = 0; k < 6; k++) \{
+          float mid = 0.5 * (lo + hi);
+          float fMid = eval_implicit(ro + rd * mid);
+          if ((fLo < 0.0 && fMid < 0.0) || (fLo > 0.0 && fMid > 0.0)) \{
+            lo = mid; fLo = fMid;
+          } else \{
+            hi = mid;
+          }
+        }
+        tHit = 0.5 * (lo + hi);
+        hit = true;
+        break;
+      }
+      tPrev = tCur;
+      fPrev = fCur;
     }
-    tPrev = tCur;
-    fPrev = fCur;
   }
   if (!hit) discard;
 
@@ -747,7 +772,8 @@ void main() \{
     eval_implicit(pos + vec3(0.0,h,0.0)) - eval_implicit(pos - vec3(0.0,h,0.0)),
     eval_implicit(pos + vec3(0.0,0.0,h)) - eval_implicit(pos - vec3(0.0,0.0,h))
   );
-  vec3 N = length(g) > 1e-6 ? normalize(g) : vec3(0.0, 1.0, 0.0);
+  float gMax = max(abs(g.x), max(abs(g.y), abs(g.z)));
+  vec3 N = gMax > 1e-20 ? normalize(g / gMax) : vec3(0.0, 1.0, 0.0);
   if (dot(N, -rd) < 0.0) N = -N;
   vec3 V = -rd;
   vec3 Lk = normalize(vec3(0.55, 0.78, 0.38));
@@ -814,16 +840,35 @@ fn eval_implicit(p: vec3<f32>) -> f32 \{
 }
 
 fn intersectBox(ro: vec3<f32>, rd: vec3<f32>, b: f32) -> vec2<f32> \{
-  let sx = select(rd.x, select(1e-8, -1e-8, rd.x < 0.0), abs(rd.x) < 1e-8);
-  let sy = select(rd.y, select(1e-8, -1e-8, rd.y < 0.0), abs(rd.y) < 1e-8);
-  let sz = select(rd.z, select(1e-8, -1e-8, rd.z < 0.0), abs(rd.z) < 1e-8);
-  let invD = vec3<f32>(1.0 / sx, 1.0 / sy, 1.0 / sz);
-  let t0 = (vec3<f32>(-b) - ro) * invD;
-  let t1 = (vec3<f32>( b) - ro) * invD;
-  let tMinV = min(t0, t1);
-  let tMaxV = max(t0, t1);
-  let tNear = max(max(tMinV.x, tMinV.y), tMinV.z);
-  let tFar  = min(min(tMaxV.x, tMaxV.y), tMaxV.z);
+  var tNear: f32 = -1e30;
+  var tFar: f32 = 1e30;
+  if (abs(rd.x) < 1e-12) \{
+    if (ro.x < -b || ro.x > b) \{ return vec2<f32>(1.0, -1.0); }
+  } else \{
+    let invX = 1.0 / rd.x;
+    let t0x = (-b - ro.x) * invX;
+    let t1x = ( b - ro.x) * invX;
+    tNear = max(tNear, min(t0x, t1x));
+    tFar  = min(tFar,  max(t0x, t1x));
+  }
+  if (abs(rd.y) < 1e-12) \{
+    if (ro.y < -b || ro.y > b) \{ return vec2<f32>(1.0, -1.0); }
+  } else \{
+    let invY = 1.0 / rd.y;
+    let t0y = (-b - ro.y) * invY;
+    let t1y = ( b - ro.y) * invY;
+    tNear = max(tNear, min(t0y, t1y));
+    tFar  = min(tFar,  max(t0y, t1y));
+  }
+  if (abs(rd.z) < 1e-12) \{
+    if (ro.z < -b || ro.z > b) \{ return vec2<f32>(1.0, -1.0); }
+  } else \{
+    let invZ = 1.0 / rd.z;
+    let t0z = (-b - ro.z) * invZ;
+    let t1z = ( b - ro.z) * invZ;
+    tNear = max(tNear, min(t0z, t1z));
+    tFar  = min(tFar,  max(t0z, t1z));
+  }
   if (tFar < tNear || tFar < 0.0) \{ return vec2<f32>(1.0, -1.0); }
   return vec2<f32>(max(0.0, tNear), tFar);
 }
@@ -841,29 +886,37 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> \{
   let dt = (tFar - tNear) / f32(steps);
   var tPrev = tNear;
   var fPrev = eval_implicit(ro + rd * tPrev);
-  var hit: bool = false;
+  var hit: bool = (fPrev == 0.0);
   var tHit = tPrev;
-  for (var i: i32 = 1; i <= 160; i = i + 1) \{
-    if (i > steps) \{ break; }
-    let tCur = tNear + dt * f32(i);
-    let fCur = eval_implicit(ro + rd * tCur);
-    if ((fPrev <= 0.0 && fCur >= 0.0) || (fPrev >= 0.0 && fCur <= 0.0) || abs(fCur) < max(0.001, u.params.x)) \{
-      var lo = tPrev; var hi = tCur; var fLo = fPrev;
-      for (var k: i32 = 0; k < 6; k = k + 1) \{
-        let mid = 0.5 * (lo + hi);
-        let fMid = eval_implicit(ro + rd * mid);
-        if ((fLo <= 0.0 && fMid <= 0.0) || (fLo >= 0.0 && fMid >= 0.0)) \{
-          lo = mid; fLo = fMid;
-        } else \{
-          hi = mid;
-        }
+  if (!hit) \{
+    for (var i: i32 = 1; i <= 160; i = i + 1) \{
+      if (i > steps) \{ break; }
+      let tCur = select(tNear + dt * f32(i), tFar, i == steps);
+      let fCur = eval_implicit(ro + rd * tCur);
+      // Strictly scale-invariant zero-set crossing (invariant under f -> c*f for all c > 0)
+      if (fCur == 0.0) \{
+        tHit = tCur;
+        hit = true;
+        break;
       }
-      tHit = 0.5 * (lo + hi);
-      hit = true;
-      break;
+      if ((fPrev < 0.0 && fCur > 0.0) || (fPrev > 0.0 && fCur < 0.0)) \{
+        var lo = tPrev; var hi = tCur; var fLo = fPrev;
+        for (var k: i32 = 0; k < 6; k = k + 1) \{
+          let mid = 0.5 * (lo + hi);
+          let fMid = eval_implicit(ro + rd * mid);
+          if ((fLo < 0.0 && fMid < 0.0) || (fLo > 0.0 && fMid > 0.0)) \{
+            lo = mid; fLo = fMid;
+          } else \{
+            hi = mid;
+          }
+        }
+        tHit = 0.5 * (lo + hi);
+        hit = true;
+        break;
+      }
+      tPrev = tCur;
+      fPrev = fCur;
     }
-    tPrev = tCur;
-    fPrev = fCur;
   }
   if (!hit) \{ discard; }
   let pos = ro + rd * tHit;
@@ -873,7 +926,9 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> \{
     eval_implicit(pos + vec3<f32>(0.0,h,0.0)) - eval_implicit(pos - vec3<f32>(0.0,h,0.0)),
     eval_implicit(pos + vec3<f32>(0.0,0.0,h)) - eval_implicit(pos - vec3<f32>(0.0,0.0,h))
   );
-  var N = select(vec3<f32>(0.0, 1.0, 0.0), normalize(g), length(g) > 1e-6);
+  let gMax = max(abs(g.x), max(abs(g.y), abs(g.z)));
+  var N = vec3<f32>(0.0, 1.0, 0.0);
+  if (gMax > 1e-20) \{ N = normalize(g / gMax); }
   if (dot(N, -rd) < 0.0) \{ N = -N; }
   let V = -rd;
   let Lk = normalize(vec3<f32>(0.55, 0.78, 0.38));
@@ -937,18 +992,35 @@ inline float product_len(float3 p, constant float* b) \{
 }
 
 inline float2 intersectBox(float3 ro, float3 rd, float b) \{
-  float3 safeRd = float3(
-    abs(rd.x) < 1e-8f ? (rd.x < 0.0f ? -1e-8f : 1e-8f) : rd.x,
-    abs(rd.y) < 1e-8f ? (rd.y < 0.0f ? -1e-8f : 1e-8f) : rd.y,
-    abs(rd.z) < 1e-8f ? (rd.z < 0.0f ? -1e-8f : 1e-8f) : rd.z
-  );
-  float3 invD = 1.0f / safeRd;
-  float3 t0 = (float3(-b) - ro) * invD;
-  float3 t1 = (float3( b) - ro) * invD;
-  float3 tMinV = min(t0, t1);
-  float3 tMaxV = max(t0, t1);
-  float tNear = max(max(tMinV.x, tMinV.y), tMinV.z);
-  float tFar  = min(min(tMaxV.x, tMaxV.y), tMaxV.z);
+  float tNear = -1e30f;
+  float tFar = 1e30f;
+  if (abs(rd.x) < 1e-12f) \{
+    if (ro.x < -b || ro.x > b) return float2(1.0f, -1.0f);
+  } else \{
+    float invX = 1.0f / rd.x;
+    float t0x = (-b - ro.x) * invX;
+    float t1x = ( b - ro.x) * invX;
+    tNear = max(tNear, min(t0x, t1x));
+    tFar  = min(tFar,  max(t0x, t1x));
+  }
+  if (abs(rd.y) < 1e-12f) \{
+    if (ro.y < -b || ro.y > b) return float2(1.0f, -1.0f);
+  } else \{
+    float invY = 1.0f / rd.y;
+    float t0y = (-b - ro.y) * invY;
+    float t1y = ( b - ro.y) * invY;
+    tNear = max(tNear, min(t0y, t1y));
+    tFar  = min(tFar,  max(t0y, t1y));
+  }
+  if (abs(rd.z) < 1e-12f) \{
+    if (ro.z < -b || ro.z > b) return float2(1.0f, -1.0f);
+  } else \{
+    float invZ = 1.0f / rd.z;
+    float t0z = (-b - ro.z) * invZ;
+    float t1z = ( b - ro.z) * invZ;
+    tNear = max(tNear, min(t0z, t1z));
+    tFar  = min(tFar,  max(t0z, t1z));
+  }
   if (tFar < tNear || tFar < 0.0f) return float2(1.0f, -1.0f);
   return float2(max(0.0f, tNear), tFar);
 }
@@ -974,29 +1046,37 @@ kernel void gsir_lean_opns_compute(
   float simTime = u.params.w;
   float tPrev = tNear;
   float fPrev = eval_implicit(ro + rd * tPrev, simTime);
-  bool hit = false;
+  bool hit = (fPrev == 0.0f);
   float tHit = tPrev;
-  for (int i = 1; i <= 160; ++i) \{
-    if (i > steps) break;
-    float tCur = tNear + dt * float(i);
-    float fCur = eval_implicit(ro + rd * tCur, simTime);
-    if ((fPrev <= 0.0f && fCur >= 0.0f) || (fPrev >= 0.0f && fCur <= 0.0f) || abs(fCur) < max(0.001f, u.params.x)) \{
-      float lo = tPrev, hi = tCur, fLo = fPrev;
-      for (int k = 0; k < 6; ++k) \{
-        float mid = 0.5f * (lo + hi);
-        float fMid = eval_implicit(ro + rd * mid, simTime);
-        if ((fLo <= 0.0f && fMid <= 0.0f) || (fLo >= 0.0f && fMid >= 0.0f)) \{
-          lo = mid; fLo = fMid;
-        } else \{
-          hi = mid;
-        }
+  if (!hit) \{
+    for (int i = 1; i <= 160; ++i) \{
+      if (i > steps) break;
+      float tCur = (i == steps) ? tFar : (tNear + dt * float(i));
+      float fCur = eval_implicit(ro + rd * tCur, simTime);
+      // Strictly scale-invariant zero-set crossing (invariant under f -> c*f for all c > 0)
+      if (fCur == 0.0f) \{
+        tHit = tCur;
+        hit = true;
+        break;
       }
-      tHit = 0.5f * (lo + hi);
-      hit = true;
-      break;
+      if ((fPrev < 0.0f && fCur > 0.0f) || (fPrev > 0.0f && fCur < 0.0f)) \{
+        float lo = tPrev, hi = tCur, fLo = fPrev;
+        for (int k = 0; k < 6; ++k) \{
+          float mid = 0.5f * (lo + hi);
+          float fMid = eval_implicit(ro + rd * mid, simTime);
+          if ((fLo < 0.0f && fMid < 0.0f) || (fLo > 0.0f && fMid > 0.0f)) \{
+            lo = mid; fLo = fMid;
+          } else \{
+            hi = mid;
+          }
+        }
+        tHit = 0.5f * (lo + hi);
+        hit = true;
+        break;
+      }
+      tPrev = tCur;
+      fPrev = fCur;
     }
-    tPrev = tCur;
-    fPrev = fCur;
   }
   if (!hit) \{ outTex.write(half4(0.0h), gid); return; }
   float3 pos = ro + rd * tHit;
@@ -1006,7 +1086,8 @@ kernel void gsir_lean_opns_compute(
     eval_implicit(pos + float3(0.0f,eps,0.0f), simTime) - eval_implicit(pos - float3(0.0f,eps,0.0f), simTime),
     eval_implicit(pos + float3(0.0f,0.0f,eps), simTime) - eval_implicit(pos - float3(0.0f,0.0f,eps), simTime)
   );
-  float3 N = length(grad) > 1e-6f ? normalize(grad) : float3(0.0f, 1.0f, 0.0f);
+  float gMax = max(abs(grad.x), max(abs(grad.y), abs(grad.z)));
+  float3 N = gMax > 1e-20f ? normalize(grad / gMax) : float3(0.0f, 1.0f, 0.0f);
   if (dot(N, -rd) < 0.0f) N = -N;
   float3 V = -rd;
   float3 Lk = normalize(float3(0.55f, 0.78f, 0.38f));
