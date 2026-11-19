@@ -11,24 +11,25 @@ A Lean 4 port and interactive 3D Geometric Algebra platform built on [Michael Re
 
 1. **Core Geometric Algebra Engine (`DirectSum/`, `Grassmann/`, `Cartan/`, `MeshTopology/`, …)**:
    - Spaces are values (`ℝ^3`, `S!"-+++"`, `D!"0,1,1,1"`, `S!"∞∅+++"`); elements are indexed by space and grade/parity (`Chain V 2 Float`, `Spinor V Float`, `Multivector V Rat`).
-   - Elaboration-time unrolled kernels (`Grassmann.Kernel.Generated.{R2,R3,R4,STA,PGA2,PGA3,CGA2,CGA3}`) run on unboxed `FloatArray`s at C/Julia speed (`interpreteCGA3 circle` **70.6 ns**, `motorSlerp` **56 ns**, 960-tri `sliceMeshByPlane` **52.4 µs**, `ALOK-1007` linearity guard in [`scripts/check_packed_linearity.py`](scripts/check_packed_linearity.py); see [`docs/PERF.md`](docs/PERF.md)).
+   - Elaboration-time unrolled kernels (`Grassmann.Kernel.Generated.{R2,R3,R4,STA,PGA2,PGA3,CGA2,CGA3}`) run on unboxed `FloatArray`s at C/Julia speed (`interpreteCGA3 circle` **~70 ns**, `motorSlerp` **~56 ns**, 960-tri `sliceMeshByPlane` **~52 µs**, `ALOK-1007` linearity guard in [`scripts/check_packed_linearity.py`](scripts/check_packed_linearity.py); see [`docs/PERF.md`](docs/PERF.md)).
    - **Strictly `Init`-only runtime core**: 98 transitive core runtime modules split via Lean 4.36 `module` + `meta import` depend solely on `Init`.
    - **Kernel-Verified Formal Proofs (`Grassmann/Proofs/`, `Tests/Proofs/Axioms.lean`)**: **83** `#print axioms` `#guard_msgs` audits (`[propext, Classical.choice, Quot.sound]` only; zero `sorry`, zero custom `axiom`, zero `native_decide`) covering Clifford ring/exterior/Hodge/conformal laws, Poincaré duality vs degenerate PGA3 Hodge star, PGA3 Study motors, CGA2/3 null points & Euclidean distances, exact rational `ℝ3` rotors, `STA` (`-+++`) Lorentz boost & spatial rotation Minkowski invariance, and `PGA2`/`PGA3` Wedge projective incidence laws.
    - **3.49M+ Oracle & Property Tests (`Tests/`, `oracle/`)**: pinned Julia goldens + property/unit tests (`3,490,648 passed, 0 failed`).
 
-2. **Interactive `Grassmann.Studio` Engine (32 Strictly `Init`-Only Modules)**:
-   - **74 CoffeeShop Presets** (`Grassmann/CoffeeShop/`): 2D/3D PGA, CGA, STA, Dual/Hyperbolic/Elliptic algebras, plus 5 physics/relativity/streamline showstoppers (`pga3d_bouncing_cube`, `pga3d_double_pendulum`, `sta_terrell_penrose`, `sta_maxwell_streamlines`, `pga3d_hopf_streamlines`), all with KaTeX `formula` + `summary` metadata and interactive `@param` sliders.
-   - **Wedge 2D + 3D Game (`Grassmann/Wedge/`)**: 16 projective geometry puzzle levels, 6 animated tutorials (`T1..T6`), and SplitMix64 procedural challenge generation.
-   - **LiveScript v2 & Fast 3D Meshing (`Grassmann/Eval/`)**: pure-Lean GA script parser/evaluator with `slider(...)` / `@param` bindings, forward-mode AD surfaces, 2D marching-triangles contours, and an unboxed `ImplicitExpr` RPN bytecode VM + adaptive Marching Tetrahedra (`Gyroid 16³` in **1.3 ms** native / **3.2–3.9 ms** WASM).
+2. **Interactive `Grassmann.Studio` Engine (33 Strictly `Init`-Only Modules)**:
+   - **77 CoffeeShop Presets** (`Grassmann/CoffeeShop/`): 2D/3D PGA, CGA, STA, Dual/Hyperbolic/Elliptic algebras, dual-handle tiltable 3D Stanford Bunny slicing, and flagship physics/relativity/algebraic-surface showstoppers (`pga3d_bouncing_cube`, `pga3d_double_pendulum`, `sta_terrell_penrose`, `sta_maxwell_streamlines`, `pga3d_hopf_streamlines`, **Barth Sextic**, **Dupin Cyclide**, **Involute Gears**), all with KaTeX `formula` + `summary` metadata and interactive `@param` sliders.
+   - **6-Stop Guided Geometric Algebra Tour** (`Grassmann/CoffeeShop/Tour.lean`): interactive beginner walkthrough served straight from Lean across Web, macOS, and Apple Vision Pro.
+   - **Wedge 2D + 3D Game (`Grassmann/Wedge/`)**: **17** projective geometry puzzle levels (incl. L17 3D Euler Axis Grand Finale), **6** animated tutorials (`T1..T6`), and SplitMix64 lossless 64-bit procedural challenge generation.
+   - **LiveScript v2 & Fast 3D Meshing (`Grassmann/Eval/`)**: pure-Lean GA script parser/evaluator with `slider(...)` / `@param` bindings, forward-mode AD surfaces, 2D marching-triangles contours, and an unboxed `ImplicitExpr` RPN bytecode VM + adaptive Marching Tetrahedra (`Gyroid 16³` in **~1.6 ms** native / **~3.0 ms** WASM).
    - **Pure-Lean GPU Shader Compiler (`Grassmann/Codegen/GPUInit.lean`)**: emits straight-line WGSL, GLSL 300 es, and Metal MSL OPNS & implicit raymarching shaders directly from Lean.
    - **Binary `GSIR` v1 Wire Protocol (`Grassmann/Scene/`, [`docs/SCENE_IR_V1.md`](docs/SCENE_IR_V1.md))**: compact binary frames shared verbatim across Web, macOS, and Apple Vision Pro.
 
 3. **Multi-Target Deployment (`c/`, `wasm/`, `web/`, `Grassmann/Server.lean`, [`docs/CABI_WASM_SERVER.md`](docs/CABI_WASM_SERVER.md))**:
-   - **Native C ABI (`scripts/build-cabi.sh`)**: standalone `libgrassmann_cabi.dylib` + `include/grassmann/cabi.h`.
-   - **Browser WebAssembly (`scripts/build-wasm.sh`)**: Lean 4.36 → C → Emscripten hybrid `-O3`/`-Oz` WASM (**1.44 MB raw / 434.5 KB gz**, content-fingerprinted `wasm-manifest.json`).
+   - **Native C ABI (`scripts/build-cabi.sh`)**: standalone `libgrassmann_cabi.dylib` (**5.5 MB**, zero `libleanshared`) + `include/grassmann/cabi.h`.
+   - **Zero-UB 8-Byte-Aligned Browser WebAssembly (`scripts/build-wasm.sh`)**: Lean 4.36 → C → Emscripten hybrid `-O3`/`-Oz` WASM (`grassmann.e3d4772aca.wasm`, **1.50 MB raw / 453.1 KB gz**, content-fingerprinted `wasm-manifest.json`, `3.0 ms` bytecode Gyroid `16³`).
    - **Apple 3-Platform Static XCFramework (`scripts/build-apple-static.sh`)**: `GrassmannCABI.xcframework` for `macos-arm64`, `xros-arm64-simulator`, and `xros-arm64` powering native macOS + Apple Vision Pro clients.
    - **Pure-Lean Binary Server (`lake exe ga-server`)**: persistent HTTP/1.1 keep-alive + RFC 6455 binary WebSocket server in pure Lean 4.36 (`Std.Internal.UV.TCP`).
-   - **WebGL2 / WebXR Studio (`web/`)**: thin Three.js renderer (zero JS geometric algebra math) with KaTeX formula card, visual 74-preset gallery, dynamic `@param` sliders, timeline, GA syntax highlighter, Zen mode, 60fps WebM recorder, and `.grassmann.json` import/export.
+   - **WebGL2 / WebXR Studio (`web/`)**: thin Three.js renderer (zero JS geometric algebra math) with KaTeX formula card, visual 77-preset gallery, 6-stop Guided Tour, dynamic `@param` sliders, timeline, GA syntax highlighter, Zen mode, 60fps WebM recorder, and `.grassmann.json` import/export.
 
 ---
 
@@ -44,8 +45,8 @@ lake exe bench --smoke                               # benchmark smoke check
 
 ### Studio Tests, Native C ABI, WASM, Apple XCFramework & Local Server
 ```bash
-# Run all 6 pure-Lean Studio test suites
-for t in Studio StudioExpansion StudioParity GPUInit LiveScript Showcase; do
+# Run all 7 pure-Lean Studio test suites
+for t in Wave6 Studio StudioExpansion StudioParity GPUInit LiveScript Showcase; do
   lake build --wfail "Tests.$t" && \
     lake env lean --setup <(lake setup-file "Tests/$t.lean") --run "Tests/$t.lean"
 done
@@ -60,7 +61,7 @@ done
 node scripts/test-ga-server.mjs
 node scripts/bench-cabi-wasm.mjs
 
-# Web Studio (local dev, unit tests, production build)
+# Web Studio (local dev, 34 unit tests, production build)
 cd web && npm ci && npm test && npm run build
 ```
 
