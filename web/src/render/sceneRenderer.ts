@@ -781,25 +781,34 @@ export class GrassmannSceneRenderer {
       ]);
     }
 
-    // 0x0D FLOW_PARTICLES (GPU-instanced velocity streaks)
+    // 0x0D FLOW_PARTICLES (GPU-instanced velocity-colored luminous tapered ribbons)
     for (const fp of frame.flowParticles) {
       if (fp.particleCount === 0) continue;
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(fp.starts), 3));
-      geo.setAttribute('aEnd', new THREE.BufferAttribute(new Float32Array(fp.ends), 3));
+      // Unit 4-segment tapered strip quad along uv.x ∈ [0,1], uv.y ∈ [0,1]
+      const basePlane = new THREE.PlaneGeometry(1, 1, 4, 1);
+      const instGeo = new THREE.InstancedBufferGeometry();
+      instGeo.index = basePlane.index;
+      instGeo.setAttribute('position', basePlane.getAttribute('position'));
+      instGeo.setAttribute('uv', basePlane.getAttribute('uv'));
+      instGeo.instanceCount = fp.particleCount;
+
+      instGeo.setAttribute('aStart', new THREE.InstancedBufferAttribute(new Float32Array(fp.starts), 3));
+      instGeo.setAttribute('aEnd', new THREE.InstancedBufferAttribute(new Float32Array(fp.ends), 3));
       const seeds = new Float32Array(fp.particleCount);
       for (let i = 0; i < fp.particleCount; i++) {
         seeds[i] = (i * 0.61803398875) % 1;
       }
-      geo.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
+      instGeo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seeds, 1));
+
       const mat = createFlowParticleMaterial(fp.rgba, fp.pointSize);
       mat.uniforms.uSpeed!.value = fp.speed || 0.6;
       mat.uniforms.uTime!.value = this.simTime;
       this.flowMaterials.push(mat);
 
-      const pts = new THREE.Points(geo, mat);
-      pts.frustumCulled = false;
-      this.dynamicGroup.add(pts);
+      const ribbons = new THREE.Mesh(instGeo, mat);
+      ribbons.frustumCulled = false;
+      ribbons.renderOrder = 4;
+      this.dynamicGroup.add(ribbons);
     }
 
     // 0x0E LABELS (CSS2DRenderer + KaTeX typography)
@@ -869,6 +878,10 @@ export class GrassmannSceneRenderer {
 
   resetCamera(): void {
     this.snapCamera('iso');
+  }
+
+  getCanvas(): HTMLCanvasElement {
+    return this.renderer.domElement;
   }
 
   snapCamera(preset: AxisSnapPreset): void {

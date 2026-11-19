@@ -440,6 +440,15 @@ export interface DiagnosticItem {
   message: string;
 }
 
+export interface ParamSpec {
+  name: string;
+  label?: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+}
+
 export interface GsirMetaJson {
   version: number;
   algebra?: AlgebraMeta;
@@ -447,6 +456,12 @@ export interface GsirMetaJson {
   title?: string;
   /** Live editable CoffeeShop LiveScript v2 source emitted by Lean for the active preset/frame */
   script?: string;
+  /** Optional KaTeX LaTeX formula describing the active geometric algebra identity */
+  formula?: string;
+  /** Optional concise human explanation of the active 3D scene */
+  summary?: string;
+  /** Optional interactive @param sliders exposed by Lean presets or LiveScript `slider(...)` */
+  params?: ParamSpec[];
   labels?: string[];
   inspect?: InspectMetaEntry[];
   opnsShaders?: OpnsShaderMeta[];
@@ -581,7 +596,8 @@ export type JsonInputEvent =
       forceFullSnapshot?: boolean;
     }
   | { op: 'wedgeTutorial'; id: 'T1' | 'T2' | 'T3' | 'T4' | 'T5' | 'T6'; forceFullSnapshot?: boolean }
-  | { op: 'wedgeRandom'; dim: 2 | 3; difficulty: 0 | 1 | 2; seed: number; forceFullSnapshot?: boolean };
+  | { op: 'wedgeRandom'; dim: 2 | 3; difficulty: 0 | 1 | 2; seed: number; forceFullSnapshot?: boolean }
+  | { op: 'setParam'; name: string; value: number };
 
 // C ABI return status codes (§5)
 export const GsirStatus = {

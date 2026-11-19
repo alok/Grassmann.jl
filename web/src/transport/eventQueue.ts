@@ -22,7 +22,7 @@ export type QueuedStudioEvent =
       kind: 'json';
       event: JsonInputEvent;
       inputTimestampMs: number;
-      coalesceKey: null;
+      coalesceKey: string | null;
       syncCamera: boolean;
       label: string;
     };
@@ -117,17 +117,29 @@ export class OrderedStudioEventQueue {
     options?: { syncCamera?: boolean; inputTimestampMs?: number }
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
+    const coalesceKey = event.op === 'setParam' ? `param:${event.name}` : null;
     const item: QueuedStudioEvent = {
       kind: 'json',
       event,
       inputTimestampMs: options?.inputTimestampMs ?? performance.now(),
-      coalesceKey: null,
+      coalesceKey,
       syncCamera: options?.syncCamera ?? event.op === 'loadPreset',
       label: `json:${event.op}`,
     };
 
     return new Promise<void>((resolve) => {
       const wrapped = Object.assign(item, { _resolve: resolve });
+      // Tail-only coalescing for continuous @param slider drags (per parameter name, never crossing discrete barriers!)
+      if (coalesceKey !== null && this.queue.length > 0) {
+        const tail = this.queue[this.queue.length - 1] as
+          | (QueuedStudioEvent & { _resolve?: () => void })
+          | undefined;
+        if (tail && tail.coalesceKey === coalesceKey) {
+          tail._resolve?.();
+          this.queue[this.queue.length - 1] = wrapped;
+          return;
+        }
+      }
       this.queue.push(wrapped);
       void this.drain();
     });

@@ -41,9 +41,13 @@ import {
   serializeExperiment,
   type GrassmannExperimentV1,
 } from './experiment';
+import { FormulaCardOverlay } from './formulaCard';
+import { PresetGalleryModal } from './galleryModal';
 import { InspectStashPanel } from './inspectPanel';
 import { createAboutModal, createConnectionModal } from './modals';
+import { ParamTimelineOverlay } from './paramBar';
 import { KATEX_CHEAT_SHEET, STUDIO_PRESETS, type StudioPreset } from './presets';
+import { ViewportVideoRecorder } from './recorder';
 import { MyStashPanel } from './stashPanel';
 import { WedgeGameHud } from './wedgeHud';
 
@@ -62,6 +66,10 @@ export class GrassmannStudioApp {
   private readonly stashPanel: MyStashPanel;
   private readonly wedgeHud: WedgeGameHud;
   private readonly calcPanel: CalculatorStudioPanel;
+  private readonly paramTimeline: ParamTimelineOverlay;
+  private readonly formulaCard: FormulaCardOverlay;
+  private readonly galleryModal: PresetGalleryModal;
+  private readonly recorder = new ViewportVideoRecorder();
   private readonly connModal: ReturnType<typeof createConnectionModal>;
   private readonly aboutModal: ReturnType<typeof createAboutModal>;
 
@@ -77,6 +85,9 @@ export class GrassmannStudioApp {
   private readonly sparkCtx: CanvasRenderingContext2D | null;
   private readonly sparkSamples: number[] = [];
   private readonly playBtn: HTMLButtonElement;
+  private readonly recBtn: HTMLButtonElement;
+  private readonly zenBtn: HTMLButtonElement;
+  private readonly exitZenBtn: HTMLButtonElement;
   private readonly xrBtn: HTMLButtonElement;
   private readonly updatingPill: HTMLDivElement;
   private readonly offlineBanner: HTMLDivElement;
@@ -90,9 +101,11 @@ export class GrassmannStudioApp {
   private activeAlgebra = 'PGA3';
   private activePresetId = 'pga3d_slicing';
   private darkTheme = true;
+  private zenMode = false;
   private gridVisible = true;
   private wireframe = false;
   private animRunning = false;
+  private animSpeed = 1;
   private animTimeSec = 0;
   private lastAnimTickMs = 0;
   private animRafId = 0;
@@ -321,7 +334,13 @@ export class GrassmannStudioApp {
     const vpTools = document.createElement('div');
     vpTools.className = 'gs-vp-toolbar';
     this.playBtn = this.makeVpBtn('▶ Play', () => this.setAnimationRunning(!this.animRunning));
+    const galleryBtn = this.makeVpBtn('Gallery (G)', () => this.galleryModal.toggle(this.activePresetId));
+    this.recBtn = this.makeVpBtn('● Rec', () => this.toggleVideoRecording());
+    this.recBtn.title = 'Record 5s 60fps WebM Video';
+    this.zenBtn = this.makeVpBtn('Zen (F)', () => this.setZenMode(!this.zenMode));
+    this.zenBtn.title = 'Toggle Fullscreen Zen Mode (F)';
     vpTools.append(
+      galleryBtn,
       this.playBtn,
       this.makeVpBtn('Grid', () => {
         this.gridVisible = !this.gridVisible;
@@ -340,9 +359,43 @@ export class GrassmannStudioApp {
         const svg = this.renderer.exportSvg(1200, 800);
         const blob = new Blob([svg], { type: 'image/svg+xml' });
         this.downloadDataUrl(URL.createObjectURL(blob), `grassmann-${Date.now()}.svg`);
-      })
+      }),
+      this.recBtn,
+      this.zenBtn
     );
     viewportWrap.appendChild(vpTools);
+
+    // Floating Exit Zen pill (only visible in Zen mode)
+    this.exitZenBtn = document.createElement('button');
+    this.exitZenBtn.type = 'button';
+    this.exitZenBtn.className = 'gs-exit-zen-pill hidden';
+    this.exitZenBtn.textContent = 'Exit Zen (F / Esc)';
+    this.exitZenBtn.addEventListener('click', () => this.setZenMode(false));
+    viewportWrap.appendChild(this.exitZenBtn);
+
+    // Collapsible KaTeX Math Formula & Summary Card (top-left of viewport)
+    this.formulaCard = new FormulaCardOverlay();
+    viewportWrap.appendChild(this.formulaCard.element);
+
+    // Dynamic @param Sliders + Compact Bottom-Center Simulation Timeline Bar
+    this.paramTimeline = new ParamTimelineOverlay({
+      onSetParam: (name, value) => {
+        void this.dispatchJson({ op: 'setParam', name, value });
+      },
+      onTogglePlay: () => this.setAnimationRunning(!this.animRunning),
+      onScrubTime: (timeSec) => {
+        this.animTimeSec = timeSec;
+        this.enqueueBinaryEvent(encodeTick(0, timeSec));
+      },
+      onSpeedChange: (speed) => {
+        this.animSpeed = speed;
+      },
+      onResetTime: () => {
+        this.animTimeSec = 0;
+        this.enqueueBinaryEvent(encodeTick(0, 0));
+      },
+    });
+    viewportWrap.append(this.paramTimeline.paramPanel, this.paramTimeline.timelineBar);
 
     // Subtle non-blocking Updating… pill for heavy Lean 3D remeshes (keeps last accepted mesh visible)
     this.updatingPill = document.createElement('div');
@@ -439,8 +492,22 @@ export class GrassmannStudioApp {
       }
     );
     this.aboutModal = createAboutModal();
+    this.galleryModal = new PresetGalleryModal({
+      onSelectPreset: (preset) => {
+        if (this.mode === 'wedge') this.setMode('coffeeshop', false);
+        this.loadPreset(preset);
+      },
+    });
+    this.galleryModal.setPresets(this.livePresets, this.activePresetId);
 
-    this.root.append(topBar, workspace, footer, this.connModal.element, this.aboutModal.element);
+    this.root.append(
+      topBar,
+      workspace,
+      footer,
+      this.connModal.element,
+      this.aboutModal.element,
+      this.galleryModal.element
+    );
 
     // Unified ordered event pump (binary + JSON)
     this.eventQueue = new OrderedStudioEventQueue({
@@ -643,6 +710,7 @@ export class GrassmannStudioApp {
         }
       }
       this.rebuildPresetBrowser?.();
+      this.galleryModal.setPresets(this.livePresets, this.activePresetId);
     } catch {
       // Keep fallback presets if catalog endpoint not supported
     }
@@ -694,6 +762,9 @@ export class GrassmannStudioApp {
     }
 
     this.wedgeHud.update(this.lastFrame?.meta?.wedge, next === 'wedge');
+    this.formulaCard.update(this.lastFrame?.meta, next !== 'wedge');
+    this.paramTimeline.setTimelineVisible(next !== 'wedge');
+    this.paramTimeline.updateParams(this.lastFrame?.meta?.params, next !== 'wedge');
 
     if (notifyLean && this.transport && this.transport.kind !== 'fixture') {
       if (next === 'wedge') {
@@ -865,7 +936,10 @@ export class GrassmannStudioApp {
       '<strong>Studio Shortcuts</strong>' +
       '<div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd> Switch studio modes</div>' +
       '<div><kbd>Space</kbd> Play / Pause simulation clock</div>' +
+      '<div><kbd>G</kbd> Open visual Preset Gallery</div>' +
+      '<div><kbd>F</kbd> Fullscreen Zen Mode</div>' +
       '<div><kbd>R</kbd> Smooth reset camera</div>' +
+      '<div><kbd>J/M/A/D</kbd> Accessible Wedge Join/Meet/Add/Dot</div>' +
       '<div><kbd>⌘/Ctrl Z</kbd> / <kbd>H</kbd> Wedge Undo / Hint</div>' +
       '<div><kbd>⇧ Enter</kbd> Evaluate script in Lean</div>' +
       '<div><kbd>Select Number</kbd> Inline drag-to-scrub slider</div>' +
@@ -1057,7 +1131,12 @@ export class GrassmannStudioApp {
         errDiag ? (typeof errDiag === 'string' ? errDiag : errDiag.message) : null
       );
       this.calcPanel.updateCalcState(frame.meta?.calc);
-      this.wedgeHud.update(frame.meta?.wedge, this.mode === 'wedge' || Boolean(frame.meta?.wedge));
+      const isWedge = this.mode === 'wedge' || Boolean(frame.meta?.wedge);
+      this.wedgeHud.update(frame.meta?.wedge, isWedge);
+      this.formulaCard.update(frame.meta, !isWedge);
+      this.paramTimeline.setTimelineVisible(!isWedge);
+      this.paramTimeline.updateParams(frame.meta?.params, !isWedge);
+      this.paramTimeline.setTime(frame.header.simTime || this.animTimeSec);
     } catch (err) {
       const msg = (err as Error).message;
       this.codeEditor.setDiagnostics([{ severity: 'error', message: msg }]);
@@ -1069,14 +1148,16 @@ export class GrassmannStudioApp {
     this.animRunning = running;
     this.playBtn.textContent = running ? '⏸ Pause' : '▶ Play';
     this.playBtn.classList.toggle('active', running);
+    this.paramTimeline.setPlaying(running);
     if (running) {
       this.lastAnimTickMs = performance.now();
       const step = () => {
         if (!this.animRunning) return;
         const now = performance.now();
-        const dt = Math.min(0.1, Math.max(0.001, (now - this.lastAnimTickMs) * 0.001));
+        const dt = Math.min(0.1, Math.max(0.001, (now - this.lastAnimTickMs) * 0.001)) * this.animSpeed;
         this.lastAnimTickMs = now;
         this.animTimeSec += dt;
+        this.paramTimeline.setTime(this.animTimeSec);
         this.enqueueBinaryEvent(encodeTick(dt, this.animTimeSec));
         this.animRafId = requestAnimationFrame(step);
       };
@@ -1084,6 +1165,34 @@ export class GrassmannStudioApp {
     } else if (this.animRafId) {
       cancelAnimationFrame(this.animRafId);
       this.animRafId = 0;
+    }
+  }
+
+  private setZenMode(active: boolean): void {
+    this.zenMode = active;
+    this.root.classList.toggle('zen-mode', active);
+    this.zenBtn.classList.toggle('active', active);
+    this.exitZenBtn.classList.toggle('hidden', !active);
+  }
+
+  private toggleVideoRecording(): void {
+    if (this.recorder.isRecording) {
+      this.recorder.stop();
+      return;
+    }
+    const started = this.recorder.start(this.renderer.getCanvas(), {
+      durationSec: 5,
+      filenamePrefix: `grassmann-${this.activePresetId || 'scene'}`,
+      onState: ({ recording, remainingSec }) => {
+        this.recBtn.classList.toggle('recording', recording);
+        this.recBtn.textContent = recording ? `■ ${remainingSec.toFixed(1)}s` : '● Rec';
+      },
+    });
+    if (!started) {
+      this.recBtn.textContent = 'No WebM';
+      setTimeout(() => {
+        this.recBtn.textContent = '● Rec';
+      }, 1500);
     }
   }
 
@@ -1217,6 +1326,28 @@ export class GrassmannStudioApp {
         this.renderer.resetCamera();
         return;
       }
+      if (ev.key === 'g' || ev.key === 'G') {
+        this.galleryModal.toggle(this.activePresetId);
+        return;
+      }
+      if (ev.key === 'f' || ev.key === 'F') {
+        this.setZenMode(!this.zenMode);
+        return;
+      }
+      if (ev.key === 'Escape') {
+        if (this.galleryModal.opened) {
+          this.galleryModal.close();
+          return;
+        }
+        if (this.zenMode) {
+          this.setZenMode(false);
+          return;
+        }
+        if (this.mode === 'wedge') {
+          this.renderer.clearWedgeSelection();
+          return;
+        }
+      }
       if ((ev.key === 'h' || ev.key === 'H') && this.mode === 'wedge') {
         this.enqueueBinaryEvent(encodeWedgeAction(WedgeActionCode.HINT, 0));
         return;
@@ -1227,10 +1358,6 @@ export class GrassmannStudioApp {
         if (k === 'm' && this.renderer.commitArmedWedgeOp('meet')) return;
         if (k === 'a' && this.renderer.commitArmedWedgeOp('add')) return;
         if (k === 'd' && this.renderer.commitArmedWedgeOp('dot')) return;
-        if (ev.key === 'Escape') {
-          this.renderer.clearWedgeSelection();
-          return;
-        }
       }
     }
 
@@ -1246,6 +1373,7 @@ export class GrassmannStudioApp {
       clearTimeout(this.updatingDelayTimer);
       this.updatingDelayTimer = null;
     }
+    this.recorder.dispose();
     this.eventQueue.dispose();
     this.setAnimationRunning(false);
     this.transport?.dispose();

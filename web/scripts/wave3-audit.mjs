@@ -318,10 +318,39 @@ async function main() {
     const sAfterImport = await page.evaluate(() => window.__grassmannStudio.getState());
     assert(sAfterImport.presetId === 'pga3d_slicing', `Expected experiment import to restore pga3d_slicing, got ${sAfterImport.presetId}`);
 
+    // 10. Wave 4B UX Craft: KaTeX Formula Card + Timeline Bar + Visual Preset Gallery (G) + Velocity Flow Ribbons + Zen Mode (F)
+    assert(await page.locator('.gs-formula-card').isVisible(), 'Expected KaTeX Formula Card visible on #pga3d_slicing');
+    assert((await page.locator('.gs-formula-card .katex').count()) >= 1, 'Expected rendered KaTeX math in Formula Card');
+    assert(await page.locator('.gs-timeline-bar').isVisible(), 'Expected Simulation Timeline Bar visible');
+
+    // Open Visual Preset Gallery Modal (G)
+    await page.locator('.gs-vp-btn', { hasText: /Gallery/ }).click();
+    await page.waitForTimeout(250);
+    assert(await page.locator('.gs-gallery-modal').isVisible(), 'Expected Visual Preset Gallery Modal visible');
+    const galleryCards = await page.locator('.gs-gallery-card').count();
+    assert(galleryCards >= 69, `Expected >=69 visual preset gallery cards, got ${galleryCards}`);
+    await page.screenshot({ path: path.join(OUT_DIR, 'w4-01-gallery-modal.png') });
+    console.log(`[wave3] Visual Preset Gallery Modal PASS (${galleryCards} cards)`);
+
+    // Load pga3d_objects (Lathed Solids & Motor Flow) via Gallery Modal -> verify velocity-colored flow ribbons!
+    await page.locator('[data-gallery-preset-id="pga3d_objects"]').click();
+    await snap('w4-03-flow-ribbons.png');
+
+    // Enter Fullscreen Zen Mode (F) -> verify unobstructed full-bleed viewport + Exit Zen pill!
+    await page.locator('.gs-vp-btn', { hasText: /Zen/ }).click();
+    await page.waitForTimeout(350);
+    assert(await page.locator('.gs-exit-zen-pill').isVisible(), 'Expected Exit Zen pill visible');
+    const zenBox = await page.locator('canvas.gs-webgl-canvas').boundingBox();
+    assert(zenBox && zenBox.width >= 1400 && zenBox.height >= 860, `Expected full-bleed Zen canvas >=1400x860, got ${JSON.stringify(zenBox)}`);
+    await page.screenshot({ path: path.join(OUT_DIR, 'w4-02-zen-mode.png') });
+    await page.locator('.gs-exit-zen-pill').click();
+    await page.waitForTimeout(250);
+    console.log(`[wave3] Fullscreen Zen Mode PASS (${Math.round(zenBox.width)}x${Math.round(zenBox.height)})`);
+
     assert(consoleErrors.length === 0, `Console errors: ${JSON.stringify(consoleErrors)}`);
     assert(consoleWarnings.length === 0, `WebGL/Shader warnings: ${JSON.stringify(consoleWarnings)}`);
     assert(pageErrors.length === 0, `Page errors: ${JSON.stringify(pageErrors)}`);
-    console.log('[wave3] ALL 15 FULL-STUDIO 69-PRESET VISUAL + GAMEPLAY + WORKER E2E CHECKS PASSED (0 console/shader/page errors)!');
+    console.log('[wave3] ALL 18 FULL-STUDIO 69-PRESET + WAVE 4B UX + WORKER E2E CHECKS PASSED (0 console/shader/page errors)!');
   } finally {
     if (browser) await browser.close();
     preview.kill('SIGTERM');

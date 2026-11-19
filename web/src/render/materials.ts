@@ -181,45 +181,82 @@ export function createBivectorMaterial(rgba: RgbaTuple, isDisk: boolean): THREE.
 }
 
 export function createFlowParticleMaterial(rgba: RgbaTuple, pointSize: number): THREE.ShaderMaterial {
+  const ribbonHalfWidth = Math.max(0.006, Math.min(0.018, (pointSize || 0.05) * 0.16));
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
+    side: THREE.DoubleSide,
     blending: THREE.AdditiveBlending,
     uniforms: {
       uColor: { value: new THREE.Color(rgba[0], rgba[1], rgba[2]) },
-      uAlpha: { value: rgba[3] },
+      uAlpha: { value: Math.max(0.55, rgba[3]) },
       uTime: { value: 0 },
       uSpeed: { value: 1 },
-      uSize: { value: Math.max(4.0, pointSize * 120.0) },
+      uWidth: { value: ribbonHalfWidth },
     },
     vertexShader: `
+      attribute vec3 aStart;
       attribute vec3 aEnd;
       attribute float aSeed;
       uniform float uTime;
       uniform float uSpeed;
-      uniform float uSize;
+      uniform float uWidth;
+      varying float vAlong;
+      varying float vAcross;
       varying float vPhase;
+      varying float vSpeedNorm;
+
       void main() {
         float phase = fract(uTime * uSpeed + aSeed);
         vPhase = phase;
-        vec3 pos = mix(position, aEnd, phase);
-        vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-        gl_PointSize = clamp(uSize / max(-mvPosition.z, 0.5), 2.5, 22.0);
-        gl_Position = projectionMatrix * mvPosition;
+        float along = uv.x;
+        vAlong = along;
+        vAcross = uv.y * 2.0 - 1.0;
+
+        vec3 delta = aEnd - aStart;
+        float segLen = length(delta);
+        vSpeedNorm = clamp(segLen * 1.15, 0.0, 1.0);
+
+        float tailSpan = 0.52;
+        float t = clamp(phase - (1.0 - along) * tailSpan, 0.0, 1.0);
+        vec3 centerPos = mix(aStart, aEnd, t);
+
+        vec3 tangent = segLen > 1e-5 ? (delta / segLen) : vec3(0.0, 1.0, 0.0);
+        vec3 viewDir = normalize(cameraPosition - centerPos);
+        vec3 side = cross(tangent, viewDir);
+        float sideLen = length(side);
+        side = sideLen > 1e-4 ? (side / sideLen) : vec3(1.0, 0.0, 0.0);
+
+        // Razor-sleek tapered comet streak with luminous tip
+        float taper = mix(0.12, 1.0, smoothstep(0.0, 0.9, along)) * (1.0 - 0.5 * smoothstep(0.92, 1.0, along));
+        vec3 worldPos = centerPos + side * (vAcross * uWidth * taper);
+
+        gl_Position = projectionMatrix * viewMatrix * vec4(worldPos, 1.0);
       }
     `,
     fragmentShader: `
       uniform vec3 uColor;
       uniform float uAlpha;
+      varying float vAlong;
+      varying float vAcross;
       varying float vPhase;
+      varying float vSpeedNorm;
+
       void main() {
-        vec2 c = gl_PointCoord * 2.0 - 1.0;
-        float r2 = dot(c, c);
-        if (r2 > 1.0) discard;
-        float glow = exp(-r2 * 2.8);
-        float envelope = sin(vPhase * 3.14159265);
-        vec3 col = mix(uColor, vec3(1.0), glow * 0.5);
-        gl_FragColor = vec4(col, glow * envelope * uAlpha);
+        float core = exp(-vAcross * vAcross * 5.2);
+        float tailFade = pow(clamp(vAlong, 0.0, 1.0), 1.75);
+        float headTip = 1.0 - smoothstep(0.94, 1.0, vAlong) * 0.4;
+        float envelope = sin(clamp(vPhase, 0.0, 1.0) * 3.14159265);
+
+        // Velocity-colored luminous ramp: electric cyan -> sky blue -> warm gold at peak shear
+        vec3 slowCol = mix(uColor, vec3(0.18, 0.84, 1.0), 0.55);
+        vec3 fastCol = mix(vec3(0.38, 0.72, 1.0), vec3(1.0, 0.76, 0.30), smoothstep(0.35, 1.0, vSpeedNorm));
+        vec3 velCol = mix(slowCol, fastCol, smoothstep(0.1, 0.95, vSpeedNorm));
+        vec3 col = mix(velCol, vec3(0.96, 0.99, 1.0), core * vAlong * 0.6);
+
+        float alpha = core * tailFade * headTip * envelope * uAlpha;
+        if (alpha < 0.01) discard;
+        gl_FragColor = vec4(col, alpha);
       }
     `,
   });
