@@ -21,6 +21,8 @@ import Tests.Dynamic.Props
 import Tests.Dynamic.Examples
 import Tests.Dynamic.Composite
 import Tests.Dynamic.Fast
+import Tests.Dynamic.RotorDecode
+import Tests.Dynamic.MaskIngress
 
 open GrassmannTests DynamicTests
 
@@ -29,7 +31,9 @@ def Tests.Dynamic.run : IO (Nat × Nat) := do
   let suites : List (String × IO Tally) :=
     [ ("dynamic/laws", lawsRun), ("dynamic/products", productsRun),
       ("dynamic/equal", equalRun), ("dynamic/anti", antiRun), ("dynamic/examples", examplesRun),
-      ("dynamic/composite", compositeRun), ("dynamic/fast", fastRun) ]
+      ("dynamic/composite", compositeRun), ("dynamic/fast", fastRun),
+      ("dynamic/rotor-decode", DynamicTests.RotorDecode.run),
+      ("dynamic/mask-ingress", DynamicTests.MaskIngress.run) ]
   let mut pass := 0
   let mut fail := 0
   for (name, suite) in suites do

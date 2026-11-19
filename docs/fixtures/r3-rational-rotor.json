@@ -1,0 +1,1562 @@
+{
+  "schema": "grassmann-exact-r3-rotor-fixture-v1",
+  "intended_repository_path": "docs/fixtures/r3-rational-rotor.json",
+  "operation": {
+    "forward": "r*v*reverse(r)",
+    "public_forward": "rotor >>> point",
+    "inverse": "reverse(r)*v*r",
+    "public_inverse": "point ⊘ rotor",
+    "full_output_layout": "odd",
+    "projected_output_layout": "vector"
+  },
+  "space": {
+    "id": "R3",
+    "dimension": 3,
+    "generators": 3,
+    "metric": {
+      "id": "positive-euclidean",
+      "diagonal": [
+        {
+          "num": "1",
+          "den": "1"
+        },
+        {
+          "num": "1",
+          "den": "1"
+        },
+        {
+          "num": "1",
+          "den": "1"
+        }
+      ]
+    },
+    "orientation": "e12=e1*e2; e1,e2,e3 have positive square",
+    "blade_order": {
+      "vector": [
+        1,
+        2,
+        4
+      ],
+      "even": [
+        0,
+        3,
+        5,
+        6
+      ],
+      "odd": [
+        1,
+        2,
+        4,
+        7
+      ],
+      "full": [
+        0,
+        1,
+        2,
+        4,
+        3,
+        5,
+        6,
+        7
+      ]
+    },
+    "packed_indexing": "zero-based; full storage is grade-major"
+  },
+  "coefficient_encoding": {
+    "kind": "exact rational object",
+    "fields": {
+      "numerator": {
+        "key": "num",
+        "encoding": "signed decimal integer string"
+      },
+      "denominator": {
+        "key": "den",
+        "encoding": "positive decimal integer string"
+      }
+    },
+    "reduced": true,
+    "zero": {
+      "num": "0",
+      "den": "1"
+    },
+    "floating_point_values": false
+  },
+  "source_revision": {
+    "baseline_commit": "7d8833068444a94d61670218e66ec0eeeab7b461",
+    "lean_module": "Grassmann.Kernel.R3RotorLaws",
+    "repository_source_path": "Grassmann/Kernel/R3RotorLaws.lean",
+    "module_sha256": "c305b77cf837e8fc085c65e4325999b011fa27878e34558b2dd29fe358a8b21c",
+    "content_address": "sha256:c305b77cf837e8fc085c65e4325999b011fa27878e34558b2dd29fe358a8b21c",
+    "final_commit_receipt": "supplied separately by root; not embedded to avoid self-reference"
+  },
+  "theorem_contract": {
+    "namespace": "Grassmann.Kernel.R3Rotor",
+    "source_theorems": [
+      "decode_normalize",
+      "decode_scalar",
+      "scalar_raw_ne",
+      "layouts",
+      "rotor_reverse",
+      "rotor_unit",
+      "action_formula",
+      "inverseAction_formula",
+      "fullAction_formula",
+      "coordinates_norm"
+    ],
+    "rotor_assumptions": [
+      "fixed rotor 3/5+(4/5)e12 in positive Euclidean R3",
+      "arbitrary x,y,z:Rat with the default coherent Rat operations",
+      "concrete generated Kernels and SandwichKernels instances"
+    ],
+    "decode_assumptions": [
+      "Coeff α; representation admission uses TA.WF",
+      "WF rejects non-linear kinds and invalid stored blades",
+      "WF is not a numeric Float-finiteness check"
+    ],
+    "decode_target": "Option (Multivector R3 α), complete dense representation",
+    "proof_receipt": "kernel compilation and axiom audit supplied separately by root",
+    "not_claimed": [
+      "generic Plan.eval₂ refinement",
+      "general Spec.Cl decoding theorem",
+      "Float field laws",
+      "Julia parity expansion",
+      "FFI or GPU verification"
+    ]
+  },
+  "provenance": {
+    "coordinate_reference": "independent Python standard-library Fraction matrix calculation",
+    "coordinate_case_count": 12,
+    "generator_sha256": "c8c0809a18eb136dac7be2e3efc9480e16bf0aeb641ed315f263d5d2534d63b4",
+    "lean_runtime_comparisons_embedded": 0,
+    "julia_execution_or_parity_claim": false,
+    "finite_engine_runtime_receipts": "supplied separately; finite tests do not prove universal claims",
+    "attribution": "Michael Reed/chakravala Grassmann ecosystem; independent Lean port"
+  },
+  "rotor_packed": [
+    {
+      "num": "3",
+      "den": "5"
+    },
+    {
+      "num": "4",
+      "den": "5"
+    },
+    {
+      "num": "0",
+      "den": "1"
+    },
+    {
+      "num": "0",
+      "den": "1"
+    }
+  ],
+  "forward_matrix": [
+    [
+      {
+        "num": "-7",
+        "den": "25"
+      },
+      {
+        "num": "24",
+        "den": "25"
+      },
+      {
+        "num": "0",
+        "den": "1"
+      }
+    ],
+    [
+      {
+        "num": "-24",
+        "den": "25"
+      },
+      {
+        "num": "-7",
+        "den": "25"
+      },
+      {
+        "num": "0",
+        "den": "1"
+      }
+    ],
+    [
+      {
+        "num": "0",
+        "den": "1"
+      },
+      {
+        "num": "0",
+        "den": "1"
+      },
+      {
+        "num": "1",
+        "den": "1"
+      }
+    ]
+  ],
+  "inverse_matrix": [
+    [
+      {
+        "num": "-7",
+        "den": "25"
+      },
+      {
+        "num": "-24",
+        "den": "25"
+      },
+      {
+        "num": "0",
+        "den": "1"
+      }
+    ],
+    [
+      {
+        "num": "24",
+        "den": "25"
+      },
+      {
+        "num": "-7",
+        "den": "25"
+      },
+      {
+        "num": "0",
+        "den": "1"
+      }
+    ],
+    [
+      {
+        "num": "0",
+        "den": "1"
+      },
+      {
+        "num": "0",
+        "den": "1"
+      },
+      {
+        "num": "1",
+        "den": "1"
+      }
+    ]
+  ],
+  "normalization": {
+    "rotor_norm_sq": {
+      "num": "1",
+      "den": "1"
+    },
+    "orthogonality_numerator": [
+      49,
+      576,
+      625
+    ],
+    "matrix_transpose_product": [
+      [
+        {
+          "num": "1",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "1",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "1",
+          "den": "1"
+        }
+      ]
+    ],
+    "matrix_determinant": {
+      "num": "1",
+      "den": "1"
+    }
+  },
+  "rows": [
+    {
+      "id": "zero",
+      "input": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_action": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_inverse_action": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_full_action_odd": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_dense_action": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "input_norm_sq": {
+        "num": "0",
+        "den": "1"
+      },
+      "expected_action_norm_sq": {
+        "num": "0",
+        "den": "1"
+      }
+    },
+    {
+      "id": "e1",
+      "input": [
+        {
+          "num": "1",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_action": [
+        {
+          "num": "-7",
+          "den": "25"
+        },
+        {
+          "num": "-24",
+          "den": "25"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_inverse_action": [
+        {
+          "num": "-7",
+          "den": "25"
+        },
+        {
+          "num": "24",
+          "den": "25"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_full_action_odd": [
+        {
+          "num": "-7",
+          "den": "25"
+        },
+        {
+          "num": "-24",
+          "den": "25"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_dense_action": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "-7",
+          "den": "25"
+        },
+        {
+          "num": "-24",
+          "den": "25"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "input_norm_sq": {
+        "num": "1",
+        "den": "1"
+      },
+      "expected_action_norm_sq": {
+        "num": "1",
+        "den": "1"
+      }
+    },
+    {
+      "id": "e2",
+      "input": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "1",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_action": [
+        {
+          "num": "24",
+          "den": "25"
+        },
+        {
+          "num": "-7",
+          "den": "25"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_inverse_action": [
+        {
+          "num": "-24",
+          "den": "25"
+        },
+        {
+          "num": "-7",
+          "den": "25"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_full_action_odd": [
+        {
+          "num": "24",
+          "den": "25"
+        },
+        {
+          "num": "-7",
+          "den": "25"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_dense_action": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "24",
+          "den": "25"
+        },
+        {
+          "num": "-7",
+          "den": "25"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "input_norm_sq": {
+        "num": "1",
+        "den": "1"
+      },
+      "expected_action_norm_sq": {
+        "num": "1",
+        "den": "1"
+      }
+    },
+    {
+      "id": "e3",
+      "input": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "1",
+          "den": "1"
+        }
+      ],
+      "expected_action": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "1",
+          "den": "1"
+        }
+      ],
+      "expected_inverse_action": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "1",
+          "den": "1"
+        }
+      ],
+      "expected_full_action_odd": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "1",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_dense_action": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "1",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "input_norm_sq": {
+        "num": "1",
+        "den": "1"
+      },
+      "expected_action_norm_sq": {
+        "num": "1",
+        "den": "1"
+      }
+    },
+    {
+      "id": "mixed",
+      "input": [
+        {
+          "num": "1",
+          "den": "1"
+        },
+        {
+          "num": "2",
+          "den": "1"
+        },
+        {
+          "num": "3",
+          "den": "1"
+        }
+      ],
+      "expected_action": [
+        {
+          "num": "41",
+          "den": "25"
+        },
+        {
+          "num": "-38",
+          "den": "25"
+        },
+        {
+          "num": "3",
+          "den": "1"
+        }
+      ],
+      "expected_inverse_action": [
+        {
+          "num": "-11",
+          "den": "5"
+        },
+        {
+          "num": "2",
+          "den": "5"
+        },
+        {
+          "num": "3",
+          "den": "1"
+        }
+      ],
+      "expected_full_action_odd": [
+        {
+          "num": "41",
+          "den": "25"
+        },
+        {
+          "num": "-38",
+          "den": "25"
+        },
+        {
+          "num": "3",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_dense_action": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "41",
+          "den": "25"
+        },
+        {
+          "num": "-38",
+          "den": "25"
+        },
+        {
+          "num": "3",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "input_norm_sq": {
+        "num": "14",
+        "den": "1"
+      },
+      "expected_action_norm_sq": {
+        "num": "14",
+        "den": "1"
+      }
+    },
+    {
+      "id": "fraction-mixed",
+      "input": [
+        {
+          "num": "-2",
+          "den": "3"
+        },
+        {
+          "num": "5",
+          "den": "7"
+        },
+        {
+          "num": "-3",
+          "den": "11"
+        }
+      ],
+      "expected_action": [
+        {
+          "num": "458",
+          "den": "525"
+        },
+        {
+          "num": "11",
+          "den": "25"
+        },
+        {
+          "num": "-3",
+          "den": "11"
+        }
+      ],
+      "expected_inverse_action": [
+        {
+          "num": "-262",
+          "den": "525"
+        },
+        {
+          "num": "-21",
+          "den": "25"
+        },
+        {
+          "num": "-3",
+          "den": "11"
+        }
+      ],
+      "expected_full_action_odd": [
+        {
+          "num": "458",
+          "den": "525"
+        },
+        {
+          "num": "11",
+          "den": "25"
+        },
+        {
+          "num": "-3",
+          "den": "11"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_dense_action": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "458",
+          "den": "525"
+        },
+        {
+          "num": "11",
+          "den": "25"
+        },
+        {
+          "num": "-3",
+          "den": "11"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "input_norm_sq": {
+        "num": "54910",
+        "den": "53361"
+      },
+      "expected_action_norm_sq": {
+        "num": "54910",
+        "den": "53361"
+      }
+    },
+    {
+      "id": "x-cancellation",
+      "input": [
+        {
+          "num": "24",
+          "den": "1"
+        },
+        {
+          "num": "7",
+          "den": "1"
+        },
+        {
+          "num": "-2",
+          "den": "1"
+        }
+      ],
+      "expected_action": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "-25",
+          "den": "1"
+        },
+        {
+          "num": "-2",
+          "den": "1"
+        }
+      ],
+      "expected_inverse_action": [
+        {
+          "num": "-336",
+          "den": "25"
+        },
+        {
+          "num": "527",
+          "den": "25"
+        },
+        {
+          "num": "-2",
+          "den": "1"
+        }
+      ],
+      "expected_full_action_odd": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "-25",
+          "den": "1"
+        },
+        {
+          "num": "-2",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_dense_action": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "-25",
+          "den": "1"
+        },
+        {
+          "num": "-2",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "input_norm_sq": {
+        "num": "629",
+        "den": "1"
+      },
+      "expected_action_norm_sq": {
+        "num": "629",
+        "den": "1"
+      }
+    },
+    {
+      "id": "y-cancellation",
+      "input": [
+        {
+          "num": "7",
+          "den": "1"
+        },
+        {
+          "num": "-24",
+          "den": "1"
+        },
+        {
+          "num": "2",
+          "den": "1"
+        }
+      ],
+      "expected_action": [
+        {
+          "num": "-25",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "2",
+          "den": "1"
+        }
+      ],
+      "expected_inverse_action": [
+        {
+          "num": "527",
+          "den": "25"
+        },
+        {
+          "num": "336",
+          "den": "25"
+        },
+        {
+          "num": "2",
+          "den": "1"
+        }
+      ],
+      "expected_full_action_odd": [
+        {
+          "num": "-25",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "2",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_dense_action": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "-25",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "2",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "input_norm_sq": {
+        "num": "629",
+        "den": "1"
+      },
+      "expected_action_norm_sq": {
+        "num": "629",
+        "den": "1"
+      }
+    },
+    {
+      "id": "negative-x",
+      "input": [
+        {
+          "num": "-1",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_action": [
+        {
+          "num": "7",
+          "den": "25"
+        },
+        {
+          "num": "24",
+          "den": "25"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_inverse_action": [
+        {
+          "num": "7",
+          "den": "25"
+        },
+        {
+          "num": "-24",
+          "den": "25"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_full_action_odd": [
+        {
+          "num": "7",
+          "den": "25"
+        },
+        {
+          "num": "24",
+          "den": "25"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_dense_action": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "7",
+          "den": "25"
+        },
+        {
+          "num": "24",
+          "den": "25"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "input_norm_sq": {
+        "num": "1",
+        "den": "1"
+      },
+      "expected_action_norm_sq": {
+        "num": "1",
+        "den": "1"
+      }
+    },
+    {
+      "id": "fraction-coordinates",
+      "input": [
+        {
+          "num": "1",
+          "den": "2"
+        },
+        {
+          "num": "-2",
+          "den": "3"
+        },
+        {
+          "num": "3",
+          "den": "4"
+        }
+      ],
+      "expected_action": [
+        {
+          "num": "-39",
+          "den": "50"
+        },
+        {
+          "num": "-22",
+          "den": "75"
+        },
+        {
+          "num": "3",
+          "den": "4"
+        }
+      ],
+      "expected_inverse_action": [
+        {
+          "num": "1",
+          "den": "2"
+        },
+        {
+          "num": "2",
+          "den": "3"
+        },
+        {
+          "num": "3",
+          "den": "4"
+        }
+      ],
+      "expected_full_action_odd": [
+        {
+          "num": "-39",
+          "den": "50"
+        },
+        {
+          "num": "-22",
+          "den": "75"
+        },
+        {
+          "num": "3",
+          "den": "4"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_dense_action": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "-39",
+          "den": "50"
+        },
+        {
+          "num": "-22",
+          "den": "75"
+        },
+        {
+          "num": "3",
+          "den": "4"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "input_norm_sq": {
+        "num": "181",
+        "den": "144"
+      },
+      "expected_action_norm_sq": {
+        "num": "181",
+        "den": "144"
+      }
+    },
+    {
+      "id": "small-fractions",
+      "input": [
+        {
+          "num": "1",
+          "den": "625"
+        },
+        {
+          "num": "-2",
+          "den": "125"
+        },
+        {
+          "num": "3",
+          "den": "25"
+        }
+      ],
+      "expected_action": [
+        {
+          "num": "-247",
+          "den": "15625"
+        },
+        {
+          "num": "46",
+          "den": "15625"
+        },
+        {
+          "num": "3",
+          "den": "25"
+        }
+      ],
+      "expected_inverse_action": [
+        {
+          "num": "233",
+          "den": "15625"
+        },
+        {
+          "num": "94",
+          "den": "15625"
+        },
+        {
+          "num": "3",
+          "den": "25"
+        }
+      ],
+      "expected_full_action_odd": [
+        {
+          "num": "-247",
+          "den": "15625"
+        },
+        {
+          "num": "46",
+          "den": "15625"
+        },
+        {
+          "num": "3",
+          "den": "25"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_dense_action": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "-247",
+          "den": "15625"
+        },
+        {
+          "num": "46",
+          "den": "15625"
+        },
+        {
+          "num": "3",
+          "den": "25"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "input_norm_sq": {
+        "num": "5726",
+        "den": "390625"
+      },
+      "expected_action_norm_sq": {
+        "num": "5726",
+        "den": "390625"
+      }
+    },
+    {
+      "id": "mixed-signs",
+      "input": [
+        {
+          "num": "-4",
+          "den": "7"
+        },
+        {
+          "num": "5",
+          "den": "9"
+        },
+        {
+          "num": "-6",
+          "den": "11"
+        }
+      ],
+      "expected_action": [
+        {
+          "num": "52",
+          "den": "75"
+        },
+        {
+          "num": "619",
+          "den": "1575"
+        },
+        {
+          "num": "-6",
+          "den": "11"
+        }
+      ],
+      "expected_inverse_action": [
+        {
+          "num": "-28",
+          "den": "75"
+        },
+        {
+          "num": "-1109",
+          "den": "1575"
+        },
+        {
+          "num": "-6",
+          "den": "11"
+        }
+      ],
+      "expected_full_action_odd": [
+        {
+          "num": "52",
+          "den": "75"
+        },
+        {
+          "num": "619",
+          "den": "1575"
+        },
+        {
+          "num": "-6",
+          "den": "11"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "expected_dense_action": [
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "52",
+          "den": "75"
+        },
+        {
+          "num": "619",
+          "den": "1575"
+        },
+        {
+          "num": "-6",
+          "den": "11"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        },
+        {
+          "num": "0",
+          "den": "1"
+        }
+      ],
+      "input_norm_sq": {
+        "num": "447925",
+        "den": "480249"
+      },
+      "expected_action_norm_sq": {
+        "num": "447925",
+        "den": "480249"
+      }
+    }
+  ]
+}

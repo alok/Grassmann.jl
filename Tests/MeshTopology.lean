@@ -4,6 +4,7 @@ import Tests.MeshTopology.Simplex
 import Tests.MeshTopology.Lagrange
 import Tests.MeshTopology.Properties
 import Tests.MeshTopology.Static
+import Tests.MeshTopology.Obj
 
 /-!
 MeshTopology test aggregator.
@@ -37,6 +38,7 @@ def run : IO (Nat × Nat) := do
     Simplex.run
     Lagrange.run
     Properties.run
+    Obj.run
   let mut skipped := 0
   for f in ["misc", "product", "quotient", "cross", "simplex", "lagrange"] do
     skipped := skipped + bothErrors (← readJson s!"oracle/golden/meshtopology/{f}.json")

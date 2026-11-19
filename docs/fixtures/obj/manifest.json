@@ -1,0 +1,1491 @@
+{
+  "schema": "grassmann-obj-profile-fixtures-v1",
+  "baseline": "47dbb351e5bf712cb96f42acdb15e9a0a548c3dc",
+  "provenance": "New authored fixtures; exact valid expectations independently computed with Python fractions.Fraction and unbounded int. No Julia oracle, external CAD importer, or solid certificate claim.",
+  "format_source": "Wavefront Advanced Visualizer manual appendix B1; https://www.martinreddy.net/gfx/3d/OBJ.spec",
+  "cases": [
+    {
+      "file": "triangle.obj",
+      "sha256": "2e9f474cfd058684c3a74e217c798c871fe51495a13c1e2989c4579022cbcb16",
+      "valid": true,
+      "vertices": [
+        {
+          "tokens": [
+            "0",
+            "0",
+            "0"
+          ],
+          "line": 2,
+          "point": [
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "1",
+            "0",
+            "0"
+          ],
+          "line": 3,
+          "point": [
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "0",
+            "1",
+            "0"
+          ],
+          "line": 4,
+          "point": [
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        }
+      ],
+      "faces": [
+        {
+          "tokens": [
+            "1",
+            "2",
+            "3"
+          ],
+          "line": 5,
+          "ids": [
+            1,
+            2,
+            3
+          ]
+        }
+      ],
+      "triangles": [
+        [
+          1,
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "file": "quad.obj",
+      "sha256": "210c86f3c2ea8ebf9c30b02746d1fb043365adc41fba8eeedfccbbdbb64424d4",
+      "valid": true,
+      "vertices": [
+        {
+          "tokens": [
+            "0",
+            "0",
+            "0"
+          ],
+          "line": 1,
+          "point": [
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "1",
+            "0",
+            "0"
+          ],
+          "line": 2,
+          "point": [
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "1",
+            "1",
+            "0"
+          ],
+          "line": 3,
+          "point": [
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "0",
+            "1",
+            "0"
+          ],
+          "line": 4,
+          "point": [
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        }
+      ],
+      "faces": [
+        {
+          "tokens": [
+            "+01",
+            "+2",
+            "-2",
+            "-1"
+          ],
+          "line": 5,
+          "ids": [
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "triangles": [
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          1,
+          3,
+          4
+        ]
+      ]
+    },
+    {
+      "file": "clockwise.obj",
+      "sha256": "05e8b90dc0b809777738254a3347a5b6ade91a3c18455a44aca1b75a4d3ad8bc",
+      "valid": true,
+      "vertices": [
+        {
+          "tokens": [
+            "0",
+            "0",
+            "0"
+          ],
+          "line": 1,
+          "point": [
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "1",
+            "0",
+            "0"
+          ],
+          "line": 2,
+          "point": [
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "1",
+            "1",
+            "0"
+          ],
+          "line": 3,
+          "point": [
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "0",
+            "1",
+            "0"
+          ],
+          "line": 4,
+          "point": [
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        }
+      ],
+      "faces": [
+        {
+          "tokens": [
+            "4",
+            "3",
+            "2",
+            "1"
+          ],
+          "line": 5,
+          "ids": [
+            4,
+            3,
+            2,
+            1
+          ]
+        }
+      ],
+      "triangles": [
+        [
+          4,
+          3,
+          2
+        ],
+        [
+          4,
+          2,
+          1
+        ]
+      ]
+    },
+    {
+      "file": "mixed-unused.obj",
+      "sha256": "9af6047155548dd0a4f55563c84026b1c8fb1c07c2437d0c963d29b8bd3f78c8",
+      "valid": true,
+      "vertices": [
+        {
+          "tokens": [
+            "0",
+            "0",
+            "0"
+          ],
+          "line": 1,
+          "point": [
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "1",
+            "0",
+            "0"
+          ],
+          "line": 2,
+          "point": [
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "1",
+            "1",
+            "0"
+          ],
+          "line": 3,
+          "point": [
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "0",
+            "1",
+            "0"
+          ],
+          "line": 4,
+          "point": [
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "9",
+            "9",
+            "9"
+          ],
+          "line": 5,
+          "point": [
+            {
+              "num": "9",
+              "den": "1"
+            },
+            {
+              "num": "9",
+              "den": "1"
+            },
+            {
+              "num": "9",
+              "den": "1"
+            }
+          ]
+        }
+      ],
+      "faces": [
+        {
+          "tokens": [
+            "1",
+            "2",
+            "3"
+          ],
+          "line": 6,
+          "ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "tokens": [
+            "1",
+            "2",
+            "3",
+            "4"
+          ],
+          "line": 7,
+          "ids": [
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "triangles": [
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          1,
+          3,
+          4
+        ]
+      ]
+    },
+    {
+      "file": "interleaved-relative.obj",
+      "sha256": "a5c3de6aee6df5be530a6b9542bcd49d5a0f9d654d863577ad7b5d310b02f9e6",
+      "valid": true,
+      "vertices": [
+        {
+          "tokens": [
+            "0",
+            "0",
+            "0"
+          ],
+          "line": 1,
+          "point": [
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "1",
+            "0",
+            "0"
+          ],
+          "line": 2,
+          "point": [
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "0",
+            "1",
+            "0"
+          ],
+          "line": 3,
+          "point": [
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "1",
+            "1",
+            "0"
+          ],
+          "line": 5,
+          "point": [
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        }
+      ],
+      "faces": [
+        {
+          "tokens": [
+            "-3",
+            "-2",
+            "-1"
+          ],
+          "line": 4,
+          "ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "tokens": [
+            "-3",
+            "-1",
+            "-2"
+          ],
+          "line": 6,
+          "ids": [
+            2,
+            4,
+            3
+          ]
+        }
+      ],
+      "triangles": [
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          2,
+          4,
+          3
+        ]
+      ]
+    },
+    {
+      "file": "tilted-quad.obj",
+      "sha256": "2a19efbb4c1cec6d746069fc8701a058c3b56e6f9fcbdb69110a2d6d98bd92b8",
+      "valid": true,
+      "vertices": [
+        {
+          "tokens": [
+            "0",
+            "0",
+            "0"
+          ],
+          "line": 1,
+          "point": [
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "1",
+            "0",
+            "1"
+          ],
+          "line": 2,
+          "point": [
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "1",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "1",
+            "1",
+            "2"
+          ],
+          "line": 3,
+          "point": [
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "2",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "0",
+            "1",
+            "1"
+          ],
+          "line": 4,
+          "point": [
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "1",
+              "den": "1"
+            }
+          ]
+        }
+      ],
+      "faces": [
+        {
+          "tokens": [
+            "1",
+            "2",
+            "3",
+            "4"
+          ],
+          "line": 5,
+          "ids": [
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "triangles": [
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          1,
+          3,
+          4
+        ]
+      ]
+    },
+    {
+      "file": "precision.obj",
+      "sha256": "0f6241d23ef27799fe51c313d222250bc7721a909a641fa35afcfae184b9bc5a",
+      "valid": true,
+      "vertices": [
+        {
+          "tokens": [
+            "9007199254740992",
+            "-0.000",
+            "+.5e+1"
+          ],
+          "line": 1,
+          "point": [
+            {
+              "num": "9007199254740992",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "5",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "9007199254740993",
+            "0",
+            "5"
+          ],
+          "line": 2,
+          "point": [
+            {
+              "num": "9007199254740993",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "5",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "9007199254740992",
+            "1.e-19",
+            "5"
+          ],
+          "line": 3,
+          "point": [
+            {
+              "num": "9007199254740992",
+              "den": "1"
+            },
+            {
+              "num": "1",
+              "den": "10000000000000000000"
+            },
+            {
+              "num": "5",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "340282366920938463463374607431768211457",
+            "+1e2",
+            "-.25000"
+          ],
+          "line": 5,
+          "point": [
+            {
+              "num": "340282366920938463463374607431768211457",
+              "den": "1"
+            },
+            {
+              "num": "100",
+              "den": "1"
+            },
+            {
+              "num": "-1",
+              "den": "4"
+            }
+          ]
+        }
+      ],
+      "faces": [
+        {
+          "tokens": [
+            "1",
+            "2",
+            "3"
+          ],
+          "line": 4,
+          "ids": [
+            1,
+            2,
+            3
+          ]
+        }
+      ],
+      "triangles": [
+        [
+          1,
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "file": "comments-crlf.obj",
+      "sha256": "0c0779a19e4b2fad90d33a28c6700e66acaf2e647787518807bc39838ad0b574",
+      "valid": true,
+      "vertices": [
+        {
+          "tokens": [
+            "0",
+            "0",
+            "0"
+          ],
+          "line": 2,
+          "point": [
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "1",
+            "0",
+            "0"
+          ],
+          "line": 3,
+          "point": [
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "0",
+            "1",
+            "0"
+          ],
+          "line": 4,
+          "point": [
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        }
+      ],
+      "faces": [
+        {
+          "tokens": [
+            "1",
+            "2",
+            "3"
+          ],
+          "line": 6,
+          "ids": [
+            1,
+            2,
+            3
+          ]
+        }
+      ],
+      "triangles": [
+        [
+          1,
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "file": "duplicate-faces.obj",
+      "sha256": "c65be1d46a1fabcf20ee89f58d4d12a34b47cc123e3a0018ed1ef318896f6d77",
+      "valid": true,
+      "vertices": [
+        {
+          "tokens": [
+            "0",
+            "0",
+            "0"
+          ],
+          "line": 1,
+          "point": [
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "1",
+            "0",
+            "0"
+          ],
+          "line": 2,
+          "point": [
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        },
+        {
+          "tokens": [
+            "0",
+            "1",
+            "0"
+          ],
+          "line": 3,
+          "point": [
+            {
+              "num": "0",
+              "den": "1"
+            },
+            {
+              "num": "1",
+              "den": "1"
+            },
+            {
+              "num": "0",
+              "den": "1"
+            }
+          ]
+        }
+      ],
+      "faces": [
+        {
+          "tokens": [
+            "1",
+            "2",
+            "3"
+          ],
+          "line": 4,
+          "ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "tokens": [
+            "1",
+            "2",
+            "3"
+          ],
+          "line": 5,
+          "ids": [
+            1,
+            2,
+            3
+          ]
+        }
+      ],
+      "triangles": [
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          1,
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "file": "empty.obj",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "valid": false,
+      "error_kind": "emptyMesh",
+      "error_line": 1
+    },
+    {
+      "file": "comments-only.obj",
+      "sha256": "bb8271bfa8890cd8e0d55638f2350c7a93881fc543edbbdf4b3872cc4294e1da",
+      "valid": false,
+      "error_kind": "emptyMesh",
+      "error_line": 1
+    },
+    {
+      "file": "no-faces.obj",
+      "sha256": "8309729cb3b717bc5025d35867587ba9183b4c15843be618b581752117fe98fb",
+      "valid": false,
+      "error_kind": "emptyMesh",
+      "error_line": 1
+    },
+    {
+      "file": "no-vertices.obj",
+      "sha256": "60d33299fe008bbf0f48e20a84599b482b502343647f119b7a55fcd4ee7c3363",
+      "valid": false,
+      "error_kind": "indexRange",
+      "error_line": 1
+    },
+    {
+      "file": "zero.obj",
+      "sha256": "ebfccfbb075387fc06e9f66befb1c44262b2417efaa42fa5625663777e03a014",
+      "valid": false,
+      "error_kind": "indexRange",
+      "error_line": 4
+    },
+    {
+      "file": "negative-zero.obj",
+      "sha256": "bb1d8246de0931f7ca2921f16f1b7208aa79eeb5c3433618a5ab7e17aedf25de",
+      "valid": false,
+      "error_kind": "indexRange",
+      "error_line": 4
+    },
+    {
+      "file": "positive-zero.obj",
+      "sha256": "4d854463447ffa3c63a0223231cb63aa5ab3311b728de7e6072eac9d2591e51b",
+      "valid": false,
+      "error_kind": "indexRange",
+      "error_line": 4
+    },
+    {
+      "file": "out-of-range.obj",
+      "sha256": "fccad1c0581497100d0cb72c8aec22f3efea0e088952512b199d0f7108dbb9b8",
+      "valid": false,
+      "error_kind": "indexRange",
+      "error_line": 4
+    },
+    {
+      "file": "relative-out-of-range.obj",
+      "sha256": "5c3b50e10b59a3f7a966d7c7d283c13b5d0245ee80ebb6746be3c3ebf41223e9",
+      "valid": false,
+      "error_kind": "indexRange",
+      "error_line": 4
+    },
+    {
+      "file": "forward-reference.obj",
+      "sha256": "1a04072118a0979c1bf1b5665f66e1db1260afdd499f1cac02e5cbd033486e69",
+      "valid": false,
+      "error_kind": "indexRange",
+      "error_line": 4
+    },
+    {
+      "file": "huge64.obj",
+      "sha256": "f0382427e9f71795b46643955bd862cd4f28159e36b4762d1c4a463f9ffebf7e",
+      "valid": false,
+      "error_kind": "indexRange",
+      "error_line": 4
+    },
+    {
+      "file": "huge128.obj",
+      "sha256": "bae37e1fd9327531977470873f1c1d2c44b536a597386b0699c3fa779297c8ee",
+      "valid": false,
+      "error_kind": "indexRange",
+      "error_line": 4
+    },
+    {
+      "file": "huge-negative.obj",
+      "sha256": "e3c414228473d48a6fe88fea6ce15ec0836e0e3b4ada3c76725b3e7934d93e51",
+      "valid": false,
+      "error_kind": "indexRange",
+      "error_line": 4
+    },
+    {
+      "file": "underscore-index.obj",
+      "sha256": "faa75ce3e5cab2839e97375bdcdf8a80232eeba6d70dcf8bcf5c2bdb9537cc3d",
+      "valid": false,
+      "error_kind": "syntax",
+      "error_line": 4
+    },
+    {
+      "file": "hex-index.obj",
+      "sha256": "c6769ed7e39f3a8444f4c5d0427046935bbb49df936091a8a5954b1a87cb4e75",
+      "valid": false,
+      "error_kind": "syntax",
+      "error_line": 4
+    },
+    {
+      "file": "fraction-index.obj",
+      "sha256": "aa9054e6daa2a868c730061c3eecc1858b8a2cfc8e09098ee9cc6176f4b8702f",
+      "valid": false,
+      "error_kind": "syntax",
+      "error_line": 4
+    },
+    {
+      "file": "sign-index.obj",
+      "sha256": "ba6bcf1da551e962ea972b3602ce2131f97dff3a3967a19d8ed4ddf5fd19df6f",
+      "valid": false,
+      "error_kind": "syntax",
+      "error_line": 4
+    },
+    {
+      "file": "texture-index.obj",
+      "sha256": "5f775125a84329e59b3679b8f94dd8ca7c82b9258f431e2e467de8cb83b7f4b2",
+      "valid": false,
+      "error_kind": "unsupportedIndex",
+      "error_line": 4
+    },
+    {
+      "file": "normal-index.obj",
+      "sha256": "de8cdf31fce47c257ab21aafc0ec0417de93f54692dd8eb23747a64564cc0873",
+      "valid": false,
+      "error_kind": "unsupportedIndex",
+      "error_line": 4
+    },
+    {
+      "file": "vertex-weight.obj",
+      "sha256": "974c6d4f1975bf0695d21741dabc4267dbe59cce426fca11f88f30aecd8506b3",
+      "valid": false,
+      "error_kind": "unsupportedVertex",
+      "error_line": 1
+    },
+    {
+      "file": "vertex-color.obj",
+      "sha256": "a3e6c6bc5997e8a9d0de0ba124094d33a0854d8480d695ed6a15978c856699c1",
+      "valid": false,
+      "error_kind": "unsupportedVertex",
+      "error_line": 1
+    },
+    {
+      "file": "short-vertex.obj",
+      "sha256": "daf4f779ff5c1260c26878e1e8b8621169c15565a123c457721b0b9a2a3df343",
+      "valid": false,
+      "error_kind": "unsupportedVertex",
+      "error_line": 1
+    },
+    {
+      "file": "short-face.obj",
+      "sha256": "32a4275889b6d6d5f08b0a28d48deacd90e6279a1aa06e8d372d4a7b9e1aa9d3",
+      "valid": false,
+      "error_kind": "unsupportedFace",
+      "error_line": 4
+    },
+    {
+      "file": "pentagon.obj",
+      "sha256": "ba2e2b8ad85d639240082087a4c8077f7bb52b61168638424e9b714e7cca661e",
+      "valid": false,
+      "error_kind": "unsupportedFace",
+      "error_line": 6
+    },
+    {
+      "file": "coordinate-dot.obj",
+      "sha256": "b7df67ef91899bed156b86477f51936896db99d8af77705631daebfedb029f3f",
+      "valid": false,
+      "error_kind": "coordinate",
+      "error_line": 1
+    },
+    {
+      "file": "coordinate-double-dot.obj",
+      "sha256": "9d558f3034b08e101d721bf3e69285e60a2fd739c950cd01c17a36c236796385",
+      "valid": false,
+      "error_kind": "coordinate",
+      "error_line": 1
+    },
+    {
+      "file": "coordinate-exponent.obj",
+      "sha256": "439d947378a1bf2f123bfcfa13c010cba3b2d94bd68d5c9885e4c65d4404ce20",
+      "valid": false,
+      "error_kind": "coordinate",
+      "error_line": 1
+    },
+    {
+      "file": "coordinate-nan.obj",
+      "sha256": "8159f01c74a7039f278d39073c2ea0a312c85db639b82b0244e2b406cdd94d17",
+      "valid": false,
+      "error_kind": "coordinate",
+      "error_line": 1
+    },
+    {
+      "file": "coordinate-inf.obj",
+      "sha256": "b4450e6168118895575f71846bc6248623afa49a550dcbbff25f3ad8400a097a",
+      "valid": false,
+      "error_kind": "coordinate",
+      "error_line": 1
+    },
+    {
+      "file": "coordinate-range.obj",
+      "sha256": "34e9762d2c3f08b63664afa64755f317548a9ada86f5562fa8bdc3383cebc654",
+      "valid": false,
+      "error_kind": "coordinateRange",
+      "error_line": 1
+    },
+    {
+      "file": "coordinate-small-range.obj",
+      "sha256": "ae0641e8009f316455c1f20a11d86cb418b6a334729979a2a7c349866967df57",
+      "valid": false,
+      "error_kind": "coordinateRange",
+      "error_line": 1
+    },
+    {
+      "file": "continuation.obj",
+      "sha256": "c63b94780e6b0ecae6f394a3d60d0242a1581a89aae4317d7e7e67bd0a9351df",
+      "valid": false,
+      "error_kind": "unsupportedContinuation",
+      "error_line": 4
+    },
+    {
+      "file": "unicode.obj",
+      "sha256": "d78839612f9f481b6f07f8ff365b8905060329f6dd55e0bd2c57e1afa8317483",
+      "valid": false,
+      "error_kind": "nonAscii",
+      "error_line": 1
+    },
+    {
+      "file": "embedded-cr.obj",
+      "sha256": "833eddd5116829564b7fa74b970b80db71d04bcce3c79b74c4782608a2116ca2",
+      "valid": false,
+      "error_kind": "nonAscii",
+      "error_line": 1
+    },
+    {
+      "file": "repeated.obj",
+      "sha256": "1a8893379945482b03a292bfccc652834c5aa1da3a0fa81b05118f780474231b",
+      "valid": false,
+      "error_kind": "degenerate",
+      "error_line": 4
+    },
+    {
+      "file": "collinear.obj",
+      "sha256": "c0c2ffdc041acd10834989b8da29fbb404cacaa3490edd52bfa0a88b2f4c7b2a",
+      "valid": false,
+      "error_kind": "degenerate",
+      "error_line": 4
+    },
+    {
+      "file": "coincident.obj",
+      "sha256": "352a88f2a91ea977934dc930e0a90f5e4da7b11d44d4a8895e00df1550745d75",
+      "valid": false,
+      "error_kind": "degenerate",
+      "error_line": 4
+    },
+    {
+      "file": "quad-nonplanar.obj",
+      "sha256": "43fe7b39bfe23c08d743757a03105353ea335602c5630fc29f16c2fbf20d83d4",
+      "valid": false,
+      "error_kind": "nonPlanarQuad",
+      "error_line": 5
+    },
+    {
+      "file": "quad-concave.obj",
+      "sha256": "3d381125b1bd1dc79345da2d0cd591fe54fc740b80936ae283b5a23843cb2cc5",
+      "valid": false,
+      "error_kind": "nonConvexQuad",
+      "error_line": 5
+    },
+    {
+      "file": "quad-crossed.obj",
+      "sha256": "f4294a7cfbeb0f90137fc28525d7b28e57f9a5ae29afa981166fae5f5fca9450",
+      "valid": false,
+      "error_kind": "nonConvexQuad",
+      "error_line": 5
+    },
+    {
+      "file": "quad-straight-turn.obj",
+      "sha256": "0b7fe8f88e72eff7dc9aee36573e7a9e3cbbae1cf8979056d64e750f304aff10",
+      "valid": false,
+      "error_kind": "nonConvexQuad",
+      "error_line": 5
+    },
+    {
+      "file": "quad-repeated.obj",
+      "sha256": "dfd3f6fc473cfdd5d9d1f758b97fee5e4af213c40f4768c18631259cca1b2739",
+      "valid": false,
+      "error_kind": "nonConvexQuad",
+      "error_line": 5
+    },
+    {
+      "file": "first-error.obj",
+      "sha256": "d6d01668c63c52764bcabfca415eee1163e8213082830e3ff1bdee45d1931906",
+      "valid": false,
+      "error_kind": "indexRange",
+      "error_line": 4
+    },
+    {
+      "file": "record-o.obj",
+      "sha256": "cd0ee0190b0c74752e8708e1bbbf9b95d98504ab3155fe74e236b66b10a627f7",
+      "valid": false,
+      "error_kind": "unsupportedRecord",
+      "error_line": 1
+    },
+    {
+      "file": "record-g.obj",
+      "sha256": "d0140fd5b77610ad5c874fe81ab7216e6a4adfc582f333f53af285da7bdaba91",
+      "valid": false,
+      "error_kind": "unsupportedRecord",
+      "error_line": 1
+    },
+    {
+      "file": "record-s.obj",
+      "sha256": "48c1234fffa7de22cd9e87cd29b96ee96d2fae053e6b688aad94a5cda4b13745",
+      "valid": false,
+      "error_kind": "unsupportedRecord",
+      "error_line": 1
+    },
+    {
+      "file": "record-vt.obj",
+      "sha256": "da26edc4b3431db36efbc03d1c6f6f2c5b761a067f8f035ff17c00433aa74bd1",
+      "valid": false,
+      "error_kind": "unsupportedRecord",
+      "error_line": 1
+    },
+    {
+      "file": "record-vn.obj",
+      "sha256": "812bb8f211601c9003709750237a2431e373c64e30658367420f1ebcec0c4ba6",
+      "valid": false,
+      "error_kind": "unsupportedRecord",
+      "error_line": 1
+    },
+    {
+      "file": "record-vp.obj",
+      "sha256": "76d0e1a05797be86722f04c598c3b300c47395489f63fd07bd4c14e1176da367",
+      "valid": false,
+      "error_kind": "unsupportedRecord",
+      "error_line": 1
+    },
+    {
+      "file": "record-usemtl.obj",
+      "sha256": "7ae14673460ebf30b39529b35026915838cd616e8319dc2bd298c7009f0f2115",
+      "valid": false,
+      "error_kind": "unsupportedRecord",
+      "error_line": 1
+    },
+    {
+      "file": "record-mtllib.obj",
+      "sha256": "c8529dde0b94f9d1a32c6511ed4512608f5f108146b5b2a56c0d469705ae0a41",
+      "valid": false,
+      "error_kind": "unsupportedRecord",
+      "error_line": 1
+    },
+    {
+      "file": "record-l.obj",
+      "sha256": "2f39846452c252743e0a31bbf0871348ad85e78f890e67a4b02c37bb6d61ea52",
+      "valid": false,
+      "error_kind": "unsupportedRecord",
+      "error_line": 1
+    },
+    {
+      "file": "record-p.obj",
+      "sha256": "e0719de89b89d54306db98d05f1568f49c06427b17b0eab00c95382d2297f31f",
+      "valid": false,
+      "error_kind": "unsupportedRecord",
+      "error_line": 1
+    },
+    {
+      "file": "record-surf.obj",
+      "sha256": "ec1b5c44bb3fed5ffe5b250aebc64240a8f4fe94273a339bb64b54e4c3ecc411",
+      "valid": false,
+      "error_kind": "unsupportedRecord",
+      "error_line": 1
+    },
+    {
+      "file": "record-call.obj",
+      "sha256": "13fb998726b505e94b63e7fbe16d064554b7262d9e529be39f7d3d826bdc8f8c",
+      "valid": false,
+      "error_kind": "unsupportedRecord",
+      "error_line": 1
+    },
+    {
+      "file": "record-csh.obj",
+      "sha256": "396ea147fd7d77efac867a0ae389b0927d967ec729fedf6867e9de2cd35485ce",
+      "valid": false,
+      "error_kind": "unsupportedRecord",
+      "error_line": 1
+    }
+  ]
+}
