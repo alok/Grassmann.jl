@@ -1407,28 +1407,248 @@ lean_object *l_Pi_instInhabited___redArg___lam__0(b_lean_obj_arg def_val, lean_o
   return def_val;
 }
 
-/* Repr / Format / Rat stubs referenced only from deriving instances */
-lean_object *l_Char_quote(uint32_t c) { (void)c; return lean_mk_string_from_bytes("''", 2); }
-lean_object *l_Float_repr(double d, lean_obj_arg p) { lean_dec(p); return lean_float_to_string(d); }
-lean_object *l_Int_repr(lean_obj_arg x) { lean_dec(x); return lean_mk_string_from_bytes("0", 1); }
-lean_object *l_String_quote(b_lean_obj_arg s) { lean_inc(s); return s; }
-lean_object *l_Repr_addAppParen(lean_obj_arg f, lean_obj_arg p) { lean_dec(p); return f; }
-lean_object *l_Std_Format_pretty(lean_obj_arg f, lean_obj_arg w, lean_obj_arg i, lean_obj_arg c) {
-  lean_dec(f); lean_dec(w); lean_dec(i); lean_dec(c);
-  return lean_mk_string_from_bytes("", 0);
+/* Signed 64-bit Big Int helpers (used by l_Int_repr, l_Rat_*, lean_int_big_*) */
+lean_object *l_Int_instInhabited = (lean_object *)(size_t)1; /* lean_box(0) */
+
+static inline int64_t int_to_i64(b_lean_obj_arg o) {
+  if (lean_is_scalar(o)) {
+    return lean_scalar_to_int64(o);
+  }
+  return (int64_t)((const wasm_bignat_object *)o)->m_val;
 }
-lean_object *l_Nat_cast___at___00Dyadic_toRat_spec__0(lean_obj_arg n) {
+
+static inline lean_obj_res i64_to_int(int64_t v) {
+  if (LEAN_MIN_SMALL_INT <= v && v <= LEAN_MAX_SMALL_INT) {
+    return lean_box((unsigned)((int)v));
+  }
+  return alloc_bignat((uint64_t)v, (double)v);
+}
+
+/* Exact Repr / Format / Rat runtime implementations (verified against Lean 4.36 IR ownership) */
+lean_obj_res l_Int_repr(b_lean_obj_arg x) {
+  int64_t v = int_to_i64(x);
+  char buf[32];
+  int len = snprintf(buf, sizeof(buf), "%lld", (long long)v);
+  return mk_ascii_string(buf, (size_t)(len > 0 ? len : 0));
+}
+
+lean_obj_res l_Char_quote(uint32_t c) {
+  char buf[16];
+  int len = 0;
+  if (c == '\n') len = snprintf(buf, sizeof(buf), "'\\n'");
+  else if (c == '\t') len = snprintf(buf, sizeof(buf), "'\\t'");
+  else if (c == '\r') len = snprintf(buf, sizeof(buf), "'\\r'");
+  else if (c == '\\') len = snprintf(buf, sizeof(buf), "'\\\\'");
+  else if (c == '\'') len = snprintf(buf, sizeof(buf), "'\\''");
+  else if (c >= 32u && c < 127u) len = snprintf(buf, sizeof(buf), "'%c'", (char)c);
+  else len = snprintf(buf, sizeof(buf), "'\\u%04x'", (unsigned)c);
+  return mk_ascii_string(buf, (size_t)(len > 0 ? len : 0));
+}
+
+lean_obj_res l_Float_repr(double d, b_lean_obj_arg p) {
+  (void)p;
+  lean_object *s = lean_float_to_string(d);
+  lean_object *f = lean_alloc_ctor(3, 1, 0); /* Std.Format.text */
+  lean_ctor_set(f, 0, s);
+  return f;
+}
+
+lean_obj_res l_String_quote(lean_obj_arg s) {
+  const char *src = lean_string_cstr(s);
+  size_t sz = lean_string_size(s) - 1;
+  size_t cap = sz * 2 + 4;
+  char *buf = (char *)malloc(cap);
+  if (!buf) abort();
+  size_t out = 0;
+  buf[out++] = '"';
+  for (size_t i = 0; i < sz; ++i) {
+    unsigned char ch = (unsigned char)src[i];
+    if (ch == '"' || ch == '\\') { buf[out++] = '\\'; buf[out++] = (char)ch; }
+    else if (ch == '\n') { buf[out++] = '\\'; buf[out++] = 'n'; }
+    else if (ch == '\r') { buf[out++] = '\\'; buf[out++] = 'r'; }
+    else if (ch == '\t') { buf[out++] = '\\'; buf[out++] = 't'; }
+    else { buf[out++] = (char)ch; }
+  }
+  buf[out++] = '"';
+  lean_object *res = lean_mk_string_from_bytes(buf, out);
+  free(buf);
+  lean_dec(s);
+  return res;
+}
+
+lean_obj_res l_Repr_addAppParen(lean_obj_arg f, b_lean_obj_arg p) {
+  if (nat_to_u64(p) < 1024ULL) return f;
+  lean_object *lp = lean_alloc_ctor(3, 1, 0);
+  lean_ctor_set(lp, 0, mk_ascii_string("(", 1));
+  lean_object *rp = lean_alloc_ctor(3, 1, 0);
+  lean_ctor_set(rp, 0, mk_ascii_string(")", 1));
+  lean_object *a1 = lean_alloc_ctor(5, 2, 0); /* Std.Format.append */
+  lean_ctor_set(a1, 0, lp);
+  lean_ctor_set(a1, 1, f);
+  lean_object *a2 = lean_alloc_ctor(5, 2, 0);
+  lean_ctor_set(a2, 0, a1);
+  lean_ctor_set(a2, 1, rp);
+  return a2;
+}
+
+typedef struct {
+  char *data;
+  size_t len;
+  size_t cap;
+} wasm_fmt_buf;
+
+static void fmt_buf_push(wasm_fmt_buf *b, const char *s, size_t n) {
+  if (n == 0) return;
+  if (b->len + n > b->cap) {
+    size_t ncap = b->cap ? b->cap * 2 : 128;
+    while (ncap < b->len + n) ncap *= 2;
+    char *nd = (char *)realloc(b->data, ncap);
+    if (!nd) abort();
+    b->data = nd;
+    b->cap = ncap;
+  }
+  memcpy(b->data + b->len, s, n);
+  b->len += n;
+}
+
+static void fmt_flatten(b_lean_obj_arg f, wasm_fmt_buf *b, int depth) {
+  if (depth > 256) return;
+  if (lean_is_scalar(f)) {
+    size_t tag = lean_unbox(f);
+    if (tag == 1) fmt_buf_push(b, " ", 1); /* Std.Format.line */
+    return;
+  }
+  unsigned tag = lean_obj_tag(f);
+  switch (tag) {
+    case 2: /* Std.Format.align */
+      fmt_buf_push(b, " ", 1);
+      break;
+    case 3: { /* Std.Format.text (s : String) */
+      b_lean_obj_arg s = lean_ctor_get(f, 0);
+      fmt_buf_push(b, lean_string_cstr(s), lean_string_size(s) - 1);
+      break;
+    }
+    case 4: /* Std.Format.nest (indent : Int) (f : Format) */
+      fmt_flatten(lean_ctor_get(f, 1), b, depth + 1);
+      break;
+    case 5: /* Std.Format.append (f1 f2 : Format) */
+      fmt_flatten(lean_ctor_get(f, 0), b, depth + 1);
+      fmt_flatten(lean_ctor_get(f, 1), b, depth + 1);
+      break;
+    case 6: /* Std.Format.group (f : Format) (behavior : FlattenBehavior) */
+      fmt_flatten(lean_ctor_get(f, 0), b, depth + 1);
+      break;
+    case 7: /* Std.Format.tag (n : Nat) (f : Format) */
+      fmt_flatten(lean_ctor_get(f, 1), b, depth + 1);
+      break;
+    default:
+      break;
+  }
+}
+
+lean_obj_res l_Std_Format_pretty(
+    lean_obj_arg f, b_lean_obj_arg w, lean_obj_arg i, lean_obj_arg c) {
+  (void)w;
+  wasm_fmt_buf b = { NULL, 0, 0 };
+  fmt_flatten(f, &b, 0);
+  lean_dec(f);
+  lean_dec(i);
+  lean_dec(c);
+  lean_object *res = lean_mk_string_from_bytes(b.data ? b.data : "", b.len);
+  free(b.data);
+  return res;
+}
+
+static unsigned __int128 gcd_u128(unsigned __int128 a, unsigned __int128 b) {
+  while (b != 0) {
+    unsigned __int128 r = a % b;
+    a = b;
+    b = r;
+  }
+  return a ? a : 1;
+}
+
+static lean_obj_res make_rat_i128(__int128 num, __int128 den) {
+  if (den == 0 || num == 0) {
+    num = 0;
+    den = 1;
+  } else {
+    if (den < 0) {
+      num = -num;
+      den = -den;
+    }
+    unsigned __int128 un = (num < 0) ? (unsigned __int128)(-num) : (unsigned __int128)num;
+    unsigned __int128 ud = (unsigned __int128)den;
+    unsigned __int128 g = gcd_u128(un, ud);
+    num /= (__int128)g;
+    den /= (__int128)g;
+  }
   lean_object *r = lean_alloc_ctor(0, 2, 0);
-  lean_ctor_set(r, 0, n);
-  lean_ctor_set(r, 1, lean_box(1));
+  lean_ctor_set(r, 0, i64_to_int((int64_t)num));
+  lean_ctor_set(r, 1, u64_to_nat((uint64_t)den));
   return r;
 }
-lean_object *l_Rat_add(lean_obj_arg a, lean_obj_arg b) { lean_dec(b); return a; }
-lean_object *l_Rat_sub(lean_obj_arg a, lean_obj_arg b) { lean_dec(b); return a; }
-lean_object *l_Rat_mul(lean_obj_arg a, lean_obj_arg b) { lean_dec(b); return a; }
-lean_object *l_Rat_div(lean_obj_arg a, lean_obj_arg b) { lean_dec(b); return a; }
-lean_object *l_Rat_neg(lean_obj_arg a) { return a; }
-uint8_t l_instDecidableEqRat_decEq(b_lean_obj_arg a, b_lean_obj_arg b) { return a == b ? 1 : 0; }
+
+lean_obj_res l_Nat_cast___at___00Dyadic_toRat_spec__0(lean_obj_arg n) {
+  int64_t v = (int64_t)nat_to_u64(n);
+  lean_dec(n);
+  return make_rat_i128((__int128)v, 1);
+}
+
+lean_obj_res l_Rat_add(lean_obj_arg a, lean_obj_arg b) {
+  __int128 an = (__int128)int_to_i64(lean_ctor_get(a, 0));
+  __int128 ad = (__int128)nat_to_u64(lean_ctor_get(a, 1));
+  __int128 bn = (__int128)int_to_i64(lean_ctor_get(b, 0));
+  __int128 bd = (__int128)nat_to_u64(lean_ctor_get(b, 1));
+  lean_dec(a);
+  lean_dec(b);
+  return make_rat_i128(an * bd + bn * ad, ad * bd);
+}
+
+lean_obj_res l_Rat_sub(lean_obj_arg a, lean_obj_arg b) {
+  __int128 an = (__int128)int_to_i64(lean_ctor_get(a, 0));
+  __int128 ad = (__int128)nat_to_u64(lean_ctor_get(a, 1));
+  __int128 bn = (__int128)int_to_i64(lean_ctor_get(b, 0));
+  __int128 bd = (__int128)nat_to_u64(lean_ctor_get(b, 1));
+  lean_dec(a);
+  lean_dec(b);
+  return make_rat_i128(an * bd - bn * ad, ad * bd);
+}
+
+lean_obj_res l_Rat_mul(b_lean_obj_arg a, lean_obj_arg b) {
+  __int128 an = (__int128)int_to_i64(lean_ctor_get(a, 0));
+  __int128 ad = (__int128)nat_to_u64(lean_ctor_get(a, 1));
+  __int128 bn = (__int128)int_to_i64(lean_ctor_get(b, 0));
+  __int128 bd = (__int128)nat_to_u64(lean_ctor_get(b, 1));
+  lean_dec(b);
+  return make_rat_i128(an * bn, ad * bd);
+}
+
+lean_obj_res l_Rat_div(b_lean_obj_arg a, lean_obj_arg b) {
+  __int128 an = (__int128)int_to_i64(lean_ctor_get(a, 0));
+  __int128 ad = (__int128)nat_to_u64(lean_ctor_get(a, 1));
+  __int128 bn = (__int128)int_to_i64(lean_ctor_get(b, 0));
+  __int128 bd = (__int128)nat_to_u64(lean_ctor_get(b, 1));
+  lean_dec(b);
+  if (bn == 0) return make_rat_i128(0, 1);
+  return make_rat_i128(an * bd, ad * bn);
+}
+
+lean_obj_res l_Rat_neg(lean_obj_arg a) {
+  __int128 an = (__int128)int_to_i64(lean_ctor_get(a, 0));
+  __int128 ad = (__int128)nat_to_u64(lean_ctor_get(a, 1));
+  lean_dec(a);
+  return make_rat_i128(-an, ad);
+}
+
+uint8_t l_instDecidableEqRat_decEq(b_lean_obj_arg a, b_lean_obj_arg b) {
+  if (a == b) return 1;
+  int64_t an = int_to_i64(lean_ctor_get(a, 0));
+  uint64_t ad = nat_to_u64(lean_ctor_get(a, 1));
+  int64_t bn = int_to_i64(lean_ctor_get(b, 0));
+  uint64_t bd = nat_to_u64(lean_ctor_get(b, 1));
+  return (an == bn && ad == bd) ? 1 : 0;
+}
 
 /* Wave 3A additions: IEEE-754 Float.toBits, Nat bitwise big ops, Float DecidableEq & Bool repr */
 uint64_t lean_float_to_bits(double d) {
@@ -1456,21 +1676,6 @@ lean_object *l_Bool_repr___redArg(uint8_t b) {
 }
 
 /* Signed 64-bit Big Int + ByteArray + String UTF-8 + Panic helpers */
-lean_object *l_Int_instInhabited = (lean_object *)(size_t)1; /* lean_box(0) */
-
-static inline int64_t int_to_i64(b_lean_obj_arg o) {
-  if (lean_is_scalar(o)) {
-    return lean_scalar_to_int64(o);
-  }
-  return (int64_t)((const wasm_bignat_object *)o)->m_val;
-}
-
-static inline lean_obj_res i64_to_int(int64_t v) {
-  if (LEAN_MIN_SMALL_INT <= v && v <= LEAN_MAX_SMALL_INT) {
-    return lean_box((unsigned)((int)v));
-  }
-  return alloc_bignat((uint64_t)v, (double)v);
-}
 
 lean_object *lean_big_int_to_int(int n) { return i64_to_int((int64_t)n); }
 lean_object *lean_big_size_t_to_int(size_t n) { return i64_to_int((int64_t)n); }

@@ -114,39 +114,85 @@ def defaultUpExprs (alg : AlgSpec) : Array String :=
     (Array.range n).map fun i =>
       match i with | 0 => "x" | 1 => "y" | 2 => "z" | _ => "0.0"
 
-/-- Format a GPU float literal cleanly (`1.0`, `-0.5`, `1.000000e-7`, `1.234568e8`)
-avoiding bare integer syntax AND never truncating small nonzero float32 constants
-like `0.0000001` (`1e-7`) to `0.000000` (which fixed-6-decimal `Float.toString` does).
-Valid verbatim in GLSL 300 es, WebGPU WGSL, and Apple Metal MSL. -/
+private def digitChar (d : Nat) : Char :=
+  Char.ofNat ('0'.toNat + (d % 10))
+
+/-- Format a GPU float literal to 9 significant digits (full IEEE-754 float32
+round-trip precision, e.g. `1.0`, `-0.5`, `0.5000004`, `2.0e-7`, `1.0e8`),
+avoiding bare integer syntax, avoiding 6-decimal precision collapse
+(`0.5000004` vs `0.5000001`), and never underflowing tiny float32 constants
+(`0.0000001` → `1.0e-7`). Pure integer digit extraction guarantees byte-for-byte
+identical GLSL 300 es, WebGPU WGSL, and Apple Metal MSL across Native C ABI,
+`ga-server`, and WASM. -/
 private def fmtFloat (v : Float) : String :=
   if v.isNaN || !v.isFinite || v == 0.0 then "0.0"
   else
     let sign := if v < 0.0 then "-" else ""
-    let av0 := Float.abs v
-    if av0 >= 1e-4 && av0 < 1e7 then
-      let s := toString v
-      if s.contains '.' || s.contains 'e' || s.contains 'E' then s else s ++ ".0"
-    else
-      -- Clamp nonzero extremes to normal IEEE-754 float32 range so WGSL/GLSL/MSL
-      -- never reject oversized literals (> FLT_MAX) or flush subnormals to 0.0f (FTZ).
-      let av := max 1e-35 (min 3.4e38 av0)
-      let exp0 : Int := (Float.floor (Float.log av / Float.log 10.0)).toInt64.toInt
-      Id.run do
-        let mut exp := exp0
-        let mut mant := av / Float.pow 10.0 (Float.ofInt exp)
-        for _ in [:8] do
-          if mant >= 10.0 then
-            mant := mant / 10.0
-            exp := exp + 1
-          else if mant < 1.0 && mant > 0.0 then
-            mant := mant * 10.0
-            exp := exp - 1
-        if mant >= 9.9999995 then
-          mant := 1.0
-          exp := exp + 1
-        let ms0 := toString mant
-        let ms := if ms0.contains '.' then ms0 else ms0 ++ ".0"
-        return s!"{sign}{ms}e{exp}"
+    -- Clamp nonzero extremes to normal IEEE-754 float32 range so WGSL/GLSL/MSL
+    -- never reject oversized literals (> FLT_MAX) or flush subnormals to 0.0f (FTZ).
+    let av := max 1e-35 (min 3.4e38 (Float.abs v))
+    let exp0 : Int := (Float.floor (Float.log av / Float.log 10.0)).toInt64.toInt
+    Id.run do
+      let mut e := exp0
+      let mut m :=
+        if e < 0 then av * Float.pow 10.0 (Float.ofInt (-e))
+        else av / Float.pow 10.0 (Float.ofInt e)
+      for _ in [:8] do
+        if m >= 10.0 then
+          m := m / 10.0
+          e := e + 1
+        else if m < 1.0 && m > 0.0 then
+          m := m * 10.0
+          e := e - 1
+      let mut sc : Nat := (Float.floor (m * 100000000.0 + 0.5)).toUInt64.toNat
+      if sc >= 1000000000 then
+        sc := 100000000
+        e := e + 1
+      else if sc < 100000000 then
+        sc := 100000000
+      -- Extract 9 decimal digits msb-first (ds[0]..ds[8]) via pure Nat arithmetic.
+      let mut ds : Array Nat := Array.replicate 9 0
+      let mut tmp := sc
+      for k in [:9] do
+        ds := ds.set! (8 - k) (tmp % 10)
+        tmp := tmp / 10
+      -- Last non-zero digit index in [0..8]
+      let mut lastNz : Nat := 0
+      for k in [:9] do
+        if ds[k]! != 0 then lastNz := k
+      let mut out := sign
+      if e >= -4 && e < 7 then
+        if e >= 0 then
+          let intCount := e.toNat + 1
+          for k in [:intCount] do
+            out := out.push (digitChar ds[k]!)
+          out := out.push '.'
+          if lastNz < intCount then
+            out := out.push '0'
+          else
+            for k in [intCount:lastNz + 1] do
+              out := out.push (digitChar ds[k]!)
+        else
+          out := out ++ "0."
+          let leadZeros := ((-e).toNat) - 1
+          for _ in [:leadZeros] do
+            out := out.push '0'
+          for k in [:lastNz + 1] do
+            out := out.push (digitChar ds[k]!)
+      else
+        out := out.push (digitChar ds[0]!)
+        out := out.push '.'
+        if lastNz == 0 then
+          out := out.push '0'
+        else
+          for k in [1:lastNz + 1] do
+            out := out.push (digitChar ds[k]!)
+        out := out.push 'e'
+        if e < 0 then
+          out := out ++ s!"-{(-e).toNat}"
+        else
+          out := out ++ s!"{e.toNat}"
+      return out
 
 /-- Compute an FNV-1a 64-bit hex cache hash string for `OpnsShaderSource.hash`. -/
 private def hashShaderTag (tag : String) (payload : String) : String := Id.run do
@@ -758,7 +804,7 @@ vec2 gs_refine_min(vec3 ro, vec3 rd, float ta, float tb, float tMidInit, float g
   if (fc <= 0.0) \{ flipped = true; tFlip = gc; }
   else if (fd <= 0.0) \{ flipped = true; tFlip = gd; }
   else \{
-    for (int k = 0; k < 16; k++) \{
+    for (int k = 0; k < 32; k++) \{
       if (fc < fd) \{
         gb = gd; gd = gc; fd = fc;
         gc = gb - (gb - ga) * invPhi;
@@ -785,8 +831,14 @@ vec2 gs_refine_min(vec3 ro, vec3 rd, float ta, float tb, float tMidInit, float g
   float gMin = min(fc, fd);
   if (tMidInit > ta && gMidInit < gMin) \{ gMin = gMidInit; tMin = tMidInit; }
   float gMaxEnd = max(g0, g2);
-  if (gMaxEnd > 0.0 && gMin < g0 && gMin < g2 && gMin <= 1e-5 * gMaxEnd) \{
-    return vec2(1.0, tMin);
+  if (gMaxEnd > 0.0 && gMin < g0 && gMin < g2 && gMin <= 1e-8 * gMaxEnd) \{
+    float delta = 0.01 * (tb - ta);
+    float gL = s * eval_implicit(ro + rd * max(ta, tMin - delta));
+    float gR = s * eval_implicit(ro + rd * min(tb, tMin + delta));
+    float gLoc = max(gL, gR);
+    if (gL <= 0.0 || gR <= 0.0 || (gLoc > 0.0 && gMin <= 1e-5 * gLoc)) \{
+      return vec2(1.0, tMin);
+    }
   }
   return vec2(0.0, 0.0);
 }
@@ -987,7 +1039,7 @@ fn gs_refine_min(ro: vec3<f32>, rd: vec3<f32>, ta: f32, tb: f32, tMidInit: f32, 
   if (fc <= 0.0) \{ flipped = true; tFlip = gc; }
   else if (fd <= 0.0) \{ flipped = true; tFlip = gd; }
   else \{
-    for (var k: i32 = 0; k < 16; k = k + 1) \{
+    for (var k: i32 = 0; k < 32; k = k + 1) \{
       if (fc < fd) \{
         gb = gd; gd = gc; fd = fc;
         gc = gb - (gb - ga) * invPhi;
@@ -1014,8 +1066,14 @@ fn gs_refine_min(ro: vec3<f32>, rd: vec3<f32>, ta: f32, tb: f32, tMidInit: f32, 
   var gMin = min(fc, fd);
   if (tMidInit > ta && gMidInit < gMin) \{ gMin = gMidInit; tMin = tMidInit; }
   let gMaxEnd = max(g0, g2);
-  if (gMaxEnd > 0.0 && gMin < g0 && gMin < g2 && gMin <= 1e-5 * gMaxEnd) \{
-    return vec2<f32>(1.0, tMin);
+  if (gMaxEnd > 0.0 && gMin < g0 && gMin < g2 && gMin <= 1e-8 * gMaxEnd) \{
+    let delta = 0.01 * (tb - ta);
+    let gL = s * eval_implicit(ro + rd * max(ta, tMin - delta));
+    let gR = s * eval_implicit(ro + rd * min(tb, tMin + delta));
+    let gLoc = max(gL, gR);
+    if (gL <= 0.0 || gR <= 0.0 || (gLoc > 0.0 && gMin <= 1e-5 * gLoc)) \{
+      return vec2<f32>(1.0, tMin);
+    }
   }
   return vec2<f32>(0.0, 0.0);
 }
@@ -1215,7 +1273,7 @@ inline float2 gs_refine_min(float3 ro, float3 rd, float simTime, float ta, float
   if (fc <= 0.0f) \{ flipped = true; tFlip = gc; }
   else if (fd <= 0.0f) \{ flipped = true; tFlip = gd; }
   else \{
-    for (int k = 0; k < 16; ++k) \{
+    for (int k = 0; k < 32; ++k) \{
       if (fc < fd) \{
         gb = gd; gd = gc; fd = fc;
         gc = gb - (gb - ga) * invPhi;
@@ -1242,8 +1300,14 @@ inline float2 gs_refine_min(float3 ro, float3 rd, float simTime, float ta, float
   float gMin = min(fc, fd);
   if (tMidInit > ta && gMidInit < gMin) \{ gMin = gMidInit; tMin = tMidInit; }
   float gMaxEnd = max(g0, g2);
-  if (gMaxEnd > 0.0f && gMin < g0 && gMin < g2 && gMin <= 1e-5f * gMaxEnd) \{
-    return float2(1.0f, tMin);
+  if (gMaxEnd > 0.0f && gMin < g0 && gMin < g2 && gMin <= 1e-8f * gMaxEnd) \{
+    float delta = 0.01f * (tb - ta);
+    float gL = s * eval_implicit(ro + rd * max(ta, tMin - delta), simTime);
+    float gR = s * eval_implicit(ro + rd * min(tb, tMin + delta), simTime);
+    float gLoc = max(gL, gR);
+    if (gL <= 0.0f || gR <= 0.0f || (gLoc > 0.0f && gMin <= 1e-5f * gLoc)) \{
+      return float2(1.0f, tMin);
+    }
   }
   return float2(0.0f, 0.0f);
 }
