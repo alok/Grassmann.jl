@@ -221,38 +221,41 @@ def marchingTetrahedra (f : Vec3 → Float)
             match c with
             | 0 => v0 | 1 => v1 | 2 => v2 | 3 => v3
             | 4 => v4 | 5 => v5 | 6 => v6 | _ => v7
+          let cornerB (c : Nat) : Bool :=
+            match c with
+            | 0 => b0 | 1 => b1 | 2 => b2 | 3 => b3
+            | 4 => b4 | 5 => b5 | 6 => b6 | _ => b7
+          let emitEdge (s : MtState) (a b : Nat) : MtState × UInt32 :=
+            let ax := cornerIx a; let ay := cornerIy a; let az := cornerIz a
+            let bx := cornerIx b; let by_ := cornerIy b; let bz := cornerIz b
+            emitEdgeVert s f gradEps nx1 ny1 ax ay az (posAt ax ay az) (cornerV a)
+                                             bx by_ bz (posAt bx by_ bz) (cornerV b)
+          let emitTri13 (s : MtState) (a b c d : Nat) : MtState :=
+            let (s1, i0) := emitEdge s a b
+            let (s2, i1) := emitEdge s1 a c
+            let (s3, i2) := emitEdge s2 a d
+            pushOrientedTri s3 i0 i1 i2
+          let emitQuad22 (s : MtState) (a b c d : Nat) : MtState :=
+            let (s1, q0) := emitEdge s a c
+            let (s2, q1) := emitEdge s1 a d
+            let (s3, q2) := emitEdge s2 b d
+            let (s4, q3) := emitEdge s3 b c
+            pushOrientedTri (pushOrientedTri s4 q0 q1 q2) q0 q2 q3
           for (c0, c1, c2, c3) in kuhnTets do
-            let cs := #[c0, c1, c2, c3]
-            let mut ins : Array Nat := #[]
-            let mut outs : Array Nat := #[]
-            for c in cs do
-              if cornerV c < 0.0 then ins := ins.push c else outs := outs.push c
-            let emitEdge (s : MtState) (a b : Nat) : MtState × UInt32 :=
-              let ax := cornerIx a; let ay := cornerIy a; let az := cornerIz a
-              let bx := cornerIx b; let by_ := cornerIy b; let bz := cornerIz b
-              emitEdgeVert s f gradEps nx1 ny1 ax ay az (posAt ax ay az) (cornerV a)
-                                               bx by_ bz (posAt bx by_ bz) (cornerV b)
-            if ins.size == 1 && outs.size == 3 then
-              let a := ins[0]!
-              let (s1, i0) := emitEdge st a outs[0]!
-              let (s2, i1) := emitEdge s1 a outs[1]!
-              let (s3, i2) := emitEdge s2 a outs[2]!
-              st := pushOrientedTri s3 i0 i1 i2
-            else if ins.size == 3 && outs.size == 1 then
-              let a := outs[0]!
-              let (s1, i0) := emitEdge st a ins[0]!
-              let (s2, i1) := emitEdge s1 a ins[1]!
-              let (s3, i2) := emitEdge s2 a ins[2]!
-              st := pushOrientedTri s3 i0 i1 i2
-            else if ins.size == 2 && outs.size == 2 then
-              let a := ins[0]!; let b := ins[1]!
-              let c := outs[0]!; let d := outs[1]!
-              let (s1, q0) := emitEdge st a c
-              let (s2, q1) := emitEdge s1 a d
-              let (s3, q2) := emitEdge s2 b d
-              let (s4, q3) := emitEdge s3 b c
-              let s5 := pushOrientedTri s4 q0 q1 q2
-              st := pushOrientedTri s5 q0 q2 q3
+            -- Zero-allocation 4-bit sign mask across the 4 tetrahedron vertices
+            let m0 := if cornerB c0 then 1 else 0
+            let m1 := if cornerB c1 then 2 else 0
+            let m2 := if cornerB c2 then 4 else 0
+            let m3 := if cornerB c3 then 8 else 0
+            match m0 + m1 + m2 + m3 with
+            | 1  | 14 => st := emitTri13 st c0 c1 c2 c3
+            | 2  | 13 => st := emitTri13 st c1 c0 c2 c3
+            | 4  | 11 => st := emitTri13 st c2 c0 c1 c3
+            | 8  | 7  => st := emitTri13 st c3 c0 c1 c2
+            | 3  | 12 => st := emitQuad22 st c0 c1 c2 c3
+            | 5  | 10 => st := emitQuad22 st c0 c2 c1 c3
+            | 6  | 9  => st := emitQuad22 st c1 c2 c0 c3
+            | _       => pure ()
   let h := meshHash meshId st.positions st.indices
   { meshId, dirtyHash := h, positions := st.positions, normals := st.normals,
     colors := st.colors, indices := st.indices }
