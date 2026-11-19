@@ -189,6 +189,9 @@ export class GrassmannStudioApp {
       this.darkTheme = !this.darkTheme;
       this.root.dataset.theme = this.darkTheme ? 'dark' : 'light';
       this.renderer.setThemeOverride(this.darkTheme);
+      if (this.lastFrame) {
+        this.renderer.applyFrame(this.lastFrame, this.decoder, false);
+      }
     });
 
     const aboutBtn = document.createElement('button');
@@ -380,6 +383,12 @@ export class GrassmannStudioApp {
         this.lastWedgeSeed = seed;
         void this.dispatchJson({ op: 'wedgeRandom', dim, difficulty, seed, forceFullSnapshot: true });
       },
+      onAccessibleOp: (op) => {
+        this.renderer.commitArmedWedgeOp(op);
+      },
+      onSolvedTransition: () => {
+        this.renderer.triggerWedgeWinPulse();
+      },
       onClearSelection: () => this.renderer.clearWedgeSelection(),
     });
     viewportWrap.appendChild(this.wedgeHud.element);
@@ -495,6 +504,9 @@ export class GrassmannStudioApp {
       },
       onWedgeGesture: (idA, idB, dirA, dirB, isPreview) => {
         this.enqueueBinaryEvent(encodeWedgeGesture(idA, idB, dirA, dirB, isPreview));
+      },
+      onWedgePairArmed: (pair) => {
+        this.wedgeHud.setArmedPair(pair);
       },
       onWedgeSelectSound: () => this.synth.play('select'),
       onCameraChange: (motor, fovDeg, distance) => {
@@ -1194,6 +1206,17 @@ export class GrassmannStudioApp {
       if ((ev.key === 'h' || ev.key === 'H') && this.mode === 'wedge') {
         this.enqueueBinaryEvent(encodeWedgeAction(WedgeActionCode.HINT, 0));
         return;
+      }
+      if (this.mode === 'wedge') {
+        const k = ev.key.toLowerCase();
+        if (k === 'j' && this.renderer.commitArmedWedgeOp('join')) return;
+        if (k === 'm' && this.renderer.commitArmedWedgeOp('meet')) return;
+        if (k === 'a' && this.renderer.commitArmedWedgeOp('add')) return;
+        if (k === 'd' && this.renderer.commitArmedWedgeOp('dot')) return;
+        if (ev.key === 'Escape') {
+          this.renderer.clearWedgeSelection();
+          return;
+        }
       }
     }
 

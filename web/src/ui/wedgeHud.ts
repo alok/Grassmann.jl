@@ -4,12 +4,15 @@
 
 import type { StudioAudioSynth } from '../audio/synth';
 import { WedgeActionCode, type WedgeActionCodeValue, type WedgeHudState } from '../gsir/types';
+import type { AccessibleWedgeOp, ArmedWedgePair } from '../render/sceneRenderer';
 import { WEDGE_LEVELS } from './presets';
 
 export interface WedgeHudCallbacks {
   onAction: (action: WedgeActionCodeValue, arg?: number) => void;
   onTutorial?: (id: 'T1' | 'T2' | 'T3' | 'T4' | 'T5' | 'T6') => void;
   onRandomChallenge?: (dim: 2 | 3, difficulty: 0 | 1 | 2, seed: number) => void;
+  onAccessibleOp?: (op: AccessibleWedgeOp) => void;
+  onSolvedTransition?: () => void;
   onClearSelection: () => void;
 }
 
@@ -37,6 +40,8 @@ export class WedgeGameHud {
   private readonly scoreEl: HTMLSpanElement;
   private readonly undoBtn: HTMLButtonElement;
   private readonly solvedBanner: HTMLDivElement;
+  private readonly armedBar: HTMLDivElement;
+  private readonly armedLabel: HTMLSpanElement;
   private readonly muteBtn: HTMLButtonElement;
 
   private lastPlayedOp = '';
@@ -184,6 +189,34 @@ export class WedgeGameHud {
     });
     this.solvedBanner.appendChild(nextSolvedBtn);
 
+    // Accessible Single-Hand / Keyboard Wedge Bar (tap A + tap B -> Join/Meet/Add/Dot!)
+    this.armedBar = document.createElement('div');
+    this.armedBar.className = 'gs-wedge-armed hidden';
+    this.armedLabel = document.createElement('span');
+    this.armedLabel.className = 'gs-wedge-armed-lbl mono';
+    const ops: Array<{ op: AccessibleWedgeOp; label: string; key: string }> = [
+      { op: 'join', label: 'Join ∨', key: 'J' },
+      { op: 'meet', label: 'Meet ∧', key: 'M' },
+      { op: 'add', label: 'Add +', key: 'A' },
+      { op: 'dot', label: 'Dot ⌋', key: 'D' },
+    ];
+    this.armedBar.appendChild(this.armedLabel);
+    for (const item of ops) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'gs-btn gs-btn-accent gs-wedge-op-btn';
+      btn.dataset.wedgeOp = item.op;
+      btn.innerHTML = `${item.label} <kbd>${item.key}</kbd>`;
+      btn.addEventListener('click', () => this.callbacks.onAccessibleOp?.(item.op));
+      this.armedBar.appendChild(btn);
+    }
+    const clearArmedBtn = document.createElement('button');
+    clearArmedBtn.type = 'button';
+    clearArmedBtn.className = 'gs-btn gs-btn-ghost';
+    clearArmedBtn.textContent = 'Clear';
+    clearArmedBtn.addEventListener('click', () => this.callbacks.onClearSelection());
+    this.armedBar.appendChild(clearArmedBtn);
+
     // Bottom action dock
     const dock = document.createElement('div');
     dock.className = 'gs-wedge-dock';
@@ -206,11 +239,20 @@ export class WedgeGameHud {
 
     const guide = document.createElement('span');
     guide.className = 'gs-wedge-gesture-guide';
-    guide.textContent = 'Drag 2 white objects: Apart = Join (∨) · Together = Meet (∧) · Hold + Drag = Dot (⌋)';
+    guide.textContent = 'Drag 2 objects OR Click A + Click B for Join (J) · Meet (M) · Add (A) · Dot (D)';
 
     dock.append(prevBtn, this.undoBtn, hintBtn, resetBtn, nextBtn, guide);
 
-    this.element.append(topCard, this.previewBadge, this.solvedBanner, dock);
+    this.element.append(topCard, this.previewBadge, this.armedBar, this.solvedBanner, dock);
+  }
+
+  setArmedPair(pair: ArmedWedgePair | null): void {
+    if (!pair) {
+      this.armedBar.classList.add('hidden');
+      return;
+    }
+    this.armedLabel.textContent = `Armed: ${pair.labelA} · ${pair.labelB}`;
+    this.armedBar.classList.remove('hidden');
   }
 
   setVisible(visible: boolean): void {
@@ -271,9 +313,10 @@ export class WedgeGameHud {
 
     this.solvedBanner.classList.toggle('hidden', !hud.solved);
 
-    // Trigger subtle Web Audio synth cues strictly driven by Lean's state transitions
+    // Trigger subtle Web Audio synth cues + luminous 3D win ring strictly driven by Lean's state transitions
     if (hud.solved && !this.wasSolved) {
       this.synth.play('win');
+      this.callbacks.onSolvedTransition?.();
     } else if (hud.lastOp && (hud.moves !== this.lastPlayedMoves || hud.lastOp !== this.lastPlayedOp)) {
       const op = hud.lastOp.toLowerCase();
       if (op === 'join' || op === 'wedge' || op === 'add' || op === 'dot' || op === 'invalid') {

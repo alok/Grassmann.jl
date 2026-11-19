@@ -36,6 +36,15 @@ import {
 } from './materials';
 import { WebXrManager, type XrPinchDragEvent } from './webxr';
 
+export type AccessibleWedgeOp = 'join' | 'meet' | 'add' | 'dot';
+
+export interface ArmedWedgePair {
+  idA: number;
+  idB: number;
+  labelA: string;
+  labelB: string;
+}
+
 export interface RendererCallbacks {
   onDragHandle?: (handleId: number, pos: Vec3Tuple) => void;
   onSelectObject?: (info: { handleId: number; kind: string; label?: string }) => void;
@@ -46,6 +55,7 @@ export interface RendererCallbacks {
     dirB: Vec3Tuple,
     isPreview: boolean
   ) => void;
+  onWedgePairArmed?: (pair: ArmedWedgePair | null) => void;
   onWedgeSelectSound?: () => void;
   onCameraChange?: (motor: Float32Array, fovDeg: number, distance: number) => void;
   onTelemetry?: (stats: {
@@ -72,6 +82,7 @@ interface InteractiveMeta {
 
 interface WedgePickSlot {
   handleId: number;
+  label: string;
   anchorWorld: THREE.Vector3;
   currentWorld: THREE.Vector3;
 }
@@ -211,6 +222,7 @@ export class GrassmannSceneRenderer {
   private wedgeSecond: WedgePickSlot | null = null;
   private wedgeDraggingSlot: 1 | 2 | null = null;
   private lastWedgePreviewMs = 0;
+  private winPulses: Array<{ mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; startMs: number; durationMs: number }> = [];
 
   // True input-to-present latency + dropped frame telemetry
   private pendingInputTsMs: number | null = null;
@@ -718,15 +730,26 @@ export class GrassmannSceneRenderer {
       if (!cached) continue;
 
       const wantWire = mr.wireframe || this.forceWireframeOverride;
+      const isGhost = mr.rgba[3] < 0.99;
+      const baseColor = mr.useVertexColors ? new THREE.Color(0xffffff) : toColor(mr.rgba);
+      if (!this.darkTheme && isGhost && !mr.useVertexColors) {
+        // Keep translucent ghost halves crisp and legible against bright Gallery Daylight backdrops
+        baseColor.multiplyScalar(0.42);
+      }
       const mat = new THREE.MeshPhysicalMaterial({
-        color: mr.useVertexColors ? 0xffffff : toColor(mr.rgba),
+        color: baseColor,
         vertexColors: mr.useVertexColors && cached.geometry.hasAttribute('color'),
-        roughness: 0.34,
-        metalness: 0.12,
-        clearcoat: 0.25,
-        clearcoatRoughness: 0.3,
-        transparent: mr.rgba[3] < 0.99,
-        opacity: mr.rgba[3],
+        roughness: isGhost ? 0.18 : 0.28,
+        metalness: isGhost ? 0.08 : 0.14,
+        clearcoat: isGhost ? 0.85 : 0.36,
+        clearcoatRoughness: isGhost ? 0.14 : 0.22,
+        sheen: isGhost ? 0.55 : 0.32,
+        sheenRoughness: 0.45,
+        sheenColor: new THREE.Color(this.darkTheme ? 0x93c5fd : 0x334155),
+        envMapIntensity: this.darkTheme ? 1.18 : 0.95,
+        transparent: isGhost,
+        opacity: !this.darkTheme && isGhost ? Math.max(mr.rgba[3], 0.34) : mr.rgba[3],
+        depthWrite: !isGhost,
         side: mr.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
         wireframe: wantWire,
       });
@@ -959,7 +982,72 @@ export class GrassmannSceneRenderer {
     this.wedgeFirst = null;
     this.wedgeSecond = null;
     this.wedgeDraggingSlot = null;
+    this.callbacks.onWedgePairArmed?.(null);
     this.renderWedgeOverlay();
+  }
+
+  /**
+   * Accessible single-hand / keyboard Wedge operation on an armed (A, B) pair.
+   * Sends ONLY raw unit separation direction vectors to Lean — ZERO GA math in JS!
+   */
+  commitArmedWedgeOp(op: AccessibleWedgeOp): boolean {
+    if (!this.wedgeFirst || !this.wedgeSecond) return false;
+    const u = this.wedgeFirst.anchorWorld.clone().sub(this.wedgeSecond.anchorWorld);
+    if (u.lengthSq() < 1e-6) {
+      u.set(1, 0, 0);
+    } else {
+      u.normalize();
+    }
+
+    let dirA: Vec3Tuple;
+    let dirB: Vec3Tuple;
+    switch (op) {
+      case 'join':
+      case 'add':
+        // Pull apart along separation axis (aOut && bOut)
+        dirA = [u.x, u.y, u.z];
+        dirB = [-u.x, -u.y, -u.z];
+        break;
+      case 'meet':
+        // Push together along separation axis (aIn && bIn)
+        dirA = [-u.x, -u.y, -u.z];
+        dirB = [u.x, u.y, u.z];
+        break;
+      case 'dot':
+        // Hold A stationary (dirA = 0), push B toward A (holdA && bIn)
+        dirA = [0, 0, 0];
+        dirB = [u.x, u.y, u.z];
+        break;
+    }
+
+    const idA = this.wedgeFirst.handleId;
+    const idB = this.wedgeSecond.handleId;
+    this.clearWedgeSelection();
+    this.callbacks.onWedgeGesture?.(idA, idB, dirA, dirB, false);
+    return true;
+  }
+
+  /**
+   * Spawns a crisp expanding luminous emerald-gold ring pulse when Lean reports Wedge solved.
+   */
+  triggerWedgeWinPulse(): void {
+    const geo = new THREE.RingGeometry(0.18, 0.28, 64);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x34d399,
+      transparent: true,
+      opacity: 0.92,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(0, 0, this.isOrtho ? 0.05 : 0);
+    if (!this.isOrtho) {
+      mesh.lookAt(this.activeCamera.position);
+    }
+    mesh.renderOrder = 8;
+    this.scene.add(mesh);
+    this.winPulses.push({ mesh, mat, startMs: performance.now(), durationMs: 820 });
   }
 
   /**
@@ -1416,16 +1504,24 @@ export class GrassmannSceneRenderer {
 
     if (this.isWedgeMode()) {
       this.callbacks.onWedgeSelectSound?.();
-      if (!this.wedgeFirst) {
+      const slotLabel = hit.meta.label || `#${hit.meta.handleId}`;
+      if (!this.wedgeFirst || (this.wedgeFirst && this.wedgeSecond)) {
         this.wedgeFirst = {
           handleId: hit.meta.handleId,
+          label: slotLabel,
           anchorWorld: hit.meta.anchor.clone(),
           currentWorld: hit.meta.anchor.clone(),
         };
+        this.wedgeSecond = null;
+        this.wedgeDraggingSlot = 1;
+        this.callbacks.onWedgePairArmed?.(null);
+      } else if (hit.meta.handleId === this.wedgeFirst.handleId) {
+        this.wedgeFirst.currentWorld.copy(hit.meta.anchor);
         this.wedgeDraggingSlot = 1;
       } else {
         this.wedgeSecond = {
           handleId: hit.meta.handleId,
+          label: slotLabel,
           anchorWorld: hit.meta.anchor.clone(),
           currentWorld: hit.meta.anchor.clone(),
         };
@@ -1532,16 +1628,28 @@ export class GrassmannSceneRenderer {
       if (this.wedgeDraggingSlot === 2 && this.wedgeFirst && this.wedgeSecond) {
         const dA = this.wedgeFirst.currentWorld.clone().sub(this.wedgeFirst.anchorWorld);
         const dB = this.wedgeSecond.currentWorld.clone().sub(this.wedgeSecond.anchorWorld);
-        // Commit gesture to Lean (isPreview = false; Lean derives hold from raw vectors!)
-        this.callbacks.onWedgeGesture?.(
-          this.wedgeFirst.handleId,
-          this.wedgeSecond.handleId,
-          [dA.x, dA.y, dA.z],
-          [dB.x, dB.y, dB.z],
-          false
-        );
-        this.wedgeFirst = null;
-        this.wedgeSecond = null;
+        const dragged = dA.length() >= 0.1 || dB.length() >= 0.1;
+        if (dragged) {
+          // Commit real drag gesture to Lean (isPreview = false; Lean derives hold from raw vectors!)
+          this.callbacks.onWedgeGesture?.(
+            this.wedgeFirst.handleId,
+            this.wedgeSecond.handleId,
+            [dA.x, dA.y, dA.z],
+            [dB.x, dB.y, dB.z],
+            false
+          );
+          this.wedgeFirst = null;
+          this.wedgeSecond = null;
+          this.callbacks.onWedgePairArmed?.(null);
+        } else {
+          // Accessible single-hand / tap-tap mode: keep A & B armed for Join/Meet/Add/Dot action buttons!
+          this.callbacks.onWedgePairArmed?.({
+            idA: this.wedgeFirst.handleId,
+            idB: this.wedgeSecond.handleId,
+            labelA: this.wedgeFirst.label,
+            labelB: this.wedgeSecond.label,
+          });
+        }
       }
       this.wedgeDraggingSlot = null;
       this.renderWedgeOverlay();
@@ -1692,6 +1800,25 @@ export class GrassmannSceneRenderer {
       }
     } else {
       this.xr.updateFrame();
+    }
+
+    // Advance Wedge win celebration ring pulses cleanly
+    if (this.winPulses.length > 0) {
+      for (let i = this.winPulses.length - 1; i >= 0; i--) {
+        const p = this.winPulses[i]!;
+        const u = (t0 - p.startMs) / p.durationMs;
+        if (u >= 1) {
+          this.scene.remove(p.mesh);
+          p.mesh.geometry.dispose();
+          p.mat.dispose();
+          this.winPulses.splice(i, 1);
+        } else {
+          const ease = 1 - Math.pow(1 - u, 3);
+          p.mesh.scale.setScalar(1 + ease * 11);
+          p.mat.opacity = 0.88 * (1 - u);
+          if (!this.isOrtho) p.mesh.lookAt(this.activeCamera.position);
+        }
+      }
     }
 
     // Advance particle flow uniform clock smoothly

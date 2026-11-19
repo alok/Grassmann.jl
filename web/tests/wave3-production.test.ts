@@ -1,7 +1,5 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import vercelCfg from '../vercel.json';
 import {
   GsirStatus,
   InputEventKind,
@@ -21,6 +19,7 @@ import {
   serializeExperiment,
   type GrassmannExperimentV1,
 } from '../src/ui/experiment';
+import { highlightGaCode } from '../src/ui/gaHighlight';
 
 describe('OrderedStudioEventQueue (Dots #84 / #87 regression suite)', () => {
   it('classifies continuous vs discrete binary events accurately', () => {
@@ -213,9 +212,7 @@ describe('Portable Cross-Client .grassmann.json Experiment Format', () => {
 
 describe('Vercel Cache & Header Configuration (Dots #84 / #87)', () => {
   it('never caches un-fingerprinted WASM/manifest immutably and omits unnecessary COOP/COEP headers', () => {
-    const dir = path.dirname(fileURLToPath(import.meta.url));
-    const vercelPath = path.resolve(dir, '..', 'vercel.json');
-    const cfg = JSON.parse(fs.readFileSync(vercelPath, 'utf8')) as {
+    const cfg = vercelCfg as {
       headers: Array<{ source: string; headers: Array<{ key: string; value: string }> }>;
     };
 
@@ -226,11 +223,34 @@ describe('Vercel Cache & Header Configuration (Dots #84 / #87)', () => {
     const manifestRule = cfg.headers.find((r) => r.source.includes('wasm-manifest'));
     expect(manifestRule?.headers.some((h) => h.value.includes('must-revalidate'))).toBe(true);
 
-    const canonicalRule = cfg.headers.find((r) => r.source === '/wasm/grassmann\\.(wasm|mjs)');
+    const canonicalRule = cfg.headers.find((r) => r.source === '/wasm/grassmann.:ext(wasm|mjs)');
     expect(canonicalRule?.headers.some((h) => h.value.includes('must-revalidate'))).toBe(true);
     expect(canonicalRule?.headers.some((h) => h.value.includes('immutable'))).toBe(false);
 
-    const fingerprintedRule = cfg.headers.find((r) => r.source.includes('[a-f0-9]'));
+    const fingerprintedRule = cfg.headers.find((r) => r.source.includes(':hash([a-f0-9]+)'));
     expect(fingerprintedRule?.headers.some((h) => h.value.includes('immutable'))).toBe(true);
+  });
+});
+
+describe('GA Syntax Highlighter (Wave 3B)', () => {
+  it('colors GA operators, blades, keywords, numbers, hex swatches, comments, and escapes HTML safely', () => {
+    const sample =
+      '// Slice plane <script>\nlet cut = plane(0, 1, 0, 0.25) ^ e12 + 0x38bdf8\n"A & B" >>> ~R';
+    const html = highlightGaCode(sample);
+    expect(html).not.toContain('<script>');
+    expect(html).toContain('&lt;script&gt;');
+    expect(html).toContain('class="tok-comment"');
+    expect(html).toContain('class="tok-kw"');
+    expect(html).toContain('class="tok-blade">e12<');
+    expect(html).toContain('class="tok-hex" style="--swatch:#38bdf8">0x38bdf8<');
+    expect(html).toContain('class="tok-op">&gt;&gt;&gt;<');
+    expect(html).toContain('class="tok-num">0.25<');
+    // Character-for-character plain-text fidelity (zero caret drift!)
+    const plain = html
+      .replace(/<[^>]+>/g, '')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&');
+    expect(plain).toBe(sample);
   });
 });

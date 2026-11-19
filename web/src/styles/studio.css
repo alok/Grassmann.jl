@@ -704,20 +704,158 @@ body,
   border-right: 1px solid var(--border);
 }
 
-.gs-editor-textarea {
+.gs-editor-stage {
+  position: relative;
   flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.gs-editor-highlight,
+.gs-editor-textarea {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  width: 100%;
+  height: 100%;
   border: 0;
-  resize: none;
-  background: transparent;
-  color: var(--text);
   padding: 12px;
   font-family: var(--font-mono);
   font-size: 12.5px;
   line-height: 1.55;
-  outline: none;
+  letter-spacing: 0;
   white-space: pre;
   overflow: auto;
   tab-size: 2;
+  box-sizing: border-box;
+}
+
+.gs-editor-highlight {
+  pointer-events: none;
+  color: var(--text);
+  overflow: hidden;
+  user-select: none;
+}
+
+.gs-editor-highlight code {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.gs-editor-textarea {
+  resize: none;
+  background: transparent;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: var(--accent);
+  outline: none;
+}
+
+.gs-editor-textarea::selection {
+  background: rgba(56, 189, 248, 0.32);
+  color: transparent;
+}
+
+/* Crisp GA Syntax Highlighting Tokens (Dark + Daylight) */
+.tok-comment {
+  color: #64748b;
+  font-style: italic;
+}
+
+.tok-string {
+  color: #34d399;
+}
+
+.tok-blade {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.tok-kw {
+  color: #c084fc;
+  font-weight: 550;
+}
+
+.tok-op {
+  color: #fb7185;
+  font-weight: 600;
+}
+
+.tok-num {
+  color: #fbbf24;
+}
+
+.tok-hex {
+  color: #f8fafc;
+  border-bottom: 2px solid var(--swatch, #38bdf8);
+  background: color-mix(in srgb, var(--swatch, #38bdf8) 20%, transparent);
+  border-radius: 2px;
+}
+
+[data-theme='light'] .tok-comment {
+  color: #64748b;
+}
+
+[data-theme='light'] .tok-string {
+  color: #059669;
+}
+
+[data-theme='light'] .tok-blade {
+  color: #0284c7;
+}
+
+[data-theme='light'] .tok-kw {
+  color: #7c3aed;
+}
+
+[data-theme='light'] .tok-op {
+  color: #e11d48;
+}
+
+[data-theme='light'] .tok-num {
+  color: #b45309;
+}
+
+[data-theme='light'] .tok-hex {
+  color: #0f172a;
+}
+
+/* Accessible Single-Hand / Keyboard Wedge Armed Action Bar */
+.gs-wedge-armed {
+  position: absolute;
+  bottom: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: var(--bg-glass);
+  border: 1px solid rgba(74, 222, 128, 0.45);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(14px);
+  pointer-events: auto;
+  z-index: 15;
+}
+
+.gs-wedge-armed-lbl {
+  font-size: 11px;
+  color: #4ade80;
+  font-weight: 600;
+  padding-right: 4px;
+  white-space: nowrap;
+}
+
+.gs-wedge-op-btn kbd {
+  margin-left: 4px;
+  padding: 0 4px;
+  font-size: 9.5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
 }
 
 .gs-inline-popover {

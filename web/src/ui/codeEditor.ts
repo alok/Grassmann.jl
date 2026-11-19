@@ -6,6 +6,7 @@
 // - Live diagnostics list from Lean's metaJson.diagnostics
 
 import type { DiagnosticItem } from '../gsir/types';
+import { highlightGaCode } from './gaHighlight';
 
 export interface CodeEditorCallbacks {
   onRun: (code: string) => void;
@@ -28,6 +29,8 @@ const HEX_COLOR_RE = /^(0x|#)([0-9a-fA-F]{6})$/;
 export class CoffeeShopCodeEditor {
   readonly element: HTMLDivElement;
   private readonly textarea: HTMLTextAreaElement;
+  private readonly highlightPre: HTMLPreElement;
+  private readonly highlightCode: HTMLElement;
   private readonly gutter: HTMLDivElement;
   private readonly diagnosticsEl: HTMLDivElement;
   private readonly popover: HTMLDivElement;
@@ -75,17 +78,29 @@ export class CoffeeShopCodeEditor {
     this.gutter.className = 'gs-editor-gutter';
     this.gutter.setAttribute('aria-hidden', 'true');
 
+    const stage = document.createElement('div');
+    stage.className = 'gs-editor-stage';
+
+    this.highlightPre = document.createElement('pre');
+    this.highlightPre.className = 'gs-editor-highlight';
+    this.highlightPre.setAttribute('aria-hidden', 'true');
+    this.highlightCode = document.createElement('code');
+    this.highlightPre.appendChild(this.highlightCode);
+
     this.textarea = document.createElement('textarea');
     this.textarea.className = 'gs-editor-textarea';
     this.textarea.spellcheck = false;
     this.textarea.autocapitalize = 'off';
     this.textarea.autocomplete = 'off';
+    this.textarea.wrap = 'off';
     this.textarea.placeholder = '// Write Grassmann.lean / CoffeeShop GA code...\n// Shift+Enter evaluates in Lean 4';
+
+    stage.append(this.highlightPre, this.textarea);
 
     this.popover = document.createElement('div');
     this.popover.className = 'gs-inline-popover hidden';
 
-    body.append(this.gutter, this.textarea, this.popover);
+    body.append(this.gutter, stage, this.popover);
 
     // Diagnostics bar
     this.diagnosticsEl = document.createElement('div');
@@ -100,6 +115,8 @@ export class CoffeeShopCodeEditor {
     });
     this.textarea.addEventListener('scroll', () => {
       this.gutter.scrollTop = this.textarea.scrollTop;
+      this.highlightPre.scrollTop = this.textarea.scrollTop;
+      this.highlightPre.scrollLeft = this.textarea.scrollLeft;
     });
     this.textarea.addEventListener('keydown', this.onKeyDown);
     this.textarea.addEventListener('select', this.inspectSelection);
@@ -146,6 +163,9 @@ export class CoffeeShopCodeEditor {
     const lines: string[] = [];
     for (let i = 1; i <= count; i++) lines.push(String(i));
     this.gutter.textContent = lines.join('\n');
+    this.highlightCode.innerHTML = highlightGaCode(this.textarea.value);
+    this.highlightPre.scrollTop = this.textarea.scrollTop;
+    this.highlightPre.scrollLeft = this.textarea.scrollLeft;
   }
 
   private readonly onKeyDown = (ev: KeyboardEvent): void => {
