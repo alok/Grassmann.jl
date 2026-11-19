@@ -155,9 +155,18 @@ function compareFrameParity(name, ref, other, label) {
       assert.equal(other.meta.wedge.moves, ref.meta.wedge.moves, `${label}.${name}: wedge.moves`);
       assert.equal(other.meta.wedge.solved, ref.meta.wedge.solved, `${label}.${name}: wedge.solved`);
     }
+    if (ref.meta.algebra && ref.meta.algebra.basisMetric) {
+      assert.deepEqual(other.meta.algebra?.basisMetric, ref.meta.algebra.basisMetric, `${label}.${name}: algebra.basisMetric`);
+    }
     if (ref.meta.opnsShaders && ref.meta.opnsShaders.length > 0) {
       assert.equal(other.meta.opnsShaders.length, ref.meta.opnsShaders.length, `${label}.${name}: shaderCount`);
       assert.equal(other.meta.opnsShaders[0].hash, ref.meta.opnsShaders[0].hash, `${label}.${name}: opnsShader hash`);
+      assert.equal(other.meta.opnsShaders[0].glsl, ref.meta.opnsShaders[0].glsl, `${label}.${name}: opnsShader GLSL3 byte-identical`);
+      assert.equal(other.meta.opnsShaders[0].wgsl, ref.meta.opnsShaders[0].wgsl, `${label}.${name}: opnsShader WGSL byte-identical`);
+      assert.equal(other.meta.opnsShaders[0].msl, ref.meta.opnsShaders[0].msl, `${label}.${name}: opnsShader MSL byte-identical`);
+    }
+    if (name === "r6_rational_rotor" && ref.meta.inspect) {
+      assert.deepEqual(other.meta.inspect, ref.meta.inspect, `${label}.${name}: exact rational inspect parity`);
     }
     if (ref.meta.calc) {
       assert.equal(other.meta.calc.display, ref.meta.calc.display, `${label}.${name}: calc.display`);
@@ -247,6 +256,11 @@ wasmFrames.r3_pow5_gpu = summarizeGsir(wsess.dispatchJson({ op: "evalImplicit", 
 wasmFrames.r3_plane_b20_cpu = summarizeGsir(wsess.dispatchJson({ op: "evalImplicit", expr: "x - 15", gpuRaymarch: false, bound: 20, gridN: 14 }));
 wsess.dispatchJson({ op: "loadPreset", id: "pga3d_bouncing_cube" });
 wasmFrames.r3_bouncing_seek = summarizeGsir(wsess.dispatchJson({ op: "seekTime", t: 2.5 }));
+wasmFrames.r6_rational_rotor = summarizeGsir(wsess.dispatchJson({ op: "loadPreset", id: "r3_rational_rotor" }));
+wasmFrames.r6_tiny_outside_gpu = summarizeGsir(wsess.dispatchJson({ op: "evalImplicit", expr: "0.0000002*x - 0.000001", gpuRaymarch: true, bound: 1 }));
+wasmFrames.r6_tiny_inside_gpu = summarizeGsir(wsess.dispatchJson({ op: "evalImplicit", expr: "0.0000001*x - 0.00000005", gpuRaymarch: true, bound: 1 }));
+wasmFrames.r6_9sig_diff_gpu = summarizeGsir(wsess.dispatchJson({ op: "evalImplicit", expr: "1000000*(0.5000004*x - 0.5000001*x) - 0.15", gpuRaymarch: true, bound: 1 }));
+wasmFrames.r6_pos_min_gpu = summarizeGsir(wsess.dispatchJson({ op: "evalImplicit", expr: "(x-0.12345)^2 + 0.0001*(0.0001 + x*x*0.0001)*0.1", gpuRaymarch: true, bound: 1 }));
 
 for (const name of Object.keys(nativeOut.frames)) {
   compareFrameParity(name, nativeOut.frames[name], wasmFrames[name], "wasm");
@@ -351,6 +365,11 @@ if (fs.existsSync(serverBin)) {
     srvFrames.r3_plane_b20_cpu = summarizeGsir(await rpc(JSON.stringify({ op: "evalImplicit", expr: "x - 15", gpuRaymarch: false, bound: 20, gridN: 14 })));
     await rpc(JSON.stringify({ op: "loadPreset", id: "pga3d_bouncing_cube" }));
     srvFrames.r3_bouncing_seek = summarizeGsir(await rpc(JSON.stringify({ op: "seekTime", t: 2.5 })));
+    srvFrames.r6_rational_rotor = summarizeGsir(await rpc(JSON.stringify({ op: "loadPreset", id: "r3_rational_rotor" })));
+    srvFrames.r6_tiny_outside_gpu = summarizeGsir(await rpc(JSON.stringify({ op: "evalImplicit", expr: "0.0000002*x - 0.000001", gpuRaymarch: true, bound: 1 })));
+    srvFrames.r6_tiny_inside_gpu = summarizeGsir(await rpc(JSON.stringify({ op: "evalImplicit", expr: "0.0000001*x - 0.00000005", gpuRaymarch: true, bound: 1 })));
+    srvFrames.r6_9sig_diff_gpu = summarizeGsir(await rpc(JSON.stringify({ op: "evalImplicit", expr: "1000000*(0.5000004*x - 0.5000001*x) - 0.15", gpuRaymarch: true, bound: 1 })));
+    srvFrames.r6_pos_min_gpu = summarizeGsir(await rpc(JSON.stringify({ op: "evalImplicit", expr: "(x-0.12345)^2 + 0.0001*(0.0001 + x*x*0.0001)*0.1", gpuRaymarch: true, bound: 1 })));
 
     for (const name of Object.keys(nativeOut.frames)) {
       compareFrameParity(name, nativeOut.frames[name], srvFrames[name], "ga-server");

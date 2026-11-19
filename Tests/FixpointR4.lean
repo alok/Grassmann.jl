@@ -145,7 +145,7 @@ def testFaceParallelAndScaleInvariantGpu : IO Unit := do
       assertTrue s!"{tag}/{lang} has per-axis abs(rd.z) < 1e-12 slab check"
         (hasSubstr src "abs(rd.z) < 1e-12" && hasSubstr src "ro.z < -b || ro.z > b")
       assertTrue s!"{tag}/{lang} has NO legacy 1e-8 safeRd hack"
-        (!hasSubstr src "safeRd" && !hasSubstr src "1e-8")
+        (!hasSubstr src "safeRd" && !hasSubstr src "abs(rd) < 1e-8")
       assertTrue s!"{tag}/{lang} has NO unscaled abs(fCur) < max(0.001 false-hit shortcut"
         (!hasSubstr src "abs(fCur) < max(0.001" && !hasSubstr src "abs(fCur) <")
       assertTrue s!"{tag}/{lang} uses strictly scale-invariant sign-change crossing"

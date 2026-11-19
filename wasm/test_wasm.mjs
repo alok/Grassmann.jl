@@ -535,6 +535,40 @@ assert.ok(sImpGpu.meta.opnsShaders[0].wgsl.includes("@fragment"), "implicit WGSL
 assert.ok(sImpGpu.meta.opnsShaders[0].msl.includes("gsir_lean_opns_compute"), "implicit MSL valid");
 console.log(`[wasm bench] evalImplicit GPU shader:  ${dtImpGpu.toFixed(2)} ms (GLSL3+WGSL+MSL)`);
 
+// Dots Round-6 Fixpoint regressions LIVE in compiled WASM:
+// 1. l_Int_repr & 9-sig-digit fmtFloat exact scientific exponents & float32 precision
+// 2. l_Rat_* exact rational rotor + basisSquares signed Int formatting
+// 3. Tightened 32-step gs_refine_min (1e-8 outer + 1e-5 local bracket) across GLSL3/WGSL/MSL
+{
+  const r6Out = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: "0.0000002*x - 0.000001", gpuRaymarch: true, bound: 1 }));
+  for (const [lang, src] of [["GLSL3", r6Out.meta.opnsShaders[0].glsl], ["WGSL", r6Out.meta.opnsShaders[0].wgsl], ["MSL", r6Out.meta.opnsShaders[0].msl]]) {
+    assert.ok(src.includes("2.0e-7") && src.includes("1.0e-6"), `R6 WASM ${lang} tiny-outside exact scientific exponents`);
+    assert.ok(!src.includes("e0"), `R6 WASM ${lang} tiny-outside must NOT emit broken e0`);
+  }
+  const r6In = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: "0.0000001*x - 0.00000005", gpuRaymarch: true, bound: 1 }));
+  for (const [lang, src] of [["GLSL3", r6In.meta.opnsShaders[0].glsl], ["WGSL", r6In.meta.opnsShaders[0].wgsl], ["MSL", r6In.meta.opnsShaders[0].msl]]) {
+    assert.ok(src.includes("1.0e-7") && src.includes("5.0e-8"), `R6 WASM ${lang} tiny-inside exact scientific exponents`);
+    assert.ok(!src.includes("e0"), `R6 WASM ${lang} tiny-inside must NOT emit broken e0`);
+  }
+  const r6Diff = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: "1000000*(0.5000004*x - 0.5000001*x) - 0.15", gpuRaymarch: true, bound: 1 }));
+  for (const [lang, src] of [["GLSL3", r6Diff.meta.opnsShaders[0].glsl], ["WGSL", r6Diff.meta.opnsShaders[0].wgsl], ["MSL", r6Diff.meta.opnsShaders[0].msl]]) {
+    assert.ok(src.includes("0.5000004") && src.includes("0.5000001") && src.includes("0.15"), `R6 WASM ${lang} preserves 9-sig-digit float32 literals`);
+  }
+  const r6Pos = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: "(x-0.12345)^2 + 0.0001*(0.0001 + x*x*0.0001)*0.1", gpuRaymarch: true, bound: 1 }));
+  for (const [lang, src] of [["GLSL3", r6Pos.meta.opnsShaders[0].glsl], ["WGSL", r6Pos.meta.opnsShaders[0].wgsl], ["MSL", r6Pos.meta.opnsShaders[0].msl]]) {
+    assert.ok(src.includes("k < 32") && src.includes("gMin <= 1e-8") && src.includes("gMin <= 1e-5"), `R6 WASM ${lang} tightened 32-step + local-bracket gs_refine_min`);
+  }
+  const r6Rat = parseGSIR(sess.dispatchJson({ op: "loadPreset", id: "r3_rational_rotor" }));
+  assert.deepEqual(r6Rat.meta.algebra.basisMetric, [1, 1, 1, 1, -1, -1, -1, -1], "R6 WASM l_Int_repr renders R3 8-blade basisMetric == [1,1,1,1,-1,-1,-1,-1]");
+  const ratJoined = r6Rat.meta.inspect.map(i => i.formatted).join(" ");
+  assert.ok(ratJoined.includes("/25") || ratJoined.includes("/5"), `R6 WASM exact Rat arithmetic produces non-zero rational fractions (got: ${ratJoined})`);
+  const r6Sta = parseGSIR(sess.dispatchJson({ op: "loadPreset", id: "sta_lorentz_boost" }));
+  assert.equal(r6Sta.meta.algebra.basisMetric.length, 16, "R6 WASM STA has 16 blade metric entries");
+  assert.equal(r6Sta.meta.algebra.basisMetric[1], -1, "R6 WASM STA e0^2 == -1 (-+++ Lorentzian metric)");
+  assert.equal(r6Sta.meta.algebra.basisMetric[2], 1, "R6 WASM STA e1^2 == +1");
+  console.log("[wasm test] ALL DOTS ROUND-6 REGRESSIONS (l_Int_repr, l_Rat_*, 9-sig fmtFloat, 32-step gs_refine_min) PASSED LIVE IN WASM!");
+}
+
 // User-typed 3D Parametric Surface
 const sParam = parseGSIR(sess.dispatchJson({
   op: "evalParametric",

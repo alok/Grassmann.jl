@@ -282,6 +282,22 @@ int main(void) {
   assert(dispatch_json_grow(sid, "{\"op\":\"seekTime\",\"t\":2.5}", &buf, &cap, &got) == GSIR_OK);
   print_gsir_summary("r3_bouncing_seek", buf, got, 1);
 
+  /* Round-6 Fixpoint Parity: exact Rat/Int runtime + 9-sig-digit & scientific GPU shader strings */
+  assert(dispatch_json_grow(sid, "{\"op\":\"loadPreset\",\"id\":\"r3_rational_rotor\"}", &buf, &cap, &got) == GSIR_OK);
+  print_gsir_summary("r6_rational_rotor", buf, got, 1);
+
+  assert(dispatch_json_grow(sid, "{\"op\":\"evalImplicit\",\"expr\":\"0.0000002*x - 0.000001\",\"gpuRaymarch\":true,\"bound\":1}", &buf, &cap, &got) == GSIR_OK);
+  print_gsir_summary("r6_tiny_outside_gpu", buf, got, 1);
+
+  assert(dispatch_json_grow(sid, "{\"op\":\"evalImplicit\",\"expr\":\"0.0000001*x - 0.00000005\",\"gpuRaymarch\":true,\"bound\":1}", &buf, &cap, &got) == GSIR_OK);
+  print_gsir_summary("r6_tiny_inside_gpu", buf, got, 1);
+
+  assert(dispatch_json_grow(sid, "{\"op\":\"evalImplicit\",\"expr\":\"1000000*(0.5000004*x - 0.5000001*x) - 0.15\",\"gpuRaymarch\":true,\"bound\":1}", &buf, &cap, &got) == GSIR_OK);
+  print_gsir_summary("r6_9sig_diff_gpu", buf, got, 1);
+
+  assert(dispatch_json_grow(sid, "{\"op\":\"evalImplicit\",\"expr\":\"(x-0.12345)^2 + 0.0001*(0.0001 + x*x*0.0001)*0.1\",\"gpuRaymarch\":true,\"bound\":1}", &buf, &cap, &got) == GSIR_OK);
+  print_gsir_summary("r6_pos_min_gpu", buf, got, 1);
+
   /* 4. Native Microbenchmarks */
   const int N_M = 200000;
   double t0 = now_ms();
