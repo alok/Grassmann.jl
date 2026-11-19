@@ -77,6 +77,7 @@ structure CoffeeShopState where
   sliceMotor           : Option Motor3 := none
   customCamera         : Option CameraState := none
   simTime              : Float := 0.0
+  lastValidScriptFrame : Option SceneFrame := none
   -- Persistent RK4 physics state for `pga3d_physics_free_top`
   topMotor             : Motor3 := Motor3.identity
   topOmega             : Vec3   := ⟨0.08, 3.2, 0.05⟩ -- Perturbed intermediate axis => Dzhanibekov flip!
@@ -109,28 +110,51 @@ def setHandle (st : CoffeeShopState) (hid : UInt32) (pos : Vec3) : CoffeeShopSta
     | none     => st.handles.push (hid, pos)
   { st with handles := next }
 
+/-- Look up the runnable LiveScript v2 `sampleCode` for any of the 69 registered presets. -/
+def presetScriptFor (presetId : String) : String :=
+  match presetCatalog.find? (·.id == presetId) with
+  | some p => p.sampleCode
+  | none =>
+    match extraPresetCatalog.find? (·.id == presetId) with
+    | some p => p.sampleCode
+    | none =>
+      match parityPresetCatalog.find? (·.id == presetId) with
+      | some p => p.sampleCode
+      | none => ""
+
 /-- Live coefficient edit from CoffeeShop's `inspect stash` table: records override and
-maps blade edits directly onto interactive handles (`0..2` → `x/y/z`) or `#pga3d_slicing` plane! -/
+maps blade edits directly onto live script multivectors (when in script mode) OR
+interactive handles (`0..2` → `x/y/z`) / `#pga3d_slicing` plane! -/
 def setCoeffOverride (st : CoffeeShopState) (entryIdx bladeIdx : UInt32) (val : Float) :
     CoffeeShopState :=
   let nextOv :=
     match st.coeffOverrides.findIdx? fun x => x.1 == entryIdx && x.2.1 == bladeIdx with
     | some idx => st.coeffOverrides.set! idx (entryIdx, bladeIdx, val)
     | none     => st.coeffOverrides.push (entryIdx, bladeIdx, val)
-  let cur := hPos st.handles entryIdx Vec3.zero
-  let nextPos : Vec3 :=
-    match bladeIdx.toNat % 3 with
-    | 0 => { cur with x := val }
-    | 1 => { cur with y := val }
-    | _ => { cur with z := val }
-  let st1 := setHandle { st with coeffOverrides := nextOv } entryIdx nextPos
-  if st.presetId == "pga3d_slicing" && entryIdx == 0 then
-    { st1 with sliceMotor := none }
-  else st1
+  if st.useCustom then
+    { st with coeffOverrides := nextOv }
+  else
+    let cur := hPos st.handles entryIdx Vec3.zero
+    let nextPos : Vec3 :=
+      match bladeIdx.toNat % 3 with
+      | 0 => { cur with x := val }
+      | 1 => { cur with y := val }
+      | _ => { cur with z := val }
+    let st1 := setHandle { st with coeffOverrides := nextOv } entryIdx nextPos
+    if st.presetId == "pga3d_slicing" && entryIdx == 0 then
+      { st1 with sliceMotor := none }
+    else st1
 
 def setScript (st : CoffeeShopState) (algebra code : String) : CoffeeShopState :=
+  -- Evaluate once immediately to update `lastValidScriptFrame` when valid (never losing last good scene on syntax error!)
+  let fresh := evalScriptToFrame algebra code #[] st.simTime 0 #[]
+  let nextValid :=
+    if fresh.diagnostics.isEmpty then some fresh
+    else st.lastValidScriptFrame
   { st with
     customAlgebra := algebra, customCode := code,
+    handles := #[], coeffOverrides := #[],
+    lastValidScriptFrame := nextValid,
     useCustom := true, useSurface := false, useImplicit := false, useParametric := false }
 
 def setSurface (st : CoffeeShopState) (expr : String)
@@ -249,35 +273,43 @@ def toSceneFrame (st : CoffeeShopState) (frameSeq : UInt64 := 0) : SceneFrame :=
                           color := RGBA.white, useVertexColors := true }] }
       | .error err => { base with diagnostics := #[err] }
     else if st.useCustom then
-      evalScriptToFrame st.customAlgebra st.customCode st.handles st.simTime frameSeq
+      let fr := evalScriptToFrame st.customAlgebra st.customCode st.handles st.simTime frameSeq st.coeffOverrides
+      if !fr.diagnostics.isEmpty then
+        match st.lastValidScriptFrame with
+        | some prev =>
+          { prev with frameSeq, simTime := st.simTime, script := st.customCode, diagnostics := fr.diagnostics }
+        | none => fr
+      else fr
     else
-      match st.presetId with
-      | "pga3d_slicing"            => buildPga3dSlicing st.handles st.sliceMotor frameSeq st.simTime
-      | "pga3d_points_and_lines"   => buildPga3dPointsAndLines st.handles frameSeq st.simTime
-      | "pga3d_physics_free_top"   => buildPga3dFreeTop st.topMotor st.topOmega st.topTrail frameSeq st.simTime
-      | "pga3d_origami"            => buildPga3dOrigami frameSeq st.simTime
-      | "pga3d_motor_orbits"       => buildPga3dMotorOrbits frameSeq st.simTime
-      | "pga3d_icosahedron"        => buildPga3dIcosahedron frameSeq st.simTime
-      | "pga3d_skinning"           => buildPga3dSkinning frameSeq st.simTime
-      | "pga3d_objects"            => buildPga3dObjects frameSeq st.simTime
-      | "cga3d_intersections"      => buildCga3dIntersections st.handles frameSeq st.simTime
-      | "cga3d_spheres_apollonius" => buildCga3dSpheresApollonius st.handles frameSeq st.simTime
-      | "cga3d_opns_cyclide"       => buildCga3dOpnsCyclide frameSeq st.simTime
-      | "pga2d_euler_line"         => buildPga2dEulerLine st.handles frameSeq st.simTime
-      | "pga2d_inverse_kinematics" => buildPga2dIK st.handles frameSeq st.simTime
-      | "pga2d_desargues_theorem"  => buildPga2dDesargues st.handles frameSeq st.simTime
-      | "sta_lorentz_boost"        => buildStaLorentzBoost st.handles frameSeq st.simTime
-      | "sta_maxwell_em"           => buildStaMaxwellEM frameSeq st.simTime
-      | "r3_rational_rotor"        => buildR3RationalRotor st.handles frameSeq st.simTime
-      | "dual_autodiff_surface"    => buildDualAutodiffSurface st.handles frameSeq st.simTime
-      | "complex_mobius_orbit"     => buildComplexMobius st.handles frameSeq st.simTime
-      | other =>
-        match buildExtraPreset other st.handles frameSeq st.simTime with
-        | some fr => fr
-        | none =>
-          match buildParityPreset other st.handles frameSeq st.simTime with
+      let rawP :=
+        match st.presetId with
+        | "pga3d_slicing"            => buildPga3dSlicing st.handles st.sliceMotor frameSeq st.simTime
+        | "pga3d_points_and_lines"   => buildPga3dPointsAndLines st.handles frameSeq st.simTime
+        | "pga3d_physics_free_top"   => buildPga3dFreeTop st.topMotor st.topOmega st.topTrail frameSeq st.simTime
+        | "pga3d_origami"            => buildPga3dOrigami frameSeq st.simTime
+        | "pga3d_motor_orbits"       => buildPga3dMotorOrbits frameSeq st.simTime
+        | "pga3d_icosahedron"        => buildPga3dIcosahedron frameSeq st.simTime
+        | "pga3d_skinning"           => buildPga3dSkinning frameSeq st.simTime
+        | "pga3d_objects"            => buildPga3dObjects frameSeq st.simTime
+        | "cga3d_intersections"      => buildCga3dIntersections st.handles frameSeq st.simTime
+        | "cga3d_spheres_apollonius" => buildCga3dSpheresApollonius st.handles frameSeq st.simTime
+        | "cga3d_opns_cyclide"       => buildCga3dOpnsCyclide frameSeq st.simTime
+        | "pga2d_euler_line"         => buildPga2dEulerLine st.handles frameSeq st.simTime
+        | "pga2d_inverse_kinematics" => buildPga2dIK st.handles frameSeq st.simTime
+        | "pga2d_desargues_theorem"  => buildPga2dDesargues st.handles frameSeq st.simTime
+        | "sta_lorentz_boost"        => buildStaLorentzBoost st.handles frameSeq st.simTime
+        | "sta_maxwell_em"           => buildStaMaxwellEM frameSeq st.simTime
+        | "r3_rational_rotor"        => buildR3RationalRotor st.handles frameSeq st.simTime
+        | "dual_autodiff_surface"    => buildDualAutodiffSurface st.handles frameSeq st.simTime
+        | "complex_mobius_orbit"     => buildComplexMobius st.handles frameSeq st.simTime
+        | other =>
+          match buildExtraPreset other st.handles frameSeq st.simTime with
           | some fr => fr
-          | none => buildPga3dSlicing st.handles st.sliceMotor frameSeq st.simTime
+          | none =>
+            match buildParityPreset other st.handles frameSeq st.simTime with
+            | some fr => fr
+            | none => buildPga3dSlicing st.handles st.sliceMotor frameSeq st.simTime
+      if rawP.script.isEmpty then { rawP with script := presetScriptFor st.presetId } else rawP
   let f1 := match st.customCamera with
     | some cam => { f0 with camera := cam }
     | none     => f0
