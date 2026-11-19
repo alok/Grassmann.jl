@@ -133,6 +133,26 @@ export class GrassmannWasm {
     return this.mod._grassmann_cabi_version() >>> 0;
   }
 
+  /** Fetch the full JSON catalog of built-in CoffeeShop presets from Lean. */
+  presetCatalog() {
+    const lenPtr = this.mod._malloc(4);
+    try {
+      this.mod._grassmann_studio_preset_catalog(0, 0, lenPtr);
+      const len = this.mod.HEAPU32[lenPtr >>> 2];
+      const buf = this.mod._malloc(len);
+      try {
+        const rc = this.mod._grassmann_studio_preset_catalog(buf, len, lenPtr);
+        if (rc !== GSIR_OK) throw new Error(`preset_catalog error ${rc}`);
+        const bytes = new Uint8Array(this.mod.HEAPU8.buffer, buf, len).slice();
+        return JSON.parse(new TextDecoder().decode(bytes));
+      } finally {
+        this.mod._free(buf);
+      }
+    } finally {
+      this.mod._free(lenPtr);
+    }
+  }
+
   createStudioSession() {
     const sid = this.mod._grassmann_studio_create();
     if (!sid) throw new Error("grassmann_studio_create returned 0");

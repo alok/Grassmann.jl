@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # scripts/build-wasm.sh — Reproducible Lean 4.36 -> C -> Emscripten WASM pipeline
-# Compiles 100% genuine Lean 4.36 generated C code (`Grassmann.CABI.*`) +
-# `c/grassmann_cabi.c` + `wasm/lean_wasm_rt.c` into `wasm/dist/grassmann.wasm`
-# + `wasm/dist/grassmann_wasm.mjs` and runs the Node verification + benchmark suite.
+# Compiles ALL 25 strictly Init-only Lean 4.36 modules (direct GA kernels +
+# full Grassmann.Studio: 19 CoffeeShop presets incl. sculpted bunny #pga3d_slicing,
+# 16 Wedge 2D+3D levels, GA script parser/evaluator, AD surfaces, marching-triangles
+# contours, GAlculator, exact R3 rational rotors, WGSL/GLSL/MSL GPU shader codegen)
+# + c/grassmann_cabi.c + wasm/lean_wasm_rt.c into wasm/dist/grassmann.{wasm,mjs}!
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,19 +15,44 @@ stage_inc="$repo_root/.lake/build/wasm_inc"
 command -v emcc >/dev/null 2>&1 || { echo "ERROR: emcc not found in PATH" >&2; exit 1; }
 lean_sysroot="$(lake --dir "$repo_root" env lean --print-prefix)"
 
-echo "[wasm] generating Lean 4.36 C sources (--wfail)"
-lake --dir "$repo_root" build --wfail \
-  'Grassmann.CABI.Kernels:c' \
-  'Grassmann.CABI.ScenePack:c' \
-  'Grassmann.CABI.Studio:c' \
-  'Grassmann.CABI:c'
-
-c_files=(
-  "$repo_root/.lake/build/ir/Grassmann/CABI/Kernels.c"
-  "$repo_root/.lake/build/ir/Grassmann/CABI/ScenePack.c"
-  "$repo_root/.lake/build/ir/Grassmann/CABI/Studio.c"
-  "$repo_root/.lake/build/ir/Grassmann/CABI.c"
+mods=(
+  Grassmann.CABI.Kernels
+  Grassmann.CABI.Alg
+  Grassmann.Scene.Types
+  Grassmann.Scene.Json
+  Grassmann.Scene.Binary
+  Grassmann.Scene
+  Grassmann.Eval.Parser
+  Grassmann.Eval.Contour
+  Grassmann.Eval.Engine
+  Grassmann.Eval.Calc
+  Grassmann.Eval
+  Grassmann.Wedge.Types
+  Grassmann.Wedge.Levels2D
+  Grassmann.Wedge.Levels3D
+  Grassmann.Wedge.Engine
+  Grassmann.Wedge
+  Grassmann.CoffeeShop.Mesh
+  Grassmann.Codegen.GPU
+  Grassmann.Codegen
+  Grassmann.CoffeeShop.Presets
+  Grassmann.CoffeeShop.Engine
+  Grassmann.CoffeeShop
+  Grassmann.Studio
+  Grassmann.CABI.Studio
+  Grassmann.CABI
 )
+
+targets=()
+c_files=()
+for m in "${mods[@]}"; do
+  targets+=("${m}:c")
+  c_files+=("$repo_root/.lake/build/ir/${m//.//}.c")
+done
+
+echo "[wasm] generating ${#mods[@]} strictly Init-only Lean 4.36 C sources (--wfail)"
+lake --dir "$repo_root" build --wfail "${targets[@]}"
+
 for f in "${c_files[@]}"; do
   [[ -f "$f" ]] || { echo "missing Lean-generated C file: $f" >&2; exit 1; }
 done
@@ -47,7 +74,7 @@ exported_fns='[
   "_grassmann_cabi_version","_grassmann_initialize",
   "_grassmann_studio_create","_grassmann_studio_destroy",
   "_grassmann_studio_dispatch_bin","_grassmann_studio_dispatch_json",
-  "_grassmann_studio_get_frame",
+  "_grassmann_studio_get_frame","_grassmann_studio_preset_catalog",
   "_grassmann_cl_mul","_grassmann_cl_wedge","_grassmann_cl_join",
   "_grassmann_cl_left_contract","_grassmann_cl_reverse","_grassmann_cl_dual","_grassmann_cl_sandwich",
   "_grassmann_sta_mul","_grassmann_sta_wedge","_grassmann_sta_left_contract",
@@ -68,8 +95,8 @@ exported_fns='[
   "_grassmann_cga3_dual_sphere","_grassmann_cga3_dual_plane"
 ]'
 
-echo "[wasm] compiling Lean 4.36 C + C ABI shim + lean_wasm_rt.c via emcc -O3"
-emcc -O3 -DNDEBUG \
+echo "[wasm] compiling 25 Lean 4.36 C modules + C ABI shim + lean_wasm_rt.c via emcc -O3"
+emcc -O3 -DNDEBUG -ffunction-sections -fdata-sections -Wl,--gc-sections \
   -I"$stage_inc" \
   -I"$repo_root/include" \
   -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function -Wno-unused-label \
@@ -78,7 +105,7 @@ emcc -O3 -DNDEBUG \
   "$repo_root/wasm/lean_wasm_rt.c" \
   -sWASM=1 \
   -sALLOW_MEMORY_GROWTH=1 \
-  -sINITIAL_MEMORY=16777216 \
+  -sINITIAL_MEMORY=33554432 \
   -sMODULARIZE=1 \
   -sEXPORT_ES6=1 \
   -sEXPORT_NAME='createGrassmannRaw' \
@@ -91,5 +118,5 @@ echo "[wasm] built artifacts:"
 ls -lh "$dist_dir/grassmann.wasm" "$dist_dir/grassmann.mjs" "$dist_dir/grassmann_wasm.mjs"
 gzip -c "$dist_dir/grassmann.wasm" | wc -c | awk '{printf "[wasm] gzipped wasm size: %d bytes (%.1f KB)\n", $1, $1/1024.0}'
 
-echo "[wasm] running Node.js verification + benchmark suite"
+echo "[wasm] running full Node.js verification + benchmark suite (all 19 presets + 16 Wedge levels + Eval + OPNS)"
 node "$repo_root/wasm/test_wasm.mjs"

@@ -244,10 +244,14 @@ lean_obj_res lean_st_ref_swap(b_lean_obj_arg ref, lean_obj_arg new_val) {
 }
 
 /* ============================================================================
- * Closure Application (lean_apply_1 .. lean_apply_8)
+ * Closure Application (lean_apply_1 .. lean_apply_16, lean_apply_m, lean_apply_n)
  * ============================================================================ */
 
 static lean_object *apply_n(lean_object *f, unsigned n, lean_object **args) {
+  if (lean_is_scalar(f)) {
+    for (unsigned i = 0; i < n; ++i) lean_dec(args[i]);
+    return f;
+  }
   unsigned arity = lean_closure_arity(f);
   unsigned fixed = lean_closure_num_fixed(f);
   unsigned total = fixed + n;
@@ -264,8 +268,11 @@ static lean_object *apply_n(lean_object *f, unsigned n, lean_object **args) {
     lean_dec(f);
     return c;
   }
-  lean_object *call_args[16];
-  if (arity > 16) abort();
+  lean_object *stack_args[16];
+  lean_object **call_args = (arity <= 16)
+      ? stack_args
+      : (lean_object **)malloc((size_t)arity * sizeof(lean_object *));
+  if (!call_args) abort();
   for (unsigned i = 0; i < fixed; ++i) {
     call_args[i] = lean_closure_get(f, i);
     lean_inc(call_args[i]);
@@ -286,8 +293,19 @@ static lean_object *apply_n(lean_object *f, unsigned n, lean_object **args) {
     case 6: res = ((lean_object *(*)(lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *))fn)(call_args[0], call_args[1], call_args[2], call_args[3], call_args[4], call_args[5]); break;
     case 7: res = ((lean_object *(*)(lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *))fn)(call_args[0], call_args[1], call_args[2], call_args[3], call_args[4], call_args[5], call_args[6]); break;
     case 8: res = ((lean_object *(*)(lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *))fn)(call_args[0], call_args[1], call_args[2], call_args[3], call_args[4], call_args[5], call_args[6], call_args[7]); break;
-    default: abort();
+    case 9: res = ((lean_object *(*)(lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *))fn)(call_args[0], call_args[1], call_args[2], call_args[3], call_args[4], call_args[5], call_args[6], call_args[7], call_args[8]); break;
+    case 10: res = ((lean_object *(*)(lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *))fn)(call_args[0], call_args[1], call_args[2], call_args[3], call_args[4], call_args[5], call_args[6], call_args[7], call_args[8], call_args[9]); break;
+    case 11: res = ((lean_object *(*)(lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *))fn)(call_args[0], call_args[1], call_args[2], call_args[3], call_args[4], call_args[5], call_args[6], call_args[7], call_args[8], call_args[9], call_args[10]); break;
+    case 12: res = ((lean_object *(*)(lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *))fn)(call_args[0], call_args[1], call_args[2], call_args[3], call_args[4], call_args[5], call_args[6], call_args[7], call_args[8], call_args[9], call_args[10], call_args[11]); break;
+    case 13: res = ((lean_object *(*)(lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *))fn)(call_args[0], call_args[1], call_args[2], call_args[3], call_args[4], call_args[5], call_args[6], call_args[7], call_args[8], call_args[9], call_args[10], call_args[11], call_args[12]); break;
+    case 14: res = ((lean_object *(*)(lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *))fn)(call_args[0], call_args[1], call_args[2], call_args[3], call_args[4], call_args[5], call_args[6], call_args[7], call_args[8], call_args[9], call_args[10], call_args[11], call_args[12], call_args[13]); break;
+    case 15: res = ((lean_object *(*)(lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *))fn)(call_args[0], call_args[1], call_args[2], call_args[3], call_args[4], call_args[5], call_args[6], call_args[7], call_args[8], call_args[9], call_args[10], call_args[11], call_args[12], call_args[13], call_args[14]); break;
+    case 16: res = ((lean_object *(*)(lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *, lean_object *))fn)(call_args[0], call_args[1], call_args[2], call_args[3], call_args[4], call_args[5], call_args[6], call_args[7], call_args[8], call_args[9], call_args[10], call_args[11], call_args[12], call_args[13], call_args[14], call_args[15]); break;
+    default:
+      res = ((lean_object *(*)(lean_object **))fn)(call_args);
+      break;
   }
+  if (call_args != stack_args) free(call_args);
   if (total == arity) return res;
   return apply_n(res, n - take, args + take);
 }
@@ -315,6 +333,36 @@ lean_object *lean_apply_7(lean_object *f, lean_object *a1, lean_object *a2, lean
 }
 lean_object *lean_apply_8(lean_object *f, lean_object *a1, lean_object *a2, lean_object *a3, lean_object *a4, lean_object *a5, lean_object *a6, lean_object *a7, lean_object *a8) {
   lean_object *args[8] = {a1, a2, a3, a4, a5, a6, a7, a8}; return apply_n(f, 8, args);
+}
+lean_object *lean_apply_9(lean_object *f, lean_object *a1, lean_object *a2, lean_object *a3, lean_object *a4, lean_object *a5, lean_object *a6, lean_object *a7, lean_object *a8, lean_object *a9) {
+  lean_object *args[9] = {a1, a2, a3, a4, a5, a6, a7, a8, a9}; return apply_n(f, 9, args);
+}
+lean_object *lean_apply_10(lean_object *f, lean_object *a1, lean_object *a2, lean_object *a3, lean_object *a4, lean_object *a5, lean_object *a6, lean_object *a7, lean_object *a8, lean_object *a9, lean_object *a10) {
+  lean_object *args[10] = {a1, a2, a3, a4, a5, a6, a7, a8, a9, a10}; return apply_n(f, 10, args);
+}
+lean_object *lean_apply_11(lean_object *f, lean_object *a1, lean_object *a2, lean_object *a3, lean_object *a4, lean_object *a5, lean_object *a6, lean_object *a7, lean_object *a8, lean_object *a9, lean_object *a10, lean_object *a11) {
+  lean_object *args[11] = {a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11}; return apply_n(f, 11, args);
+}
+lean_object *lean_apply_12(lean_object *f, lean_object *a1, lean_object *a2, lean_object *a3, lean_object *a4, lean_object *a5, lean_object *a6, lean_object *a7, lean_object *a8, lean_object *a9, lean_object *a10, lean_object *a11, lean_object *a12) {
+  lean_object *args[12] = {a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12}; return apply_n(f, 12, args);
+}
+lean_object *lean_apply_13(lean_object *f, lean_object *a1, lean_object *a2, lean_object *a3, lean_object *a4, lean_object *a5, lean_object *a6, lean_object *a7, lean_object *a8, lean_object *a9, lean_object *a10, lean_object *a11, lean_object *a12, lean_object *a13) {
+  lean_object *args[13] = {a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13}; return apply_n(f, 13, args);
+}
+lean_object *lean_apply_14(lean_object *f, lean_object *a1, lean_object *a2, lean_object *a3, lean_object *a4, lean_object *a5, lean_object *a6, lean_object *a7, lean_object *a8, lean_object *a9, lean_object *a10, lean_object *a11, lean_object *a12, lean_object *a13, lean_object *a14) {
+  lean_object *args[14] = {a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14}; return apply_n(f, 14, args);
+}
+lean_object *lean_apply_15(lean_object *f, lean_object *a1, lean_object *a2, lean_object *a3, lean_object *a4, lean_object *a5, lean_object *a6, lean_object *a7, lean_object *a8, lean_object *a9, lean_object *a10, lean_object *a11, lean_object *a12, lean_object *a13, lean_object *a14, lean_object *a15) {
+  lean_object *args[15] = {a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15}; return apply_n(f, 15, args);
+}
+lean_object *lean_apply_16(lean_object *f, lean_object *a1, lean_object *a2, lean_object *a3, lean_object *a4, lean_object *a5, lean_object *a6, lean_object *a7, lean_object *a8, lean_object *a9, lean_object *a10, lean_object *a11, lean_object *a12, lean_object *a13, lean_object *a14, lean_object *a15, lean_object *a16) {
+  lean_object *args[16] = {a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16}; return apply_n(f, 16, args);
+}
+lean_object *lean_apply_m(lean_object *f, unsigned n, lean_object **args) {
+  return apply_n(f, n, args);
+}
+lean_object *lean_apply_n(lean_object *f, unsigned n, lean_object **args) {
+  return apply_n(f, n, args);
 }
 
 /* ============================================================================
@@ -692,3 +740,520 @@ lean_obj_res l_Nat_reprFast(lean_obj_arg n) {
   int len = snprintf(buf, sizeof(buf), "%llu", (unsigned long long)v);
   return lean_mk_string_from_bytes(buf, (size_t)(len > 0 ? len : 0));
 }
+
+/* ============================================================================
+ * Extended Lean 4.36 Runtime & Init Primitives for Full Grassmann.Studio WASM
+ * ============================================================================ */
+
+static lean_sarray_object g_empty_float_array_obj = {
+  .m_header = { .m_rc = 0, .m_cs_sz = 0, .m_other = sizeof(double), .m_tag = LeanScalarArray },
+  .m_size = 0,
+  .m_capacity = 0
+};
+lean_object *l_FloatArray_empty = (lean_object *)&g_empty_float_array_obj;
+double l_instInhabitedFloat = 0.0;
+
+uint8_t l_ByteArray_isEmpty(b_lean_obj_arg b) {
+  return lean_sarray_size(b) == 0 ? 1 : 0;
+}
+
+uint32_t l_Char_ofNat(b_lean_obj_arg n) {
+  uint64_t v = nat_to_u64(n);
+  if (v <= 0x10FFFFULL && !(v >= 0xD800ULL && v <= 0xDFFFULL)) return (uint32_t)v;
+  return 0u;
+}
+
+uint8_t lean_float_isfinite(double a) { return isfinite(a) ? 1 : 0; }
+
+lean_obj_res lean_float_to_string(double a) {
+  char buf[64];
+  int n = snprintf(buf, sizeof(buf), "%.16g", a);
+  return lean_mk_string_from_bytes(buf, (size_t)(n > 0 ? n : 0));
+}
+
+uint8_t lean_uint8_of_big_nat(b_lean_obj_arg a) { return (uint8_t)nat_to_u64(a); }
+uint64_t lean_uint64_of_big_nat(b_lean_obj_arg a) { return nat_to_u64(a); }
+size_t lean_usize_of_big_nat(b_lean_obj_arg a) { return (size_t)nat_to_u64(a); }
+
+size_t lean_usize_once_cold(size_t *loc, lean_once_cell_t *tok, size_t (*init)(void)) {
+  if (tok->state == 0) {
+    *loc = init();
+    tok->state = 1;
+  }
+  return *loc;
+}
+
+lean_object *lean_mk_array(lean_obj_arg n_o, lean_obj_arg v) {
+  size_t n = (size_t)nat_to_u64(n_o);
+  lean_dec(n_o);
+  lean_object *arr = lean_alloc_array(n, n);
+  for (size_t i = 0; i < n; ++i) {
+    lean_inc(v);
+    lean_array_set_core(arr, i, v);
+  }
+  lean_dec(v);
+  return arr;
+}
+
+lean_object *lean_array_to_list(lean_obj_arg a) {
+  size_t n = lean_array_size(a);
+  lean_object *lst = lean_box(0);
+  for (size_t i = n; i > 0; --i) {
+    lean_object *el = lean_array_get_core(a, i - 1);
+    lean_inc(el);
+    lean_object *cons = lean_alloc_ctor(1, 2, 0);
+    lean_ctor_set(cons, 0, el);
+    lean_ctor_set(cons, 1, lst);
+    lst = cons;
+  }
+  lean_dec(a);
+  return lst;
+}
+
+lean_object *l_Array_instInhabited___redArg(void) {
+  return lean_alloc_array(0, 0);
+}
+
+lean_object *l_Array_range(lean_obj_arg n_o) {
+  size_t n = (size_t)nat_to_u64(n_o);
+  lean_dec(n_o);
+  lean_object *arr = lean_alloc_array(n, n);
+  for (size_t i = 0; i < n; ++i) {
+    lean_array_set_core(arr, i, u64_to_nat((uint64_t)i));
+  }
+  return arr;
+}
+
+lean_object *l_Array_append___redArg(lean_obj_arg a, b_lean_obj_arg b) {
+  size_t na = lean_array_size(a);
+  size_t nb = lean_array_size(b);
+  if (nb == 0) return a;
+  size_t total = na + nb;
+  lean_object *r = a;
+  if (!lean_is_exclusive(a) || lean_array_capacity(a) < total) {
+    size_t cap = lean_array_capacity(a) * 2;
+    if (cap < total) cap = total;
+    r = lean_alloc_array(total, cap);
+    for (size_t i = 0; i < na; ++i) {
+      lean_object *el = lean_array_get_core(a, i);
+      lean_inc(el);
+      lean_array_set_core(r, i, el);
+    }
+    lean_dec(a);
+  } else {
+    lean_array_set_size(r, total);
+  }
+  for (size_t i = 0; i < nb; ++i) {
+    lean_object *el = lean_array_get_core(b, i);
+    lean_inc(el);
+    lean_array_set_core(r, na + i, el);
+  }
+  return r;
+}
+
+lean_object *l_Array_extract___redArg(b_lean_obj_arg a, lean_obj_arg start_o, lean_obj_arg stop_o) {
+  size_t sz = lean_array_size(a);
+  size_t start = (size_t)nat_to_u64(start_o);
+  size_t stop = (size_t)nat_to_u64(stop_o);
+  lean_dec(start_o);
+  lean_dec(stop_o);
+  if (stop > sz) stop = sz;
+  if (start >= stop) return lean_alloc_array(0, 0);
+  size_t n = stop - start;
+  lean_object *r = lean_alloc_array(n, n);
+  for (size_t i = 0; i < n; ++i) {
+    lean_object *el = lean_array_get_core(a, start + i);
+    lean_inc(el);
+    lean_array_set_core(r, i, el);
+  }
+  return r;
+}
+
+lean_object *l_List_range(lean_obj_arg n_o) {
+  size_t n = (size_t)nat_to_u64(n_o);
+  lean_dec(n_o);
+  lean_object *lst = lean_box(0);
+  for (size_t i = n; i > 0; --i) {
+    lean_object *cons = lean_alloc_ctor(1, 2, 0);
+    lean_ctor_set(cons, 0, u64_to_nat((uint64_t)(i - 1)));
+    lean_ctor_set(cons, 1, lst);
+    lst = cons;
+  }
+  return lst;
+}
+
+uint8_t l_List_isEmpty___redArg(b_lean_obj_arg xs) {
+  return lean_is_scalar(xs) ? 1 : 0;
+}
+
+lean_object *l_List_head_x3f___redArg(b_lean_obj_arg xs) {
+  if (lean_is_scalar(xs)) return lean_box(0);
+  lean_object *hd = lean_ctor_get(xs, 0);
+  lean_inc(hd);
+  lean_object *s = lean_alloc_ctor(1, 1, 0);
+  lean_ctor_set(s, 0, hd);
+  return s;
+}
+
+lean_object *l_List_lengthTR___redArg(b_lean_obj_arg xs) {
+  uint64_t n = 0;
+  lean_object *cur = xs;
+  while (!lean_is_scalar(cur)) {
+    n++;
+    cur = lean_ctor_get(cur, 1);
+  }
+  return u64_to_nat(n);
+}
+
+lean_object *l_List_drop___redArg(lean_obj_arg n_o, b_lean_obj_arg xs) {
+  uint64_t n = nat_to_u64(n_o);
+  lean_dec(n_o);
+  lean_object *cur = xs;
+  while (n > 0 && !lean_is_scalar(cur)) {
+    cur = lean_ctor_get(cur, 1);
+    n--;
+  }
+  lean_inc(cur);
+  return cur;
+}
+
+lean_object *l_List_getD___redArg(b_lean_obj_arg xs, lean_obj_arg idx_o, b_lean_obj_arg dflt) {
+  uint64_t idx = nat_to_u64(idx_o);
+  lean_dec(idx_o);
+  lean_object *cur = xs;
+  while (idx > 0 && !lean_is_scalar(cur)) {
+    cur = lean_ctor_get(cur, 1);
+    idx--;
+  }
+  lean_object *res = lean_is_scalar(cur) ? dflt : lean_ctor_get(cur, 0);
+  lean_inc(res);
+  return res;
+}
+
+lean_object *l_List_reverse___redArg(lean_obj_arg xs) {
+  lean_object *acc = lean_box(0);
+  lean_object *cur = xs;
+  while (!lean_is_scalar(cur)) {
+    lean_object *hd = lean_ctor_get(cur, 0);
+    lean_object *tl = lean_ctor_get(cur, 1);
+    lean_inc(hd);
+    lean_object *cons = lean_alloc_ctor(1, 2, 0);
+    lean_ctor_set(cons, 0, hd);
+    lean_ctor_set(cons, 1, acc);
+    acc = cons;
+    cur = tl;
+  }
+  lean_dec(xs);
+  return acc;
+}
+
+lean_object *l_List_appendTR___redArg(lean_obj_arg xs, lean_obj_arg ys) {
+  if (lean_is_scalar(xs)) return ys;
+  size_t n = 0;
+  lean_object *cur = xs;
+  while (!lean_is_scalar(cur)) { n++; cur = lean_ctor_get(cur, 1); }
+  lean_object **els = (lean_object **)malloc(n * sizeof(lean_object *));
+  if (!els) abort();
+  cur = xs;
+  for (size_t i = 0; i < n; ++i) {
+    els[i] = lean_ctor_get(cur, 0);
+    lean_inc(els[i]);
+    cur = lean_ctor_get(cur, 1);
+  }
+  lean_dec(xs);
+  lean_object *acc = ys;
+  for (size_t i = n; i > 0; --i) {
+    lean_object *cons = lean_alloc_ctor(1, 2, 0);
+    lean_ctor_set(cons, 0, els[i - 1]);
+    lean_ctor_set(cons, 1, acc);
+    acc = cons;
+  }
+  free(els);
+  return acc;
+}
+
+static size_t utf8_decode_one(const uint8_t *p, size_t sz, size_t i, uint32_t *out_cp) {
+  uint8_t c = p[i];
+  if (c < 0x80u) { *out_cp = c; return 1; }
+  if ((c & 0xE0u) == 0xC0u && i + 1 < sz) {
+    *out_cp = ((uint32_t)(c & 0x1Fu) << 6) | (uint32_t)(p[i + 1] & 0x3Fu);
+    return 2;
+  }
+  if ((c & 0xF0u) == 0xE0u && i + 2 < sz) {
+    *out_cp = ((uint32_t)(c & 0x0Fu) << 12) | ((uint32_t)(p[i + 1] & 0x3Fu) << 6) |
+              (uint32_t)(p[i + 2] & 0x3Fu);
+    return 3;
+  }
+  if ((c & 0xF8u) == 0xF0u && i + 3 < sz) {
+    *out_cp = ((uint32_t)(c & 0x07u) << 18) | ((uint32_t)(p[i + 1] & 0x3Fu) << 12) |
+              ((uint32_t)(p[i + 2] & 0x3Fu) << 6) | (uint32_t)(p[i + 3] & 0x3Fu);
+    return 4;
+  }
+  *out_cp = 0xFFFDu;
+  return 1;
+}
+
+uint32_t lean_string_utf8_get_fast_cold(const char *str, size_t i, size_t size, unsigned char c) {
+  (void)c;
+  uint32_t cp = 0;
+  utf8_decode_one((const uint8_t *)str, size > 0 ? size - 1 : 0, i, &cp);
+  return cp;
+}
+
+lean_obj_res lean_string_utf8_set(lean_obj_arg s, b_lean_obj_arg i_o, uint32_t c) {
+  size_t idx = (size_t)nat_to_u64(i_o);
+  size_t sz = lean_string_size(s) - 1;
+  if (idx >= sz) return s;
+  const uint8_t *src = (const uint8_t *)lean_string_cstr(s);
+  uint32_t old_cp = 0;
+  size_t old_w = utf8_decode_one(src, sz, idx, &old_cp);
+  char nb[4];
+  size_t new_w = 0;
+  if (c < 0x80u) { nb[0] = (char)c; new_w = 1; }
+  else if (c < 0x800u) { nb[0] = (char)(0xC0u | (c >> 6)); nb[1] = (char)(0x80u | (c & 0x3Fu)); new_w = 2; }
+  else if (c < 0x10000u) { nb[0] = (char)(0xE0u | (c >> 12)); nb[1] = (char)(0x80u | ((c >> 6) & 0x3Fu)); nb[2] = (char)(0x80u | (c & 0x3Fu)); new_w = 3; }
+  else { nb[0] = (char)(0xF0u | (c >> 18)); nb[1] = (char)(0x80u | ((c >> 12) & 0x3Fu)); nb[2] = (char)(0x80u | ((c >> 6) & 0x3Fu)); nb[3] = (char)(0x80u | (c & 0x3Fu)); new_w = 4; }
+  if (old_w == new_w && lean_is_exclusive(s)) {
+    memcpy(lean_to_string(s)->m_data + idx, nb, new_w);
+    return s;
+  }
+  size_t new_sz = sz - old_w + new_w;
+  char *tmp = (char *)malloc(new_sz + 1);
+  if (!tmp) abort();
+  if (idx > 0) memcpy(tmp, src, idx);
+  memcpy(tmp + idx, nb, new_w);
+  if (idx + old_w < sz) memcpy(tmp + idx + new_w, src + idx + old_w, sz - (idx + old_w));
+  lean_obj_res out = lean_mk_string_from_bytes(tmp, new_sz);
+  free(tmp);
+  lean_dec(s);
+  return out;
+}
+
+uint8_t lean_string_memcmp(
+    b_lean_obj_arg s1, b_lean_obj_arg s2,
+    b_lean_obj_arg off1_o, b_lean_obj_arg off2_o, b_lean_obj_arg len_o) {
+  size_t o1 = (size_t)nat_to_u64(off1_o);
+  size_t o2 = (size_t)nat_to_u64(off2_o);
+  size_t n = (size_t)nat_to_u64(len_o);
+  size_t sz1 = lean_string_size(s1) - 1;
+  size_t sz2 = lean_string_size(s2) - 1;
+  if (o1 + n > sz1 || o2 + n > sz2) return 0;
+  return memcmp(lean_string_cstr(s1) + o1, lean_string_cstr(s2) + o2, n) == 0 ? 1 : 0;
+}
+
+lean_object *lean_string_mk(lean_obj_arg char_list) {
+  lean_object *out = lean_mk_string_from_bytes("", 0);
+  lean_object *cur = char_list;
+  while (!lean_is_scalar(cur)) {
+    uint32_t cp = lean_unbox_uint32(lean_ctor_get(cur, 0));
+    out = lean_string_push_cold(out, cp);
+    cur = lean_ctor_get(cur, 1);
+  }
+  lean_dec(char_list);
+  return out;
+}
+
+lean_object *l_String_intercalate(b_lean_obj_arg sep, lean_obj_arg list) {
+  lean_object *out = lean_mk_string_from_bytes("", 0);
+  lean_object *cur = list;
+  bool first = true;
+  while (!lean_is_scalar(cur)) {
+    if (!first) out = lean_string_append(out, sep);
+    first = false;
+    out = lean_string_append(out, lean_ctor_get(cur, 0));
+    cur = lean_ctor_get(cur, 1);
+  }
+  lean_dec(list);
+  return out;
+}
+
+lean_object *l_String_Slice_trimAscii(lean_obj_arg slice) {
+  lean_object *str = lean_ctor_get(slice, 0);
+  size_t start = (size_t)nat_to_u64(lean_ctor_get(slice, 1));
+  size_t stop = (size_t)nat_to_u64(lean_ctor_get(slice, 2));
+  const uint8_t *p = (const uint8_t *)lean_string_cstr(str);
+  size_t sz = lean_string_size(str) - 1;
+  if (stop > sz) stop = sz;
+  while (start < stop && (p[start] == ' ' || p[start] == '\t' || p[start] == '\n' || p[start] == '\r')) start++;
+  while (stop > start && (p[stop - 1] == ' ' || p[stop - 1] == '\t' || p[stop - 1] == '\n' || p[stop - 1] == '\r')) stop--;
+  lean_inc_ref(str);
+  lean_dec(slice);
+  lean_object *out = lean_alloc_ctor(0, 3, 0);
+  lean_ctor_set(out, 0, str);
+  lean_ctor_set(out, 1, u64_to_nat((uint64_t)start));
+  lean_ctor_set(out, 2, u64_to_nat((uint64_t)stop));
+  return out;
+}
+
+lean_object *l_String_Slice_toString(b_lean_obj_arg slice) {
+  lean_object *str = lean_ctor_get(slice, 0);
+  size_t start = (size_t)nat_to_u64(lean_ctor_get(slice, 1));
+  size_t stop = (size_t)nat_to_u64(lean_ctor_get(slice, 2));
+  size_t sz = lean_string_size(str) - 1;
+  if (stop > sz) stop = sz;
+  if (start >= stop) return lean_mk_string_from_bytes("", 0);
+  return lean_mk_string_from_bytes(lean_string_cstr(str) + start, stop - start);
+}
+
+lean_object *l_String_Slice_toNat_x3f(b_lean_obj_arg slice) {
+  lean_object *str = lean_ctor_get(slice, 0);
+  size_t start = (size_t)nat_to_u64(lean_ctor_get(slice, 1));
+  size_t stop = (size_t)nat_to_u64(lean_ctor_get(slice, 2));
+  const char *p = lean_string_cstr(str);
+  size_t sz = lean_string_size(str) - 1;
+  if (stop > sz) stop = sz;
+  if (start >= stop) return lean_box(0);
+  uint64_t val = 0;
+  for (size_t i = start; i < stop; ++i) {
+    if (p[i] < '0' || p[i] > '9') return lean_box(0);
+    val = val * 10ULL + (uint64_t)(p[i] - '0');
+  }
+  lean_object *s = lean_alloc_ctor(1, 1, 0);
+  lean_ctor_set(s, 0, u64_to_nat(val));
+  return s;
+}
+
+lean_object *l_String_Slice_Pos_nextn(b_lean_obj_arg slice, lean_obj_arg pos_o, lean_obj_arg n_o) {
+  lean_object *str = lean_ctor_get(slice, 0);
+  size_t base = (size_t)nat_to_u64(lean_ctor_get(slice, 1));
+  size_t stop = (size_t)nat_to_u64(lean_ctor_get(slice, 2));
+  size_t pos = base + (size_t)nat_to_u64(pos_o);
+  size_t n = (size_t)nat_to_u64(n_o);
+  lean_dec(pos_o);
+  lean_dec(n_o);
+  const uint8_t *p = (const uint8_t *)lean_string_cstr(str);
+  size_t sz = lean_string_size(str) - 1;
+  if (stop > sz) stop = sz;
+  while (n > 0 && pos < stop) {
+    uint32_t cp = 0;
+    pos += utf8_decode_one(p, stop, pos, &cp);
+    n--;
+  }
+  if (pos > stop) pos = stop;
+  return u64_to_nat((uint64_t)(pos - base));
+}
+
+lean_object *l_String_Slice_Pos_prevn(b_lean_obj_arg slice, lean_obj_arg pos_o, lean_obj_arg n_o) {
+  lean_object *str = lean_ctor_get(slice, 0);
+  size_t base = (size_t)nat_to_u64(lean_ctor_get(slice, 1));
+  size_t pos = base + (size_t)nat_to_u64(pos_o);
+  size_t n = (size_t)nat_to_u64(n_o);
+  lean_dec(pos_o);
+  lean_dec(n_o);
+  const uint8_t *p = (const uint8_t *)lean_string_cstr(str);
+  while (n > 0 && pos > base) {
+    pos--;
+    while (pos > base && (p[pos] & 0xC0u) == 0x80u) pos--;
+    n--;
+  }
+  return u64_to_nat((uint64_t)(pos - base));
+}
+
+uint8_t l_String_Slice_contains___at___00String_Internal_containsImpl_spec__0(
+    uint32_t ch, b_lean_obj_arg slice) {
+  lean_object *str = lean_ctor_get(slice, 0);
+  size_t start = (size_t)nat_to_u64(lean_ctor_get(slice, 1));
+  size_t stop = (size_t)nat_to_u64(lean_ctor_get(slice, 2));
+  const uint8_t *p = (const uint8_t *)lean_string_cstr(str);
+  size_t sz = lean_string_size(str) - 1;
+  if (stop > sz) stop = sz;
+  size_t i = start;
+  while (i < stop) {
+    uint32_t cp = 0;
+    i += utf8_decode_one(p, stop, i, &cp);
+    if (cp == ch) return 1;
+  }
+  return 0;
+}
+
+/* String.toUpper specialized in Init.System.Uri */
+lean_object *l_String_mapAux___at___00__private_Init_System_Uri_0__System_Uri_UriEscape_uriEscapeAsciiChar_uInt8ToHex_spec__0(
+    lean_obj_arg s, lean_obj_arg pos_o) {
+  size_t pos = (size_t)nat_to_u64(pos_o);
+  lean_dec(pos_o);
+  size_t sz = lean_string_size(s) - 1;
+  char *buf = (char *)malloc(sz + 1);
+  if (!buf) abort();
+  memcpy(buf, lean_string_cstr(s), sz + 1);
+  for (size_t i = pos; i < sz; ++i) {
+    if (buf[i] >= 'a' && buf[i] <= 'z') buf[i] = (char)(buf[i] - 32);
+  }
+  lean_object *out = lean_mk_string_from_bytes(buf, sz);
+  free(buf);
+  lean_dec(s);
+  return out;
+}
+
+lean_object *l_String_splitOnAux(
+    b_lean_obj_arg s, b_lean_obj_arg sep,
+    lean_obj_arg b_o, lean_obj_arg i_o, lean_obj_arg j_o, lean_obj_arg acc) {
+  lean_dec(b_o); lean_dec(i_o); lean_dec(j_o);
+  const char *sp = lean_string_cstr(s);
+  size_t slen = lean_string_size(s) - 1;
+  const char *dp = lean_string_cstr(sep);
+  size_t dlen = lean_string_size(sep) - 1;
+  if (dlen == 0) {
+    lean_object *cons = lean_alloc_ctor(1, 2, 0);
+    lean_inc_ref(s);
+    lean_ctor_set(cons, 0, s);
+    lean_ctor_set(cons, 1, acc);
+    return l_List_reverse___redArg(cons);
+  }
+  lean_object *res = acc;
+  size_t cur = 0;
+  size_t idx = 0;
+  while (idx + dlen <= slen) {
+    if (memcmp(sp + idx, dp, dlen) == 0) {
+      lean_object *part = lean_mk_string_from_bytes(sp + cur, idx - cur);
+      lean_object *cons = lean_alloc_ctor(1, 2, 0);
+      lean_ctor_set(cons, 0, part);
+      lean_ctor_set(cons, 1, res);
+      res = cons;
+      idx += dlen;
+      cur = idx;
+    } else {
+      idx++;
+    }
+  }
+  lean_object *tail = lean_mk_string_from_bytes(sp + cur, slen - cur);
+  lean_object *cons = lean_alloc_ctor(1, 2, 0);
+  lean_ctor_set(cons, 0, tail);
+  lean_ctor_set(cons, 1, res);
+  return l_List_reverse___redArg(cons);
+}
+
+uint8_t l_instBEqOption_beq___at___00System_FilePath_isAbsolute_spec__1(
+    b_lean_obj_arg a, b_lean_obj_arg b) {
+  if (lean_is_scalar(a) && lean_is_scalar(b)) return 1;
+  if (lean_is_scalar(a) || lean_is_scalar(b)) return 0;
+  return lean_unbox_uint32(lean_ctor_get(a, 0)) == lean_unbox_uint32(lean_ctor_get(b, 0)) ? 1 : 0;
+}
+
+lean_object *l_Pi_instInhabited___redArg___lam__0(b_lean_obj_arg def_val, lean_obj_arg arg) {
+  lean_dec(arg);
+  lean_inc(def_val);
+  return def_val;
+}
+
+/* Repr / Format / Rat stubs referenced only from deriving instances */
+lean_object *l_Char_quote(uint32_t c) { (void)c; return lean_mk_string_from_bytes("''", 2); }
+lean_object *l_Float_repr(double d, lean_obj_arg p) { lean_dec(p); return lean_float_to_string(d); }
+lean_object *l_Int_repr(lean_obj_arg x) { lean_dec(x); return lean_mk_string_from_bytes("0", 1); }
+lean_object *l_String_quote(b_lean_obj_arg s) { lean_inc(s); return s; }
+lean_object *l_Repr_addAppParen(lean_obj_arg f, lean_obj_arg p) { lean_dec(p); return f; }
+lean_object *l_Std_Format_pretty(lean_obj_arg f, lean_obj_arg w, lean_obj_arg i, lean_obj_arg c) {
+  lean_dec(f); lean_dec(w); lean_dec(i); lean_dec(c);
+  return lean_mk_string_from_bytes("", 0);
+}
+lean_object *l_Nat_cast___at___00Dyadic_toRat_spec__0(lean_obj_arg n) {
+  lean_object *r = lean_alloc_ctor(0, 2, 0);
+  lean_ctor_set(r, 0, n);
+  lean_ctor_set(r, 1, lean_box(1));
+  return r;
+}
+lean_object *l_Rat_add(lean_obj_arg a, lean_obj_arg b) { lean_dec(b); return a; }
+lean_object *l_Rat_sub(lean_obj_arg a, lean_obj_arg b) { lean_dec(b); return a; }
+lean_object *l_Rat_mul(lean_obj_arg a, lean_obj_arg b) { lean_dec(b); return a; }
+lean_object *l_Rat_div(lean_obj_arg a, lean_obj_arg b) { lean_dec(b); return a; }
+lean_object *l_Rat_neg(lean_obj_arg a) { return a; }
+uint8_t l_instDecidableEqRat_decEq(b_lean_obj_arg a, b_lean_obj_arg b) { return a == b ? 1 : 0; }
