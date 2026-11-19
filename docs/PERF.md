@@ -751,3 +751,31 @@ zero hashing, pure `Init`) — eliminates closure/boxing overhead across all spa
 | `STA/grade 2 of Multivector` | 447.3 ns | 22.9 ns | 19.5× |
 | `PGA3/grade 2 of Multivector` | 441.4 ns | 22.2 ns | 19.9× |
 | `CGA3/grade 2 of Multivector` | 706.5 ns | 26.0 ns | 27.2× |
+
+## 2026-11-19: `Grassmann.Projective` (PGA2/3) & optimized `Grassmann.Conformal` (CGA2/3)
+
+Added `Grassmann/GanjaCompat.lean`, `Grassmann/Projective.lean` (closed-form `O(1)`
+`motorExp`/`motorLog`/SLERP, Study normalization, column-major `motorToMat4` in ganja/`GSIR`
+wire order, flat XYZ batch transforms, RK4 rigid-body step, exact PGA3 triangle-mesh plane
+slicing + stitched 2D contours), and `FloatArray`-backed `Grassmann/Conformal.lean` + full
+`interpreteCGA3`/`interpreteCGA2` round/flat classifier.
+
+Hoisting sub-`1e-22` float literals (`1e-24`, `1e-300`) to module-level `def`s (avoiding per-call
+bignum `Float.ofScientific`), replacing `.push` chains with single-copy `Values.set` on cached
+zero templates, and adding a zero-allocation `dominantGradeCGA3` + direct IPNS grade-1 fast path
+in `interpreteCGA3` produced huge speedups (`lake exe bench grassmann`, min ns/op, Apple M4 Max):
+
+| case | initial | optimized | speedup |
+|---|---|---|---|
+| `projective/motorExp` | 1,001 ns | **17.9 ns** | 55.9× |
+| `projective/motorLog` | 1,166 ns | **47.6 ns** | 24.5× |
+| `projective/normalizeMotor3` | 86.9 ns | **11.9 ns** | 7.3× |
+| `projective/motorSlerp` | 2,330 ns | **168.6 ns** | 13.8× |
+| `projective/motorToMat4` | 193.6 ns | **52.4 ns** | 3.7× |
+| `projective/transformXYZBatch` | 4.74 ns/pt | **3.93 ns/pt** | 1.2× |
+| `projective/rigidBodyStepRK4` | 1.04 µs | **1.00 µs** | 1.0× |
+| `projective/sliceMeshByPlane` (12 tris) | 4.59 µs | **4.69 µs** | — |
+| `conformal/point3` | 81.0 ns | **12.0 ns** | 6.7× |
+| `conformal/dualSphere3` | 82.7 ns | **12.2 ns** | 6.8× |
+| `conformal/interpreteCGA3 sphere` | 837.7 ns | **86.1 ns** | 9.7× |
+| `conformal/interpreteCGA3 circle` | 654.1 ns | **544.2 ns** | 1.2× |

@@ -27,6 +27,8 @@ import Grassmann.Fuse
 import Grassmann.Batch
 import Grassmann.Spec
 import Grassmann.Conformal
+import Grassmann.GanjaCompat
+import Grassmann.Projective
 
 /-!
 # Grassmann: ⟨Grassmann-Clifford-Hodge⟩ differential geometric algebra

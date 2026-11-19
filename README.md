@@ -34,6 +34,10 @@ Toolchain: `leanprover/lean4:v4.36.0`. Plots are rendered with
 
 ## Credit and licence
 
-The mathematics, API design and naming are Michael Reed's; cite his work (see
-[`CITATION.cff`](CITATION.cff)) when you use this. As a port of AGPL-3.0 software, this
-repository is licensed under the [GNU AGPL v3](LICENSE).
+The core mathematics, API design and naming are [Michael Reed](https://github.com/chakravala)'s
+([Grassmann.jl](https://github.com/chakravala/Grassmann.jl)); cite his work (see
+[`CITATION.cff`](CITATION.cff)) when you use this. The `ganja.js` compatibility bridge,
+projective geometric algebra utilities, conformal classifier (`interprete`), and CoffeeShop/Wedge
+conventions (`Grassmann.GanjaCompat`, `Grassmann.Projective`, `Grassmann.Conformal`) are inspired
+by and credit [Steven De Keninck](https://github.com/enkimute) ([ganja.js](https://github.com/enkimute/ganja.js)).
+As a port of AGPL-3.0 software, this repository is licensed under the [GNU AGPL v3](LICENSE).

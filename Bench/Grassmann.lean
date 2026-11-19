@@ -2,6 +2,7 @@ import Bench.Grassmann.Spaces
 import Bench.Grassmann.Extra
 import Bench.Grassmann.Batch
 import Bench.Grassmann.Floor
+import Bench.Grassmann.Projective
 
 /-!
 # `grassmann`: the typed algebra at `Float`
@@ -22,6 +23,6 @@ open _root_.Grassmann DirectSum Bench
 /-- The suite. -/
 def run : Suite := ⟨"grassmann", do
   casesR2; casesR3; casesR4; casesSTA; casesPGA2; casesPGA3; casesCGA2; casesCGA3
-  batchR3; batchSTA; batchPGA3; batchCGA3; floors⟩
+  batchR3; batchSTA; batchPGA3; batchCGA3; floors; projectiveAndConformal⟩
 
 end Bench.Grassmann

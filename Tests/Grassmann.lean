@@ -24,6 +24,7 @@ import Tests.Grassmann.Kernel
 import Tests.Grassmann.Golden
 import Tests.Grassmann.Types
 import Tests.Grassmann.Conformal
+import Tests.Grassmann.Projective
 import Tests.Grassmann.Identities
 import Tests.Grassmann.Metric
 
@@ -37,6 +38,7 @@ def Tests.Grassmann.run : IO (Nat × Nat) := do
       ("grassmann/types", Types.run), ("grassmann/basis", Basis.run),
       ("grassmann/extension", Extension.run),
       ("grassmann/conformal", ConformalSuite.run),
+      ("grassmann/projective", ProjectiveSuite.run),
       ("grassmann/identities", Identities.run),
       ("grassmann/metric", MetricSuite.run) ]
   let mut pass := 0
