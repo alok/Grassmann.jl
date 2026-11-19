@@ -12,7 +12,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 //  and load cleanly with ZERO ENOENT even when canonical grassmann.wasm is absent!)
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "dist/wasm-manifest.json"), "utf8"));
 assert.equal(manifest.version, 1, "wasm-manifest version");
-assert.equal(manifest.presetCount, 74, "wasm-manifest presetCount");
+assert.equal(manifest.presetCount, 77, "wasm-manifest presetCount");
 assert.ok(/^[0-9a-f]{10}$/.test(manifest.hash), "wasm-manifest 10-hex hash");
 const fpWasmSrc = path.join(__dirname, "dist", manifest.wasmFile);
 const fpLoaderSrc = path.join(__dirname, "dist", manifest.loaderFile);
@@ -112,12 +112,16 @@ assertNear(back[0], 1.5, 1e-12, "WASM CGA3 down.x");
 assertNear(back[1], -2.25, 1e-12, "WASM CGA3 down.y");
 assertNear(back[2], 0.75, 1e-12, "WASM CGA3 down.z");
 
-// 5. Full Preset Catalog (ALL 74 CoffeeShop Presets — 69 + 5 Wave 4B Showcase!)
+// 5. Full Preset Catalog (ALL 77 CoffeeShop Presets) + 6-Stop Guided GA Tour!
 const catalog = g.presetCatalog();
-assert.equal(catalog.length, 74, `expected 74 presets, got ${catalog.length}`);
+assert.equal(catalog.length, 77, `expected 77 presets, got ${catalog.length}`);
 const uniqueIds = new Set(catalog.map(p => p.id));
-assert.equal(uniqueIds.size, 74, "zero duplicate preset IDs across 74-preset catalog");
-console.log(`[wasm test] loaded full Lean preset catalog: ${catalog.length} presets (74 unique)`);
+assert.equal(uniqueIds.size, 77, "zero duplicate preset IDs across 77-preset catalog");
+const tour = g.tourCatalog();
+assert.equal(tour.length, 6, `expected 6 tour stops, got ${tour.length}`);
+assert.equal(tour[0].id, "tour_points_lines");
+assert.equal(tour[5].id, "tour_play_wedge");
+console.log(`[wasm test] loaded full Lean preset catalog: ${catalog.length} presets (77 unique) + ${tour.length}-stop Guided Tour`);
 
 // 6. Full Unified Grassmann.Studio Session in WASM!
 const sess = g.createStudioSession();
@@ -152,9 +156,10 @@ assert.ok(contourSec, "pga3d_slicing has CONTOUR_OVERLAY");
   console.log(`[wasm test] sculpted bunny verified: ${vCount} verts, span=(${spanX.toFixed(2)}, ${spanY.toFixed(2)}, ${spanZ.toFixed(2)}), ${polyCount} slice contours, script=${f0.meta.script.length} chars`);
 }
 
-// Exercise EVERY SINGLE preset (all 74!) + verify KaTeX formula & summary in compiled Lean WASM!
+// Exercise EVERY SINGLE preset (all 77!) + verify KaTeX formula & summary in compiled Lean WASM!
 let foundOpnsGlsl = false;
 let showcaseVerified = 0;
+let wave6ShowstoppersVerified = 0;
 for (const item of catalog) {
   const frRaw = sess.dispatchJson({ op: "loadPreset", id: item.id });
   const fr = parseGSIR(frRaw);
@@ -168,6 +173,25 @@ for (const item of catalog) {
       assert.ok(fr.sections.some(s => s.kind === 0x0D), `${item.id} emits 0x0D FLOW_PARTICLES`);
     }
     showcaseVerified++;
+  }
+  if (item.id === "implicit_barth_sextic") {
+    assert.ok(fr.sections.some(s => s.kind === 0x0B), "implicit_barth_sextic emits bytecode MESH_ASSETS");
+    assert.ok(fr.sections.some(s => s.kind === 0x10), "implicit_barth_sextic emits 0x10 OPNS_UNIFORMS");
+    assert.ok(fr.meta.opnsShaders && fr.meta.opnsShaders.length === 1, "implicit_barth_sextic emits GPUInit shader");
+    assert.ok(fr.meta.params && fr.meta.params.some(p => p.name === "phi"), "implicit_barth_sextic exposes phi slider");
+    wave6ShowstoppersVerified++;
+  }
+  if (item.id === "cga3d_dupin_cyclide_raymarch") {
+    assert.ok(fr.sections.some(s => s.kind === 0x10), "cga3d_dupin_cyclide_raymarch emits 0x10 OPNS_UNIFORMS");
+    assert.ok(fr.sections.some(s => s.kind === 0x0C), "cga3d_dupin_cyclide_raymarch emits focal conic curves");
+    assert.ok(fr.meta.opnsShaders && fr.meta.opnsShaders.length === 1, "cga3d_dupin_cyclide_raymarch emits GPUInit shader");
+    wave6ShowstoppersVerified++;
+  }
+  if (item.id === "pga3d_gears_kinematics") {
+    const meshRefs = fr.sections.find(s => s.kind === 0x0A);
+    assert.ok(meshRefs && meshRefs.count >= 3, "pga3d_gears_kinematics emits 3 meshing gears");
+    assert.ok(fr.sections.some(s => s.kind === 0x09), "pga3d_gears_kinematics emits angular-velocity bivector disks");
+    wave6ShowstoppersVerified++;
   }
   if (item.id === "cga3d_opns_cyclide") {
     assert.ok(fr.meta.opnsShaders && fr.meta.opnsShaders.length > 0, "OPNS shader emitted");
@@ -187,8 +211,128 @@ for (const item of catalog) {
     foundOpnsGlsl = true;
   }
 }
-assert.equal(showcaseVerified, 5, "verified all 5 Wave 4B showstopper physics/relativity/streamline presets");
+assert.equal(showcaseVerified, 5, "verified all 5 Wave 4B showstopper presets");
+assert.equal(wave6ShowstoppersVerified, 3, "verified all 3 Wave 6C showstopper presets (Barth Sextic, Dupin Cyclide, Involute Gears)");
 assert.ok(foundOpnsGlsl, "verified cga3d_opns_cyclide GPUInit WGSL/GLSL3/MSL shader emission in WASM");
+
+// Wave 6C Dual-Handle 3D Slicing Manipulator (handle 0 = center, handle 1 = tilt normal)
+{
+  const sl0Raw = sess.dispatchJson({ op: "loadPreset", id: "pga3d_slicing" });
+  const sl0 = parseGSIR(sl0Raw);
+  const ptSec = sl0.sections.find(s => s.kind === 0x02);
+  assert.ok(ptSec && ptSec.count >= 2, "pga3d_slicing exposes 2 draggable handles (center + tilt normal)");
+  const dragTilt = new Uint8Array(20);
+  const dtdv = new DataView(dragTilt.buffer);
+  dragTilt[0] = 0x01; dtdv.setUint16(2, 16, true); dtdv.setUint32(4, 1, true); // handleId = 1 (tilt normal)
+  dtdv.setFloat32(8, 0.7, true); dtdv.setFloat32(12, 0.5, true); dtdv.setFloat32(16, 0.4, true);
+  const sl1Raw = sess.dispatchBin(dragTilt);
+  const sl1 = parseGSIR(sl1Raw);
+  const cSec1 = sl1.sections.find(s => s.kind === 0x0F);
+  assert.ok(cSec1, "tilted pga3d_slicing still emits stitched 2D CONTOUR_OVERLAY");
+  const plSec0 = sl0.sections.find(s => s.kind === 0x05);
+  const plSec1 = sl1.sections.find(s => s.kind === 0x05);
+  assert.ok(plSec0 && plSec1, "pga3d_slicing emits cutting plane");
+  const dv0 = new DataView(sl0Raw.buffer, sl0Raw.byteOffset, sl0Raw.byteLength);
+  const dv1 = new DataView(sl1Raw.buffer, sl1Raw.byteOffset, sl1Raw.byteLength);
+  // Plane basis u.y (+16) changes when tilting normal away from +Y
+  const uy0 = dv0.getFloat32(plSec0.byteOffset + 16, true);
+  const uy1 = dv1.getFloat32(plSec1.byteOffset + 16, true);
+  assert.ok(Math.abs(uy1 - uy0) > 0.05, `dragging tilt handle 1 tilted cutting plane (uy: ${uy0.toFixed(3)} -> ${uy1.toFixed(3)})`);
+}
+
+// Wave 6C 6-Stop Guided Tour (`loadTourStop` 0..5)
+for (let idx = 0; idx < 6; idx++) {
+  const tf = parseGSIR(sess.dispatchJson({ op: "loadTourStop", index: idx }));
+  if (idx === 5) {
+    assert.equal(tf.meta.presetId, "wedge_level_1", "loadTourStop 5 entered wedge_level_1");
+    assert.ok(tf.meta.wedge && tf.meta.wedge.level === 1, "loadTourStop 5 entered Wedge 2D Level 1");
+  } else {
+    assert.equal(tf.meta.presetId, tour[idx].presetId, `loadTourStop ${idx} loaded ${tour[idx].presetId}`);
+  }
+}
+
+// Dots Round-2 Regression Probes LIVE IN COMPILED WASM!
+// (Dots P0 #2) PGA2 script point-vs-line incidence: (e1 - e0) ^ point(1,0,0) == 0 & (e2 - 2*e0) ^ point(3,2,0) == 0
+{
+  const pga2Inc = parseGSIR(sess.dispatchJson({
+    op: "evalScript",
+    algebra: "PGA2",
+    code: "let P = point(1, 0, 0)\nlet L = e1 - e0\nlet I0 = L ^ P\nlet Q = point(3, 2, 0)\nlet M = e2 - 2*e0\nlet I1 = M ^ Q"
+  }));
+  assert.equal(pga2Inc.meta.diagnostics.length, 0, "Dots P0 #2: PGA2 incidence zero diagnostics");
+  const i0 = pga2Inc.meta.inspect.find(e => e.name === "I0");
+  const i1 = pga2Inc.meta.inspect.find(e => e.name === "I1");
+  assert.ok(i0 && i0.formatted === "0", `Dots P0 #2: expected I0 == 0, got ${i0?.formatted}`);
+  assert.ok(i1 && i1.formatted === "0", `Dots P0 #2: expected I1 == 0, got ${i1?.formatted}`);
+}
+
+// (Dots P0 #3) CGA3 off-origin OPNS line A^B^ni emits 1 line & 0 circles passing through A=(0,1,0) & B=(1,1,0)
+{
+  const cga3LineRaw = sess.dispatchJson({
+    op: "evalScript",
+    algebra: "CGA3",
+    code: "let A = point(0, 1, 0)\nlet B = point(1, 1, 0)\nlet L = A ^ B ^ ni\ngraph([L])"
+  });
+  const cga3Line = parseGSIR(cga3LineRaw);
+  assert.equal(cga3Line.meta.diagnostics.length, 0, "Dots P0 #3: CGA3 off-origin line zero diagnostics");
+  const lSec = cga3Line.sections.find(s => s.kind === 0x04);
+  const cSec = cga3Line.sections.find(s => s.kind === 0x06);
+  assert.ok(lSec && lSec.count === 1, `Dots P0 #3: expected 1 line, got ${lSec?.count ?? 0}`);
+  assert.ok(!cSec || cSec.count === 0, `Dots P0 #3: expected 0 circles, got ${cSec?.count ?? 0}`);
+  const ldv = new DataView(cga3LineRaw.buffer, cga3LineRaw.byteOffset, cga3LineRaw.byteLength);
+  const ox = ldv.getFloat32(lSec.byteOffset + 0, true);
+  const oy = ldv.getFloat32(lSec.byteOffset + 4, true);
+  const oz = ldv.getFloat32(lSec.byteOffset + 8, true);
+  const dx = ldv.getFloat32(lSec.byteOffset + 12, true);
+  const dy = ldv.getFloat32(lSec.byteOffset + 16, true);
+  const dz = ldv.getFloat32(lSec.byteOffset + 20, true);
+  const distToLine = (px, py, pz) => {
+    const rx = px - ox, ry = py - oy, rz = pz - oz;
+    const cx = ry * dz - rz * dy, cy = rz * dx - rx * dz, cz = rx * dy - ry * dx;
+    return Math.hypot(cx, cy, cz);
+  };
+  assert.ok(distToLine(0, 1, 0) < 1e-4, `Dots P0 #3: A=(0,1,0) on line (dist=${distToLine(0,1,0)})`);
+  assert.ok(distToLine(1, 1, 0) < 1e-4, `Dots P0 #3: B=(1,1,0) on line (dist=${distToLine(1,1,0)})`);
+}
+
+// (Dots P0 #4) Lossless 64-bit UInt64 seedStr: 9007199254740992 vs 9007199254740993 produce distinct challenges!
+{
+  const wA = parseGSIR(sess.dispatchJson({ op: "wedgeRandom", dim: 3, difficulty: 2, seedStr: "9007199254740992" }));
+  const wB = parseGSIR(sess.dispatchJson({ op: "wedgeRandom", dim: 3, difficulty: 2, seedStr: "9007199254740993" }));
+  assert.equal(wA.meta.wedge.seedStr, "9007199254740992", "Dots P0 #4: seedStr A lossless");
+  assert.equal(wB.meta.wedge.seedStr, "9007199254740993", "Dots P0 #4: seedStr B lossless");
+  assert.equal(wB.meta.wedge.isRandom, true, "Dots P0 #4: isRandom preserved");
+  assert.notEqual(wA.meta.wedge.title, wB.meta.wedge.title, "Dots P0 #4: consecutive 64-bit seeds produce distinct challenges");
+}
+
+// (Dots P0 #5) GPU implicit raymarcher respects bound across GLSL3/WGSL/MSL (clipR = max(1.2, bound*1.75))
+{
+  const gB1 = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: "x*x+y*y+z*z-9", gpuRaymarch: true, bound: 1 }));
+  const gB4 = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: "x*x+y*y+z*z-9", gpuRaymarch: true, bound: 4 }));
+  assert.notEqual(gB1.meta.opnsShaders[0].hash, gB4.meta.opnsShaders[0].hash, "Dots P0 #5: bound=1 vs bound=4 distinct shader hashes");
+  assert.ok(gB4.meta.opnsShaders[0].glsl.includes("7."), "Dots P0 #5: bound=4 GLSL uses clipR=7.0");
+  assert.ok(gB4.meta.opnsShaders[0].wgsl.includes("49."), "Dots P0 #5: bound=4 WGSL uses clipR^2=49.0");
+  assert.ok(gB4.meta.opnsShaders[0].msl.includes("49."), "Dots P0 #5: bound=4 MSL uses clipR^2=49.0");
+}
+
+// (Dots P1 #8 & #10) Mode-gated WedgeGesture + explicit seekTime / resetTime!
+{
+  const st0 = parseGSIR(sess.dispatchJson({ op: "loadPreset", id: "pga3d_bouncing_cube" }));
+  assert.equal(st0.meta.presetId, "pga3d_bouncing_cube");
+  // Send binary WedgeGesture while in CoffeeShop -> MUST NOT hijack mode into Wedge!
+  const hijack = new Uint8Array(40);
+  const hdv = new DataView(hijack.buffer);
+  hijack[0] = 0x06; hdv.setUint16(2, 36, true); hdv.setUint32(4, 2, true); hdv.setUint32(8, 3, true);
+  hdv.setFloat32(12, -1.0, true); hdv.setFloat32(24, 1.0, true); hdv.setUint16(38, 0, true);
+  const afterHijack = parseGSIR(sess.dispatchBin(hijack));
+  assert.ok(afterHijack.meta === null || afterHijack.meta.presetId === "pga3d_bouncing_cube", "Dots P1 #8: WedgeGesture ignored outside Wedge mode");
+  // Explicit seekTime(2.5) and resetTime() -> exact simTime 2.5 and 0.0!
+  const sSeek = parseGSIR(sess.dispatchJson({ op: "seekTime", t: 2.5 }));
+  assertNear(sSeek.simTime, 2.5, 1e-4, "Dots P1 #10: seekTime sets exact simTime == 2.5");
+  const sReset = parseGSIR(sess.dispatchJson({ op: "resetTime" }));
+  assertNear(sReset.simTime, 0.0, 1e-6, "Dots P1 #10: resetTime resets exact simTime == 0.0");
+}
+console.log("[wasm test] ALL 6 DOTS ROUND-2 REGRESSIONS + DUAL-HANDLE SLICING + 6-STOP TOUR VERIFIED LIVE IN WASM!");
 
 // Live @param / setParam verification on sta_terrell_penrose & pga3d_bouncing_cube!
 {
@@ -217,8 +361,8 @@ const obj1 = parseGSIR(sess.dispatchBin(tick));
 assert.equal(obj1.metaJsonLen, 0, "hot tick omits unchanged metaJson");
 assert.ok(!obj1.sections.some(s => s.kind === 0x0B), "hot tick omits cached MESH_ASSETS");
 
-// Wedge 2D (L1 & L9) + Wedge 3D (L10 & L16) + live WedgeGesture preview & commit!
-for (const [preset, lvl] of [["wedge_2d", 1], ["wedge_2d", 9], ["wedge_3d", 10], ["wedge_3d", 16]]) {
+// Wedge 2D (L1 & L9) + Wedge 3D (L10, L16 & Grand Finale L17!) + live WedgeGesture preview & commit!
+for (const [preset, lvl] of [["wedge_2d", 1], ["wedge_2d", 9], ["wedge_3d", 10], ["wedge_3d", 16], ["wedge_3d", 17]]) {
   sess.dispatchJson({ op: "loadPreset", id: preset });
   const wl = parseGSIR(sess.dispatchJson({ op: "wedgeAction", action: "goto", arg: lvl }));
   assert.ok(wl.meta.wedge, `wedge HUD present for L${lvl}`);
@@ -390,4 +534,4 @@ const misalignedAllocs = g.mod._grassmann_wasm_misaligned_allocs() >>> 0;
 assert.equal(misalignedAllocs, 0, `expected 0 misaligned wasm32 heap allocs, got ${misalignedAllocs}`);
 assert.ok(totalHeapAllocs > 10000, `expected >10000 live heap allocs checked, got ${totalHeapAllocs}`);
 console.log(`[wasm align] 100% 8-byte aligned (selftest=0, misaligned=0 / ${totalHeapAllocs} live heap allocs+reallocs)`);
-console.log("[wasm test] ALL 74 PRESETS + @PARAM + KATEX + BYTECODE IMPLICIT3D/GPU + LIVESCRIPT V2 + WEDGE PASSED IN WASM!");
+console.log("[wasm test] ALL 77 PRESETS + 6-STOP TOUR + 6 DOTS REGRESSIONS + 8B ALIGNMENT + BYTECODE IMPLICIT3D/GPU + LIVESCRIPT V2 + 17 WEDGE LEVELS PASSED IN WASM!");

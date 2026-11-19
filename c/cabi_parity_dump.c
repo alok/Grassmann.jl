@@ -162,12 +162,18 @@ int main(void) {
   assert(grassmann_cga3_up(1.5, -2.25, 0.75, cgaUp) == GSIR_OK);
   assert(grassmann_cga3_down(cgaUp, cgaDown) == GSIR_OK);
 
-  /* 2. Full 69-Preset Catalog */
+  /* 2. Full 77-Preset Catalog + 6-Stop Guided Tour Catalog */
   uint32_t catNeed = 0, catGot = 0;
   assert(grassmann_studio_preset_catalog(NULL, 0, &catNeed) == GSIR_ERR_BUF_SMALL);
   char *catBuf = (char *)malloc(catNeed + 1);
   assert(grassmann_studio_preset_catalog(catBuf, catNeed, &catGot) == GSIR_OK);
   catBuf[catGot] = '\0';
+
+  uint32_t tourNeed = 0, tourGot = 0;
+  assert(grassmann_studio_tour_catalog(NULL, 0, &tourNeed) == GSIR_ERR_BUF_SMALL);
+  char *tourBuf = (char *)malloc(tourNeed + 1);
+  assert(grassmann_studio_tour_catalog(tourBuf, tourNeed, &tourGot) == GSIR_OK);
+  tourBuf[tourGot] = '\0';
 
   printf("{\"version\":%u,\"kernels\":{\"staMul\":", grassmann_cabi_version());
   print_f64_arr(staMul, 16);
@@ -177,8 +183,9 @@ int main(void) {
   printf(",\"pga3Motor\":"); print_f64_arr(mC, 8);
   printf(",\"pga3Mat4\":"); print_f64_arr(mMat, 16);
   printf(",\"cga3Down\":"); print_f64_arr(cgaDown, 3);
-  printf("},\"catalog\":%s,\"frames\":{", catBuf);
+  printf("},\"catalog\":%s,\"tour\":%s,\"frames\":{", catBuf, tourBuf);
   free(catBuf);
+  free(tourBuf);
 
   /* 3. Canonical GSIR v1 Frame Parity Sequence */
   uint64_t sid = grassmann_studio_create();
@@ -246,6 +253,23 @@ int main(void) {
 
   assert(dispatch_json_grow(sid, "{\"op\":\"loadPreset\",\"id\":\"pga3d_bouncing_cube\"}", &buf, &cap, &got) == GSIR_OK);
   print_gsir_summary("bouncing_cube", buf, got, 1);
+
+  /* Wave 6C Showstoppers + Tour + Wedge L17 parity */
+  assert(dispatch_json_grow(sid, "{\"op\":\"loadPreset\",\"id\":\"implicit_barth_sextic\"}", &buf, &cap, &got) == GSIR_OK);
+  print_gsir_summary("barth_sextic", buf, got, 1);
+
+  assert(dispatch_json_grow(sid, "{\"op\":\"loadPreset\",\"id\":\"cga3d_dupin_cyclide_raymarch\"}", &buf, &cap, &got) == GSIR_OK);
+  print_gsir_summary("dupin_cyclide", buf, got, 1);
+
+  assert(dispatch_json_grow(sid, "{\"op\":\"loadPreset\",\"id\":\"pga3d_gears_kinematics\"}", &buf, &cap, &got) == GSIR_OK);
+  print_gsir_summary("gears_kinematics", buf, got, 1);
+
+  assert(dispatch_json_grow(sid, "{\"op\":\"loadTourStop\",\"index\":3}", &buf, &cap, &got) == GSIR_OK);
+  print_gsir_summary("tour_stop_3", buf, got, 1);
+
+  assert(dispatch_json_grow(sid, "{\"op\":\"loadPreset\",\"id\":\"wedge_3d\"}", &buf, &cap, &got) == GSIR_OK);
+  assert(dispatch_json_grow(sid, "{\"op\":\"wedgeAction\",\"action\":\"goto\",\"arg\":17}", &buf, &cap, &got) == GSIR_OK);
+  print_gsir_summary("wedge_l17", buf, got, 1);
 
   /* 4. Native Microbenchmarks */
   const int N_M = 200000;
