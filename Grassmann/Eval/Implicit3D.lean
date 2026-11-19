@@ -65,36 +65,48 @@ private def meshHash (meshId : UInt64) (pos : FloatArray) (indices : Array UInt3
 
 /-! ## 1. Fast Watertight Kuhn Marching Tetrahedra (`f(x,y,z) = iso`) -/
 
-/-- Six positively-oriented Kuhn tetrahedra partitioning the unit cube `[0,1]³`.
-Corner bitmask `b = dx + 2*dy + 4*dz` (`0=(0,0,0)` .. `7=(1,1,1)`).
-Every tetrahedron edge `(u, v)` ordered with `u < v` satisfies `dx, dy, dz ∈ {0, 1}`,
-so edges map bijectively into the 7-direction lattice edge table! -/
-private def kuhnTets : Array (Nat × Nat × Nat × Nat) :=
-  #[ (0, 1, 3, 7)
-   , (0, 1, 7, 5)
-   , (0, 2, 7, 3)
-   , (0, 2, 6, 7)
-   , (0, 4, 5, 7)
-   , (0, 4, 7, 6) ]
-
-/-- Central-difference gradient normal & discrete Laplacian curvature proxy at `p`. -/
-private def gradAndCurv (f : Vec3 → Float) (p : Vec3) (eps : Float) : Vec3 × Float :=
-  let fxP := f ⟨p.x + eps, p.y, p.z⟩
-  let fxM := f ⟨p.x - eps, p.y, p.z⟩
-  let fyP := f ⟨p.x, p.y + eps, p.z⟩
-  let fyM := f ⟨p.x, p.y - eps, p.z⟩
-  let fzP := f ⟨p.x, p.y, p.z + eps⟩
-  let fzM := f ⟨p.x, p.y, p.z - eps⟩
-  let fc  := f p
-  let gx := (fxP - fxM) / (2.0 * eps)
-  let gy := (fyP - fyM) / (2.0 * eps)
-  let gz := (fzP - fzM) / (2.0 * eps)
-  let g : Vec3 := ⟨gx, gy, gz⟩
-  let nLen := Vec3.norm g
-  let n := if nLen > 1e-9 && isFiniteF nLen then Vec3.scale (1.0 / nLen) g else ⟨0.0, 1.0, 0.0⟩
-  let lap := (fxP + fxM + fyP + fyM + fzP + fzM - 6.0 * fc) / (eps * eps)
-  let curv := if isFiniteF lap then lap / (max 0.25 nLen) else 0.0
-  (n, curv)
+/-- 2nd-order central-difference gradient & discrete Laplacian directly from the already-sampled
+scalar `field` grid (`0` extra function evaluations!). Exact for all quadratic fields even on boundaries. -/
+@[inline] private def gridGradAndLap (field : FloatArray) (nx1 ny1 nz1 : Nat)
+    (inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 : Float)
+    (ix iy iz : Nat) : Float × Float × Float × Float :=
+  let slice := nx1 * ny1
+  let base := iz * slice + iy * nx1 + ix
+  let fc := field.get! base
+  let (gx, d2x) :=
+    if ix > 0 && ix + 1 < nx1 then
+      let fp := field.get! (base + 1); let fm := field.get! (base - 1)
+      ((fp - fm) * inv2Dx, (fp + fm - 2.0 * fc) * invDx2)
+    else if ix == 0 && nx1 ≥ 3 then
+      let f1 := field.get! (base + 1); let f2 := field.get! (base + 2)
+      ((-3.0 * fc + 4.0 * f1 - f2) * inv2Dx, (fc - 2.0 * f1 + f2) * invDx2)
+    else if ix + 1 == nx1 && nx1 ≥ 3 then
+      let f1 := field.get! (base - 1); let f2 := field.get! (base - 2)
+      ((3.0 * fc - 4.0 * f1 + f2) * inv2Dx, (fc - 2.0 * f1 + f2) * invDx2)
+    else (0.0, 0.0)
+  let (gy, d2y) :=
+    if iy > 0 && iy + 1 < ny1 then
+      let fp := field.get! (base + nx1); let fm := field.get! (base - nx1)
+      ((fp - fm) * inv2Dy, (fp + fm - 2.0 * fc) * invDy2)
+    else if iy == 0 && ny1 ≥ 3 then
+      let f1 := field.get! (base + nx1); let f2 := field.get! (base + 2 * nx1)
+      ((-3.0 * fc + 4.0 * f1 - f2) * inv2Dy, (fc - 2.0 * f1 + f2) * invDy2)
+    else if iy + 1 == ny1 && ny1 ≥ 3 then
+      let f1 := field.get! (base - nx1); let f2 := field.get! (base - 2 * nx1)
+      ((3.0 * fc - 4.0 * f1 + f2) * inv2Dy, (fc - 2.0 * f1 + f2) * invDy2)
+    else (0.0, 0.0)
+  let (gz, d2z) :=
+    if iz > 0 && iz + 1 < nz1 then
+      let fp := field.get! (base + slice); let fm := field.get! (base - slice)
+      ((fp - fm) * inv2Dz, (fp + fm - 2.0 * fc) * invDz2)
+    else if iz == 0 && nz1 ≥ 3 then
+      let f1 := field.get! (base + slice); let f2 := field.get! (base + 2 * slice)
+      ((-3.0 * fc + 4.0 * f1 - f2) * inv2Dz, (fc - 2.0 * f1 + f2) * invDz2)
+    else if iz + 1 == nz1 && nz1 ≥ 3 then
+      let f1 := field.get! (base - slice); let f2 := field.get! (base - 2 * slice)
+      ((3.0 * fc - 4.0 * f1 + f2) * inv2Dz, (fc - 2.0 * f1 + f2) * invDz2)
+    else (0.0, 0.0)
+  (gx, gy, gz, d2x + d2y + d2z)
 
 private structure MtState where
   positions : FloatArray
@@ -104,69 +116,202 @@ private structure MtState where
   edgeCache : Array UInt32
   vertCount : UInt32
 
-private def emitEdgeVert (st : MtState) (f : Vec3 → Float) (eps : Float)
-    (nx1 ny1 : Nat)
-    (ixA iyA izA : Nat) (pA : Vec3) (vA : Float)
-    (ixB iyB izB : Nat) (pB : Vec3) (vB : Float) : MtState × UInt32 :=
+private def emitEdgeVertField (st : MtState) (field : FloatArray)
+    (nx1 ny1 nz1 : Nat)
+    (inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 : Float)
+    (xs ys zs : FloatArray)
+    (ixA iyA izA : Nat) (vA : Float)
+    (ixB iyB izB : Nat) (vB : Float) : MtState × UInt32 :=
+  let ⟨positions, normals, colors, indices, edgeCache, vertCount⟩ := st
   -- Canonical Kuhn edge ordering: smaller grid vertex first so dx, dy, dz ∈ {0, 1}
-  let (ax, ay, az, pa, va, bx, by_, bz, pb, vb) :=
-    if ixA ≤ ixB && iyA ≤ iyB && izA ≤ izB then
-      (ixA, iyA, izA, pA, vA, ixB, iyB, izB, pB, vB)
-    else
-      (ixB, iyB, izB, pB, vB, ixA, iyA, izA, pA, vA)
-  let dx := bx - ax
-  let dy := by_ - ay
-  let dz := bz - az
-  let dirCode := (dx + 2 * dy + 4 * dz) - 1
+  let swap := !(ixA ≤ ixB && iyA ≤ iyB && izA ≤ izB)
+  let ax := if swap then ixB else ixA
+  let ay := if swap then iyB else iyA
+  let az := if swap then izB else izA
+  let bx := if swap then ixA else ixB
+  let by_ := if swap then iyA else iyB
+  let bz := if swap then izA else izB
+  let dirCode := ((bx - ax) + 2 * (by_ - ay) + 4 * (bz - az)) - 1
   let slot := ((az * ny1 + ay) * nx1 + ax) * 7 + dirCode
-  let cached := st.edgeCache.getD slot 0xFFFFFFFF
+  let cached := edgeCache.getD slot 0xFFFFFFFF
   if cached != 0xFFFFFFFF then
-    (st, cached)
+    (⟨positions, normals, colors, indices, edgeCache, vertCount⟩, cached)
   else
+    let va := if swap then vB else vA
+    let vb := if swap then vA else vB
     let denom := vb - va
     let tRaw := if Float.abs denom > 1e-12 then (-va) / denom else 0.5
     let t := clamp01 tRaw
-    let p := Vec3.lerp pa pb t
-    let (n, curv) := gradAndCurv f p eps
-    let col := iridescentColor p n curv
-    let vid := st.vertCount
-    let st' : MtState :=
-      { positions := st.positions.push p.x |>.push p.y |>.push p.z
-        normals   := st.normals.push n.x |>.push n.y |>.push n.z
-        colors    := st.colors.push col.r |>.push col.g |>.push col.b |>.push col.a
-        indices   := st.indices
-        edgeCache := if slot < st.edgeCache.size then st.edgeCache.set! slot vid else st.edgeCache
-        vertCount := vid + 1 }
-    (st', vid)
+    let pax := xs.get! ax; let pay := ys.get! ay; let paz := zs.get! az
+    let px := pax + (xs.get! bx - pax) * t
+    let py := pay + (ys.get! by_ - pay) * t
+    let pz := paz + (zs.get! bz - paz) * t
+    let (gax, gay, gaz, lapA) := gridGradAndLap field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 ax ay az
+    let (gbx, gby, gbz, lapB) := gridGradAndLap field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 bx by_ bz
+    let gx := gax + (gbx - gax) * t
+    let gy := gay + (gby - gay) * t
+    let gz := gaz + (gbz - gaz) * t
+    let nLen := Float.sqrt (gx * gx + gy * gy + gz * gz)
+    let n : Vec3 :=
+      if nLen > 1e-9 && isFiniteF nLen then
+        let invN := 1.0 / nLen
+        ⟨gx * invN, gy * invN, gz * invN⟩
+      else ⟨0.0, 1.0, 0.0⟩
+    let lap := lapA + (lapB - lapA) * t
+    let curv := if isFiniteF lap then lap / (max 0.25 nLen) else 0.0
+    let col := iridescentColor ⟨px, py, pz⟩ n curv
+    let vid := vertCount
+    let positions := positions.push px |>.push py |>.push pz
+    let normals   := normals.push n.x |>.push n.y |>.push n.z
+    let colors    := colors.push col.r |>.push col.g |>.push col.b |>.push col.a
+    let edgeCache := if h : slot < edgeCache.size then edgeCache.set slot vid h else edgeCache
+    (⟨positions, normals, colors, indices, edgeCache, vid + 1⟩, vid)
 
 private def pushOrientedTri (st : MtState) (i0 i1 i2 : UInt32) : MtState :=
+  let ⟨positions, normals, colors, indices, edgeCache, vertCount⟩ := st
   let o0 := i0.toNat * 3
   let o1 := i1.toNat * 3
   let o2 := i2.toNat * 3
-  let p0 : Vec3 := ⟨st.positions.get! o0, st.positions.get! (o0 + 1), st.positions.get! (o0 + 2)⟩
-  let p1 : Vec3 := ⟨st.positions.get! o1, st.positions.get! (o1 + 1), st.positions.get! (o1 + 2)⟩
-  let p2 : Vec3 := ⟨st.positions.get! o2, st.positions.get! (o2 + 1), st.positions.get! (o2 + 2)⟩
-  let n0 : Vec3 := ⟨st.normals.get! o0, st.normals.get! (o0 + 1), st.normals.get! (o0 + 2)⟩
-  let n1 : Vec3 := ⟨st.normals.get! o1, st.normals.get! (o1 + 1), st.normals.get! (o1 + 2)⟩
-  let n2 : Vec3 := ⟨st.normals.get! o2, st.normals.get! (o2 + 1), st.normals.get! (o2 + 2)⟩
-  let faceN := Vec3.cross (Vec3.sub p1 p0) (Vec3.sub p2 p0)
-  if Vec3.normSq faceN < 1e-18 then
-    st -- Skip degenerate sliver triangles
+  let x0 := positions.get! o0; let y0 := positions.get! (o0 + 1); let z0 := positions.get! (o0 + 2)
+  let dx1 := positions.get! o1 - x0; let dy1 := positions.get! (o1 + 1) - y0; let dz1 := positions.get! (o1 + 2) - z0
+  let dx2 := positions.get! o2 - x0; let dy2 := positions.get! (o2 + 1) - y0; let dz2 := positions.get! (o2 + 2) - z0
+  let fx := dy1 * dz2 - dz1 * dy2
+  let fy := dz1 * dx2 - dx1 * dz2
+  let fz := dx1 * dy2 - dy1 * dx2
+  if fx * fx + fy * fy + fz * fz < 1e-18 then
+    ⟨positions, normals, colors, indices, edgeCache, vertCount⟩
   else
-    let avgN := Vec3.add n0 (Vec3.add n1 n2)
-    let idxs :=
-      if Vec3.dot faceN avgN ≥ 0.0 then
-        st.indices.push i0 |>.push i1 |>.push i2
+    let anx := normals.get! o0 + normals.get! o1 + normals.get! o2
+    let any := normals.get! (o0 + 1) + normals.get! (o1 + 1) + normals.get! (o2 + 1)
+    let anz := normals.get! (o0 + 2) + normals.get! (o1 + 2) + normals.get! (o2 + 2)
+    let indices :=
+      if fx * anx + fy * any + fz * anz ≥ 0.0 then
+        indices.push i0 |>.push i1 |>.push i2
       else
-        st.indices.push i0 |>.push i2 |>.push i1
-    { st with indices := idxs }
+        indices.push i0 |>.push i2 |>.push i1
+    ⟨positions, normals, colors, indices, edgeCache, vertCount⟩
 
-/-- Extract a watertight CCW `MeshAsset` of the zero-level isosurface `f(x, y, z) = iso`
-over `[bmin, bmax]` at grid resolution `nx × ny × nz` using O(1) edge-cached Kuhn
-Marching Tetrahedra. -/
-def marchingTetrahedra (f : Vec3 → Float)
+@[inline] private def cornerVal (c : Nat) (v0 v1 v2 v3 v4 v5 v6 v7 : Float) : Float :=
+  match c with
+  | 0 => v0 | 1 => v1 | 2 => v2 | 3 => v3
+  | 4 => v4 | 5 => v5 | 6 => v6 | _ => v7
+
+@[inline] private def emitCellEdge (st : MtState) (field : FloatArray)
+    (nx1 ny1 nz1 : Nat) (inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 : Float)
+    (xs ys zs : FloatArray)
+    (ix iy iz : Nat) (v0 v1 v2 v3 v4 v5 v6 v7 : Float) (a b : Nat) : MtState × UInt32 :=
+  emitEdgeVertField st field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs
+    (ix + (a &&& 1)) (iy + ((a >>> 1) &&& 1)) (iz + ((a >>> 2) &&& 1)) (cornerVal a v0 v1 v2 v3 v4 v5 v6 v7)
+    (ix + (b &&& 1)) (iy + ((b >>> 1) &&& 1)) (iz + ((b >>> 2) &&& 1)) (cornerVal b v0 v1 v2 v3 v4 v5 v6 v7)
+
+@[inline] private def emitTetField (st : MtState) (field : FloatArray)
+    (nx1 ny1 nz1 : Nat) (inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 : Float)
+    (xs ys zs : FloatArray)
+    (ix iy iz : Nat) (v0 v1 v2 v3 v4 v5 v6 v7 : Float)
+    (c0 c1 c2 c3 : Nat) (b0 b1 b2 b3 : Bool) : MtState :=
+  let mask := (if b0 then 1 else 0) + (if b1 then 2 else 0) + (if b2 then 4 else 0) + (if b3 then 8 else 0)
+  match mask with
+  | 1 | 14 =>
+    let (s1, i0) := emitCellEdge st field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c0 c1
+    let (s2, i1) := emitCellEdge s1 field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c0 c2
+    let (s3, i2) := emitCellEdge s2 field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c0 c3
+    pushOrientedTri s3 i0 i1 i2
+  | 2 | 13 =>
+    let (s1, i0) := emitCellEdge st field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c1 c0
+    let (s2, i1) := emitCellEdge s1 field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c1 c2
+    let (s3, i2) := emitCellEdge s2 field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c1 c3
+    pushOrientedTri s3 i0 i1 i2
+  | 4 | 11 =>
+    let (s1, i0) := emitCellEdge st field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c2 c0
+    let (s2, i1) := emitCellEdge s1 field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c2 c1
+    let (s3, i2) := emitCellEdge s2 field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c2 c3
+    pushOrientedTri s3 i0 i1 i2
+  | 8 | 7 =>
+    let (s1, i0) := emitCellEdge st field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c3 c0
+    let (s2, i1) := emitCellEdge s1 field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c3 c1
+    let (s3, i2) := emitCellEdge s2 field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c3 c2
+    pushOrientedTri s3 i0 i1 i2
+  | 3 | 12 =>
+    let (s1, q0) := emitCellEdge st field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c0 c2
+    let (s2, q1) := emitCellEdge s1 field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c0 c3
+    let (s3, q2) := emitCellEdge s2 field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c1 c3
+    let (s4, q3) := emitCellEdge s3 field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c1 c2
+    pushOrientedTri (pushOrientedTri s4 q0 q1 q2) q0 q2 q3
+  | 5 | 10 =>
+    let (s1, q0) := emitCellEdge st field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c0 c1
+    let (s2, q1) := emitCellEdge s1 field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c0 c3
+    let (s3, q2) := emitCellEdge s2 field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c2 c3
+    let (s4, q3) := emitCellEdge s3 field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c2 c1
+    pushOrientedTri (pushOrientedTri s4 q0 q1 q2) q0 q2 q3
+  | 6 | 9 =>
+    let (s1, q0) := emitCellEdge st field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c1 c0
+    let (s2, q1) := emitCellEdge s1 field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c1 c3
+    let (s3, q2) := emitCellEdge s2 field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c2 c3
+    let (s4, q3) := emitCellEdge s3 field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 c2 c0
+    pushOrientedTri (pushOrientedTri s4 q0 q1 q2) q0 q2 q3
+  | _ => st
+
+/-- Extract a watertight CCW `MeshAsset` directly from a pre-sampled `(nx+1)×(ny+1)×(nz+1)`
+scalar `field` array using O(1) Kuhn edge deduplication and zero-eval 2nd-order interpolated
+grid gradients! Zero closure calls during extraction. -/
+def marchingTetrahedraField (field xs ys zs : FloatArray)
+    (nx' ny' nz' : Nat) (dx dy dz : Float) (meshId : UInt64) : MeshAsset := Id.run do
+  let nx1 := nx' + 1
+  let ny1 := ny' + 1
+  let nz1 := nz' + 1
+  let totalPts := nx1 * ny1 * nz1
+  let inv2Dx := 0.5 / max 1e-9 dx
+  let inv2Dy := 0.5 / max 1e-9 dy
+  let inv2Dz := 0.5 / max 1e-9 dz
+  let invDx2 := 1.0 / max 1e-12 (dx * dx)
+  let invDy2 := 1.0 / max 1e-12 (dy * dy)
+  let invDz2 := 1.0 / max 1e-12 (dz * dz)
+  let mut st : MtState :=
+    { positions := FloatArray.emptyWithCapacity 4096
+      normals   := FloatArray.emptyWithCapacity 4096
+      colors    := FloatArray.emptyWithCapacity 4096
+      indices   := Array.mkEmpty 8192
+      edgeCache := Array.replicate (totalPts * 7) 0xFFFFFFFF
+      vertCount := 0 }
+  let sliceStride := nx1 * ny1
+  for iz in [:nz'] do
+    let zOff0 := iz * sliceStride
+    let zOff1 := zOff0 + sliceStride
+    for iy in [:ny'] do
+      let yOff00 := zOff0 + iy * nx1
+      let yOff01 := yOff00 + nx1
+      let yOff10 := zOff1 + iy * nx1
+      let yOff11 := yOff10 + nx1
+      for ix in [:nx'] do
+        let v0 := field.get! (yOff00 + ix)
+        let v1 := field.get! (yOff00 + ix + 1)
+        let v2 := field.get! (yOff01 + ix)
+        let v3 := field.get! (yOff01 + ix + 1)
+        let v4 := field.get! (yOff10 + ix)
+        let v5 := field.get! (yOff10 + ix + 1)
+        let v6 := field.get! (yOff11 + ix)
+        let v7 := field.get! (yOff11 + ix + 1)
+        let b0 := v0 < 0.0; let b1 := v1 < 0.0; let b2 := v2 < 0.0; let b3 := v3 < 0.0
+        let b4 := v4 < 0.0; let b5 := v5 < 0.0; let b6 := v6 < 0.0; let b7 := v7 < 0.0
+        let allIn  := b0 && b1 && b2 && b3 && b4 && b5 && b6 && b7
+        let allOut := !b0 && !b1 && !b2 && !b3 && !b4 && !b5 && !b6 && !b7
+        if !allIn && !allOut then
+          st := emitTetField st field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 0 1 3 7 b0 b1 b3 b7
+          st := emitTetField st field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 0 1 7 5 b0 b1 b7 b5
+          st := emitTetField st field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 0 2 7 3 b0 b2 b7 b3
+          st := emitTetField st field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 0 2 6 7 b0 b2 b6 b7
+          st := emitTetField st field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 0 4 5 7 b0 b4 b5 b7
+          st := emitTetField st field nx1 ny1 nz1 inv2Dx inv2Dy inv2Dz invDx2 invDy2 invDz2 xs ys zs ix iy iz v0 v1 v2 v3 v4 v5 v6 v7 0 4 7 6 b0 b4 b7 b6
+  let h := meshHash meshId st.positions st.indices
+  { meshId, dirtyHash := h, positions := st.positions, normals := st.normals,
+    colors := st.colors, indices := st.indices }
+
+/-- Zero-allocation unboxed-`Float` Kuhn Marching Tetrahedra (`f x y z = iso`) over `[bmin, bmax]`.
+Evaluates `f` ONLY ONCE per grid vertex (`(nx+1)×(ny+1)×(nz+1)`) and derives exact 2nd-order
+interpolated normals & curvature directly from the scalar grid! -/
+@[specialize] def marchingTetrahedraXYZ (f : Float → Float → Float → Float)
     (bmin bmax : Vec3) (nx ny nz : Nat) (meshId : UInt64)
-    (iso : Float := 0.0) (gradEps : Float := 1.5e-3) : MeshAsset := Id.run do
+    (iso : Float := 0.0) (_gradEps : Float := 1.5e-3) : MeshAsset := Id.run do
   let nx' := max 4 (min 40 nx)
   let ny' := max 4 (min 40 ny)
   let nz' := max 4 (min 40 nz)
@@ -176,89 +321,29 @@ def marchingTetrahedra (f : Vec3 → Float)
   let dx := (bmax.x - bmin.x) / Float.ofNat nx'
   let dy := (bmax.y - bmin.y) / Float.ofNat ny'
   let dz := (bmax.z - bmin.z) / Float.ofNat nz'
-  -- Step 1: Sample scalar field on the (nx+1)*(ny+1)*(nz+1) grid once
+  let mut xs := FloatArray.emptyWithCapacity nx1
+  for ix in [:nx1] do xs := xs.push (bmin.x + Float.ofNat ix * dx)
+  let mut ys := FloatArray.emptyWithCapacity ny1
+  for iy in [:ny1] do ys := ys.push (bmin.y + Float.ofNat iy * dy)
+  let mut zs := FloatArray.emptyWithCapacity nz1
+  for iz in [:nz1] do zs := zs.push (bmin.z + Float.ofNat iz * dz)
   let totalPts := nx1 * ny1 * nz1
   let mut field := FloatArray.emptyWithCapacity totalPts
   for iz in [:nz1] do
-    let z := bmin.z + Float.ofNat iz * dz
+    let z := zs.get! iz
     for iy in [:ny1] do
-      let y := bmin.y + Float.ofNat iy * dy
+      let y := ys.get! iy
       for ix in [:nx1] do
-        let x := bmin.x + Float.ofNat ix * dx
-        field := field.push (f ⟨x, y, z⟩ - iso)
-  let valAt (ix iy iz : Nat) : Float :=
-    field.get! ((iz * ny1 + iy) * nx1 + ix)
-  let posAt (ix iy iz : Nat) : Vec3 :=
-    ⟨bmin.x + Float.ofNat ix * dx, bmin.y + Float.ofNat iy * dy, bmin.z + Float.ofNat iz * dz⟩
-  -- Step 2: Traverse cells with O(1) empty-cell rejection & O(1) Kuhn edge vertex cache
-  let mut st : MtState :=
-    { positions := FloatArray.emptyWithCapacity 4096
-      normals   := FloatArray.emptyWithCapacity 4096
-      colors    := FloatArray.emptyWithCapacity 4096
-      indices   := Array.mkEmpty 8192
-      edgeCache := Array.replicate (totalPts * 7) 0xFFFFFFFF
-      vertCount := 0 }
-  for iz in [:nz'] do
-    for iy in [:ny'] do
-      for ix in [:nx'] do
-        let v0 := valAt ix       iy       iz
-        let v1 := valAt (ix + 1) iy       iz
-        let v2 := valAt ix       (iy + 1) iz
-        let v3 := valAt (ix + 1) (iy + 1) iz
-        let v4 := valAt ix       iy       (iz + 1)
-        let v5 := valAt (ix + 1) iy       (iz + 1)
-        let v6 := valAt ix       (iy + 1) (iz + 1)
-        let v7 := valAt (ix + 1) (iy + 1) (iz + 1)
-        let b0 := v0 < 0.0; let b1 := v1 < 0.0; let b2 := v2 < 0.0; let b3 := v3 < 0.0
-        let b4 := v4 < 0.0; let b5 := v5 < 0.0; let b6 := v6 < 0.0; let b7 := v7 < 0.0
-        let allIn  := b0 && b1 && b2 && b3 && b4 && b5 && b6 && b7
-        let allOut := !b0 && !b1 && !b2 && !b3 && !b4 && !b5 && !b6 && !b7
-        if !allIn && !allOut then
-          let cornerIx (c : Nat) : Nat := ix + (c &&& 1)
-          let cornerIy (c : Nat) : Nat := iy + ((c >>> 1) &&& 1)
-          let cornerIz (c : Nat) : Nat := iz + ((c >>> 2) &&& 1)
-          let cornerV (c : Nat) : Float :=
-            match c with
-            | 0 => v0 | 1 => v1 | 2 => v2 | 3 => v3
-            | 4 => v4 | 5 => v5 | 6 => v6 | _ => v7
-          let cornerB (c : Nat) : Bool :=
-            match c with
-            | 0 => b0 | 1 => b1 | 2 => b2 | 3 => b3
-            | 4 => b4 | 5 => b5 | 6 => b6 | _ => b7
-          let emitEdge (s : MtState) (a b : Nat) : MtState × UInt32 :=
-            let ax := cornerIx a; let ay := cornerIy a; let az := cornerIz a
-            let bx := cornerIx b; let by_ := cornerIy b; let bz := cornerIz b
-            emitEdgeVert s f gradEps nx1 ny1 ax ay az (posAt ax ay az) (cornerV a)
-                                             bx by_ bz (posAt bx by_ bz) (cornerV b)
-          let emitTri13 (s : MtState) (a b c d : Nat) : MtState :=
-            let (s1, i0) := emitEdge s a b
-            let (s2, i1) := emitEdge s1 a c
-            let (s3, i2) := emitEdge s2 a d
-            pushOrientedTri s3 i0 i1 i2
-          let emitQuad22 (s : MtState) (a b c d : Nat) : MtState :=
-            let (s1, q0) := emitEdge s a c
-            let (s2, q1) := emitEdge s1 a d
-            let (s3, q2) := emitEdge s2 b d
-            let (s4, q3) := emitEdge s3 b c
-            pushOrientedTri (pushOrientedTri s4 q0 q1 q2) q0 q2 q3
-          for (c0, c1, c2, c3) in kuhnTets do
-            -- Zero-allocation 4-bit sign mask across the 4 tetrahedron vertices
-            let m0 := if cornerB c0 then 1 else 0
-            let m1 := if cornerB c1 then 2 else 0
-            let m2 := if cornerB c2 then 4 else 0
-            let m3 := if cornerB c3 then 8 else 0
-            match m0 + m1 + m2 + m3 with
-            | 1  | 14 => st := emitTri13 st c0 c1 c2 c3
-            | 2  | 13 => st := emitTri13 st c1 c0 c2 c3
-            | 4  | 11 => st := emitTri13 st c2 c0 c1 c3
-            | 8  | 7  => st := emitTri13 st c3 c0 c1 c2
-            | 3  | 12 => st := emitQuad22 st c0 c1 c2 c3
-            | 5  | 10 => st := emitQuad22 st c0 c2 c1 c3
-            | 6  | 9  => st := emitQuad22 st c1 c2 c0 c3
-            | _       => pure ()
-  let h := meshHash meshId st.positions st.indices
-  { meshId, dirtyHash := h, positions := st.positions, normals := st.normals,
-    colors := st.colors, indices := st.indices }
+        field := field.push (f (xs.get! ix) y z - iso)
+  return marchingTetrahedraField field xs ys zs nx' ny' nz' dx dy dz meshId
+
+/-- Extract a watertight CCW `MeshAsset` of the zero-level isosurface `f(x, y, z) = iso`
+over `[bmin, bmax]` at grid resolution `nx × ny × nz` using O(1) edge-cached Kuhn
+Marching Tetrahedra. -/
+def marchingTetrahedra (f : Vec3 → Float)
+    (bmin bmax : Vec3) (nx ny nz : Nat) (meshId : UInt64)
+    (iso : Float := 0.0) (gradEps : Float := 1.5e-3) : MeshAsset :=
+  marchingTetrahedraXYZ (fun x y z => f ⟨x, y, z⟩) bmin bmax nx ny nz meshId iso gradEps
 
 /-! ## 2. Parametric 3D Surface Mesher (`(u, v) → Vec3`) -/
 
@@ -344,51 +429,55 @@ def buildParametricSurface (surf : Float → Float → Vec3)
 Fast at `18³` (6,859 grid samples). -/
 def buildGyroidMesh (iso : Float := 0.0) (freq : Float := 2.4) (gridN : Nat := 18)
     (meshId : UInt64 := 3001) : MeshAsset :=
-  let f (p : Vec3) : Float :=
-    let x := p.x * freq; let y := p.y * freq; let z := p.z * freq
+  let f (px py pz : Float) : Float :=
+    let x := px * freq; let y := py * freq; let z := pz * freq
     let g := Float.sin x * Float.cos y + Float.sin y * Float.cos z + Float.sin z * Float.cos x - iso
     -- Soft spherical bounding shell so Gyroid floats cleanly as a closed organic sculpture
-    let r2 := p.x * p.x + p.y * p.y + p.z * p.z
+    let r2 := px * px + py * py + pz * pz
     let mask := r2 - 1.75
     if mask > g then mask else g
-  marchingTetrahedra f ⟨-1.45, -1.45, -1.45⟩ ⟨1.45, 1.45, 1.45⟩ gridN gridN gridN meshId
+  marchingTetrahedraXYZ f ⟨-1.45, -1.45, -1.45⟩ ⟨1.45, 1.45, 1.45⟩ gridN gridN gridN meshId
 
 /-- **Schwarz P** triply periodic minimal surface: `cos(kx) + cos(ky) + cos(kz) = iso`. -/
 def buildSchwarzPMesh (iso : Float := 0.0) (freq : Float := 2.35) (gridN : Nat := 18)
     (meshId : UInt64 := 3002) : MeshAsset :=
-  let f (p : Vec3) : Float :=
-    let x := p.x * freq; let y := p.y * freq; let z := p.z * freq
+  let f (px py pz : Float) : Float :=
+    let x := px * freq; let y := py * freq; let z := pz * freq
     let s := Float.cos x + Float.cos y + Float.cos z - iso
-    let r2 := p.x * p.x + p.y * p.y + p.z * p.z
+    let r2 := px * px + py * py + pz * pz
     let mask := r2 - 1.85
     if mask > s then mask else s
-  marchingTetrahedra f ⟨-1.45, -1.45, -1.45⟩ ⟨1.45, 1.45, 1.45⟩ gridN gridN gridN meshId
+  marchingTetrahedraXYZ f ⟨-1.45, -1.45, -1.45⟩ ⟨1.45, 1.45, 1.45⟩ gridN gridN gridN meshId
 
 /-- **Animated 4-Lobe Organic Metaballs**: `1.0 - ∑ rᵢ² / (‖p - cᵢ(t)‖² + 0.04) = 0`.
 `ctrl` moves lobe 0 interactively! -/
 def buildMetaballsMesh (t : Float) (ctrl : Vec3 := ⟨0.55, 0.25, 0.0⟩)
     (gridN : Nat := 18) (meshId : UInt64 := 3003) : MeshAsset :=
-  let c0 := ctrl
-  let c1 : Vec3 := ⟨-0.58 * Float.cos (t * 0.9), 0.42 * Float.sin (t * 1.1), 0.35 * Float.sin (t * 0.7)⟩
-  let c2 : Vec3 := ⟨0.32 * Float.sin (t * 1.3), -0.52 * Float.cos (t * 0.8), -0.40 * Float.cos (t * 1.0)⟩
-  let c3 : Vec3 := ⟨-0.25 * Float.sin (t * 0.6), -0.20 * Float.sin (t * 1.2), 0.55 * Float.cos (t * 0.85)⟩
-  let f (p : Vec3) : Float :=
-    let d0 := Vec3.normSq (Vec3.sub p c0) + 0.04
-    let d1 := Vec3.normSq (Vec3.sub p c1) + 0.04
-    let d2 := Vec3.normSq (Vec3.sub p c2) + 0.04
-    let d3 := Vec3.normSq (Vec3.sub p c3) + 0.04
+  let c0x := ctrl.x; let c0y := ctrl.y; let c0z := ctrl.z
+  let c1x := -0.58 * Float.cos (t * 0.9); let c1y := 0.42 * Float.sin (t * 1.1); let c1z := 0.35 * Float.sin (t * 0.7)
+  let c2x := 0.32 * Float.sin (t * 1.3); let c2y := -0.52 * Float.cos (t * 0.8); let c2z := -0.40 * Float.cos (t * 1.0)
+  let c3x := -0.25 * Float.sin (t * 0.6); let c3y := -0.20 * Float.sin (t * 1.2); let c3z := 0.55 * Float.cos (t * 0.85)
+  let f (px py pz : Float) : Float :=
+    let dx0 := px - c0x; let dy0 := py - c0y; let dz0 := pz - c0z
+    let dx1 := px - c1x; let dy1 := py - c1y; let dz1 := pz - c1z
+    let dx2 := px - c2x; let dy2 := py - c2y; let dz2 := pz - c2z
+    let dx3 := px - c3x; let dy3 := py - c3y; let dz3 := pz - c3z
+    let d0 := dx0 * dx0 + dy0 * dy0 + dz0 * dz0 + 0.04
+    let d1 := dx1 * dx1 + dy1 * dy1 + dz1 * dz1 + 0.04
+    let d2 := dx2 * dx2 + dy2 * dy2 + dz2 * dz2 + 0.04
+    let d3 := dx3 * dx3 + dy3 * dy3 + dz3 * dz3 + 0.04
     1.0 - (0.20 / d0 + 0.18 / d1 + 0.16 / d2 + 0.15 / d3)
-  marchingTetrahedra f ⟨-1.45, -1.45, -1.45⟩ ⟨1.45, 1.45, 1.45⟩ gridN gridN gridN meshId
+  marchingTetrahedraXYZ f ⟨-1.45, -1.45, -1.45⟩ ⟨1.45, 1.45, 1.45⟩ gridN gridN gridN meshId
 
 /-- **Genus-2 Double-Torus Pretzel**: `((x² + y²)² - x² + y²)² + z² - r² = 0`. -/
 def buildGenus2Mesh (tubeR : Float := 0.22) (gridN : Nat := 20)
     (meshId : UInt64 := 3004) : MeshAsset :=
   let r2 := tubeR * tubeR
-  let f (p : Vec3) : Float :=
-    let x2 := p.x * p.x; let y2 := p.y * p.y; let z2 := p.z * p.z
+  let f (px py pz : Float) : Float :=
+    let x2 := px * px; let y2 := py * py; let z2 := pz * pz
     let q := (x2 + y2) * (x2 + y2) - x2 + y2
     q * q + z2 - r2
-  marchingTetrahedra f ⟨-1.35, -1.0, -0.55⟩ ⟨1.35, 1.0, 0.55⟩ gridN gridN (max 10 (gridN / 2)) meshId
+  marchingTetrahedraXYZ f ⟨-1.35, -1.0, -0.55⟩ ⟨1.35, 1.0, 0.55⟩ gridN gridN (max 10 (gridN / 2)) meshId
 
 /-! ## 4. Canonical Parametric 3D Surface Builders -/
 
