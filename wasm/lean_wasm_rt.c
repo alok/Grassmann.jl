@@ -1531,6 +1531,11 @@ lean_obj_res l_Int_toNat(b_lean_obj_arg a) {
   return v <= 0 ? lean_box(0) : u64_to_nat((uint64_t)v);
 }
 
+/* Round-5 addition for GPUInit scientific float32 literal formatting */
+double l_Float_ofInt(b_lean_obj_arg a) {
+  return (double)int_to_i64(a);
+}
+
 lean_obj_res lean_float_array_data(lean_obj_arg a) {
   size_t sz = lean_sarray_size(a);
   lean_obj_res r = lean_alloc_array(sz, sz);
