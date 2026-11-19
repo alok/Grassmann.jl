@@ -1,5 +1,23 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadGrassmannWasm } from "./dist/grassmann_wasm.mjs";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// 0. Verify content-fingerprinted wasm-manifest.json + hashed asset load!
+const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "dist/wasm-manifest.json"), "utf8"));
+assert.equal(manifest.version, 1, "wasm-manifest version");
+assert.equal(manifest.presetCount, 69, "wasm-manifest presetCount");
+assert.ok(/^[0-9a-f]{10}$/.test(manifest.hash), "wasm-manifest 10-hex hash");
+assert.ok(fs.existsSync(path.join(__dirname, "dist", manifest.wasmFile)), "fingerprinted .wasm exists");
+assert.ok(fs.existsSync(path.join(__dirname, "dist", manifest.loaderFile)), "fingerprinted .mjs exists");
+{
+  const { default: createFp } = await import(`./dist/${manifest.loaderFile}`);
+  const fpMod = await createFp();
+  assert.equal(fpMod._grassmann_initialize(), 0, "fingerprinted WASM initializes cleanly");
+}
 
 function assertNear(a, b, tol = 1e-10, msg = "") {
   assert.ok(Math.abs(a - b) <= tol, `${msg}: got ${a}, expected ${b} (tol ${tol})`);
@@ -75,34 +93,71 @@ assertNear(back[0], 1.5, 1e-12, "WASM CGA3 down.x");
 assertNear(back[1], -2.25, 1e-12, "WASM CGA3 down.y");
 assertNear(back[2], 0.75, 1e-12, "WASM CGA3 down.z");
 
-// 5. Full Preset Catalog (ALL 19 CoffeeShop Presets!)
+// 5. Full Preset Catalog (ALL 69 CoffeeShop Presets — 100% ganja.js parity!)
 const catalog = g.presetCatalog();
-assert.ok(Array.isArray(catalog) && catalog.length >= 19, `expected >= 19 presets, got ${catalog.length}`);
-console.log(`[wasm test] loaded full Lean preset catalog: ${catalog.length} presets`);
+assert.equal(catalog.length, 69, `expected 69 presets, got ${catalog.length}`);
+const uniqueIds = new Set(catalog.map(p => p.id));
+assert.equal(uniqueIds.size, 69, "zero duplicate preset IDs across 69-preset catalog");
+console.log(`[wasm test] loaded full Lean preset catalog: ${catalog.length} presets (69 unique)`);
 
 // 6. Full Unified Grassmann.Studio Session in WASM!
 const sess = g.createStudioSession();
-const f0 = parseGSIR(sess.getFrame());
+const f0Raw = sess.getFrame();
+const f0 = parseGSIR(f0Raw);
 assert.equal(f0.frameSeq, 1n);
 assert.equal(f0.meta.presetId, "pga3d_slicing");
-assert.ok(f0.sections.some(s => s.kind === 0x0B), "initial sculpted bunny frame has MESH_ASSETS");
-assert.ok(f0.sections.some(s => s.kind === 0x0F), "pga3d_slicing has CONTOUR_OVERLAY");
+const meshSec = f0.sections.find(s => s.kind === 0x0B);
+const contourSec = f0.sections.find(s => s.kind === 0x0F);
+assert.ok(meshSec, "initial sculpted bunny frame has MESH_ASSETS");
+assert.ok(contourSec, "pga3d_slicing has CONTOUR_OVERLAY");
+// Regression check (#89): verify full 360-deg pi precision -> sculpted bunny spans > 1.4 units
+// AND slice contour overlay has non-empty polylines!
+{
+  const dv = new DataView(f0Raw.buffer, f0Raw.byteOffset, f0Raw.byteLength);
+  const vCount = dv.getUint32(meshSec.byteOffset + 16, true);
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  const posOff = meshSec.byteOffset + 32;
+  for (let i = 0; i < vCount; i++) {
+    const vx = dv.getFloat32(posOff + i * 12, true);
+    const vy = dv.getFloat32(posOff + i * 12 + 4, true);
+    const vz = dv.getFloat32(posOff + i * 12 + 8, true);
+    if (vx < minX) minX = vx; if (vx > maxX) maxX = vx;
+    if (vy < minY) minY = vy; if (vy > maxY) maxY = vy;
+    if (vz < minZ) minZ = vz; if (vz > maxZ) maxZ = vz;
+  }
+  const spanX = maxX - minX, spanY = maxY - minY, spanZ = maxZ - minZ;
+  assert.ok(spanX > 1.5 && spanY > 0.9 && spanZ > 0.9, `bunny mesh full 360-deg span expected >(1.5,0.9,0.9), got (${spanX.toFixed(3)}, ${spanY.toFixed(3)}, ${spanZ.toFixed(3)})`);
+  const polyCount = dv.getUint32(contourSec.byteOffset + 16, true);
+  assert.ok(polyCount > 0, `pga3d_slicing bunny contour has polylines (got ${polyCount})`);
+  console.log(`[wasm test] sculpted bunny verified: ${vCount} verts, span=(${spanX.toFixed(2)}, ${spanY.toFixed(2)}, ${spanZ.toFixed(2)}), ${polyCount} slice contours`);
+}
 
-// Exercise EVERY SINGLE preset in the catalog in compiled Lean WASM!
+// Exercise EVERY SINGLE preset (all 69!) in compiled Lean WASM!
 let foundOpnsGlsl = false;
 for (const item of catalog) {
-  const fr = parseGSIR(sess.dispatchJson({ op: "loadPreset", id: item.id }));
+  const frRaw = sess.dispatchJson({ op: "loadPreset", id: item.id });
+  const fr = parseGSIR(frRaw);
   assert.ok(fr.meta !== null, `meta present for preset ${item.id}`);
   assert.equal(fr.meta.presetId, item.id, `presetId matches ${item.id}`);
   if (item.id === "cga3d_opns_cyclide") {
     assert.ok(fr.meta.opnsShaders && fr.meta.opnsShaders.length > 0, "OPNS shader emitted");
+    assert.ok(fr.meta.opnsShaders[0].glsl.includes("uniform mat4 projectionMatrix;"), "GLSL3 has projectionMatrix");
     assert.ok(fr.meta.opnsShaders[0].glsl.includes("product_len"), "GLSL OPNS shader valid");
     assert.ok(fr.meta.opnsShaders[0].wgsl.includes("@fragment"), "WGSL OPNS shader valid");
-    assert.ok(fr.meta.opnsShaders[0].msl.includes("metal_stdlib"), "MSL OPNS shader valid");
+    assert.ok(fr.meta.opnsShaders[0].msl.includes("gsir_lean_opns_compute"), "MSL OPNS shader valid");
+    // Regression check (#89): verify b[4] == 1.0 (quadratic 0.5*(x^2+y^2+z^2) bounded sphere term!)
+    const opnsSec = fr.sections.find(s => s.kind === 0x10);
+    assert.ok(opnsSec, "cga3d_opns_cyclide has 0x10 OPNS_UNIFORMS");
+    const odv = new DataView(frRaw.buffer, frRaw.byteOffset, frRaw.byteLength);
+    // OpnsUniforms record: shaderIdx(4)+grade(4)+coeffCount(4)+thresh(4)+maxSteps(4)+stepSize(4)+rgba(16)+flags(4) = 44B header, then float coeffs[]
+    const coeffCount = odv.getUint32(opnsSec.byteOffset + 8, true);
+    assert.equal(coeffCount, 5, "CGA3 grade-4 sphere has 5 coefficients");
+    const b4 = odv.getFloat32(opnsSec.byteOffset + 44 + 4 * 4, true);
+    assertNear(b4, 1.0, 1e-5, "cga3d_opns_cyclide b[4] quadratic sphere coeff == 1.0");
     foundOpnsGlsl = true;
   }
 }
-assert.ok(foundOpnsGlsl, "verified cga3d_opns_cyclide WGSL/GLSL/MSL shader emission in WASM");
+assert.ok(foundOpnsGlsl, "verified cga3d_opns_cyclide GPUInit WGSL/GLSL3/MSL shader emission in WASM");
 
 // Hot binary Tick on static-mesh pga3d_objects -> omits BOTH MESH_ASSETS & metaJson!
 const obj0 = parseGSIR(sess.dispatchJson({ op: "loadPreset", id: "pga3d_objects" }));
@@ -141,7 +196,7 @@ const wCommit = parseGSIR(sess.dispatchBin(wg));
 assert.ok(wCommit.meta && wCommit.meta.wedge.moves === 1, "WedgeGesture commit increments moves to 1");
 assert.equal(wCommit.meta.wedge.solved, true, "WedgeGesture Join solves Level 1!");
 
-// Live evalScript, evalSurface, evalEquations (marching-triangles contours!), calcEval, editCoeff
+// Live evalScript, evalSurface, evalEquations, evalImplicit (mesh + GPU raymarch!), evalParametric, calcEval
 const sScript = parseGSIR(sess.dispatchJson({ op: "evalScript", algebra: "PGA3", code: "let P = point(1,2,3); let Q = point(-1,0,1); let L = P & Q" }));
 assert.equal(sScript.meta.diagnostics.length, 0, "evalScript zero diagnostics");
 assert.ok(sScript.sections.some(s => s.kind === 0x04), "evalScript emitted PGA3 line");
@@ -151,6 +206,50 @@ assert.ok(sSurf.sections.some(s => s.kind === 0x0B), "evalSurface emitted CCW me
 
 const sEq = parseGSIR(sess.dispatchJson({ op: "evalEquations", equations: ["x^2+y^2-1", "y-x"], bounds: [-2, 2, -2, 2], gridN: 32 }));
 assert.ok(sEq.sections.some(s => s.kind === 0x0F), "evalEquations emitted marching-triangles CONTOUR_OVERLAY");
+
+// User-typed 3D Implicit Equation (Kuhn Marching Tetrahedra mesh + latency benchmark!)
+const gyroidExpr = "cos(x*2)*sin(y*2)+cos(y*2)*sin(z*2)+cos(z*2)*sin(x*2)";
+const tImp0 = performance.now();
+const sImpMesh = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: gyroidExpr, gpuRaymarch: false, gridN: 16 }));
+const dtImpMesh = performance.now() - tImp0;
+assert.equal(sImpMesh.meta.diagnostics.length, 0, "evalImplicit mesh zero diagnostics");
+assert.ok(sImpMesh.sections.some(s => s.kind === 0x0B), "evalImplicit mesh emitted CCW MESH_ASSETS");
+console.log(`[wasm bench] evalImplicit gyroid 16^3: ${dtImpMesh.toFixed(2)} ms (${sImpMesh.meta.inspect[0].formatted})`);
+
+// User-typed 3D Implicit Equation (GPUInit GLSL3 + WGSL + Metal MSL raymarcher!)
+const tGpu0 = performance.now();
+const sImpGpu = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: gyroidExpr, gpuRaymarch: true }));
+const dtImpGpu = performance.now() - tGpu0;
+assert.equal(sImpGpu.meta.diagnostics.length, 0, "evalImplicit gpuRaymarch zero diagnostics");
+assert.ok(sImpGpu.sections.some(s => s.kind === 0x10), "evalImplicit gpuRaymarch emitted 0x10 OPNS_UNIFORMS");
+assert.ok(sImpGpu.meta.opnsShaders && sImpGpu.meta.opnsShaders.length === 1, "evalImplicit gpuRaymarch emitted opnsShaders[0]");
+assert.ok(sImpGpu.meta.opnsShaders[0].glsl.includes("uniform mat4 projectionMatrix;"), "implicit GLSL3 declares projectionMatrix");
+assert.ok(sImpGpu.meta.opnsShaders[0].wgsl.includes("@fragment"), "implicit WGSL valid");
+assert.ok(sImpGpu.meta.opnsShaders[0].msl.includes("gsir_lean_opns_compute"), "implicit MSL valid");
+console.log(`[wasm bench] evalImplicit GPU shader:  ${dtImpGpu.toFixed(2)} ms (GLSL3+WGSL+MSL)`);
+
+// User-typed 3D Parametric Surface
+const sParam = parseGSIR(sess.dispatchJson({
+  op: "evalParametric",
+  fx: "(1.1 + 0.42*cos(v))*cos(u)",
+  fy: "0.42*sin(v)",
+  fz: "(1.1 + 0.42*cos(v))*sin(u)",
+  nu: 32, nv: 18
+}));
+assert.equal(sParam.meta.diagnostics.length, 0, "evalParametric zero diagnostics");
+assert.ok(sParam.sections.some(s => s.kind === 0x0B), "evalParametric emitted CCW MESH_ASSETS");
+
+// Wedge Tutorials (T1..T6 animated cards!) + Procedural Challenge Generator (2D & 3D)
+for (const tid of ["T1", "T2", "T3", "T4", "T5", "T6"]) {
+  const wt = parseGSIR(sess.dispatchJson({ op: "wedgeTutorial", id: tid }));
+  assert.ok(wt.meta && wt.meta.wedge, `wedgeTutorial ${tid} has wedge HUD`);
+  assert.ok(wt.sections.some(s => s.kind === 0x03), `wedgeTutorial ${tid} emits animated gesture arrow segments`);
+}
+for (const [dim, diff, seed] of [[2, 0, 11], [2, 2, 22], [3, 0, 33], [3, 2, 44]]) {
+  const wr = parseGSIR(sess.dispatchJson({ op: "wedgeRandom", dim, difficulty: diff, seed }));
+  assert.ok(wr.meta && wr.meta.wedge, `wedgeRandom dim=${dim} diff=${diff} has wedge HUD`);
+  assert.equal(wr.meta.wedge.is3D, dim === 3, `wedgeRandom is3D matches dim=${dim}`);
+}
 
 const sCalc = parseGSIR(sess.dispatchJson({ op: "calcEval", mode: "STA", expr: "e1 * e2" }));
 assert.ok(sCalc.meta.calc && sCalc.meta.calc.display.length > 0, "calcEval produced display");
@@ -180,4 +279,4 @@ const dtFrames = performance.now() - t1;
 console.log(`[wasm bench] studio_drag_gsir_frame: ${((dtFrames * 1e3) / N_FRAMES).toFixed(2)} us/frame (${lastSize} B/frame, ${Math.round(N_FRAMES / (dtFrames / 1000))} fps max)`);
 
 sess.destroy();
-console.log("[wasm test] ALL 19 PRESETS + WEDGE 2D/3D + EVAL + CONTOURS + OPNS SHADERS PASSED IN WASM!");
+console.log("[wasm test] ALL 69 PRESETS + IMPLICIT3D/GPU + PARAMETRIC + WEDGE TUTORIALS/RANDOM + EVAL + OPNS PASSED IN WASM!");

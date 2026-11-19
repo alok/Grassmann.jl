@@ -15,8 +15,10 @@ cd "$ROOT"
 
 LEAN_PREFIX="$(lake --dir "$ROOT" env lean --print-prefix)"
 OUT_ROOT="$ROOT/.lake/build/apple"
-VISIONOS_INC="$OUT_ROOT/include-visionos"
+STAGE_ROOT="$ROOT/.lake/build/apple-staging"
+VISIONOS_INC="$STAGE_ROOT/include-visionos"
 XCFRAMEWORK="$OUT_ROOT/GrassmannCABI.xcframework"
+STAGE_XCFW="$STAGE_ROOT/GrassmannCABI.xcframework"
 NCPU="$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
 
 MODULES=(
@@ -30,16 +32,22 @@ MODULES=(
   Grassmann.Eval.Contour
   Grassmann.Eval.Engine
   Grassmann.Eval.Calc
+  Grassmann.Eval.Implicit3D
+  Grassmann.Eval.ImplicitExpr
   Grassmann.Eval
   Grassmann.Wedge.Types
   Grassmann.Wedge.Levels2D
   Grassmann.Wedge.Levels3D
+  Grassmann.Wedge.Tutorials
   Grassmann.Wedge.Engine
   Grassmann.Wedge
   Grassmann.CoffeeShop.Mesh
   Grassmann.Codegen.GPU
+  Grassmann.Codegen.GPUInit
   Grassmann.Codegen
   Grassmann.CoffeeShop.Presets
+  Grassmann.CoffeeShop.PresetsExtra
+  Grassmann.CoffeeShop.PresetsParity
   Grassmann.CoffeeShop.Engine
   Grassmann.CoffeeShop
   Grassmann.Studio
@@ -55,10 +63,10 @@ for m in "${MODULES[@]}"; do
 done
 
 echo "[apple] Lean toolchain: $(lean --version)"
-echo "[apple] generating 25 strictly Init-only Lean 4.36 C sources (--wfail)"
+echo "[apple] generating ${#MODULES[@]} strictly Init-only Lean 4.36 C sources (--wfail)"
 lake build --wfail "${C_TARGETS[@]}"
 
-rm -rf "$OUT_ROOT"
+rm -rf "$STAGE_ROOT"
 mkdir -p "$VISIONOS_INC/lean"
 
 # visionOS / xrsimulator LeanVisionOSRuntime.xcframework is built with
@@ -83,8 +91,8 @@ build_slice() {
   local libtool_bin
   libtool_bin="$(xcrun --sdk "$sdk" --find libtool)"
 
-  local obj_dir="$OUT_ROOT/$slice/obj"
-  local archive="$OUT_ROOT/$slice/libgrassmann_cabi.a"
+  local obj_dir="$STAGE_ROOT/$slice/obj"
+  local archive="$STAGE_ROOT/$slice/libgrassmann_cabi.a"
   mkdir -p "$obj_dir"
 
   local inc_flags=()
@@ -145,6 +153,7 @@ build_slice() {
   local syms
   syms="$(nm -gU "$archive")"
   for req in _grassmann_cabi_version _grassmann_initialize _grassmann_initialize_module \
+             _grassmann_attach_thread _grassmann_detach_thread \
              _grassmann_studio_create _grassmann_studio_dispatch_bin _grassmann_studio_dispatch_json \
              _grassmann_studio_get_frame _grassmann_studio_preset_catalog \
              _grassmann_pga3_motor_compose _grassmann_sta_mul _grassmann_r3_apply_rational_rotor; do
@@ -181,19 +190,16 @@ build_slice "xros-arm64"           "xros"        "arm64-apple-xros2.0"          
 
 echo "[apple] packaging GrassmannCABI.xcframework"
 xcodebuild -create-xcframework \
-  -library "$OUT_ROOT/macos-arm64/libgrassmann_cabi.a"          -headers "$ROOT/include" \
-  -library "$OUT_ROOT/xros-arm64-simulator/libgrassmann_cabi.a" -headers "$ROOT/include" \
-  -library "$OUT_ROOT/xros-arm64/libgrassmann_cabi.a"           -headers "$ROOT/include" \
-  -output "$XCFRAMEWORK" >/dev/null
-
-ls -lh "$OUT_ROOT"/*/libgrassmann_cabi.a
-echo "[apple] XCFramework created: $XCFRAMEWORK"
+  -library "$STAGE_ROOT/macos-arm64/libgrassmann_cabi.a"          -headers "$ROOT/include" \
+  -library "$STAGE_ROOT/xros-arm64-simulator/libgrassmann_cabi.a" -headers "$ROOT/include" \
+  -library "$STAGE_ROOT/xros-arm64/libgrassmann_cabi.a"           -headers "$ROOT/include" \
+  -output "$STAGE_XCFW" >/dev/null
 
 # Optional real-world link check against LeanVisionOSRuntime.xcframework (all 3 slices!)
 RUNTIME_XCFW="${LEAN_VISIONOS_RUNTIME_XCFW:-/Users/alokbeniwal/LeanVisionOS/build/LeanVisionOSRuntime.xcframework}"
 if [[ -d "$RUNTIME_XCFW" ]]; then
   echo "[apple] running live 3-platform link verification against $RUNTIME_XCFW"
-  SMOKE_C="$OUT_ROOT/apple_link_smoke.cpp"
+  SMOKE_C="$STAGE_ROOT/apple_link_smoke.cpp"
   cat > "$SMOKE_C" << 'EOF'
 #include <cassert>
 #include <cstdio>
@@ -205,9 +211,9 @@ int main() {
   uint64_t sid = grassmann_studio_create();
   assert(sid > 0);
   uint32_t catLen = 0;
-  static char catBuf[16384];
+  static char catBuf[65536];
   assert(grassmann_studio_preset_catalog(catBuf, sizeof(catBuf), &catLen) == GSIR_OK);
-  assert(catLen > 100);
+  assert(catLen > 10000);
   static uint8_t frameBuf[262144];
   uint32_t frameLen = 0;
   assert(grassmann_studio_get_frame(sid, frameBuf, sizeof(frameBuf), &frameLen) == GSIR_OK);
@@ -228,7 +234,7 @@ EOF
     rt_lib="$RUNTIME_XCFW/$slice/libCLeanVisionOS.a"
     sdk_path="$(xcrun --sdk "$sdk" --show-sdk-path)"
     clangxx="$(xcrun --sdk "$sdk" --find clang++)"
-    bin="$OUT_ROOT/$slice/apple_link_smoke"
+    bin="$STAGE_ROOT/$slice/apple_link_smoke"
     extra_arr=()
     if [[ -n "$extra" ]]; then
       # shellcheck disable=SC2206
@@ -236,7 +242,7 @@ EOF
     fi
     "$clangxx" -target "$target" "${extra_arr[@]}" -isysroot "$sdk_path" \
       -I"$ROOT/include" "$SMOKE_C" \
-      "$OUT_ROOT/$slice/libgrassmann_cabi.a" \
+      "$STAGE_ROOT/$slice/libgrassmann_cabi.a" \
       "$rt_lib" \
       -lz -o "$bin"
     echo "[apple] LINK PASS ($slice): $(du -h "$bin" | awk '{print $1}')"
@@ -246,5 +252,16 @@ EOF
   done
   rm -f "$SMOKE_C"
 fi
+
+# Atomically publish verified artifacts to .lake/build/apple
+rm -rf "${OUT_ROOT}.old"
+if [[ -d "$OUT_ROOT" ]]; then
+  mv "$OUT_ROOT" "${OUT_ROOT}.old"
+fi
+mv "$STAGE_ROOT" "$OUT_ROOT"
+rm -rf "${OUT_ROOT}.old"
+
+ls -lh "$OUT_ROOT"/*/libgrassmann_cabi.a
+echo "[apple] XCFramework published: $XCFRAMEWORK"
 
 echo "[apple] ALL 3 APPLE SLICES + XCFRAMEWORK VERIFIED PASS!"

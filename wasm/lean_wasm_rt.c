@@ -22,7 +22,8 @@
 
 typedef struct {
   lean_object m_header;
-  uint64_t    m_val;
+  uint64_t    m_val;   /* exact low 64 bits for Nat/Int bit & integer ops */
+  double      m_fval;  /* exact full-precision double for arbitrary-length literals (e.g. 21-digit pi) */
 } wasm_bignat_object;
 
 static inline uint64_t nat_to_u64(b_lean_obj_arg o) {
@@ -32,17 +33,29 @@ static inline uint64_t nat_to_u64(b_lean_obj_arg o) {
   return ((const wasm_bignat_object *)o)->m_val;
 }
 
-static inline lean_obj_res u64_to_nat(uint64_t v) {
-  if (v <= (uint64_t)LEAN_MAX_SMALL_NAT) {
-    return lean_box((size_t)v);
+static inline double nat_to_f64(b_lean_obj_arg o) {
+  if (lean_is_scalar(o)) {
+    return (double)lean_unbox(o);
   }
+  return ((const wasm_bignat_object *)o)->m_fval;
+}
+
+static inline lean_obj_res alloc_bignat(uint64_t v, double fv) {
   wasm_bignat_object *o = (wasm_bignat_object *)lean_alloc_object(sizeof(wasm_bignat_object));
   o->m_header.m_rc = 1;
   o->m_header.m_cs_sz = 0;
   o->m_header.m_other = 0;
   o->m_header.m_tag = LeanMPZ;
   o->m_val = v;
+  o->m_fval = fv;
   return &o->m_header;
+}
+
+static inline lean_obj_res u64_to_nat(uint64_t v) {
+  if (v <= (uint64_t)LEAN_MAX_SMALL_NAT) {
+    return lean_box((size_t)v);
+  }
+  return alloc_bignat(v, (double)v);
 }
 
 /* ============================================================================
@@ -669,8 +682,18 @@ lean_obj_res lean_big_uint64_to_nat(uint64_t n) { return u64_to_nat(n); }
 uint32_t lean_uint32_of_big_nat(b_lean_obj_arg a) { return (uint32_t)nat_to_u64(a); }
 
 lean_obj_res lean_cstr_to_nat(const char *n) {
-  uint64_t v = strtoull(n, NULL, 10);
-  return u64_to_nat(v);
+  if (!n) return lean_box(0);
+  double fval = strtod(n, NULL);
+  uint64_t u = 0;
+  size_t digits = 0;
+  for (const char *p = n; *p >= '0' && *p <= '9'; ++p) {
+    u = u * 10ULL + (uint64_t)(*p - '0');
+    digits++;
+  }
+  if (digits <= 9 && u <= (uint64_t)LEAN_MAX_SMALL_NAT) {
+    return lean_box((size_t)u);
+  }
+  return alloc_bignat(u, fval);
 }
 
 lean_object *lean_nat_big_succ(lean_object *a) { return u64_to_nat(nat_to_u64(a) + 1ULL); }
@@ -706,7 +729,7 @@ lean_obj_res lean_nat_big_shiftr(b_lean_obj_arg a1, b_lean_obj_arg a2) {
 }
 
 double lean_float_of_nat(b_lean_obj_arg a) {
-  return (double)nat_to_u64(a);
+  return nat_to_f64(a);
 }
 
 uint8_t lean_float_isnan(double a) { return isnan(a) ? 1 : 0; }
@@ -725,8 +748,8 @@ uint32_t lean_float32_to_bits(float d) {
 }
 
 double l_Float_ofScientific(lean_obj_arg m, uint8_t s, lean_obj_arg e) {
-  double dm = (double)nat_to_u64(m);
-  double de = (double)nat_to_u64(e);
+  double dm = nat_to_f64(m);
+  double de = nat_to_f64(e);
   lean_dec(m);
   lean_dec(e);
   double p10 = pow(10.0, de);
@@ -1257,3 +1280,98 @@ lean_object *l_Rat_mul(lean_obj_arg a, lean_obj_arg b) { lean_dec(b); return a; 
 lean_object *l_Rat_div(lean_obj_arg a, lean_obj_arg b) { lean_dec(b); return a; }
 lean_object *l_Rat_neg(lean_obj_arg a) { return a; }
 uint8_t l_instDecidableEqRat_decEq(b_lean_obj_arg a, b_lean_obj_arg b) { return a == b ? 1 : 0; }
+
+/* Wave 3A additions: IEEE-754 Float.toBits, Nat bitwise big ops, Float DecidableEq & Bool repr */
+uint64_t lean_float_to_bits(double d) {
+  uint64_t bits = 0;
+  memcpy(&bits, &d, sizeof(bits));
+  return bits;
+}
+lean_obj_res lean_nat_big_land(b_lean_obj_arg a, b_lean_obj_arg b) {
+  return u64_to_nat(nat_to_u64(a) & nat_to_u64(b));
+}
+lean_obj_res lean_nat_big_lor(b_lean_obj_arg a, b_lean_obj_arg b) {
+  return u64_to_nat(nat_to_u64(a) | nat_to_u64(b));
+}
+lean_obj_res lean_nat_big_lxor(b_lean_obj_arg a, b_lean_obj_arg b) {
+  return u64_to_nat(nat_to_u64(a) ^ nat_to_u64(b));
+}
+uint8_t l_instDecidableEqFloat_decEq(double a, double b) {
+  return a == b ? 1 : 0;
+}
+lean_object *l_Bool_repr___redArg(uint8_t b) {
+  lean_object *s = b ? lean_mk_string_from_bytes("true", 4) : lean_mk_string_from_bytes("false", 5);
+  lean_object *f = lean_alloc_ctor(3, 1, 0);
+  lean_ctor_set(f, 0, s);
+  return f;
+}
+
+/* Signed 64-bit Big Int + ByteArray + String UTF-8 + Panic helpers */
+lean_object *l_Int_instInhabited = (lean_object *)(size_t)1; /* lean_box(0) */
+
+static inline int64_t int_to_i64(b_lean_obj_arg o) {
+  if (lean_is_scalar(o)) {
+    return lean_scalar_to_int64(o);
+  }
+  return (int64_t)((const wasm_bignat_object *)o)->m_val;
+}
+
+static inline lean_obj_res i64_to_int(int64_t v) {
+  if (LEAN_MIN_SMALL_INT <= v && v <= LEAN_MAX_SMALL_INT) {
+    return lean_box((unsigned)((int)v));
+  }
+  return alloc_bignat((uint64_t)v, (double)v);
+}
+
+lean_object *lean_big_int_to_int(int n) { return i64_to_int((int64_t)n); }
+lean_object *lean_big_size_t_to_int(size_t n) { return i64_to_int((int64_t)n); }
+lean_object *lean_big_int64_to_int(int64_t n) { return i64_to_int(n); }
+lean_object *lean_int_big_neg(lean_object *a) { return i64_to_int(-int_to_i64(a)); }
+lean_object *lean_int_big_add(lean_object *a, lean_object *b) { return i64_to_int(int_to_i64(a) + int_to_i64(b)); }
+lean_object *lean_int_big_sub(lean_object *a, lean_object *b) { return i64_to_int(int_to_i64(a) - int_to_i64(b)); }
+lean_object *lean_int_big_mul(lean_object *a, lean_object *b) { return i64_to_int(int_to_i64(a) * int_to_i64(b)); }
+bool lean_int_big_eq(lean_object *a, lean_object *b) { return int_to_i64(a) == int_to_i64(b); }
+bool lean_int_big_le(lean_object *a, lean_object *b) { return int_to_i64(a) <= int_to_i64(b); }
+bool lean_int_big_lt(lean_object *a, lean_object *b) { return int_to_i64(a) < int_to_i64(b); }
+bool lean_int_big_nonneg(lean_object *a) { return int_to_i64(a) >= 0; }
+int8_t lean_int8_of_big_int(b_lean_obj_arg a) { return (int8_t)int_to_i64(a); }
+int32_t lean_int32_of_big_int(b_lean_obj_arg a) { return (int32_t)int_to_i64(a); }
+
+lean_object *lean_nat_big_xor(lean_object *a, lean_object *b) {
+  return u64_to_nat(nat_to_u64(a) ^ nat_to_u64(b));
+}
+
+lean_obj_res lean_byte_array_data(lean_obj_arg a) {
+  size_t sz = lean_sarray_size(a);
+  lean_obj_res r = lean_alloc_array(sz, sz);
+  const uint8_t *it = lean_sarray_cptr(a);
+  lean_object **dst = lean_array_cptr(r);
+  for (size_t i = 0; i < sz; ++i) {
+    dst[i] = lean_box((size_t)it[i]);
+  }
+  lean_dec(a);
+  return r;
+}
+
+lean_obj_res lean_string_utf8_next_fast_cold(size_t i, unsigned char c) {
+  if ((c & 0xE0u) == 0xC0u) return lean_box(i + 2);
+  if ((c & 0xF0u) == 0xE0u) return lean_box(i + 3);
+  if ((c & 0xF8u) == 0xF0u) return lean_box(i + 4);
+  return lean_box(i + 1);
+}
+
+void lean_inc_ref_huge_n(lean_object *o, size_t n) {
+  if (o->m_rc == 0) return;
+  if (o->m_rc > 0) {
+    if (n > (size_t)(INT32_MAX - o->m_rc)) {
+      o->m_rc = 0; /* freeze persistent on huge RC */
+    } else {
+      o->m_rc += (int)n;
+    }
+  }
+}
+
+void lean_internal_panic(char const *msg) {
+  fprintf(stderr, "[lean_wasm_rt] panic: %s\n", msg ? msg : "(null)");
+  abort();
+}

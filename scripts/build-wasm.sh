@@ -26,16 +26,22 @@ mods=(
   Grassmann.Eval.Contour
   Grassmann.Eval.Engine
   Grassmann.Eval.Calc
+  Grassmann.Eval.Implicit3D
+  Grassmann.Eval.ImplicitExpr
   Grassmann.Eval
   Grassmann.Wedge.Types
   Grassmann.Wedge.Levels2D
   Grassmann.Wedge.Levels3D
+  Grassmann.Wedge.Tutorials
   Grassmann.Wedge.Engine
   Grassmann.Wedge
   Grassmann.CoffeeShop.Mesh
   Grassmann.Codegen.GPU
+  Grassmann.Codegen.GPUInit
   Grassmann.Codegen
   Grassmann.CoffeeShop.Presets
+  Grassmann.CoffeeShop.PresetsExtra
+  Grassmann.CoffeeShop.PresetsParity
   Grassmann.CoffeeShop.Engine
   Grassmann.CoffeeShop
   Grassmann.Studio
@@ -71,7 +77,8 @@ EOF
 
 exported_fns='[
   "_malloc","_free",
-  "_grassmann_cabi_version","_grassmann_initialize",
+  "_grassmann_cabi_version","_grassmann_initialize","_grassmann_initialize_module",
+  "_grassmann_attach_thread","_grassmann_detach_thread",
   "_grassmann_studio_create","_grassmann_studio_destroy",
   "_grassmann_studio_dispatch_bin","_grassmann_studio_dispatch_json",
   "_grassmann_studio_get_frame","_grassmann_studio_preset_catalog",
@@ -95,7 +102,7 @@ exported_fns='[
   "_grassmann_cga3_dual_sphere","_grassmann_cga3_dual_plane"
 ]'
 
-echo "[wasm] compiling 25 Lean 4.36 C modules + C ABI shim + lean_wasm_rt.c via emcc -O3"
+echo "[wasm] compiling ${#mods[@]} Lean 4.36 C modules + C ABI shim + lean_wasm_rt.c via emcc -O3"
 emcc -O3 -DNDEBUG -ffunction-sections -fdata-sections -Wl,--gc-sections \
   -I"$stage_inc" \
   -I"$repo_root/include" \
@@ -114,9 +121,36 @@ emcc -O3 -DNDEBUG -ffunction-sections -fdata-sections -Wl,--gc-sections \
   -o "$dist_dir/grassmann.mjs"
 
 cp "$repo_root/wasm/grassmann_wasm.mjs" "$dist_dir/grassmann_wasm.mjs"
-echo "[wasm] built artifacts:"
-ls -lh "$dist_dir/grassmann.wasm" "$dist_dir/grassmann.mjs" "$dist_dir/grassmann_wasm.mjs"
-gzip -c "$dist_dir/grassmann.wasm" | wc -c | awk '{printf "[wasm] gzipped wasm size: %d bytes (%.1f KB)\n", $1, $1/1024.0}'
 
-echo "[wasm] running full Node.js verification + benchmark suite (all 19 presets + 16 Wedge levels + Eval + OPNS)"
+# Emit content-fingerprinted WASM artifacts + wasm-manifest.json alongside canonical names
+# so Vercel / CDN deployments can safely use long-lived immutable caching without cache poisoning!
+rm -f "$dist_dir"/grassmann.[0-9a-f]*.wasm "$dist_dir"/grassmann.[0-9a-f]*.mjs
+wasm_hash="$(shasum -a 256 "$dist_dir/grassmann.wasm" | awk '{print substr($1, 1, 10)}')"
+fp_wasm="grassmann.${wasm_hash}.wasm"
+fp_mjs="grassmann.${wasm_hash}.mjs"
+cp "$dist_dir/grassmann.wasm" "$dist_dir/$fp_wasm"
+sed "s/grassmann\.wasm/${fp_wasm}/g" "$dist_dir/grassmann.mjs" > "$dist_dir/$fp_mjs"
+
+wasm_bytes="$(wc -c < "$dist_dir/grassmann.wasm" | tr -d ' ')"
+gz_bytes="$(gzip -9 -c "$dist_dir/grassmann.wasm" | wc -c | tr -d ' ')"
+cat > "$dist_dir/wasm-manifest.json" << EOF
+{
+  "version": 1,
+  "hash": "${wasm_hash}",
+  "wasmFile": "${fp_wasm}",
+  "loaderFile": "${fp_mjs}",
+  "canonicalWasmFile": "grassmann.wasm",
+  "canonicalLoaderFile": "grassmann.mjs",
+  "wrapperFile": "grassmann_wasm.mjs",
+  "bytes": ${wasm_bytes},
+  "gzipBytes": ${gz_bytes},
+  "presetCount": 69
+}
+EOF
+
+echo "[wasm] built artifacts (content hash=${wasm_hash}):"
+ls -lh "$dist_dir/grassmann.wasm" "$dist_dir/grassmann.mjs" "$dist_dir/$fp_wasm" "$dist_dir/$fp_mjs" "$dist_dir/grassmann_wasm.mjs" "$dist_dir/wasm-manifest.json"
+echo "[wasm] gzipped wasm size: ${gz_bytes} bytes ($((gz_bytes / 1024)).$(((gz_bytes % 1024) * 10 / 1024)) KB)"
+
+echo "[wasm] running full Node.js verification + benchmark suite (all 69 presets + Implicit3D/GPU + Wedge Tutorials/Random)"
 node "$repo_root/wasm/test_wasm.mjs"
