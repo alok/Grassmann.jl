@@ -423,7 +423,7 @@ def testCoffeeShopAndStudio : IO Unit := do
 /-! ## 5. Straight-Line GPU Codegen (WGSL, GLSL 300 es, Metal MSL) -/
 
 def testGpuCodegen : IO Unit := do
-  match compileOpnsBundle "cga3_witt" DirectSum.CGA3 4 false with
+  match compileOpnsBundle "cga3_witt" Grassmann.CABI.Alg.AlgSpace.CGA3 4 false with
   | .error e => throw (IO.userError s!"compileOpnsBundle failed: {e}")
   | .ok bundle =>
     assertTrue "WGSL has @fragment, product_len & 16-byte vec4 uniform blade array"

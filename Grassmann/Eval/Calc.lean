@@ -14,7 +14,7 @@ Credits: Michael Reed (`chakravala` / `Grassmann.jl`) and Steven De Keninck
 
 namespace Grassmann.Eval.Calc
 
-open DirectSum Grassmann Grassmann.Scene Grassmann.Eval
+open Grassmann.CABI.Alg Grassmann.Scene Grassmann.Eval
 
 /-- Exact rational 3D vector for `ALOK-950` R3 rational rotor checks. -/
 structure RatVec3 where
@@ -83,7 +83,7 @@ private def evalToText (mode : String) (regs : Array (String × String)) (exprSt
         env := env1.bind slot v
   let ast ← parseExprString exprStr
   let (res, _) ← evalGA env ast
-  return res.showString
+  return res.showString (r > 0)
 
 /-- Apply a GAlculator keypad press (`"STA"`, `"P3D"`, `"C3D"`, `"st"`, `"x1"`, `"="`, `"Cl"`, …). -/
 def stepKey (st : CalcState) (key : String) : CalcState :=

@@ -1,19 +1,18 @@
-import DirectSum.Ops
-import DirectSum.Common
+import Grassmann.CABI.Alg
 import Grassmann.Scene.Types
 
 /-!
-# Straight-Line GPU Codegen (WGSL, GLSL 300 es, Metal MSL) from `DirectSum`
+# Straight-Line GPU Codegen (WGSL, GLSL 300 es, Metal MSL) (Strictly Init-Only)
 
 Emits zero-table, loop-free straight-line GPU shader code directly from
-`DirectSum.TensorBundle.plan₂` (`out[ic] += coef · x[ia] · y[ib]`) for:
+`Grassmann.CABI.Alg.plan2` (`out[ic] += coef · x[ia] · y[ib]`) for:
 
 1. **OPNS & IPNS Sphere-Tracing Raymarching Shaders** (`WGSL` for WebGPU,
    `GLSL 300 es` for WebGL2 / Three.js `ShaderMaterial`, and `MSL` for visionOS
    RealityKit `CustomMaterial` / Metal compute) — ports `ganja.js`'s `OPNS_GLSL`/
    `IPNS_GLSL` visualizer into a pure-Lean multi-backend compiler.
 2. **Straight-line Clifford Product Kernels** (`emitProductKernel`) for arbitrary
-   `TensorBundle` `V`, `BinOp`, and `Layout`s (e.g. PGA3 motor × motor, PGA3 motor
+   `AlgSpace` `V`, `BinOp`, and `Layout`s (e.g. PGA3 motor × motor, PGA3 motor
    sandwich, STA geometric product) for GPU vector/multivector fields & physics.
 
 Credits: Michael Reed (`chakravala` / `Grassmann.jl`) and Steven De Keninck
@@ -22,7 +21,7 @@ Credits: Michael Reed (`chakravala` / `Grassmann.jl`) and Steven De Keninck
 
 namespace Grassmann.Codegen.GPU
 
-open DirectSum Grassmann.Scene
+open Grassmann.CABI.Alg Grassmann.Scene
 
 /-- Target GPU shading language. -/
 inductive Target where
@@ -31,19 +30,22 @@ inductive Target where
   | msl
   deriving DecidableEq, Repr, Inhabited
 
-/-- Format a rational plan coefficient as a clean GPU float literal (`1.0`, `-0.5`, etc.). -/
-private def fmtRatLit (q : Rat) : String :=
-  if q.den == 1 then
-    s!"{q.num}.0"
-  else
-    s!"({q.num}.0 / {q.den}.0)"
+/-- Format a plan coefficient as a clean GPU float literal (`1.0`, `-0.5`, etc.). -/
+private def fmtCoefLit (c : Float) : String :=
+  if Float.abs (c - 1.0) < 1e-9 then "1.0"
+  else if Float.abs (c + 1.0) < 1e-9 then "-1.0"
+  else if Float.abs (c - 0.5) < 1e-9 then "0.5"
+  else if Float.abs (c + 0.5) < 1e-9 then "-0.5"
+  else if Float.abs (c - 2.0) < 1e-9 then "2.0"
+  else if Float.abs (c + 2.0) < 1e-9 then "-2.0"
+  else s!"{c}"
 
 /-- Group `PlanEntry` contributions by output slot `ic` (`0 .. outDim - 1`). -/
 private def groupByOutput (outDim : Nat) (entries : Array PlanEntry) :
     Array (Array PlanEntry) := Id.run do
   let mut buckets : Array (Array PlanEntry) := Array.replicate outDim #[]
   for e in entries do
-    if e.ic < outDim && e.z == 0 && e.coef != 0 then
+    if e.ic < outDim && Float.abs e.coef > 1e-12 then
       buckets := buckets.set! e.ic (buckets[e.ic]!.push e)
   return buckets
 
@@ -56,15 +58,17 @@ private def emitSlotExpr (terms : Array PlanEntry) (fmtA : Nat → String) (fmtB
       if i < terms.size then
         let e := terms[i]!
         let prod := s!"({fmtA e.ia}) * ({fmtB e.ib})"
+        let isPosOne := Float.abs (e.coef - 1.0) < 1e-9
+        let isNegOne := Float.abs (e.coef + 1.0) < 1e-9
         let termStr :=
-          if e.coef == 1 then prod
-          else if e.coef == -1 then s!"-({prod})"
-          else s!"{fmtRatLit e.coef} * ({prod})"
+          if isPosOne then prod
+          else if isNegOne then s!"-({prod})"
+          else s!"{fmtCoefLit e.coef} * ({prod})"
         let next :=
           if i == 0 then termStr
-          else if e.coef == -1 then s!"{acc} - {prod}"
-          else if e.coef < 0 then
-            let posCoef := fmtRatLit (-e.coef)
+          else if isNegOne then s!"{acc} - {prod}"
+          else if e.coef < 0.0 then
+            let posCoef := fmtCoefLit (-e.coef)
             s!"{acc} - {posCoef} * ({prod})"
           else s!"{acc} + {termStr}"
         go (i + 1) next
@@ -74,13 +78,13 @@ private def emitSlotExpr (terms : Array PlanEntry) (fmtA : Nat → String) (fmtB
 /-! ## Straight-Line Clifford Product Kernel Emission -/
 
 /-- Emit a straight-line binary product function in `WGSL`, `GLSL`, or `MSL` directly
-from `V.plan₂ op la lb lc` (zero sign tables or nested loops on the GPU). -/
+from `plan2 V op la lb lc` (zero sign tables or nested loops on the GPU). -/
 def emitProductKernel (target : Target) (fnName : String)
-    (V : TensorBundle) (op : BinOp) (la lb lc : Layout) : Except String String := do
-  let entries ← V.plan₂ op la lb lc
-  let dimA := la.size V.n
-  let dimB := lb.size V.n
-  let dimC := lc.size V.n
+    (V : AlgSpace) (op : BinOp) (la lb lc : Layout) : Except String String := do
+  let entries ← plan2 V op la lb lc
+  let dimA := la.size V
+  let dimB := lb.size V
+  let dimC := lc.size V
   let buckets := groupByOutput dimC entries
   let mut lines : Array String := #[]
   match target with
@@ -116,7 +120,7 @@ def emitProductKernel (target : Target) (fnName : String)
 - Raw `Cl(4,1)` (`e₊²=+1, e₋²=-1`): `[x, y, z, 0.5*(x*x+y*y+z*z)-0.5, 0.5*(x*x+y*y+z*z)+0.5]`
 - Projective `PGA3` (`D"0,1,1,1"`): `[1.0, x, y, z]`
 - Euclidean `ℝ3`: `[x, y, z]` -/
-def defaultUpExprs (V : TensorBundle) : Array String :=
+def defaultUpExprs (V : AlgSpace) : Array String :=
   if V.hasconformal && V.n == 5 then
     #["0.5*(x*x+y*y+z*z)", "1.0", "x", "y", "z"]
   else if V.hasconformal && V.n == 4 then
@@ -130,8 +134,8 @@ def defaultUpExprs (V : TensorBundle) : Array String :=
       match i with | 0 => "x" | 1 => "y" | 2 => "z" | _ => "0.0"
 
 /-- Emit the unrolled `product_len(p, b)` body computing `‖up(p) ∧ b‖` (OPNS) or
-`‖up(p) ⌋ b‖` (IPNS) from `V.plan₂`. -/
-private def emitNullSpaceBody (target : Target) (V : TensorBundle) (grade : Nat)
+`‖up(p) ⌋ b‖` (IPNS) from `plan2 V`. -/
+private def emitNullSpaceBody (target : Target) (V : AlgSpace) (grade : Nat)
     (upExprs : Array String) (isIPNS : Bool) : Except String (Nat × String) := do
   let op : BinOp := if isIPNS then .contractionLeft else .wedge
   let outGrade : Nat :=
@@ -142,9 +146,9 @@ private def emitNullSpaceBody (target : Target) (V : TensorBundle) (grade : Nat)
   let la := Layout.chain 1
   let lb := Layout.chain grade
   let lc := Layout.chain outGrade
-  let entries ← V.plan₂ op la lb lc
-  let inDim := lb.size V.n
-  let outDim := lc.size V.n
+  let entries ← plan2 V op la lb lc
+  let inDim := lb.size V
+  let outDim := lc.size V
   let buckets := groupByOutput outDim entries
   let declF := match target with | .wgsl => "let" | .glsl => "float" | .msl => "float"
   let varF  := match target with | .wgsl => "var sum: f32 = 0.0;" | _ => "float sum = 0.0;"
@@ -167,7 +171,7 @@ private def emitNullSpaceBody (target : Target) (V : TensorBundle) (grade : Nat)
 
 /-- Emit a complete GLSL 300 es (WebGL2 / Three.js `ShaderMaterial`) OPNS/IPNS
 sphere-tracing fragment shader. -/
-def emitOpnsGlsl (V : TensorBundle) (grade : Nat) (isIPNS : Bool := false)
+def emitOpnsGlsl (V : AlgSpace) (grade : Nat) (isIPNS : Bool := false)
     (upExprs : Array String := defaultUpExprs V) : Except String String := do
   let (dimB, body) ← emitNullSpaceBody .glsl V grade upExprs isIPNS
   let modeName := if isIPNS then "IPNS" else "OPNS"
@@ -228,7 +232,7 @@ void main() \{
 "
 
 /-- Emit a complete WGSL (WebGPU) OPNS/IPNS sphere-tracing fragment shader. -/
-def emitOpnsWgsl (V : TensorBundle) (grade : Nat) (isIPNS : Bool := false)
+def emitOpnsWgsl (V : AlgSpace) (grade : Nat) (isIPNS : Bool := false)
     (upExprs : Array String := defaultUpExprs V) : Except String String := do
   let (dimB, body) ← emitNullSpaceBody .wgsl V grade upExprs isIPNS
   let vec4N := max 1 ((dimB + 3) / 4)
@@ -289,7 +293,7 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> \{
 
 /-- Emit a complete Metal MSL (visionOS / macOS RealityKit `CustomMaterial` & Metal
 fragment pipeline) OPNS/IPNS sphere-tracing shader. -/
-def emitOpnsMsl (V : TensorBundle) (grade : Nat) (isIPNS : Bool := false)
+def emitOpnsMsl (V : AlgSpace) (grade : Nat) (isIPNS : Bool := false)
     (upExprs : Array String := defaultUpExprs V) : Except String String := do
   let (dimB, body) ← emitNullSpaceBody .msl V grade upExprs isIPNS
   let modeName := if isIPNS then "IPNS" else "OPNS"
@@ -349,7 +353,7 @@ fragment float4 opns_fragment(float2 uv [[stage_in]], constant OpnsUniforms& u [
 "
 
 /-- Build a complete `OpnsShaderSource` bundle (WGSL + GLSL + MSL) cached by deterministic hash. -/
-def compileOpnsBundle (tag : String) (V : TensorBundle) (grade : Nat)
+def compileOpnsBundle (tag : String) (V : AlgSpace) (grade : Nat)
     (isIPNS : Bool := false) : Except String OpnsShaderSource := do
   let wgsl ← emitOpnsWgsl V grade isIPNS
   let glsl ← emitOpnsGlsl V grade isIPNS
@@ -359,8 +363,8 @@ def compileOpnsBundle (tag : String) (V : TensorBundle) (grade : Nat)
 
 /-- Emit straight-line PGA3 even-motor product + sandwich compute shaders in WGSL and MSL. -/
 def emitPga3MotorShaders : Except String (String × String) := do
-  let wgslMul ← emitProductKernel .wgsl "pga3_motor_mul" DirectSum.PGA3 .mul .even .even .even
-  let mslMul  ← emitProductKernel .msl  "pga3_motor_mul" DirectSum.PGA3 .mul .even .even .even
+  let wgslMul ← emitProductKernel .wgsl "pga3_motor_mul" AlgSpace.PGA3 .mul .even .even .even
+  let mslMul  ← emitProductKernel .msl  "pga3_motor_mul" AlgSpace.PGA3 .mul .even .even .even
   return (wgslMul, mslMul)
 
 end Grassmann.Codegen.GPU

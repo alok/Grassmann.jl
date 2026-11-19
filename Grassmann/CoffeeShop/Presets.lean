@@ -16,7 +16,7 @@ Credits: Steven De Keninck (`enkimute` / `ganja.js`) & Michael Reed (`chakravala
 
 namespace Grassmann.CoffeeShop
 
-open DirectSum Grassmann.Scene Grassmann.Eval Grassmann.CoffeeShop.Mesh
+open Grassmann.CABI.Alg Grassmann.Scene Grassmann.Eval Grassmann.CoffeeShop.Mesh
 
 /-- Catalog metadata for a CoffeeShop preset. -/
 structure PresetInfo where
@@ -570,7 +570,7 @@ def buildCga3dSpheresApollonius (handles : Array (UInt32 × Vec3)) (seq : UInt64
 
 def buildCga3dOpnsCyclide (seq : UInt64) (t : Float) : SceneFrame :=
   let f := baseFrame "cga3d_opns_cyclide" "3D CGA OPNS Raymarcher (Lean WGSL/GLSL/MSL)" "CGA3" seq t
-  let shaderOpt := Grassmann.Codegen.GPU.compileOpnsBundle "cga3_witt" DirectSum.CGA3 4 false
+  let shaderOpt := Grassmann.Codegen.GPU.compileOpnsBundle "cga3_witt" AlgSpace.CGA3 4 false
   let shaders := match shaderOpt with | .ok s => #[s] | .error _ => #[]
   -- Grade-4 blade in 5D CGA3 has C(5,4) = 5 coefficients (animating a dual sphere / cyclide)
   let cx := 0.35 * Float.sin (t * 0.7)

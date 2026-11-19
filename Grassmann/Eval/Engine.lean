@@ -1,6 +1,4 @@
-import DirectSum.Common
-import DirectSum.Parse
-import Grassmann.Dynamic
+import Grassmann.CABI.Alg
 import Grassmann.Scene.Types
 import Grassmann.Eval.Parser
 import Grassmann.Eval.Contour
@@ -8,12 +6,17 @@ import Grassmann.Eval.Contour
 /-!
 # Pure-Lean GA Expression / Script Evaluator & 3D Surface Engine (`Grassmann.Eval.Engine`)
 
+Strictly `Init`-only (ZERO `Lean.*`, `Lake.*`, or `Std.*` imports) so the entire
+unified `Grassmann.Studio` compiles into a ~3–5 MB standalone Apple dylib/static
+lib AND a tiny Emscripten WASM binary!
+
 Evaluates arbitrary Geometric Algebra expressions and CoffeeShop scripts over ANY
-`DirectSum.TensorBundle` (`Cl(p,q,r)`, `STA`, `R3`, `PGA2`, `PGA3`, `CGA2`, `CGA3`,
-`Complex`, `Dual`, `Quaternion`) using `Grassmann.TA V Float`, bridges `ganja.js`
-operator conventions cleanly (metric-free `!`, Dorst `<<`, regressive `&`, sandwich `>>>`),
-auto-classifies resulting multivectors into `SceneIR` 3D/2D primitives, and evaluates
-`z = f(x, y, t)` surfaces using forward-mode AD + Grassmann exterior normals!
+`AlgSpace` (`Cl(p,q,r)`, `STA`, `R3`, `PGA2`, `PGA3`, `CGA2`, `CGA3`,
+`Complex`, `Dual`, `Quaternion`) using dense `FloatArray` multivectors `MV V`,
+bridges `ganja.js` operator conventions cleanly (metric-free `!`, Dorst `<<`,
+regressive `&`, sandwich `>>>`), auto-classifies resulting multivectors into
+`SceneIR` 3D/2D primitives, and evaluates `z = f(x, y, t)` surfaces using
+forward-mode AD + Grassmann exterior normals!
 
 Credits: Michael Reed (`chakravala` / `Grassmann.jl`) and Steven De Keninck
 (`enkimute` / `ganja.js`).
@@ -21,61 +24,58 @@ Credits: Michael Reed (`chakravala` / `Grassmann.jl`) and Steven De Keninck
 
 namespace Grassmann.Eval
 
-open DirectSum DirectSum.Bits StaticVectors AbstractTensors Grassmann Grassmann.Scene
+open Grassmann.CABI.Alg Grassmann.Scene
 
 /-! ## Arbitrary `Cl(p, q, r)` Signature Construction -/
 
-/-- Construct a `DirectSum.TensorBundle` for arbitrary Clifford signature `Cl(p, q, r)`:
+/-- Construct an `AlgSpace` for arbitrary Clifford signature `Cl(p, q, r)`:
 places `r` degenerate zeros (`e₀²=0`) FIRST (matching `ganja.js` `PGA2`/`PGA3` order),
 followed by `p` positive `+1` generators and `q` negative `-1` generators. -/
-def clTensorBundle (p q r : Nat) : TensorBundle :=
-  if r == 0 then
-    let negMask : UInt64 := (List.range q).foldl (fun m i => m ||| ((1 : UInt64) <<< (p + i).toUInt64)) 0
-    TensorBundle.sig (p + q) negMask
-  else
-    let d : Array Rat :=
-      Array.replicate r (0 : Rat) ++ Array.replicate p (1 : Rat) ++ Array.replicate q (-1 : Rat)
-    TensorBundle.diag d
+def clAlgSpace (p q r : Nat) : AlgSpace :=
+  AlgSpace.cl p q r
 
 /-- Resolve an algebra specifier string (`"PGA3"`, `"STA"`, `"CGA3"`, `"R3"`, `"Cl(3,0,1)"`, …)
-into `(canonicalName, TensorBundle, p, q, r, isConformalWitt)`. -/
-def resolveAlgebra (spec : String) : String × TensorBundle × UInt8 × UInt8 × UInt8 × Bool :=
+into `(canonicalName, AlgSpace, p, q, r, isConformalWitt)`. -/
+def resolveAlgebra (spec : String) : String × AlgSpace × UInt8 × UInt8 × UInt8 × Bool :=
   let s := spec.trimAscii.toString.toUpper
   match s with
-  | "R" | "REAL" | "CL(0,0,0)" => ("R", TensorBundle.V0, 0, 0, 0, false)
-  | "C" | "COMPLEX" | "CL(0,1)" | "CL(0,1,0)" => ("Complex", TensorBundle.sig 1 1, 0, 1, 0, false)
-  | "D" | "DUAL" | "CL(0,0,1)" => ("Dual", TensorBundle.diag #[0], 0, 0, 1, false)
+  | "R" | "REAL" | "CL(0,0,0)" => ("R", AlgSpace.V0, 0, 0, 0, false)
+  | "C" | "COMPLEX" | "CL(0,1)" | "CL(0,1,0)" => ("Complex", AlgSpace.sig 1 1, 0, 1, 0, false)
+  | "D" | "DUAL" | "CL(0,0,1)" => ("Dual", AlgSpace.cl 0 0 1, 0, 0, 1, false)
   | "H" | "QUAT" | "QUATERNION" | "CL(0,2)" | "CL(0,2,0)" =>
-    ("Quaternion", TensorBundle.sig 2 3, 0, 2, 0, false)
-  | "R2" | "GA2D" | "VGA2" | "CL(2,0)" | "CL(2,0,0)" => ("R2", DirectSum.ℝ2, 2, 0, 0, false)
-  | "R3" | "GA3D" | "VGA3" | "CL(3,0)" | "CL(3,0,0)" => ("R3", DirectSum.ℝ3, 3, 0, 0, false)
-  | "R4" | "CL(4,0)" | "CL(4,0,0)" => ("R4", DirectSum.ℝ4, 4, 0, 0, false)
+    ("Quaternion", AlgSpace.sig 2 3, 0, 2, 0, false)
+  | "R2" | "GA2D" | "VGA2" | "CL(2,0)" | "CL(2,0,0)" => ("R2", AlgSpace.R2, 2, 0, 0, false)
+  | "R3" | "GA3D" | "VGA3" | "CL(3,0)" | "CL(3,0,0)" => ("R3", AlgSpace.R3, 3, 0, 0, false)
+  | "R4" | "CL(4,0)" | "CL(4,0,0)" => ("R4", AlgSpace.R4, 4, 0, 0, false)
   | "STA" | "M" | "MINKOWSKI" | "CL(1,3)" | "CL(3,1)" | "STA31" =>
     -- ALOK-950 canonical signature: S"-+++" (t² = -1, x²=y²=z² = +1)
-    ("STA", DirectSum.STA, 3, 1, 0, false)
-  | "PGA2" | "P2D" | "PGA2D" | "CL(2,0,1)" => ("PGA2", DirectSum.PGA2, 2, 0, 1, false)
-  | "PGA3" | "P3D" | "PGA3D" | "CL(3,0,1)" => ("PGA3", DirectSum.PGA3, 3, 0, 1, false)
-  | "CGA2" | "C2D" | "CGA2D" => ("CGA2", DirectSum.CGA2, 3, 1, 0, true)
-  | "CGA3" | "C3D" | "CGA3D" | "CL(4,1)" | "CL(4,1,0)" => ("CGA3", DirectSum.CGA3, 4, 1, 0, true)
+    ("STA", AlgSpace.STA, 3, 1, 0, false)
+  | "PGA2" | "P2D" | "PGA2D" | "CL(2,0,1)" => ("PGA2", AlgSpace.PGA2, 2, 0, 1, false)
+  | "PGA3" | "P3D" | "PGA3D" | "CL(3,0,1)" => ("PGA3", AlgSpace.PGA3, 3, 0, 1, false)
+  | "CGA2" | "C2D" | "CGA2D" => ("CGA2", AlgSpace.CGA2, 3, 1, 0, true)
+  | "CGA3" | "C3D" | "CGA3D" | "CL(4,1)" | "CL(4,1,0)" => ("CGA3", AlgSpace.CGA3, 4, 1, 0, true)
   | _ =>
-    -- Parse `CL(p,q)` or `CL(p,q,r)`
-    if s.startsWith "CL(" && s.endsWith ")" then
-      let inner := ((s.drop 3).dropEnd 1).toString
-      let parts := (inner.splitOn ",").map (fun x => (x.trimAscii.toString.toNat?).getD 0)
-      let p := parts.getD 0 3
-      let q := parts.getD 1 0
-      let r := parts.getD 2 0
+    -- Parse `CL(p,q)` or `CL(p,q,r)` or shorthand `"p,q,r"`
+    let core :=
+      if s.startsWith "CL(" && s.endsWith ")" then
+        ((s.drop 3).dropEnd 1).toString
+      else s
+    let parts := (core.splitOn ",").map (fun x => x.trimAscii.toString.toNat?)
+    if parts.length ≥ 2 && parts.all Option.isSome then
+      let p := (parts.getD 0 none).getD 3
+      let q := (parts.getD 1 none).getD 0
+      let r := (parts.getD 2 none).getD 0
       let tot := min 6 (p + q + r)
       let p' := min p tot
       let q' := min q (tot - p')
       let r' := min r (tot - p' - q')
-      (s!"Cl({p'},{q'},{r'})", clTensorBundle p' q' r', p'.toUInt8, q'.toUInt8, r'.toUInt8, false)
+      (s!"Cl({p'},{q'},{r'})", clAlgSpace p' q' r', p'.toUInt8, q'.toUInt8, r'.toUInt8, false)
     else
-      ("PGA3", DirectSum.PGA3, 3, 0, 1, false)
+      ("PGA3", AlgSpace.PGA3, 3, 0, 1, false)
 
 /-- Build `Scene.AlgebraMeta` (basis blade names & metric signs `-1/0/+1`) directly from `V`. -/
-def algebraMetaOf (name : String) (V : TensorBundle) (p q r : UInt8) (witt : Bool) : AlgebraMeta :=
-  let blades := Leibniz.indexBasisAll V.n
+def algebraMetaOf (name : String) (V : AlgSpace) (p q r : UInt8) (witt : Bool) : AlgebraMeta :=
+  let blades := indexBasisAll V.n
   let names := blades.map fun b =>
     if b == 0 then "1"
     else if r > 0 then
@@ -85,81 +85,74 @@ def algebraMetaOf (name : String) (V : TensorBundle) (p q r : UInt8) (witt : Boo
     else V.bladeLabel b
   let metrics : Array Int8 := blades.map fun b =>
     if b == 0 then (1 : Int8)
-    else
-      match V.apply₂ .mul b b with
-      | .ok .zero => 0
-      | .ok (.blade _) => 1
-      | .ok (.single c _) => if c < 0 then (-1 : Int8) else if c > 0 then 1 else 0
-      | _ => 1
+    else bladeMetricSign V b
   { name, p, q, r, conformalWitt := witt, basisNames := names, basisMetric := metrics }
 
-/-! ## Ganja Compatibility Helpers on `Grassmann.TA V Float` -/
+/-! ## Ganja Compatibility Helpers on `MV V` -/
 
-/-- Extract dense `FloatArray` of length `2^V.n` in grade-major basis order from `TA V Float`. -/
-def taToDenseArray {V : TensorBundle} (x : TA V Float) : FloatArray :=
-  let blades := Leibniz.indexBasisAll V.n
+/-- Extract dense `FloatArray` of length `2^V.n` in grade-major basis order from `MV V`. -/
+def mvToDenseArray {V : AlgSpace} (x : MV V) : FloatArray :=
+  let blades := indexBasisAll V.n
   let rec go (i : Nat) (acc : FloatArray) : FloatArray :=
     if i < blades.size then go (i + 1) (acc.push (x.coeff blades[i]!)) else acc
   go 0 (FloatArray.emptyWithCapacity blades.size)
 
-/-- Reconstruct a `TA V Float` from a dense `FloatArray` in grade-major basis order. -/
-def denseArrayToTA {V : TensorBundle} (xs : FloatArray) : TA V Float :=
-  let blades := Leibniz.indexBasisAll V.n
-  let rec go (i : Nat) (acc : TA V Float) : TA V Float :=
+/-- Reconstruct an `MV V` from a dense `FloatArray` in grade-major basis order. -/
+def denseArrayToMV {V : AlgSpace} (xs : FloatArray) : MV V :=
+  let blades := indexBasisAll V.n
+  let rec go (i : Nat) (acc : MV V) : MV V :=
     if i < min blades.size xs.size then
       let c := xs.get! i
       if Float.abs c < 1e-15 then go (i + 1) acc
-      else go (i + 1) (TA.add acc (TA.single blades[i]! c))
+      else go (i + 1) (MV.add acc (MV.single blades[i]! c))
     else acc
-  go 0 TA.zero
+  go 0 MV.zero
 
-/-- Dorst left contraction `a ⌋ b` (`ganja.js`'s `a << b`) on `TA V Float`.
-Grassmann.jl's `contraction(b, a)` multiplies grade-`k` left factors by `rev(k) = (-1)^(k(k-1)/2)`;
-pre-reversing `a` yields exact Dorst left contraction for ALL grades! -/
-def dorstLDot {V : TensorBundle} [Kernels V] (a b : TA V Float) : TA V Float :=
-  TA.prod .contraction b (TA.reverse a)
+/-- Dorst left contraction `a ⌋ b` (`ganja.js`'s `a << b`) on `MV V`. -/
+def dorstLDot {V : AlgSpace} (a b : MV V) : MV V :=
+  MV.contractionLeft a b
 
 /-- Symmetric inner product (`ganja.js`'s `a | b`). -/
-def symDot {V : TensorBundle} [Kernels V] (a b : TA V Float) : TA V Float :=
-  let blades := Leibniz.indexBasisAll V.n
-  let rec goA (i : Nat) (acc : TA V Float) : TA V Float :=
+def symDot {V : AlgSpace} (a b : MV V) : MV V :=
+  let blades := indexBasisAll V.n
+  let rec goA (i : Nat) (acc : MV V) : MV V :=
     if i < blades.size then
       let ba := blades[i]!
       let ca := a.coeff ba
       if Float.abs ca < 1e-15 then goA (i + 1) acc
       else
-        let ga := popcount ba
-        let rec goB (j : Nat) (acc2 : TA V Float) : TA V Float :=
+        let ga := popcount64 ba
+        let rec goB (j : Nat) (acc2 : MV V) : MV V :=
           if j < blades.size then
             let bb := blades[j]!
             let cb := b.coeff bb
             if Float.abs cb < 1e-15 then goB (j + 1) acc2
             else
-              let gb := popcount bb
+              let gb := popcount64 bb
               let targetG := if ga ≥ gb then ga - gb else gb - ga
-              let prod := TA.prod .mul (TA.single ba ca) (TA.single bb cb)
-              let proj := TA.gradeProj targetG prod
-              goB (j + 1) (TA.add acc2 proj)
+              let prod := MV.mul (MV.single ba ca) (MV.single bb cb)
+              let proj := MV.gradeProj targetG prod
+              goB (j + 1) (MV.add acc2 proj)
           else acc2
         goA (i + 1) (goB 0 acc)
     else acc
-  goA 0 TA.zero
+  goA 0 MV.zero
 
 /-- Metric-free regressive product (`ganja.js`'s `a & b` = `complementleft(!a ∧ !b)`). -/
-def ganjaVee {V : TensorBundle} [Kernels V] (a b : TA V Float) : TA V Float :=
-  TA.complementleft (TA.prod .wedge (TA.complementright a) (TA.complementright b))
+def ganjaVee {V : AlgSpace} (a b : MV V) : MV V :=
+  MV.complementleft (MV.wedge (MV.complementright a) (MV.complementright b))
 
 /-- Sandwich product `R >>> x = R * x * ~R`. -/
-def ganjaSandwich {V : TensorBundle} [Kernels V] (r x : TA V Float) : TA V Float :=
-  TA.prod .mul (TA.prod .mul r x) (TA.reverse r)
+def ganjaSandwich {V : AlgSpace} (r x : MV V) : MV V :=
+  MV.mul (MV.mul r x) (MV.reverse r)
 
 /-- Euclidean-style geometric norm `√|⟨x ~x⟩₀|` (falls back to coefficient norm if null). -/
-def ganjaNorm {V : TensorBundle} [Kernels V] (x : TA V Float) : Float :=
-  let s := (TA.prod .mul x (TA.reverse x)).coeff 0
+def ganjaNorm {V : AlgSpace} (x : MV V) : Float :=
+  let s := (MV.mul x (MV.reverse x)).coeff 0
   let m := Float.sqrt (Float.abs s)
   if m > 1e-12 then m
   else
-    let xs := taToDenseArray x
+    let xs := mvToDenseArray x
     let rec sumSq (i : Nat) (acc : Float) : Float :=
       if i < xs.size then
         let v := xs.get! i
@@ -168,18 +161,18 @@ def ganjaNorm {V : TensorBundle} [Kernels V] (x : TA V Float) : Float :=
     sumSq 0 0.0
 
 /-- Normalize multivector `x` by `ganjaNorm x`. -/
-def ganjaNormalize {V : TensorBundle} [Kernels V] (x : TA V Float) : TA V Float :=
+def ganjaNormalize {V : AlgSpace} (x : MV V) : MV V :=
   let n := ganjaNorm x
-  if n < 1e-12 then x else TA.mulScalar x (1.0 / n)
+  if n < 1e-12 then x else MV.mulScalar x (1.0 / n)
 
-/-- Dominant grade of a `TA V Float` (for `InspectEntry` and auto-rendering). -/
-def dominantGrade {V : TensorBundle} (x : TA V Float) : Nat :=
-  let blades := Leibniz.indexBasisAll V.n
+/-- Dominant grade of an `MV V` (for `InspectEntry` and auto-rendering). -/
+def dominantGrade {V : AlgSpace} (x : MV V) : Nat :=
+  let blades := indexBasisAll V.n
   let rec go (i : Nat) (bestG : Nat) (bestMag : Float) : Nat :=
     if i < blades.size then
       let b := blades[i]!
       let mag := Float.abs (x.coeff b)
-      if mag > bestMag then go (i + 1) (popcount b) mag
+      if mag > bestMag then go (i + 1) (popcount64 b) mag
       else go (i + 1) bestG bestMag
     else bestG
   go 0 0 0.0
@@ -188,14 +181,14 @@ def dominantGrade {V : TensorBundle} (x : TA V Float) : Nat :=
 When `zeroIndexed` is true (PGA with `r > 0`), digit `0` maps to bit `0`, `1` to bit `1`, etc.
 Otherwise (Euclidean/STA/CGA), digit `1` maps to bit `0`, `2` to bit `1`, etc., with `∞ → 0, ∅ → 1`
 in Witt conformal spaces. -/
-def bladeSubToBits (V : TensorBundle) (zeroIndexed : Bool) (sub : String) : Option UInt64 :=
+def bladeSubToBits (V : AlgSpace) (zeroIndexed : Bool) (sub : String) : Option UInt64 :=
   let rec go (cs : List Char) (mask : UInt64) : Option UInt64 :=
     match cs with
     | [] => some mask
     | c :: rest =>
       let bit? : Option Nat :=
-        if c == '∞' then if V.hasinf then some 0 else none
-        else if c == '∅' then if V.hasorigin then some (if V.hasinf then 1 else 0) else none
+        if c == '∞' then if V.hasInf then some 0 else none
+        else if c == '∅' then if V.hasOrigin then some (if V.hasInf then 1 else 0) else none
         else if c.isDigit then
           let d := c.toNat - 48
           if zeroIndexed then
@@ -203,7 +196,7 @@ def bladeSubToBits (V : TensorBundle) (zeroIndexed : Bool) (sub : String) : Opti
           else
             let off := V.nulls
             if d == 0 then
-              if V.hasorigin then some (if V.hasinf then 1 else 0) else some 0
+              if V.hasOrigin then some (if V.hasInf then 1 else 0) else some 0
             else if d - 1 + off < V.n then some (d - 1 + off)
             else if d - 1 < V.n then some (d - 1)
             else none
@@ -216,79 +209,72 @@ def bladeSubToBits (V : TensorBundle) (zeroIndexed : Bool) (sub : String) : Opti
 /-! ## GA Script Evaluator -/
 
 /-- Evaluation environment for dynamic GA scripts. -/
-structure EvalEnv (V : TensorBundle) where
+structure EvalEnv (V : AlgSpace) where
   zeroIndexed : Bool := false
   timeSec     : Float := 0.0
   handles     : Array (UInt32 × Vec3) := #[]
-  vars        : Array (String × TA V Float) := #[]
+  vars        : Array (String × MV V) := #[]
   order       : Array String := #[] -- preserves declaration order for visualization/inspector
 
 namespace EvalEnv
 
-def lookup? {V : TensorBundle} (env : EvalEnv V) (name : String) : Option (TA V Float) :=
+def lookup? {V : AlgSpace} (env : EvalEnv V) (name : String) : Option (MV V) :=
   (env.vars.find? fun kv => kv.1 == name).map (·.2)
 
-def bind {V : TensorBundle} (env : EvalEnv V) (name : String) (v : TA V Float) : EvalEnv V :=
+def bind {V : AlgSpace} (env : EvalEnv V) (name : String) (v : MV V) : EvalEnv V :=
   match env.vars.findIdx? fun kv => kv.1 == name with
   | some idx => { env with vars := env.vars.set! idx (name, v) }
   | none => { env with vars := env.vars.push (name, v), order := env.order.push name }
 
-def handlePos {V : TensorBundle} (env : EvalEnv V) (hid : UInt32) (defPos : Vec3) : Vec3 :=
+def handlePos {V : AlgSpace} (env : EvalEnv V) (hid : UInt32) (defPos : Vec3) : Vec3 :=
   ((env.handles.find? fun kv => kv.1 == hid).map (·.2)).getD defPos
 
 end EvalEnv
 
 /-- Construct a PGA2/PGA3/CGA/Euclidean point multivector from `(x, y, z)` in space `V`. -/
-def makePointTA (V : TensorBundle) (zeroIndexed : Bool) (x y z : Float) : TA V Float :=
+def makePointMV (V : AlgSpace) (zeroIndexed : Bool) (x y z : Float) : MV V :=
   if zeroIndexed && V.n == 4 then
-    -- PGA3 point = !(e0 + x e1 + y e2 + z e3) = e123 - x e023 + y e013 - z e012
-    -- Note bits: bit0=e0, bit1=e1, bit2=e2, bit3=e3 => e123 = 0b1110=14, e023=13, e013=11, e012=7
-    let p := TA.single 14 1.0
-    let p := TA.add p (TA.single 13 (-x))
-    let p := TA.add p (TA.single 11 y)
-    TA.add p (TA.single 7 (-z))
+    let p := MV.single 14 1.0
+    let p := MV.add p (MV.single 13 (-x))
+    let p := MV.add p (MV.single 11 y)
+    MV.add p (MV.single 7 (-z))
   else if zeroIndexed && V.n == 3 then
-    -- PGA2 point = !(e0 + x e1 + y e2) = e12 + x e20 + y e01 = e12 - x e02 + y e01
-    -- bits: bit0=e0, bit1=e1, bit2=e2 => e12=6, e02=5, e01=3
-    let p := TA.single 6 1.0
-    let p := TA.add p (TA.single 3 (-x))
-    TA.add p (TA.single 5 y)
+    let p := MV.single 6 1.0
+    let p := MV.add p (MV.single 3 (-x))
+    MV.add p (MV.single 5 y)
   else if V.hasconformal && V.n == 5 then
-    -- Witt CGA3: v∅ + x e1 + y e2 + z e3 + 0.5*(x²+y²+z²) v∞
-    -- bits: bit0=∞, bit1=∅, bit2=e1, bit3=e2, bit4=e3
     let r2 := 0.5 * (x * x + y * y + z * z)
-    let p := TA.single 1 r2
-    let p := TA.add p (TA.single 2 1.0)
-    let p := TA.add p (TA.single 4 x)
-    let p := TA.add p (TA.single 8 y)
-    TA.add p (TA.single 16 z)
+    let p := MV.single 1 r2
+    let p := MV.add p (MV.single 2 1.0)
+    let p := MV.add p (MV.single 4 x)
+    let p := MV.add p (MV.single 8 y)
+    MV.add p (MV.single 16 z)
   else if V.hasconformal && V.n == 4 then
     let r2 := 0.5 * (x * x + y * y)
-    let p := TA.single 1 r2
-    let p := TA.add p (TA.single 2 1.0)
-    let p := TA.add p (TA.single 4 x)
-    TA.add p (TA.single 8 y)
-  else if V.n == 4 && V == DirectSum.STA then
-    -- STA S"-+++": bit0=et, bit1=ex, bit2=ey, bit3=ez
-    let p := TA.single 2 x
-    let p := TA.add p (TA.single 4 y)
-    TA.add p (TA.single 8 z)
+    let p := MV.single 1 r2
+    let p := MV.add p (MV.single 2 1.0)
+    let p := MV.add p (MV.single 4 x)
+    MV.add p (MV.single 8 y)
+  else if V.n == 4 && V == AlgSpace.STA then
+    let p := MV.single 2 x
+    let p := MV.add p (MV.single 4 y)
+    MV.add p (MV.single 8 z)
   else
-    let p := if V.n ≥ 1 then TA.single 1 x else TA.zero
-    let p := if V.n ≥ 2 then TA.add p (TA.single 2 y) else p
-    if V.n ≥ 3 then TA.add p (TA.single 4 z) else p
+    let p := if V.n ≥ 1 then MV.single 1 x else MV.zero
+    let p := if V.n ≥ 2 then MV.add p (MV.single 2 y) else p
+    if V.n ≥ 3 then MV.add p (MV.single 4 z) else p
 
-/-- Evaluate an `Expr` over `TA V Float` with full ganja.js + Grassmann.jl operator support. -/
-partial def evalGA {V : TensorBundle} [Kernels V] (env : EvalEnv V) (e : Expr) :
-    Except String (TA V Float × EvalEnv V) := do
+/-- Evaluate an `Expr` over `MV V` with full ganja.js + Grassmann.jl operator support. -/
+partial def evalGA {V : AlgSpace} (env : EvalEnv V) (e : Expr) :
+    Except String (MV V × EvalEnv V) := do
   match e with
-  | .num v => return (if v == 0.0 then TA.zero else TA.single 0 v, env)
-  | .str _ => return (TA.zero, env)
+  | .num v => return (if v == 0.0 then MV.zero else MV.single 0 v, env)
+  | .str _ => return (MV.zero, env)
   | .blade pfx sub =>
     match bladeSubToBits V env.zeroIndexed sub with
     | some bits =>
-      let b : TA V Float := if bits == 0 then TA.one else TA.blade bits
-      if pfx == 'E' then return (TA.complementright b, env)
+      let b : MV V := if bits == 0 then MV.one else MV.blade bits
+      if pfx == 'E' then return (MV.complementright b, env)
       else return (b, env)
     | none => throw s!"invalid blade literal '{pfx}{sub}' in {V}"
   | .ident name =>
@@ -296,83 +282,82 @@ partial def evalGA {V : TensorBundle} [Kernels V] (env : EvalEnv V) (e : Expr) :
     | some v => return (v, env)
     | none =>
       match name with
-      | "pi" | "π" => return (TA.single 0 3.14159265358979323846, env)
-      | "e" | "ℯ"  => return (TA.single 0 2.71828182845904523536, env)
-      | "t" | "time" => return (TA.single 0 env.timeSec, env)
-      | "I" | "pss" => return (TA.blade (lowMask V.n), env)
+      | "pi" | "π" => return (MV.single 0 3.14159265358979323846, env)
+      | "e" | "ℯ"  => return (MV.single 0 2.71828182845904523536, env)
+      | "t" | "time" => return (MV.single 0 env.timeSec, env)
+      | "I" | "pss" => return (MV.blade (lowMask V.n), env)
       | "no" | "ori" | "∅" =>
-        if V.hasorigin then return (TA.blade (if V.hasinf then 2 else 1), env)
-        else if V.n == 5 then return (TA.add (TA.single 16 0.5) (TA.single 8 (-0.5)), env)
+        if V.hasOrigin then return (MV.blade (if V.hasInf then 2 else 1), env)
+        else if V.n == 5 then return (MV.add (MV.single 16 0.5) (MV.single 8 (-0.5)), env)
         else throw "no/ori requires conformal space"
       | "ni" | "inf" | "∞" =>
-        if V.hasinf then return (TA.blade 1, env)
-        else if V.n == 5 then return (TA.add (TA.single 8 1.0) (TA.single 16 1.0), env)
+        if V.hasInf then return (MV.blade 1, env)
+        else if V.n == 5 then return (MV.add (MV.single 8 1.0) (MV.single 16 1.0), env)
         else throw "ni/inf requires conformal space"
-      | "et" => return (TA.blade 1, env)
-      | "ex" => return (TA.blade (if V == DirectSum.STA then 2 else 1), env)
-      | "ey" => return (TA.blade (if V == DirectSum.STA then 4 else 2), env)
-      | "ez" => return (TA.blade (if V == DirectSum.STA then 8 else 4), env)
+      | "et" => return (MV.blade 1, env)
+      | "ex" => return (MV.blade (if V == AlgSpace.STA then 2 else 1), env)
+      | "ey" => return (MV.blade (if V == AlgSpace.STA then 4 else 2), env)
+      | "ez" => return (MV.blade (if V == AlgSpace.STA then 8 else 4), env)
       | _ => throw s!"unbound identifier '{name}'"
   | .unary op a =>
     let (va, env1) ← evalGA env a
     match op with
-    | "-" => return (TA.neg va, env1)
-    | "~" => return (TA.reverse va, env1)
-    | "!" => return (TA.complementright va, env1)
-    | "⋆" => return (TA.hodge va, env1)
+    | "-" => return (MV.neg va, env1)
+    | "~" => return (MV.reverse va, env1)
+    | "!" => return (MV.complementright va, env1)
+    | "⋆" => return (MV.hodge va, env1)
     | _   => throw s!"unknown unary operator '{op}'"
   | .binary op a b =>
     let (va, env1) ← evalGA env a
     let (vb, env2) ← evalGA env1 b
     match op with
-    | "+" => return (TA.add va vb, env2)
-    | "-" => return (TA.sub va vb, env2)
-    | "*" | "·" => return (TA.prod .mul va vb, env2)
+    | "+" => return (MV.add va vb, env2)
+    | "-" => return (MV.sub va vb, env2)
+    | "*" | "·" => return (MV.mul va vb, env2)
     | "/" =>
       let sc := vb.coeff 0
       if dominantGrade vb == 0 && Float.abs sc > 1e-15 then
-        return (TA.mulScalar va (1.0 / sc), env2)
+        return (MV.mulScalar va (1.0 / sc), env2)
       else
-        return (TA.prod .mul va (TA.inv vb), env2)
-    | "∧" => return (TA.prod .wedge va vb, env2)
+        return (MV.mul va (MV.inv vb), env2)
+    | "∧" => return (MV.wedge va vb, env2)
     | "^" =>
-      -- Smart dispatch: scalar ^ scalar = pow; otherwise outer/wedge product!
       if dominantGrade va == 0 && dominantGrade vb == 0 then
-        return (TA.single 0 (Float.pow (va.coeff 0) (vb.coeff 0)), env2)
+        return (MV.single 0 (Float.pow (va.coeff 0) (vb.coeff 0)), env2)
       else
-        return (TA.prod .wedge va vb, env2)
+        return (MV.wedge va vb, env2)
     | "&" | "∨" => return (ganjaVee va vb, env2)
     | "<<" | "⨼" => return (dorstLDot va vb, env2)
-    | "⋅" | "⨽" => return (TA.prod .contraction va vb, env2)
+    | "⋅" | "⨽" => return (MV.contraction va vb, env2)
     | "|" => return (symDot va vb, env2)
     | ">>>" => return (ganjaSandwich va vb, env2)
-    | "⊘" => return (ganjaSandwich (TA.reverse vb) va, env2)
+    | "⊘" => return (ganjaSandwich (MV.reverse vb) va, env2)
     | "**" =>
       let expS := vb.coeff 0
       if Float.abs (expS + 1.0) < 1e-9 then
-        return (TA.inv va, env2)
+        return (MV.inv va, env2)
       else if dominantGrade va == 0 && dominantGrade vb == 0 then
-        return (TA.single 0 (Float.pow (va.coeff 0) expS), env2)
+        return (MV.single 0 (Float.pow (va.coeff 0) expS), env2)
       else if Float.abs (va.coeff 0 - 2.71828182845904523536) < 1e-6 && dominantGrade va == 0 then
-        return (TA.exp vb, env2)
+        return (MV.exp vb, env2)
       else
         let n := expS.toUInt32.toNat
-        let rec powRec (k : Nat) (acc : TA V Float) : TA V Float :=
-          match k with | 0 => acc | m + 1 => powRec m (TA.prod .mul acc va)
-        return (powRec n TA.one, env2)
+        let rec powRec (k : Nat) (acc : MV V) : MV V :=
+          match k with | 0 => acc | m + 1 => powRec m (MV.mul acc va)
+        return (powRec n MV.one, env2)
     | _ => throw s!"unsupported binary operator '{op}'"
   | .field obj fname =>
     let (vo, env1) ← evalGA env obj
     match fname.toLower with
     | "normalized" | "unit" => return (ganjaNormalize vo, env1)
-    | "reverse" | "rev"     => return (TA.reverse vo, env1)
-    | "conjugate" | "conj"  => return (TA.clifford vo, env1)
-    | "involute"            => return (TA.involute vo, env1)
-    | "dual"                => return (TA.complementright vo, env1)
-    | "undual"              => return (TA.complementleft vo, env1)
-    | "length" | "norm"     => return (TA.single 0 (ganjaNorm vo), env1)
-    | "s" | "scalar"        => return (TA.single 0 (vo.coeff 0), env1)
-    | "inverse" | "inv"     => return (TA.inv vo, env1)
+    | "reverse" | "rev"     => return (MV.reverse vo, env1)
+    | "conjugate" | "conj"  => return (MV.clifford vo, env1)
+    | "involute"            => return (MV.involute vo, env1)
+    | "dual"                => return (MV.complementright vo, env1)
+    | "undual"              => return (MV.complementleft vo, env1)
+    | "length" | "norm"     => return (MV.single 0 (ganjaNorm vo), env1)
+    | "s" | "scalar"        => return (MV.single 0 (vo.coeff 0), env1)
+    | "inverse" | "inv"     => return (MV.inv vo, env1)
     | _ => throw s!"unknown field '.{fname}'"
   | .method obj mname args =>
     let (vo, env1) ← evalGA env obj
@@ -380,84 +365,82 @@ partial def evalGA {V : TensorBundle} [Kernels V] (env : EvalEnv V) (e : Expr) :
     | "grade" =>
       if h : 0 < args.size then
         let (vg, env2) ← evalGA env1 args[0]
-        return (TA.gradeProj (coeffZeroNat vg) vo, env2)
+        return (MV.gradeProj (coeffZeroNat vg) vo, env2)
       else throw "Grade(k) expects 1 argument"
-    | "exp" => return (TA.exp vo, env1)
-    | "log" => return (TA.log vo, env1)
+    | "exp" => return (MV.exp vo, env1)
+    | "log" => return (MV.log vo, env1)
     | _ => throw s!"unknown method '.{mname}()'"
   | .call fname args =>
     let mut envCur := env
-    let mut vals : Array (TA V Float) := Array.mkEmpty args.size
+    let mut vals : Array (MV V) := Array.mkEmpty args.size
     for a in args do
       let (v, envNext) ← evalGA envCur a
       vals := vals.push v
       envCur := envNext
     let f0 (i : Nat) (d : Float := 0.0) : Float := (vals[i]?.map (·.coeff 0)).getD d
     match fname.toLower with
-    | "sin"  => return (TA.single 0 (Float.sin (f0 0)), envCur)
-    | "cos"  => return (TA.single 0 (Float.cos (f0 0)), envCur)
-    | "tan"  => return (TA.single 0 (Float.tan (f0 0)), envCur)
-    | "sinh" => return (TA.single 0 (Float.sinh (f0 0)), envCur)
-    | "cosh" => return (TA.single 0 (Float.cosh (f0 0)), envCur)
-    | "sqrt" => return (TA.single 0 (Float.sqrt (max 0.0 (f0 0))), envCur)
-    | "abs"  => return (TA.single 0 (Float.abs (f0 0)), envCur)
-    | "atan2" => return (TA.single 0 (Float.atan2 (f0 0) (f0 1)), envCur)
+    | "sin"  => return (MV.single 0 (Float.sin (f0 0)), envCur)
+    | "cos"  => return (MV.single 0 (Float.cos (f0 0)), envCur)
+    | "tan"  => return (MV.single 0 (Float.tan (f0 0)), envCur)
+    | "sinh" => return (MV.single 0 (Float.sinh (f0 0)), envCur)
+    | "cosh" => return (MV.single 0 (Float.cosh (f0 0)), envCur)
+    | "sqrt" => return (MV.single 0 (Float.sqrt (max 0.0 (f0 0))), envCur)
+    | "abs"  => return (MV.single 0 (Float.abs (f0 0)), envCur)
+    | "atan2" => return (MV.single 0 (Float.atan2 (f0 0) (f0 1)), envCur)
     | "exp"  =>
-      if h : 0 < vals.size then return (TA.exp vals[0], envCur)
+      if h : 0 < vals.size then return (MV.exp vals[0], envCur)
       else throw "exp() expects 1 argument"
     | "log"  =>
-      if h : 0 < vals.size then return (TA.log vals[0], envCur)
+      if h : 0 < vals.size then return (MV.log vals[0], envCur)
       else throw "log() expects 1 argument"
     | "rev" | "reverse" =>
-      if h : 0 < vals.size then return (TA.reverse vals[0], envCur)
+      if h : 0 < vals.size then return (MV.reverse vals[0], envCur)
       else throw "rev() expects 1 argument"
     | "dual" =>
-      if h : 0 < vals.size then return (TA.complementright vals[0], envCur)
+      if h : 0 < vals.size then return (MV.complementright vals[0], envCur)
       else throw "dual() expects 1 argument"
     | "norm" | "length" =>
-      if h : 0 < vals.size then return (TA.single 0 (ganjaNorm vals[0]), envCur)
+      if h : 0 < vals.size then return (MV.single 0 (ganjaNorm vals[0]), envCur)
       else throw "norm() expects 1 argument"
     | "unit" | "normalize" =>
       if h : 0 < vals.size then return (ganjaNormalize vals[0], envCur)
       else throw "normalize() expects 1 argument"
     | "grade" =>
-      if h : 1 < vals.size then return (TA.gradeProj (coeffZeroNat vals[1]) vals[0], envCur)
+      if h : 1 < vals.size then return (MV.gradeProj (coeffZeroNat vals[1]) vals[0], envCur)
       else throw "grade(x, k) expects 2 arguments"
     | "point" =>
-      return (makePointTA V envCur.zeroIndexed (f0 0) (f0 1) (f0 2), envCur)
+      return (makePointMV V envCur.zeroIndexed (f0 0) (f0 1) (f0 2), envCur)
     | "handle" =>
       let hid := (f0 0).toUInt32
       let p := envCur.handlePos hid ⟨f0 1, f0 2, f0 3⟩
-      return (makePointTA V envCur.zeroIndexed p.x p.y p.z, envCur)
+      return (makePointMV V envCur.zeroIndexed p.x p.y p.z, envCur)
     | "plane" =>
-      -- plane(a,b,c,d) = d*e0 + a*e1 + b*e2 + c*e3 in PGA3
       if envCur.zeroIndexed && V.n == 4 then
-        let pl := TA.add (TA.single 1 (f0 3))
-          (TA.add (TA.single 2 (f0 0)) (TA.add (TA.single 4 (f0 1)) (TA.single 8 (f0 2))))
+        let pl := MV.add (MV.single 1 (f0 3))
+          (MV.add (MV.single 2 (f0 0)) (MV.add (MV.single 4 (f0 1)) (MV.single 8 (f0 2))))
         return (pl, envCur)
       else
-        let pl := TA.add (TA.single 1 (f0 0)) (TA.add (TA.single 2 (f0 1)) (TA.single 4 (f0 2)))
+        let pl := MV.add (MV.single 1 (f0 0)) (MV.add (MV.single 2 (f0 1)) (MV.single 4 (f0 2)))
         return (pl, envCur)
     | "line" =>
-      -- line(a,b,c) = c*e0 + a*e1 + b*e2 in PGA2
       if envCur.zeroIndexed && V.n == 3 then
-        let l := TA.add (TA.single 1 (f0 2)) (TA.add (TA.single 2 (f0 0)) (TA.single 4 (f0 1)))
+        let l := MV.add (MV.single 1 (f0 2)) (MV.add (MV.single 2 (f0 0)) (MV.single 4 (f0 1)))
         return (l, envCur)
       else
-        return (TA.add (TA.single 2 (f0 0)) (TA.single 4 (f0 1)), envCur)
+        return (MV.add (MV.single 2 (f0 0)) (MV.single 4 (f0 1)), envCur)
     | "up" =>
       if h : 0 < vals.size then
         let v := vals[0]
         if V.hasconformal && V.n == 5 then
-          return (makePointTA V false (v.coeff 4) (v.coeff 8) (v.coeff 16), envCur)
+          return (makePointMV V false (v.coeff 4) (v.coeff 8) (v.coeff 16), envCur)
         else
-          return (makePointTA V envCur.zeroIndexed (v.coeff 1) (v.coeff 2) (v.coeff 4), envCur)
+          return (makePointMV V envCur.zeroIndexed (v.coeff 1) (v.coeff 2) (v.coeff 4), envCur)
       else throw "up() expects 1 argument"
     | "rotor" =>
       if h : 1 < vals.size then
         let b := ganjaNormalize vals[0]
         let ang := 0.5 * f0 1
-        return (TA.add (TA.single 0 (Float.cos ang)) (TA.mulScalar b (Float.sin ang)), envCur)
+        return (MV.add (MV.single 0 (Float.cos ang)) (MV.mulScalar b (Float.sin ang)), envCur)
       else throw "rotor(bivector, angle) expects 2 arguments"
     | _ => throw s!"unknown function '{fname}'"
   | .letBind name rhs =>
@@ -469,10 +452,10 @@ partial def evalGA {V : TensorBundle} [Kernels V] (env : EvalEnv V) (e : Expr) :
   | .eq lhs rhs =>
     let (vl, env1) ← evalGA env lhs
     let (vr, env2) ← evalGA env1 rhs
-    return (TA.sub vl vr, env2)
+    return (MV.sub vl vr, env2)
   | .list elems =>
     let mut envCur := env
-    let mut last : TA V Float := TA.zero
+    let mut last : MV V := MV.zero
     for el in elems do
       let (v, envNext) ← evalGA envCur el
       last := v
@@ -480,14 +463,14 @@ partial def evalGA {V : TensorBundle} [Kernels V] (env : EvalEnv V) (e : Expr) :
     return (last, envCur)
   | .seq stmts =>
     let mut envCur := env
-    let mut last : TA V Float := TA.zero
+    let mut last : MV V := MV.zero
     for s in stmts do
       let (v, envNext) ← evalGA envCur s
       last := v
       envCur := envNext
     return (last, envCur)
 where
-  coeffZeroNat (x : TA V Float) : Nat := (max 0.0 (x.coeff 0)).toUInt32.toNat
+  coeffZeroNat (x : MV V) : Nat := (max 0.0 (x.coeff 0)).toUInt32.toNat
 
 /-! ## Automatic Multivector → `SceneFrame` Classifier -/
 
@@ -501,16 +484,16 @@ private def scriptPalette (i : Nat) : RGBA :=
   | 5 => RGBA.blue
   | _ => RGBA.white
 
-/-- Classify a single `TA V Float` element into `SceneFrame` 3D/2D primitives
+/-- Classify a single `MV V` element into `SceneFrame` 3D/2D primitives
 (PGA2, PGA3, CGA3 Witt, STA `-+++`, R3, Complex/Dual/Quaternion). -/
-def appendClassified {V : TensorBundle} (f : SceneFrame) (name : String) (idx : Nat)
-    (zeroIndexed : Bool) (x : TA V Float) : SceneFrame :=
+def appendClassified {V : AlgSpace} (f : SceneFrame) (name : String) (idx : Nat)
+    (zeroIndexed : Bool) (x : MV V) : SceneFrame :=
   let col := scriptPalette idx
   let g := dominantGrade x
-  let dense := taToDenseArray x
+  let dense := mvToDenseArray x
   let entry : InspectEntry :=
     { idx := idx.toUInt32, name, grade := g.toUInt32,
-      formatted := x.showString, coeffs := dense, editable := true }
+      formatted := x.showString zeroIndexed, coeffs := dense, editable := true }
   let f := { f with inspect := f.inspect.push entry }
   -- PGA3: D"0,1,1,1" (bit0=e0, bit1=e1, bit2=e2, bit3=e3)
   if zeroIndexed && V.n == 4 then
@@ -523,7 +506,6 @@ def appendClassified {V : TensorBundle} (f : SceneFrame) (name : String) (idx : 
           handleId := idx.toUInt32, pos := ⟨px, py, pz⟩, radius := 0.08,
           color := col, role := { draggable := true }, label := name } }
     else if g == 2 then
-      -- Plücker line: direction d = (e23, -e13, e12), moment m = (e01, e02, e03)
       let dir : Vec3 := ⟨x.coeff 12, -x.coeff 10, x.coeff 6⟩
       let dn2 := Vec3.normSq dir
       if dn2 > 1e-8 then
@@ -534,7 +516,6 @@ def appendClassified {V : TensorBundle} (f : SceneFrame) (name : String) (idx : 
             color := col, label := name } }
       else f
     else if g == 1 then
-      -- Plane: d*e0 + a*e1 + b*e2 + c*e3 = 0
       let n : Vec3 := ⟨x.coeff 2, x.coeff 4, x.coeff 8⟩
       let nlen := Vec3.norm n
       if nlen > 1e-6 then
@@ -569,8 +550,8 @@ def appendClassified {V : TensorBundle} (f : SceneFrame) (name : String) (idx : 
   -- Witt CGA3: S"∞∅+++" (bit0=∞, bit1=∅, bit2=e1, bit3=e2, bit4=e3)
   else if V.hasconformal && V.n == 5 then
     if g == 1 then
-      let w := x.coeff 2 -- ∅ coefficient = weight
-      let cInf := x.coeff 1 -- ∞ coefficient
+      let w := x.coeff 2
+      let cInf := x.coeff 1
       let ex := x.coeff 4; let ey := x.coeff 8; let ez := x.coeff 16
       if Float.abs w > 1e-6 then
         let cx := ex / w; let cy := ey / w; let cz := ez / w
@@ -597,9 +578,9 @@ def appendClassified {V : TensorBundle} (f : SceneFrame) (name : String) (idx : 
     else f
   -- STA S"-+++" or Euclidean R3 / R2 / Complex / Quaternion
   else
-    let vx := if V == DirectSum.STA then x.coeff 2 else x.coeff 1
-    let vy := if V == DirectSum.STA then x.coeff 4 else (if V.n ≥ 2 then x.coeff 2 else 0.0)
-    let vz := if V == DirectSum.STA then x.coeff 8 else (if V.n ≥ 3 then x.coeff 4 else 0.0)
+    let vx := if V == AlgSpace.STA then x.coeff 2 else x.coeff 1
+    let vy := if V == AlgSpace.STA then x.coeff 4 else (if V.n ≥ 2 then x.coeff 2 else 0.0)
+    let vz := if V == AlgSpace.STA then x.coeff 8 else (if V.n ≥ 3 then x.coeff 4 else 0.0)
     if g == 1 then
       let tip : Vec3 := ⟨vx, vy, vz⟩
       { f with
@@ -609,10 +590,9 @@ def appendClassified {V : TensorBundle} (f : SceneFrame) (name : String) (idx : 
           handleId := idx.toUInt32, pos := tip, radius := 0.07,
           color := col, role := { draggable := true }, label := name } }
     else if g == 2 && V.n ≥ 3 then
-      -- Spatial bivector disk: (e23, e31, e12) normal
-      let b12 := if V == DirectSum.STA then x.coeff 6 else x.coeff 3
-      let b13 := if V == DirectSum.STA then x.coeff 10 else x.coeff 5
-      let b23 := if V == DirectSum.STA then x.coeff 12 else x.coeff 6
+      let b12 := if V == AlgSpace.STA then x.coeff 6 else x.coeff 3
+      let b13 := if V == AlgSpace.STA then x.coeff 10 else x.coeff 5
+      let b23 := if V == AlgSpace.STA then x.coeff 12 else x.coeff 6
       let area := Float.sqrt (b12 * b12 + b13 * b13 + b23 * b23)
       if area > 1e-6 then
         let n : Vec3 := ⟨b23, -b13, b12⟩
@@ -640,13 +620,13 @@ def evalScriptToFrame (algebraSpec : String) (code : String)
   | .error err => { base with diagnostics := #[s!"Parse error: {err}"] }
   | .ok stmts =>
     let initEnv : EvalEnv V := { zeroIndexed := zeroIdx, timeSec, handles }
-    let rec runStmts (i : Nat) (env : EvalEnv V) (last : TA V Float) :
-        Except String (TA V Float × EvalEnv V) := do
+    let rec runStmts (i : Nat) (env : EvalEnv V) (last : MV V) :
+        Except String (MV V × EvalEnv V) := do
       if i < stmts.size then
         let (v, env1) ← evalGA env stmts[i]!
         runStmts (i + 1) env1 v
       else return (last, env)
-    match runStmts 0 initEnv TA.zero with
+    match runStmts 0 initEnv MV.zero with
     | .error err => { base with diagnostics := #[s!"Eval error: {err}"] }
     | .ok (lastVal, finalEnv) => Id.run do
       let mut f := base
