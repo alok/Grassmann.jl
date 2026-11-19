@@ -1,0 +1,4 @@
+module GrassmannCABI {
+    header "grassmann/cabi.h"
+    export *
+}
