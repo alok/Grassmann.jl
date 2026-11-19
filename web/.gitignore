@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.vite/
+*.local
+.DS_Store
+.vercel/
+public/wasm/grassmann.wasm
+public/wasm/grassmann.mjs
+artifacts/
+
+.vercel
+.env*

@@ -1,0 +1,32 @@
+{
+  "name": "grassmann-web-studio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure 3D GSIR v1 binary renderer & studio IDE for Grassmann.lean (CoffeeShop, Wedge 2D/3D, LeanCalculator 3D, GAlculator, WebXR)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "audit:visual": "node scripts/visual-audit.mjs",
+    "test:e2e": "node scripts/interaction-e2e.mjs",
+    "audit:wave3": "node scripts/wave3-audit.mjs",
+    "audit:vercel": "node scripts/vercel-audit.mjs",
+    "stage:wasm": "node scripts/stage-wasm.mjs"
+  },
+  "dependencies": {
+    "katex": "^0.16.21",
+    "three": "^0.174.0"
+  },
+  "devDependencies": {
+    "@types/katex": "^0.16.7",
+    "@types/three": "^0.174.0",
+    "playwright-core": "^1.65.1",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.2",
+    "vitest": "^3.0.9"
+  }
+}
