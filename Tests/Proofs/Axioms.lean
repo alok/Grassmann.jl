@@ -9,6 +9,8 @@ import DirectSum.Proofs
 import Grassmann.Spec
 import Grassmann.Proofs
 import Grassmann.Tactic
+import Grassmann.MaskIngress
+import Grassmann.Kernel.R3RotorLaws
 
 /-- info: 'DirectSum.Proofs.reorderParity_eq_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms DirectSum.Proofs.reorderParity_eq_spec
@@ -126,3 +128,92 @@ import Grassmann.Tactic
 
 /-- info: 'Grassmann.Proofs.Interp.STA_refHodge' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Grassmann.Proofs.Interp.STA_refHodge
+
+/-- info: 'Grassmann.Proofs.ProjectiveConformal.poincare_invol_PGA2' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.ProjectiveConformal.poincare_invol_PGA2
+
+/-- info: 'Grassmann.Proofs.ProjectiveConformal.poincare_invol_PGA3' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.ProjectiveConformal.poincare_invol_PGA3
+
+/--
+info: 'Grassmann.Proofs.ProjectiveConformal.pga3_poincare_e0_ne_zero' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+-/
+#guard_msgs in #print axioms Grassmann.Proofs.ProjectiveConformal.pga3_poincare_e0_ne_zero
+
+/-- info: 'Grassmann.Proofs.ProjectiveConformal.pga3_hodge_e0_eq_zero' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.ProjectiveConformal.pga3_hodge_e0_eq_zero
+
+/--
+info: 'Grassmann.Proofs.ProjectiveConformal.ganjaCompat_pga3_dualChain_e0_ne_zero' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+-/
+#guard_msgs in #print axioms Grassmann.Proofs.ProjectiveConformal.ganjaCompat_pga3_dualChain_e0_ne_zero
+
+/--
+info: 'Grassmann.Proofs.ProjectiveConformal.ganjaCompat_pga3_undual_dual_e0' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+-/
+#guard_msgs in #print axioms Grassmann.Proofs.ProjectiveConformal.ganjaCompat_pga3_undual_dual_e0
+
+/-- info: 'Grassmann.Proofs.ProjectiveConformal.pga3_motor_mul_reverse' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.ProjectiveConformal.pga3_motor_mul_reverse
+
+/--
+info: 'Grassmann.Proofs.ProjectiveConformal.pga3_motor_reverse_norm_inv' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+-/
+#guard_msgs in #print axioms Grassmann.Proofs.ProjectiveConformal.pga3_motor_reverse_norm_inv
+
+/-- info: 'Grassmann.Proofs.ProjectiveConformal.pga3_study_quadric_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.ProjectiveConformal.pga3_study_quadric_iff
+
+/--
+info: 'Grassmann.Proofs.ProjectiveConformal.pga3_unit_motor_mul_closed' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+-/
+#guard_msgs in #print axioms Grassmann.Proofs.ProjectiveConformal.pga3_unit_motor_mul_closed
+
+/--
+info: 'Grassmann.Proofs.ProjectiveConformal.pga3_impl_motor_mul_reverse' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+-/
+#guard_msgs in #print axioms Grassmann.Proofs.ProjectiveConformal.pga3_impl_motor_mul_reverse
+
+/-- info: 'Grassmann.Proofs.ProjectiveConformal.cga3_point_mul_self' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.ProjectiveConformal.cga3_point_mul_self
+
+/-- info: 'Grassmann.Proofs.ProjectiveConformal.cga3_point_distance_sq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.ProjectiveConformal.cga3_point_distance_sq
+
+/-- info: 'Grassmann.Proofs.ProjectiveConformal.cga2_point_mul_self' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.ProjectiveConformal.cga2_point_mul_self
+
+/-- info: 'Grassmann.Proofs.ProjectiveConformal.r3_rotor_mul_reverse' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.ProjectiveConformal.r3_rotor_mul_reverse
+
+/--
+info: 'Grassmann.Proofs.ProjectiveConformal.r3_unit_rotor_preserves_norm_sq' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+-/
+#guard_msgs in #print axioms Grassmann.Proofs.ProjectiveConformal.r3_unit_rotor_preserves_norm_sq
+
+/--
+info: 'Grassmann.Proofs.ProjectiveConformal.r3_concrete_rational_rotor_unit' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+-/
+#guard_msgs in #print axioms Grassmann.Proofs.ProjectiveConformal.r3_concrete_rational_rotor_unit
+
+/-- info: 'Grassmann.MaskIngress.single?_sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.MaskIngress.single?_sound
+
+/-- info: 'Grassmann.Kernel.R3Rotor.action_formula' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Kernel.R3Rotor.action_formula

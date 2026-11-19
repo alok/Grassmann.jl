@@ -7,6 +7,7 @@ import Grassmann.Proofs.Conformal
 import Grassmann.Proofs.Regressive
 import Grassmann.Proofs.Transport
 import Grassmann.Proofs.Interp
+import Grassmann.Proofs.ProjectiveConformal
 
 /-!
 # Grassmann.Proofs: the implementation meets the specification
@@ -60,4 +61,11 @@ proved in general, what is checked by kernel evaluation and what is tested):
   makes the product isomorphic to `Cl(p,q)` and associative on all multivectors
   (proved); the tables of `S!"∞∅+"`, `CGA2` and `CGA3` are kernel-checked, so
   `CGA2_mul_assoc` and `CGA3_mul_assoc` are unconditional.
+* `Grassmann.Proofs.ProjectiveConformal`: metric-free Poincaré duality
+  involution (`poincare_invol_PGA2`, `poincare_invol_PGA3`), degenerate `PGA3`
+  `!e0 = e123 ≠ 0` vs Hodge `⋆e0 = 0` (spec + executable `GanjaCompat`), `PGA3`
+  Study invariant & reverse norm invariance (`pga3_motor_mul_reverse`,
+  `pga3_study_quadric_iff`, `pga3_unit_motor_mul_closed`), `CGA2`/`CGA3`
+  null-point (`P * P = 0`) and Euclidean distance identities, and exact
+  rational `ℝ3` rotor unit norm & isometry.
 -/
