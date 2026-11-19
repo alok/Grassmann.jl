@@ -125,7 +125,8 @@ avoiding bare integer syntax, avoiding 6-decimal precision collapse
 identical GLSL 300 es, WebGPU WGSL, and Apple Metal MSL across Native C ABI,
 `ga-server`, and WASM. -/
 private def fmtFloat (v : Float) : String :=
-  if v.isNaN || !v.isFinite || v == 0.0 then "0.0"
+  if v.isNaN || v == 0.0 then "0.0"
+  else if v.isInf then (if v < 0.0 then "-3.4e38" else "3.4e38")
   else
     let sign := if v < 0.0 then "-" else ""
     -- Clamp nonzero extremes to normal IEEE-754 float32 range so WGSL/GLSL/MSL
@@ -570,6 +571,14 @@ def compileGaOpnsBundle (tag : String) (alg : AlgSpec) (grade : Nat) (isIPNS : B
 
 /-! ## 4. Live User-Typed `ImplicitExpr` → GPU Raymarching Shader Compiler! -/
 
+/-- Exact odd-integer predicate for any finite IEEE-754 float64 integer `kRound`:
+for `|k| < 2^53` `toUInt64` is exact (zero saturation); for `|k| >= 2^53` every
+representable float64 has ULP >= 2 and is strictly even. -/
+private def isOddIntFloat (kRound : Float) : Bool :=
+  let ak := Float.abs kRound
+  if ak < 9007199254740992.0 then ak.toUInt64.toNat % 2 == 1
+  else false
+
 /-- Emit a signed-safe GPU power expression `a ^ b` across GLSL3, WGSL, and Metal MSL:
 - Small integer exponents `0..8` use exact unrolled multiplication helpers (`gs_sq`..`gs_p8`) preserving exact sign for `a ≤ 0`!
 - Arbitrary odd integer exponents use `gs_spow_odd` (preserving negative signs, zero NaN at `a = 0`)!
@@ -582,9 +591,9 @@ private def emitPowGpu (sa : String) (b : Expr) (sb : String) : String :=
     else
       let kRound := Float.round k
       if Float.abs (k - kRound) < 1e-9 then
-        let kAbs := (Float.abs kRound).toUInt64.toNat
-        if kRound ≥ 0.0 then
-          match kAbs with
+        let ak := Float.abs kRound
+        if kRound ≥ 0.0 && ak <= 8.5 then
+          match ak.toUInt64.toNat with
           | 0 => "1.0"
           | 1 => sa
           | 2 => s!"gs_sq({sa})"
@@ -594,11 +603,9 @@ private def emitPowGpu (sa : String) (b : Expr) (sb : String) : String :=
           | 6 => s!"gs_p6({sa})"
           | 7 => s!"gs_p7({sa})"
           | 8 => s!"gs_p8({sa})"
-          | _ =>
-            if kAbs % 2 == 1 then s!"gs_spow_odd({sa}, {fmtFloat kRound})"
-            else s!"gs_spow_even({sa}, {fmtFloat kRound})"
+          | _ => s!"gs_spow_even({sa}, {fmtFloat kRound})"
         else
-          if kAbs % 2 == 1 then s!"gs_spow_odd({sa}, {fmtFloat kRound})"
+          if isOddIntFloat kRound then s!"gs_spow_odd({sa}, {fmtFloat kRound})"
           else s!"gs_spow_even({sa}, {fmtFloat kRound})"
       else
         s!"pow(max(1e-6, abs({sa})), {sb})"
@@ -650,42 +657,48 @@ private def countSumTerms (e : Expr) (limit : Nat := 16) : Nat :=
   | _ => 1
 
 private def pushLinearTerm (scale : Float) (term : Expr)
-    (constAcc : Float) (terms : Array (Float × Expr)) : Float × Array (Float × Expr) := Id.run do
+    (constAcc : Float) (terms : Array (Float × Expr)) : Option (Float × Array (Float × Expr)) := Id.run do
+  if !scale.isFinite then return none
   for i in [:terms.size] do
     let (oldC, base) := terms[i]!
     if exprEq base term then
-      return (constAcc, terms.set! i (oldC + scale, base))
-  return (constAcc, terms.push (scale, term))
+      let sum := oldC + scale
+      if !sum.isFinite then return none
+      return some (constAcc, terms.set! i (sum, base))
+  return some (constAcc, terms.push (scale, term))
 
 /-- Flatten linear combinations `(coeff * base)` in Float64, combining like terms
 `a * e ± b * e -> (a ± b) * e` and folding constant offsets before float32 GPU
 codegen eliminates catastrophic float32 cancellation (e.g.
-`1000000*(0.5000004*x - 0.5000001*x) - 0.15` -> `0.3*x - 0.15`). -/
+`1000000*(0.5000004*x - 0.5000001*x) - 0.15` -> `0.3*x - 0.15`).
+Returns `none` on ANY Float64 overflow (`!isFinite`) so no term is ever dropped! -/
 private partial def collectLinearTerms (scale : Float) (e : Expr)
-    (constAcc : Float) (terms : Array (Float × Expr)) : Float × Array (Float × Expr) :=
-  if scale == 0.0 then (constAcc, terms)
+    (constAcc : Float) (terms : Array (Float × Expr)) : Option (Float × Array (Float × Expr)) :=
+  if !scale.isFinite || !constAcc.isFinite then none
+  else if scale == 0.0 then some (constAcc, terms)
   else
     match e with
     | .lit v =>
       let prod := scale * v
-      if prod.isFinite then (constAcc + prod, terms) else (constAcc, terms)
+      let sum := constAcc + prod
+      if prod.isFinite && sum.isFinite then some (sum, terms) else none
     | .un .neg a => collectLinearTerms (-scale) a constAcc terms
-    | .bin .add a b =>
-      let (c1, t1) := collectLinearTerms scale a constAcc terms
+    | .bin .add a b => do
+      let (c1, t1) ← collectLinearTerms scale a constAcc terms
       collectLinearTerms scale b c1 t1
-    | .bin .sub a b =>
-      let (c1, t1) := collectLinearTerms scale a constAcc terms
+    | .bin .sub a b => do
+      let (c1, t1) ← collectLinearTerms scale a constAcc terms
       collectLinearTerms (-scale) b c1 t1
     | .bin .mul (.lit c) a =>
-      let sc := scale * c
-      if sc.isFinite && countSumTerms a 12 <= 12 then
-        collectLinearTerms sc a constAcc terms
+      if countSumTerms a 12 <= 12 then
+        let sc := scale * c
+        if sc.isFinite then collectLinearTerms sc a constAcc terms else none
       else
         pushLinearTerm scale (.bin .mul (.lit c) a) constAcc terms
     | .bin .mul a (.lit c) =>
-      let sc := scale * c
-      if sc.isFinite && countSumTerms a 12 <= 12 then
-        collectLinearTerms sc a constAcc terms
+      if countSumTerms a 12 <= 12 then
+        let sc := scale * c
+        if sc.isFinite then collectLinearTerms sc a constAcc terms else none
       else
         pushLinearTerm scale (.bin .mul a (.lit c)) constAcc terms
     | other => pushLinearTerm scale other constAcc terms
@@ -765,26 +778,34 @@ partial def simplifyExpr : Expr → Expr
       | .neg, .un .neg inner => inner
       | .neg, .bin .mul (.lit c) inner => simplifyMul (.lit (-c)) inner
       | .neg, .bin .add _ _ | .neg, .bin .sub _ _ =>
-        let (cAcc, terms) := collectLinearTerms (-1.0) a' 0.0 #[]
-        rebuildLinearSum cAcc terms
+        match collectLinearTerms (-1.0) a' 0.0 #[] with
+        | some (cAcc, terms) => rebuildLinearSum cAcc terms
+        | none => .un .neg a'
       | _, _ => .un op a'
   | .bin op a b =>
     let a' := simplifyExpr a
     let b' := simplifyExpr b
     match op with
     | .add =>
-      let (c1, t1) := collectLinearTerms 1.0 a' 0.0 #[]
-      let (c2, t2) := collectLinearTerms 1.0 b' c1 t1
-      rebuildLinearSum c2 t2
+      match (do
+        let (c1, t1) ← collectLinearTerms 1.0 a' 0.0 #[]
+        collectLinearTerms 1.0 b' c1 t1) with
+      | some (c2, t2) => rebuildLinearSum c2 t2
+      | none => .bin .add a' b'
     | .sub =>
-      let (c1, t1) := collectLinearTerms 1.0 a' 0.0 #[]
-      let (c2, t2) := collectLinearTerms (-1.0) b' c1 t1
-      rebuildLinearSum c2 t2
+      match (do
+        let (c1, t1) ← collectLinearTerms 1.0 a' 0.0 #[]
+        collectLinearTerms (-1.0) b' c1 t1) with
+      | some (c2, t2) => rebuildLinearSum c2 t2
+      | none => .bin .sub a' b'
     | .mul => simplifyMul a' b'
     | .div =>
       match a', b' with
       | .lit ca, .lit cb =>
         if Float.abs cb >= 1e-30 && (ca / cb).isFinite then .lit (ca / cb)
+        else .bin .div a' b'
+      | .bin .mul (.lit ca) inner, .lit cb =>
+        if Float.abs cb >= 1e-30 && (ca / cb).isFinite then scaleExpr (ca / cb) inner
         else .bin .div a' b'
       | .lit 0.0, _ => .lit 0.0
       | x, .lit 1.0 => x
@@ -793,12 +814,12 @@ partial def simplifyExpr : Expr → Expr
     | .pow =>
       match a', b' with
       | .lit ca, .lit cb =>
-        let kRound := Float.floor (cb + 0.5)
-        if Float.abs (cb - kRound) < 1e-9 then
+        let kRound := Float.round cb
+        if cb.isFinite && Float.abs (cb - kRound) < 1e-9 then
           let r :=
             if ca < 0.0 then
               let mag := Float.pow (Float.abs ca) kRound
-              if (Float.abs kRound).toUInt64.toNat % 2 == 1 then -mag else mag
+              if isOddIntFloat kRound then -mag else mag
             else Float.pow ca kRound
           if r.isFinite then .lit r else .bin .pow a' b'
         else if ca >= 0.0 && (Float.pow ca cb).isFinite then

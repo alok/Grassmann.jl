@@ -232,6 +232,21 @@ def testScientificFloatFormatting : IO Unit := do
     assertTrue s!"{lang} R7 preserves distinct 9-sig-digit 0.5000004 and 0.5000001 on unlike variables"
       (hasSubstr src "0.5000004" && hasSubstr src "0.5000001" && hasSubstr src "0.15")
 
+  -- Verifier R7 adversarial regressions: Float64 overflow never drops terms; (-1)^1e20 is +1.0 (even); div linear fold!
+  for ovfExpr in #["1e308 + 1e308 + x", "1e308 + x + 1e308", "1e308*x + 1e308*x"] do
+    let shOverflow ← IO.ofExcept (compileImplicitExprToGpu ovfExpr "r7_ovf" 1.0)
+    for (lang, src) in #[("GLSL3", shOverflow.glsl), ("WGSL", shOverflow.wgsl), ("MSL", shOverflow.msl)] do
+      assertTrue s!"{lang} R7 overflow '{ovfExpr}' keeps 3.4e38 (never drops to 0.0 / return p.x;)"
+        (hasSubstr src "3.4e38" && !hasSubstr src "return p.x;" && !hasSubstr src "(0.0 + p.x)")
+  let shEvenBigPow ← IO.ofExcept (compileImplicitExprToGpu "(-1)^1e20 + x" "r7_evenpow" 1.0)
+  for (lang, src) in #[("GLSL3", shEvenBigPow.glsl), ("WGSL", shEvenBigPow.wgsl), ("MSL", shEvenBigPow.msl)] do
+    assertTrue s!"{lang} R7 (-1)^1e20 + x folds even parity to (p.x + 1.0)"
+      (hasSubstr src "return (p.x + 1.0);")
+  let shDivFold ← IO.ofExcept (compileImplicitExprToGpu "2000000*((0.5000004*x)/2 - (0.5000001*x)/2) - 0.15" "r7_divfold" 1.0)
+  for (lang, src) in #[("GLSL3", shDivFold.glsl), ("WGSL", shDivFold.wgsl), ("MSL", shDivFold.msl)] do
+    assertTrue s!"{lang} R7 div linear fold reduces 2000000*((0.5000004*x)/2 - (0.5000001*x)/2) - 0.15 to ((0.3 * p.x) - 0.15)"
+      (hasSubstr src "return ((0.3 * p.x) - 0.15);")
+
   -- CPU Marching Tetrahedra parity for tiny outside vs inside & 9-sig-digit diff
   let csTiny := CoffeeShop.setImplicit {} "0.0000001*(x - 1.5)" false 1.0 14
   let frTiny := CoffeeShop.toSceneFrame csTiny 1

@@ -564,6 +564,18 @@ console.log(`[wasm bench] evalImplicit GPU shader:  ${dtImpGpu.toFixed(2)} ms (G
   // Stress-test lean_float_to_string on 1e308 (316-char %f string -> previously risked snprintf OOB read!)
   const r7Huge = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: "1e308*x - 1e308", gpuRaymarch: true, bound: 1 }));
   assert.ok(r7Huge.meta.opnsShaders.length === 1 && r7Huge.meta.opnsShaders[0].glsl.includes("3.4e38"), "R7 WASM 1e308 GPU shader handled safely");
+  const r7Ovf = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: "1e308 + 1e308 + x", gpuRaymarch: true, bound: 1 }));
+  for (const [lang, src] of [["GLSL3", r7Ovf.meta.opnsShaders[0].glsl], ["WGSL", r7Ovf.meta.opnsShaders[0].wgsl], ["MSL", r7Ovf.meta.opnsShaders[0].msl]]) {
+    assert.ok(src.includes("3.4e38") && !src.includes("return p.x;"), `R7 WASM ${lang} overflow 1e308+1e308+x keeps 3.4e38 (no dropped terms)`);
+  }
+  const r7BigPow = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: "(-1)^1e20 + x", gpuRaymarch: true, bound: 1 }));
+  for (const [lang, src] of [["GLSL3", r7BigPow.meta.opnsShaders[0].glsl], ["WGSL", r7BigPow.meta.opnsShaders[0].wgsl], ["MSL", r7BigPow.meta.opnsShaders[0].msl]]) {
+    assert.ok(src.includes("return (p.x + 1.0);"), `R7 WASM ${lang} (-1)^1e20+x exact even parity == p.x + 1.0`);
+  }
+  const r7DivFold = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: "2000000*((0.5000004*x)/2 - (0.5000001*x)/2) - 0.15", gpuRaymarch: true, bound: 1 }));
+  for (const [lang, src] of [["GLSL3", r7DivFold.meta.opnsShaders[0].glsl], ["WGSL", r7DivFold.meta.opnsShaders[0].wgsl], ["MSL", r7DivFold.meta.opnsShaders[0].msl]]) {
+    assert.ok(src.includes("return ((0.3 * p.x) - 0.15);"), `R7 WASM ${lang} div linear fold == ((0.3 * p.x) - 0.15)`);
+  }
   const r7CalcHuge = parseGSIR(sess.dispatchJson({ op: "calcEval", mode: "R3", expr: "1e150 * 1e150 * 1e8" }));
   assert.ok(r7CalcHuge.meta.calc && r7CalcHuge.meta.calc.display.length > 0, "R7 WASM lean_float_to_string(1e308) safe without snprintf OOB read");
   const r6Pos = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: "(x-0.12345)^2 + 0.0001*(0.0001 + x*x*0.0001)*0.1", gpuRaymarch: true, bound: 1 }));
