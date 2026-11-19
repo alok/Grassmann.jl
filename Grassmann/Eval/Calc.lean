@@ -150,7 +150,22 @@ def toSceneFrame (st : CalcState) (frameSeq : UInt64 := 0) (simTime : Float := 0
   let hud : CalcHudState :=
     { mode := st.mode, display := st.display, history := st.history, registers := regs }
   let diags := if st.lastError.isEmpty then f.diagnostics else f.diagnostics.push st.lastError
+  let (calcFormula, calcSummary) :=
+    match st.mode with
+    | "STA" | "M" =>
+      ("ab = a \\cdot b + a \\wedge b \\in \\mathrm{Cl}_{3,1},\\quad \\gamma_0^2 = -1,\\; \\gamma_i^2 = +1",
+       "Spacetime Algebra Cl(3,1) (-+++) calculator evaluating multivector products, boosts, and bivectors live in 3D.")
+    | "P3D" | "PGA3" =>
+      ("A \\vee B,\\; A \\wedge B,\\; M X \\widetilde{M} \\in \\mathrm{Cl}_{3,0,1}",
+       "3D Projective Geometric Algebra calculator for joins, meets, orthogonal projections, and rigid-body motors.")
+    | "C3D" | "CGA3" =>
+      ("P = \\mathbf{x} + \\tfrac{1}{2}\\mathbf{x}^2 e_\\infty + e_\\emptyset \\in \\mathrm{Cl}_{4,1}",
+       "3D Conformal Geometric Algebra calculator computing rounds, intersections, and conformal transformations.")
+    | _ =>
+      ("a b = a \\cdot b + a \\wedge b,\\qquad R \\mathbf{v} \\widetilde{R}",
+       s!"Interactive Geometric Algebra calculator in {st.mode} with stored registers x1..x10 graphed live in 3D.")
   return { f with mode := .calculator, title := s!"LeanCalculator ({st.mode})",
+                  formula := calcFormula, summary := calcSummary,
                   calcHud := some hud, diagnostics := diags }
 
 end Grassmann.Eval.Calc

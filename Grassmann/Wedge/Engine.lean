@@ -248,6 +248,50 @@ private def pushElemToFrame (f : SceneFrame) (id : UInt32) (role : WedgeRole)
         color := ⟨col.r, col.g, col.b, alpha⟩,
         gridLines := true, handleId := id, role := rf, label } }
 
+/-- Crisp KaTeX `formula` and 1-sentence `summary` for every Wedge 2D/3D campaign level,
+tutorial card, and procedural challenge. -/
+private def wedgeMathMeta (lvl : WedgeLevel) (is3D : Bool) : String × String :=
+  match lvl.number.toNat with
+  | 1  => ("L = A \\vee B \\in \\mathrm{Cl}_{2,0,1}",
+           "Regressive join (pull apart) spans the unique 2D PGA line passing through points A and B.")
+  | 2  => ("P = a \\wedge b \\in \\mathrm{Cl}_{2,0,1}",
+           "Exterior meet (push together) computes the exact projective intersection point of two 2D lines.")
+  | 3  => ("M = \\frac{A + B}{\\|A + B\\|} \\in \\mathrm{Cl}_{2,0,1}",
+           "Normalized projective addition of two same-weight PGA points yields their exact Euclidean midpoint.")
+  | 4  => ("\\ell = \\frac{c + b}{\\|c + b\\|} \\in \\mathrm{Cl}_{2,0,1}",
+           "Normalized addition of two unit 2D PGA lines constructs their exact Euclidean angle bisector.")
+  | 5  => ("\\ell_\\perp = a \\rfloor B \\in \\mathrm{Cl}_{2,0,1}",
+           "Left contraction (hold B, drag a toward B) drops the line through B orthogonal to line a.")
+  | 6  => ("\\ell_\\perp = a \\rfloor B,\\qquad \\ell_{45^\\circ} = a + (a \\rfloor B)",
+           "Combines orthogonal contraction and projective line addition to construct a 45-degree bisector without coordinates.")
+  | 7  => ("H = ((A \\vee B) \\rfloor C) \\wedge ((B \\vee C) \\rfloor A)",
+           "Constructs the triangle orthocenter as the exterior meet of two coordinate-free PGA altitudes.")
+  | 8  => ("O = ((A \\vee B) \\rfloor (A+B)) \\wedge ((B \\vee C) \\rfloor (B+C))",
+           "Constructs the circumcenter as the meet of perpendicular bisectors built from midpoints and contractions.")
+  | 9  => ("\\ell_{\\text{Euler}} = H \\vee O",
+           "Proves Euler's theorem in 2D PGA by joining the orthocenter and circumcenter into Euler's line.")
+  | 10 => ("\\Pi = (A \\vee B) \\vee C \\in \\mathrm{Cl}_{3,0,1}",
+           "3D regressive join lifts two points to a Plücker line and joins a third point to span their plane.")
+  | 11 => ("P = (\\Pi_1 \\wedge \\Pi_2) \\wedge \\Pi_3 \\in \\mathrm{Cl}_{3,0,1}",
+           "3D exterior meet intersects two planes into a line and meets a third plane to find their corner vertex.")
+  | 12 => ("\\Pi_{\\text{bis}} = \\frac{\\Pi_1 + \\Pi_2}{\\|\\Pi_1 + \\Pi_2\\|}",
+           "Same-grade addition of two normalized 3D PGA planes yields their exact dihedral angle bisector plane.")
+  | 13 => ("\\Pi_{\\perp} = (A \\vee B) \\rfloor (A + B)",
+           "Contracts the joining line onto the midpoint to construct the 3D perpendicular bisector plane of segment AB.")
+  | 14 => ("L_{\\perp} = (A \\vee B \\vee C) \\rfloor D",
+           "Drops the exact 3D altitude line from apex D orthogonal to the base plane spanned by A, B, and C.")
+  | 15 => ("O = \\Pi_{\\perp}(AB) \\wedge \\Pi_{\\perp}(AC) \\wedge \\Pi_{\\perp}(AD)",
+           "Finds the tetrahedron circumcenter as the triple meet of three perpendicular bisector planes in PGA3.")
+  | 16 => ("M = ((C \\vee D)\\rfloor(A+B)) \\wedge ((B \\vee D)\\rfloor(A+C)) \\wedge ((A \\vee B)\\rfloor(C+D))",
+           "Constructs the 3D Monge point where planes through edge midpoints perpendicular to opposite edges concur.")
+  | _  =>
+    if is3D then
+      ("A \\vee B,\\quad \\Pi_1 \\wedge \\Pi_2,\\quad X \\rfloor Y \\in \\mathrm{Cl}_{3,0,1}",
+       if lvl.goal.isEmpty then "Coordinate-free 3D PGA construction using join, meet, addition, and orthogonal contraction." else lvl.goal)
+    else
+      ("A \\vee B,\\quad a \\wedge b,\\quad a \\rfloor B \\in \\mathrm{Cl}_{2,0,1}",
+       if lvl.goal.isEmpty then "Coordinate-free 2D PGA construction using join, meet, addition, and orthogonal contraction." else lvl.goal)
+
 /-- Emit the complete `SceneFrame` + `WedgeHudState` for the current Wedge board
 (supporting campaign levels 1–16, animated tutorial cards T1–T6, and procedural challenges). -/
 def toSceneFrame (st : WedgeState) (frameSeq : UInt64 := 0) (simTime : Float := 0.0) :
@@ -255,6 +299,7 @@ def toSceneFrame (st : WedgeState) (frameSeq : UInt64 := 0) (simTime : Float := 
   let lvl := st.customLevel.getD (allLevels[min st.levelIdx (allLevels.size - 1)]!)
   let is3D := st.dim == .dim3D
   let (algName, V, p, q, r, witt) := resolveAlgebra (if is3D then "PGA3" else "PGA2")
+  let (wFormula, wSummary) := wedgeMathMeta lvl is3D
   let mut f : SceneFrame :=
     { frameSeq, simTime,
       mode := if is3D then .wedge3D else .wedge2D,
@@ -265,6 +310,8 @@ def toSceneFrame (st : WedgeState) (frameSeq : UInt64 := 0) (simTime : Float := 
       algebra := algebraMetaOf algName V p q r witt,
       presetId := s!"wedge_level_{lvl.number}",
       title := lvl.title,
+      formula := wFormula,
+      summary := wSummary,
       camera :=
         if is3D then { motor := Motor3.orbitCamera 0.55 (-0.34) 5.4, fovDeg := 45.0, distance := 5.4 }
         else { motor := Motor3.translator 0.0 0.0 (-4.2), orthoScale := 1.0, isOrtho := true } }
