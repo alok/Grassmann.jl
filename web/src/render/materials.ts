@@ -391,13 +391,52 @@ export interface CachedOpnsMaterial {
  * Supports BOTH full-screen UV raymarchers (Codegen/GPU.lean) and 3D bounding-box
  * raymarchers (Codegen/GPUInit.lean).
  */
+export const MAX_CACHED_OPNS_SHADERS = 24;
+
 export class OpnsShaderCache {
   private readonly materials = new Map<string, CachedOpnsMaterial>();
+  private readonly failedHashes = new Set<string>();
+  private readonly maxEntries: number;
+
+  constructor(maxEntries = MAX_CACHED_OPNS_SHADERS) {
+    this.maxEntries = Math.max(2, maxEntries);
+  }
+
+  get size(): number {
+    return this.materials.size;
+  }
+
+  get failedCount(): number {
+    return this.failedHashes.size;
+  }
+
+  markFailed(hash: string): void {
+    this.failedHashes.delete(hash);
+    this.failedHashes.add(hash);
+    while (this.failedHashes.size > this.maxEntries) {
+      const oldest = this.failedHashes.values().next().value;
+      if (oldest === undefined) break;
+      this.failedHashes.delete(oldest);
+    }
+  }
+
+  hasFailed(hash: string): boolean {
+    return this.failedHashes.has(hash);
+  }
 
   getOrCreate(meta: OpnsShaderMeta): CachedOpnsMaterial | null {
+    if (this.failedHashes.has(meta.hash)) return null;
     const existing = this.materials.get(meta.hash);
-    if (existing) return existing;
-    if (!meta.glsl) return null;
+    if (existing) {
+      // Touch for LRU recency
+      this.materials.delete(meta.hash);
+      this.materials.set(meta.hash, existing);
+      return existing;
+    }
+    if (!meta.glsl) {
+      this.markFailed(meta.hash);
+      return null;
+    }
 
     const glsl3 = isGlsl3Shader(meta.glsl);
     const fullScreen = glsl3 && isFullScreenUvOpns(meta.glsl);
@@ -445,6 +484,13 @@ export class OpnsShaderCache {
       bladeArraySize,
     };
     this.materials.set(meta.hash, entry);
+    while (this.materials.size > this.maxEntries) {
+      const oldestKey = this.materials.keys().next().value;
+      if (oldestKey === undefined) break;
+      const oldest = this.materials.get(oldestKey);
+      oldest?.material.dispose();
+      this.materials.delete(oldestKey);
+    }
     return entry;
   }
 
@@ -482,5 +528,6 @@ export class OpnsShaderCache {
       entry.material.dispose();
     }
     this.materials.clear();
+    this.failedHashes.clear();
   }
 }

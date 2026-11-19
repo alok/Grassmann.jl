@@ -5,13 +5,30 @@
 
 import type { StudioMode } from './studioApp';
 
+export type ExperimentSceneKind =
+  | 'preset'
+  | 'script'
+  | 'surface'
+  | 'implicit'
+  | 'parametric'
+  | 'wedgeLevel'
+  | 'wedgeTutorial'
+  | 'wedgeRandom';
+
+export type WedgeTutorialId = 'T1' | 'T2' | 'T3' | 'T4' | 'T5' | 'T6';
+
 export interface GrassmannExperimentV1 {
   version: 1;
   mode: StudioMode;
+  /** Exact discriminated scene kind (Dots P0 #4) so restore dispatches the exact matching Lean op */
+  sceneKind?: ExperimentSceneKind;
   presetId: string;
   algebra: string;
   script: string;
+  surfaceExpr?: string;
   implicitExpr: string;
+  gpuRaymarch?: boolean;
+  bound?: number;
   parametricExpr: {
     fx: string;
     fy: string;
@@ -21,13 +38,54 @@ export interface GrassmannExperimentV1 {
     handleId: number;
     pos: [number, number, number];
   }>;
+  params?: Record<string, number>;
   wedgeLevel: number;
-  wedgeSeed: number;
+  /** Lossless decimal string (for >53-bit 64-bit seeds like "9007199254740993") or legacy number */
+  wedgeSeed: number | string;
+  wedgeDim?: 2 | 3;
+  wedgeDifficulty?: 0 | 1 | 2;
+  wedgeTutorialId?: WedgeTutorialId;
   camera: {
     pos: [number, number, number];
     target: [number, number, number];
     isOrtho: boolean;
   };
+}
+
+const VALID_SCENE_KINDS = new Set<ExperimentSceneKind>([
+  'preset',
+  'script',
+  'surface',
+  'implicit',
+  'parametric',
+  'wedgeLevel',
+  'wedgeTutorial',
+  'wedgeRandom',
+]);
+
+const VALID_TUTORIAL_IDS = new Set<WedgeTutorialId>(['T1', 'T2', 'T3', 'T4', 'T5', 'T6']);
+
+export function normalizeSeedString(seed: number | string | undefined): string {
+  if (typeof seed === 'string' && /^\d+$/.test(seed.trim())) {
+    return seed.trim();
+  }
+  if (typeof seed === 'number' && Number.isFinite(seed) && seed >= 0) {
+    return String(Math.trunc(seed));
+  }
+  return '42';
+}
+
+export function inferLegacySceneKind(exp: Pick<GrassmannExperimentV1, 'mode' | 'sceneKind' | 'presetId' | 'script'>): ExperimentSceneKind {
+  if (exp.sceneKind && VALID_SCENE_KINDS.has(exp.sceneKind)) {
+    return exp.sceneKind;
+  }
+  if (exp.mode === 'wedge') return 'wedgeLevel';
+  if (exp.presetId === 'custom_script') return 'script';
+  if (exp.presetId === 'surface_3d') return 'surface';
+  if (exp.presetId === 'implicit_expr' || exp.presetId === 'implicit_gpu') return 'implicit';
+  if (exp.presetId === 'parametric_expr') return 'parametric';
+  if (exp.presetId && exp.presetId.trim().length > 0) return 'preset';
+  return exp.script.trim().length > 0 ? 'script' : 'preset';
 }
 
 export function serializeExperiment(exp: GrassmannExperimentV1): string {
@@ -75,7 +133,14 @@ export function parseGrassmannExperiment(raw: string): GrassmannExperimentV1 | n
         ? ([parsed.camera.target[0], parsed.camera.target[1], parsed.camera.target[2]] as [number, number, number])
         : ([0, 0.15, 0] as [number, number, number]);
 
-    return {
+    const wedgeSeed: number | string =
+      typeof parsed.wedgeSeed === 'string' && /^\d+$/.test(parsed.wedgeSeed.trim())
+        ? parsed.wedgeSeed.trim()
+        : typeof parsed.wedgeSeed === 'number' && Number.isFinite(parsed.wedgeSeed)
+          ? parsed.wedgeSeed
+          : 42;
+
+    const out: GrassmannExperimentV1 = {
       version: 1,
       mode,
       presetId: typeof parsed.presetId === 'string' ? parsed.presetId : 'pga3d_slicing',
@@ -92,13 +157,48 @@ export function parseGrassmannExperiment(raw: string): GrassmannExperimentV1 | n
       },
       handles,
       wedgeLevel: typeof parsed.wedgeLevel === 'number' && Number.isFinite(parsed.wedgeLevel) ? parsed.wedgeLevel : 1,
-      wedgeSeed: typeof parsed.wedgeSeed === 'number' && Number.isFinite(parsed.wedgeSeed) ? parsed.wedgeSeed : 42,
+      wedgeSeed,
       camera: {
         pos: camPos,
         target: camTarget,
         isOrtho: Boolean(parsed.camera?.isOrtho),
       },
     };
+
+    if (parsed.sceneKind && VALID_SCENE_KINDS.has(parsed.sceneKind)) {
+      out.sceneKind = parsed.sceneKind;
+    }
+    if (typeof parsed.surfaceExpr === 'string') {
+      out.surfaceExpr = parsed.surfaceExpr;
+    }
+    if (typeof parsed.gpuRaymarch === 'boolean') {
+      out.gpuRaymarch = parsed.gpuRaymarch;
+    }
+    if (typeof parsed.bound === 'number' && Number.isFinite(parsed.bound) && parsed.bound > 0) {
+      out.bound = parsed.bound;
+    }
+    if (parsed.wedgeDim === 2 || parsed.wedgeDim === 3) {
+      out.wedgeDim = parsed.wedgeDim;
+    }
+    if (parsed.wedgeDifficulty === 0 || parsed.wedgeDifficulty === 1 || parsed.wedgeDifficulty === 2) {
+      out.wedgeDifficulty = parsed.wedgeDifficulty;
+    }
+    if (parsed.wedgeTutorialId && VALID_TUTORIAL_IDS.has(parsed.wedgeTutorialId)) {
+      out.wedgeTutorialId = parsed.wedgeTutorialId;
+    }
+    if (parsed.params && typeof parsed.params === 'object' && !Array.isArray(parsed.params)) {
+      const cleanParams: Record<string, number> = {};
+      for (const [k, v] of Object.entries(parsed.params)) {
+        if (typeof v === 'number' && Number.isFinite(v)) {
+          cleanParams[k] = v;
+        }
+      }
+      if (Object.keys(cleanParams).length > 0) {
+        out.params = cleanParams;
+      }
+    }
+
+    return out;
   } catch {
     return null;
   }

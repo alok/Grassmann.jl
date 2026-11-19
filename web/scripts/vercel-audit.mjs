@@ -131,14 +131,16 @@ async function main() {
     });
     page.on('pageerror', (e) => pageErrors.push(e.message));
 
-    // 1. Cold HTTPS Load -> verify 74 presets + Web Worker WASM + GA syntax highlight + KaTeX Formula Card + Sculpted Bunny
+    // 1. Cold HTTPS Load -> verify 77 presets + 6 Lean Tour stops + Web Worker WASM + GA syntax highlight + KaTeX Formula Card + Dual-Handle Sculpted Bunny
     await page.goto(BASE_URL, { waitUntil: 'networkidle' });
     await page.waitForTimeout(1000);
 
     const sCold = await page.evaluate(() => window.__grassmannStudio.getState());
     assert(sCold.transportKind === 'wasm', `Cold load expected wasm, got ${sCold.transportKind}`);
     assert(sCold.transportLabel.includes(manifest.hash), `Expected worker hash ${manifest.hash}, got ${sCold.transportLabel}`);
-    assert(sCold.presetCount >= 74, `Cold load expected >=74 presets, got ${sCold.presetCount}`);
+    assert(sCold.presetCount >= 77, `Cold load expected >=77 presets, got ${sCold.presetCount}`);
+    assert(sCold.leanTourCount === 6, `Cold load expected 6 Lean tour stops, got ${sCold.leanTourCount}`);
+    assert(sCold.handlesCount >= 2, `Cold load expected >=2 bunny slice handles, got ${sCold.handlesCount}`);
     assert(typeof sCold.formula === 'string' && sCold.formula.length > 0, `Expected Lean metaJson.formula on cold HTTPS load`);
     assert(typeof sCold.metaScript === 'string' && sCold.metaScript.length >= 60, `Expected LiveScript v2 metaJson.script on cold HTTPS load, got ${JSON.stringify(sCold.metaScript)}`);
 
@@ -160,18 +162,39 @@ async function main() {
     assert(Number(sLiveEdit.frameSeq) > Number(sCold.frameSeq) && sLiveEdit.diagnostics.length === 0, `LiveScript v2 edit failed over HTTPS: ${JSON.stringify(sLiveEdit.diagnostics)}`);
     console.log(`[vercel] 1b. LiveScript v2 Live Edit PASS (seq ${sCold.frameSeq} -> ${sLiveEdit.frameSeq})`);
 
-    // 2. Warm Reload (browser HTTP cache enabled!) -> verify zero stale-cache failure (a60f037ad8 -> cbaef49869)
+    // 2. Warm Reload (browser HTTP cache enabled!) -> verify zero stale-cache failure (cbaef49869 -> e3d4772aca)
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForTimeout(800);
     const sWarm = await page.evaluate(() => window.__grassmannStudio.getState());
-    assert(sWarm.transportKind === 'wasm' && sWarm.presetCount >= 74 && sWarm.transportLabel.includes(manifest.hash), `Warm reload failed: ${JSON.stringify(sWarm)}`);
-    console.log(`[vercel] 2. Warm Cached Reload PASS | ${sWarm.presetCount} presets | ${sWarm.transportLabel}`);
+    assert(sWarm.transportKind === 'wasm' && sWarm.presetCount >= 77 && sWarm.leanTourCount === 6 && sWarm.transportLabel.includes(manifest.hash), `Warm reload failed: ${JSON.stringify(sWarm)}`);
+    console.log(`[vercel] 2. Warm Cached Reload PASS | ${sWarm.presetCount} presets | ${sWarm.leanTourCount} tour stops | ${sWarm.transportLabel}`);
 
-    // 2b. Wave 5B Live HTTPS Showcase Check: 74-card Gallery + sta_terrell_penrose beta=0.85 scrub + sta_maxwell_streamlines 0x0D flow!
+    // 2b. Wave 7A Live HTTPS Showcase Check: 77-card Gallery + Barth Sextic + Involute Gears + Terrell-Penrose + Maxwell Streamlines + resetTime === 0!
     await page.locator('.gs-vp-btn', { hasText: /Gallery/ }).click();
     await page.waitForTimeout(250);
     const galleryCards = await page.locator('.gs-gallery-card').count();
-    assert(galleryCards >= 74, `Expected >=74 Gallery cards over HTTPS, got ${galleryCards}`);
+    assert(galleryCards >= 77, `Expected >=77 Gallery cards over HTTPS, got ${galleryCards}`);
+    await page.locator('[data-gallery-preset-id="implicit_barth_sextic"]').click();
+    await page.waitForTimeout(600);
+    const sBarth = await page.evaluate(() => window.__grassmannStudio.getState());
+    const cBarth = await measureCanvas(page);
+    assert(cBarth.ok && (sBarth.opnsCount >= 1 || sBarth.meshCount >= 1), `Barth Sextic failed over HTTPS: opns=${sBarth.opnsCount} canvas=${JSON.stringify(cBarth)}`);
+    await page.screenshot({ path: path.join(OUT_DIR, 'vercel-07-barth-sextic.png') });
+
+    await page.locator('.gs-vp-btn', { hasText: /Gallery/ }).click();
+    await page.locator('[data-gallery-preset-id="pga3d_gears_kinematics"]').click();
+    await page.waitForTimeout(550);
+    const sGears = await page.evaluate(() => window.__grassmannStudio.getState());
+    assert(sGears.meshCount >= 1, `Expected Involute Gears meshes over HTTPS, got ${sGears.meshCount}`);
+    await page.evaluate(() => window.__grassmannStudio.dispatchJson({ op: 'seekTime', t: 2.0 }));
+    await page.waitForTimeout(200);
+    await page.locator('.gs-tl-reset').click();
+    await page.waitForTimeout(200);
+    const sReset = await page.evaluate(() => window.__grassmannStudio.getState());
+    assert(sReset.simTime === 0, `Expected resetTime === 0 over HTTPS, got ${sReset.simTime}`);
+    await page.screenshot({ path: path.join(OUT_DIR, 'vercel-08-gears.png') });
+
+    await page.locator('.gs-vp-btn', { hasText: /Gallery/ }).click();
     await page.locator('[data-gallery-preset-id="sta_terrell_penrose"]').click();
     await page.waitForTimeout(550);
     const betaSlider = page.locator('.gs-param-slider[data-param-name="beta"]');

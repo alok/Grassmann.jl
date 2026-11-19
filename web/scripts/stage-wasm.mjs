@@ -15,7 +15,7 @@ const argIdx = process.argv.indexOf('--src');
 const srcDir =
   (argIdx >= 0 && process.argv[argIdx + 1]) ||
   process.env.GRASSMANN_WASM_DIR ||
-  '/Users/alokbeniwal/Grassmann-worktrees/cabi/wasm/dist';
+  path.resolve(webDir, '..', 'wasm', 'dist');
 
 const srcMjs = path.join(srcDir, 'grassmann.mjs');
 const srcWasm = path.join(srcDir, 'grassmann.wasm');
@@ -70,8 +70,13 @@ if (fs.existsSync(srcManifest)) {
   };
 }
 
+// Rewrite internal default "grassmann.wasm" references inside the fingerprinted ES loader
+// so standalone imports without custom `locateFile` resolve the exact fingerprinted binary (Dots P0 #6).
+const mjsText = mjsBytes.toString('utf8');
+const patchedMjsText = mjsText.replaceAll('"grassmann.wasm"', `"${hashedWasmName}"`);
+
 fs.writeFileSync(path.join(outDir, hashedWasmName), wasmBytes);
-fs.writeFileSync(path.join(outDir, hashedMjsName), mjsBytes);
+fs.writeFileSync(path.join(outDir, hashedMjsName), patchedMjsText, 'utf8');
 fs.writeFileSync(path.join(outDir, 'wasm-manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 
 console.log(

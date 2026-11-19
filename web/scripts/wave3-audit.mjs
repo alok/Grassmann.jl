@@ -168,17 +168,19 @@ async function main() {
     await page.goto(BASE_URL, { waitUntil: 'networkidle' });
     await page.waitForTimeout(900);
 
-    // 1. Dynamic Preset Catalog (74 presets!) + Dedicated Web Worker WASM + Sculpted Bunny #pga3d_slicing + LiveScript v2 metaJson.script
+    // 1. Dynamic Preset Catalog (77 presets!) + Lean Tour Catalog (6 stops) + Dedicated Web Worker WASM + Sculpted Bunny #pga3d_slicing + LiveScript v2 metaJson.script
     const s0 = await snap('w3-01-bunny-before.png');
     assert(s0.transportKind === 'wasm', 'Expected live Lean WASM');
     assert(/Worker/i.test(s0.transportLabel || ''), `Expected dedicated Web Worker WASM, got ${s0.transportLabel}`);
-    assert(s0.presetCount >= 74, `Expected >=74 dynamic Lean presets, got ${s0.presetCount}`);
+    assert(s0.presetCount >= 77, `Expected >=77 dynamic Lean presets, got ${s0.presetCount}`);
+    assert(s0.leanTourCount === 6 && s0.tourCount === 6, `Expected 6 Lean Guided Tour stops, got lean=${s0.leanTourCount} ui=${s0.tourCount}`);
+    assert(s0.handlesCount >= 2, `Expected >=2 draggable slice handles (Center + Tilt Normal) on #pga3d_slicing, got ${s0.handlesCount}`);
     assert(typeof s0.formula === 'string' && s0.formula.length > 0, `Expected Lean metaJson.formula on #pga3d_slicing, got ${JSON.stringify(s0.formula)}`);
     assert(typeof s0.summary === 'string' && s0.summary.length > 0, `Expected Lean metaJson.summary on #pga3d_slicing, got ${JSON.stringify(s0.summary)}`);
     assert(await page.locator('.gs-contour-pip').isVisible(), 'Expected sculpted bunny 2D slice contour PiP visible!');
     assert(typeof s0.metaScript === 'string' && s0.metaScript.length >= 60, `Expected Lean metaJson.script populated on #pga3d_slicing, got ${JSON.stringify(s0.metaScript)}`);
     assert(s0.script === s0.metaScript, 'Expected Code Editor synced directly to Lean metaJson.script');
-    console.log(`[wave3] Dynamic Lean preset catalog synced: ${s0.presetCount} presets via ${s0.transportLabel} (metaJson.script=${s0.metaScript.length} chars)`);
+    console.log(`[wave3] Dynamic Lean catalog synced: ${s0.presetCount} presets + ${s0.leanTourCount} tour stops via ${s0.transportLabel} (handles=${s0.handlesCount})`);
 
     // 1b. LiveScript v2 Live Edit + Shift+Enter + Syntax Error Resilience!
     const editor = page.locator('.gs-editor-textarea');
@@ -207,14 +209,26 @@ async function main() {
     await page.locator('[data-preset-id="pga3d_slicing"]').click();
     await page.waitForTimeout(450);
 
-    // Drag slice handle upward through bunny torso!
+    // Drag slice handle 0 (Center) upward through bunny torso!
     const h0 = await page.evaluate(() => window.__grassmannStudio.getHandleScreenPos(0));
     assert(h0 !== null, 'Expected draggable slice handleId=0');
     await page.mouse.move(h0.clientX, h0.clientY);
     await page.mouse.down();
     await page.mouse.move(h0.clientX, h0.clientY - 70, { steps: 10 });
     await page.mouse.up();
-    await snap('w3-02-bunny-sliced.png');
+    const sSliced = await snap('w3-02-bunny-sliced.png');
+
+    // Wave 7A: Drag slice handle 1 (Amber Tilt Normal) obliquely to tilt cutting plane in 3D & update 2D Contour PiP!
+    const h1 = await page.evaluate(() => window.__grassmannStudio.getHandleScreenPos(1));
+    assert(h1 !== null, 'Expected draggable Tilt Normal handleId=1 on #pga3d_slicing');
+    await page.mouse.move(h1.clientX, h1.clientY);
+    await page.mouse.down();
+    await page.mouse.move(h1.clientX + 95, h1.clientY + 45, { steps: 12 });
+    await page.mouse.up();
+    const sTilted = await snap('w7-01-bunny-tilted.png');
+    assert(Number(sTilted.frameSeq) > Number(sSliced.frameSeq), 'Expected DragHandle 1 (Tilt Normal) to advance frameSeq');
+    assert(await page.locator('.gs-contour-pip').isVisible(), 'Expected 2D Contour PiP visible after oblique plane tilt');
+    console.log(`[wave3] Wave 7A Dual-Handle Tilted 3D Bunny PASS (seq ${sSliced.frameSeq} -> ${sTilted.frameSeq})`);
 
     // 2. Live Lean-Emitted GPUInit GLSL 300 es OPNS Raymarching (cga3d_opns_cyclide)
     await page.locator('[data-preset-id="cga3d_opns_cyclide"]').click();
@@ -332,7 +346,12 @@ async function main() {
     const expSnap = await page.evaluate(() => window.__grassmannStudio.exportExperiment());
     assert(expSnap && expSnap.version === 1 && typeof expSnap.presetId === 'string', 'Expected valid .grassmann.json v1 export');
     await page.evaluate(async (exp) => {
-      await window.__grassmannStudio.importExperiment({ ...exp, mode: 'coffeeshop', presetId: 'pga3d_slicing' });
+      await window.__grassmannStudio.importExperiment({
+        ...exp,
+        mode: 'coffeeshop',
+        sceneKind: 'preset',
+        presetId: 'pga3d_slicing',
+      });
     }, expSnap);
     await page.waitForTimeout(450);
     const sAfterImport = await page.evaluate(() => window.__grassmannStudio.getState());
@@ -343,12 +362,12 @@ async function main() {
     assert((await page.locator('.gs-formula-card .katex').count()) >= 1, 'Expected rendered KaTeX math in Formula Card');
     assert(await page.locator('.gs-timeline-bar').isVisible(), 'Expected Simulation Timeline Bar visible');
 
-    // Open Visual Preset Gallery Modal (G) -> assert 74 dynamic Lean cards!
+    // Open Visual Preset Gallery Modal (G) -> assert 77 dynamic Lean cards!
     await page.locator('.gs-vp-btn', { hasText: /Gallery/ }).click();
     await page.waitForTimeout(250);
     assert(await page.locator('.gs-gallery-modal').isVisible(), 'Expected Visual Preset Gallery Modal visible');
     const galleryCards = await page.locator('.gs-gallery-card').count();
-    assert(galleryCards >= 74, `Expected >=74 visual preset gallery cards, got ${galleryCards}`);
+    assert(galleryCards >= 77, `Expected >=77 visual preset gallery cards, got ${galleryCards}`);
     await page.screenshot({ path: path.join(OUT_DIR, 'w4-01-gallery-modal.png') });
     console.log(`[wave3] Visual Preset Gallery Modal PASS (${galleryCards} cards)`);
 
@@ -451,10 +470,109 @@ async function main() {
     await page.waitForTimeout(250);
     console.log(`[wave3] Fullscreen Zen Mode PASS (${Math.round(zenBox.width)}x${Math.round(zenBox.height)})`);
 
+    // 11. Wave 7A Grand Finale Live Showcases & Functional Checks!
+    // 11a. Barth Sextic (implicit_barth_sextic)
+    await page.locator('.gs-vp-btn', { hasText: /Gallery/ }).click();
+    await page.locator('[data-gallery-preset-id="implicit_barth_sextic"]').click();
+    const sBarth = await snap('w7-02-barth-sextic.png');
+    assert(sBarth.opnsCount >= 1 || sBarth.meshCount >= 1, `Expected GPU OPNS or mesh on implicit_barth_sextic, got opns=${sBarth.opnsCount} mesh=${sBarth.meshCount}`);
+    assert(sBarth.params.length >= 2, `Expected >=2 @param sliders (phi, iso) on implicit_barth_sextic, got ${JSON.stringify(sBarth.params)}`);
+    console.log(`[wave3] Wave 7A Barth Sextic PASS | opns=${sBarth.opnsCount} params=[${sBarth.params.map((p) => p.name).join(', ')}]`);
+
+    // 11b. CGA3 Dupin Cyclide GPU Raymarch (cga3d_dupin_cyclide_raymarch)
+    await page.locator('.gs-vp-btn', { hasText: /Gallery/ }).click();
+    await page.locator('[data-gallery-preset-id="cga3d_dupin_cyclide_raymarch"]').click();
+    const sCyclide = await snap('w7-03-dupin-cyclide-raymarch.png');
+    assert(sCyclide.opnsCount >= 1, `Expected GPU OPNS shader on cga3d_dupin_cyclide_raymarch, got opns=${sCyclide.opnsCount}`);
+    assert(sCyclide.params.length >= 2, `Expected >=2 @param sliders on cga3d_dupin_cyclide_raymarch, got ${JSON.stringify(sCyclide.params)}`);
+    console.log(`[wave3] Wave 7A Dupin Cyclide Raymarch PASS | opns=${sCyclide.opnsCount} params=[${sCyclide.params.map((p) => p.name).join(', ')}]`);
+
+    // 11c. Involute 3D Meshing Gears (pga3d_gears_kinematics)
+    await page.locator('.gs-vp-btn', { hasText: /Gallery/ }).click();
+    await page.locator('[data-gallery-preset-id="pga3d_gears_kinematics"]').click();
+    const sGears = await snap('w7-04-gears-kinematics.png');
+    assert(sGears.meshCount >= 1, `Expected 3D gear meshes on pga3d_gears_kinematics, got mesh=${sGears.meshCount}`);
+    assert(sGears.params.length >= 1, `Expected @param sliders on pga3d_gears_kinematics, got ${JSON.stringify(sGears.params)}`);
+    console.log(`[wave3] Wave 7A Involute 3D Gears PASS | meshes=${sGears.meshCount} params=[${sGears.params.map((p) => p.name).join(', ')}]`);
+
+    // 11d. Live Lean resetTime === 0.0 exact (NOT 0.001!)
+    await page.evaluate(() => window.__grassmannStudio.dispatchJson({ op: 'seekTime', t: 2.5 }));
+    await page.waitForTimeout(250);
+    const sSeek = await page.evaluate(() => window.__grassmannStudio.getState());
+    assert(Math.abs(sSeek.simTime - 2.5) < 0.05, `Expected seekTime(2.5) -> simTime~2.5, got ${sSeek.simTime}`);
+    await page.locator('.gs-tl-reset').click();
+    await page.waitForTimeout(250);
+    const sReset = await page.evaluate(() => window.__grassmannStudio.getState());
+    assert(sReset.simTime === 0, `Expected resetTime -> exact simTime===0.0 (not 0.001!), got ${sReset.simTime}`);
+    console.log(`[wave3] Wave 7A Live resetTime PASS | seek=${sSeek.simTime.toFixed(2)} -> reset=${sReset.simTime}`);
+
+    // 11e. Live Lean Guided Tour (T) via grassmann_studio_tour_catalog + loadTourStop
+    await page.locator('.gs-vp-btn', { hasText: /Tour/ }).click();
+    await page.waitForTimeout(350);
+    assert(await page.locator('.gs-tour-card').isVisible(), 'Expected Guided Tour card visible');
+    const sTour0 = await page.evaluate(() => window.__grassmannStudio.getState());
+    assert(sTour0.recentEvents.includes('json:loadTourStop'), `Expected json:loadTourStop dispatched, got ${JSON.stringify(sTour0.recentEvents)}`);
+    await page.locator('.gs-tour-next').click();
+    await page.waitForTimeout(350);
+    const sTour1 = await page.evaluate(() => window.__grassmannStudio.getState());
+    assert(sTour1.tourStop === 1 && sTour1.presetId === 'pga3d_slicing', `Expected Tour stop 1 -> pga3d_slicing, got stop=${sTour1.tourStop} preset=${sTour1.presetId}`);
+    await page.locator('.gs-tour-close').click();
+    await page.waitForTimeout(200);
+    console.log(`[wave3] Wave 7A Live Lean Tour PASS | 6 stops | loadTourStop verified`);
+
+    // 11f. Dots P0 #5 Live GPU bound=4 sphere (x*x+y*y+z*z-9 visible outside old r=2.2 clip!)
+    await page.evaluate(() =>
+      window.__grassmannStudio.dispatchJson({
+        op: 'evalImplicit',
+        expr: 'x*x+y*y+z*z-9',
+        gpuRaymarch: true,
+        bound: 4,
+        bounds: [-4, 4, -4, 4, -4, 4],
+        gridN: 16,
+        forceFullSnapshot: true,
+      })
+    );
+    const sBound4 = await snap('w7-06-gpu-bound4-sphere.png');
+    assert(sBound4.opnsCount >= 1, `Expected GPU OPNS raymarch for bound=4 sphere, got opns=${sBound4.opnsCount}`);
+    const cBound4 = await measureCanvas(page);
+    assert(cBound4.variance >= 120 && cBound4.distinctColors >= 25, `Expected visible radius-3 sphere at bound=4, got ${JSON.stringify(cBound4)}`);
+    console.log(`[wave3] Wave 7A GPU bound=4 Sphere PASS | canvas=`, cBound4);
+
+    // 11g. Wedge L17 (3D Euler Axis Grand Finale) + Dots P0 #4 Lossless 64-bit seedStr "9007199254740993" round-trip!
+    await page.locator('.gs-mode-btn', { hasText: 'Wedge 2D/3D' }).click();
+    await page.waitForTimeout(450);
+    await page.locator('.gs-wedge-select').selectOption('17');
+    const sL17 = await snap('w7-05-wedge-l17.png');
+    assert(sL17.wedge && sL17.wedge.level === 17 && sL17.wedge.totalLevels >= 17 && sL17.wedge.is3D === true, `Expected Wedge L17 3D, got ${JSON.stringify(sL17.wedge)}`);
+    console.log(`[wave3] Wave 7A Wedge L17 Grand Finale PASS | ${sL17.wedge.title} (${sL17.wedge.level}/${sL17.wedge.totalLevels})`);
+
+    await page.evaluate(() =>
+      window.__grassmannStudio.dispatchJson({
+        op: 'wedgeRandom',
+        dim: 3,
+        difficulty: 2,
+        seed: 0,
+        seedStr: '9007199254740993',
+        forceFullSnapshot: true,
+      })
+    );
+    await page.waitForTimeout(350);
+    const sSeed0 = await page.evaluate(() => window.__grassmannStudio.getState());
+    assert(sSeed0.wedge?.isRandom === true && sSeed0.wedge?.seedStr === '9007199254740993', `Expected Lean metaJson.wedge.seedStr === '9007199254740993', got ${JSON.stringify(sSeed0.wedge)}`);
+    const expSeed = await page.evaluate(() => window.__grassmannStudio.exportExperiment());
+    assert(expSeed.sceneKind === 'wedgeRandom' && expSeed.wedgeSeed === '9007199254740993', `Expected exported wedgeSeed === '9007199254740993', got ${JSON.stringify(expSeed)}`);
+    await page.evaluate(() => window.__grassmannStudio.dispatchJson({ op: 'loadPreset', id: 'pga3d_slicing', forceFullSnapshot: true }));
+    await page.waitForTimeout(250);
+    await page.evaluate((exp) => window.__grassmannStudio.importExperiment(exp), expSeed);
+    await page.waitForTimeout(400);
+    const sSeed1 = await page.evaluate(() => window.__grassmannStudio.getState());
+    assert(sSeed1.wedge?.isRandom === true && sSeed1.wedge?.seedStr === '9007199254740993', `Expected restored wedge seedStr === '9007199254740993', got ${JSON.stringify(sSeed1.wedge)}`);
+    console.log(`[wave3] Wave 7A Lossless 64-bit seedStr Round-Trip PASS | seedStr=${sSeed1.wedge.seedStr}`);
+
     assert(consoleErrors.length === 0, `Console errors: ${JSON.stringify(consoleErrors)}`);
     assert(consoleWarnings.length === 0, `WebGL/Shader warnings: ${JSON.stringify(consoleWarnings)}`);
     assert(pageErrors.length === 0, `Page errors: ${JSON.stringify(pageErrors)}`);
-    console.log('[wave3] ALL 24 FULL-STUDIO 74-PRESET + WAVE 5B SHOWCASE + BYTECODE + WORKER E2E CHECKS PASSED (0 console/shader/page errors)!');
+    console.log('[wave3] ALL 32 FULL-STUDIO 77-PRESET + WAVE 7A SHOWCASE + TOUR + L17 + DOTS FIXES E2E CHECKS PASSED (0 console/shader/page errors)!');
   } finally {
     if (browser) await browser.close();
     preview.kill('SIGTERM');
