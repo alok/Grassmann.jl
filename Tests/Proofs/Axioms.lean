@@ -217,3 +217,102 @@ info: 'Grassmann.Proofs.ProjectiveConformal.r3_concrete_rational_rotor_unit' dep
 
 /-- info: 'Grassmann.Kernel.R3Rotor.action_formula' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Grassmann.Kernel.R3Rotor.action_formula
+
+/-- info: 'Grassmann.Proofs.SpacetimeWedge.sta_timelike_sq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.sta_timelike_sq
+
+/-- info: 'Grassmann.Proofs.SpacetimeWedge.sta_spacelike_sq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.sta_spacelike_sq
+
+/-- info: 'Grassmann.Proofs.SpacetimeWedge.sta_generators_anticomm' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.sta_generators_anticomm
+
+/--
+info: 'Grassmann.Proofs.SpacetimeWedge.sta_minkowski_quadratic_form' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+-/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.sta_minkowski_quadratic_form
+
+/-- info: 'Grassmann.Proofs.SpacetimeWedge.sta_boost_unit' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.sta_boost_unit
+
+/-- info: 'Grassmann.Proofs.SpacetimeWedge.sta_boost_composition' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.sta_boost_composition
+
+/-- info: 'Grassmann.Proofs.SpacetimeWedge.sta_boost_sandwich_formula' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.sta_boost_sandwich_formula
+
+/--
+info: 'Grassmann.Proofs.SpacetimeWedge.sta_boost_preserves_minkowski' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+-/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.sta_boost_preserves_minkowski
+
+/--
+info: 'Grassmann.Proofs.SpacetimeWedge.sta_impl_boost_preserves_minkowski' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+-/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.sta_impl_boost_preserves_minkowski
+
+/--
+info: 'Grassmann.Proofs.SpacetimeWedge.sta_spatial_rot_preserves_minkowski' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+-/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.sta_spatial_rot_preserves_minkowski
+
+/-- info: 'Grassmann.Proofs.SpacetimeWedge.sta_concrete_rational_boost' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.sta_concrete_rational_boost
+
+/-- info: 'Grassmann.Proofs.SpacetimeWedge.PGA2_vee' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.PGA2_vee
+
+/-- info: 'Grassmann.Proofs.SpacetimeWedge.PGA3_vee' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.PGA3_vee
+
+/-- info: 'Grassmann.Proofs.SpacetimeWedge.pga2_point_on_line_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.pga2_point_on_line_eq
+
+/-- info: 'Grassmann.Proofs.SpacetimeWedge.pga2_join_antisymm' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.pga2_join_antisymm
+
+/-- info: 'Grassmann.Proofs.SpacetimeWedge.pga2_join_incident' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.pga2_join_incident
+
+/-- info: 'Grassmann.Proofs.SpacetimeWedge.pga2_meet_lines_laws' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.pga2_meet_lines_laws
+
+/-- info: 'Grassmann.Proofs.SpacetimeWedge.pga2_midpoint_on_join' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.pga2_midpoint_on_join
+
+/-- info: 'Grassmann.Proofs.SpacetimeWedge.pga2_impl_wedge_laws' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.pga2_impl_wedge_laws
+
+/-- info: 'Grassmann.Proofs.SpacetimeWedge.pga3_point_on_plane_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.pga3_point_on_plane_eq
+
+/-- info: 'Grassmann.Proofs.SpacetimeWedge.pga3_meet_planes_incident' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.pga3_meet_planes_incident
+
+/--
+info: 'Grassmann.Proofs.SpacetimeWedge.pga3_meet_three_planes_incident' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+-/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.pga3_meet_three_planes_incident
+
+/-- info: 'Grassmann.Proofs.SpacetimeWedge.pga3_join_points_laws' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.pga3_join_points_laws
+
+/--
+info: 'Grassmann.Proofs.SpacetimeWedge.pga3_join_three_points_plane_incident' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+-/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.pga3_join_three_points_plane_incident
+
+/-- info: 'Grassmann.Proofs.SpacetimeWedge.pga3_impl_wedge_laws' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Grassmann.Proofs.SpacetimeWedge.pga3_impl_wedge_laws

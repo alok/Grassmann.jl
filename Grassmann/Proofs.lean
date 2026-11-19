@@ -8,6 +8,7 @@ import Grassmann.Proofs.Regressive
 import Grassmann.Proofs.Transport
 import Grassmann.Proofs.Interp
 import Grassmann.Proofs.ProjectiveConformal
+import Grassmann.Proofs.SpacetimeWedge
 
 /-!
 # Grassmann.Proofs: the implementation meets the specification
@@ -68,4 +69,11 @@ proved in general, what is checked by kernel evaluation and what is tested):
   `pga3_study_quadric_iff`, `pga3_unit_motor_mul_closed`), `CGA2`/`CGA3`
   null-point (`P * P = 0`) and Euclidean distance identities, and exact
   rational `ℝ3` rotor unit norm & isometry.
+* `Grassmann.Proofs.SpacetimeWedge`: `ALOK-950` Spacetime Algebra `STA`
+  (`S!"-+++"`) Lorentz boost & spatial rotation Minkowski quadratic form
+  invariance (`sta_boost_preserves_minkowski`, `sta_boost_sandwich_formula`,
+  `sta_impl_boost_preserves_minkowski`), plus `PGA2`/`PGA3` Wedge projective
+  incidence laws (join antisymmetry & incidence, line/plane meet incidence,
+  midpoint on join, three-plane/three-point incidence, transported to
+  `implWedge` & `implVee`).
 -/
