@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # scripts/build-wasm.sh — Reproducible Lean 4.36 -> C -> Emscripten WASM pipeline
-# Compiles ALL 32 strictly Init-only Lean 4.36 modules (direct GA kernels +
-# full Grassmann.Studio: 74 CoffeeShop presets incl. sculpted bunny #pga3d_slicing
-# & 5 Wave 4B physics/relativity/streamline showstoppers, 16 Wedge 2D+3D levels,
-# 6 animated Wedge tutorials, LiveScript v2 parser/evaluator, bytecode Marching
-# Tetrahedra Implicit3D, AD surfaces, marching-triangles contours, GAlculator,
-# exact R3 rational rotors, WGSL/GLSL/MSL GPU shader codegen)
+# Compiles ALL 33 strictly Init-only Lean 4.36 modules (direct GA kernels +
+# full Grassmann.Studio: 77 CoffeeShop presets incl. dual-handle sculpted bunny
+# #pga3d_slicing, Barth Sextic, Dupin Cyclide, Involute Gears, Terrell-Penrose,
+# Maxwell streamlines, 6-stop Guided Tour, 17 Wedge 2D+3D levels, 6 animated
+# Wedge tutorials, LiveScript v2 parser/evaluator, bytecode Marching Tetrahedra
+# Implicit3D, AD surfaces, marching-triangles contours, GAlculator, exact R3
+# rational rotors, WGSL/GLSL/MSL GPU shader codegen)
 # + c/grassmann_cabi.c + wasm/lean_wasm_rt.c into wasm/dist/grassmann.{wasm,mjs}!
 set -euo pipefail
 
@@ -45,6 +46,7 @@ mods=(
   Grassmann.CoffeeShop.PresetsExtra
   Grassmann.CoffeeShop.PresetsParity
   Grassmann.CoffeeShop.PresetsShowcase
+  Grassmann.CoffeeShop.Tour
   Grassmann.CoffeeShop.Engine
   Grassmann.CoffeeShop
   Grassmann.Studio
@@ -193,7 +195,7 @@ exported_fns='[
   "_grassmann_attach_thread","_grassmann_detach_thread",
   "_grassmann_studio_create","_grassmann_studio_destroy",
   "_grassmann_studio_dispatch_bin","_grassmann_studio_dispatch_json",
-  "_grassmann_studio_get_frame","_grassmann_studio_preset_catalog",
+  "_grassmann_studio_get_frame","_grassmann_studio_preset_catalog","_grassmann_studio_tour_catalog",
   "_grassmann_cl_mul","_grassmann_cl_wedge","_grassmann_cl_join",
   "_grassmann_cl_left_contract","_grassmann_cl_reverse","_grassmann_cl_dual","_grassmann_cl_sandwich",
   "_grassmann_sta_mul","_grassmann_sta_wedge","_grassmann_sta_left_contract",
@@ -303,7 +305,7 @@ cat > "$dist_dir/wasm-manifest.json" << EOF
   "wrapperFile": "grassmann_wasm.mjs",
   "bytes": ${wasm_bytes},
   "gzipBytes": ${gz_bytes},
-  "presetCount": 74
+  "presetCount": 77
 }
 EOF
 
@@ -311,5 +313,5 @@ echo "[wasm] built artifacts (content hash=${wasm_hash}):"
 ls -lh "$dist_dir/grassmann.wasm" "$dist_dir/grassmann.mjs" "$dist_dir/$fp_wasm" "$dist_dir/$fp_mjs" "$dist_dir/grassmann_wasm.mjs" "$dist_dir/wasm-manifest.json"
 echo "[wasm] gzipped wasm size: ${gz_bytes} bytes ($((gz_bytes / 1024)).$(((gz_bytes % 1024) * 10 / 1024)) KB)"
 
-echo "[wasm] running full Node.js verification + benchmark suite (all 74 presets + @param + KaTeX + Bytecode Implicit3D/GPU + LiveScript v2 + Wedge)"
+echo "[wasm] running full Node.js verification + benchmark suite (all 77 presets + 6-stop Tour + Dots Round-2 regressions + 8B alignment + 17 Wedge levels)"
 node "$repo_root/wasm/test_wasm.mjs"

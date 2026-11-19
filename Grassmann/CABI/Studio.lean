@@ -81,8 +81,12 @@ def getCachedFrame (sid : UInt64) : IO (Int32 × ByteArray) := do
   | some idx =>
     return (0, Grassmann.Studio.getLastFrame reg.slots[idx]!.state)
 
-/-- Return the complete JSON preset catalog (all 19 CoffeeShop presets). -/
+/-- Return the complete JSON preset catalog (all 77 CoffeeShop presets). -/
 def getPresetCatalogJson : String :=
   Grassmann.Studio.presetCatalogJson
+
+/-- Return the complete 6-stop Guided GA Tour catalog JSON (`0..5`). -/
+def getTourCatalogJson : String :=
+  Grassmann.Studio.tourCatalogJson
 
 end Grassmann.CABI.Studio

@@ -135,14 +135,23 @@ export class GrassmannWasm {
 
   /** Fetch the full JSON catalog of built-in CoffeeShop presets from Lean. */
   presetCatalog() {
+    return this._fetchJsonCatalog(this.mod._grassmann_studio_preset_catalog, "preset_catalog");
+  }
+
+  /** Fetch the 6-stop Guided GA Tour catalog JSON from Lean. */
+  tourCatalog() {
+    return this._fetchJsonCatalog(this.mod._grassmann_studio_tour_catalog, "tour_catalog");
+  }
+
+  _fetchJsonCatalog(fn, label) {
     const lenPtr = this.mod._malloc(4);
     try {
-      this.mod._grassmann_studio_preset_catalog(0, 0, lenPtr);
+      fn(0, 0, lenPtr);
       const len = this.mod.HEAPU32[lenPtr >>> 2];
       const buf = this.mod._malloc(len);
       try {
-        const rc = this.mod._grassmann_studio_preset_catalog(buf, len, lenPtr);
-        if (rc !== GSIR_OK) throw new Error(`preset_catalog error ${rc}`);
+        const rc = fn(buf, len, lenPtr);
+        if (rc !== GSIR_OK) throw new Error(`${label} error ${rc}`);
         const bytes = new Uint8Array(this.mod.HEAPU8.buffer, buf, len).slice();
         return JSON.parse(new TextDecoder().decode(bytes));
       } finally {

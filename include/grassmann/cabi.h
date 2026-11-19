@@ -106,6 +106,12 @@ GRASSMANN_API int32_t grassmann_studio_preset_catalog(
   uint32_t outCap,
   uint32_t *outLen);
 
+/* Copy the UTF-8 JSON array of the 6-stop Guided GA Tour into caller buffer. */
+GRASSMANN_API int32_t grassmann_studio_tour_catalog(
+  char *outBuf,
+  uint32_t outCap,
+  uint32_t *outLen);
+
 /* ============================================================================
  * Direct Packed Numeric GA Kernels (Caller-Owned Buffers)
  * ============================================================================ */
