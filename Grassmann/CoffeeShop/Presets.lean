@@ -60,27 +60,49 @@ private def latheSphere : MeshAsset :=
 def buildPga3dSlicing (handles : Array (UInt32 × Vec3)) (sliceMotor : Option Motor3)
     (seq : UInt64) (t : Float) : SceneFrame :=
   let f := baseFrame "pga3d_slicing" "3D PGA Mesh Slicing (Bunny + Live Contour)" "PGA3" seq t
-  -- Draggable handle 0 controls cutting plane height & tilt (or orbits smoothly if untouched)
-  let defH : Vec3 := ⟨0.0, 0.15 + 0.55 * Float.sin (t * 0.65), 0.0⟩
-  let ctrl := hPos handles 0 defH
-  let (planeNormal, planeD) :=
-    match sliceMotor with
-    | some m =>
-      let n := Vec3.normalize (Motor3.applyDir m ⟨0.0, 1.0, 0.0⟩)
-      let p0 := Motor3.applyPoint m Vec3.zero
-      (n, -(Vec3.dot n p0))
-    | none =>
-      let tilt := 0.25 * Float.sin (t * 0.4) + 0.35 * ctrl.x
-      let n := Vec3.normalize ⟨Float.sin tilt, Float.cos tilt, 0.2 * ctrl.z⟩
-      (n, -(Vec3.dot n ⟨0.0, ctrl.y, 0.0⟩))
-  let center := Vec3.scale (-planeD) planeNormal
+  -- Dual live 3D handles:
+  --   handleId = 0: Plane Center (translates the cutting plane in 3D)
+  --   handleId = 1: Tilt Normal  (rotates the PGA3 plane normal freely in SO(3))
+  let armLen : Float := 0.95
+  let hasH0 := handles.any (·.1 == 0)
+  let hasH1 := handles.any (·.1 == 1)
+  let defCenter : Vec3 := ⟨0.0, 0.15 + 0.45 * Float.sin (t * 0.65), 0.0⟩
+  let defTilt := 0.25 * Float.sin (t * 0.4)
+  let defNormal : Vec3 := Vec3.normalize ⟨Float.sin defTilt, Float.cos defTilt, 0.12 * Float.cos (t * 0.3)⟩
+  let (planeCenter, planeNormal, planeD) :=
+    if !hasH0 && !hasH1 then
+      match sliceMotor with
+      | some m =>
+        let n := Vec3.normalize (Motor3.applyDir m ⟨0.0, 1.0, 0.0⟩)
+        let p0 := Motor3.applyPoint m Vec3.zero
+        (p0, n, -(Vec3.dot n p0))
+      | none =>
+        (defCenter, defNormal, -(Vec3.dot defNormal defCenter))
+    else
+      let c := hPos handles 0 defCenter
+      let n :=
+        if hasH1 then
+          let tip := hPos handles 1 (Vec3.add c (Vec3.scale armLen defNormal))
+          let diff := Vec3.sub tip c
+          if Vec3.norm diff > 0.08 then Vec3.normalize diff else defNormal
+        else
+          let tilt := 0.25 * Float.sin (t * 0.4) + 0.35 * c.x
+          Vec3.normalize ⟨Float.sin tilt, Float.cos tilt, 0.2 * c.z⟩
+      (c, n, -(Vec3.dot n c))
+  let tiltPos := Vec3.add planeCenter (Vec3.scale armLen planeNormal)
   let (u, v) := Vec3.orthonormalBasis planeNormal
   let sliced := sliceMeshByPlane bunnyAsset planeNormal planeD 2001 2002
+  let normalStem : SegmentPrim :=
+    { a := planeCenter, b := tiltPos, width := 3.2, color := RGBA.amber,
+      role := { arrow := true } }
   let insp : Array InspectEntry := #[
     { idx := 0, name := "cutPlane", grade := 1,
       formatted := s!"{planeD}e0 + {planeNormal.x}e1 + {planeNormal.y}e2 + {planeNormal.z}e3",
       editable := true },
-    { idx := 1, name := "contourSegs", grade := 2,
+    { idx := 1, name := "planeNormal", grade := 1,
+      formatted := s!"({planeNormal.x}, {planeNormal.y}, {planeNormal.z})",
+      editable := true },
+    { idx := 2, name := "contourSegs", grade := 2,
       formatted := s!"{sliced.contour3D.size} cut edges, {sliced.contour2D.curves.size} loops",
       editable := false }
   ]
@@ -90,17 +112,20 @@ def buildPga3dSlicing (handles : Array (UInt32 × Vec3)) (sliceMotor : Option Mo
       { meshId := sliced.lowerMesh.meshId, dirtyHash := sliced.lowerMesh.dirtyHash,
         motor := Motor3.identity, color := RGBA.white, useVertexColors := true },
       { meshId := sliced.upperMesh.meshId, dirtyHash := sliced.upperMesh.dirtyHash,
-        motor := Motor3.translator 0.0 0.08 0.0,
+        motor := Motor3.translator (0.08 * planeNormal.x) (0.08 * planeNormal.y) (0.08 * planeNormal.z),
         color := ⟨0.88, 0.92, 1.0, 0.24⟩, useVertexColors := false }
     ]
     planes := #[{
-      center, u, v, extent := 1.5,
+      center := planeCenter, u, v, extent := 1.5,
       color := ⟨0.22, 0.85, 0.98, 0.18⟩, gridLines := true,
       handleId := 0, role := { draggable := true }, label := "Cut Plane Π" }]
-    points := #[{
-      handleId := 0, pos := ctrl, radius := 0.09, color := RGBA.cyan,
-      role := { draggable := true }, label := "Drag Slice" }]
-    segments := sliced.contour3D
+    points := #[
+      { handleId := 0, pos := planeCenter, radius := 0.09, color := RGBA.cyan,
+        role := { draggable := true }, label := "Plane Center" },
+      { handleId := 1, pos := tiltPos, radius := 0.085, color := RGBA.amber,
+        role := { draggable := true }, label := "Tilt Normal" }
+    ]
+    segments := sliced.contour3D.push normalStem
     contourOverlay := some sliced.contour2D
     inspect := insp }
 
@@ -917,8 +942,8 @@ def buildComplexMobius (handles : Array (UInt32 × Vec3)) (seq : UInt64) (t : Fl
 
 def presetCatalog : Array PresetInfo := #[
   { id := "pga3d_slicing", title := "3D PGA Mesh Slicing (Bunny)", category := "3D PGA", algebra := "PGA3",
-    description := "Live Stanford-style bunny sliced by a PGA3 plane with dual clipped halves + 2D contour inset.",
-    sampleCode := "@basis PGA3\nlet bunny = mesh(\"bunny\")\nlet h = point(0, 0.15 + 0.45 * sin(t * 0.65), 0)\nlet cut = plane(0.15 * cos(t * 0.4), 1, 0, -h.y)\nlet sliced = slice(bunny, cut)" },
+    description := "Live Stanford-style bunny sliced by a dual-handle PGA3 plane (center + 3D tilt normal) with clipped halves + 2D contour inset.",
+    sampleCode := "@basis PGA3\nlet bunny = mesh(\"bunny\")\nlet P = point(0, 0.15 + 0.45 * sin(t * 0.65), 0)\nlet N = point(0.24 * sin(t * 0.4), 1.1 + 0.45 * sin(t * 0.65), 0.12 * cos(t * 0.3))\nlet nx = N.x - P.x\nlet ny = N.y - P.y\nlet nz = N.z - P.z\nlet cut = plane(nx, ny, nz, -(nx * P.x + ny * P.y + nz * P.z))\nlet sliced = slice(bunny, cut)" },
   { id := "pga3d_points_and_lines", title := "3D PGA Points, Lines & Planes", category := "3D PGA", algebra := "PGA3",
     description := "5 draggable 3D pyramid points demonstrating Join (&), Meet (^), and projective sums.",
     sampleCode := "@basis PGA3\nlet A = point(0, 0.95, 0)\nlet B = point(0.9, -0.7, -0.7)\nlet C = point(-0.9, -0.7, -0.7)\nlet D = point(0, -0.7, 0.95)\nlet L_AB = A & B\nlet L_AC = A & C\nlet face = A & B & C\nlet mid = (A + D).Normalized" },
