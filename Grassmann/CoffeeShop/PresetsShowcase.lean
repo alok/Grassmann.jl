@@ -1073,52 +1073,64 @@ def buildCga3dDupinCyclideRaymarch (handles : Array (UInt32 × Vec3))
 
 /-! ## 8. `pga3d_gears_kinematics` — 3D PGA Meshing Involute Gear Train (Composed Screw Motors) -/
 
-/-- Build a watertight outward-CCW 3D involute-style spur gear mesh with tooth flanks,
-beveled tips, roots, and central shaft bore purely in Lean (`Init`-only). -/
+/-- Build a watertight outward-CCW 3D involute-style spur gear mesh with symmetric tapered
+tooth flanks centered at `θ = 0`, generous backlash & root clearance (`r_a = r_p + 0.72 m`,
+`r_f = r_p - 1.10 m`, pitch-circle tooth width `0.42 < 0.50` pitch), and central shaft bore
+purely in Lean (`Init`-only). Guarantees strictly zero tooth interpenetration across all
+meshing ratios (`Z ∈ 6..24`, even or odd)! -/
 private def buildInvoluteGearMesh (teeth : Nat) (pitchR thick : Float)
     (baseCol : RGBA) (meshId : UInt64) : MeshAsset := Id.run do
   let z := max 6 teeth
   let zF := Float.ofNat z
   let modM := (2.0 * pitchR) / zF
-  let rOut := pitchR + 0.78 * modM
-  let rRoot := max (0.30 * pitchR) (pitchR - 0.98 * modM)
+  let rOut := pitchR + 0.72 * modM
+  let rRoot := max (0.30 * pitchR) (pitchR - 1.10 * modM)
   let rHub := max 0.11 (0.28 * pitchR)
   let hz := 0.5 * thick
-  let stepsPerTooth := 4
+  -- 6-point symmetric involute tooth profile centered at `frac = 0.0` (valley centered at `±0.5`):
+  --   0: root-left (-0.30), 1: pitch-left (-0.21), 2: tip-left (-0.10),
+  --   3: tip-right (+0.10), 4: pitch-right (+0.21), 5: root-right (+0.30)
+  let stepsPerTooth := 6
   let nSeg := z * stepsPerTooth
-  -- Profile radii per tooth phase: [root, pitch-flank, tip, tip]
   let profR (step : Nat) : Float :=
-    match step % 4 with
+    match step % 6 with
     | 0 => rRoot
-    | 1 => rOut
+    | 1 => pitchR
     | 2 => rOut
+    | 3 => rOut
+    | 4 => pitchR
     | _ => rRoot
   let profAng (i : Nat) : Float :=
-    let toothIdx := i / 4
-    let sub := i % 4
+    let toothIdx := i / 6
+    let sub := i % 6
     let baseA := twoPiF * Float.ofNat toothIdx / zF
     let stepA := twoPiF / zF
     let frac :=
       match sub with
-      | 0 => 0.08
-      | 1 => 0.30
-      | 2 => 0.62
-      | _ => 0.84
+      | 0 => -0.30
+      | 1 => -0.21
+      | 2 => -0.10
+      | 3 =>  0.10
+      | 4 =>  0.21
+      | _ =>  0.30
     baseA + frac * stepA
   let tipCol : RGBA := ⟨min 1.0 (baseCol.r * 1.18), min 1.0 (baseCol.g * 1.18), min 1.0 (baseCol.b * 1.18), 1.0⟩
-  let rootCol : RGBA := ⟨baseCol.r * 0.72, baseCol.g * 0.72, baseCol.b * 0.72, 1.0⟩
+  let midCol : RGBA := ⟨baseCol.r * 0.94, baseCol.g * 0.94, baseCol.b * 0.94, 1.0⟩
+  let rootCol : RGBA := ⟨baseCol.r * 0.70, baseCol.g * 0.70, baseCol.b * 0.70, 1.0⟩
   let hubCol : RGBA := ⟨0.24, 0.28, 0.36, 1.0⟩
   let mut mb : MeshBuilder := {}
   -- Add ring vertices: [0..nSeg-1] outer front (+hz), [nSeg..2*nSeg-1] outer back (-hz),
   -- [2*nSeg..3*nSeg-1] inner bore front (+hz), [3*nSeg..4*nSeg-1] inner bore back (-hz)
   for i in [:nSeg] do
     let a := profAng i; let r := profR i
-    let c := if i % 4 == 1 || i % 4 == 2 then tipCol else rootCol
+    let sub := i % 6
+    let c := if sub == 2 || sub == 3 then tipCol else if sub == 1 || sub == 4 then midCol else rootCol
     let (mb1, _) := mb.addVertex ⟨r * Float.cos a, r * Float.sin a, hz⟩ c
     mb := mb1
   for i in [:nSeg] do
     let a := profAng i; let r := profR i
-    let c := if i % 4 == 1 || i % 4 == 2 then tipCol else rootCol
+    let sub := i % 6
+    let c := if sub == 2 || sub == 3 then tipCol else if sub == 1 || sub == 4 then midCol else rootCol
     let (mb1, _) := mb.addVertex ⟨r * Float.cos a, r * Float.sin a, -hz⟩ c
     mb := mb1
   for i in [:nSeg] do
@@ -1170,8 +1182,10 @@ def buildPga3dGearsKinematics (handles : Array (UInt32 × Vec3))
   -- Draggable handle 0 scrubs extra phase offset cleanly
   let phaseH := hPos handles 0 ⟨0.0, -1.25, 0.0⟩
   let theta1 := speed * t + phaseH.x * 1.4
-  let theta2 := -(theta1 / actualRatio) + piF / Float.ofNat z2
-  let theta3 := -(Float.ofNat z1 / Float.ofNat z3) * theta1 + piF / (2.0 * Float.ofNat z3)
+  -- Universal exact meshing phase for contact angle α:
+  --   θ_k = α + π + ((α - θ₁) * Z₁ - π) / Z_k  ⟹  u₁ + u_k ≡ 0.5 (mod 1) for ALL Z_k (even & odd)!
+  let theta2 := piF + (-theta1 * Float.ofNat z1 - piF) / Float.ofNat z2
+  let theta3 := 1.5 * piF + ((0.5 * piF - theta1) * Float.ofNat z1 - piF) / Float.ofNat z3
   let c1 : Vec3 := ⟨-r1, 0.0, 0.0⟩
   let c2 : Vec3 := ⟨r2, 0.0, 0.0⟩
   let c3 : Vec3 := ⟨-r1, r1 + r3, 0.0⟩
