@@ -26,7 +26,7 @@ A Lean 4 port and interactive 3D Geometric Algebra platform built on [Michael Re
 
 3. **Multi-Target Deployment (`c/`, `wasm/`, `web/`, `Grassmann/Server.lean`, [`docs/CABI_WASM_SERVER.md`](docs/CABI_WASM_SERVER.md))**:
    - **Native C ABI (`scripts/build-cabi.sh`)**: standalone `libgrassmann_cabi.dylib` (**5.6 MB**, zero `libleanshared`) + `include/grassmann/cabi.h`.
-   - **Zero-UB 8-Byte-Aligned Browser WebAssembly (`scripts/build-wasm.sh`)**: Lean 4.36 → C → Emscripten hybrid `-O3`/`-Oz` WASM (`grassmann.e4c5192de3.wasm`, **1.54 MB raw / 462.3 KB gz**, content-fingerprinted `wasm-manifest.json`, `~3.2 ms` bytecode Gyroid `16³`).
+   - **Zero-UB 8-Byte-Aligned Browser WebAssembly (`scripts/build-wasm.sh`)**: Lean 4.36 → C → Emscripten hybrid `-O3`/`-Oz` WASM (`grassmann.ca6755053c.wasm`, **1.55 MB raw / 466.5 KB gz**, content-fingerprinted `wasm-manifest.json`, `~3.2 ms` bytecode Gyroid `16³`).
    - **Apple 3-Platform Static XCFramework (`scripts/build-apple-static.sh`)**: `GrassmannCABI.xcframework` for `macos-arm64`, `xros-arm64-simulator`, and `xros-arm64` powering native macOS + Apple Vision Pro clients.
    - **Pure-Lean Binary Server (`lake exe ga-server`)**: persistent HTTP/1.1 keep-alive + RFC 6455 binary WebSocket server in pure Lean 4.36 (`Std.Internal.UV.TCP`).
    - **WebGL2 / WebXR Studio (`web/`)**: thin Three.js renderer (zero JS geometric algebra math) with KaTeX formula card, visual 77-preset gallery, 6-stop Guided Tour, dynamic `@param` sliders, timeline, GA syntax highlighter, Zen mode, 60fps WebM recorder, and `.grassmann.json` import/export.
