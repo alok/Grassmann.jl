@@ -222,7 +222,7 @@ def setSurface (st : CoffeeShopState) (expr : String)
 
 def setImplicit (st : CoffeeShopState) (expr : String) (gpuRaymarch : Bool := false)
     (bound : Float := 1.6) (gridN : Nat := 18) : CoffeeShopState :=
-  let b := if bound > 0.1 then min 10.0 bound else 1.6
+  let b := if bound.isNaN || !bound.isFinite then 1.6 else max 0.5 (min 20.0 bound)
   { st with
     implicitExpr := expr,
     implicitGpuRaymarch := gpuRaymarch,
@@ -298,16 +298,50 @@ def resetTime (st : CoffeeShopState) : CoffeeShopState :=
     cubeState := initBouncingCubeState spin,
     doublePendulum := initDoublePendulumState armLen }
 
-/-- Seek simulation clock cleanly to `timeSec` without advancing by clamped `dt`. -/
-def seekTime (st : CoffeeShopState) (timeSec : Float) : CoffeeShopState :=
-  if timeSec ≤ 0.0 then resetTime st
-  else { st with simTime := timeSec }
+/-- Seek simulation clock cleanly to `timeSec` without advancing by clamped `dt`.
+For integrated RK4 physics presets (`pga3d_bouncing_cube`, `pga3d_double_pendulum`,
+`pga3d_physics_free_top`), deterministically resets to `t = 0` and replays fixed `dt = 1/60`
+RK4 steps up to `min(timeSec, 30.0)` so scrubbing displays the exact physical pose at `t`! -/
+def seekTime (st : CoffeeShopState) (timeSec : Float) : CoffeeShopState := Id.run do
+  if timeSec ≤ 0.0 then
+    return resetTime st
+  let inPreset := !st.useCustom && !st.useSurface && !st.useImplicit && !st.useParametric
+  let isRk4Preset :=
+    inPreset &&
+    (st.presetId == "pga3d_bouncing_cube" ||
+     st.presetId == "pga3d_double_pendulum" ||
+     st.presetId == "pga3d_physics_free_top")
+  if !isRk4Preset then
+    return { st with simTime := timeSec }
+  let targetT := min 30.0 timeSec
+  let dt : Float := 1.0 / 60.0
+  let nSteps : Nat := (targetT * 60.0).toUInt32.toNat
+  let mut cur := resetTime st
+  for k in [:nSteps] do
+    cur := stepTick cur dt (Float.ofNat (k + 1) * dt)
+  let rem := targetT - Float.ofNat nSteps * dt
+  if rem > 1e-4 then
+    -- Integrate exact sub-millisecond remainder via RK4 without `stepTick`'s `0.001` floor
+    if cur.presetId == "pga3d_bouncing_cube" then
+      let g := paramVal cur.paramOverrides "gravity" 9.8 0.5 20.0
+      let e := paramVal cur.paramOverrides "restitution" 0.78 0.1 0.98
+      let sp := paramVal cur.paramOverrides "spin" 2.6 0.0 8.0
+      cur := { cur with cubeState := stepBouncingCubeRK4 cur.cubeState rem g e sp }
+    else if cur.presetId == "pga3d_double_pendulum" then
+      let l := paramVal cur.paramOverrides "length" 1.0 0.4 1.5
+      let d := paramVal cur.paramOverrides "damping" 0.03 0.0 0.35
+      let g := paramVal cur.paramOverrides "gravity" 9.8 1.0 20.0
+      cur := { cur with doublePendulum := stepDoublePendulumRK4 cur.doublePendulum rem l d g }
+    else if cur.presetId == "pga3d_physics_free_top" then
+      let (m1, w1) := stepFreeTopRK4 cur.topMotor cur.topOmega rem
+      cur := { cur with topMotor := m1, topOmega := w1 }
+  return { cur with simTime := targetT }
 
 /-- Build a GPU-raymarched implicit 3D frame via strictly `Init`-only `GPUInit`
-(GLSL 300 es + WGSL + Metal MSL), respecting requested half-extent `bound`. -/
+(GLSL 300 es + WGSL + Metal MSL), clipped strictly to `[-bound, bound]³` (`bound ∈ [0.5, 20.0]`). -/
 private def buildImplicitGpuFrame (exprStr : String) (seq : UInt64) (t : Float)
     (bound : Float := 1.6) : SceneFrame :=
-  let b := if bound > 0.1 then min 20.0 bound else 1.6
+  let b := if bound.isNaN || !bound.isFinite then 1.6 else max 0.5 (min 20.0 bound)
   let camDist := max 4.6 (b * 2.8)
   let base : SceneFrame :=
     { frameSeq := seq, simTime := t, mode := .surface, is2D := false,
