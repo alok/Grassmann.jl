@@ -27,7 +27,11 @@ This is setup code for small matrices (it runs once per `eigen` call on an
 mutable locals over row-major `FloatArray`s, not as the tail-recursive kernels
 of the hot paths.
 -/
-import Grassmann.Forms.Roots
+module
+
+public import Grassmann.Forms.Roots
+
+@[expose] public section
 
 namespace Grassmann.Forms.Eigen
 

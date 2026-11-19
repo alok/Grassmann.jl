@@ -18,8 +18,12 @@ discriminants.
 * `eigen(X)`: always the dense eigensolver (Julia: LAPACK `eigen(Matrix(X))`),
   as a `SpectralOperator`.
 -/
-import Grassmann.Forms.Dyadic
-import Grassmann.Forms.Eigen
+module
+
+public import Grassmann.Forms.Dyadic
+public import Grassmann.Forms.Eigen
+
+@[expose] public section
 
 namespace Grassmann
 

@@ -6,7 +6,11 @@ Common spaces (DirectSum.jl `src/DirectSum.jl:442-450`, DESIGN.md §3).
 identical products. The named algebras are `abbrev`s of structure literals so
 instances keyed on them are found after reducible unfolding.
 -/
-import DirectSum.Parse
+module
+
+public import DirectSum.Parse
+
+@[expose] public section
 
 namespace DirectSum
 

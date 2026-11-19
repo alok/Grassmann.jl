@@ -21,8 +21,12 @@ port-notes/grassmann-forms.md §5).
 * `Projector`, `SpectralOperator`, `Dyadic` (`forms.jl:427-428, 464`), and TeX
   (`printtex`, `alltex`, `forms.jl:1731-1764`) for operators and Cayley tables.
 -/
-import Grassmann.Forms.Cayley
-import Grassmann.Types.Show
+module
+
+public import Grassmann.Forms.Cayley
+public import Grassmann.Types.Show
+
+@[expose] public section
 
 namespace Grassmann
 

@@ -48,9 +48,26 @@ kernels with 30 944 multiply-accumulate entries plus 128 fused sandwiches. At
 dominates (`Multivector*Multivector` of STA, PGA3, CGA3) and are 10× faster than
 the reference kernels; small operations are bound by the allocation of their result.
 -/
-import Grassmann.Kernel.Codegen.Sandwich
-import Grassmann.Kernel.Codegen.Dyn
-import Lean.Meta.Eval
+module
+
+public meta import Grassmann.Kernel.Codegen.Sandwich
+public meta import Grassmann.Kernel.Codegen.Dyn
+public meta import Lean.Meta.Eval
+
+public section
+
+namespace Grassmann.Kernel.Codegen
+
+/-- `grassmann_kernels V`: generate straight-line kernels and a `Kernels V` instance for
+the space `V` (DESIGN.md §5.2). Optional `(dense := false)` and `(maxEntries := n)`
+override the emission policy. -/
+syntax (name := kernelsCmd) "grassmann_kernels "
+  (atomic("(" &"dense" " := ") ident ")")? (atomic("(" &"maxEntries" " := ") num ")")? term : command
+
+end Grassmann.Kernel.Codegen
+end
+
+public meta section
 
 namespace Grassmann.Kernel.Codegen
 
@@ -107,12 +124,6 @@ def generateKernels (t : Term) (V : TensorBundle) (pre : Name) (pol : Policy) : 
   trace[grassmann.codegen] "{V}: {em.kernels} kernels ({em.linear.size} linear), {em.entries} entries, \
     {sw} fused sandwiches, {dls.size} dynamic loops ({dk} dedicated kernels); \
     plans {t1 - t0} ms, emission and compilation {t2 - t1} ms"
-
-/-- `grassmann_kernels V`: generate straight-line kernels and a `Kernels V` instance for
-the space `V` (DESIGN.md §5.2). Optional `(dense := false)` and `(maxEntries := n)`
-override the emission policy. -/
-syntax (name := kernelsCmd) "grassmann_kernels "
-  (atomic("(" &"dense" " := ") ident ")")? (atomic("(" &"maxEntries" " := ") num ")")? term : command
 
 /-- The declaration prefix for the space term `t`: the current namespace and the
 identifier, or the display of the space. -/

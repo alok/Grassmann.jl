@@ -13,7 +13,11 @@ Fixed Julia defects (port-notes §8.4): `Endomorphism ⋅ DiagonalOperator` is
 `A·D` (Julia returns `(A·D)ᵀ`, item 1) and a diagonal outermorphism acts on a
 `CoSpinor` through its odd part (Julia uses the even part, item 2).
 -/
-import Grassmann.Forms.Outermorphism
+module
+
+public import Grassmann.Forms.Outermorphism
+
+@[expose] public section
 
 namespace Grassmann
 

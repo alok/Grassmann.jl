@@ -31,8 +31,12 @@ kernels, one straight-line kernel per operation and layout, written into an excl
 when there is one; otherwise the reference (`Values` arithmetic and `convertLayout`), which
 computes the same floating-point operations.
 -/
-import Grassmann.Types.Convert
-import Grassmann.Kernel.Class
+module
+
+public import Grassmann.Types.Convert
+public import Grassmann.Kernel.Class
+
+@[expose] public section
 
 namespace Grassmann
 

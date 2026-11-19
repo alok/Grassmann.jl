@@ -28,7 +28,11 @@ Two layers:
 Julia returns 1-based positions (`bladeindex`, `basisindex`, …); we keep those
 names with Julia semantics and add 0-based `…Rank` variants for storage.
 -/
-import DirectSum.Bits
+module
+
+public import DirectSum.Bits
+
+@[expose] public section
 
 namespace Leibniz
 
@@ -224,11 +228,11 @@ def tables : Array (Thunk IndexTables) :=
 /-! ## Julia index functions -/
 
 /-- The table entry `a[i]`, `0` out of range (inline read, no panic path). -/
-@[inline] private def natAt (a : Array Nat) (i : Nat) : Nat := if h : i < a.size then a[i] else 0
+@[inline] def natAt (a : Array Nat) (i : Nat) : Nat := if h : i < a.size then a[i] else 0
 
 /-- Whether the tables of dimension `n` cover mask `b` (`n ≤ 12` and `b < 2ⁿ`); a shift, not
 `2 ^ n` (which is a GMP call on `Nat`). -/
-@[inline] private def tabled (n : Nat) (b : UInt64) : Bool := n ≤ tableLimit && b >>> n.toUInt64 == 0
+@[inline] def tabled (n : Nat) (b : UInt64) : Bool := n ≤ tableLimit && b >>> n.toUInt64 == 0
 
 /-- Runtime implementation of `bladeRank`: one table read for `n ≤ 12`. -/
 def bladeRankImpl (n : Nat) (b : UInt64) : Nat :=

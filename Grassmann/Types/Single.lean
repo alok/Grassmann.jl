@@ -12,7 +12,11 @@ grassmann-types.md §3.3).
 
 The unit blades themselves are DirectSum's `Submanifold V G`.
 -/
-import Grassmann.Types.Dims
+module
+
+public import Grassmann.Types.Dims
+
+@[expose] public section
 
 namespace Grassmann
 

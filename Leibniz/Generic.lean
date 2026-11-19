@@ -4,7 +4,11 @@ parities, the complement mask, and the raw complement parities.
 
 `true` always means "the component is negated".
 -/
-import DirectSum.Bits
+module
+
+public import DirectSum.Bits
+
+@[expose] public section
 
 namespace Leibniz
 

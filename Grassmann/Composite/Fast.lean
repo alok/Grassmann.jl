@@ -21,8 +21,13 @@ series run on these instead:
 All of it computes exactly what the typed operations compute (the same floating-point
 operations in the same order); `Tests/Composite` checks the composite functions against Julia.
 -/
-import Grassmann.Composite.Scalar
-import Grassmann.Forms.Mat
+module
+
+import all Init.Data.FloatArray.Basic
+public import Grassmann.Composite.Scalar
+public import Grassmann.Forms.Mat
+
+@[expose] public section
 
 namespace Grassmann.Composite
 

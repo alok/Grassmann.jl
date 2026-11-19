@@ -13,7 +13,13 @@ Scalar and single-blade helpers of the composite (transcendental) layer
   allocation-free bit path and every other space falls back to DirectSum's
   exact blade rules (`TensorBundle.terms₂`).
 -/
-import Grassmann.Algebra.Norms
+module
+
+meta import JuliaBase.FloatLit
+
+public import Grassmann.Algebra.Norms
+
+@[expose] public section
 
 namespace Grassmann.Composite
 

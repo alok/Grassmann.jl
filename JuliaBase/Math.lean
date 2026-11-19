@@ -1,6 +1,10 @@
-import JuliaBase.Num
-import JuliaBase.FloatLit
-import JuliaBase.MathTables
+module
+
+public import JuliaBase.Num
+meta import JuliaBase.FloatLit
+public import JuliaBase.MathTables
+
+@[expose] public section
 
 /-!
 # Julia's own elementary functions, bit for bit

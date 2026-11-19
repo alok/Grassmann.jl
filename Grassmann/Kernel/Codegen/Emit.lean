@@ -63,9 +63,13 @@ its operation (compile time only; the final code is the direct call); and the
 typed layer's parity layouts (`halfLayout ((G + H) % 2 == 1)`) do not fold at all
 (no `Nat.mod`/`Nat.beq` folding), leaving one branch on a closed `Bool`.
 -/
-import Grassmann.Kernel.Codegen.Plans
-import Lean.Elab.Command
-import Lean.Compiler.Specialize
+module
+
+public meta import Grassmann.Kernel.Codegen.Plans
+public meta import Lean.Elab.Command
+public meta import Lean.Compiler.Specialize
+
+public meta section
 
 namespace Grassmann.Kernel.Codegen
 

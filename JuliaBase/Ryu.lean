@@ -17,6 +17,10 @@ The power-of-5 tables are closed terms computed from `Nat` arithmetic when the m
 is initialized, exactly as Julia computes them from `BigInt` (utils.jl:228-272).
 -/
 
+module
+
+public section
+
 namespace JuliaBase.Ryu
 
 /-- Julia `Ryu.log10pow2(e)` = `⌊log10(2^e)⌋` for `0 ≤ e < 1651` (utils.jl:35). -/

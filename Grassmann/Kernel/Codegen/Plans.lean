@@ -48,7 +48,12 @@ errors: complements in dyadic spaces) or drops terms (a repeated tangent
 generator, which a scalar coefficient cannot hold), falls through to the
 reference kernels.
 -/
-import Grassmann.Kernel.Runtime
+module
+
+public import Grassmann.Kernel.Runtime
+public import Std.Data.HashSet
+
+@[expose] public section
 
 namespace Grassmann.Kernel.Codegen
 

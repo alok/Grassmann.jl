@@ -27,8 +27,12 @@ the static type of Julia's values (Julia returns a `Multivector` with a zero sca
 `↑` in conformal space, the same coefficients); on multivectors (`Float`) the formulas run
 in the full algebra, with `inv` undefined giving `NaN` coefficients.
 -/
-import Grassmann.Composite.Ring
-import Grassmann.Forms.Eval
+module
+
+public import Grassmann.Composite.Ring
+public import Grassmann.Forms.Eval
+
+@[expose] public section
 
 namespace Grassmann
 

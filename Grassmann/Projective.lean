@@ -16,9 +16,13 @@ In Grassmann.jl's grade-major lex order, `Spinor PGA3 Float` stores its 8 coeffi
 **exact `ganja.js` / `GSIR` v1 wire order**:
   `[s, e01, e02, e03, e12, e13, e23, e0123]` (indices `0..7`).
 -/
-import Grassmann.GanjaCompat
-import Grassmann.Kernel.Generated.PGA2
-import Grassmann.Kernel.Generated.PGA3
+module
+
+public import Grassmann.GanjaCompat
+public import Grassmann.Kernel.Generated.PGA2
+public import Grassmann.Kernel.Generated.PGA3
+
+public section
 
 namespace Grassmann
 

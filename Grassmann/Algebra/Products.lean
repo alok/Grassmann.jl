@@ -45,7 +45,11 @@ for versors the projection drops nothing, so the values agree there.
 `⊗` is not provided: for graded operands Julia builds a `Dyadic` operator, which
 is outside the element model (oracle-schema.md §12).
 -/
-import Grassmann.Algebra.Unary
+module
+
+public import Grassmann.Algebra.Unary
+
+@[expose] public section
 
 namespace Grassmann
 

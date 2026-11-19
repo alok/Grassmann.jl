@@ -8,7 +8,11 @@ grade (`Leibniz.indexBasisAll`). The coefficient accessor uses the correct
 `basisindex` (Julia's `m.v13` wrongly uses `bladeindex`, and `m[b]` indexes a
 grade block: defect `multivector-getproperty`, fixed here).
 -/
-import Grassmann.Types.Half
+module
+
+public import Grassmann.Types.Half
+
+@[expose] public section
 
 namespace Grassmann
 

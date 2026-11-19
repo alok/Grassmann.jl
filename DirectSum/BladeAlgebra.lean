@@ -17,8 +17,12 @@ Blade-level products, involutions and complements (port-notes/grassmann-parity.m
 Hot paths for code generation: `mulSign` (signature spaces, allocation-free)
 and `mulDiag` (diagonal spaces).
 -/
-import DirectSum.Parity
-import Std.Data.HashMap
+module
+
+public import DirectSum.Parity
+public import DirectSum.Cache
+
+@[expose] public section
 
 namespace DirectSum
 
@@ -89,7 +93,7 @@ def nestTangent (z : UInt64) (inner : BladeResult) : BladeResult :=
 /-! ## Grade involutions (`DirectSum.jl src/generic.jl:220-234`) -/
 
 /-- `b` if the parity is even, else `-1·b`. -/
-@[inline] private def signed (p : Bool) (b : UInt64) : BladeResult :=
+@[inline] def signed (p : Bool) (b : UInt64) : BladeResult :=
   if p then .single (-1) b else .blade b
 
 /-- Julia `reverse(b)` (`~b`, also `conj`): negate grades `≡ 2,3 (mod 4)`
@@ -195,7 +199,7 @@ def contractionSkeleton (a b : UInt64) : Option (Bool × UInt64 × UInt64) :=
 /-! ### Chevalley product (any symmetric bilinear form) -/
 
 /-- `e_i ⌋ X` for generator `i` (0-based) under Gram matrix `g`. -/
-private def lcontrVec (g : Array (Array Rat)) (i : Nat) (x : Terms) : Terms :=
+def lcontrVec (g : Array (Array Rat)) (i : Nat) (x : Terms) : Terms :=
   x.foldl (init := #[]) fun acc (k, c) =>
     (indicesList k).zipIdx.foldl (init := acc) fun acc (p, j) =>
       let gij := ((g[i]?.getD #[])[p - 1]?).getD 0
@@ -203,14 +207,14 @@ private def lcontrVec (g : Array (Array Rat)) (i : Nat) (x : Terms) : Terms :=
       else acc.add (k &&& ~~~(bit p)) (if j % 2 == 0 then c * gij else -(c * gij))
 
 /-- `e_i ∧ X` for generator `i` (0-based). -/
-private def wedgeVec (i : Nat) (x : Terms) : Terms :=
+def wedgeVec (i : Nat) (x : Terms) : Terms :=
   x.foldl (init := #[]) fun acc (k, c) =>
     if testBit k i then acc
     else acc.add (k ||| shl 1 i) (if popcount (k &&& lowMask i) % 2 == 0 then c else -c)
 
 /-- `e_A X` in the outer-product basis by the Chevalley recursion
 `e_A = e_{a₁} e_{A'} - e_{a₁} ⌋ e_{A'}` (`a₁` the lowest generator of `A`). -/
-private def bladeMul (g : Array (Array Rat)) : Nat → UInt64 → Terms → Terms
+def bladeMul (g : Array (Array Rat)) : Nat → UInt64 → Terms → Terms
   | 0, _, x => x
   | fuel + 1, a, x =>
     if a == 0 then x else
@@ -240,7 +244,7 @@ def mulTable (V : TensorBundle) : Array BladeResult :=
 
 /-- The product tables built so far, per space (DESIGN.md §5.3: a global cache read through
 `unsafeBaseIO`, referentially transparent like Julia's). -/
-initialize mulTableCache : IO.Ref (Std.HashMap TensorBundle (Array BladeResult)) ← IO.mkRef {}
+initialize mulTableCache : IO.Ref (SmallMap TensorBundle (Array BladeResult)) ← IO.mkRef {}
 
 /-- `mul` for a non-diagonal space with `n ≤ 6`: a read of the cached table. -/
 unsafe def mulCachedUnsafe (V : TensorBundle) (a b : UInt64) : BladeResult :=

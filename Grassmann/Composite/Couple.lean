@@ -35,7 +35,11 @@ here the principal complex cube root); `exp(::Phasor)` uses a wrong formula
 `term-power-period4`, here `inv(v)^|k|`); blade powers use a period-4 cycle that
 is wrong for null and non-unit blades (same defect, here `B^k = β^⌊k/2⌋ B^(k mod 2)`).
 -/
-import Grassmann.Composite.Series
+module
+
+public import Grassmann.Composite.Series
+
+@[expose] public section
 
 namespace Grassmann.Composite
 

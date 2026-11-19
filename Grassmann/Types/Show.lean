@@ -19,8 +19,12 @@ The coefficient printing is `JuliaBase.JuliaShow` (`showValue` = Leibniz
 | `Couple` | `1 + 2v₁₂` |
 | `PseudoCouple` | `1v₁ + 2v₁₂₃` |
 -/
-import Grassmann.Types.Couple
-import JuliaBase.Show
+module
+
+public import Grassmann.Types.Couple
+public import JuliaBase.Show
+
+@[expose] public section
 
 namespace Grassmann
 

@@ -13,8 +13,12 @@ Julia's kind predicates and the graded aliases (AbstractTensors.jl `src/Abstract
 * `Scalar`, `GradedVector`, `Bivector`, `Trivector`: the classes `TensorGraded X M V G T` at
   `G = 0, 1, 2, 3` (Julia's `const Scalar{V,T} = TensorGraded{V,0,T}`, …).
 -/
-import AbstractTensors.Ops
-import StaticVectors.LinAlg
+module
+
+public import AbstractTensors.Ops
+public import StaticVectors.LinAlg
+
+@[expose] public section
 
 universe u v w
 

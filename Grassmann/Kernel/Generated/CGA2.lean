@@ -1,7 +1,13 @@
 /-
 Generated kernels of `CGA2` (plane conformal algebra S!"∞∅++"; DESIGN.md §5.2).
 -/
-import Grassmann.Kernel.Codegen
+module
+
+public import Grassmann.Kernel.Runtime
+public import DirectSum.Common
+meta import Grassmann.Kernel.Codegen
+
+@[expose] public section
 
 namespace Grassmann.Kernel.Gen
 

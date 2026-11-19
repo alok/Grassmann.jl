@@ -7,8 +7,12 @@ visible in floating point: `sum(Values(-0.0)) === -0.0`, whereas
 `0.0 + -0.0 === 0.0`. Every reduction here follows that rule, and falls back
 to the documented empty value (`0` for `+`, `1` for `*`) when `n = 0`.
 -/
-import StaticVectors.Values
-import StaticVectors.Scalar
+module
+
+public import StaticVectors.Values
+public import StaticVectors.Scalar
+
+@[expose] public section
 
 universe u v
 

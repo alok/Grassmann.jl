@@ -43,8 +43,12 @@ module-initialization constant (it does for `ℝ3` multivector products, but not
 when a layout is computed from a parity inside a loop, as in the sandwich
 instances). Generated kernels (DESIGN.md §5.2) bypass the cache entirely.
 -/
-import Grassmann.Kernel.Plan
-import Std.Data.HashMap
+module
+
+public import Grassmann.Kernel.Plan
+public import DirectSum.Cache
+
+@[expose] public section
 
 namespace Grassmann.Kernel
 
@@ -184,12 +188,8 @@ def build (k : PlanKey) : Except String Plan := do
           throw s!"{V.bladeLabel t.bits} lies outside the result layout {repr k.lc} of {repr k.op}"
   return Plan.ofRows rows nested
 
-private unsafe def planCacheImpl : IO.Ref (Std.HashMap PlanKey (Except String Plan)) :=
-  unsafeBaseIO (IO.mkRef {})
-
-/-- The process-global plan cache. -/
-@[implemented_by planCacheImpl]
-private opaque planCache : IO.Ref (Std.HashMap PlanKey (Except String Plan))
+/-- The process-global plan cache (initialized once per process). -/
+private initialize planCache : IO.Ref (SmallMap PlanKey (Except String Plan)) ← IO.mkRef {}
 
 private unsafe def planImpl (k : PlanKey) : Except String Plan := unsafeBaseIO do
   match (← planCache.get).get? k with

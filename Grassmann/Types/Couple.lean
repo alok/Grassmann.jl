@@ -14,7 +14,11 @@ As DESIGN.md §4.2 prescribes, the blade `B` is runtime data. A degenerate
 and a `PseudoCouple` with `B = I` both on the pseudoscalar
 (oracle-schema.md §7.1): their dense values are `re + im` on that blade.
 -/
-import Grassmann.Types.Multivector
+module
+
+public import Grassmann.Types.Multivector
+
+@[expose] public section
 
 namespace Grassmann
 

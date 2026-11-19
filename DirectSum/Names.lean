@@ -11,7 +11,11 @@ sign for permutations *and* repeated indices; Julia's `indexparity!` flips the
 sign of repeated *positive* generators through `Λ(V)`, does not back up after a
 cancellation and throws on out-of-order or `w`-first names (quirk Q16).
 -/
-import DirectSum.BladeAlgebra
+module
+
+public import DirectSum.BladeAlgebra
+
+@[expose] public section
 
 namespace DirectSum
 
@@ -22,7 +26,7 @@ namespace TensorBundle
 variable (V : TensorBundle)
 
 /-- 1-based position of `c` in `alphabet`, if present. -/
-private def charIndex (alphabet : String) (c : Char) : Option Nat :=
+def charIndex (alphabet : String) (c : Char) : Option Nat :=
   (alphabet.toList.idxOf? c).map (· + 1)
 
 /-- The generator (1-based) named by index character `c` in a block with prefix

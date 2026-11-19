@@ -20,7 +20,11 @@ follows its `Single` arithmetic: a coefficient multiplies a bare blade into a
 absorbs. `mapBilinear`/`mapLinear` implement exactly that, and the oracle suite
 (`Tests/DirectSum/Derived.lean`) checks kinds and strings as well as terms.
 -/
-import DirectSum.BladeAlgebra
+module
+
+public import DirectSum.BladeAlgebra
+
+@[expose] public section
 
 namespace DirectSum
 

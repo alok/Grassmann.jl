@@ -1,6 +1,10 @@
-import JuliaBase.Num
-import JuliaBase.Ryu
-import JuliaBase.FloatLit
+module
+
+public import JuliaBase.Num
+public import JuliaBase.Ryu
+meta import JuliaBase.FloatLit
+
+@[expose] public section
 
 /-
 Julia's float printing: `Ryu.writeshortest` (Julia `share/julia/base/ryu/shortest.jl:262-461`)

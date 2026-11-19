@@ -7,7 +7,11 @@ dyadic spaces) return `Except String`. The notations `V′` and `V ⊕ W` use th
 total variants `dual` (Julia `dual`, identity on dyadic spaces) and `oplus!`
 (panics with Julia's message).
 -/
-import DirectSum.Show
+module
+
+public import DirectSum.Show
+
+@[expose] public section
 
 namespace DirectSum
 
@@ -45,7 +49,7 @@ postfix:max "′" => TensorBundle.dual
 
 /-- The metric of the non-tangent generators as a diagonal (for `⊕` of a
 `DiagonalForm` with a `Signature`, Julia's intended semantics, quirk Q8). -/
-private def asDiag : Array Rat :=
+def asDiag : Array Rat :=
   match V.metric with
   | .diagonal _ => V.diagValues
   | .signature s => (List.range V.grade).toArray.map fun k => if testBit s k then -1 else 1
@@ -54,7 +58,7 @@ private def asDiag : Array Rat :=
 /-- Julia `combine_options`/`oplus` option table (`DirectSum.jl
 src/operations.jl:19-54`): the result's `dyadmode`, or an error. `exact` says
 `b` is exactly the dual of `a` (same size and metric). -/
-private def oplusMode (a b : TensorBundle) (exact : Bool) : Except String Int :=
+def oplusMode (a b : TensorBundle) (exact : Bool) : Except String Int :=
   if a.nulls != 0 || b.nulls != 0 || a.isdyadic || b.isdyadic || !a.polymode || !b.polymode then
     .error "arbitrary TensorBundle direct-sums not yet implemented"
   else match a.dyadmode, b.dyadmode with

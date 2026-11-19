@@ -12,7 +12,11 @@ mask into its vector, covector, tangent (`∂`) and cotangent (`ϵ`) blocks
 according to a `LabelCtx` describing the space, renumbers the conformal slots
 through `shiftIndices`, and prints the blocks in the order `∂ ϵ v w`.
 -/
-import DirectSum.Bits
+module
+
+public import DirectSum.Bits
+
+@[expose] public section
 
 namespace Leibniz
 
@@ -26,15 +30,15 @@ def alphanumv : String := "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ
 /-- `"1234567890" ++ A–Z ++ a–z` : covector index alphabet. -/
 def alphanumw : String := "1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
-private def subDigits : Array Char := #['₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉', '₀']
-private def supDigits : Array Char := #['¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹', '⁰']
+def subDigits : Array Char := #['₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉', '₀']
+def supDigits : Array Char := #['¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹', '⁰']
 
 /-- Subscript glyphs for indices `-1 … 36` (Julia `subs`): `∞ ∅ ₁ … ₉ ₀ a … z`. -/
-private def subTable : Array Char :=
+def subTable : Array Char :=
   #['∞', '∅', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉', '₀'] ++ ("abcdefghijklmnopqrstuvwxyz".toList.toArray)
 
 /-- Superscript glyphs for indices `-1 … 36` (Julia `sups`): `∞ ∅ ¹ … ⁹ ⁰ A … Z`. -/
-private def supTable : Array Char :=
+def supTable : Array Char :=
   #['∞', '∅', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹', '⁰'] ++ ("ABCDEFGHIJKLMNOPQRSTUVWXYZ".toList.toArray)
 
 /-- Subscript glyph for index `i` (Julia `subs[i]`), for `-1 ≤ i ≤ 36`;

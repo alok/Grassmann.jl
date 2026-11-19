@@ -1,4 +1,9 @@
-import JuliaBase.FloatLit
+module
+
+import all Init.Data.FloatArray.Basic
+meta import JuliaBase.FloatLit
+
+@[expose] public section
 
 /-!
 # Inline bit casts: `reinterpret` without a runtime call

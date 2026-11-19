@@ -18,8 +18,12 @@ Credits:
 | Sandwich (`>>>`) | `R >>> x = R * x * ~R` (reverse) | `R >>> x = R * x * R.Reverse` | identical! |
 | CGA3 null basis | Witt `CGA3 = S!"∞∅+++"` (`∞⋅∅ = -1`) | Raw `Cl(4,1)` (`ni = e₋+e₊`, `no = ½(e₋-e₊)`) | `cgaWittToRawVec` / `cgaRawToWittVec` |
 -/
-import Grassmann.Kernel.Runtime
-import Grassmann.Types.Convert
+module
+
+public import Grassmann.Kernel.Runtime
+public import Grassmann.Types.Convert
+
+@[expose] public section
 
 namespace Grassmann
 

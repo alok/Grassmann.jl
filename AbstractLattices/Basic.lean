@@ -24,6 +24,10 @@ and the lattice meet), so `a ∧ b` on Bools is ambiguous with the namespace ope
 `a && b`.
 -/
 
+module
+
+@[expose] public section
+
 namespace AbstractLattices
 
 universe u v w

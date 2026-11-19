@@ -19,10 +19,14 @@ takes its operand at precedence 40, so `!a * b` is `!(a * b)` (Julia:
 `(!a) * b`). Parenthesize every wedge, vee and complement operand when
 porting Julia expressions.
 -/
-import AbstractTensors.Dims
-import AbstractTensors.Coeff
-import AbstractTensors.Alias
-import AbstractLattices.Basic
+module
+
+public import AbstractTensors.Dims
+public import AbstractTensors.Coeff
+meta import AbstractTensors.Alias
+public import AbstractLattices.Basic
+
+@[expose] public section
 
 universe u v w
 

@@ -1,3 +1,7 @@
+module
+
+@[expose] public section
+
 /-!
 # Julia `Base.Math` lookup tables
 

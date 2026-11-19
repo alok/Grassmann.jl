@@ -20,8 +20,12 @@ left. The loops are tail-recursive with explicit accumulators and are
 `@[specialize]`d on the coefficient class (DESIGN.md §2 rules 2-3), so at
 `Float` they compile to unboxed `FloatArray` code.
 -/
-import Grassmann.Types.Dims
-import Grassmann.Forms.UnrolledMat
+module
+
+public import Grassmann.Types.Dims
+public import Grassmann.Forms.UnrolledMat
+
+@[expose] public section
 
 namespace Grassmann.Forms
 

@@ -33,7 +33,11 @@ the element.
 Plans are built once per process and cached like the static layer's plans
 (`@[implemented_by]` over an `IO.Ref` cache; logically `build`).
 -/
-import Grassmann.Kernel.Reference
+module
+
+public import Grassmann.Kernel.Reference
+
+@[expose] public section
 
 namespace Grassmann.Loops
 
@@ -120,12 +124,8 @@ def loopRows (V : TensorBundle) (op : BinOp) (as bs : Array UInt64) (lc : Layout
 def build (k : JKey) : Plan :=
   ofRowsKeep (loopRows k.V k.op (k.a.blades k.V.n) (k.b.blades k.V.n) k.lc k.outerFirst)
 
-private unsafe def cacheImpl : IO.Ref (Std.HashMap JKey Plan) :=
-  unsafeBaseIO (IO.mkRef {})
-
 /-- The process-global cache of loop plans. -/
-@[implemented_by cacheImpl]
-private opaque cache : IO.Ref (Std.HashMap JKey Plan)
+private initialize cache : IO.Ref (DirectSum.SmallMap JKey Plan) ← IO.mkRef {}
 
 private unsafe def planImpl (k : JKey) : Plan := unsafeBaseIO do
   match (← cache.get).get? k with
@@ -174,12 +174,8 @@ def buildS (k : SKey) : Plan × Plan :=
   let p₂ := ofRowsKeep (loopRows k.V .mul (k.mid.blades n) ys (.chain k.G) true live)
   (p₁, p₂)
 
-private unsafe def sCacheImpl : IO.Ref (Std.HashMap SKey (Plan × Plan)) :=
-  unsafeBaseIO (IO.mkRef {})
-
 /-- The process-global cache of sandwich plans. -/
-@[implemented_by sCacheImpl]
-private opaque sCache : IO.Ref (Std.HashMap SKey (Plan × Plan))
+private initialize sCache : IO.Ref (DirectSum.SmallMap SKey (Plan × Plan)) ← IO.mkRef {}
 
 private unsafe def splanImpl (k : SKey) : Plan × Plan := unsafeBaseIO do
   match (← sCache.get).get? k with
@@ -218,12 +214,8 @@ def buildM (V : TensorBundle) (l : Layout) : Plan := Id.run do
       rows := rows.push row
   return ofRowsKeep rows
 
-private unsafe def mCacheImpl : IO.Ref (Std.HashMap (Layout × TensorBundle) Plan) :=
-  unsafeBaseIO (IO.mkRef {})
-
 /-- The process-global cache of metric plans. -/
-@[implemented_by mCacheImpl]
-private opaque mCache : IO.Ref (Std.HashMap (Layout × TensorBundle) Plan)
+private initialize mCache : IO.Ref (DirectSum.SmallMap (Layout × TensorBundle) Plan) ← IO.mkRef {}
 
 private unsafe def mplanImpl (V : TensorBundle) (l : Layout) : Plan := unsafeBaseIO do
   match (← mCache.get).get? (l, V) with

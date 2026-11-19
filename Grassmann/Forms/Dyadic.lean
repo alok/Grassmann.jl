@@ -17,7 +17,11 @@ returns the eigenvalue chain itself, item 9). Julia's `+` on projectors and
 dyadics (broken there, item 8) is not provided; a sum of rank-one terms is a
 `SpectralOperator`.
 -/
-import Grassmann.Forms.Diagonal
+module
+
+public import Grassmann.Forms.Diagonal
+
+@[expose] public section
 
 namespace Grassmann
 

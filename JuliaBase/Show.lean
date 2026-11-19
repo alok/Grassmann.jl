@@ -1,5 +1,9 @@
-import JuliaBase.Float
-import JuliaBase.Complex
+module
+
+public import JuliaBase.Float
+public import JuliaBase.Complex
+
+@[expose] public section
 
 /-!
 Julia `show`/`print` for the scalar types the port prints, and the `JuliaShow` class that

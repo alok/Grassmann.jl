@@ -28,8 +28,12 @@ spaces: `(tᵀt)⁻¹tᵀ` for fewer columns than dimensions (Julia's reciprocal
 `vector(valᵢ / (t₁∧…∧tₘ))`, which uses the codomain metric: identical for
 Euclidean codomains) and `tᵀ(ttᵀ)⁻¹` for more (`composite.jl:761-772`).
 -/
-import Grassmann.Forms.Operator
-import Grassmann.Forms.Unrolled
+module
+
+public import Grassmann.Forms.Operator
+public import Grassmann.Forms.Unrolled
+
+@[expose] public section
 
 namespace Grassmann
 

@@ -19,7 +19,11 @@ Julia's graded `abs2`/contraction conjugate complex coefficients (`dot`); the
 plan kernels use plain products (grassmann-products.md §4.12), so for complex
 coefficients `abs2` here is the bilinear, not the Hermitian, square.
 -/
-import Grassmann.Algebra.Products
+module
+
+public import Grassmann.Algebra.Products
+
+@[expose] public section
 
 namespace Grassmann
 

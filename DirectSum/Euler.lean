@@ -13,7 +13,11 @@ Julia defect fixed: `isorigin(e)` reads `e[hasinf(V)+1]`, the metric of a genera
 *blade*, so it is `true` for every single-generator blade of a space with an origin
 (`isorigin(v∞) = isorigin(v₁) = true` in `S"∞∅++"`); the port tests the `∅` generator.
 -/
-import DirectSum.Blade
+module
+
+public import DirectSum.Blade
+
+@[expose] public section
 
 namespace DirectSum
 

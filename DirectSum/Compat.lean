@@ -15,7 +15,11 @@ tests:
 what Julia prints so the test suite can prove a mismatch is one of these
 defects rather than a porting error.
 -/
-import DirectSum.BladeAlgebra
+module
+
+public import DirectSum.BladeAlgebra
+
+@[expose] public section
 
 namespace DirectSum.Compat
 
@@ -34,7 +38,7 @@ def interior (a b : UInt64) : Rat × UInt64 × Bool :=
   (ts.foldl (fun acc (_, x) => acc + x) 0, ts[0]?.map (·.1) |>.getD 0, t)
 
 /-- The contraction part of one right-expansion step (`paritygeometricright`). -/
-private def stepRight (s : State) (b : UInt64) : List State :=
+def stepRight (s : State) (b : UInt64) : List State :=
   let ((ae, aeg), (ai, aig)) := s
   let g := popcount b
   let flip := parityclifford g != (g * popcount ai % 2 == 1)
@@ -53,7 +57,7 @@ private def stepRight (s : State) (b : UInt64) : List State :=
   else ccg
 
 /-- One left-expansion step (`paritygeometricleft`). -/
-private def stepLeft (a : UInt64) (s : State) : List State :=
+def stepLeft (a : UInt64) (s : State) : List State :=
   let ((be, beg), (bi, big)) := s
   let g := popcount a
   let ccg : List State :=
@@ -71,7 +75,7 @@ private def stepLeft (a : UInt64) (s : State) : List State :=
   else ccg
 
 /-- Julia `combinebasis`: `E ∪ I` for every state with `E ∩ I = ∅` (not merged). -/
-private def combine (vals : List State) : Terms :=
+def combine (vals : List State) : Terms :=
   (vals.filterMap fun ((e, eg), (i, ig)) => if e &&& i == 0 then some (e ^^^ i, eg * ig) else none).toArray
 
 /-- Julia `paritygeometric(V,A,B)`: the (unmerged) term list of `e_A e_B`. -/

@@ -1,7 +1,11 @@
-import StaticVectors.Packed
-import StaticVectors.Values
-import StaticVectors.Scalar
-import StaticVectors.Reduce
-import StaticVectors.LinAlg
-import StaticVectors.Ranges
-import StaticVectors.Show
+module
+
+public import StaticVectors.Packed
+public import StaticVectors.Values
+public import StaticVectors.Scalar
+public import StaticVectors.Reduce
+public import StaticVectors.LinAlg
+public import StaticVectors.Ranges
+public import StaticVectors.Show
+
+@[expose] public section

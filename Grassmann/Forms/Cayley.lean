@@ -17,7 +17,11 @@ Operators built from the algebra itself (Grassmann.jl `src/forms.jl:802-835,
 on the non-null generators (defect C4neg, `forms.jl:1586-1593`), which differs only
 for conformal spaces with negative generators.
 -/
-import Grassmann.Forms.Spectral
+module
+
+public import Grassmann.Forms.Spectral
+
+@[expose] public section
 
 namespace Grassmann
 

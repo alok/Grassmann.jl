@@ -1,5 +1,9 @@
-import JuliaBase.FloatLit
-import JuliaBase.Bits
+module
+
+meta import JuliaBase.FloatLit
+public import JuliaBase.Bits
+
+@[expose] public section
 
 /-
 Julia `Base` numeric semantics for `Float` (Julia `Float64`), `Float32` and `Int`.

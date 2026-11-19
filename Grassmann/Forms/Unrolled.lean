@@ -10,7 +10,11 @@ printed operation by operation, so it is bit-identical to the generic algorithm 
 at `Float`. Inputs are column-major raw storage (`(i, j)` at `j·n + i`); matrix results are
 column-major. Do not edit by hand.
 -/
-import Grassmann.Forms.Mat
+module
+
+public import Grassmann.Forms.Mat
+
+@[expose] public section
 
 namespace Grassmann.Forms.Unrolled
 

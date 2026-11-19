@@ -13,9 +13,13 @@ Metric views (§3.3): `V.sigBits` (view A: signs used by `parity`),
 non-diagonal contractions), passed explicitly so the exact and the
 Julia-compatible conformal metric share one implementation.
 -/
-import DirectSum.Show
-import Leibniz.Combinatorics
-import Leibniz.Generic
+module
+
+public import DirectSum.Show
+public import Leibniz.Combinatorics
+public import Leibniz.Generic
+
+@[expose] public section
 
 namespace DirectSum
 

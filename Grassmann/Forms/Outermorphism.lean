@@ -19,7 +19,11 @@ Fixed Julia defects (port-notes §8.4): `transpose` (a `MethodError` in Julia,
 item 5) and the zero padding of `O ⋅ Spinor`/`O ⋅ CoSpinor` when `min(n, m)` is
 odd (item 6: Julia pads with grades of the wrong parity).
 -/
-import Grassmann.Forms.Compound
+module
+
+public import Grassmann.Forms.Compound
+
+@[expose] public section
 
 namespace Grassmann
 

@@ -8,7 +8,11 @@ printed operation by operation, so it is bit-identical to the generic algorithm 
 at `Float`. Inputs are column-major raw storage (`(i, j)` at `j·n + i`); matrix results are
 column-major. Do not edit by hand.
 -/
-import Grassmann.Types.Dims
+module
+
+public import Grassmann.Types.Dims
+
+@[expose] public section
 
 namespace Grassmann.Forms.UnrolledMat
 

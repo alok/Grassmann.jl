@@ -149,11 +149,8 @@ where
 (every well-formed batch); reading it with `rd` below `m` gives the same values either way. -/
 @[inline] def pad (a : FloatArray) (m : Nat) : FloatArray := if m ≤ a.size then a else padSlow a m
 
-private unsafe def zerosCacheImpl : IO.Ref (Array FloatArray) := unsafeBaseIO (IO.mkRef #[])
-
 /-- A few zero arrays of recently used lengths (run time only). -/
-@[implemented_by zerosCacheImpl]
-private opaque zerosCache : IO.Ref (Array FloatArray)
+private initialize zerosCache : IO.Ref (Array FloatArray) ← IO.mkRef #[]
 
 private unsafe def zerosSharedImpl (m : Nat) : FloatArray := unsafeBaseIO do
   let c ← zerosCache.get

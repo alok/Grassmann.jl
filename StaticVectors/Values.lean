@@ -11,7 +11,11 @@ Julia's mutable `Variables{N,T}` and `FixedVector{N,T}` are the same type
 here: updates (`set`, `modify`) are in place when the value is unshared.
 Indices are 0-based `Fin n` (Julia's `v[i]` is `v.get ⟨i-1, _⟩`).
 -/
-import StaticVectors.Packed
+module
+
+public import StaticVectors.Packed
+
+@[expose] public section
 
 universe u v w
 

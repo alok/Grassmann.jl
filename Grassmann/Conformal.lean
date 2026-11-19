@@ -24,10 +24,14 @@ Conventions are Grassmann's: generator order `∞, ∅, e₁ … e_d`, `∞⋅�
 multiplication by `I⁻¹`) turns an OPNS blade through points into its IPNS
 vector.
 -/
-import Grassmann.Composite.Project
-import Grassmann.Forms.Outermorphism
-import Grassmann.Kernel.Generated.CGA2
-import Grassmann.Kernel.Generated.CGA3
+module
+
+public import Grassmann.Composite.Project
+public import Grassmann.Forms.Outermorphism
+public import Grassmann.Kernel.Generated.CGA2
+public import Grassmann.Kernel.Generated.CGA3
+
+public section
 
 namespace Grassmann
 

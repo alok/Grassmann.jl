@@ -12,8 +12,12 @@ metric factors `0·(x·y)` and conformal coefficients included). The unary flags
 entry-wise maps (`out[β] = c·x[src(β)]`, DirectSum's container-level coefficient `c`, zero
 coefficients kept) with the generated unary plans in the same way.
 -/
-import Grassmann.Kernel.Codegen.Emit
-import Grassmann.Kernel.Dyn
+module
+
+public meta import Grassmann.Kernel.Codegen.Emit
+public meta import Grassmann.Kernel.Dyn
+
+public meta section
 
 namespace Grassmann.Kernel.Codegen
 
@@ -86,12 +90,6 @@ def planDynLoops (V : TensorBundle) (pre : Name) (planned : Array Planned) (maxE
 /-- The declaration name of an emitted loop kernel. -/
 def dynLoopName (pre : Name) (d : DynLoop) : Name :=
   pre ++ Name.mkSimple s!"k_loop_{opTag (.bin d.op)}_{layoutTag d.la}_{layoutTag d.lb}_{layoutTag d.lc}"
-
-/-- Julia's loop through the interpreted plans, out of line (the fallback of the generated
-dispatch). -/
-@[noinline, specialize] def dynLoopOut {α : Type} [Coeff α] (V : TensorBundle) (op : BinOp) (la lb lc : Layout)
-    (x : Values α (la.size V.n)) (y : Values α (lb.size V.n)) : Values α (lc.size V.n) :=
-  Loops.run true { V, op, a := .dense la, b := .dense lb, lc, outerFirst := true } x.data y.data
 
 /-- Emit the loop kernels of `loops` that no typed kernel computes, the dispatcher `pre.dynLoop`
 and the `DynKernels` instance of the space `V` (`Vrt`: its run-time value). Returns the number

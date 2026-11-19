@@ -23,10 +23,14 @@ Tangent spaces: a repeated `∂` makes a coefficient the blade `e_z` of
 `V.loworder` (Julia's nested `Single`, grassmann-parity.md §4.11); such terms
 carry `z ≠ 0` and every other term has `z = 0`.
 -/
-import DirectSum.Derived
-import DirectSum.Blade
-import DirectSum.Names
-import AbstractTensors.Ops
+module
+
+public import DirectSum.Derived
+public import DirectSum.Blade
+public import DirectSum.Names
+public import AbstractTensors.Ops
+
+@[expose] public section
 
 namespace DirectSum
 
@@ -258,7 +262,7 @@ variable (V : TensorBundle)
 
 /-- Place blade-level terms into the result layout, failing if a term falls
 outside it (the chosen result container is then too small). -/
-private def place (lc : Layout) (ia ib : Nat) (ts : Array BladeTerm) (acc : Array PlanEntry) :
+def place (lc : Layout) (ia ib : Nat) (ts : Array BladeTerm) (acc : Array PlanEntry) :
     Except String (Array PlanEntry) :=
   ts.foldlM (init := acc) fun acc t =>
     if lc.contains V.n t.bits then

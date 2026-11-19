@@ -1,4 +1,6 @@
-import Lean.Elab.Term
+module
+
+public meta import Lean.Elab.Term
 
 /-!
 # Float literals as module-level constants: `f64! x`, `f32! x`
@@ -25,7 +27,7 @@ this way; see `docs/PERF.md` for the measured effect. This is the port's one lit
 (Geophysics' former `f64%` is gone).
 -/
 
-open Lean Elab Term Meta
+public section
 
 namespace JuliaBase
 
@@ -54,6 +56,15 @@ syntax:max (name := i64Lit) "i64! " "-"? num : term
 
 /-- `i32! 20` (or `i32! -60`): an `Int32` literal as a module-level constant (see `i64!`). -/
 syntax:max (name := i32Lit) "i32! " "-"? num : term
+
+end JuliaBase
+end
+
+public meta section
+
+open Lean Elab Term Meta
+
+namespace JuliaBase
 
 namespace FloatLit
 

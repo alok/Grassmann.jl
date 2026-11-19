@@ -27,7 +27,11 @@ multivectors costs 186 ns in `ℝ3` (64 entries), 1.85 µs in `ℝ5` and 7.3 µs
 19.8 ns, its `ℝ6` runtime loop 8.2 µs). The generated kernels of DESIGN.md §5.2
 replace these plans on the hot spaces.
 -/
-import Grassmann.Types.Dims
+module
+
+public import Grassmann.Types.Dims
+
+@[expose] public section
 
 namespace Grassmann.Kernel
 

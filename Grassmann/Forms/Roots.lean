@@ -18,8 +18,12 @@ polynomial with complex roots) are `Except.error` here.
 Degree ≥ 5 (Julia: LAPACK eigenvalues of the companion matrix) is
 `Grassmann.Forms.Eigen`.
 -/
-import Grassmann.Forms.Operator
-import JuliaBase.FloatLit
+module
+
+public import Grassmann.Forms.Operator
+meta import JuliaBase.FloatLit
+
+@[expose] public section
 
 namespace Grassmann.Forms
 

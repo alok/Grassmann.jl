@@ -13,10 +13,14 @@ non-dyadic:  [∞] [∅] v₁ … v_m  ∂₁ … ∂_ν        (∞/∅ only wh
 dyadic:      v₁ … v_m  w¹ … wᵐ  ∂₁ … ∂_ν  ϵ¹ … ϵ^ν
 ```
 -/
-import DirectSum.Bits
-import Leibniz.Combinatorics
-import Leibniz.Generic
-import Leibniz.Indices
+module
+
+public import DirectSum.Bits
+public import Leibniz.Combinatorics
+public import Leibniz.Generic
+public import Leibniz.Indices
+
+@[expose] public section
 
 namespace DirectSum
 

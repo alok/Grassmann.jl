@@ -9,7 +9,11 @@ Julia `bladeindex` order. `G` is a type index; `G > n` gives the empty chain
 (`binomial n G = 0`), which is how `Chain V (G+H)` of a wedge beyond the top
 grade is automatically zero.
 -/
-import Grassmann.Types.Single
+module
+
+public import Grassmann.Types.Single
+
+@[expose] public section
 
 namespace Grassmann
 

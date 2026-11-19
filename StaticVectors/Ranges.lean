@@ -4,7 +4,11 @@ Integer range builders (Julia `StaticVectors.jl src/StaticVectors.jl:72-93`).
 These are **data**, not indices: they keep Julia's 1-based values. Code that
 feeds them back in as `Values` indices must subtract 1.
 -/
-import StaticVectors.Values
+module
+
+public import StaticVectors.Values
+
+@[expose] public section
 
 namespace StaticVectors
 

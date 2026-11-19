@@ -21,9 +21,13 @@ state such theorems for `Int`/`Rat`, whose `Coeff` instances below reuse the
 core `Add`/`Mul`/`Neg`/`Sub` instances that `Lean.Grind.CommRing Int` is
 built from, so the two structures agree definitionally.
 -/
-import JuliaBase.Complex
-import StaticVectors.Packed
-import StaticVectors.Scalar
+module
+
+public import JuliaBase.Complex
+public import StaticVectors.Packed
+public import StaticVectors.Scalar
+
+@[expose] public section
 
 universe u
 

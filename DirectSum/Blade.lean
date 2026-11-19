@@ -7,7 +7,11 @@ At run time a `Submanifold V G` is one `UInt64` (a single-field structure is
 unboxed); the invariant `popcount bits = G`, `bits < 2ⁿ` is maintained by the
 smart constructors (`ofBits?`, `ofIndices?`, `unrank`), as DESIGN.md asks.
 -/
-import DirectSum.BladeAlgebra
+module
+
+public import DirectSum.BladeAlgebra
+
+@[expose] public section
 
 namespace DirectSum
 

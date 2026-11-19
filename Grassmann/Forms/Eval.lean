@@ -19,7 +19,11 @@ space and its subspaces (Grassmann.jl `src/forms.jl:22-142, 293-294, 836-881`,
   `vecdot(::CoSpinor, ::Multivector)` uses the even part and is always zero:
   here the odd part).
 -/
-import Grassmann.Forms.Show
+module
+
+public import Grassmann.Forms.Show
+
+@[expose] public section
 
 namespace Grassmann
 

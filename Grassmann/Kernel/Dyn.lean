@@ -30,7 +30,11 @@ The default instance (every other space) sets every flag to `false`: Julia's loo
 interpreted. The operator instances of the dynamic layer read these through
 `Grassmann.Dynamic.Fast`.
 -/
-import Grassmann.Dynamic.Loops
+module
+
+public import Grassmann.Dynamic.Loops
+
+@[expose] public section
 
 namespace Grassmann
 

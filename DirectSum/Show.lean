@@ -11,8 +11,13 @@ Julia-exact display of spaces, subspaces and basis terms (DirectSum.jl
   (when `float = false` and `r` is integral) or as the Julia `Float64` nearest
   to them, through `JuliaBase.F64.showString` (Ryu shortest round-trip digits).
 -/
-import DirectSum.Space
-import JuliaBase.Float
+module
+
+public import DirectSum.Space
+public import JuliaBase.Float
+meta import JuliaBase.Float
+
+@[expose] public section
 
 namespace DirectSum
 
@@ -57,17 +62,17 @@ variable (V : TensorBundle)
 /-! ## Spaces -/
 
 /-- `T^μ⟨` prefix (empty `⟨` when `μ = 0`). -/
-private def openBracket (mu : Nat) : String :=
+def openBracket (mu : Nat) : String :=
   if mu > 0 then "T" ++ (sups mu).toString ++ "⟨" else "⟨"
 
 /-- `⟩` followed by `*` (dyadic) / `'` (dual) and the name-scheme subscript. -/
-private def closeBracket : String :=
+def closeBracket : String :=
   "⟩" ++ (if V.dyadmode < 0 then "*" else if V.dyadmode > 0 then "'" else "")
     ++ (if V.name > 1 then (subs V.name).toString else "")
 
 /-- Tangent-slot glyphs after the metric: `ν` subscripts (superscripts when dual
 xor not polymode), then for dyadic spaces `ν` superscripts. -/
-private def tangentGlyphs : String :=
+def tangentGlyphs : String :=
   let d := V.diffvars
   if d == 0 then "" else
     let first := (List.range d).map fun x =>
@@ -77,7 +82,7 @@ private def tangentGlyphs : String :=
 
 /-- The `⟨…⟩` display of a matrix row restricted to `cols` (Julia `Values` show):
 `[1.0, 0.5, 0.0]`. -/
-private def showRow (row : Array Rat) (cols : List Nat) : String :=
+def showRow (row : Array Rat) (cols : List Nat) : String :=
   "[" ++ ", ".intercalate (cols.map fun j => juliaFloat (row[j - 1]?.getD 0)) ++ "]"
 
 /-- Julia `show(::Submanifold)` of the subspace of `V` spanned by mask `S`

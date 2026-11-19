@@ -19,9 +19,13 @@ plans) read and write, and no cast is needed at runtime or in proofs.
 `Leibniz.binomial` is structural (kernel-reducible): `decide` evaluates the
 sizes of small spaces.
 -/
-import DirectSum.Core
-import StaticVectors
-import AbstractTensors
+module
+
+public import DirectSum.Core
+public import StaticVectors
+public import AbstractTensors
+
+@[expose] public section
 
 namespace Grassmann
 
@@ -75,14 +79,14 @@ memoized table read). -/
 @[inline] def layoutBlades (n : Nat) (l : Layout) : Array UInt64 := l.blades n
 
 /-- Encode a small layout (`g ≤ 8`) into `0..11` for O(1) flat-array cache indexing. -/
-private def layoutSlot : Layout → Option Nat
+def layoutSlot : Layout → Option Nat
   | .full => some 0
   | .even => some 1
   | .odd => some 2
   | .chain g => if g ≤ 8 then some (3 + g) else none
 
 /-- Number of cached `(n, la, lc)` entries in the flat table (`n ∈ 0..8`, 12 layouts each). -/
-private def flatPermSlots : Nat := 9 * 12 * 12
+def flatPermSlots : Nat := 9 * 12 * 12
 
 /-- Index map of `convertLayout n la lc`: entry `i` holds `la.rank n b` when `la` stores
 `b = (lc.blades n)[i]!`, else `la.size n` (out of range for `getD`, so it yields `Coeff.zero`). -/
@@ -96,17 +100,11 @@ theorem size_layoutPermSpec (n : Nat) (la lc : Layout) :
     (layoutPermSpec n la lc).size = lc.size n := by
   simp [layoutPermSpec]
 
-private unsafe def flatPermCacheImpl : IO.Ref (Array (Option (Array Nat))) :=
-  unsafeBaseIO (IO.mkRef (Array.replicate flatPermSlots none))
+private initialize flatPermCache : IO.Ref (Array (Option (Array Nat))) ←
+  IO.mkRef (Array.replicate flatPermSlots none)
 
-@[implemented_by flatPermCacheImpl]
-private opaque flatPermCache : IO.Ref (Array (Option (Array Nat)))
-
-private unsafe def bigPermCacheImpl : IO.Ref (Array ((Nat × Layout × Layout) × Array Nat)) :=
-  unsafeBaseIO (IO.mkRef #[])
-
-@[implemented_by bigPermCacheImpl]
-private opaque bigPermCache : IO.Ref (Array ((Nat × Layout × Layout) × Array Nat))
+private initialize bigPermCache : IO.Ref (Array ((Nat × Layout × Layout) × Array Nat)) ←
+  IO.mkRef #[]
 
 private unsafe def layoutPermCached (n : Nat) (la lc : Layout) : Array Nat := unsafeBaseIO do
   if n ≤ 8 then

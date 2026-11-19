@@ -9,8 +9,12 @@ Contains:
 * `refBinOut` … `refConvSubOut`: out-of-line reference kernel fallbacks used by generated dispatch;
 * `SandwichKernels`, `RevSandwich`, and the high-priority typed `⊘` / `>>>` instances.
 -/
-import Grassmann.Algebra.Products
-import Grassmann.Kernel.Dyn
+module
+
+public import Grassmann.Algebra.Products
+public import Grassmann.Kernel.Dyn
+
+@[expose] public section
 
 namespace Grassmann.Kernel
 
@@ -78,6 +82,12 @@ the coefficient type of its call site. -/
 @[noinline, specialize] def refConvSubOut {α : Type} [Coeff α] (n : Nat) (la lb lc : Layout)
     (x : Values α (la.size n)) (y : Values α (lb.size n)) : Values α (lc.size n) :=
   convertLayout n la lc x - convertLayout n lb lc y
+
+/-- The dynamic layer's interpreted loop, out of line (the fallback of the generated dynamic
+dispatch). -/
+@[noinline, specialize] def dynLoopOut {α : Type} [Coeff α] (V : TensorBundle) (op : BinOp) (la lb lc : Layout)
+    (x : Values α (la.size V.n)) (y : Values α (lb.size V.n)) : Values α (lc.size V.n) :=
+  Loops.run true { V, op, a := .dense la, b := .dense lb, lc, outerFirst := true } x.data y.data
 
 end Grassmann.Kernel.Codegen
 

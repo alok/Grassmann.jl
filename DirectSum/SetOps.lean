@@ -27,8 +27,12 @@ Julia defects fixed here (documented in `docs/port-notes/directsum.md`):
 * A union of subspaces of unrelated spaces recurses through `interop` until
   Julia's stack overflows; the port reports an error.
 -/
-import DirectSum.SpaceOps
-import DirectSum.Blade
+module
+
+public import DirectSum.SpaceOps
+public import DirectSum.Blade
+
+@[expose] public section
 
 namespace DirectSum
 
@@ -95,20 +99,20 @@ instance : HPow TensorBundle Nat TensorBundle := ⟨pow!⟩
 
 /-- The space as Julia dispatches on it: an `Int` space counts as the
 `Signature` of the same size. -/
-private def asSig (V : TensorBundle) : TensorBundle :=
+def asSig (V : TensorBundle) : TensorBundle :=
   match V.metric with
   | .euclid => { V with metric := .signature 0 }
   | _ => V
 
 /-- Same `N`, options and metric (Julia `TensorBundle{N,M,S}` on both sides). -/
-private def sameNMS (a b : TensorBundle) : Bool :=
+def sameNMS (a b : TensorBundle) : Bool :=
   let a := asSig a
   let b := asSig b
   a.n == b.n && a.options == b.options && a.metric == b.metric
 
 /-- Same options and metric, but different tangent parameters `(F, D)` (the
 first branch of Julia's general methods). -/
-private def sameMSOtherTangent (a b : TensorBundle) : Bool :=
+def sameMSOtherTangent (a b : TensorBundle) : Bool :=
   let a := asSig a
   let b := asSig b
   a.options == b.options && a.metric == b.metric &&
@@ -116,7 +120,7 @@ private def sameMSOtherTangent (a b : TensorBundle) : Bool :=
 
 /-- The space with `N`, `F`, `D` combined by `f` (Julia
 `Signature{f(N1,N2),M,S,f(F1,F2),f(D1,D2)}()`, naming scheme reset). -/
-private def tangentHull (f : Nat → Nat → Nat) (a b : TensorBundle) : TensorBundle :=
+def tangentHull (f : Nat → Nat → Nat) (a b : TensorBundle) : TensorBundle :=
   { asSig a with n := f a.n b.n, diffvars := f a.diffvars b.diffvars,
                  diffmode := f a.diffmode b.diffmode, name := 1 }
 

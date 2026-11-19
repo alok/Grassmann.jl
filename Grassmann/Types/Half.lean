@@ -10,7 +10,11 @@ even half is the scalar and the odd half is empty). The parity is a type index,
 so products of halves have static result types (`Half p * Half q : Half (p ^^ q)`,
 DESIGN.md §4.2).
 -/
-import Grassmann.Types.Chain
+module
+
+public import Grassmann.Types.Chain
+
+@[expose] public section
 
 namespace Grassmann
 

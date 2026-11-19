@@ -26,8 +26,12 @@ nestings (Julia returns the operator unchanged: item 4), `diag` of a
 square operator (Julia: grade-1 only), and `==` (a `StackOverflowError` in
 Grassmann 0.8.46: item 12).
 -/
-import Grassmann.Forms.Mat
-import Grassmann.Algebra.Norms
+module
+
+public import Grassmann.Forms.Mat
+public import Grassmann.Algebra.Norms
+
+@[expose] public section
 
 namespace Grassmann
 

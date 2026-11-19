@@ -23,7 +23,11 @@ prescribes: `cos t` is literally `cosh(I ⟑ t)`, which is `cosh t` for a scalar
 in a space with `I² = +1` (oracle defect `scalar-trig-hyperbolic`, policy
 `replicate`).
 -/
-import Grassmann.Composite.Spinor
+module
+
+public import Grassmann.Composite.Spinor
+
+@[expose] public section
 
 namespace Grassmann
 

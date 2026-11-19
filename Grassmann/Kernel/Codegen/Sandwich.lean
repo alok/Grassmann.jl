@@ -37,7 +37,26 @@ itself (more fields next to `bin`/`binProj`/`un`) with the typed instances
 of `Grassmann.Algebra.Products` calling them; until then this module overrides
 those instances for the graded/half shapes.
 -/
-import Grassmann.Kernel.Codegen.Emit
+module
+
+public meta import Grassmann.Kernel.Codegen.Emit
+
+public section
+
+namespace Grassmann
+
+namespace RevSandwichElab
+
+/-- `rsandwich% R x c`: `R * x * c` for `c = ~R` (the expansion of that pattern, see
+`elabPattern`). -/
+syntax (name := rsandwichStx) "rsandwich% " term:max term:max term:max : term
+
+end RevSandwichElab
+
+end Grassmann
+end
+
+public meta section
 
 namespace Grassmann
 
@@ -79,10 +98,6 @@ def elabPattern (a b c : Syntax) (expected? : Option Expr) : TermElabM Expr := d
   catch _ =>
     s.restore (restoreInfo := true)
     plain
-
-/-- `rsandwich% R x c`: `R * x * c` for `c = ~R` (the expansion of that pattern, see
-`elabPattern`). -/
-syntax (name := rsandwichStx) "rsandwich% " term:max term:max term:max : term
 
 /-- Elaborate `rsandwich% R x c` (`elabPattern`). -/
 @[term_elab rsandwichStx] def elabRSandwich : TermElab := fun stx expected? =>

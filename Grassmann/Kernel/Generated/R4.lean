@@ -1,7 +1,13 @@
 /-
 Generated kernels of `ℝ4` (Euclidean 4-space; DESIGN.md §5.2).
 -/
-import Grassmann.Kernel.Codegen
+module
+
+public import Grassmann.Kernel.Runtime
+public import DirectSum.Common
+meta import Grassmann.Kernel.Codegen
+
+@[expose] public section
 
 namespace Grassmann.Kernel.Gen
 

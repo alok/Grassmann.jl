@@ -24,8 +24,12 @@ squares to zero returns `e^s(1 + t)` instead of `e^s(1 + m)` (item 1; so
 (item 2); the generated `cosh`/`sinh` throw `UndefVarError` (item 3); the
 generated `expm1` of a negative pure scalar returns `0` (item 13).
 -/
-import Grassmann.Composite.Couple
-import Grassmann.Composite.Fast
+module
+
+public import Grassmann.Composite.Couple
+public import Grassmann.Composite.Fast
+
+@[expose] public section
 
 namespace Grassmann
 

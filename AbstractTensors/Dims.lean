@@ -9,6 +9,10 @@ recurrence `C(n, k+1) = C(n, k)·(n-k)/(k+1)` with **structural** recursion on
 (`gdims(4,5) == 0`).
 -/
 
+module
+
+@[expose] public section
+
 namespace AbstractTensors
 
 /-- Binomial coefficient `n choose k` (Julia `Base.binomial`, AT:181 `gdims(N,G)`),

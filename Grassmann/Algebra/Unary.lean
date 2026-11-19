@@ -24,8 +24,12 @@ complement of a grade-`G` chain is not of grade `n-G` there; the typed
 complements reject tangent spaces (the plan fails; Julia throws too, defect
 `tangent-container-complement`). Use `toMultivector` first.
 -/
-import Grassmann.Algebra.Arith
-import Grassmann.Kernel.Class
+module
+
+public import Grassmann.Algebra.Arith
+public import Grassmann.Kernel.Class
+
+@[expose] public section
 
 namespace Grassmann
 

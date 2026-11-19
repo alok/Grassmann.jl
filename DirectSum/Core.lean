@@ -1,18 +1,22 @@
-import DirectSum.Bits
-import DirectSum.Space
-import DirectSum.Show
-import DirectSum.SpaceOps
-import DirectSum.Parse
-import DirectSum.Common
-import DirectSum.Parity
-import DirectSum.BladeAlgebra
-import DirectSum.Compat
-import DirectSum.Blade
-import DirectSum.Names
-import DirectSum.SetOps
-import DirectSum.Euler
-import DirectSum.Derived
-import DirectSum.Ops
+module
+
+public import DirectSum.Bits
+public import DirectSum.Space
+public import DirectSum.Show
+public import DirectSum.SpaceOps
+public import DirectSum.Parse
+public import DirectSum.Common
+public import DirectSum.Parity
+public import DirectSum.BladeAlgebra
+public import DirectSum.Compat
+public import DirectSum.Blade
+public import DirectSum.Names
+public import DirectSum.SetOps
+public import DirectSum.Euler
+public import DirectSum.Derived
+public import DirectSum.Ops
+
+@[expose] public section
 
 /-!
 # DirectSum.Core: the runtime space and basis-blade layer (without elaborator `DirectSum.Basis`)

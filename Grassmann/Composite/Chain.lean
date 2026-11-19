@@ -26,7 +26,11 @@ Results whose container depends on the parity of `G` are `Multivector`s
 Tangent spaces are handled only as far as the products stay scalar-valued (as in
 the kernels).
 -/
-import Grassmann.Composite.Dense
+module
+
+public import Grassmann.Composite.Dense
+
+@[expose] public section
 
 namespace Grassmann
 

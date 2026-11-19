@@ -13,6 +13,12 @@ specializing at `Float` yields unboxed straight-line code (measured at parity
 with a hand-written `FloatArray` kernel).
 -/
 
+module
+
+import all Init.Data.FloatArray.Basic
+
+@[expose] public section
+
 universe u v w
 
 namespace StaticVectors
@@ -62,7 +68,7 @@ instance (priority := low) instPackedArray {α : Type u} : Packed α where
   mkEmpty := Array.mkEmpty
   push := Array.push
   set a i x := a.set i x
-  size_mkEmpty _ := rfl
+  size_mkEmpty _ := by rfl
   size_push := by simp
   size_set := by simp
   get_push_lt a x i h := Array.getElem_push_lt h
@@ -78,7 +84,7 @@ instance instPackedFloat : Packed Float where
   mkEmpty := FloatArray.emptyWithCapacity
   push := FloatArray.push
   set a i x := a.set i x
-  size_mkEmpty _ := rfl
+  size_mkEmpty _ := by rfl
   size_push a x := by simp [FloatArray.push, FloatArray.size]
   size_set a i x := by
     simp only [FloatArray.set, FloatArray.size]

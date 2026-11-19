@@ -14,6 +14,10 @@ We compute it branch-free with a prefix-XOR scan, and prove the fast
 version equal to the naive specification.
 -/
 
+module
+
+@[expose] public section
+
 namespace DirectSum.Bits
 
 /-- Population count (number of set bits). -/

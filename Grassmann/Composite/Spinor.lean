@@ -18,7 +18,11 @@ through the `qlog` series. Julia returns `NaN` for a real quaternion (the angle'
 `a + b·I` (scalar blade) is the couple on the pseudoscalar, any other goes through
 its `multispin` (here: the `Multivector`, whose values agree).
 -/
-import Grassmann.Composite.Chain
+module
+
+public import Grassmann.Composite.Chain
+
+@[expose] public section
 
 namespace Grassmann
 

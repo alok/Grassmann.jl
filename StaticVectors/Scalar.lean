@@ -8,7 +8,11 @@ carry exactly those element operations, with instances for the real scalar
 types and for `JuliaBase.Complex`. The element semantics themselves (Julia `max`,
 `isapprox`, `hypot`, …) are `JuliaBase`'s.
 -/
-import JuliaBase.Complex
+module
+
+public import JuliaBase.Complex
+
+@[expose] public section
 
 universe u
 

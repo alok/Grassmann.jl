@@ -46,7 +46,11 @@ The linear fields (`add` … `convSub`) compute exactly what the reference compu
 same floating-point operations: a sum of two containers of different kinds adds explicit
 zeros (`xᵢ + 0`), as the promoted sum of the reference does, so the sign of a zero agrees.
 -/
-import Grassmann.Kernel.Reference
+module
+
+public import Grassmann.Kernel.Reference
+
+@[expose] public section
 
 namespace Grassmann
 

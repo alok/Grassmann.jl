@@ -33,7 +33,11 @@ Deviation: Julia's generic loops have no iteration cap and never terminate on
 some non-finite inputs (`expm1(-Inf)` alternates `±Inf` forever); here every
 loop has fuel (10000 terms, the cap of Grassmann's `@generated` variants).
 -/
-import AbstractTensors.Ops
+module
+
+public import AbstractTensors.Ops
+
+@[expose] public section
 
 namespace AbstractTensors
 

@@ -10,15 +10,26 @@ Used to make AbstractTensors' `Wedge`/`Vee` the AbstractLattices classes
 `HWedge`/`HVee`: Julia's `∧`/`∨` are one generic function extended by every
 package (`AbstractLattices.jl src/AbstractLattices.jl:5-9`).
 -/
-import Lean.Elab.Command
+module
+
+public meta import Lean.Elab.Command
+
+public section
 
 namespace AbstractTensors
-
-open Lean Elab Command
 
 /-- `export_alias N => C`: declare `N` (relative to the current namespace) as an
 alias of the constant `C`. -/
 syntax (name := exportAlias) "export_alias " ident " => " ident : command
+
+end AbstractTensors
+end
+
+public meta section
+
+namespace AbstractTensors
+
+open Lean Elab Command
 
 @[command_elab exportAlias] def elabExportAlias : CommandElab
   | `(export_alias $n => $c) => do

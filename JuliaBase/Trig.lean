@@ -1,4 +1,10 @@
-import JuliaBase.Math
+module
+
+meta import JuliaBase.FloatLit
+
+public import JuliaBase.Math
+
+@[expose] public section
 
 /-!
 # Julia's own trigonometric functions, bit for bit

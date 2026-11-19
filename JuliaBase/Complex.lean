@@ -1,6 +1,12 @@
-import JuliaBase.Math
-import JuliaBase.Trig
-import JuliaBase.Hyperbolic
+module
+
+meta import JuliaBase.FloatLit
+
+public import JuliaBase.Math
+public import JuliaBase.Trig
+public import JuliaBase.Hyperbolic
+
+@[expose] public section
 
 /-!
 Julia's `Complex{T}` (Julia `base/complex.jl`): the port's one computable complex number

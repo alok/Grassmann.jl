@@ -16,7 +16,11 @@ Two classes let the algebra layer treat the element types uniformly:
 
 `toMultivector` is Julia's `Multivector(t)` for every element type.
 -/
-import Grassmann.Types.Couple
+module
+
+public import Grassmann.Types.Couple
+
+@[expose] public section
 
 namespace Grassmann
 

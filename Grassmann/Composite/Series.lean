@@ -40,7 +40,11 @@ scalar path (Julia's `expm1(Spinor(-2.0))` returns `0`, item 13); the generated
 `cosh`/`sinh`, which throw `UndefVarError` in Julia 0.8.46 (item 3), follow
 their evident intent.
 -/
-import Grassmann.Composite.Scalar
+module
+
+public import Grassmann.Composite.Scalar
+
+@[expose] public section
 
 namespace Grassmann.Composite
 

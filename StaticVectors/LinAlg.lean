@@ -9,7 +9,11 @@ Evaluation order follows Julia exactly, so `Float` results are bit-identical:
   (`norm(Values(1e200, 1e200)) == Inf`, unlike Julia's `norm(::Vector)`);
 * `normalize(a) = inv(norm(a)) * a`, multiplying by the reciprocal.
 -/
-import StaticVectors.Reduce
+module
+
+public import StaticVectors.Reduce
+
+@[expose] public section
 
 universe u
 

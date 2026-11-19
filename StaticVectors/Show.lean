@@ -12,8 +12,12 @@ abstracttensors-staticvectors.md §5), and the `vals![…]` literal (Julia `Valu
   Base's `alignment` does (numbers split before the first `.`, `e`, `E`, `f`, `F`; complex
   numbers after the sign of the imaginary part; the left parts right-justified).
 -/
-import StaticVectors.Values
-import JuliaBase.Show
+module
+
+public import StaticVectors.Values
+public import JuliaBase.Show
+
+@[expose] public section
 
 universe u
 
