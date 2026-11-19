@@ -64,26 +64,8 @@ typed layer's parity layouts (`halfLayout ((G + H) % 2 == 1)`) do not fold at al
 (no `Nat.mod`/`Nat.beq` folding), leaving one branch on a closed `Bool`.
 -/
 import Grassmann.Kernel.Codegen.Plans
-import Grassmann.Kernel.Class
 import Lean.Elab.Command
 import Lean.Compiler.Specialize
-
-namespace Grassmann.Kernel
-
-open DirectSum StaticVectors AbstractTensors
-
-/-- `pickBase`'s run-time choice: `x` when it is exclusive, else `y` when that is, else `x`. -/
-@[inline] unsafe def pickBaseImpl {α : Type} [Coeff α] {n : Nat} (x y : Values α n) : Values α n :=
-  if isExclusiveUnsafe x then x else if isExclusiveUnsafe y then y else x
-
-/-- The output buffer of a generated kernel with two operands of the output's size: logically
-`x`; at run time whichever of `x` and `y` is exclusive, so that the kernel's writes are in
-place (`pickBaseImpl`). A kernel using it writes every output, so the result does not depend on
-the buffer chosen. -/
-@[implemented_by pickBaseImpl]
-def pickBase {α : Type} [Coeff α] {n : Nat} (x _y : Values α n) : Values α n := x
-
-end Grassmann.Kernel
 
 namespace Grassmann.Kernel.Codegen
 
@@ -406,43 +388,6 @@ def emitCoefs (pre : Name) (qs : Array Rat) : CommandElabM (Array (Rat × Name))
       coefficient type."
     out := out.push (q, nm)
   return out
-
-/-! ## Fallbacks
-
-The dispatch falls through to these out-of-line copies of the reference kernels:
-one call per unmatched case keeps the dispatch code small, and each is still
-specialized at the coefficient type of its call site (instance arguments always
-are), so an uncovered shape costs what the reference kernel costs. -/
-
-/-- `Grassmann.Kernel.refBin`, out of line. -/
-@[noinline, specialize] def refBinOut {α : Type} [Coeff α] (V : TensorBundle) (op : BinOp) (la lb lc : Layout)
-    (x : Values α (la.size V.n)) (y : Values α (lb.size V.n)) : Values α (lc.size V.n) :=
-  refBin V op la lb lc x y
-
-/-- `Grassmann.Kernel.refBinProj`, out of line. -/
-@[noinline, specialize] def refBinProjOut {α : Type} [Coeff α] (V : TensorBundle) (op : BinOp) (la lb lc : Layout)
-    (x : Values α (la.size V.n)) (y : Values α (lb.size V.n)) : Values α (lc.size V.n) :=
-  refBinProj V op la lb lc x y
-
-/-- `Grassmann.Kernel.refUn`, out of line. -/
-@[noinline, specialize] def refUnOut {α : Type} [Coeff α] (V : TensorBundle) (op : UnOp) (la lc : Layout)
-    (x : Values α (la.size V.n)) : Values α (lc.size V.n) :=
-  refUn V op la lc x
-
-/-- `convertLayout`, out of line (the fallback of the generated conversions). -/
-@[noinline, specialize] def refConvOut {α : Type} [Coeff α] (n : Nat) (la lc : Layout)
-    (x : Values α (la.size n)) : Values α (lc.size n) :=
-  convertLayout n la lc x
-
-/-- The reference `conv la lc x + conv lb lc y`, out of line. -/
-@[noinline, specialize] def refConvAddOut {α : Type} [Coeff α] (n : Nat) (la lb lc : Layout)
-    (x : Values α (la.size n)) (y : Values α (lb.size n)) : Values α (lc.size n) :=
-  convertLayout n la lc x + convertLayout n lb lc y
-
-/-- The reference `conv la lc x - conv lb lc y`, out of line. -/
-@[noinline, specialize] def refConvSubOut {α : Type} [Coeff α] (n : Nat) (la lb lc : Layout)
-    (x : Values α (la.size n)) (y : Values α (lb.size n)) : Values α (lc.size n) :=
-  convertLayout n la lc x - convertLayout n lb lc y
 
 /-! ## Dispatch syntax -/
 

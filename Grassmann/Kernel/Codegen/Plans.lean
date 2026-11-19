@@ -48,7 +48,7 @@ errors: complements in dyadic spaces) or drops terms (a repeated tangent
 generator, which a scalar coefficient cannot hold), falls through to the
 reference kernels.
 -/
-import Grassmann.Kernel.Reference
+import Grassmann.Kernel.Runtime
 
 namespace Grassmann.Kernel.Codegen
 
@@ -148,16 +148,6 @@ the dense mixed families are dropped (their compile cost grows as `4ⁿ`) and
 only `Multivector×Multivector` of the geometric product stays dense. -/
 def Policy.default (n : Nat) : Policy :=
   if n ≤ 5 then {} else { dense := false }
-
-/-- The layout of a half (`false` even, `true` odd). -/
-@[inline] def halfL (odd : Bool) : Layout := if odd then .odd else .even
-
-/-- The parity of a graded or half layout (`none` for `.full`). -/
-def parityOf : Layout → Option Bool
-  | .chain g => some (g % 2 == 1)
-  | .even => some false
-  | .odd => some true
-  | .full => none
 
 /-- The result layout of the typed product instances (`Grassmann.Algebra.Products`,
 `sandwichCore`) for `op` on `la × lb`, or `none` if the typed layer has no such

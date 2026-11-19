@@ -19,7 +19,7 @@ plans) read and write, and no cast is needed at runtime or in proofs.
 `Leibniz.binomial` is structural (kernel-reducible): `decide` evaluates the
 sizes of small spaces.
 -/
-import DirectSum
+import DirectSum.Core
 import StaticVectors
 import AbstractTensors
 

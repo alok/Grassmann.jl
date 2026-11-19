@@ -1,19 +1,5 @@
-import DirectSum.Bits
-import DirectSum.Space
-import DirectSum.Show
-import DirectSum.SpaceOps
-import DirectSum.Parse
-import DirectSum.Common
-import DirectSum.Parity
-import DirectSum.BladeAlgebra
-import DirectSum.Compat
-import DirectSum.Blade
-import DirectSum.Names
-import DirectSum.SetOps
+import DirectSum.Core
 import DirectSum.Basis
-import DirectSum.Euler
-import DirectSum.Derived
-import DirectSum.Ops
 import DirectSum.Proofs
 
 /-!
