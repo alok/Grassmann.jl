@@ -498,6 +498,8 @@ structure ScriptEnv (V : AlgSpace) where
   timeSec        : Float := 0.0
   handles        : Array (UInt32 × Vec3) := #[]
   coeffOverrides : Array (UInt32 × UInt32 × Float) := #[]
+  paramOverrides : Array (String × Float) := #[]
+  emittedParams  : Array ParamSpec := #[]
   vars           : Array (String × ScriptVal V) := #[]
   order          : Array String := #[]
   varColors      : Array (String × Option RGBA) := #[]
@@ -555,6 +557,28 @@ def bindTop {V : AlgSpace} (env : ScriptEnv V) (name : String) (v : ScriptVal V)
 
 def handlePos {V : AlgSpace} (env : ScriptEnv V) (hid : UInt32) (defPos : Vec3) : Vec3 :=
   ((env.handles.find? fun kv => kv.1 == hid).map (·.2)).getD defPos
+
+/-- Register or update an interactive `@param` / `slider(...)` specification and return its live value. -/
+def registerParam {V : AlgSpace} (env : ScriptEnv V) (name label : String)
+    (defVal minV maxV stepV : Float) : Float × ScriptEnv V :=
+  let lo := min minV maxV
+  let hi := max minV maxV
+  let rawVal := ((env.paramOverrides.find? fun kv => kv.1 == name).map (·.2)).getD defVal
+  let curVal := max lo (min hi rawVal)
+  let stp := if stepV > 0.0 then stepV else max 0.001 ((hi - lo) / 100.0)
+  let spec : ParamSpec := {
+    name,
+    label := if label.isEmpty then name else label,
+    value := curVal,
+    min := lo,
+    max := hi,
+    step := stp
+  }
+  let nextParams :=
+    match env.emittedParams.findIdx? fun p => p.name == name with
+    | some idx => env.emittedParams.set! idx spec
+    | none     => env.emittedParams.push spec
+  (curVal, { env with emittedParams := nextParams })
 
 end ScriptEnv
 
@@ -979,6 +1003,21 @@ partial def evalScriptVal {V : AlgSpace} (env : ScriptEnv V) (e : Expr) :
         let p := envCur.handlePos hid ⟨f0 1, f0 2, f0 3⟩
         let envNext := { envCur with nextHandleId := max envCur.nextHandleId (hid + 1) }
         return (.mv (makePointMV V envNext.zeroIndexed p.x p.y p.z) true (some hid), envNext)
+      -- Interactive `@param` slider (`slider("name", default, min, max[, step[, label]])`)
+      | "slider" | "param" =>
+        match (vals[0]? : Option (ScriptVal V)) with
+        | some (.str pName) =>
+          let defV := f0 1 0.5
+          let minV := f0 2 0.0
+          let maxV := f0 3 1.0
+          let stepV := if vals.size ≥ 5 then f0 4 0.0 else 0.0
+          let lbl :=
+            match (vals[5]? : Option (ScriptVal V)) with
+            | some (.str s) => s
+            | _ => pName
+          let (curV, envNext) := envCur.registerParam pName lbl defV minV maxV stepV
+          return (.mv (MV.single 0 curV), envNext)
+        | _ => throw "slider(\"name\", default, min, max[, step[, label]]) expects a parameter name string"
       -- Planes, lines, motors, rotors, boosts
       | "plane" =>
         -- Either `plane(A, B, C)` from 3 points (`A & B & C`), or `plane(a, b, c, d)` coefficients!
@@ -1630,11 +1669,38 @@ private def extractAlgebraHeader (stmts : Array Expr) : Option String :=
   (stmts.find? fun s => match s with | .setAlgebra _ => true | _ => false).bind fun s =>
     match s with | .setAlgebra spec => some spec | _ => none
 
+/-- Default KaTeX `formula` & 1-sentence `summary` for LiveScript v2 custom scripts by algebra. -/
+private def scriptMathMeta (algName : String) (p q r : UInt8) : String × String :=
+  match algName with
+  | "PGA3" =>
+    ("M X \\widetilde{M},\\quad A \\vee B,\\quad \\Pi_1 \\wedge \\Pi_2 \\in \\mathrm{Cl}_{3,0,1}",
+     "Live 3D Projective Geometric Algebra script compiled and evaluated purely in Lean 4.")
+  | "PGA2" =>
+    ("A \\vee B,\\quad \\ell_1 \\wedge \\ell_2,\\quad \\ell \\rfloor P \\in \\mathrm{Cl}_{2,0,1}",
+     "Live 2D Projective Geometric Algebra script evaluated purely in Lean 4.")
+  | "CGA3" =>
+    ("S_1 \\wedge S_2,\\quad A \\wedge B \\wedge C \\wedge D \\in \\mathrm{Cl}_{4,1}",
+     "Live 3D Conformal Geometric Algebra script computing rounds, intersections, and versors in Lean 4.")
+  | "CGA2" =>
+    ("C = A \\wedge B \\wedge C,\\quad X' = V X \\widetilde{V} \\in \\mathrm{Cl}_{3,1}",
+     "Live 2D Conformal Geometric Algebra script evaluated purely in Lean 4.")
+  | "STA" =>
+    ("B = \\exp\\!\\left(\\tfrac{\\eta}{2}\\,\\gamma_0\\gamma_1\\right),\\quad F = \\mathbf{E} + I\\mathbf{B} \\in \\mathrm{Cl}_{3,1}",
+     "Live Spacetime Algebra Cl(3,1) (-+++) script computing Lorentz boosts and bivectors in Lean 4.")
+  | "R3" =>
+    ("a b = a \\cdot b + a \\wedge b,\\quad R \\mathbf{v} \\widetilde{R} \\in \\mathrm{Cl}_{3,0}",
+     "Live 3D Euclidean Geometric Algebra script with exact rotors, bivectors, and 3D surfaces in Lean 4.")
+  | _ =>
+    ("a b = a \\cdot b + a \\wedge b \\in \\mathrm{Cl}_{" ++ toString p.toNat ++ "," ++ toString q.toNat ++ "," ++ toString r.toNat ++ "}",
+     s!"Live {algName} Geometric Algebra script evaluated in real time inside Lean 4.")
+
 /-- Evaluate a full LiveScript v2 CoffeeShop script string in `algebraSpec` and emit a `SceneFrame`
-(with reactive draggable handles, live `EditCoeff` overrides, Inspect Stash, and exact `Line:Col` diagnostics). -/
+(with reactive draggable handles, live `@param`/`slider(...)` overrides, `EditCoeff`, Inspect Stash,
+and exact `Line:Col` diagnostics). -/
 def evalScriptToFrame (algebraSpec : String) (code : String)
     (handles : Array (UInt32 × Vec3) := #[]) (timeSec : Float := 0.0)
-    (frameSeq : UInt64 := 0) (coeffOverrides : Array (UInt32 × UInt32 × Float) := #[]) :
+    (frameSeq : UInt64 := 0) (coeffOverrides : Array (UInt32 × UInt32 × Float) := #[])
+    (paramOverrides : Array (String × Float) := #[]) :
     SceneFrame :=
   match parseScript code with
   | .error err =>
@@ -1642,9 +1708,10 @@ def evalScriptToFrame (algebraSpec : String) (code : String)
     let zeroIdx := r > 0
     let meta_ := algebraMetaOf algName V p q r witt
     let is2D := (zeroIdx && V.n == 3) || (!zeroIdx && V.n ≤ 2)
+    let (fml, smry) := scriptMathMeta algName p q r
     { frameSeq, simTime := timeSec, mode := .coffeeShop, is2D,
       algebra := meta_, presetId := "custom_script", title := s!"{algName} Script",
-      script := code,
+      script := code, formula := fml, summary := smry,
       camera := if is2D then { motor := Motor3.translator 0.0 0.0 (-4.0), isOrtho := true } else {},
       diagnostics := #[s!"Parse error — {err}"] }
   | .ok stmts =>
@@ -1653,14 +1720,15 @@ def evalScriptToFrame (algebraSpec : String) (code : String)
     let zeroIdx := r > 0
     let meta_ := algebraMetaOf algName V p q r witt
     let is2D := (zeroIdx && V.n == 3) || (witt && V.n == 4) || (!zeroIdx && V.n ≤ 2)
+    let (fml, smry) := scriptMathMeta algName p q r
     let base : SceneFrame :=
       { frameSeq, simTime := timeSec, mode := .coffeeShop, is2D,
         algebra := meta_, presetId := "custom_script", title := s!"{algName} Script",
-        script := code,
+        script := code, formula := fml, summary := smry,
         camera := if is2D then { motor := Motor3.translator 0.0 0.0 (-4.0), isOrtho := true } else {} }
     let initEnv : ScriptEnv V :=
       { zeroIndexed := zeroIdx, algName, p := p.toNat, q := q.toNat, r := r.toNat,
-        conformalWitt := witt, timeSec, handles, coeffOverrides }
+        conformalWitt := witt, timeSec, handles, coeffOverrides, paramOverrides }
     let rec runStmts (i : Nat) (env : ScriptEnv V) (last : ScriptVal V) :
         Except String (ScriptVal V × ScriptEnv V) := do
       if i < stmts.size then
@@ -1670,7 +1738,7 @@ def evalScriptToFrame (algebraSpec : String) (code : String)
     match runStmts 0 initEnv (.mv MV.zero) with
     | .error err => { base with diagnostics := #[s!"Eval error: {err}"] }
     | .ok (lastVal, finalEnv) => Id.run do
-      let mut f := base
+      let mut f := { base with params := finalEnv.emittedParams }
       if finalEnv.hasGraph then
         -- 1. Populate Inspect Stash for ALL top-level named multivector variables!
         let mut iIdx := 0

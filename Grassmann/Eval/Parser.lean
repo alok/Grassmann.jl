@@ -39,6 +39,7 @@ inductive Tok where
   | op    (sym : String)
   | kw    (name : String) -- `let`, `fn`, `for`, `in`, `if`, `else`, `return`, `true`, `false`
   | atBasis -- `@basis`
+  | atParam -- `@param`
   | sep   -- `;` or newline
   deriving Repr, BEq, Inhabited
 
@@ -187,8 +188,11 @@ def tokenizeSpanned (input : String) : Except String (Array SpannedTok) := Id.ru
       if kw == "basis" || kw == "algebra" then
         acc := acc.push { tok := .atBasis, span := sp }
         col := col + (j - i); i := j
+      else if kw == "param" then
+        acc := acc.push { tok := .atParam, span := sp }
+        col := col + (j - i); i := j
       else
-        return .error s!"Line {sp.line}, Col {sp.col}: unknown directive '@{kw}' (expected '@basis')"
+        return .error s!"Line {sp.line}, Col {sp.col}: unknown directive '@{kw}' (expected '@basis' or '@param')"
     else if c == '"' || c == '\'' then
       let quoteCh := c
       i := i + 1; col := col + 1
@@ -611,6 +615,42 @@ private partial def parseStmt (st : ParseSt) : Except String (Expr × ParseSt) :
         return (.setAlgebra alg, st2)
     | some (.str alg) => return (.setAlgebra alg, st1.bump)
     | _ => parseErr st1 "expected algebra name after '@basis' (e.g. PGA3, CGA3, STA, Cl(3,0,1))"
+  | some .atParam =>
+    -- `@param name = default (min..max[, step])` desugars cleanly to `let name = slider(...)`
+    let st1 := st.bump
+    let nameOpt : Option String :=
+      match st1.peek with
+      | some (.ident n) => some n
+      | some (.blade pfx sub) => some s!"{pfx}{sub}"
+      | _ => none
+    match nameOpt with
+    | none => parseErr st1 "expected parameter name after '@param' (e.g. @param beta = 0.7 (0..0.95))"
+    | some pName =>
+      let st2 := st1.bump
+      if st2.peek != some (.op "=") then
+        parseErr st2 s!"expected '=' after '@param {pName}'"
+      else
+        let (defE, st3) ← parseExpr 0 st2.bump
+        if st3.peek == some (.op "(") then
+          let (minE, st4) ← parseExpr 0 st3.bump
+          if st4.peek != some (.op "..") && st4.peek != some (.op ",") then
+            parseErr st4 s!"expected '..' or ',' in '@param {pName}' range"
+          else
+            let (maxE, st5) ← parseExpr 0 st4.bump
+            let (args, stEnd) ←
+              if st5.peek == some (.op ",") then
+                let (stepE, st6) ← parseExpr 0 st5.bump
+                if st6.peek != some (.op ")") then
+                  parseErr st6 s!"expected ')' after '@param {pName}' step"
+                else
+                  pure (#[Expr.str pName, defE, minE, maxE, stepE], st6.bump)
+              else if st5.peek == some (.op ")") then
+                pure (#[Expr.str pName, defE, minE, maxE], st5.bump)
+              else
+                parseErr st5 s!"expected ')' closing '@param {pName}' range"
+            return (.letBind pName (.call "slider" args), stEnd)
+        else
+          return (.letBind pName (.call "slider" #[.str pName, defE, .num 0.0, .num 1.0]), st3)
   | some (.kw "fn") =>
     let st1 := st.bump
     match st1.peek with

@@ -108,7 +108,7 @@ with its initial `GSIR` v1 frame pre-cached. -/
 def create : StudioSession :=
   renderAndCache {} true
 
-/-- Return the unified catalog of ALL 69 CoffeeShop presets (19 base + 28 extra + 22 parity)
+/-- Return the unified catalog of ALL 74 CoffeeShop presets (19 base + 28 extra + 22 parity + 5 showcase)
 as a strictly `Init`-only JSON array string. -/
 def presetCatalogJson : String :=
   CoffeeShop.allPresetCatalogJson
@@ -170,6 +170,8 @@ def dispatchEvent (st : StudioSession) (ev : InputEvent) (forceSnap : Bool := fa
       ({ st with active := .wedge,
                  randomSeedCounter := st.randomSeedCounter + 1,
                  wedge := Wedge.loadRandomChallenge is3D difficulty.toNat effectiveSeed }, true)
+    | .setParam name val =>
+      ({ st with coffee := CoffeeShop.setParam st.coffee name val }, forceSnap)
     | .snapshot =>
       (st, true)
   renderAndCache st1 forceFull

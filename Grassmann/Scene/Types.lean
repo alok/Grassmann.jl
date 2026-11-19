@@ -559,6 +559,16 @@ structure AlgebraMeta where
   basisMetric   : Array Int8   := #[]
   deriving Repr, Inhabited
 
+/-- Interactive `@param` slider specification emitted in `metaJson.params[]`. -/
+structure ParamSpec where
+  name  : String := ""
+  label : String := ""
+  value : Float  := 0.0
+  min   : Float  := 0.0
+  max   : Float  := 1.0
+  step  : Float  := 0.01
+  deriving Repr, Inhabited, BEq
+
 /-- Complete canonical `SceneIR` v1 frame produced purely in Lean. -/
 structure SceneFrame where
   frameSeq       : UInt64                := 0
@@ -572,6 +582,9 @@ structure SceneFrame where
   presetId       : String                := ""
   title          : String                := ""
   script         : String                := ""
+  params         : Array ParamSpec       := #[]
+  formula        : String                := ""
+  summary        : String                := ""
   camera         : CameraState           := {}
   points         : Array PointPrim       := #[]
   segments       : Array SegmentPrim     := #[]
@@ -625,6 +638,7 @@ inductive InputEvent where
   | evalParametric (fx fy fz : String) (uMin uMax vMin vMax : Float) (nu nv : UInt32)
   | wedgeTutorial  (id : String)
   | wedgeRandom    (is3D : Bool) (difficulty : UInt32) (seed : UInt64)
+  | setParam       (name : String) (value : Float)
   | snapshot
   deriving Repr, Inhabited
 
