@@ -16,7 +16,7 @@
 
 import { encodeTick } from '../gsir/encoder';
 import { GsirStatus, type JsonInputEvent } from '../gsir/types';
-import type { StudioTransport } from './types';
+import type { LeanPresetCatalogItem, StudioTransport } from './types';
 
 export interface GrassmannWasmExports {
   memory?: WebAssembly.Memory;
@@ -76,17 +76,71 @@ export interface GrassmannWasmExports {
     outCap: number,
     outLenPtr: number
   ) => number;
+  grassmann_studio_preset_catalog?: (
+    outPtr: number,
+    outCap: number,
+    outLenPtr: number
+  ) => number;
+  _grassmann_studio_preset_catalog?: (
+    outPtr: number,
+    outCap: number,
+    outLenPtr: number
+  ) => number;
 }
 
 export interface WasmTransportOptions {
-  /** URL to compiled grassmann.wasm or Emscripten grassmann_raw.mjs (default: './wasm/grassmann_raw.mjs') */
+  /** URL to compiled grassmann.wasm or Emscripten grassmann.mjs (default: './wasm/grassmann.mjs') */
   wasmUrl?: string;
+  /** Optional explicit .wasm binary URL override (e.g. content-fingerprinted grassmann.<hash>.wasm from manifest) */
+  wasmBinaryUrl?: string;
   /** Optional custom exports loader (used by tests or embedded Emscripten glue) */
   loadExports?: () => Promise<GrassmannWasmExports>;
   /** Initial caller-owned output buffer capacity in bytes (default: 256 KB) */
   initialOutCap?: number;
   /** Initial reusable input scratch buffer capacity in bytes (default: 16 KB) */
   initialInCap?: number;
+}
+
+export interface WasmManifest {
+  version: number;
+  hash: string;
+  mjs?: string;
+  wasm?: string;
+  loaderFile?: string;
+  wasmFile?: string;
+  bytes?: number;
+  gzipBytes?: number;
+  presetCount?: number;
+}
+
+/**
+ * Resolves a content-fingerprinted WASM manifest (cache: no-store) when available
+ * so warm browser caches always load the newest fingerprinted grassmann.<hash>.{mjs,wasm}.
+ * Supports both `{ loaderFile, wasmFile }` (build-wasm.sh) and `{ mjs, wasm }` formats.
+ */
+export async function fetchWasmManifest(
+  manifestUrl = './wasm/wasm-manifest.json',
+  signal?: AbortSignal
+): Promise<{ mjsUrl: string; wasmUrl: string; hash: string } | null> {
+  try {
+    const baseHref =
+      typeof globalThis !== 'undefined' && 'location' in globalThis && globalThis.location?.href
+        ? globalThis.location.href
+        : undefined;
+    const resolvedManifest = baseHref ? new URL(manifestUrl, baseHref).href : manifestUrl;
+    const resp = await fetch(resolvedManifest, { cache: 'no-store', signal });
+    const ct = resp.headers.get('content-type') ?? '';
+    if (!resp.ok || ct.includes('text/html')) return null;
+    const data = (await resp.json()) as Partial<WasmManifest>;
+    const mjsRel = data.loaderFile ?? data.mjs;
+    const wasmRel = data.wasmFile ?? data.wasm;
+    if (typeof mjsRel !== 'string' || typeof wasmRel !== 'string') return null;
+    const mjsUrl = new URL(mjsRel, resolvedManifest).href;
+    const wasmUrl = new URL(wasmRel, resolvedManifest).href;
+    return { mjsUrl, wasmUrl, hash: data.hash ?? 'manifest' };
+  } catch {
+    return null;
+  }
 }
 
 interface ResolvedExports {
@@ -113,9 +167,11 @@ interface ResolvedExports {
     outLenPtr: number
   ) => number;
   getFrame: (session: bigint, outPtr: number, outCap: number, outLenPtr: number) => number;
+  presetCatalog?: (outPtr: number, outCap: number, outLenPtr: number) => number;
 }
 
 const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder('utf-8');
 
 function resolveExports(raw: GrassmannWasmExports): ResolvedExports {
   const malloc = raw.malloc ?? raw._malloc;
@@ -126,6 +182,7 @@ function resolveExports(raw: GrassmannWasmExports): ResolvedExports {
   const dispatchBin = raw.grassmann_studio_dispatch_bin ?? raw._grassmann_studio_dispatch_bin;
   const dispatchJson = raw.grassmann_studio_dispatch_json ?? raw._grassmann_studio_dispatch_json;
   const getFrame = raw.grassmann_studio_get_frame ?? raw._grassmann_studio_get_frame;
+  const presetCatalog = raw.grassmann_studio_preset_catalog ?? raw._grassmann_studio_preset_catalog;
 
   const hasMem = Boolean(raw.memory || raw.wasmMemory || raw.HEAPU8);
   if (!hasMem || !malloc || !free || !createRaw || !destroy || !dispatchBin || !dispatchJson || !getFrame) {
@@ -150,6 +207,7 @@ function resolveExports(raw: GrassmannWasmExports): ResolvedExports {
     dispatchBin,
     dispatchJson,
     getFrame,
+    presetCatalog,
   };
 }
 
@@ -158,6 +216,7 @@ export class WasmTransport implements StudioTransport {
   readonly label: string;
 
   private readonly wasmUrl: string;
+  private readonly wasmBinaryUrl?: string;
   private readonly loadExportsFn?: () => Promise<GrassmannWasmExports>;
   private exports: ResolvedExports | null = null;
   private session = 0n;
@@ -174,6 +233,7 @@ export class WasmTransport implements StudioTransport {
 
   constructor(options: WasmTransportOptions = {}) {
     this.wasmUrl = options.wasmUrl ?? './grassmann.wasm';
+    this.wasmBinaryUrl = options.wasmBinaryUrl;
     this.loadExportsFn = options.loadExports;
     this.initialOutCap = Math.max(4096, options.initialOutCap ?? 256 * 1024);
     this.initialInCap = Math.max(1024, options.initialInCap ?? 16 * 1024);
@@ -185,15 +245,22 @@ export class WasmTransport implements StudioTransport {
       return this.getFrame();
     }
 
+    const baseHref =
+      typeof globalThis !== 'undefined' && 'location' in globalThis && globalThis.location?.href
+        ? globalThis.location.href
+        : undefined;
+
     let raw: GrassmannWasmExports;
     if (this.loadExportsFn) {
       raw = await this.loadExportsFn();
     } else if (this.wasmUrl.endsWith('.mjs') || this.wasmUrl.endsWith('.js')) {
-      // Resolve relative to document URL (NOT bundled /assets/index-*.js!) so Vite/Vercel builds load /wasm/*.mjs cleanly
-      const resolvedUrl =
-        typeof window !== 'undefined'
-          ? new URL(this.wasmUrl, window.location.href).href
-          : this.wasmUrl;
+      // Resolve relative to document/worker URL (NOT bundled /assets/index-*.js!) so Vite/Vercel builds load /wasm/*.mjs cleanly
+      const resolvedUrl = baseHref ? new URL(this.wasmUrl, baseHref).href : this.wasmUrl;
+      const resolvedBinaryUrl = this.wasmBinaryUrl
+        ? baseHref
+          ? new URL(this.wasmBinaryUrl, baseHref).href
+          : this.wasmBinaryUrl
+        : undefined;
       // Pre-flight check ensures Vite SPA fallback HTML doesn't produce a browser MIME error
       const probe = await fetch(resolvedUrl, { method: 'GET', signal });
       const ct = probe.headers.get('content-type') ?? '';
@@ -205,7 +272,12 @@ export class WasmTransport implements StudioTransport {
         loadGrassmannWasm?: (opts?: Record<string, unknown>) => Promise<{ mod: GrassmannWasmExports }>;
       };
       const moduleOpts = {
-        locateFile: (file: string) => new URL(file, resolvedUrl).href,
+        locateFile: (file: string) => {
+          if (resolvedBinaryUrl && file.endsWith('.wasm')) {
+            return resolvedBinaryUrl;
+          }
+          return new URL(file, resolvedUrl).href;
+        },
       };
       if (typeof modNs.default === 'function') {
         raw = await modNs.default(moduleOpts);
@@ -216,10 +288,7 @@ export class WasmTransport implements StudioTransport {
         throw new Error(`Emscripten glue module at ${resolvedUrl} has no default factory export`);
       }
     } else {
-      const resolvedUrl =
-        typeof window !== 'undefined'
-          ? new URL(this.wasmUrl, window.location.href).href
-          : this.wasmUrl;
+      const resolvedUrl = baseHref ? new URL(this.wasmUrl, baseHref).href : this.wasmUrl;
       const resp = await fetch(resolvedUrl, { signal });
       const ct = resp.headers.get('content-type') ?? '';
       if (!resp.ok || ct.includes('text/html')) {
@@ -295,6 +364,29 @@ export class WasmTransport implements StudioTransport {
     const ex = this.requireReady();
     const rc = ex.getFrame(this.session, this.outPtr, this.outCap, this.outLenPtr);
     return this.finalizeFrameCall(rc, 'get_frame');
+  }
+
+  async getPresetCatalog(): Promise<LeanPresetCatalogItem[]> {
+    const ex = this.requireReady();
+    if (!ex.presetCatalog) return [];
+    const lenPtr = ex.malloc(8);
+    try {
+      ex.presetCatalog(0, 0, lenPtr);
+      const len = new DataView(ex.getMemoryBuffer(), lenPtr, 4).getUint32(0, true);
+      if (len === 0) return [];
+      const buf = ex.malloc(len);
+      try {
+        const rc = ex.presetCatalog(buf, len, lenPtr);
+        if (rc !== GsirStatus.OK) return [];
+        const bytes = new Uint8Array(ex.getMemoryBuffer(), buf, len).slice();
+        const parsed = JSON.parse(textDecoder.decode(bytes));
+        return Array.isArray(parsed) ? (parsed as LeanPresetCatalogItem[]) : [];
+      } finally {
+        ex.free(buf);
+      }
+    } finally {
+      ex.free(lenPtr);
+    }
   }
 
   dispose(): void {

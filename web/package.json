@@ -12,7 +12,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "audit:visual": "node scripts/visual-audit.mjs",
-    "test:e2e": "node scripts/interaction-e2e.mjs"
+    "test:e2e": "node scripts/interaction-e2e.mjs",
+    "audit:wave3": "node scripts/wave3-audit.mjs",
+    "stage:wasm": "node scripts/stage-wasm.mjs"
   },
   "dependencies": {
     "katex": "^0.16.21",

@@ -5,7 +5,7 @@
 
 import { encodeTick } from '../gsir/encoder';
 import type { JsonInputEvent } from '../gsir/types';
-import type { StudioTransport } from './types';
+import type { LeanPresetCatalogItem, StudioTransport } from './types';
 
 export interface ServerTransportOptions {
   baseUrl?: string;
@@ -84,6 +84,20 @@ export class ServerTransport implements StudioTransport {
 
   async getFrame(): Promise<Uint8Array> {
     return this.getFrameHttp();
+  }
+
+  async getPresetCatalog(): Promise<LeanPresetCatalogItem[]> {
+    try {
+      const resp = await fetch(`${this.baseUrl}/api/presets`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+      if (!resp.ok) return [];
+      const parsed = await resp.json();
+      return Array.isArray(parsed) ? (parsed as LeanPresetCatalogItem[]) : [];
+    } catch {
+      return [];
+    }
   }
 
   dispose(): void {

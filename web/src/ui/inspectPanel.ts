@@ -84,6 +84,36 @@ export class InspectStashPanel {
     this.element.append(topBar, legend, this.tableContainer, this.detailContainer);
   }
 
+  /**
+   * Highlights the Inspect entry matching a clicked 3D viewport object (by label or handleId).
+   * Returns true if a matching entry was found and focused.
+   */
+  selectByHandleOrLabel(handleId: number, label?: string): boolean {
+    const inspect = this.lastFrame?.meta?.inspect ?? [];
+    if (inspect.length === 0) return false;
+    const cleanLabel = (label ?? '').replace(/^Drag\s+/i, '').trim().toLowerCase();
+    let match =
+      (cleanLabel
+        ? inspect.find(
+            (e) =>
+              e.name.toLowerCase() === cleanLabel ||
+              e.name.toLowerCase().includes(cleanLabel) ||
+              cleanLabel.includes(e.name.toLowerCase())
+          )
+        : undefined) ??
+      inspect.find((e) => e.idx === handleId) ??
+      inspect[0];
+
+    if (!match) return false;
+    this.selectedEntryIdx = match.idx;
+    if (this.lastFrame) {
+      this.update(this.lastFrame);
+      const selectedRow = this.tableContainer.querySelector('tr.selected');
+      selectedRow?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+    return true;
+  }
+
   update(frame: GsirFrame): void {
     this.lastFrame = frame;
     const algebra = frame.meta?.algebra;

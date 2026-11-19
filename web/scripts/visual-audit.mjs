@@ -236,10 +236,10 @@ async function main() {
     await page.evaluate(() => {
       const ta = document.querySelector('textarea.gs-editor-textarea');
       if (ta instanceof HTMLTextAreaElement) {
-        const idx = ta.value.indexOf('0.25');
-        if (idx >= 0) {
+        const m = /-?\d+\.\d+/.exec(ta.value);
+        if (m) {
           ta.focus();
-          ta.setSelectionRange(idx, idx + 4);
+          ta.setSelectionRange(m.index, m.index + m[0].length);
           ta.dispatchEvent(new Event('select', { bubbles: true }));
         }
       }
@@ -248,7 +248,7 @@ async function main() {
 
     // 3. CoffeeShop CGA3 OPNS / Intersections preset
     await page.locator('.gs-left-tab-btn', { hasText: 'Presets' }).click();
-    await page.locator('.gs-preset-card', { hasText: 'Conformal Sphere Intersections' }).click();
+    await page.locator('[data-preset-id="cga3d_intersections"]').click();
     await capture('03-coffeeshop-cga3d-opns.png');
 
     // 4. Wedge 2D/3D Game Mode (via keyboard shortcut `2`!)
@@ -259,12 +259,12 @@ async function main() {
 
     // 5. LeanCalculator 3D Surface z=f(x,y,t) evaluated live in Lean + STA tab
     await page.locator('.gs-mode-btn', { hasText: 'LeanCalculator 3D' }).click();
-    await page.locator('.gs-subtab-btn', { hasText: 'Surface 3D' }).click();
+    await page.locator('.gs-subtab-btn', { hasText: /^Surface$/ }).click();
     await page.locator('.gs-btn-primary', { hasText: 'Evaluate Surface in Lean' }).click();
     await capture('05-leancalc-surface.png');
 
     // Also capture STA Cl(3,1) (-+++) panel over live surface/scene
-    await page.locator('.gs-subtab-btn', { hasText: 'STA −+++' }).click();
+    await page.locator('.gs-subtab-btn', { hasText: /^STA$/ }).click();
     await capture('05b-leancalc-sta.png');
 
     // 6. GAlculator Tactile Keypad Mode

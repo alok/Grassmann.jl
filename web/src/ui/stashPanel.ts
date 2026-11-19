@@ -18,6 +18,9 @@ export interface StashPanelCallbacks {
   onLoadSketch: (entry: SavedStashEntry) => void;
   onExportPng: (width: number, height: number) => void;
   onExportSvg: (width: number, height: number) => void;
+  onExportExperiment?: () => void;
+  onCopyExperimentJson?: () => string;
+  onLoadExperimentJson?: (json: string, name: string) => void;
   onShareUrl: () => string;
   onLoadGsirFile: (bytes: Uint8Array, name: string) => void;
   onLoadScriptFile: (code: string, name: string) => void;
@@ -123,14 +126,46 @@ export class MyStashPanel {
     dimRow.append(this.widthInput, times, this.heightInput, pngBtn, svgBtn);
     exportBox.append(exportLabel, dimRow);
 
-    // Drag & Drop .ga / .gsir dropzone
+    // Cross-Client Portable .grassmann.json Experiment Export / Copy
+    const expRow = document.createElement('div');
+    expRow.className = 'gs-row-gap';
+    const exportExpBtn = document.createElement('button');
+    exportExpBtn.type = 'button';
+    exportExpBtn.className = 'gs-btn gs-btn-ghost';
+    exportExpBtn.textContent = '⬇ .grassmann.json';
+    exportExpBtn.title = 'Export portable cross-client experiment (Web + macOS + visionOS)';
+    exportExpBtn.addEventListener('click', () => this.callbacks.onExportExperiment?.());
+
+    const copyExpBtn = document.createElement('button');
+    copyExpBtn.type = 'button';
+    copyExpBtn.className = 'gs-btn gs-btn-ghost';
+    copyExpBtn.textContent = 'Copy Experiment';
+    copyExpBtn.addEventListener('click', () => {
+      const json = this.callbacks.onCopyExperimentJson?.();
+      if (!json) return;
+      void navigator.clipboard?.writeText(json).then(
+        () => {
+          this.shareToastEl.textContent = 'Experiment JSON copied!';
+          setTimeout(() => {
+            this.shareToastEl.textContent = '';
+          }, 1600);
+        },
+        () => {
+          this.shareToastEl.textContent = 'Clipboard unavailable';
+        }
+      );
+    });
+    expRow.append(exportExpBtn, copyExpBtn);
+    exportBox.appendChild(expRow);
+
+    // Drag & Drop .grassmann.json / .ga / .gsir dropzone
     const dropzone = document.createElement('label');
     dropzone.className = 'gs-dropzone';
-    dropzone.textContent = 'Drop or click to open .gsir binary snapshot or .ga script';
+    dropzone.textContent = 'Drop or click to open .grassmann.json, .gsir snapshot, or .ga script';
 
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
-    fileInput.accept = '.gsir,.bin,.ga,.lean,.txt';
+    fileInput.accept = '.json,.grassmann.json,.gsir,.bin,.ga,.lean,.txt';
     fileInput.style.display = 'none';
     fileInput.addEventListener('change', () => {
       const file = fileInput.files?.[0];
@@ -194,6 +229,9 @@ export class MyStashPanel {
     if (file.name.endsWith('.gsir') || file.name.endsWith('.bin')) {
       const ab = await file.arrayBuffer();
       this.callbacks.onLoadGsirFile(new Uint8Array(ab), file.name);
+    } else if (file.name.endsWith('.json') || file.name.endsWith('.grassmann.json')) {
+      const text = await file.text();
+      this.callbacks.onLoadExperimentJson?.(text, file.name);
     } else {
       const text = await file.text();
       this.callbacks.onLoadScriptFile(text, file.name);

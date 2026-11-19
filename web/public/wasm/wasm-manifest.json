@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "hash": "72bf16aff2",
+  "wasmFile": "grassmann.72bf16aff2.wasm",
+  "loaderFile": "grassmann.72bf16aff2.mjs",
+  "canonicalWasmFile": "grassmann.wasm",
+  "canonicalLoaderFile": "grassmann.mjs",
+  "wrapperFile": "grassmann_wasm.mjs",
+  "bytes": 1576791,
+  "gzipBytes": 413395,
+  "presetCount": 69,
+  "mjs": "./grassmann.72bf16aff2.mjs",
+  "wasm": "./grassmann.72bf16aff2.wasm"
+}

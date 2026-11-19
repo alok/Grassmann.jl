@@ -5,17 +5,12 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
-    headers: {
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'require-corp',
-    },
   },
   preview: {
     port: 4173,
-    headers: {
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'require-corp',
-    },
+  },
+  worker: {
+    format: 'es',
   },
   build: {
     target: 'es2022',

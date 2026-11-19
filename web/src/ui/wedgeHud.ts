@@ -8,6 +8,8 @@ import { WEDGE_LEVELS } from './presets';
 
 export interface WedgeHudCallbacks {
   onAction: (action: WedgeActionCodeValue, arg?: number) => void;
+  onTutorial?: (id: 'T1' | 'T2' | 'T3' | 'T4' | 'T5' | 'T6') => void;
+  onRandomChallenge?: (dim: 2 | 3, difficulty: 0 | 1 | 2, seed: number) => void;
   onClearSelection: () => void;
 }
 
@@ -99,6 +101,57 @@ export class WedgeGameHud {
 
     row1.append(this.levelSelect, this.dimToggleBtn, stats, this.muteBtn);
 
+    // Tutorial Cards T1..T6 strip + Random Challenge generator (#72)
+    const row2 = document.createElement('div');
+    row2.className = 'gs-wedge-extras';
+
+    const tutStrip = document.createElement('div');
+    tutStrip.className = 'gs-wedge-tut-strip';
+    const tuts: Array<{ id: 'T1' | 'T2' | 'T3' | 'T4' | 'T5' | 'T6'; label: string }> = [
+      { id: 'T1', label: 'T1' },
+      { id: 'T2', label: 'T2 Join' },
+      { id: 'T3', label: 'T3 Meet' },
+      { id: 'T4', label: 'T4 Sum' },
+      { id: 'T5', label: 'T5 Dot' },
+      { id: 'T6', label: 'T6 3D' },
+    ];
+    for (const t of tuts) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'gs-chip gs-wedge-tut-chip';
+      btn.textContent = t.label;
+      btn.addEventListener('click', () => {
+        this.hintShown = false;
+        this.callbacks.onClearSelection();
+        this.callbacks.onTutorial?.(t.id);
+      });
+      tutStrip.appendChild(btn);
+    }
+
+    const randWrap = document.createElement('div');
+    randWrap.className = 'gs-wedge-rand-wrap';
+    const diffSelect = document.createElement('select');
+    diffSelect.className = 'gs-select gs-wedge-diff';
+    diffSelect.innerHTML =
+      '<option value="0">Easy</option><option value="1" selected>Medium</option><option value="2">Hard</option>';
+
+    const randBtn = document.createElement('button');
+    randBtn.type = 'button';
+    randBtn.className = 'gs-btn gs-btn-accent gs-wedge-rand-btn';
+    randBtn.textContent = '🎲 Random';
+    let randomCounter = 1;
+    randBtn.addEventListener('click', () => {
+      this.hintShown = false;
+      this.callbacks.onClearSelection();
+      const dim: 2 | 3 = this.dimToggleBtn.textContent?.includes('3D') ? 3 : 2;
+      const diff = (Number.parseInt(diffSelect.value, 10) || 0) as 0 | 1 | 2;
+      const seed = (Date.now() & 0xffff) + randomCounter++;
+      this.callbacks.onRandomChallenge?.(dim, diff, seed);
+    });
+    randWrap.append(diffSelect, randBtn);
+
+    row2.append(tutStrip, randWrap);
+
     this.titleEl = document.createElement('div');
     this.titleEl.className = 'gs-wedge-title';
 
@@ -111,7 +164,7 @@ export class WedgeGameHud {
     this.hintEl = document.createElement('div');
     this.hintEl.className = 'gs-wedge-hint hidden';
 
-    topCard.append(row1, this.titleEl, this.goalEl, this.tutorialEl, this.hintEl);
+    topCard.append(row1, row2, this.titleEl, this.goalEl, this.tutorialEl, this.hintEl);
 
     // Live Preview Op Pill
     this.previewBadge = document.createElement('div');

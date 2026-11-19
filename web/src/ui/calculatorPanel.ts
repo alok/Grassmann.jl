@@ -26,15 +26,16 @@ const OP_KEYS = [
   { key: '&', label: '∨' },
   { key: '<<', label: '●' },
   { key: '*', label: '*' },
-  { key: 'exp', label: 'Exp' },
-  { key: 'dual', label: 'Dual' },
-  { key: 'rev', label: 'Rev' },
-  { key: 'conj', label: 'Conj' },
-  { key: 'inv', label: 'x⁻¹' },
+  { key: 'Exp', label: 'Exp' },
+  { key: 'Dual', label: 'Dual' },
+  { key: 'Rev', label: 'Rev' },
+  { key: 'Conj', label: 'Conj' },
+  { key: 'Inv', label: 'x⁻¹' },
   { key: '+', label: '+' },
   { key: '-', label: '−' },
-  { key: 'eval', label: '=' },
-  { key: 'clear', label: 'CLR' },
+  { key: 'ST', label: 'STO' },
+  { key: '=', label: '=' },
+  { key: 'CLEAR', label: 'CLR' },
 ];
 
 export class CalculatorStudioPanel {
@@ -52,6 +53,11 @@ export class CalculatorStudioPanel {
   private activeCalcMode = 'STA';
   private eqList: string[] = ['x^2 + y^2 - 1.4', 'y - 0.6*x^2 + 0.5'];
   private readonly eqListEl: HTMLDivElement;
+  private implicit3dInput!: HTMLInputElement;
+  private paramFxInput!: HTMLInputElement;
+  private paramFyInput!: HTMLInputElement;
+  private paramFzInput!: HTMLInputElement;
+  private readonly inlineErrorEl: HTMLDivElement;
 
   constructor(callbacks: CalculatorPanelCallbacks) {
     this.callbacks = callbacks;
@@ -59,15 +65,17 @@ export class CalculatorStudioPanel {
     this.element = document.createElement('div');
     this.element.className = 'gs-calc-panel';
 
-    // Sub-tabs: Surface 3D | Implicit | STA Cl(3,1) | GAlculator
+    // Sub-tabs: STA | Surface | Implicit 3D | Parametric | 2D Eq | GAlculator
     const tabBar = document.createElement('div');
-    tabBar.className = 'gs-subtabs';
+    tabBar.className = 'gs-subtabs gs-subtabs-6';
 
     const tabs = [
-      { id: 'sta', label: 'STA −+++' },
-      { id: 'surface', label: 'Surface 3D' },
-      { id: 'implicit', label: 'Equations' },
-      { id: 'galc', label: 'GAlculator' },
+      { id: 'sta', label: 'STA' },
+      { id: 'surface', label: 'Surface' },
+      { id: 'implicit3d', label: 'Imp 3D' },
+      { id: 'parametric', label: 'Param' },
+      { id: 'implicit', label: '2D Eq' },
+      { id: 'galc', label: 'GAlc' },
     ];
 
     for (const t of tabs) {
@@ -83,6 +91,8 @@ export class CalculatorStudioPanel {
     // Build panes
     const staPane = this.buildStaPane();
     const surfacePane = this.buildSurfacePane();
+    const implicit3dPane = this.buildImplicit3dPane();
+    const parametricPane = this.buildParametricPane();
     const implicitPane = document.createElement('div');
     implicitPane.className = 'gs-subtab-pane';
     this.eqListEl = document.createElement('div');
@@ -99,11 +109,57 @@ export class CalculatorStudioPanel {
 
     this.subTabPanes.set('sta', staPane);
     this.subTabPanes.set('surface', surfacePane);
+    this.subTabPanes.set('implicit3d', implicit3dPane);
+    this.subTabPanes.set('parametric', parametricPane);
     this.subTabPanes.set('implicit', implicitPane);
     this.subTabPanes.set('galc', galcPane);
 
-    this.element.append(tabBar, staPane, surfacePane, implicitPane, galcPane);
+    this.inlineErrorEl = document.createElement('div');
+    this.inlineErrorEl.className = 'gs-calc-error hidden';
+
+    this.element.append(
+      tabBar,
+      this.inlineErrorEl,
+      staPane,
+      surfacePane,
+      implicit3dPane,
+      parametricPane,
+      implicitPane,
+      galcPane
+    );
     this.selectSubTab('sta');
+  }
+
+  setInlineError(message: string | null): void {
+    if (!message) {
+      this.inlineErrorEl.textContent = '';
+      this.inlineErrorEl.classList.add('hidden');
+      return;
+    }
+    this.inlineErrorEl.textContent = message;
+    this.inlineErrorEl.classList.remove('hidden');
+  }
+
+  getImplicitExpr(): string {
+    return this.implicit3dInput?.value.trim() ?? '';
+  }
+
+  setImplicitExpr(expr: string): void {
+    if (this.implicit3dInput) this.implicit3dInput.value = expr;
+  }
+
+  getParametricExpr(): { fx: string; fy: string; fz: string } {
+    return {
+      fx: this.paramFxInput?.value.trim() ?? '',
+      fy: this.paramFyInput?.value.trim() ?? '',
+      fz: this.paramFzInput?.value.trim() ?? '',
+    };
+  }
+
+  setParametricExpr(expr: { fx: string; fy: string; fz: string }): void {
+    if (this.paramFxInput) this.paramFxInput.value = expr.fx;
+    if (this.paramFyInput) this.paramFyInput.value = expr.fy;
+    if (this.paramFzInput) this.paramFzInput.value = expr.fz;
   }
 
   selectSubTab(id: string): void {
@@ -325,6 +381,184 @@ export class CalculatorStudioPanel {
     return pane;
   }
 
+  private buildImplicit3dPane(): HTMLDivElement {
+    const pane = document.createElement('div');
+    pane.className = 'gs-subtab-pane';
+
+    const exprInput = document.createElement('input');
+    exprInput.className = 'gs-input mono';
+    exprInput.value = 'sin(x*2)*cos(y*2) + sin(y*2)*cos(z*2) + sin(z*2)*cos(x*2)';
+    this.implicit3dInput = exprInput;
+
+    // Crisp Mesh / GPU Raymarch toggle switch
+    let gpuRaymarch = true;
+    const modeSwitch = document.createElement('div');
+    modeSwitch.className = 'gs-segmented';
+    const meshBtn = document.createElement('button');
+    meshBtn.type = 'button';
+    meshBtn.className = 'gs-seg-btn';
+    meshBtn.textContent = 'Marching Tet Mesh';
+    const gpuBtn = document.createElement('button');
+    gpuBtn.type = 'button';
+    gpuBtn.className = 'gs-seg-btn active';
+    gpuBtn.textContent = 'GPU Raymarch (GLSL3)';
+
+    const syncToggle = () => {
+      meshBtn.classList.toggle('active', !gpuRaymarch);
+      gpuBtn.classList.toggle('active', gpuRaymarch);
+    };
+    const emitImplicit = () => {
+      this.callbacks.onDispatchJson({
+        op: 'evalImplicit',
+        expr: exprInput.value.trim(),
+        gpuRaymarch,
+        bounds: [-2.2, 2.2, -2.2, 2.2, -2.2, 2.2],
+        gridN: 24,
+      });
+    };
+
+    meshBtn.addEventListener('click', () => {
+      gpuRaymarch = false;
+      syncToggle();
+      emitImplicit();
+    });
+    gpuBtn.addEventListener('click', () => {
+      gpuRaymarch = true;
+      syncToggle();
+      emitImplicit();
+    });
+    modeSwitch.append(meshBtn, gpuBtn);
+
+    const chips = document.createElement('div');
+    chips.className = 'gs-chip-row';
+    const samples = [
+      { name: 'Gyroid', expr: 'sin(x*2)*cos(y*2) + sin(y*2)*cos(z*2) + sin(z*2)*cos(x*2)' },
+      { name: 'Schwarz P', expr: 'cos(x*2) + cos(y*2) + cos(z*2)' },
+      { name: 'Torus', expr: '(sqrt(x^2 + z^2) - 1.2)^2 + y^2 - 0.32' },
+      { name: 'Genus-2', expr: '((x^2 + y^2)^2 - x^2 + y^2)^2 + z^2 - 0.08' },
+      { name: 'Metaballs', expr: '1/(0.2 + (x-0.7*cos(t))^2 + y^2 + z^2) + 1/(0.2 + (x+0.7*cos(t))^2 + y^2 + z^2) - 2.4' },
+    ];
+    for (const s of samples) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'gs-chip';
+      btn.textContent = s.name;
+      btn.addEventListener('click', () => {
+        exprInput.value = s.expr;
+        emitImplicit();
+      });
+      chips.appendChild(btn);
+    }
+
+    const evalBtn = document.createElement('button');
+    evalBtn.type = 'button';
+    evalBtn.className = 'gs-btn gs-btn-primary';
+    evalBtn.textContent = 'Evaluate Implicit 3D in Lean';
+    evalBtn.addEventListener('click', emitImplicit);
+
+    const note = document.createElement('div');
+    note.className = 'gs-hint-text';
+    note.textContent = 'Compiled live in Lean 4: either Kuhn Marching Tetrahedra or straight-line GLSL 300 es raymarching.';
+
+    pane.append(
+      this.field('Implicit f(x, y, z, t) = 0', exprInput),
+      this.field('Renderer Backend (Lean 4)', modeSwitch),
+      chips,
+      evalBtn,
+      note
+    );
+    return pane;
+  }
+
+  private buildParametricPane(): HTMLDivElement {
+    const pane = document.createElement('div');
+    pane.className = 'gs-subtab-pane';
+
+    const fxInput = document.createElement('input');
+    fxInput.className = 'gs-input mono';
+    fxInput.value = '(1.2 + 0.45*v*cos(u*0.5))*cos(u)';
+    this.paramFxInput = fxInput;
+
+    const fyInput = document.createElement('input');
+    fyInput.className = 'gs-input mono';
+    fyInput.value = '0.45*v*sin(u*0.5)';
+    this.paramFyInput = fyInput;
+
+    const fzInput = document.createElement('input');
+    fzInput.className = 'gs-input mono';
+    fzInput.value = '(1.2 + 0.45*v*cos(u*0.5))*sin(u)';
+    this.paramFzInput = fzInput;
+
+    const emitParam = () => {
+      this.callbacks.onDispatchJson({
+        op: 'evalParametric',
+        fx: fxInput.value.trim(),
+        fy: fyInput.value.trim(),
+        fz: fzInput.value.trim(),
+        uRange: [0, 6.283185],
+        vRange: [-1, 1],
+        gridN: 36,
+      });
+    };
+
+    const chips = document.createElement('div');
+    chips.className = 'gs-chip-row';
+    const samples = [
+      {
+        name: 'Möbius',
+        fx: '(1.2 + 0.45*v*cos(u*0.5))*cos(u)',
+        fy: '0.45*v*sin(u*0.5)',
+        fz: '(1.2 + 0.45*v*cos(u*0.5))*sin(u)',
+      },
+      {
+        name: 'Klein Bottle',
+        fx: '(1.4 + cos(u*0.5)*sin(v*3.14) - sin(u*0.5)*sin(2*v*3.14))*cos(u)',
+        fy: 'sin(u*0.5)*sin(v*3.14) + cos(u*0.5)*sin(2*v*3.14)',
+        fz: '(1.4 + cos(u*0.5)*sin(v*3.14) - sin(u*0.5)*sin(2*v*3.14))*sin(u)',
+      },
+      {
+        name: 'Clifford Torus',
+        fx: 'cos(u) / (1.42 - sin(v*3.14))',
+        fy: 'cos(v*3.14) / (1.42 - sin(v*3.14))',
+        fz: 'sin(u) / (1.42 - sin(v*3.14))',
+      },
+      {
+        name: 'Enneper',
+        fx: '0.45*(u - u^3/3 + u*v^2)',
+        fy: '0.45*(u^2 - v^2)',
+        fz: '0.45*(v - v^3/3 + v*u^2)',
+      },
+    ];
+    for (const s of samples) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'gs-chip';
+      btn.textContent = s.name;
+      btn.addEventListener('click', () => {
+        fxInput.value = s.fx;
+        fyInput.value = s.fy;
+        fzInput.value = s.fz;
+        emitParam();
+      });
+      chips.appendChild(btn);
+    }
+
+    const evalBtn = document.createElement('button');
+    evalBtn.type = 'button';
+    evalBtn.className = 'gs-btn gs-btn-primary';
+    evalBtn.textContent = 'Evaluate Parametric 3D in Lean';
+    evalBtn.addEventListener('click', emitParam);
+
+    pane.append(
+      this.field('x(u, v, t)', fxInput),
+      this.field('y(u, v, t)', fyInput),
+      this.field('z(u, v, t)', fzInput),
+      chips,
+      evalBtn
+    );
+    return pane;
+  }
+
   private buildImplicitPane(pane: HTMLDivElement): void {
     const desc = document.createElement('div');
     desc.className = 'gs-hint-text';
@@ -455,7 +689,6 @@ export class CalculatorStudioPanel {
       btn.className = 'gs-keycap gs-keycap-basis';
       btn.textContent = k;
       btn.addEventListener('click', () => {
-        this.calcExprInput.value += (this.calcExprInput.value ? ' ' : '') + k;
         this.callbacks.onDispatchJson({ op: 'calcKey', key: k });
       });
       basisGrid.appendChild(btn);
@@ -467,12 +700,12 @@ export class CalculatorStudioPanel {
     for (const op of OP_KEYS) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = `gs-keycap${op.key === 'eval' ? ' gs-keycap-eval' : op.key === 'clear' ? ' gs-keycap-clr' : ''}`;
+      btn.className = `gs-keycap${op.key === '=' ? ' gs-keycap-eval' : op.key === 'CLEAR' ? ' gs-keycap-clr' : ''}`;
       btn.textContent = op.label;
       btn.addEventListener('click', () => {
-        if (op.key === 'clear') {
+        if (op.key === 'CLEAR') {
           this.calcExprInput.value = '';
-        } else if (op.key === 'eval' && this.calcExprInput.value.trim()) {
+        } else if (op.key === '=' && this.calcExprInput.value.trim()) {
           this.callbacks.onDispatchJson({
             op: 'calcEval',
             mode: this.activeCalcMode,

@@ -38,6 +38,7 @@ import { WebXrManager, type XrPinchDragEvent } from './webxr';
 
 export interface RendererCallbacks {
   onDragHandle?: (handleId: number, pos: Vec3Tuple) => void;
+  onSelectObject?: (info: { handleId: number; kind: string; label?: string }) => void;
   onWedgeGesture?: (
     idA: number,
     idB: number,
@@ -47,7 +48,14 @@ export interface RendererCallbacks {
   ) => void;
   onWedgeSelectSound?: () => void;
   onCameraChange?: (motor: Float32Array, fovDeg: number, distance: number) => void;
-  onTelemetry?: (stats: { fps: number; renderUs: number; cachedMeshes: number; xrActive: boolean }) => void;
+  onTelemetry?: (stats: {
+    fps: number;
+    renderUs: number;
+    p95InputToPresentMs: number;
+    droppedFrames: number;
+    cachedMeshes: number;
+    xrActive: boolean;
+  }) => void;
 }
 
 interface CachedGpuMesh {
@@ -59,6 +67,7 @@ interface InteractiveMeta {
   handleId: number;
   anchor: THREE.Vector3;
   kind: 'point' | 'segment' | 'line' | 'plane';
+  label?: string;
 }
 
 interface WedgePickSlot {
@@ -176,6 +185,7 @@ export class GrassmannSceneRenderer {
   private readonly hollowTorusGeo = new THREE.TorusGeometry(1.0, 0.22, 14, 36);
   private readonly arrowConeGeo = new THREE.ConeGeometry(0.065, 0.2, 16);
   private readonly opnsBoxGeo = new THREE.BoxGeometry(8, 8, 8);
+  private readonly opnsQuadGeo = new THREE.PlaneGeometry(2, 2);
 
   // Wedge 2D/3D green rubber-band SVG overlay
   private readonly wedgeSvg: SVGSVGElement;
@@ -188,12 +198,25 @@ export class GrassmannSceneRenderer {
   private readonly pointerNdc = new THREE.Vector2();
   private readonly dragPlane = new THREE.Plane();
   private readonly dragHitPoint = new THREE.Vector3();
-  private activeDrag: { handleId: number; offset: THREE.Vector3 } | null = null;
+  private activeDrag: {
+    handleId: number;
+    offset: THREE.Vector3;
+    startClientX: number;
+    startClientY: number;
+    moved: boolean;
+    meta: InteractiveMeta;
+  } | null = null;
   private hoveredHandleId: number | null = null;
   private wedgeFirst: WedgePickSlot | null = null;
   private wedgeSecond: WedgePickSlot | null = null;
   private wedgeDraggingSlot: 1 | 2 | null = null;
   private lastWedgePreviewMs = 0;
+
+  // True input-to-present latency + dropped frame telemetry
+  private pendingInputTsMs: number | null = null;
+  private readonly inputToPresentSamples: number[] = [];
+  private lastRafMs = performance.now();
+  private droppedFrames = 0;
 
   // Frame / UI state
   private currentFrame: GsirFrame | null = null;
@@ -352,9 +375,17 @@ export class GrassmannSceneRenderer {
   /**
    * Apply a decoded GSIR v1 frame + session mesh cache into the Three.js scene.
    */
-  applyFrame(frame: GsirFrame, decoder: GsirSessionDecoder, syncCamera = false): void {
+  applyFrame(
+    frame: GsirFrame,
+    decoder: GsirSessionDecoder,
+    syncCamera = false,
+    inputTimestampMs?: number
+  ): void {
     this.currentFrame = frame;
     this.simTime = frame.header.simTime;
+    if (typeof inputTimestampMs === 'number' && Number.isFinite(inputTimestampMs)) {
+      this.pendingInputTsMs = inputTimestampMs;
+    }
 
     // 1. Update cached MeshAsset BufferGeometries ONLY when dirtyHash changes (#17 Fix #1 CCW winding)
     for (const asset of frame.meshAssets) {
@@ -431,6 +462,7 @@ export class GrassmannSceneRenderer {
           handleId: pt.handleId,
           anchor: new THREE.Vector3(pt.pos[0], pt.pos[1], pt.pos[2]),
           kind: 'point',
+          label: pt.labelIdx !== GSIR_NO_LABEL ? labelTexts[pt.labelIdx] : undefined,
         } satisfies InteractiveMeta;
         this.interactiveObjects.push(mesh);
       }
@@ -547,6 +579,7 @@ export class GrassmannSceneRenderer {
           handleId: pl.handleId,
           anchor: new THREE.Vector3(pl.center[0], pl.center[1], pl.center[2]),
           kind: 'plane',
+          label: pl.labelIdx !== GSIR_NO_LABEL ? labelTexts[pl.labelIdx] : undefined,
         } satisfies InteractiveMeta;
         this.interactiveObjects.push(mesh);
       }
@@ -558,7 +591,14 @@ export class GrassmannSceneRenderer {
         !renderedLabelIndices.has(pl.labelIdx)
       ) {
         renderedLabelIndices.add(pl.labelIdx);
-        this.addLabelObject(pl.center, labelTexts[pl.labelIdx]!, pl.rgba, false);
+        // Place plane label near a clean front edge/corner so it never collides with center handles or intersection circles!
+        const ext = Math.max(0.1, pl.extent || 2.0) * 0.62;
+        const labelPos: Vec3Tuple = [
+          pl.center[0] + pl.u[0] * ext + pl.v[0] * ext,
+          pl.center[1] + pl.u[1] * ext + pl.v[1] * ext,
+          pl.center[2] + pl.u[2] * ext + pl.v[2] * ext,
+        ];
+        this.addLabelObject(labelPos, labelTexts[pl.labelIdx]!, pl.rgba, false);
       }
     }
 
@@ -662,7 +702,7 @@ export class GrassmannSceneRenderer {
           const cone = new THREE.Mesh(this.arrowConeGeo, coneMat);
           cone.position.copy(tipPos);
           cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tangent);
-          cone.scale.setScalar(0.85);
+          cone.scale.setScalar(0.58);
           this.dynamicGroup.add(cone);
         }
       }
@@ -848,6 +888,40 @@ export class GrassmannSceneRenderer {
     }
     this.startCameraTransition(endPos, new THREE.Vector3(0, 0, 0), 420);
     this.maybeEmitCameraChange(true);
+  }
+
+  getCameraState(): { pos: Vec3Tuple; target: Vec3Tuple; isOrtho: boolean } {
+    const cam = this.isOrtho ? this.orthoCamera : this.perspCamera;
+    const t = this.controls.target;
+    return {
+      pos: [cam.position.x, cam.position.y, cam.position.z],
+      target: [t.x, t.y, t.z],
+      isOrtho: this.isOrtho,
+    };
+  }
+
+  setCameraState(pos: Vec3Tuple, target: Vec3Tuple, isOrtho: boolean): void {
+    this.setOrthoMode(isOrtho);
+    this.cameraTransition = null;
+    this.suppressCameraSync = true;
+    try {
+      const cam = isOrtho ? this.orthoCamera : this.perspCamera;
+      cam.position.set(pos[0], pos[1], pos[2]);
+      this.controls.target.set(target[0], target[1], target[2]);
+      this.controls.update();
+    } finally {
+      this.suppressCameraSync = false;
+    }
+  }
+
+  frameRadius(radius: number): void {
+    if (this.isOrtho) return;
+    const d = Math.max(4.8, radius * 2.75);
+    this.startCameraTransition(
+      new THREE.Vector3(d * 0.62, d * 0.48, d * 0.72),
+      new THREE.Vector3(0, 0.05, 0),
+      380
+    );
   }
 
   /**
@@ -1184,12 +1258,16 @@ export class GrassmannSceneRenderer {
     for (const item of frame.opnsUniforms) {
       const shaderMeta = shaders[item.shaderIdx];
       if (!shaderMeta) continue;
-      const mat = this.opnsCache.getOrCreate(shaderMeta);
-      if (!mat) continue;
-      this.opnsCache.updateUniforms(mat, item, this.simTime, this.opnsResolution, this.opnsInvViewProj);
-      const box = new THREE.Mesh(this.opnsBoxGeo, mat);
-      box.renderOrder = mat.depthWrite ? 1 : 4;
-      this.opnsGroup.add(box);
+      const entry = this.opnsCache.getOrCreate(shaderMeta);
+      if (!entry) continue;
+      this.opnsCache.updateUniforms(entry, item, this.simTime, this.opnsResolution, this.opnsInvViewProj);
+      const mesh = new THREE.Mesh(
+        entry.isFullScreenQuad ? this.opnsQuadGeo : this.opnsBoxGeo,
+        entry.material
+      );
+      mesh.frustumCulled = false;
+      mesh.renderOrder = entry.isFullScreenQuad ? 1 : entry.material.depthWrite ? 1 : 4;
+      this.opnsGroup.add(mesh);
     }
   }
 
@@ -1273,11 +1351,14 @@ export class GrassmannSceneRenderer {
         const scale = new THREE.Vector3();
         inv.decompose(pos, quat, scale);
         const dist = Math.max(2.6, distance || pos.length() || 5.0);
-        // If Lean supplies a flat eye-level Z-axis default (x≈0, y≈0), elevate to a dramatic 3/4 studio hero angle!
-        if (Math.abs(pos.x) < 1e-2 && Math.abs(pos.y) < 1e-2) {
+        // Elevate flat eye-level Z-axis defaults OR inverted-pitch view matrices (pos.y < 0) to a hero 3/4 studio angle
+        if ((Math.abs(pos.x) < 1e-2 && Math.abs(pos.y) < 1e-2) || pos.y < -0.05) {
+          const heroX = Math.abs(pos.x) > 0.2 ? Math.abs(pos.x) : dist * 0.65;
+          const heroY = Math.max(Math.abs(pos.y) * 1.15, dist * 0.45);
+          const heroZ = Math.max(Math.abs(pos.z), dist * 0.72);
           this.startCameraTransition(
-            new THREE.Vector3(dist * 0.78, dist * 0.62, dist * 0.92),
-            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(heroX, heroY, heroZ),
+            new THREE.Vector3(0, 0.15, 0),
             440
           );
         } else if (pos.lengthSq() > 1e-4) {
@@ -1360,7 +1441,19 @@ export class GrassmannSceneRenderer {
       this.activeDrag = {
         handleId: hit.meta.handleId,
         offset: hit.meta.anchor.clone().sub(this.dragHitPoint),
+        startClientX: ev.clientX,
+        startClientY: ev.clientY,
+        moved: false,
+        meta: hit.meta,
       };
+    } else {
+      // Clicking a plane/segment/line immediately selects it in Inspect Stash
+      this.controls.enabled = true;
+      this.callbacks.onSelectObject?.({
+        handleId: hit.meta.handleId,
+        kind: hit.meta.kind,
+        label: hit.meta.label,
+      });
     }
   };
 
@@ -1368,6 +1461,11 @@ export class GrassmannSceneRenderer {
     this.updatePointerNdc(ev);
 
     if (this.activeDrag) {
+      const dx = ev.clientX - this.activeDrag.startClientX;
+      const dy = ev.clientY - this.activeDrag.startClientY;
+      if (dx * dx + dy * dy > 16) {
+        this.activeDrag.moved = true;
+      }
       this.raycaster.setFromCamera(this.pointerNdc, this.activeCamera);
       if (this.raycaster.ray.intersectPlane(this.dragPlane, this.dragHitPoint)) {
         const nextPos = this.dragHitPoint.clone().add(this.activeDrag.offset);
@@ -1416,8 +1514,16 @@ export class GrassmannSceneRenderer {
 
   private readonly onPointerUp = (): void => {
     if (this.activeDrag) {
+      const finished = this.activeDrag;
       this.activeDrag = null;
       this.controls.enabled = true;
+      if (!finished.moved) {
+        this.callbacks.onSelectObject?.({
+          handleId: finished.meta.handleId,
+          kind: finished.meta.kind,
+          label: finished.meta.label,
+        });
+      }
       return;
     }
 
@@ -1594,23 +1700,39 @@ export class GrassmannSceneRenderer {
       fm.uniforms.uTime!.value = sec;
     }
 
-    // Sync OPNS camera matrix & corner 3D axis gizmo smoothly
+    // Sync OPNS camera basis/matrices & corner 3D axis gizmo smoothly
     if (this.opnsGroup.children.length > 0) {
       this.opnsInvViewProj
         .multiplyMatrices(this.activeCamera.projectionMatrix, this.activeCamera.matrixWorldInverse)
         .invert();
+      const aspect = Math.max(0.1, this.width / Math.max(1, this.height));
+      const fovRad = THREE.MathUtils.degToRad(this.perspCamera.fov);
+      const tanHalf = Math.tan(fovRad * 0.5);
+      const camFwd = new THREE.Vector3();
+      this.activeCamera.getWorldDirection(camFwd);
+      const camRight = new THREE.Vector3().setFromMatrixColumn(this.activeCamera.matrixWorld, 0).normalize();
+      const camUp = new THREE.Vector3().setFromMatrixColumn(this.activeCamera.matrixWorld, 1).normalize();
+
       for (const child of this.opnsGroup.children) {
         if (child instanceof THREE.Mesh && child.material instanceof THREE.ShaderMaterial) {
-          if (child.material.uniforms.uInvViewProj) {
-            (child.material.uniforms.uInvViewProj.value as THREE.Matrix4).copy(this.opnsInvViewProj);
-          }
-          if (child.material.uniforms.uResolution) {
-            (child.material.uniforms.uResolution.value as THREE.Vector2).set(this.width, this.height);
-          }
+          const u = child.material.uniforms;
+          if (u.uInvViewProj) (u.uInvViewProj.value as THREE.Matrix4).copy(this.opnsInvViewProj);
+          if (u.uResolution) (u.uResolution.value as THREE.Vector2).set(this.width, this.height);
+          if (u.uCamPos) (u.uCamPos.value as THREE.Vector3).copy(this.activeCamera.position);
+          if (u.uCamFwd) (u.uCamFwd.value as THREE.Vector3).copy(camFwd);
+          if (u.uCamRight) (u.uCamRight.value as THREE.Vector3).copy(camRight).multiplyScalar(tanHalf * aspect);
+          if (u.uCamUp) (u.uCamUp.value as THREE.Vector3).copy(camUp).multiplyScalar(tanHalf);
+          if (u.uSimTime) u.uSimTime.value = sec;
         }
       }
     }
     this.axisGizmo.update(this.activeCamera, this.isOrtho);
+
+    const dtFrameMs = t0 - this.lastRafMs;
+    this.lastRafMs = t0;
+    if (dtFrameMs > 25 && dtFrameMs < 250) {
+      this.droppedFrames++;
+    }
 
     if (this.xr.isActive()) {
       // During WebXR sessions render straight to the XR framebuffer (per RayTrace4D #8)
@@ -1620,15 +1742,32 @@ export class GrassmannSceneRenderer {
       this.labelRenderer.render(this.scene, this.activeCamera);
     }
 
-    const renderUs = Math.max(0, (performance.now() - t0) * 1000);
+    const tEnd = performance.now();
+    if (this.pendingInputTsMs !== null) {
+      const i2p = Math.max(0, tEnd - this.pendingInputTsMs);
+      this.pendingInputTsMs = null;
+      this.inputToPresentSamples.push(i2p);
+      if (this.inputToPresentSamples.length > 60) {
+        this.inputToPresentSamples.shift();
+      }
+    }
+
+    const renderUs = Math.max(0, (tEnd - t0) * 1000);
     this.rafFrames++;
     if (t0 - this.fpsWindowStart >= 500) {
       this.lastFps = Math.round((this.rafFrames * 1000) / (t0 - this.fpsWindowStart));
       this.rafFrames = 0;
       this.fpsWindowStart = t0;
+      let p95 = renderUs / 1000;
+      if (this.inputToPresentSamples.length > 0) {
+        const sorted = [...this.inputToPresentSamples].sort((a, b) => a - b);
+        p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))]!;
+      }
       this.callbacks.onTelemetry?.({
         fps: this.lastFps,
         renderUs,
+        p95InputToPresentMs: p95,
+        droppedFrames: this.droppedFrames,
         cachedMeshes: this.meshGeoCache.size,
         xrActive: this.xr.isActive(),
       });
@@ -1660,6 +1799,7 @@ export class GrassmannSceneRenderer {
     this.hollowTorusGeo.dispose();
     this.arrowConeGeo.dispose();
     this.opnsBoxGeo.dispose();
+    this.opnsQuadGeo.dispose();
     this.xr.dispose();
     this.axisGizmo.dispose();
     this.contourOverlay.dispose();

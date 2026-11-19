@@ -23,15 +23,24 @@ import {
 } from '../gsir';
 import { GrassmannSceneRenderer } from '../render';
 import {
+  OrderedStudioEventQueue,
   ServerTransport,
   StaticGsirTransport,
   WasmTransport,
   connectLeanBackend,
   resolveTransportConfigFromEnv,
+  type QueuedStudioEvent,
   type StudioTransport,
 } from '../transport';
 import { CalculatorStudioPanel } from './calculatorPanel';
 import { CoffeeShopCodeEditor } from './codeEditor';
+import {
+  decodeExperimentFromHash,
+  encodeExperimentToHash,
+  parseGrassmannExperiment,
+  serializeExperiment,
+  type GrassmannExperimentV1,
+} from './experiment';
 import { InspectStashPanel } from './inspectPanel';
 import { createAboutModal, createConnectionModal } from './modals';
 import { KATEX_CHEAT_SHEET, STUDIO_PRESETS, type StudioPreset } from './presets';
@@ -69,6 +78,7 @@ export class GrassmannStudioApp {
   private readonly sparkSamples: number[] = [];
   private readonly playBtn: HTMLButtonElement;
   private readonly xrBtn: HTMLButtonElement;
+  private readonly updatingPill: HTMLDivElement;
   private readonly offlineBanner: HTMLDivElement;
   private readonly modeButtons = new Map<StudioMode, HTMLButtonElement>();
   private readonly leftTabButtons = new Map<LeftTab, HTMLButtonElement>();
@@ -88,12 +98,17 @@ export class GrassmannStudioApp {
   private animRafId = 0;
   private lastLeanUs = 0;
   private lastDecodeUs = 0;
+  private lastP95Ms = 0;
+  private lastDroppedFrames = 0;
+  private lastWedgeSeed = 42;
   private lastFrame: GsirFrame | null = null;
   private dispatchedEventLog: string[] = [];
+  private livePresets: StudioPreset[] = [...STUDIO_PRESETS];
+  private rebuildPresetBrowser: (() => void) | null = null;
 
-  // Coalesced 60fps binary dispatch queue
-  private dispatchInFlight = false;
-  private pendingBinEvent: Uint8Array | null = null;
+  // Unified ordered event pump (coalesces continuous drag/tick/camera, preserves all discrete actions)
+  private readonly eventQueue: OrderedStudioEventQueue;
+  private updatingDelayTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -244,6 +259,20 @@ export class GrassmannStudioApp {
         const blob = new Blob([svg], { type: 'image/svg+xml' });
         this.downloadDataUrl(URL.createObjectURL(blob), `grassmann-${Date.now()}.svg`);
       },
+      onExportExperiment: () => {
+        const json = serializeExperiment(this.buildExperimentSnapshot());
+        const blob = new Blob([json], { type: 'application/json' });
+        this.downloadDataUrl(URL.createObjectURL(blob), `${this.activePresetId || 'experiment'}.grassmann.json`);
+      },
+      onCopyExperimentJson: () => serializeExperiment(this.buildExperimentSnapshot()),
+      onLoadExperimentJson: (json) => {
+        const parsed = parseGrassmannExperiment(json);
+        if (parsed) {
+          void this.applyExperiment(parsed);
+        } else {
+          this.codeEditor.setDiagnostics([{ severity: 'error', message: 'Invalid .grassmann.json experiment file' }]);
+        }
+      },
       onShareUrl: () => this.buildShareUrl(),
       onLoadGsirFile: (bytes, name) => this.loadStaticGsirBytes(bytes, name),
       onLoadScriptFile: (code) => {
@@ -312,6 +341,12 @@ export class GrassmannStudioApp {
     );
     viewportWrap.appendChild(vpTools);
 
+    // Subtle non-blocking Updating… pill for heavy Lean 3D remeshes (keeps last accepted mesh visible)
+    this.updatingPill = document.createElement('div');
+    this.updatingPill.className = 'gs-updating-pill hidden';
+    this.updatingPill.innerHTML = '<span class="gs-spinner"></span><span>Updating in Lean 4…</span>';
+    viewportWrap.appendChild(this.updatingPill);
+
     // Offline / Connect Banner inside viewport
     this.offlineBanner = document.createElement('div');
     this.offlineBanner.className = 'gs-offline-banner hidden';
@@ -337,6 +372,13 @@ export class GrassmannStudioApp {
     this.wedgeHud = new WedgeGameHud(this.synth, {
       onAction: (action: WedgeActionCodeValue, arg = 0) => {
         this.enqueueBinaryEvent(encodeWedgeAction(action, arg));
+      },
+      onTutorial: (id) => {
+        void this.dispatchJson({ op: 'wedgeTutorial', id, forceFullSnapshot: true });
+      },
+      onRandomChallenge: (dim, difficulty, seed) => {
+        this.lastWedgeSeed = seed;
+        void this.dispatchJson({ op: 'wedgeRandom', dim, difficulty, seed, forceFullSnapshot: true });
       },
       onClearSelection: () => this.renderer.clearWedgeSelection(),
     });
@@ -391,12 +433,65 @@ export class GrassmannStudioApp {
 
     this.root.append(topBar, workspace, footer, this.connModal.element, this.aboutModal.element);
 
+    // Unified ordered event pump (binary + JSON)
+    this.eventQueue = new OrderedStudioEventQueue({
+      execute: (item) => this.executeQueuedEvent(item),
+      onBusyChange: (busy, _pending, isHeavy) => {
+        if (busy && isHeavy) {
+          if (!this.updatingDelayTimer) {
+            this.updatingDelayTimer = setTimeout(() => {
+              this.updatingPill.classList.remove('hidden');
+            }, 45);
+          }
+        } else if (!busy) {
+          if (this.updatingDelayTimer) {
+            clearTimeout(this.updatingDelayTimer);
+            this.updatingDelayTimer = null;
+          }
+          this.updatingPill.classList.add('hidden');
+        }
+      },
+      onError: (err, item) => {
+        const msg = (err as Error).message || 'Lean dispatch error';
+        if (item.kind === 'json') {
+          this.calcPanel.setInlineError(msg);
+          this.codeEditor.setDiagnostics([{ severity: 'error', message: msg }]);
+        } else {
+          this.setStatus('error', `Dispatch err: ${msg}`);
+        }
+      },
+    });
+
+    // Global drag-and-drop for portable .grassmann.json / .gsir files anywhere on the Studio
+    this.root.addEventListener('dragover', (ev) => {
+      if (ev.dataTransfer?.types.includes('Files')) ev.preventDefault();
+    });
+    this.root.addEventListener('drop', (ev) => {
+      const file = ev.dataTransfer?.files?.[0];
+      if (!file) return;
+      if (file.name.endsWith('.grassmann.json') || file.name.endsWith('.json')) {
+        ev.preventDefault();
+        void file.text().then((txt) => {
+          const parsed = parseGrassmannExperiment(txt);
+          if (parsed) void this.applyExperiment(parsed);
+        });
+      } else if (file.name.endsWith('.gsir')) {
+        ev.preventDefault();
+        void file.arrayBuffer().then((ab) => this.loadStaticGsirBytes(new Uint8Array(ab), file.name));
+      }
+    });
+
     // =========================================================================
     // 4. Initialize Three.js Scene Renderer
     // =========================================================================
     this.renderer = new GrassmannSceneRenderer(canvasHost, {
       onDragHandle: (handleId, pos) => {
         this.enqueueBinaryEvent(encodeDragHandle(handleId, pos[0], pos[1], pos[2]));
+      },
+      onSelectObject: ({ handleId, label }) => {
+        if (this.mode !== 'wedge' && this.inspectPanel.selectByHandleOrLabel(handleId, label)) {
+          this.selectLeftTab('inspect');
+        }
       },
       onWedgeGesture: (idA, idB, dirA, dirB, isPreview) => {
         this.enqueueBinaryEvent(encodeWedgeGesture(idA, idB, dirA, dirB, isPreview));
@@ -407,9 +502,11 @@ export class GrassmannStudioApp {
           this.enqueueBinaryEvent(encodeSetCamera(motor, fovDeg, distance));
         }
       },
-      onTelemetry: ({ fps, renderUs, cachedMeshes }) => {
-        this.telemetryText.textContent = `${fps} FPS · Dec ${Math.round(this.lastDecodeUs)}µs · Rnd ${(renderUs / 1000).toFixed(2)}ms · ${cachedMeshes}m`;
-        this.pushSparkSample((renderUs + this.lastDecodeUs) / 1000);
+      onTelemetry: ({ fps, renderUs, p95InputToPresentMs, droppedFrames, cachedMeshes }) => {
+        this.lastP95Ms = p95InputToPresentMs;
+        this.lastDroppedFrames = droppedFrames;
+        this.telemetryText.textContent = `${fps} FPS · p95 ${p95InputToPresentMs.toFixed(1)}ms · ${droppedFrames} drop · ${cachedMeshes}m`;
+        this.pushSparkSample(Math.max(p95InputToPresentMs, (renderUs + this.lastDecodeUs) / 1000));
       },
     });
 
@@ -425,10 +522,16 @@ export class GrassmannStudioApp {
         transportLabel: this.transport?.label ?? null,
         lastLeanUs: this.lastLeanUs,
         lastDecodeUs: this.lastDecodeUs,
+        p95InputToPresentMs: this.lastP95Ms,
+        droppedFrames: this.lastDroppedFrames,
         frameSeq: this.lastFrame ? this.lastFrame.header.frameSeq.toString() : null,
         presetId: this.lastFrame?.meta?.presetId ?? this.activePresetId,
         title: this.lastFrame?.meta?.title ?? null,
         cachedMeshes: this.decoder.getCachedMeshCount(),
+        presetCount: this.livePresets.length,
+        opnsCount: this.lastFrame?.opnsUniforms.length ?? 0,
+        wedge: this.lastFrame?.meta?.wedge ?? null,
+        calc: this.lastFrame?.meta?.calc ?? null,
         points: this.lastFrame?.points.map((p) => ({
           handleId: p.handleId,
           draggable: p.draggable,
@@ -438,6 +541,8 @@ export class GrassmannStudioApp {
         recentEvents: this.dispatchedEventLog.slice(-12),
       }),
       getHandleScreenPos: (handleId?: number) => this.renderer.getInteractiveHandleScreenPos(handleId),
+      exportExperiment: () => this.buildExperimentSnapshot(),
+      importExperiment: (exp: GrassmannExperimentV1) => this.applyExperiment(exp),
     };
 
     // Probe WebXR support (Vision Pro / Quest)
@@ -469,6 +574,7 @@ export class GrassmannStudioApp {
       this.offlineBanner.classList.add('hidden');
       this.updateEngineBadge();
       this.ingestRawFrame(initialFrame, true);
+      await this.syncPresetCatalogFromLean(transport);
       this.applyUrlHashOnConnect();
     } catch (err) {
       this.setStatus('error', 'Lean Offline · Connect');
@@ -489,10 +595,39 @@ export class GrassmannStudioApp {
       this.offlineBanner.classList.add('hidden');
       this.updateEngineBadge();
       this.ingestRawFrame(bytes, true);
+      await this.syncPresetCatalogFromLean(next);
     } catch (err) {
       next.dispose();
       this.setStatus('error', 'Connection Failed');
       this.connModal.open((err as Error).message);
+    }
+  }
+
+  private async syncPresetCatalogFromLean(transport: StudioTransport): Promise<void> {
+    if (!transport.getPresetCatalog) return;
+    try {
+      const items = await transport.getPresetCatalog();
+      if (items.length === 0) return;
+      this.livePresets = items.map((it) => ({
+        id: it.id,
+        title: it.title,
+        category: it.category || it.algebra || 'General',
+        algebra: it.algebra || 'PGA3',
+        signature: it.signature ?? it.algebra ?? 'Cl(p,q,r)',
+        badge: it.badge,
+        description: it.description || '',
+        defaultCode: it.sampleCode ?? `// ${it.title}\npreset ${it.id}`,
+      }));
+      // Sync editor sample code for active preset so Shift+Enter always runs valid Lean GA script!
+      const active = this.livePresets.find((p) => p.id === this.activePresetId) ?? this.livePresets[0];
+      if (active) {
+        this.activePresetId = active.id;
+        this.activeAlgebra = active.algebra;
+        this.codeEditor.setCode(active.defaultCode);
+      }
+      this.rebuildPresetBrowser?.();
+    } catch {
+      // Keep fallback presets if catalog endpoint not supported
     }
   }
 
@@ -547,7 +682,7 @@ export class GrassmannStudioApp {
       if (next === 'wedge') {
         void this.dispatchJson({ op: 'loadPreset', id: 'game_wedge', forceFullSnapshot: true });
       } else if (next === 'calculator') {
-        void this.dispatchJson({ op: 'loadPreset', id: 'timespace_lorentz', forceFullSnapshot: true });
+        void this.dispatchJson({ op: 'loadPreset', id: 'sta_lorentz_boost', forceFullSnapshot: true });
       }
     }
   }
@@ -594,12 +729,10 @@ export class GrassmannStudioApp {
     countBadge.className = 'gs-preset-count mono';
     searchRow.append(search, countBadge);
 
-    // Horizontally scrollable category filter carousel
-    const categories = ['All', ...Array.from(new Set(STUDIO_PRESETS.map((p) => p.category)))];
+    // Horizontally scrollable category filter carousel (dynamically synced with Lean preset catalog!)
     let selectedCat = 'All';
     const catBar = document.createElement('div');
     catBar.className = 'gs-cat-carousel';
-    const catBtns: HTMLButtonElement[] = [];
 
     const listEl = document.createElement('div');
     listEl.className = 'gs-preset-list';
@@ -610,7 +743,7 @@ export class GrassmannStudioApp {
 
       let matchedCount = 0;
       const grouped = new Map<string, StudioPreset[]>();
-      for (const p of STUDIO_PRESETS) {
+      for (const p of this.livePresets) {
         if (selectedCat !== 'All' && p.category !== selectedCat) continue;
         if (
           q &&
@@ -639,6 +772,7 @@ export class GrassmannStudioApp {
         for (const p of items) {
           const card = document.createElement('button');
           card.type = 'button';
+          card.dataset.presetId = p.id;
           card.className = `gs-preset-card${p.id === this.activePresetId ? ' active' : ''}`;
           card.innerHTML =
             `<div class="gs-preset-card-head">` +
@@ -655,22 +789,28 @@ export class GrassmannStudioApp {
       }
     };
 
-    for (const cat of categories) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = `gs-cat-pill${cat === 'All' ? ' active' : ''}`;
-      btn.textContent = cat === 'Implicit & Parametric 3D' ? 'Implicit 3D' : cat;
-      btn.addEventListener('click', () => {
-        selectedCat = cat;
-        catBtns.forEach((b, idx) => b.classList.toggle('active', categories[idx] === cat));
-        renderList(search.value);
-      });
-      catBtns.push(btn);
-      catBar.appendChild(btn);
-    }
+    const rebuildCategories = () => {
+      const categories = ['All', ...Array.from(new Set(this.livePresets.map((p) => p.category)))];
+      if (!categories.includes(selectedCat)) selectedCat = 'All';
+      catBar.innerHTML = '';
+      for (const cat of categories) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `gs-cat-pill${cat === selectedCat ? ' active' : ''}`;
+        btn.textContent = cat === 'Implicit & Parametric 3D' ? 'Implicit 3D' : cat;
+        btn.addEventListener('click', () => {
+          selectedCat = cat;
+          rebuildCategories();
+          renderList(search.value);
+        });
+        catBar.appendChild(btn);
+      }
+      renderList(search.value);
+    };
 
+    this.rebuildPresetBrowser = rebuildCategories;
     search.addEventListener('input', () => renderList(search.value));
-    renderList('');
+    rebuildCategories();
 
     pane.append(algRow, searchRow, catBar, listEl);
     return pane;
@@ -736,11 +876,19 @@ export class GrassmannStudioApp {
 
     if (raw.includes('=')) {
       const params = new URLSearchParams(raw);
+      const expParam = params.get('exp');
+      if (expParam) {
+        const exp = decodeExperimentFromHash(expParam);
+        if (exp) {
+          void this.applyExperiment(exp);
+          return;
+        }
+      }
       const presetId = params.get('preset');
       const code = params.get('code');
       const alg = params.get('alg');
       if (presetId) {
-        const found = STUDIO_PRESETS.find((p) => p.id === presetId);
+        const found = this.livePresets.find((p) => p.id === presetId);
         if (found) this.loadPreset(found);
         else void this.dispatchJson({ op: 'loadPreset', id: presetId, forceFullSnapshot: true });
       } else if (code) {
@@ -760,7 +908,7 @@ export class GrassmannStudioApp {
       this.setMode('wedge', true);
       return;
     }
-    const preset = STUDIO_PRESETS.find((p) => p.id === cleanId);
+    const preset = this.livePresets.find((p) => p.id === cleanId);
     if (preset) {
       this.loadPreset(preset);
     } else {
@@ -769,12 +917,61 @@ export class GrassmannStudioApp {
   }
 
   private buildShareUrl(): string {
-    const params = new URLSearchParams();
-    params.set('alg', this.activeAlgebra);
-    params.set('code', this.codeEditor.getCode());
-    const url = `${window.location.origin}${window.location.pathname}#${params.toString()}`;
-    window.history.replaceState(null, '', `#${params.toString()}`);
+    const hash = encodeExperimentToHash(this.buildExperimentSnapshot());
+    const url = `${window.location.origin}${window.location.pathname}#${hash}`;
+    window.history.replaceState(null, '', `#${hash}`);
     return url;
+  }
+
+  private buildExperimentSnapshot(): GrassmannExperimentV1 {
+    const handles = (this.lastFrame?.points ?? [])
+      .filter((p) => p.draggable)
+      .map((p) => ({
+        handleId: p.handleId,
+        pos: [p.pos[0], p.pos[1], p.pos[2]] as [number, number, number],
+      }));
+    const cam = this.renderer.getCameraState();
+    return {
+      version: 1,
+      mode: this.mode,
+      presetId: this.lastFrame?.meta?.presetId ?? this.activePresetId,
+      algebra: this.activeAlgebra,
+      script: this.codeEditor.getCode(),
+      implicitExpr: this.calcPanel.getImplicitExpr(),
+      parametricExpr: this.calcPanel.getParametricExpr(),
+      handles,
+      wedgeLevel: this.lastFrame?.meta?.wedge?.level ?? 1,
+      wedgeSeed: this.lastWedgeSeed,
+      camera: {
+        pos: [cam.pos[0], cam.pos[1], cam.pos[2]],
+        target: [cam.target[0], cam.target[1], cam.target[2]],
+        isOrtho: cam.isOrtho,
+      },
+    };
+  }
+
+  private async applyExperiment(exp: GrassmannExperimentV1): Promise<void> {
+    this.activePresetId = exp.presetId;
+    this.activeAlgebra = exp.algebra;
+    this.algebraSelect.value = exp.algebra;
+    this.lastWedgeSeed = exp.wedgeSeed;
+    this.codeEditor.setCode(exp.script);
+    this.calcPanel.setImplicitExpr(exp.implicitExpr);
+    this.calcPanel.setParametricExpr(exp.parametricExpr);
+    this.setMode(exp.mode, false);
+
+    if (exp.mode === 'wedge') {
+      this.enqueueBinaryEvent(encodeWedgeAction(WedgeActionCode.GOTO_LEVEL, exp.wedgeLevel));
+    } else if (exp.presetId) {
+      await this.dispatchJson({ op: 'loadPreset', id: exp.presetId, forceFullSnapshot: true });
+    } else if (exp.script.trim()) {
+      await this.dispatchJson({ op: 'evalScript', algebra: exp.algebra, code: exp.script });
+    }
+
+    for (const h of exp.handles) {
+      this.enqueueBinaryEvent(encodeDragHandle(h.handleId, h.pos[0], h.pos[1], h.pos[2]));
+    }
+    this.renderer.setCameraState(exp.camera.pos, exp.camera.target, exp.camera.isOrtho);
   }
 
   private enqueueBinaryEvent(bytes: Uint8Array): void {
@@ -782,62 +979,63 @@ export class GrassmannStudioApp {
     const kindHex = bytes.byteLength > 0 ? `bin:0x${bytes[0]!.toString(16)}` : 'bin';
     this.dispatchedEventLog.push(kindHex);
     if (this.dispatchedEventLog.length > 40) this.dispatchedEventLog.shift();
-    this.pendingBinEvent = bytes;
-    if (!this.dispatchInFlight) {
-      void this.drainBinaryQueue();
-    }
+    this.eventQueue.enqueueBinary(bytes, performance.now());
   }
 
-  private async drainBinaryQueue(): Promise<void> {
-    if (!this.transport || this.dispatchInFlight) return;
-    this.dispatchInFlight = true;
-    try {
-      while (this.pendingBinEvent && this.transport) {
-        const next = this.pendingBinEvent;
-        this.pendingBinEvent = null;
-        const t0 = performance.now();
-        const frameBytes = await this.transport.dispatchBin(next);
-        this.lastLeanUs = (performance.now() - t0) * 1000;
-        this.updateEngineBadge();
-        this.ingestRawFrame(frameBytes, false);
-      }
-    } catch (err) {
-      this.setStatus('error', `Dispatch err: ${(err as Error).message}`);
-    } finally {
-      this.dispatchInFlight = false;
-    }
-  }
-
-  private async dispatchJson(ev: JsonInputEvent): Promise<void> {
+  private dispatchJson(ev: JsonInputEvent): Promise<void> {
     if (!this.transport) {
       this.offlineBanner.classList.remove('hidden');
-      return;
+      return Promise.resolve();
     }
     this.dispatchedEventLog.push(`json:${ev.op}`);
     if (this.dispatchedEventLog.length > 40) this.dispatchedEventLog.shift();
-    try {
-      const t0 = performance.now();
-      const frameBytes = await this.transport.dispatchJson(ev);
-      this.lastLeanUs = (performance.now() - t0) * 1000;
-      this.updateEngineBadge();
-      this.ingestRawFrame(frameBytes, ev.op === 'loadPreset');
-    } catch (err) {
-      this.setStatus('error', `Error: ${(err as Error).message}`);
+    return this.eventQueue.enqueueJson(ev, {
+      syncCamera: ev.op === 'loadPreset',
+      inputTimestampMs: performance.now(),
+    });
+  }
+
+  private async executeQueuedEvent(item: QueuedStudioEvent): Promise<void> {
+    if (!this.transport) return;
+    const t0 = performance.now();
+    const frameBytes =
+      item.kind === 'bin'
+        ? await this.transport.dispatchBin(item.bytes)
+        : await this.transport.dispatchJson(item.event);
+    this.lastLeanUs = (performance.now() - t0) * 1000;
+    this.updateEngineBadge();
+    this.ingestRawFrame(frameBytes, item.syncCamera, item.inputTimestampMs);
+
+    if (
+      item.kind === 'json' &&
+      (item.event.op === 'evalSurface' || item.event.op === 'evalImplicit' || item.event.op === 'evalParametric')
+    ) {
+      const b = item.event.op === 'evalSurface' ? item.event.bounds : item.event.op === 'evalImplicit' ? item.event.bounds : undefined;
+      const extent = b ? Math.max(Math.abs(b[0] ?? 2.5), Math.abs(b[1] ?? 2.5)) : 2.8;
+      this.renderer.frameRadius(extent);
     }
   }
 
-  private ingestRawFrame(bytes: Uint8Array, syncCamera: boolean): void {
+  private ingestRawFrame(bytes: Uint8Array, syncCamera: boolean, inputTimestampMs?: number): void {
     try {
       const frame = this.decoder.decode(bytes);
       this.lastFrame = frame;
       this.lastDecodeUs = frame.decodeTimeUs;
-      this.renderer.applyFrame(frame, this.decoder, syncCamera);
+      this.renderer.applyFrame(frame, this.decoder, syncCamera, inputTimestampMs);
       this.inspectPanel.update(frame);
       this.codeEditor.setDiagnostics(frame.meta?.diagnostics);
+      const errDiag = frame.meta?.diagnostics?.find((d) =>
+        typeof d === 'string' ? d.trim().length > 0 : d.severity === 'error'
+      );
+      this.calcPanel.setInlineError(
+        errDiag ? (typeof errDiag === 'string' ? errDiag : errDiag.message) : null
+      );
       this.calcPanel.updateCalcState(frame.meta?.calc);
       this.wedgeHud.update(frame.meta?.wedge, this.mode === 'wedge' || Boolean(frame.meta?.wedge));
     } catch (err) {
-      this.codeEditor.setDiagnostics([{ severity: 'error', message: (err as Error).message }]);
+      const msg = (err as Error).message;
+      this.codeEditor.setDiagnostics([{ severity: 'error', message: msg }]);
+      this.calcPanel.setInlineError(msg);
     }
   }
 
@@ -1007,6 +1205,11 @@ export class GrassmannStudioApp {
 
   dispose(): void {
     window.removeEventListener('keydown', this.onGlobalKeyDown);
+    if (this.updatingDelayTimer) {
+      clearTimeout(this.updatingDelayTimer);
+      this.updatingDelayTimer = null;
+    }
+    this.eventQueue.dispose();
     this.setAnimationRunning(false);
     this.transport?.dispose();
     this.renderer.dispose();

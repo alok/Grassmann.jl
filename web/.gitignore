@@ -3,6 +3,7 @@ dist/
 .vite/
 *.local
 .DS_Store
-public/wasm/
+public/wasm/grassmann.wasm
+public/wasm/grassmann.mjs
 artifacts/
 

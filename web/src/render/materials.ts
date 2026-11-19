@@ -230,7 +230,9 @@ const OPNS_MAX_COEFFS = 64;
 const OPNS_VERTEX_SHADER_GLSL1 = `
   varying vec3 vWorldPos;
   varying vec3 vLocalPos;
+  varying vec2 vUv;
   void main() {
+    vUv = uv;
     vLocalPos = position;
     vec4 wp = modelMatrix * vec4(position, 1.0);
     vWorldPos = wp.xyz;
@@ -238,14 +240,24 @@ const OPNS_VERTEX_SHADER_GLSL1 = `
   }
 `;
 
-const OPNS_VERTEX_SHADER_GLSL3 = `
+const OPNS_VERTEX_SHADER_GLSL3_BOX = `
   out vec3 vWorldPos;
   out vec3 vLocalPos;
+  out vec2 vUv;
   void main() {
+    vUv = uv;
     vLocalPos = position;
     vec4 wp = modelMatrix * vec4(position, 1.0);
     vWorldPos = wp.xyz;
     gl_Position = projectionMatrix * viewMatrix * wp;
+  }
+`;
+
+const OPNS_VERTEX_SHADER_GLSL3_QUAD = `
+  out vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = vec4(position.xy, 0.0, 1.0);
   }
 `;
 
@@ -253,8 +265,22 @@ function isGlsl3Shader(rawGlsl: string): boolean {
   return /#version\s+300\s+es/.test(rawGlsl) || /\bout\s+vec4\s+\w+/.test(rawGlsl);
 }
 
+function isFullScreenUvOpns(rawGlsl: string): boolean {
+  return /\bin\s+vec2\s+vUv\b/.test(rawGlsl) && !/\bin\s+vec3\s+vWorldPos\b/.test(rawGlsl);
+}
+
 function stripVersionDirective(rawGlsl: string): string {
-  return rawGlsl.replace(/^\s*#version\s+300\s+es\s*\n?/m, '');
+  let src = rawGlsl.replace(/^\s*#version\s+300\s+es\s*\n?/m, '');
+  // Defensive guard: Three.js GLSL3 fragment shaders do not auto-declare projectionMatrix
+  if (/\bprojectionMatrix\b/.test(src) && !/\buniform\s+mat4\s+projectionMatrix\b/.test(src)) {
+    src = src.replace(/(precision\s+highp\s+float\s*;)/, '$1\nuniform mat4 projectionMatrix;');
+  }
+  return src;
+}
+
+function parseBladeArraySize(rawGlsl: string): number {
+  const m = /uniform\s+float\s+uBlade\s*\[\s*(\d+)\s*\]/.exec(rawGlsl);
+  return m ? Math.max(1, Number.parseInt(m[1]!, 10)) : 0;
 }
 
 function wrapLeanOpnsGlsl(rawGlsl: string): string {
@@ -316,60 +342,93 @@ function wrapLeanOpnsGlsl(rawGlsl: string): string {
   `;
 }
 
+export interface CachedOpnsMaterial {
+  material: THREE.ShaderMaterial;
+  isFullScreenQuad: boolean;
+  bladeArraySize: number;
+}
+
 /**
  * Caches compiled OPNS/IPNS ShaderMaterials by Lean's shader.hash so live
  * coefficient updates never trigger GLSL recompilation.
+ * Supports BOTH full-screen UV raymarchers (Codegen/GPU.lean) and 3D bounding-box
+ * raymarchers (Codegen/GPUInit.lean).
  */
 export class OpnsShaderCache {
-  private readonly materials = new Map<string, THREE.ShaderMaterial>();
+  private readonly materials = new Map<string, CachedOpnsMaterial>();
 
-  getOrCreate(meta: OpnsShaderMeta): THREE.ShaderMaterial | null {
+  getOrCreate(meta: OpnsShaderMeta): CachedOpnsMaterial | null {
     const existing = this.materials.get(meta.hash);
     if (existing) return existing;
     if (!meta.glsl) return null;
 
     const glsl3 = isGlsl3Shader(meta.glsl);
+    const fullScreen = glsl3 && isFullScreenUvOpns(meta.glsl);
+    const bladeArraySize = parseBladeArraySize(meta.glsl);
     const writesDepth = /\bgl_FragDepth\b/.test(meta.glsl);
     const coeffsBuf = new Float32Array(OPNS_MAX_COEFFS);
+    const uniforms: Record<string, THREE.IUniform> = {
+      uColor: { value: new THREE.Vector4(0.35, 0.8, 1.0, 0.75) },
+      uCoeffs: { value: coeffsBuf },
+      uGrade: { value: 4 },
+      uThresh: { value: 0.003 },
+      uMaxSteps: { value: 80 },
+      uStepSize: { value: 0.05 },
+      uIsIPNS: { value: 0 },
+      uSimTime: { value: 0 },
+      uResolution: { value: new THREE.Vector2(1024, 768) },
+      uInvViewProj: { value: new THREE.Matrix4() },
+      uCamPos: { value: new THREE.Vector3(0, 0, 5) },
+      uCamRight: { value: new THREE.Vector3(1, 0, 0) },
+      uCamUp: { value: new THREE.Vector3(0, 1, 0) },
+      uCamFwd: { value: new THREE.Vector3(0, 0, -1) },
+    };
+    if (bladeArraySize > 0) {
+      uniforms.uBlade = { value: new Float32Array(bladeArraySize) };
+    }
+
     const mat = new THREE.ShaderMaterial({
       glslVersion: glsl3 ? THREE.GLSL3 : THREE.GLSL1,
       transparent: !writesDepth,
-      depthTest: true,
+      depthTest: !fullScreen,
       depthWrite: writesDepth,
-      side: THREE.BackSide,
-      uniforms: {
-        uColor: { value: new THREE.Vector4(0.35, 0.8, 1.0, 0.75) },
-        uCoeffs: { value: coeffsBuf },
-        uGrade: { value: 4 },
-        uThresh: { value: 0.003 },
-        uMaxSteps: { value: 80 },
-        uStepSize: { value: 0.05 },
-        uIsIPNS: { value: 0 },
-        uSimTime: { value: 0 },
-        uResolution: { value: new THREE.Vector2(1024, 768) },
-        uInvViewProj: { value: new THREE.Matrix4() },
-      },
-      vertexShader: glsl3 ? OPNS_VERTEX_SHADER_GLSL3 : OPNS_VERTEX_SHADER_GLSL1,
+      side: fullScreen ? THREE.DoubleSide : THREE.BackSide,
+      uniforms,
+      vertexShader: fullScreen
+        ? OPNS_VERTEX_SHADER_GLSL3_QUAD
+        : glsl3
+          ? OPNS_VERTEX_SHADER_GLSL3_BOX
+          : OPNS_VERTEX_SHADER_GLSL1,
       fragmentShader: glsl3 ? stripVersionDirective(meta.glsl) : wrapLeanOpnsGlsl(meta.glsl),
     });
 
-    this.materials.set(meta.hash, mat);
-    return mat;
+    const entry: CachedOpnsMaterial = {
+      material: mat,
+      isFullScreenQuad: fullScreen,
+      bladeArraySize,
+    };
+    this.materials.set(meta.hash, entry);
+    return entry;
   }
 
   updateUniforms(
-    mat: THREE.ShaderMaterial,
+    entry: CachedOpnsMaterial,
     item: GsirOpnsUniform,
     simTime: number,
     resolution?: THREE.Vector2,
     invViewProj?: THREE.Matrix4
   ): void {
-    const u = mat.uniforms;
+    const u = entry.material.uniforms;
     if (u.uColor) (u.uColor.value as THREE.Vector4).set(item.rgba[0], item.rgba[1], item.rgba[2], item.rgba[3]);
     if (u.uCoeffs) {
       const dst = u.uCoeffs.value as Float32Array;
       dst.fill(0);
       dst.set(item.coeffs.subarray(0, Math.min(item.coeffs.length, OPNS_MAX_COEFFS)));
+    }
+    if (u.uBlade && entry.bladeArraySize > 0) {
+      const dst = u.uBlade.value as Float32Array;
+      dst.fill(0);
+      dst.set(item.coeffs.subarray(0, Math.min(item.coeffs.length, entry.bladeArraySize)));
     }
     if (u.uGrade) u.uGrade.value = item.grade;
     if (u.uThresh) u.uThresh.value = item.thresh;
@@ -382,8 +441,8 @@ export class OpnsShaderCache {
   }
 
   dispose(): void {
-    for (const mat of this.materials.values()) {
-      mat.dispose();
+    for (const entry of this.materials.values()) {
+      entry.material.dispose();
     }
     this.materials.clear();
   }

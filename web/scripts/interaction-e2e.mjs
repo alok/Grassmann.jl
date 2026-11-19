@@ -172,9 +172,10 @@ async function main() {
     // -------------------------------------------------------------------------
     await page.evaluate(() => {
       const ta = document.querySelector('textarea.gs-editor-textarea');
-      const idx = ta.value.indexOf('0.25');
+      const m = /-?\d+\.\d+/.exec(ta.value);
+      if (!m) throw new Error(`No float literal found in editor: ${ta.value}`);
       ta.focus();
-      ta.setSelectionRange(idx, idx + 4);
+      ta.setSelectionRange(m.index, m.index + m[0].length);
       ta.dispatchEvent(new Event('select', { bubbles: true }));
     });
     await page.waitForTimeout(150);
@@ -195,6 +196,11 @@ async function main() {
     assert(BigInt(sAfterRun.frameSeq) > seqBeforeRun, 'Shift+Enter EvalScript must increment frameSeq');
     assert(sAfterRun.recentEvents.includes('json:evalScript'), 'Expected json:evalScript event');
     console.log(`[e2e] 4. Inline Number Scrubber + Shift+Enter PASS (seq=${sAfterRun.frameSeq})`);
+
+    // Reload rich multi-primitive preset before SVG export check
+    await page.locator('.gs-left-tab-btn', { hasText: 'Presets' }).click();
+    await page.locator('[data-preset-id="cga3d_intersections"]').click();
+    await page.waitForTimeout(350);
 
     // -------------------------------------------------------------------------
     // TEST 4: Real PNG & SVG Downloads Verified Byte-for-Byte
@@ -282,7 +288,7 @@ async function main() {
     // TEST 7: LeanCalculator 3D Surface + STA Lorentz Boost + GAlculator x1..x10
     // -------------------------------------------------------------------------
     await page.locator('.gs-mode-btn', { hasText: 'LeanCalculator 3D' }).click();
-    await page.locator('.gs-subtab-btn', { hasText: 'Surface 3D' }).click();
+    await page.locator('.gs-subtab-btn', { hasText: /^Surface$/ }).click();
     const surfInput = page.locator('.gs-subtab-pane:not(.hidden) input.gs-input.mono').first();
     await surfInput.fill('0.5*cos(x*2)*sin(y*2)');
     await page.locator('.gs-btn-primary', { hasText: 'Evaluate Surface in Lean' }).click();
@@ -295,7 +301,7 @@ async function main() {
     );
 
     // STA Cl(3,1) (-+++) Lorentz boost slider
-    await page.locator('.gs-subtab-btn', { hasText: 'STA −+++' }).click();
+    await page.locator('.gs-subtab-btn', { hasText: /^STA$/ }).click();
     await page.locator('.gs-subtab-pane:not(.hidden) input[type="range"]').evaluate((el) => {
       el.value = '0.65';
       el.dispatchEvent(new Event('input', { bubbles: true }));
@@ -321,7 +327,7 @@ async function main() {
     // -------------------------------------------------------------------------
     await page.locator('.gs-mode-btn', { hasText: 'CoffeeShop IDE' }).click();
     await page.locator('.gs-left-tab-btn', { hasText: 'Presets' }).click();
-    await page.locator('.gs-preset-card', { hasText: '3D Bunny Mesh Slicing' }).click();
+    await page.locator('[data-preset-id="pga3d_slicing"]').click();
     await page.waitForTimeout(450);
 
     for (const vp of [
