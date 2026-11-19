@@ -11,6 +11,7 @@
 
 #include <math.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -61,25 +62,58 @@ static inline lean_obj_res u64_to_nat(uint64_t v) {
 /* ============================================================================
  * Memory Allocation, Persistence & Exact Reference Counting
  * ============================================================================
- * Note: In lean.h (when !LEAN_MIMALLOC), `lean_alloc_small_object(sz)` prepends
- * a `size_t` size word before the returned `lean_object*`, and `lean_free_small_object`
- * frees `(size_t*)o - 1`. Using the exact same layout for `lean_alloc_object` and
- * `lean_free_object` ensures every heap Lean object (small or big) can be freed
- * uniformly by either `lean_free_small_object` or `lean_free_object`.
+ * Note: On wasm32, sizeof(size_t) == 4, whereas double / uint64_t /
+ * wasm_bignat_object / FloatArray require 8-byte alignment (alignof(max_align_t) == 8).
+ * Both the staged wasm32 lean.h (`lean_alloc_small_object` / `lean_small_object_size`
+ * / `lean_free_small_object`) and this runtime (`lean_alloc_object` /
+ * `lean_realloc_object` / `lean_free_object` / `lean_dec_ref_cold`) prepend an
+ * 8-byte aligned uint64_t header before every heap `lean_object*`, guaranteeing
+ * `(uintptr_t)o % 8 == 0` for 100% of allocated Lean objects on wasm32.
  */
 
+#ifndef GRASSMANN_WASM_ALIGN8_ALLOC
+#error "lean_wasm_rt.c requires staged wasm32 lean.h with 8-byte aligned small-object header"
+#endif
+
+typedef union {
+  size_t   size;
+  uint64_t align_u64;
+  double   align_f64;
+} lean_wasm_alloc_hdr;
+
+_Static_assert(sizeof(lean_wasm_alloc_hdr) == 8, "WASM alloc header must be 8 bytes");
+_Static_assert(_Alignof(lean_wasm_alloc_hdr) == 8, "WASM alloc header must be 8-byte aligned");
+_Static_assert(sizeof(lean_object) == 8, "lean_object header must be 8 bytes");
+_Static_assert(offsetof(lean_sarray_object, m_data) % 8 == 0, "FloatArray m_data must be 8-byte aligned");
+_Static_assert(offsetof(lean_ctor_object, m_objs) % 8 == 0, "lean_ctor_object m_objs must be 8-byte aligned");
+_Static_assert(_Alignof(wasm_bignat_object) == 8, "wasm_bignat_object must require 8-byte alignment");
+_Static_assert(offsetof(wasm_bignat_object, m_val) % 8 == 0, "wasm_bignat_object.m_val must be 8-byte aligned");
+_Static_assert(offsetof(wasm_bignat_object, m_fval) % 8 == 0, "wasm_bignat_object.m_fval must be 8-byte aligned");
+
+static uint32_t g_wasm_alloc_count = 0;
+static uint32_t g_wasm_misaligned_allocs = 0;
+
 lean_object *lean_alloc_object(size_t sz) {
-  size_t *mem = (size_t *)malloc(sizeof(size_t) + sz);
+  if (LEAN_UNLIKELY(sz > SIZE_MAX - sizeof(lean_wasm_alloc_hdr))) abort();
+  lean_wasm_alloc_hdr *mem = (lean_wasm_alloc_hdr *)malloc(sizeof(lean_wasm_alloc_hdr) + sz);
   if (LEAN_UNLIKELY(!mem)) abort();
-  *mem = sz;
-  return (lean_object *)(mem + 1);
+  mem->align_u64 = (uint64_t)sz;
+  lean_object *o = (lean_object *)(mem + 1);
+  g_wasm_alloc_count++;
+  if (LEAN_UNLIKELY(((uintptr_t)o & 7u) != 0u)) g_wasm_misaligned_allocs++;
+  return o;
 }
 
 static inline lean_object *lean_realloc_object(lean_object *o, size_t new_sz) {
-  size_t *mem = (size_t *)realloc((size_t *)o - 1, sizeof(size_t) + new_sz);
+  if (LEAN_UNLIKELY(new_sz > SIZE_MAX - sizeof(lean_wasm_alloc_hdr))) abort();
+  lean_wasm_alloc_hdr *mem = (lean_wasm_alloc_hdr *)realloc(
+      (lean_wasm_alloc_hdr *)o - 1, sizeof(lean_wasm_alloc_hdr) + new_sz);
   if (LEAN_UNLIKELY(!mem)) abort();
-  *mem = new_sz;
-  return (lean_object *)(mem + 1);
+  mem->align_u64 = (uint64_t)new_sz;
+  lean_object *r = (lean_object *)(mem + 1);
+  g_wasm_alloc_count++;
+  if (LEAN_UNLIKELY(((uintptr_t)r & 7u) != 0u)) g_wasm_misaligned_allocs++;
+  return r;
 }
 
 lean_object *lean_alloc_small_object_core(unsigned sz, unsigned slot_idx) {
@@ -89,7 +123,7 @@ lean_object *lean_alloc_small_object_core(unsigned sz, unsigned slot_idx) {
 
 void lean_free_object(lean_object *o) {
   if (LEAN_LIKELY(o != NULL)) {
-    free((size_t *)o - 1);
+    free((lean_wasm_alloc_hdr *)o - 1);
   }
 }
 
@@ -187,7 +221,7 @@ void lean_dec_ref_cold(lean_object *o) {
         else if (v->m_rc == 1) next = v;
       }
     }
-    free((size_t *)o - 1);
+    free((lean_wasm_alloc_hdr *)o - 1);
     if (!next) return;
     o = next;
   }
@@ -197,7 +231,7 @@ void lean_dec_ref_cold(lean_object *o) {
  * Module Init & Once Cells (Single-threaded WASM)
  * ============================================================================ */
 
-static lean_sarray_object g_empty_byte_array_obj = {
+static _Alignas(8) lean_sarray_object g_empty_byte_array_obj = {
   .m_header = { .m_rc = 0, .m_cs_sz = 0, .m_other = 1, .m_tag = LeanScalarArray },
   .m_size = 0,
   .m_capacity = 0
@@ -880,7 +914,7 @@ lean_obj_res l_Nat_reprFast(lean_obj_arg n) {
  * Extended Lean 4.36 Runtime & Init Primitives for Full Grassmann.Studio WASM
  * ============================================================================ */
 
-static lean_sarray_object g_empty_float_array_obj = {
+static _Alignas(8) lean_sarray_object g_empty_float_array_obj = {
   .m_header = { .m_rc = 0, .m_cs_sz = 0, .m_other = sizeof(double), .m_tag = LeanScalarArray },
   .m_size = 0,
   .m_capacity = 0
@@ -1519,4 +1553,130 @@ lean_obj_res lean_float_array_mk(lean_obj_arg a) {
   }
   lean_dec(a);
   return r;
+}
+
+/* ============================================================================
+ * wasm32 8-Byte Alignment Verification Exports (Dots P0 #1 Regression Gate)
+ * ============================================================================ */
+
+LEAN_EXPORT uint32_t grassmann_wasm_misaligned_allocs(void) {
+  return g_wasm_misaligned_allocs;
+}
+
+LEAN_EXPORT uint32_t grassmann_wasm_alloc_count(void) {
+  return g_wasm_alloc_count;
+}
+
+LEAN_EXPORT uint32_t grassmann_wasm_alignment_selftest(void) {
+  uint32_t fail = 0;
+
+  /* Bit 0: static empty scalar arrays */
+  if ((((uintptr_t)&g_empty_byte_array_obj) & 7u) != 0u) fail |= (1u << 0);
+  if ((((uintptr_t)&g_empty_float_array_obj) & 7u) != 0u) fail |= (1u << 0);
+
+  /* Bit 1: lean_alloc_object across odd/even sizes (1..1024 B) */
+  static const size_t sizes[16] = {1, 3, 7, 8, 12, 13, 16, 20, 24, 29, 33, 48, 64, 129, 257, 1024};
+  lean_object *objs[64];
+  for (unsigned i = 0; i < 64; ++i) {
+    size_t sz = sizes[i & 15u];
+    objs[i] = lean_alloc_object(sz);
+    if ((((uintptr_t)objs[i]) & 7u) != 0u) fail |= (1u << 1);
+  }
+  for (unsigned i = 0; i < 64; ++i) lean_free_object(objs[i]);
+
+  /* Bit 2: staged lean.h lean_alloc_small_object + lean_small_object_size + lean_free_small_object */
+  lean_object *smalls[64];
+  for (unsigned i = 0; i < 64; ++i) {
+    unsigned sz = (unsigned)(8u + (i * 5u));
+    smalls[i] = lean_alloc_small_object(sz);
+    if ((((uintptr_t)smalls[i]) & 7u) != 0u) fail |= (1u << 2);
+    if (lean_small_object_size(smalls[i]) != sz) fail |= (1u << 2);
+  }
+  for (unsigned i = 0; i < 64; ++i) lean_free_small_object(smalls[i]);
+
+  /* Bit 3: lean_alloc_ctor (odd & even num_objs), lean_box_float, lean_box_uint64 */
+  for (unsigned i = 0; i < 32; ++i) {
+    unsigned nobj = i % 6u;
+    unsigned ssz = (i % 4u) * 8u;
+    lean_object *c = lean_alloc_ctor(0, nobj, ssz);
+    if ((((uintptr_t)c) & 7u) != 0u) fail |= (1u << 3);
+    for (unsigned k = 0; k < nobj; ++k) lean_ctor_set(c, k, lean_box(k));
+    lean_dec(c);
+
+    lean_object *bf = lean_box_float((double)i + 0.25);
+    if ((((uintptr_t)bf) & 7u) != 0u || lean_unbox_float(bf) != (double)i + 0.25) fail |= (1u << 3);
+    lean_dec(bf);
+
+    uint64_t uval = 0x1122334455667788ULL + (uint64_t)i;
+    lean_object *bu = lean_box_uint64(uval);
+    if ((((uintptr_t)bu) & 7u) != 0u || lean_unbox_uint64(bu) != uval) fail |= (1u << 3);
+    lean_dec(bu);
+  }
+  /* Verify odd-num_objs ctor (offset = sizeof(void*)*1 == 4 on wasm32) round-trips cleanly */
+  {
+    lean_object *odd = lean_alloc_ctor(0, 1, 16);
+    if ((((uintptr_t)odd) & 7u) != 0u) fail |= (1u << 3);
+    lean_ctor_set(odd, 0, lean_box(7));
+    lean_ctor_set_float(odd, (unsigned)sizeof(void *), 3.141592653589793);
+    lean_ctor_set_uint64(odd, (unsigned)sizeof(void *) + 8u, 0xCAFEBABE12345678ULL);
+    if (lean_ctor_get_float(odd, (unsigned)sizeof(void *)) != 3.141592653589793) fail |= (1u << 3);
+    if (lean_ctor_get_uint64(odd, (unsigned)sizeof(void *) + 8u) != 0xCAFEBABE12345678ULL) fail |= (1u << 3);
+    lean_dec(odd);
+  }
+
+  /* Bit 4: FloatArray alloc + repeated exclusive realloc growths (interleaved to force moves!) */
+  {
+    lean_object *fa = lean_alloc_sarray(sizeof(double), 0, 0);
+    if ((((uintptr_t)fa) & 7u) != 0u || (((uintptr_t)lean_float_array_cptr(fa)) & 7u) != 0u) {
+      fail |= (1u << 4);
+    }
+    lean_object *pins[16];
+    for (unsigned p = 0; p < 16; ++p) pins[p] = NULL;
+    for (unsigned i = 0; i < 256; ++i) {
+      fa = lean_float_array_push(fa, (double)i * 1.5 - 3.25);
+      if ((((uintptr_t)fa) & 7u) != 0u || (((uintptr_t)lean_float_array_cptr(fa)) & 7u) != 0u) {
+        fail |= (1u << 4);
+      }
+      /* Interleave odd-sized allocations at growth boundaries to force realloc moves */
+      if ((i & 15u) == 0u) {
+        unsigned slot = (i >> 4) & 15u;
+        pins[slot] = lean_alloc_object(13u + i);
+        if ((((uintptr_t)pins[slot]) & 7u) != 0u) fail |= (1u << 4);
+      }
+    }
+    const double *fp = lean_float_array_cptr(fa);
+    for (unsigned i = 0; i < 256; ++i) {
+      if (fp[i] != (double)i * 1.5 - 3.25) fail |= (1u << 4);
+    }
+    for (unsigned p = 0; p < 16; ++p) lean_free_object(pins[p]);
+    lean_dec(fa);
+  }
+
+  /* Bit 5: wasm_bignat_object (alloc_bignat & lean_cstr_to_nat 21-digit pi) */
+  {
+    lean_object *bn[32];
+    for (unsigned i = 0; i < 32; ++i) {
+      uint64_t v = 0x100000000ULL + (uint64_t)i * 17ULL;
+      bn[i] = alloc_bignat(v, (double)v);
+      const wasm_bignat_object *b = (const wasm_bignat_object *)bn[i];
+      if ((((uintptr_t)b) & 7u) != 0u || (((uintptr_t)&b->m_val) & 7u) != 0u ||
+          (((uintptr_t)&b->m_fval) & 7u) != 0u || b->m_val != v) {
+        fail |= (1u << 5);
+      }
+    }
+    for (unsigned i = 0; i < 32; ++i) lean_dec(bn[i]);
+
+    lean_object *pi_nat = lean_cstr_to_nat("314159265358979323846");
+    const wasm_bignat_object *pb = (const wasm_bignat_object *)pi_nat;
+    if (lean_is_scalar(pi_nat) || (((uintptr_t)pb) & 7u) != 0u ||
+        (((uintptr_t)&pb->m_fval) & 7u) != 0u || fabs(pb->m_fval - 3.141592653589793e20) > 1e6) {
+      fail |= (1u << 5);
+    }
+    lean_dec(pi_nat);
+  }
+
+  /* Bit 6: zero misaligned allocations observed globally */
+  if (g_wasm_misaligned_allocs != 0u) fail |= (1u << 6);
+
+  return fail;
 }

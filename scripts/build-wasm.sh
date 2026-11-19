@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # scripts/build-wasm.sh — Reproducible Lean 4.36 -> C -> Emscripten WASM pipeline
-# Compiles ALL 25 strictly Init-only Lean 4.36 modules (direct GA kernels +
-# full Grassmann.Studio: 19 CoffeeShop presets incl. sculpted bunny #pga3d_slicing,
-# 16 Wedge 2D+3D levels, GA script parser/evaluator, AD surfaces, marching-triangles
-# contours, GAlculator, exact R3 rational rotors, WGSL/GLSL/MSL GPU shader codegen)
+# Compiles ALL 32 strictly Init-only Lean 4.36 modules (direct GA kernels +
+# full Grassmann.Studio: 74 CoffeeShop presets incl. sculpted bunny #pga3d_slicing
+# & 5 Wave 4B physics/relativity/streamline showstoppers, 16 Wedge 2D+3D levels,
+# 6 animated Wedge tutorials, LiveScript v2 parser/evaluator, bytecode Marching
+# Tetrahedra Implicit3D, AD surfaces, marching-triangles contours, GAlculator,
+# exact R3 rational rotors, WGSL/GLSL/MSL GPU shader codegen)
 # + c/grassmann_cabi.c + wasm/lean_wasm_rt.c into wasm/dist/grassmann.{wasm,mjs}!
 set -euo pipefail
 
@@ -72,10 +74,106 @@ for f in "${c_files[@]}"; do
 done
 
 mkdir -p "$dist_dir" "$stage_inc/lean"
-# Inline no-op lean_inc_heartbeat() in the staged WASM header so every
-# lean_alloc_small_object avoids an empty cross-TU WASM call.
-sed 's/^LEAN_EXPORT void lean_inc_heartbeat(void);$/static inline void lean_inc_heartbeat(void) {}/' \
-  "$lean_sysroot/include/lean/lean.h" > "$stage_inc/lean/lean.h"
+# Stage lean.h for wasm32 with three verified patches:
+# 1. Inline no-op lean_inc_heartbeat() to avoid cross-TU calls on every small alloc.
+# 2. 8-byte (uint64_t) prefix header in lean_alloc_small_object / lean_small_object_size /
+#    lean_free_small_object so EVERY wasm32 heap object (FloatArray, bignat, boxed Float,
+#    ctor) is strictly 0 mod 8 instead of 4 mod 8 (sizeof(size_t) == 4 on wasm32).
+# 3. __builtin_memcpy in lean_ctor_{get,set}_{uint64,float} so constructors with an odd
+#    number of 32-bit object fields (offset = sizeof(void*)*1,3,5) never perform
+#    misaligned 8-byte pointer dereferences on wasm32.
+uv run python - "$lean_sysroot/include/lean/lean.h" "$stage_inc/lean/lean.h" << 'PY'
+import sys
+src_path, dst_path = sys.argv[1], sys.argv[2]
+text = open(src_path, "r", encoding="utf-8").read()
+
+patches = [
+    (
+        "LEAN_EXPORT void lean_inc_heartbeat(void);",
+        "static inline void lean_inc_heartbeat(void) {}",
+        "inline lean_inc_heartbeat",
+    ),
+    (
+        "    void * mem = malloc(sizeof(size_t) + sz);\n"
+        "    if (mem == 0) lean_internal_panic_out_of_memory();\n"
+        "    *(size_t*)mem = sz;\n"
+        "    return (lean_object*)((size_t*)mem + 1);",
+        "    void * mem = malloc(sizeof(uint64_t) + (size_t)sz);\n"
+        "    if (mem == 0) lean_internal_panic_out_of_memory();\n"
+        "    *(uint64_t*)mem = (uint64_t)sz;\n"
+        "    return (lean_object*)((uint64_t*)mem + 1);",
+        "8-byte aligned lean_alloc_small_object",
+    ),
+    (
+        "    return *((size_t*)o - 1);",
+        "    return (unsigned)(*((uint64_t*)o - 1));",
+        "8-byte aligned lean_small_object_size",
+    ),
+    (
+        "    size_t* ptr = (size_t*)o - 1;\n"
+        "    free_sized(ptr, *ptr + sizeof(size_t));",
+        "    uint64_t* ptr = (uint64_t*)o - 1;\n"
+        "    free(ptr);",
+        "8-byte aligned lean_free_small_object",
+    ),
+    (
+        "static inline uint64_t lean_ctor_get_uint64(b_lean_obj_arg o, unsigned offset) {\n"
+        "    assert(offset >= lean_ctor_num_objs(o) * sizeof(void*));\n"
+        "    return *((uint64_t*)((uint8_t*)(lean_ctor_obj_cptr(o)) + offset));\n"
+        "}",
+        "static inline uint64_t lean_ctor_get_uint64(b_lean_obj_arg o, unsigned offset) {\n"
+        "    assert(offset >= lean_ctor_num_objs(o) * sizeof(void*));\n"
+        "    uint64_t v;\n"
+        "    __builtin_memcpy(&v, (uint8_t*)(lean_ctor_obj_cptr(o)) + offset, sizeof(v));\n"
+        "    return v;\n"
+        "}",
+        "unaligned-safe lean_ctor_get_uint64",
+    ),
+    (
+        "static inline double lean_ctor_get_float(b_lean_obj_arg o, unsigned offset) {\n"
+        "    assert(offset >= lean_ctor_num_objs(o) * sizeof(void*));\n"
+        "    return *((double*)((uint8_t*)(lean_ctor_obj_cptr(o)) + offset));\n"
+        "}",
+        "static inline double lean_ctor_get_float(b_lean_obj_arg o, unsigned offset) {\n"
+        "    assert(offset >= lean_ctor_num_objs(o) * sizeof(void*));\n"
+        "    double v;\n"
+        "    __builtin_memcpy(&v, (uint8_t*)(lean_ctor_obj_cptr(o)) + offset, sizeof(v));\n"
+        "    return v;\n"
+        "}",
+        "unaligned-safe lean_ctor_get_float",
+    ),
+    (
+        "static inline void lean_ctor_set_uint64(b_lean_obj_arg o, unsigned offset, uint64_t v) {\n"
+        "    assert(offset >= lean_ctor_num_objs(o) * sizeof(void*));\n"
+        "    *((uint64_t*)((uint8_t*)(lean_ctor_obj_cptr(o)) + offset)) = v;\n"
+        "}",
+        "static inline void lean_ctor_set_uint64(b_lean_obj_arg o, unsigned offset, uint64_t v) {\n"
+        "    assert(offset >= lean_ctor_num_objs(o) * sizeof(void*));\n"
+        "    __builtin_memcpy((uint8_t*)(lean_ctor_obj_cptr(o)) + offset, &v, sizeof(v));\n"
+        "}",
+        "unaligned-safe lean_ctor_set_uint64",
+    ),
+    (
+        "static inline void lean_ctor_set_float(b_lean_obj_arg o, unsigned offset, double v) {\n"
+        "    assert(offset >= lean_ctor_num_objs(o) * sizeof(void*));\n"
+        "    *((double*)((uint8_t*)(lean_ctor_obj_cptr(o)) + offset)) = v;\n"
+        "}",
+        "static inline void lean_ctor_set_float(b_lean_obj_arg o, unsigned offset, double v) {\n"
+        "    assert(offset >= lean_ctor_num_objs(o) * sizeof(void*));\n"
+        "    __builtin_memcpy((uint8_t*)(lean_ctor_obj_cptr(o)) + offset, &v, sizeof(v));\n"
+        "}",
+        "unaligned-safe lean_ctor_set_float",
+    ),
+]
+
+for old, new, label in patches:
+    n = text.count(old)
+    if n != 1:
+        raise SystemExit(f"ERROR: staged lean.h patch '{label}' matched {n} times (expected 1)")
+    text = text.replace(old, new, 1)
+
+open(dst_path, "w", encoding="utf-8").write(text)
+PY
 cp "$lean_sysroot/include/lean/version.h" "$stage_inc/lean/version.h"
 cat > "$stage_inc/lean/config.h" << 'EOF'
 #pragma once
@@ -83,12 +181,14 @@ cat > "$stage_inc/lean/config.h" << 'EOF'
 #define LEAN_EMSCRIPTEN 1
 #define LEAN_IS_STAGE0 0
 #define GRASSMANN_WASM_INLINE_HEARTBEAT 1
+#define GRASSMANN_WASM_ALIGN8_ALLOC 1
 EOF
 : > "$stage_inc/lean/lean_gmp.h"
 : > "$stage_inc/lean/lean_libuv.h"
 
 exported_fns='[
   "_malloc","_free",
+  "_grassmann_wasm_alignment_selftest","_grassmann_wasm_misaligned_allocs","_grassmann_wasm_alloc_count",
   "_grassmann_cabi_version","_grassmann_initialize","_grassmann_initialize_module",
   "_grassmann_attach_thread","_grassmann_detach_thread",
   "_grassmann_studio_create","_grassmann_studio_destroy",
@@ -181,6 +281,14 @@ fp_wasm="grassmann.${wasm_hash}.wasm"
 fp_mjs="grassmann.${wasm_hash}.mjs"
 cp "$dist_dir/grassmann.wasm" "$dist_dir/$fp_wasm"
 sed "s/grassmann\.wasm/${fp_wasm}/g" "$dist_dir/grassmann.mjs" > "$dist_dir/$fp_mjs"
+if rg -q 'grassmann\.wasm' "$dist_dir/$fp_mjs"; then
+  echo "ERROR: fingerprinted loader $fp_mjs still references un-fingerprinted grassmann.wasm" >&2
+  exit 1
+fi
+if ! rg -q "${fp_wasm}" "$dist_dir/$fp_mjs"; then
+  echo "ERROR: fingerprinted loader $fp_mjs missing reference to $fp_wasm" >&2
+  exit 1
+fi
 
 wasm_bytes="$(wc -c < "$dist_dir/grassmann.wasm" | tr -d ' ')"
 gz_bytes="$(gzip -9 -c "$dist_dir/grassmann.wasm" | wc -c | tr -d ' ')"

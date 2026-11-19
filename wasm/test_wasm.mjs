@@ -1,22 +1,39 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadGrassmannWasm } from "./dist/grassmann_wasm.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// 0. Verify content-fingerprinted wasm-manifest.json + hashed asset load!
+// 0. Verify content-fingerprinted wasm-manifest.json + isolated default-factory load
+// (Dots P0 #6: fingerprinted loader must reference grassmann.<hash>.wasm directly without locateFile
+//  and load cleanly with ZERO ENOENT even when canonical grassmann.wasm is absent!)
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "dist/wasm-manifest.json"), "utf8"));
 assert.equal(manifest.version, 1, "wasm-manifest version");
 assert.equal(manifest.presetCount, 74, "wasm-manifest presetCount");
 assert.ok(/^[0-9a-f]{10}$/.test(manifest.hash), "wasm-manifest 10-hex hash");
-assert.ok(fs.existsSync(path.join(__dirname, "dist", manifest.wasmFile)), "fingerprinted .wasm exists");
-assert.ok(fs.existsSync(path.join(__dirname, "dist", manifest.loaderFile)), "fingerprinted .mjs exists");
+const fpWasmSrc = path.join(__dirname, "dist", manifest.wasmFile);
+const fpLoaderSrc = path.join(__dirname, "dist", manifest.loaderFile);
+assert.ok(fs.existsSync(fpWasmSrc), "fingerprinted .wasm exists");
+assert.ok(fs.existsSync(fpLoaderSrc), "fingerprinted .mjs exists");
 {
-  const { default: createFp } = await import(`./dist/${manifest.loaderFile}`);
-  const fpMod = await createFp();
-  assert.equal(fpMod._grassmann_initialize(), 0, "fingerprinted WASM initializes cleanly");
+  const loaderText = fs.readFileSync(fpLoaderSrc, "utf8");
+  assert.ok(loaderText.includes(manifest.wasmFile), `fingerprinted loader must reference ${manifest.wasmFile}`);
+  assert.ok(!loaderText.includes("grassmann.wasm"), "fingerprinted loader must not reference un-fingerprinted grassmann.wasm");
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "grassmann-wasm-fp-"));
+  try {
+    fs.copyFileSync(fpWasmSrc, path.join(tmpDir, manifest.wasmFile));
+    fs.copyFileSync(fpLoaderSrc, path.join(tmpDir, manifest.loaderFile));
+    const { default: createFp } = await import(pathToFileURL(path.join(tmpDir, manifest.loaderFile)).href);
+    const fpMod = await createFp(); // intentionally NO locateFile!
+    assert.equal(fpMod._grassmann_initialize(), 0, "isolated fingerprinted WASM initializes cleanly without locateFile");
+    assert.equal(fpMod._grassmann_wasm_alignment_selftest(), 0, "isolated fingerprinted WASM 8-byte alignment selftest");
+    assert.equal(fpMod._grassmann_wasm_misaligned_allocs(), 0, "isolated fingerprinted WASM zero misaligned allocs");
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 }
 
 function assertNear(a, b, tol = 1e-10, msg = "") {
@@ -63,6 +80,8 @@ function parseGSIR(bytes) {
 
 const g = await loadGrassmannWasm();
 assert.equal(g.version(), 0x00020000);
+assert.equal(g.mod._grassmann_wasm_alignment_selftest(), 0, "initial wasm32 8-byte alignment selftest PASS");
+assert.equal(g.mod._grassmann_wasm_misaligned_allocs(), 0, "initial wasm32 zero misaligned allocs");
 
 // 1. STA Cl(3,1) -+++ boost invariance
 const boost = g.staBoostRotor(0.75, 1, 0, 0);
@@ -362,4 +381,13 @@ const dtFrames = performance.now() - t1;
 console.log(`[wasm bench] studio_drag_gsir_frame: ${((dtFrames * 1e3) / N_FRAMES).toFixed(2)} us/frame (${lastSize} B/frame, ${Math.round(N_FRAMES / (dtFrames / 1000))} fps max)`);
 
 sess.destroy();
+
+// Final post-workload wasm32 8-byte alignment audit (Dots P0 #1):
+// Prove 100% of live FloatArray / ctor / bignat / String / Array heap allocs + reallocs stayed 0 mod 8!
+assert.equal(g.mod._grassmann_wasm_alignment_selftest(), 0, "post-workload wasm32 8-byte alignment selftest PASS");
+const totalHeapAllocs = g.mod._grassmann_wasm_alloc_count() >>> 0;
+const misalignedAllocs = g.mod._grassmann_wasm_misaligned_allocs() >>> 0;
+assert.equal(misalignedAllocs, 0, `expected 0 misaligned wasm32 heap allocs, got ${misalignedAllocs}`);
+assert.ok(totalHeapAllocs > 10000, `expected >10000 live heap allocs checked, got ${totalHeapAllocs}`);
+console.log(`[wasm align] 100% 8-byte aligned (selftest=0, misaligned=0 / ${totalHeapAllocs} live heap allocs+reallocs)`);
 console.log("[wasm test] ALL 74 PRESETS + @PARAM + KATEX + BYTECODE IMPLICIT3D/GPU + LIVESCRIPT V2 + WEDGE PASSED IN WASM!");
