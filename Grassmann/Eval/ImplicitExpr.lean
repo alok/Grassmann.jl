@@ -825,16 +825,19 @@ def evalParametricExprMesh (fxStr fyStr fzStr : String) (t : Float := 0.0)
 def evalImplicitExprToFrame (exprStr : String) (seq : UInt64 := 0) (t : Float := 0.0)
     (bmin : Vec3 := ⟨-1.6, -1.6, -1.6⟩) (bmax : Vec3 := ⟨1.6, 1.6, 1.6⟩)
     (gridN : Nat := 18) : SceneFrame :=
+  let halfExt := max (max (Float.abs bmin.x) (Float.abs bmax.x))
+    (max (max (Float.abs bmin.y) (Float.abs bmax.y)) (max (Float.abs bmin.z) (Float.abs bmax.z)))
+  let camDist := max 4.6 (halfExt * 2.8)
   let base : SceneFrame :=
     { frameSeq := seq, simTime := t, mode := .surface, is2D := false,
-      gridEnabled := true, darkTheme := true, gridSize := 2.2,
+      gridEnabled := true, darkTheme := true, gridSize := max 2.2 halfExt,
       algebra := { name := "R3", p := 3, q := 0, r := 0,
                    basisNames := #["1","e1","e2","e3","e12","e13","e23","I"],
                    basisMetric := #[1,1,1,1,-1,-1,-1,-1] },
       presetId := "implicit_expr", title := s!"Implicit: {exprStr} = 0",
       formula := "f(x, y, z, t) = 0,\\qquad \\mathbf{n} = \\frac{\\nabla f}{\\|\\nabla f\\|}",
       summary := s!"Zero-level implicit 3D isosurface `{exprStr} = 0` meshed via bytecode-accelerated Kuhn Marching Tetrahedra.",
-      camera := { motor := Motor3.orbitCamera 0.55 (-0.32) 4.6, fovDeg := 45.0, distance := 4.6 } }
+      camera := { motor := Motor3.orbitCamera 0.55 (-0.32) camDist, fovDeg := 45.0, distance := camDist } }
   match evalImplicitExprMesh exprStr t bmin bmax gridN 5001 true with
   | .ok mesh =>
     { base with
