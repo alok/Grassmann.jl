@@ -124,6 +124,7 @@ static inline int32_t require_init(void) {
 }
 
 static inline lean_obj_res make_f64_array(const double *src, size_t count) {
+  if (count > SIZE_MAX / sizeof(double)) return NULL;
   lean_obj_res out = lean_alloc_sarray(sizeof(double), count, count);
   if (count > 0) {
     memcpy(lean_float_array_cptr(out), src, count * sizeof(double));
@@ -234,22 +235,40 @@ int32_t grassmann_initialize_module(void) {
   return initialize_impl(0);
 }
 
-int32_t grassmann_thread_initialize(void) {
+#ifndef __EMSCRIPTEN__
+static _Thread_local int g_tls_attached = 0;
+#endif
+
+int32_t grassmann_attach_thread(void) {
   int32_t st = require_init();
   if (st != GSIR_OK) return st;
 #ifndef __EMSCRIPTEN__
-  lean_initialize_thread();
+  if (!g_tls_attached) {
+    lean_initialize_thread();
+    g_tls_attached = 1;
+  }
 #endif
   return GSIR_OK;
 }
 
-int32_t grassmann_thread_finalize(void) {
+int32_t grassmann_detach_thread(void) {
   int32_t st = require_init();
   if (st != GSIR_OK) return st;
 #ifndef __EMSCRIPTEN__
-  lean_finalize_thread();
+  if (g_tls_attached) {
+    lean_finalize_thread();
+    g_tls_attached = 0;
+  }
 #endif
   return GSIR_OK;
+}
+
+int32_t grassmann_thread_initialize(void) {
+  return grassmann_attach_thread();
+}
+
+int32_t grassmann_thread_finalize(void) {
+  return grassmann_detach_thread();
 }
 
 /* ============================================================================
@@ -554,10 +573,18 @@ int32_t grassmann_pga3_motor_apply_xyz_batch(
   if (st != GSIR_OK) return st;
   if (!m8) return GSIR_ERR_BAD_INPUT;
   if (pointCount == 0) return GSIR_OK;
+  if (pointCount > SIZE_MAX / (3 * sizeof(double))) return GSIR_ERR_BAD_INPUT;
   if (!xyzIn || !xyzOut) return GSIR_ERR_BAD_INPUT;
   size_t n = pointCount * 3;
+  lean_obj_res mArr = make_f64_array(m8, 8);
+  lean_obj_res xArr = make_f64_array(xyzIn, n);
+  if (!mArr || !xArr) {
+    if (mArr) lean_dec(mArr);
+    if (xArr) lean_dec(xArr);
+    return GSIR_ERR_BAD_INPUT;
+  }
   return copy_f64_result(
-    grassmann_lean_pga3_motor_apply_xyz_batch(make_f64_array(m8, 8), make_f64_array(xyzIn, n)),
+    grassmann_lean_pga3_motor_apply_xyz_batch(mArr, xArr),
     xyzOut, n);
 }
 

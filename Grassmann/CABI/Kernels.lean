@@ -733,24 +733,26 @@ def pga3MotorApplyXYZ (m : FloatArray) (x y z : Float) : FloatArray :=
 
 /-- Blazing-fast batch transform of flat `xyz` triples (`3*N` doubles) by one unit PGA3 motor.
 Precomputes the 3×4 affine matrix once, then runs a tight tail-recursive loop! -/
-def pga3MotorApplyXYZBatch (m xyz : FloatArray) : FloatArray := Id.run do
+def pga3MotorApplyXYZBatch (m xyz : FloatArray) : FloatArray :=
   let mat := pga3MotorToMat4 m
   let r00 := faGet mat 0; let r10 := faGet mat 1; let r20 := faGet mat 2
   let r01 := faGet mat 4; let r11 := faGet mat 5; let r21 := faGet mat 6
   let r02 := faGet mat 8; let r12 := faGet mat 9; let r22 := faGet mat 10
   let tx  := faGet mat 12; let ty := faGet mat 13; let tz := faGet mat 14
-  let nPts := xyz.size / 3
-  let mut out := FloatArray.emptyWithCapacity (nPts * 3)
-  for k in [:nPts] do
-    let base := k * 3
-    let x := faGet xyz base
-    let y := faGet xyz (base + 1)
-    let z := faGet xyz (base + 2)
-    out := out
-      |>.push (r00*x + r01*y + r02*z + tx)
-      |>.push (r10*x + r11*y + r12*z + ty)
-      |>.push (r20*x + r21*y + r22*z + tz)
-  return out
+  let lim := (xyz.size / 3) * 3
+  let rec go (base : Nat) (out : FloatArray) : FloatArray :=
+    if h2 : base + 2 < xyz.size then
+      let x := xyz[base]'(Nat.lt_trans (Nat.lt_succ_of_lt (Nat.lt_succ_self base)) h2)
+      let y := xyz[base + 1]'(Nat.lt_trans (Nat.lt_succ_self (base + 1)) h2)
+      let z := xyz[base + 2]'h2
+      let out := out
+        |>.push (r00*x + r01*y + r02*z + tx)
+        |>.push (r10*x + r11*y + r12*z + ty)
+        |>.push (r20*x + r21*y + r22*z + tz)
+      go (base + 3) out
+    else out
+  termination_by xyz.size - base
+  go 0 (FloatArray.emptyWithCapacity lim)
 
 /-! ### CGA2 `Cl(3, 1)` & CGA3 `Cl(4, 1)` Kernels
 

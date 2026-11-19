@@ -296,20 +296,31 @@ int main(void) {
     /* Test flagship CoffeeShop presets, Wedge 2D/3D, evalScript, evalSurface, evalEquations, calcEval */
     const char *events[] = {
       "{\"op\":\"loadPreset\",\"id\":\"pga3d_slicing\"}",
+      "{\"op\":\"loadPreset\",\"id\":\"pga3d_slicing_hq\"}",
       "{\"op\":\"loadPreset\",\"id\":\"pga3d_physics_free_top\"}",
       "{\"op\":\"loadPreset\",\"id\":\"pga3d_origami\"}",
       "{\"op\":\"loadPreset\",\"id\":\"pga3d_motor_orbits\"}",
       "{\"op\":\"loadPreset\",\"id\":\"cga3d_intersections\"}",
       "{\"op\":\"loadPreset\",\"id\":\"cga3d_spheres_apollonius\"}",
       "{\"op\":\"loadPreset\",\"id\":\"cga3d_opns_cyclide\"}",
+      "{\"op\":\"loadPreset\",\"id\":\"implicit_gyroid\"}",
+      "{\"op\":\"loadPreset\",\"id\":\"param_klein_bottle\"}",
+      "{\"op\":\"loadPreset\",\"id\":\"qcga3d_quadrics\"}",
       "{\"op\":\"loadPreset\",\"id\":\"sta_lorentz_boost\"}",
       "{\"op\":\"loadPreset\",\"id\":\"sta_maxwell_em\"}",
       "{\"op\":\"loadPreset\",\"id\":\"r3_rational_rotor\"}",
       "{\"op\":\"loadPreset\",\"id\":\"wedge_2d\"}",
       "{\"op\":\"loadPreset\",\"id\":\"wedge_3d\"}",
+      "{\"op\":\"wedgeTutorial\",\"id\":\"T1\"}",
+      "{\"op\":\"wedgeTutorial\",\"id\":\"T6\"}",
+      "{\"op\":\"wedgeRandom\",\"dim\":2,\"difficulty\":1,\"seed\":42}",
+      "{\"op\":\"wedgeRandom\",\"dim\":3,\"difficulty\":2,\"seed\":99}",
       "{\"op\":\"evalScript\",\"algebra\":\"PGA3\",\"code\":\"let P = point(1,2,3); P\"}",
       "{\"op\":\"evalSurface\",\"expr\":\"cos(x)*sin(y)\",\"bounds\":[-2,2,-2,2],\"gridN\":24}",
       "{\"op\":\"evalEquations\",\"equations\":[\"x^2+y^2-1\",\"y-x\"],\"bounds\":[-2,2,-2,2],\"gridN\":32}",
+      "{\"op\":\"evalImplicit\",\"expr\":\"cos(x*2)*sin(y*2)+cos(y*2)*sin(z*2)+cos(z*2)*sin(x*2)\",\"gpuRaymarch\":false}",
+      "{\"op\":\"evalImplicit\",\"expr\":\"cos(x*2)*sin(y*2)+cos(y*2)*sin(z*2)+cos(z*2)*sin(x*2)\",\"gpuRaymarch\":true}",
+      "{\"op\":\"evalParametric\",\"fx\":\"(1.1+0.4*cos(v))*cos(u)\",\"fy\":\"0.4*sin(v)\",\"fz\":\"(1.1+0.4*cos(v))*sin(u)\"}",
       "{\"op\":\"calcEval\",\"mode\":\"STA\",\"expr\":\"e1 * e2\"}"
     };
     for (size_t i = 0; i < sizeof(events) / sizeof(events[0]); ++i) {
@@ -342,10 +353,18 @@ int main(void) {
     double dt = now_ns() - t0;
     printf("[bench] pga3_motor_compose:     %.1f ns/call (%d iters)\n", dt / N, N);
 
-    /* 1000-pt batch XYZ transform */
+    /* Integer overflow guard check (Dots #86) + idempotent thread attach/detach */
+    double dummyPt[3] = {1.0, 2.0, 3.0};
+    CHECK(grassmann_pga3_motor_apply_xyz_batch(m1, dummyPt, SIZE_MAX / 2, dummyPt) == GSIR_ERR_BAD_INPUT,
+          "batch pointCount overflow returns GSIR_ERR_BAD_INPUT");
+    CHECK(grassmann_attach_thread() == GSIR_OK, "attach_thread idempotent (1)");
+    CHECK(grassmann_attach_thread() == GSIR_OK, "attach_thread idempotent (2)");
+
+    /* 1000-pt batch XYZ transform + C-shim memcpy overhead breakdown */
     const size_t PTS = 1000;
     double *inPts = (double *)calloc(PTS * 3, sizeof(double));
     double *outPts = (double *)calloc(PTS * 3, sizeof(double));
+    double *tmpPts = (double *)calloc(PTS * 3, sizeof(double));
     for (size_t i = 0; i < PTS * 3; ++i) inPts[i] = (double)i * 0.001;
     const int B = 5000;
     t0 = now_ns();
@@ -353,8 +372,18 @@ int main(void) {
       grassmann_pga3_motor_apply_xyz_batch(m1, inPts, PTS, outPts);
     }
     dt = now_ns() - t0;
-    printf("[bench] pga3_apply_xyz_batch:   %.1f ns/pt (1000 pts in %.2f us)\n",
-           dt / ((double)B * (double)PTS), (dt / B) / 1000.0);
+    double nsPerPt = dt / ((double)B * (double)PTS);
+    /* Raw 2x memcpy (input copy + output copy) baseline for shim overhead measurement */
+    double tCopy0 = now_ns();
+    for (int i = 0; i < B; ++i) {
+      memcpy(tmpPts, inPts, PTS * 3 * sizeof(double));
+      memcpy(outPts, tmpPts, PTS * 3 * sizeof(double));
+    }
+    double dtCopy = now_ns() - tCopy0;
+    double copyNsPerPt = dtCopy / ((double)B * (double)PTS);
+    printf("[bench] pga3_apply_xyz_batch:   %.2f ns/pt (1000 pts in %.2f us; C-shim 2x memcpy baseline=%.2f ns/pt, kernel=%.2f ns/pt)\n",
+           nsPerPt, (dt / B) / 1000.0, copyNsPerPt, nsPerPt > copyNsPerPt ? nsPerPt - copyNsPerPt : 0.0);
+    free(tmpPts);
     free(inPts);
     free(outPts);
 

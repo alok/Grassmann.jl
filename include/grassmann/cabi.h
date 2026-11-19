@@ -55,6 +55,13 @@ GRASSMANN_API int32_t  grassmann_initialize(void);
 /* Initialize ONLY the Grassmann.CABI Lean module when the host runtime
  * (e.g. LeanVisionOSRuntime) has ALREADY called lean_initialize_runtime_module(). */
 GRASSMANN_API int32_t  grassmann_initialize_module(void);
+/* Attach/detach a dedicated native OS worker thread to the Lean runtime.
+ * IMPORTANT (Swift/visionOS): Pin all Lean C ABI calls to ONE dedicated OS Thread
+ * (e.g. Foundation.Thread / pthread) that calls grassmann_attach_thread() once on
+ * entry and grassmann_detach_thread() on exit — NEVER call from an arbitrary
+ * Swift cooperative actor pool thread! Both calls are thread-local idempotent. */
+GRASSMANN_API int32_t  grassmann_attach_thread(void);
+GRASSMANN_API int32_t  grassmann_detach_thread(void);
 GRASSMANN_API int32_t  grassmann_thread_initialize(void);
 GRASSMANN_API int32_t  grassmann_thread_finalize(void);
 

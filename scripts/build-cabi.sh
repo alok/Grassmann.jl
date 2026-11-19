@@ -27,16 +27,22 @@ mods=(
   Grassmann.Eval.Contour
   Grassmann.Eval.Engine
   Grassmann.Eval.Calc
+  Grassmann.Eval.Implicit3D
+  Grassmann.Eval.ImplicitExpr
   Grassmann.Eval
   Grassmann.Wedge.Types
   Grassmann.Wedge.Levels2D
   Grassmann.Wedge.Levels3D
+  Grassmann.Wedge.Tutorials
   Grassmann.Wedge.Engine
   Grassmann.Wedge
   Grassmann.CoffeeShop.Mesh
   Grassmann.Codegen.GPU
+  Grassmann.Codegen.GPUInit
   Grassmann.Codegen
   Grassmann.CoffeeShop.Presets
+  Grassmann.CoffeeShop.PresetsExtra
+  Grassmann.CoffeeShop.PresetsParity
   Grassmann.CoffeeShop.Engine
   Grassmann.CoffeeShop
   Grassmann.Studio
@@ -124,6 +130,23 @@ case "$(uname -s)" in
     exit 2
     ;;
 esac
+
+echo "[cabi] checking ALOK-1007 generated-C linearity on hot batch loop (Kernels.c)"
+uv run python - "$repo_root/.lake/build/ir/Grassmann/CABI/Kernels.c" << 'PY'
+import pathlib, re, sys
+src = pathlib.Path(sys.argv[1]).read_text()
+m = re.search(r"LEAN_EXPORT lean_object\* lp_Grassmann_Grassmann_CABI_Kernels_pga3MotorApplyXYZBatch_go\([^)]*\)\{.*?(?=\nLEAN_EXPORT )", src, re.S)
+assert m, "Missing pga3MotorApplyXYZBatch_go loop in Kernels.c"
+body = m.group(0)
+assert "lean_float_array_fget(" in body or "lean_float_array_uget(" in body, "Missing direct FloatArray get in hot loop"
+assert "lean_float_array_push(" in body, "Missing linear lean_float_array_push in hot loop"
+assert "goto _start;" in body, "Hot loop not tail-call compiled"
+for bad in ("lean_box_float", "lean_alloc_closure", "lean_nat_mul", "l_Float_ofScientific"):
+    assert bad not in body, f"ALOK-1007 violation: found {bad} inside hot batch loop"
+m2 = re.search(r"LEAN_EXPORT lean_object\* lp_Grassmann_Grassmann_CABI_Kernels_pga3MotorApplyXYZBatch\([^)]*\)\{.*?(?=\nLEAN_EXPORT )", src, re.S)
+assert m2 and "lean_mk_empty_float_array(" in m2.group(0), "Missing single preallocated lean_mk_empty_float_array"
+print("[cabi] ALOK-1007 linearity PASS (prealloc FloatArray, direct fget/push, tail goto _start, zero boxing/closures/mul)")
+PY
 
 echo "[cabi] building and running C11 smoke test + benchmark"
 cc -std=c11 -O2 -Wall -Wextra -Werror \
