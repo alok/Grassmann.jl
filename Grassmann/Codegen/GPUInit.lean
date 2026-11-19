@@ -243,6 +243,7 @@ uniform int uIsIPNS;
 uniform float uSimTime;
 uniform vec2 uResolution;
 uniform mat4 uInvViewProj;
+uniform mat4 projectionMatrix;
 
 float product_len(vec3 p, float b[64]) \{
   float x = p.x; float y = p.y; float z = p.z;
@@ -618,6 +619,7 @@ uniform int uIsIPNS;
 uniform float uSimTime;
 uniform vec2 uResolution;
 uniform mat4 uInvViewProj;
+uniform mat4 projectionMatrix;
 
 float gs_sq(float v) \{ return v * v; }
 float gs_cb(float v) \{ return v * v * v; }
