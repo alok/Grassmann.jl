@@ -182,8 +182,8 @@ partial def reifyPoly (e : Expr) : ReifyM Poly := do
 partial def reifyMV (e : Expr) (fuel : Nat := 16) : ReifyM MExpr := do
   let sp ← read
   let args := e.getAppArgs
-  let last := args.back!
-  let last2 := args[args.size - 2]!
+  let last := args.getD (args.size - 1) default
+  let last2 := args.getD (args.size - 2) default
   let asVar : ReifyM MExpr := do
     if fuel > 0 then
       if let .const c _ := e.getAppFn then
