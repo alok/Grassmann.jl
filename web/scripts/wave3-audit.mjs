@@ -165,13 +165,42 @@ async function main() {
     await page.goto(BASE_URL, { waitUntil: 'networkidle' });
     await page.waitForTimeout(900);
 
-    // 1. Dynamic Preset Catalog (69 presets!) + Dedicated Web Worker WASM + Sculpted Bunny #pga3d_slicing
+    // 1. Dynamic Preset Catalog (69 presets!) + Dedicated Web Worker WASM + Sculpted Bunny #pga3d_slicing + LiveScript v2 metaJson.script
     const s0 = await snap('w3-01-bunny-before.png');
     assert(s0.transportKind === 'wasm', 'Expected live Lean WASM');
     assert(/Worker/i.test(s0.transportLabel || ''), `Expected dedicated Web Worker WASM, got ${s0.transportLabel}`);
     assert(s0.presetCount >= 69, `Expected >=69 dynamic Lean presets, got ${s0.presetCount}`);
     assert(await page.locator('.gs-contour-pip').isVisible(), 'Expected sculpted bunny 2D slice contour PiP visible!');
-    console.log(`[wave3] Dynamic Lean preset catalog synced: ${s0.presetCount} presets via ${s0.transportLabel}`);
+    assert(typeof s0.metaScript === 'string' && s0.metaScript.length >= 60, `Expected Lean metaJson.script populated on #pga3d_slicing, got ${JSON.stringify(s0.metaScript)}`);
+    assert(s0.script === s0.metaScript, 'Expected Code Editor synced directly to Lean metaJson.script');
+    console.log(`[wave3] Dynamic Lean preset catalog synced: ${s0.presetCount} presets via ${s0.transportLabel} (metaJson.script=${s0.metaScript.length} chars)`);
+
+    // 1b. LiveScript v2 Live Edit + Shift+Enter + Syntax Error Resilience!
+    const editor = page.locator('.gs-editor-textarea');
+    const origScript = s0.script;
+    const editedScript = origScript.replace(/-?\d+\.\d+/, '0.45');
+    await editor.fill(editedScript);
+    await editor.press('Shift+Enter');
+    await page.waitForTimeout(400);
+    const sEdited = await page.evaluate(() => window.__grassmannStudio.getState());
+    assert(Number(sEdited.frameSeq) > Number(s0.frameSeq), 'Expected LiveScript v2 Shift+Enter to advance frameSeq');
+    assert(sEdited.diagnostics.length === 0, `Expected 0 diagnostics on valid edited LiveScript v2, got ${JSON.stringify(sEdited.diagnostics)}`);
+    console.log(`[wave3] LiveScript v2 live edit + Shift+Enter PASS (seq ${s0.frameSeq} -> ${sEdited.frameSeq}, 0 diags)`);
+
+    // Syntax error resilience: Line L, Col C diagnostic shown while last valid 3D mesh remains rendered!
+    await editor.fill('let broken = 1 + (');
+    await editor.press('Shift+Enter');
+    await page.waitForTimeout(350);
+    assert(await page.locator('.gs-diagnostics').isVisible(), 'Expected diagnostics banner visible on syntax error');
+    const diagText = await page.locator('.gs-diagnostics').textContent();
+    assert(/Line \d+, Col \d+|error|expected/i.test(diagText || ''), `Expected Line/Col diagnostic, got: ${diagText}`);
+    const cAfterErr = await measureCanvas(page);
+    assert(cAfterErr.ok, 'Expected last valid 3D scene retained after syntax error');
+    console.log(`[wave3] LiveScript v2 syntax error resilience PASS ("${(diagText || '').trim()}")`);
+
+    // Restore clean #pga3d_slicing preset before handle drag
+    await page.locator('[data-preset-id="pga3d_slicing"]').click();
+    await page.waitForTimeout(450);
 
     // Drag slice handle upward through bunny torso!
     const h0 = await page.evaluate(() => window.__grassmannStudio.getHandleScreenPos(0));
@@ -253,10 +282,13 @@ async function main() {
     await snap('w3-11-equations-contours.png');
     assert(await page.locator('.gs-contour-pip').isVisible(), 'Expected 2D Contour Overlay PiP visible after evalEquations');
 
-    // 7b. Implicit 3D Gyroid (Kuhn Marching Tetrahedra Mesh AND live GPUInit GLSL3 Raymarch!)
+    // 7b. Implicit 3D Gyroid (Symmetric Kuhn Marching Tetrahedra Mesh + ZERO stale contour PiP, AND live GPUInit GLSL3 Raymarch!)
     await page.locator('.gs-subtab-btn', { hasText: /^Imp 3D$/ }).click();
     await page.locator('.gs-seg-btn', { hasText: 'Marching Tet Mesh' }).click();
     await snap('w3-13-implicit-mesh.png');
+    assert(!(await page.locator('.gs-contour-pip').isVisible()), 'Expected stale 2D Contour Overlay PiP CLEARED on evalImplicit!');
+    const cMesh = await measureCanvas(page);
+    assert(cMesh.variance >= 400 && cMesh.distinctColors >= 80, `Expected full symmetric Gyroid mesh, got ${JSON.stringify(cMesh)}`);
 
     await page.locator('.gs-seg-btn', { hasText: 'GPU Raymarch (GLSL3)' }).click();
     const sImpGpu = await snap('w3-14-implicit-gpu.png');

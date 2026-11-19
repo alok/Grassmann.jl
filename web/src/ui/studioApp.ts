@@ -539,6 +539,9 @@ export class GrassmannStudioApp {
         frameSeq: this.lastFrame ? this.lastFrame.header.frameSeq.toString() : null,
         presetId: this.lastFrame?.meta?.presetId ?? this.activePresetId,
         title: this.lastFrame?.meta?.title ?? null,
+        script: this.codeEditor.getCode(),
+        metaScript: this.lastFrame?.meta?.script ?? null,
+        diagnostics: this.lastFrame?.meta?.diagnostics ?? [],
         cachedMeshes: this.decoder.getCachedMeshCount(),
         presetCount: this.livePresets.length,
         opnsCount: this.lastFrame?.opnsUniforms.length ?? 0,
@@ -585,7 +588,7 @@ export class GrassmannStudioApp {
       this.decoder.reset();
       this.offlineBanner.classList.add('hidden');
       this.updateEngineBadge();
-      this.ingestRawFrame(initialFrame, true);
+      this.ingestRawFrame(initialFrame, true, undefined, true);
       await this.syncPresetCatalogFromLean(transport);
       this.applyUrlHashOnConnect();
     } catch (err) {
@@ -606,7 +609,7 @@ export class GrassmannStudioApp {
       this.decoder.reset();
       this.offlineBanner.classList.add('hidden');
       this.updateEngineBadge();
-      this.ingestRawFrame(bytes, true);
+      this.ingestRawFrame(bytes, true, undefined, true);
       await this.syncPresetCatalogFromLean(next);
     } catch (err) {
       next.dispose();
@@ -630,12 +633,14 @@ export class GrassmannStudioApp {
         description: it.description || '',
         defaultCode: it.sampleCode ?? `// ${it.title}\npreset ${it.id}`,
       }));
-      // Sync editor sample code for active preset so Shift+Enter always runs valid Lean GA script!
+      // Sync editor sample code for active preset ONLY if Lean didn't already emit a richer live metaJson.script
       const active = this.livePresets.find((p) => p.id === this.activePresetId) ?? this.livePresets[0];
       if (active) {
         this.activePresetId = active.id;
         this.activeAlgebra = active.algebra;
-        this.codeEditor.setCode(active.defaultCode);
+        if (!this.lastFrame?.meta?.script?.trim()) {
+          this.codeEditor.setCode(active.defaultCode);
+        }
       }
       this.rebuildPresetBrowser?.();
     } catch {
@@ -1016,7 +1021,8 @@ export class GrassmannStudioApp {
         : await this.transport.dispatchJson(item.event);
     this.lastLeanUs = (performance.now() - t0) * 1000;
     this.updateEngineBadge();
-    this.ingestRawFrame(frameBytes, item.syncCamera, item.inputTimestampMs);
+    const syncEditorScript = item.kind === 'json' && item.event.op === 'loadPreset';
+    this.ingestRawFrame(frameBytes, item.syncCamera, item.inputTimestampMs, syncEditorScript);
 
     if (
       item.kind === 'json' &&
@@ -1028,12 +1034,20 @@ export class GrassmannStudioApp {
     }
   }
 
-  private ingestRawFrame(bytes: Uint8Array, syncCamera: boolean, inputTimestampMs?: number): void {
+  private ingestRawFrame(
+    bytes: Uint8Array,
+    syncCamera: boolean,
+    inputTimestampMs?: number,
+    syncEditorScript = false
+  ): void {
     try {
       const frame = this.decoder.decode(bytes);
       this.lastFrame = frame;
       this.lastDecodeUs = frame.decodeTimeUs;
       this.renderer.applyFrame(frame, this.decoder, syncCamera, inputTimestampMs);
+      if (syncEditorScript && frame.meta?.script && frame.meta.script.trim().length > 0) {
+        this.codeEditor.setCode(frame.meta.script);
+      }
       this.inspectPanel.update(frame);
       this.codeEditor.setDiagnostics(frame.meta?.diagnostics);
       const errDiag = frame.meta?.diagnostics?.find((d) =>

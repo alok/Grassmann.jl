@@ -71,6 +71,9 @@ async function measureCanvas(page) {
 }
 
 async function verifyHeaders() {
+  const localManifest = JSON.parse(
+    fs.readFileSync(path.join(WEB_DIR, 'public', 'wasm', 'wasm-manifest.json'), 'utf8')
+  );
   const manifestUrl = `${BASE_URL}/wasm/wasm-manifest.json`;
   const mResp = await fetch(manifestUrl);
   assert(mResp.ok, `GET ${manifestUrl} failed: HTTP ${mResp.status}`);
@@ -82,6 +85,10 @@ async function verifyHeaders() {
 
   const manifest = await mResp.json();
   assert(manifest.hash && manifest.wasmFile, `Invalid manifest JSON: ${JSON.stringify(manifest)}`);
+  assert(
+    manifest.hash === localManifest.hash,
+    `Expected live Vercel manifest hash ${localManifest.hash}, got ${manifest.hash}`
+  );
 
   const wasmUrl = `${BASE_URL}/wasm/${manifest.wasmFile}`;
   const wResp = await fetch(wasmUrl, { method: 'HEAD' });
@@ -132,6 +139,7 @@ async function main() {
     assert(sCold.transportKind === 'wasm', `Cold load expected wasm, got ${sCold.transportKind}`);
     assert(sCold.transportLabel.includes(manifest.hash), `Expected worker hash ${manifest.hash}, got ${sCold.transportLabel}`);
     assert(sCold.presetCount >= 69, `Cold load expected >=69 presets, got ${sCold.presetCount}`);
+    assert(typeof sCold.metaScript === 'string' && sCold.metaScript.length >= 60, `Expected LiveScript v2 metaJson.script on cold HTTPS load, got ${JSON.stringify(sCold.metaScript)}`);
 
     // Verify GA syntax highlight tokens rendered in Code Editor
     const tokCount = await page.locator('.gs-editor-highlight .tok-kw, .gs-editor-highlight .tok-op, .gs-editor-highlight .tok-num').count();
@@ -140,7 +148,16 @@ async function main() {
     const c1 = await measureCanvas(page);
     assert(c1.ok, `Cold load canvas blank: ${JSON.stringify(c1)}`);
     await page.screenshot({ path: path.join(OUT_DIR, 'vercel-01-bunny-ide.png') });
-    console.log(`[vercel] 1. Cold HTTPS Load PASS | ${sCold.presetCount} presets | ${sCold.transportLabel} | tokens=${tokCount} | canvas=`, c1);
+    console.log(`[vercel] 1. Cold HTTPS Load PASS | ${sCold.presetCount} presets | ${sCold.transportLabel} | script=${sCold.metaScript.length}c | tokens=${tokCount} | canvas=`, c1);
+
+    // 1b. LiveScript v2 edit + Shift+Enter over live HTTPS
+    const editor = page.locator('.gs-editor-textarea');
+    await editor.fill(sCold.script.replace(/-?\d+\.\d+/, '0.45'));
+    await editor.press('Shift+Enter');
+    await page.waitForTimeout(400);
+    const sLiveEdit = await page.evaluate(() => window.__grassmannStudio.getState());
+    assert(Number(sLiveEdit.frameSeq) > Number(sCold.frameSeq) && sLiveEdit.diagnostics.length === 0, `LiveScript v2 edit failed over HTTPS: ${JSON.stringify(sLiveEdit.diagnostics)}`);
+    console.log(`[vercel] 1b. LiveScript v2 Live Edit PASS (seq ${sCold.frameSeq} -> ${sLiveEdit.frameSeq})`);
 
     // 2. Warm Reload (browser HTTP cache enabled!) -> verify zero stale-cache failure
     await page.reload({ waitUntil: 'networkidle' });
@@ -149,15 +166,23 @@ async function main() {
     assert(sWarm.transportKind === 'wasm' && sWarm.presetCount >= 69, `Warm reload failed: ${JSON.stringify(sWarm)}`);
     console.log(`[vercel] 2. Warm Cached Reload PASS | ${sWarm.presetCount} presets | ${sWarm.transportLabel}`);
 
-    // 3. Live GPUInit GLSL3 OPNS Gyroid over HTTPS
+    // 3. Symmetric Gyroid Marching Tetrahedra Mesh (0 stale contours!) + Live GPUInit GLSL3 OPNS Gyroid over HTTPS
     await page.locator('.gs-mode-btn', { hasText: 'LeanCalculator 3D' }).click();
     await page.locator('.gs-subtab-btn', { hasText: /^Imp 3D$/ }).click();
-    await page.locator('.gs-btn-primary', { hasText: 'Evaluate Implicit 3D in Lean' }).click();
+    await page.locator('.gs-seg-btn', { hasText: 'Marching Tet Mesh' }).click();
+    await page.waitForTimeout(700);
+    const cMesh = await measureCanvas(page);
+    assert(cMesh.variance >= 400 && cMesh.distinctColors >= 80, `Expected full symmetric Gyroid mesh over HTTPS, got ${JSON.stringify(cMesh)}`);
+    assert(!(await page.locator('.gs-contour-pip').isVisible()), 'Expected zero stale contour PiP on Imp 3D');
+    await page.screenshot({ path: path.join(OUT_DIR, 'vercel-02b-gyroid-mesh.png') });
+    console.log(`[vercel] 3a. Symmetric Gyroid Marching Tet Mesh PASS | canvas=`, cMesh);
+
+    await page.locator('.gs-seg-btn', { hasText: 'GPU Raymarch (GLSL3)' }).click();
     await page.waitForTimeout(700);
     const c2 = await measureCanvas(page);
     assert(c2.ok, `OPNS Gyroid blank: ${JSON.stringify(c2)}`);
     await page.screenshot({ path: path.join(OUT_DIR, 'vercel-02-opns-gyroid.png') });
-    console.log(`[vercel] 3. Live GPUInit OPNS Gyroid PASS | canvas=`, c2);
+    console.log(`[vercel] 3b. Live GPUInit OPNS Gyroid PASS | canvas=`, c2);
 
     // 4. Accessible Single-Hand Wedge 2D L1 Solve (Click A -> Click B -> Click Join button -> SOLVED!)
     await page.locator('.gs-mode-btn', { hasText: 'Wedge 2D/3D' }).click();

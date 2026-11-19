@@ -445,6 +445,8 @@ export interface GsirMetaJson {
   algebra?: AlgebraMeta;
   presetId?: string;
   title?: string;
+  /** Live editable CoffeeShop LiveScript v2 source emitted by Lean for the active preset/frame */
+  script?: string;
   labels?: string[];
   inspect?: InspectMetaEntry[];
   opnsShaders?: OpnsShaderMeta[];
