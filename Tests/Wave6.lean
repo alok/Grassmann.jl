@@ -481,12 +481,12 @@ def testDotsRound2Regressions : IO Unit := do
     (frB1.opnsShaders.size == 1 && frB4.opnsShaders.size == 1 &&
      frB1.opnsShaders[0]!.hash != frB4.opnsShaders[0]!.hash)
   let sh4 := frB4.opnsShaders[0]!
-  assertTrue "Dots P0 #5: bound=4 GLSL uses clipR=7.0 (not 2.2)"
-    (hasSubstr sh4.glsl "intersectSphere(ro, rd, 7.0" && !hasSubstr sh4.glsl "intersectSphere(ro, rd, 2.2)")
-  assertTrue "Dots P0 #5: bound=4 WGSL uses clipR²=49.0 (not 4.84)"
-    (hasSubstr sh4.wgsl "- 49.0" && !hasSubstr sh4.wgsl "- 4.84;")
-  assertTrue "Dots P0 #5: bound=4 MSL uses clipR²=49.0f (not 4.84f)"
-    (hasSubstr sh4.msl "- 49.0" && !hasSubstr sh4.msl "- 4.84f;")
+  assertTrue "Dots P0 #5: bound=4 GLSL uses exact AABB intersectBox(4.0)"
+    (hasSubstr sh4.glsl "intersectBox(ro, rd, 4.0" && hasSubstr sh4.glsl "hitRange.y < hitRange.x")
+  assertTrue "Dots P0 #5: bound=4 WGSL uses exact AABB intersectBox(4.0) + tFar<tNear guard"
+    (hasSubstr sh4.wgsl "intersectBox(ro, rd, 4.0" && hasSubstr sh4.wgsl "tFar < tNear")
+  assertTrue "Dots P0 #5: bound=4 MSL uses exact AABB intersectBox(4.0f) + tFar<tNear guard"
+    (hasSubstr sh4.msl "intersectBox(ro, rd, 4.0" && hasSubstr sh4.msl "tFar < tNear")
   assertTrue "Dots P0 #5: bound=4 camera distance frames radius-3 sphere cleanly"
     (frB4.camera.distance ≥ 10.0)
 
