@@ -417,13 +417,16 @@ private def refineBounds (f : Vec3 → Float) (bmin bmax : Vec3) : Vec3 × Vec3 
           let x0 := bmin.x + Float.ofNat ix * dx; let x1 := x0 + dx
           let y0 := bmin.y + Float.ofNat iy * dy; let y1 := y0 + dy
           let z0 := bmin.z + Float.ofNat iz * dz; let z1 := z0 + dz
-          if x0 < loX then loX := x0; if x1 > hiX then hiX := x1
-          if y0 < loY then loY := y0; if y1 > hiY then hiY := y1
-          if z0 < loZ then loZ := z0; if z1 > hiZ then hiZ := z1
+          if x0 < loX then loX := x0
+          if x1 > hiX then hiX := x1
+          if y0 < loY then loY := y0
+          if y1 > hiY then hiY := y1
+          if z0 < loZ then loZ := z0
+          if z1 > hiZ then hiZ := z1
   if !found then
     return (bmin, bmax)
   else
-    let padX := dx * 0.75; let padY := dy * 0.75; let padZ := dz * 0.75
+    let padX := dx; let padY := dy; let padZ := dz
     let rMin : Vec3 := ⟨max bmin.x (loX - padX), max bmin.y (loY - padY), max bmin.z (loZ - padZ)⟩
     let rMax : Vec3 := ⟨min bmax.x (hiX + padX), min bmax.y (hiY + padY), min bmax.z (hiZ + padZ)⟩
     return (rMin, rMax)

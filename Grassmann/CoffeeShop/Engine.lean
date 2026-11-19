@@ -153,7 +153,7 @@ def setScript (st : CoffeeShopState) (algebra code : String) : CoffeeShopState :
     else st.lastValidScriptFrame
   { st with
     customAlgebra := algebra, customCode := code,
-    handles := #[], coeffOverrides := #[],
+    handles := #[], coeffOverrides := #[], eqOverlay := none,
     lastValidScriptFrame := nextValid,
     useCustom := true, useSurface := false, useImplicit := false, useParametric := false }
 
@@ -163,6 +163,7 @@ def setSurface (st : CoffeeShopState) (expr : String)
     surfaceExpr := expr,
     surfaceBounds := (minX, maxX, minY, maxY),
     surfaceGridN := max 8 (min 96 gridN),
+    eqOverlay := none,
     useSurface := true, useCustom := false, useImplicit := false, useParametric := false }
 
 def setImplicit (st : CoffeeShopState) (expr : String) (gpuRaymarch : Bool := false)
@@ -173,6 +174,7 @@ def setImplicit (st : CoffeeShopState) (expr : String) (gpuRaymarch : Bool := fa
     implicitGpuRaymarch := gpuRaymarch,
     implicitBound := b,
     implicitGridN := max 8 (min 36 gridN),
+    eqOverlay := none,
     useImplicit := true, useCustom := false, useSurface := false, useParametric := false }
 
 def setParametric (st : CoffeeShopState) (fx fy fz : String)
@@ -183,6 +185,7 @@ def setParametric (st : CoffeeShopState) (fx fy fz : String)
     paramVBounds := (vMin, vMax),
     paramNu := max 8 (min 96 nu),
     paramNv := max 6 (min 64 nv),
+    eqOverlay := none,
     useParametric := true, useCustom := false, useSurface := false, useImplicit := false }
 
 def setEquations (st : CoffeeShopState) (eqs : Array String)

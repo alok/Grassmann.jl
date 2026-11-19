@@ -213,6 +213,43 @@ def testFlagshipPresetScripts : IO Unit := do
     | .error e => throw (IO.userError s!"FAIL [preset script {p.id}] GSIR invalid: {e}")
     | .ok _ => assertTrue s!"preset script {p.id} 8B aligned" (raw.size % 8 == 0)
 
+  -- #97 Regression Fix 1: Periodic Gyroid adaptive bounds span symmetric [-1.6, +1.6]^3!
+  match ImplicitExpr.evalImplicitExprMesh
+      "cos(x*2)*sin(y*2)+cos(y*2)*sin(z*2)+cos(z*2)*sin(x*2)"
+      0.0 ⟨-1.6, -1.6, -1.6⟩ ⟨1.6, 1.6, 1.6⟩ 14 5999 true with
+  | .error e => throw (IO.userError s!"Symmetric gyroid failed: {e}")
+  | .ok gyr =>
+    let vCount := gyr.positions.size / 3
+    let mut minX := 1e9; let mut maxX := -1e9
+    let mut minY := 1e9; let mut maxY := -1e9
+    let mut minZ := 1e9; let mut maxZ := -1e9
+    for i in [:vCount] do
+      let x := gyr.positions.get! (i * 3)
+      let y := gyr.positions.get! (i * 3 + 1)
+      let z := gyr.positions.get! (i * 3 + 2)
+      if x < minX then minX := x
+      if x > maxX then maxX := x
+      if y < minY then minY := y
+      if y > maxY then maxY := y
+      if z < minZ then minZ := z
+      if z > maxZ then maxZ := z
+    assertTrue s!"Gyroid spans symmetric X ([{minX}, {maxX}])" (minX < -1.1 && maxX > 1.1)
+    assertTrue s!"Gyroid spans symmetric Y ([{minY}, {maxY}])" (minY < -1.1 && maxY > 1.1)
+    assertTrue s!"Gyroid spans symmetric Z ([{minZ}, {maxZ}])" (minZ < -1.1 && maxZ > 1.1)
+
+  -- #97 Regression Fix 2: evalImplicit / evalParametric / evalSurface clear stale contourOverlay!
+  let mut sessEq := Studio.create
+  sessEq := Studio.dispatchEvent sessEq (.evalEquations #["x^2+y^2-1", "y-x"] (-2) 2 (-2) 2 24) true
+  assertTrue "evalEquations sets contourOverlay" (CoffeeShop.toSceneFrame sessEq.coffee 1).contourOverlay.isSome
+  sessEq := Studio.dispatchEvent sessEq (.evalImplicit "x^2+y^2+z^2-1" false 1.5 12) true
+  assertTrue "evalImplicit clears stale contourOverlay" (CoffeeShop.toSceneFrame sessEq.coffee 2).contourOverlay.isNone
+  sessEq := Studio.dispatchEvent sessEq (.evalEquations #["x^2+y^2-1"] (-2) 2 (-2) 2 24) true
+  sessEq := Studio.dispatchEvent sessEq (.evalParametric "(1+0.3*cos(v))*cos(u)" "0.3*sin(v)" "(1+0.3*cos(v))*sin(u)" 0 6.28318 0 6.28318 20 12) true
+  assertTrue "evalParametric clears stale contourOverlay" (CoffeeShop.toSceneFrame sessEq.coffee 3).contourOverlay.isNone
+  sessEq := Studio.dispatchEvent sessEq (.evalEquations #["x^2+y^2-1"] (-2) 2 (-2) 2 24) true
+  sessEq := Studio.dispatchEvent sessEq (.evalSurface "sin(x)*cos(y)" (-2) 2 (-2) 2 16) true
+  assertTrue "evalSurface clears stale contourOverlay" (CoffeeShop.toSceneFrame sessEq.coffee 4).contourOverlay.isNone
+
   -- Verify `toSceneFrame` populates `metaJson.script` on normal preset loads!
   let cs := CoffeeShop.loadPreset {} "pga3d_slicing"
   let frP := CoffeeShop.toSceneFrame cs 1
