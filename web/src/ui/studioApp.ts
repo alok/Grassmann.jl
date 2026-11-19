@@ -759,7 +759,7 @@ export class GrassmannStudioApp {
         meshCount: this.lastFrame?.meshRefs.length ?? 0,
         meshRefMatrices:
           this.lastFrame?.meshRefs.map((m) => ({
-            meshId: m.meshId,
+            meshId: m.meshId.toString(),
             mat4: Array.from(m.modelMat4),
           })) ?? [],
         segmentCount: this.lastFrame?.segments.length ?? 0,

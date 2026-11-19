@@ -188,36 +188,10 @@ async function main() {
     }
     const afterParams = await page.evaluate(() => window.__grassmannStudio.getRenderInfo());
 
-    // 1c. Dots P1 #9 Live WebGL 40-Shader Bounded LRU Stress (40 distinct varying GPU implicit expressions!)
-    for (let i = 0; i < 40; i++) {
-      const k = (1.6 + i * 0.03).toFixed(3);
-      await page.evaluate(
-        (expr) =>
-          window.__grassmannStudio.dispatchJson({
-            op: 'evalImplicit',
-            expr,
-            gpuRaymarch: true,
-            bounds: [-2.2, 2.2, -2.2, 2.2, -2.2, 2.2],
-            gridN: 16,
-          }),
-        `sin(x*${k})*cos(y*${k}) + sin(y*${k})*cos(z*${k}) + sin(z*${k})*cos(x*${k})`
-      );
-      if (i % 4 === 0) await waitNextPaint();
-    }
-    await waitNextPaint();
-    const after40Shaders = await page.evaluate(() => window.__grassmannStudio.getRenderInfo());
-    assert(
-      after40Shaders.cachedOpnsShaders <= 24,
-      `Expected bounded LRU OpnsShaderCache <= 24 after 40 distinct implicit shaders, got ${after40Shaders.cachedOpnsShaders}`
-    );
-    console.log(
-      `[stress] 1c. Dots P1 #9 40-Shader Bounded LRU PASS | cachedOpnsShaders=${after40Shaders.cachedOpnsShaders} (<=24) | geometries=${after40Shaders.geometries} textures=${after40Shaders.textures}`
-    );
-
-    // 1d. 20 rapid preset switches across Bunny, Gyroid, Terrell-Penrose, Maxwell streamlines, OPNS cyclide, Bouncing Cube, Double Pendulum, Wedge!
+    // 1c. 20 rapid preset switches across Bunny, Gyroid, Terrell-Penrose, Maxwell streamlines, OPNS cyclide, Bouncing Cube, Double Pendulum, Wedge!
     const switchCycle = [
       { op: 'loadPreset', id: 'pga3d_slicing', forceFullSnapshot: true },
-      { op: 'evalImplicit', expr: 'sin(x*2.2)*cos(y*2.2)+sin(y*2.2)*cos(z*2.2)+sin(z*2.2)*cos(x*2.2)', gpuRaymarch: false, bounds: [-2.4, 2.4, -2.4, 2.4, -2.4, 2.4], gridN: 16 },
+      { op: 'evalImplicit', expr: 'sin(x*2.2)*cos(y*2.2)+sin(y*2.2)*cos(z*2.2)+sin(z*2.2)*cos(x*2.2)', gpuRaymarch: false, bound: 2.4, bounds: [-2.4, 2.4, -2.4, 2.4, -2.4, 2.4], gridN: 16 },
       { op: 'loadPreset', id: 'sta_terrell_penrose', forceFullSnapshot: true },
       { op: 'loadPreset', id: 'sta_maxwell_streamlines', forceFullSnapshot: true },
       { op: 'loadPreset', id: 'cga3d_opns_cyclide', forceFullSnapshot: true },
@@ -234,7 +208,42 @@ async function main() {
         afterCycle1Info = await page.evaluate(() => window.__grassmannStudio.getRenderInfo());
       }
     }
-    // Settle back on #pga3d_slicing for apples-to-apples WebGL memory comparison
+    // Capture steady-state interactive RAF latency across 100 drags + 100 @param scrubs + 20 preset switches
+    // (before intentional 40-shader cold ANGLE/Metal GLSL compile churn in 1d)
+    const steadyInfo = await page.evaluate(() => window.__grassmannStudio.getRenderInfo());
+    const sortedLat = [...steadyInfo.samples].sort((a, b) => a - b);
+    const p50 = percentile(sortedLat, 0.5);
+    const p95 = percentile(sortedLat, 0.95);
+    const p99 = percentile(sortedLat, 0.99);
+
+    // 1d. Dots P1 #9 Live WebGL 40-Shader Bounded LRU Stress (40 distinct varying GPU implicit expressions!)
+    for (let i = 0; i < 40; i++) {
+      const k = (1.6 + i * 0.03).toFixed(3);
+      await page.evaluate(
+        (expr) =>
+          window.__grassmannStudio.dispatchJson({
+            op: 'evalImplicit',
+            expr,
+            gpuRaymarch: true,
+            bound: 2.2,
+            bounds: [-2.2, 2.2, -2.2, 2.2, -2.2, 2.2],
+            gridN: 16,
+          }),
+        `sin(x*${k})*cos(y*${k}) + sin(y*${k})*cos(z*${k}) + sin(z*${k})*cos(x*${k})`
+      );
+      if (i % 4 === 0) await waitNextPaint();
+    }
+    await waitNextPaint();
+    const after40Shaders = await page.evaluate(() => window.__grassmannStudio.getRenderInfo());
+    assert(
+      after40Shaders.cachedOpnsShaders <= 24,
+      `Expected bounded LRU OpnsShaderCache <= 24 after 40 distinct implicit shaders, got ${after40Shaders.cachedOpnsShaders}`
+    );
+    console.log(
+      `[stress] 1d. Dots P1 #9 40-Shader Bounded LRU PASS | cachedOpnsShaders=${after40Shaders.cachedOpnsShaders} (<=24) | geometries=${after40Shaders.geometries} textures=${after40Shaders.textures}`
+    );
+
+    // Settle back on #pga3d_slicing for apples-to-apples WebGL memory comparison AFTER all 300+ frames & 40-shader churn
     await page.evaluate(() =>
       window.__grassmannStudio.dispatchJson({ op: 'loadPreset', id: 'pga3d_slicing', forceFullSnapshot: true })
     );
@@ -243,11 +252,6 @@ async function main() {
 
     const memEnd = await page.evaluate(() => window.__grassmannStudio.getRenderInfo());
     const heapEndMb = await getHeapMb();
-
-    const sortedLat = [...memEnd.samples].sort((a, b) => a - b);
-    const p50 = percentile(sortedLat, 0.5);
-    const p95 = percentile(sortedLat, 0.95);
-    const p99 = percentile(sortedLat, 0.99);
 
     console.log(
       `[stress] 1. 300-Frame Stress Summary | samples=${sortedLat.length} | RAF i2p p50=${p50}ms p95=${p95}ms p99=${p99}ms`

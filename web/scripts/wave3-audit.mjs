@@ -569,8 +569,8 @@ async function main() {
     assert(sSeed1.wedge?.isRandom === true && sSeed1.wedge?.seedStr === '9007199254740993', `Expected restored wedge seedStr === '9007199254740993', got ${JSON.stringify(sSeed1.wedge)}`);
     console.log(`[wave3] Wave 7A Lossless 64-bit seedStr Round-Trip PASS | seedStr=${sSeed1.wedge.seedStr}`);
 
-    // 12. Wave 8B/8C Dots Round-3 Fixpoint Verification Suite (activated via --wave8 or WAVE8_FIXPOINT=1)
-    const runWave8 = process.env.WAVE8_FIXPOINT === '1' || process.argv.includes('--wave8');
+    // 12. Wave 8B/8C Dots Round-3 Fixpoint Verification Suite (36/36 full suite!)
+    const runWave8 = process.env.WAVE8_FIXPOINT !== '0' && !process.argv.includes('--no-wave8');
     if (runWave8) {
       await page.locator('.gs-mode-btn', { hasText: 'CoffeeShop IDE' }).click();
       await page.waitForTimeout(250);
