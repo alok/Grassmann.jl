@@ -8,7 +8,7 @@ This repo ports Michael Reed's Julia ecosystem (Grassmann.jl and friends) to Lea
 3. `docs/PERF.md`: measured performance facts. Add to it; don't guess.
 
 Rules (details in DESIGN.md §2):
-- Toolchain `leanprover/lean4:v4.35.0-rc3`. The root package has **no dependencies**.
+- Toolchain `leanprover/lean4:v4.36.0`. The root package has **no dependencies**.
 - `lake build` must stay warning-free (CI uses `--wfail`); `lake test` runs all tests.
 - No `sorry`, custom axioms or `native_decide` in library code.
 - Float bulk data lives in `StaticVectors.Values` / `FloatArray`, never `Array Float`.

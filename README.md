@@ -29,7 +29,7 @@ lake test         # unit, golden (Julia oracle) and property tests
 lake exe bench    # benchmarks
 ```
 
-Toolchain: `leanprover/lean4:v4.35.0-rc3`. Plots are rendered with
+Toolchain: `leanprover/lean4:v4.36.0`. Plots are rendered with
 [LeanPlot](https://github.com/alok/LeanPlot) in the `gallery/` sub-package.
 
 ## Credit and licence
