@@ -305,20 +305,72 @@ for (let idx = 0; idx < 6; idx++) {
   assert.notEqual(wA.meta.wedge.title, wB.meta.wedge.title, "Dots P0 #4: consecutive 64-bit seeds produce distinct challenges");
 }
 
-// (Dots P0 #5) GPU implicit raymarcher respects bound across GLSL3/WGSL/MSL (clipR = max(1.2, bound*1.75))
+// (Dots P0 #5 + Round-3 #1/#2) Signed GPU powers + Exact Ray-AABB [-bound, bound]^3 + tFar < tNear + bound in [0.5, 20]
 {
+  // R3 #1: Signed odd integer power x^5 + 1 preserves negative sign (x = -1 plane!)
+  const p5CpuRaw = sess.dispatchJson({ op: "evalImplicit", expr: "x^5 + 1", gpuRaymarch: false, bound: 2, gridN: 14 });
+  const p5Cpu = parseGSIR(p5CpuRaw);
+  const p5Mesh = p5Cpu.sections.find(s => s.kind === 0x0B);
+  assert.ok(p5Mesh, "Dots R3 #1: CPU x^5+1 emitted mesh");
+  const p5Verts = new DataView(p5CpuRaw.buffer, p5CpuRaw.byteOffset, p5CpuRaw.byteLength).getUint32(p5Mesh.byteOffset + 16, true);
+  assert.ok(p5Verts > 200, `Dots R3 #1: CPU x^5+1 rich mesh at x=-1 (verts=${p5Verts})`);
+  const p5Gpu = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: "x^5 + 1", gpuRaymarch: true, bound: 2 }));
+  for (const [lang, src] of [["GLSL3", p5Gpu.meta.opnsShaders[0].glsl], ["WGSL", p5Gpu.meta.opnsShaders[0].wgsl], ["MSL", p5Gpu.meta.opnsShaders[0].msl]]) {
+    assert.ok(src.includes("gs_p5(p.x)"), `Dots R3 #1: ${lang} x^5+1 emits signed gs_p5(p.x)`);
+    assert.ok(!src.includes("pow(max(1e-6, abs(p.x))"), `Dots R3 #1: ${lang} x^5+1 does NOT strip sign`);
+  }
+
+  // R3 #2a: x - 1.5 @ bound=1 -> CPU strictly empty (0 verts) AND GPU uses intersectBox(ro, rd, 1.0) + tFar < tNear!
+  const b1CpuRaw = sess.dispatchJson({ op: "evalImplicit", expr: "x - 1.5", gpuRaymarch: false, bound: 1, gridN: 14 });
+  const b1Cpu = parseGSIR(b1CpuRaw);
+  const b1Mesh = b1Cpu.sections.find(s => s.kind === 0x0B);
+  const b1Verts = b1Mesh ? new DataView(b1CpuRaw.buffer, b1CpuRaw.byteOffset, b1CpuRaw.byteLength).getUint32(b1Mesh.byteOffset + 16, true) : 0;
+  assert.equal(b1Verts, 0, `Dots R3 #2: CPU x-1.5 @ bound=1 must be empty (got ${b1Verts} verts)`);
+  const b1Gpu = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: "x - 1.5", gpuRaymarch: true, bound: 1 }));
+  for (const [lang, src] of [["GLSL3", b1Gpu.meta.opnsShaders[0].glsl], ["WGSL", b1Gpu.meta.opnsShaders[0].wgsl], ["MSL", b1Gpu.meta.opnsShaders[0].msl]]) {
+    assert.ok(src.includes("intersectBox(ro, rd, 1.0"), `Dots R3 #2: ${lang} clips to intersectBox(1.0)`);
+    assert.ok(src.includes("tFar < tNear || tFar < 0.0"), `Dots R3 #2: ${lang} enforces tFar < tNear || tFar < 0.0`);
+    assert.ok(!src.includes("intersectSphere"), `Dots R3 #2: ${lang} has no legacy intersectSphere`);
+  }
+
+  // R3 #2b: bound=1 vs bound=4 distinct hashes + intersectBox(4.0)
   const gB1 = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: "x*x+y*y+z*z-9", gpuRaymarch: true, bound: 1 }));
   const gB4 = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: "x*x+y*y+z*z-9", gpuRaymarch: true, bound: 4 }));
   assert.notEqual(gB1.meta.opnsShaders[0].hash, gB4.meta.opnsShaders[0].hash, "Dots P0 #5: bound=1 vs bound=4 distinct shader hashes");
-  assert.ok(gB4.meta.opnsShaders[0].glsl.includes("7."), "Dots P0 #5: bound=4 GLSL uses clipR=7.0");
-  assert.ok(gB4.meta.opnsShaders[0].wgsl.includes("49."), "Dots P0 #5: bound=4 WGSL uses clipR^2=49.0");
-  assert.ok(gB4.meta.opnsShaders[0].msl.includes("49."), "Dots P0 #5: bound=4 MSL uses clipR^2=49.0");
+  for (const [lang, src] of [["GLSL3", gB4.meta.opnsShaders[0].glsl], ["WGSL", gB4.meta.opnsShaders[0].wgsl], ["MSL", gB4.meta.opnsShaders[0].msl]]) {
+    assert.ok(src.includes("intersectBox(ro, rd, 4.0"), `Dots P0 #5: ${lang} bound=4 uses intersectBox(4.0)`);
+  }
+
+  // R3 #2c: x - 15 @ bound=20 -> CPU non-empty plane at x=15 AND GPU uses intersectBox(20.0)
+  const b20CpuRaw = sess.dispatchJson({ op: "evalImplicit", expr: "x - 15", gpuRaymarch: false, bound: 20, gridN: 14 });
+  const b20Cpu = parseGSIR(b20CpuRaw);
+  const b20Mesh = b20Cpu.sections.find(s => s.kind === 0x0B);
+  assert.ok(b20Mesh, "Dots R3 #2: CPU x-15 @ bound=20 emitted mesh");
+  const b20Verts = new DataView(b20CpuRaw.buffer, b20CpuRaw.byteOffset, b20CpuRaw.byteLength).getUint32(b20Mesh.byteOffset + 16, true);
+  assert.ok(b20Verts > 100, `Dots R3 #2: CPU x-15 @ bound=20 non-empty (verts=${b20Verts})`);
+  const b20Gpu = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: "x - 15", gpuRaymarch: true, bound: 20 }));
+  for (const [lang, src] of [["GLSL3", b20Gpu.meta.opnsShaders[0].glsl], ["WGSL", b20Gpu.meta.opnsShaders[0].wgsl], ["MSL", b20Gpu.meta.opnsShaders[0].msl]]) {
+    assert.ok(src.includes("intersectBox(ro, rd, 20.0"), `Dots R3 #2: ${lang} bound=20 uses intersectBox(20.0)`);
+  }
 }
 
-// (Dots P1 #8 & #10) Mode-gated WedgeGesture + explicit seekTime / resetTime!
+// (Dots P1 #8 & #10 + Round-3 #3) Mode-gated WedgeGesture + deterministic RK4 seekTime(2.5) / resetTime!
 {
-  const st0 = parseGSIR(sess.dispatchJson({ op: "loadPreset", id: "pga3d_bouncing_cube" }));
+  const readCubePos = (raw, fr) => {
+    const mref = fr.sections.find(s => s.kind === 0x0A);
+    assert.ok(mref && mref.count >= 1, "bouncing cube has 0x0A MESH_REFS");
+    const dv = new DataView(raw.buffer, raw.byteOffset, raw.byteLength);
+    // MeshRef record: meshId(8)+dirtyHash(8)+motor(32)+mat4(64) -> translation col3 at +48 + 48 = +96
+    return [
+      dv.getFloat32(mref.byteOffset + 96, true),
+      dv.getFloat32(mref.byteOffset + 100, true),
+      dv.getFloat32(mref.byteOffset + 104, true),
+    ];
+  };
+  const st0Raw = sess.dispatchJson({ op: "loadPreset", id: "pga3d_bouncing_cube" });
+  const st0 = parseGSIR(st0Raw);
   assert.equal(st0.meta.presetId, "pga3d_bouncing_cube");
+  const pos0 = readCubePos(st0Raw, st0);
   // Send binary WedgeGesture while in CoffeeShop -> MUST NOT hijack mode into Wedge!
   const hijack = new Uint8Array(40);
   const hdv = new DataView(hijack.buffer);
@@ -326,13 +378,22 @@ for (let idx = 0; idx < 6; idx++) {
   hdv.setFloat32(12, -1.0, true); hdv.setFloat32(24, 1.0, true); hdv.setUint16(38, 0, true);
   const afterHijack = parseGSIR(sess.dispatchBin(hijack));
   assert.ok(afterHijack.meta === null || afterHijack.meta.presetId === "pga3d_bouncing_cube", "Dots P1 #8: WedgeGesture ignored outside Wedge mode");
-  // Explicit seekTime(2.5) and resetTime() -> exact simTime 2.5 and 0.0!
-  const sSeek = parseGSIR(sess.dispatchJson({ op: "seekTime", t: 2.5 }));
+  // Explicit seekTime(2.5) -> deterministic RK4 replay moves cube substantially away from t=0!
+  const sSeekRaw = sess.dispatchJson({ op: "seekTime", t: 2.5 });
+  const sSeek = parseGSIR(sSeekRaw);
   assertNear(sSeek.simTime, 2.5, 1e-4, "Dots P1 #10: seekTime sets exact simTime == 2.5");
-  const sReset = parseGSIR(sess.dispatchJson({ op: "resetTime" }));
+  const posSeek = readCubePos(sSeekRaw, sSeek);
+  const moveDist = Math.hypot(posSeek[0] - pos0[0], posSeek[1] - pos0[1], posSeek[2] - pos0[2]);
+  assert.ok(moveDist > 0.25, `Dots R3 #3: seekTime(2.5) RK4 moved cube away from t=0 (dist=${moveDist.toFixed(3)})`);
+  // Explicit resetTime -> exact simTime 0.0 AND restores initial t=0 cube pose!
+  const sResetRaw = sess.dispatchJson({ op: "resetTime" });
+  const sReset = parseGSIR(sResetRaw);
   assertNear(sReset.simTime, 0.0, 1e-6, "Dots P1 #10: resetTime resets exact simTime == 0.0");
+  const posReset = readCubePos(sResetRaw, sReset);
+  const resetErr = Math.hypot(posReset[0] - pos0[0], posReset[1] - pos0[1], posReset[2] - pos0[2]);
+  assert.ok(resetErr < 1e-5, `Dots R3 #3: resetTime restored t=0 cube pose (err=${resetErr})`);
 }
-console.log("[wasm test] ALL 6 DOTS ROUND-2 REGRESSIONS + DUAL-HANDLE SLICING + 6-STOP TOUR VERIFIED LIVE IN WASM!");
+console.log("[wasm test] ALL DOTS ROUND-2 & ROUND-3 REGRESSIONS + DUAL-HANDLE SLICING + 6-STOP TOUR VERIFIED LIVE IN WASM!");
 
 // Live @param / setParam verification on sta_terrell_penrose & pga3d_bouncing_cube!
 {

@@ -243,6 +243,10 @@ wasmFrames.gears_kinematics = summarizeGsir(wsess.dispatchJson({ op: "loadPreset
 wasmFrames.tour_stop_3 = summarizeGsir(wsess.dispatchJson({ op: "loadTourStop", index: 3 }));
 wsess.dispatchJson({ op: "loadPreset", id: "wedge_3d" });
 wasmFrames.wedge_l17 = summarizeGsir(wsess.dispatchJson({ op: "wedgeAction", action: "goto", arg: 17 }));
+wasmFrames.r3_pow5_gpu = summarizeGsir(wsess.dispatchJson({ op: "evalImplicit", expr: "x^5 + 1", gpuRaymarch: true, bound: 2 }));
+wasmFrames.r3_plane_b20_cpu = summarizeGsir(wsess.dispatchJson({ op: "evalImplicit", expr: "x - 15", gpuRaymarch: false, bound: 20, gridN: 14 }));
+wsess.dispatchJson({ op: "loadPreset", id: "pga3d_bouncing_cube" });
+wasmFrames.r3_bouncing_seek = summarizeGsir(wsess.dispatchJson({ op: "seekTime", t: 2.5 }));
 
 for (const name of Object.keys(nativeOut.frames)) {
   compareFrameParity(name, nativeOut.frames[name], wasmFrames[name], "wasm");
@@ -343,6 +347,10 @@ if (fs.existsSync(serverBin)) {
     srvFrames.tour_stop_3 = summarizeGsir(await rpc(JSON.stringify({ op: "loadTourStop", index: 3 })));
     await rpc(JSON.stringify({ op: "loadPreset", id: "wedge_3d" }));
     srvFrames.wedge_l17 = summarizeGsir(await rpc(JSON.stringify({ op: "wedgeAction", action: "goto", arg: 17 })));
+    srvFrames.r3_pow5_gpu = summarizeGsir(await rpc(JSON.stringify({ op: "evalImplicit", expr: "x^5 + 1", gpuRaymarch: true, bound: 2 })));
+    srvFrames.r3_plane_b20_cpu = summarizeGsir(await rpc(JSON.stringify({ op: "evalImplicit", expr: "x - 15", gpuRaymarch: false, bound: 20, gridN: 14 })));
+    await rpc(JSON.stringify({ op: "loadPreset", id: "pga3d_bouncing_cube" }));
+    srvFrames.r3_bouncing_seek = summarizeGsir(await rpc(JSON.stringify({ op: "seekTime", t: 2.5 })));
 
     for (const name of Object.keys(nativeOut.frames)) {
       compareFrameParity(name, nativeOut.frames[name], srvFrames[name], "ga-server");

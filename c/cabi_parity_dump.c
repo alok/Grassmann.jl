@@ -271,6 +271,17 @@ int main(void) {
   assert(dispatch_json_grow(sid, "{\"op\":\"wedgeAction\",\"action\":\"goto\",\"arg\":17}", &buf, &cap, &got) == GSIR_OK);
   print_gsir_summary("wedge_l17", buf, got, 1);
 
+  /* Wave 8B Round-3 Fixpoint Parity (signed GPU power, bound=20 AABB, deterministic RK4 seekTime) */
+  assert(dispatch_json_grow(sid, "{\"op\":\"evalImplicit\",\"expr\":\"x^5 + 1\",\"gpuRaymarch\":true,\"bound\":2}", &buf, &cap, &got) == GSIR_OK);
+  print_gsir_summary("r3_pow5_gpu", buf, got, 1);
+
+  assert(dispatch_json_grow(sid, "{\"op\":\"evalImplicit\",\"expr\":\"x - 15\",\"gpuRaymarch\":false,\"bound\":20,\"gridN\":14}", &buf, &cap, &got) == GSIR_OK);
+  print_gsir_summary("r3_plane_b20_cpu", buf, got, 1);
+
+  assert(dispatch_json_grow(sid, "{\"op\":\"loadPreset\",\"id\":\"pga3d_bouncing_cube\"}", &buf, &cap, &got) == GSIR_OK);
+  assert(dispatch_json_grow(sid, "{\"op\":\"seekTime\",\"t\":2.5}", &buf, &cap, &got) == GSIR_OK);
+  print_gsir_summary("r3_bouncing_seek", buf, got, 1);
+
   /* 4. Native Microbenchmarks */
   const int N_M = 200000;
   double t0 = now_ms();
