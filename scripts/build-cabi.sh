@@ -44,6 +44,7 @@ mods=(
   Grassmann.CoffeeShop.PresetsExtra
   Grassmann.CoffeeShop.PresetsParity
   Grassmann.CoffeeShop.PresetsShowcase
+  Grassmann.CoffeeShop.Tour
   Grassmann.CoffeeShop.Engine
   Grassmann.CoffeeShop
   Grassmann.Studio

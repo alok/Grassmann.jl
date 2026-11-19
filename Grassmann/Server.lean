@@ -422,6 +422,8 @@ private def handleClient (ctx : ServerCtx) (client : Socket) : IO Unit := do
           sendHttpResp client "200 OK" "application/json" payload.toUTF8 keepAlive
         else if method == "GET" && path == "/api/presets" then
           sendHttpResp client "200 OK" "application/json" CABI.Studio.getPresetCatalogJson.toUTF8 keepAlive
+        else if method == "GET" && path == "/api/tour" then
+          sendHttpResp client "200 OK" "application/json" CABI.Studio.getTourCatalogJson.toUTF8 keepAlive
         else if method == "POST" && path == "/api/session" then
           let sid ← withStudioLock ctx CABI.Studio.createSession
           sendHttpResp client "200 OK" "application/json" s!"\{\"session\":{sid}}".toUTF8 keepAlive

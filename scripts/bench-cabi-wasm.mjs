@@ -208,8 +208,11 @@ for (const [k, natArr] of Object.entries(nativeOut.kernels)) {
 }
 
 const wasmCatalog = wasm.presetCatalog();
-assert.equal(nativeOut.catalog.length, 74, `expected 74 native presets, got ${nativeOut.catalog.length}`);
-assert.deepEqual(wasmCatalog.map(p => p.id), nativeOut.catalog.map(p => p.id), "Native vs WASM 74-preset catalog IDs");
+assert.equal(nativeOut.catalog.length, 77, `expected 77 native presets, got ${nativeOut.catalog.length}`);
+assert.deepEqual(wasmCatalog.map(p => p.id), nativeOut.catalog.map(p => p.id), "Native vs WASM 77-preset catalog IDs");
+const wasmTour = wasm.tourCatalog();
+assert.equal(nativeOut.tour.length, 6, `expected 6 native tour stops, got ${nativeOut.tour.length}`);
+assert.deepEqual(wasmTour, nativeOut.tour, "Native vs WASM 6-stop Tour catalog exact equality");
 
 const wsess = wasm.createStudioSession();
 const wasmFrames = {};
@@ -234,6 +237,12 @@ wsess.dispatchJson({ op: "loadPreset", id: "sta_terrell_penrose" });
 wasmFrames.terrell_penrose_param = summarizeGsir(wsess.dispatchJson({ op: "setParam", name: "beta", value: 0.85 }));
 wasmFrames.maxwell_streamlines = summarizeGsir(wsess.dispatchJson({ op: "loadPreset", id: "sta_maxwell_streamlines" }));
 wasmFrames.bouncing_cube = summarizeGsir(wsess.dispatchJson({ op: "loadPreset", id: "pga3d_bouncing_cube" }));
+wasmFrames.barth_sextic = summarizeGsir(wsess.dispatchJson({ op: "loadPreset", id: "implicit_barth_sextic" }));
+wasmFrames.dupin_cyclide = summarizeGsir(wsess.dispatchJson({ op: "loadPreset", id: "cga3d_dupin_cyclide_raymarch" }));
+wasmFrames.gears_kinematics = summarizeGsir(wsess.dispatchJson({ op: "loadPreset", id: "pga3d_gears_kinematics" }));
+wasmFrames.tour_stop_3 = summarizeGsir(wsess.dispatchJson({ op: "loadTourStop", index: 3 }));
+wsess.dispatchJson({ op: "loadPreset", id: "wedge_3d" });
+wasmFrames.wedge_l17 = summarizeGsir(wsess.dispatchJson({ op: "wedgeAction", action: "goto", arg: 17 }));
 
 for (const name of Object.keys(nativeOut.frames)) {
   compareFrameParity(name, nativeOut.frames[name], wasmFrames[name], "wasm");
@@ -282,7 +291,15 @@ if (fs.existsSync(serverBin)) {
         res.on("end", () => resolve(JSON.parse(Buffer.concat(chunks).toString("utf8"))));
       }).on("error", reject);
     });
-    assert.deepEqual(catJson.map(p => p.id), nativeOut.catalog.map(p => p.id), "Native vs ga-server 69-preset catalog IDs");
+    assert.deepEqual(catJson.map(p => p.id), nativeOut.catalog.map(p => p.id), "Native vs ga-server 77-preset catalog IDs");
+    const tourJson = await new Promise((resolve, reject) => {
+      http.get(`http://127.0.0.1:${PORT}/api/tour`, (res) => {
+        const chunks = [];
+        res.on("data", c => chunks.push(c));
+        res.on("end", () => resolve(JSON.parse(Buffer.concat(chunks).toString("utf8"))));
+      }).on("error", reject);
+    });
+    assert.deepEqual(tourJson, nativeOut.tour, "Native vs ga-server 6-stop Tour catalog exact equality");
 
     const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
     ws.binaryType = "arraybuffer";
@@ -320,6 +337,12 @@ if (fs.existsSync(serverBin)) {
     srvFrames.terrell_penrose_param = summarizeGsir(await rpc(JSON.stringify({ op: "setParam", name: "beta", value: 0.85 })));
     srvFrames.maxwell_streamlines = summarizeGsir(await rpc(JSON.stringify({ op: "loadPreset", id: "sta_maxwell_streamlines" })));
     srvFrames.bouncing_cube = summarizeGsir(await rpc(JSON.stringify({ op: "loadPreset", id: "pga3d_bouncing_cube" })));
+    srvFrames.barth_sextic = summarizeGsir(await rpc(JSON.stringify({ op: "loadPreset", id: "implicit_barth_sextic" })));
+    srvFrames.dupin_cyclide = summarizeGsir(await rpc(JSON.stringify({ op: "loadPreset", id: "cga3d_dupin_cyclide_raymarch" })));
+    srvFrames.gears_kinematics = summarizeGsir(await rpc(JSON.stringify({ op: "loadPreset", id: "pga3d_gears_kinematics" })));
+    srvFrames.tour_stop_3 = summarizeGsir(await rpc(JSON.stringify({ op: "loadTourStop", index: 3 })));
+    await rpc(JSON.stringify({ op: "loadPreset", id: "wedge_3d" }));
+    srvFrames.wedge_l17 = summarizeGsir(await rpc(JSON.stringify({ op: "wedgeAction", action: "goto", arg: 17 })));
 
     for (const name of Object.keys(nativeOut.frames)) {
       compareFrameParity(name, nativeOut.frames[name], srvFrames[name], "ga-server");
@@ -341,7 +364,7 @@ if (fs.existsSync(serverBin)) {
 }
 
 console.log("\n=== 3-Way Cross-Parity & Benchmark Report (Native C ABI vs Lean WASM vs ga-server) ===");
-console.log(`Parity: 7 numeric GA kernels (tol <= 1e-12), 74/74 catalog IDs, ${Object.keys(nativeOut.frames).length} GSIR v1 scenes (bbox tol <= 1e-4, KaTeX & @param exact): ALL IDENTICAL PASS!`);
+console.log(`Parity: 7 numeric GA kernels (tol <= 1e-12), 77/77 catalog IDs, 6/6 Tour stops, ${Object.keys(nativeOut.frames).length} GSIR v1 scenes (bbox tol <= 1e-4, KaTeX & @param exact): ALL IDENTICAL PASS!`);
 console.log(`WASM artifact: ${manifest.wasmFile} (${(manifest.bytes / 1024).toFixed(1)} KB raw / ${(manifest.gzipBytes / 1024).toFixed(1)} KB gz)`);
 console.log("| Metric | Native C ABI (dylib) | Lean 4.36 WASM | Pure-Lean ga-server (WS) |");
 console.log("|---|---:|---:|---:|");

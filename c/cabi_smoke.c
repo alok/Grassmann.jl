@@ -228,9 +228,27 @@ int main(void) {
     catBuf[catGot] = '\0';
     CHECK(strstr(catBuf, "pga3d_slicing") != NULL &&
           strstr(catBuf, "cga3d_opns_cyclide") != NULL &&
-          strstr(catBuf, "sta_lorentz_boost") != NULL,
-          "preset catalog lists flagship presets");
+          strstr(catBuf, "sta_lorentz_boost") != NULL &&
+          strstr(catBuf, "implicit_barth_sextic") != NULL &&
+          strstr(catBuf, "cga3d_dupin_cyclide_raymarch") != NULL &&
+          strstr(catBuf, "pga3d_gears_kinematics") != NULL,
+          "preset catalog lists flagship + Wave 6C showstopper presets");
     free(catBuf);
+
+    /* Verify 6-stop Guided Tour catalog export */
+    uint32_t tourNeed = 0, tourGot = 0;
+    CHECK(grassmann_studio_tour_catalog(NULL, 0, &tourNeed) == GSIR_ERR_BUF_SMALL,
+          "tour_catalog size probe");
+    CHECK(tourNeed > 500, "tour catalog non-empty JSON");
+    char *tourBuf = (char *)malloc(tourNeed + 1);
+    CHECK(tourBuf != NULL, "malloc tourBuf");
+    CHECK(grassmann_studio_tour_catalog(tourBuf, tourNeed, &tourGot) == GSIR_OK, "tour_catalog ok");
+    tourBuf[tourGot] = '\0';
+    CHECK(strstr(tourBuf, "tour_points_lines") != NULL &&
+          strstr(tourBuf, "tour_conformal_barth") != NULL &&
+          strstr(tourBuf, "tour_play_wedge") != NULL,
+          "tour catalog lists 6-stop Guided GA Tour");
+    free(tourBuf);
 
     uint64_t sid = grassmann_studio_create();
     CHECK(sid != 0, "studio_create");
@@ -321,6 +339,14 @@ int main(void) {
       "{\"op\":\"evalImplicit\",\"expr\":\"cos(x*2)*sin(y*2)+cos(y*2)*sin(z*2)+cos(z*2)*sin(x*2)\",\"gpuRaymarch\":false}",
       "{\"op\":\"evalImplicit\",\"expr\":\"cos(x*2)*sin(y*2)+cos(y*2)*sin(z*2)+cos(z*2)*sin(x*2)\",\"gpuRaymarch\":true}",
       "{\"op\":\"evalParametric\",\"fx\":\"(1.1+0.4*cos(v))*cos(u)\",\"fy\":\"0.4*sin(v)\",\"fz\":\"(1.1+0.4*cos(v))*sin(u)\"}",
+      "{\"op\":\"loadPreset\",\"id\":\"implicit_barth_sextic\"}",
+      "{\"op\":\"loadPreset\",\"id\":\"cga3d_dupin_cyclide_raymarch\"}",
+      "{\"op\":\"loadPreset\",\"id\":\"pga3d_gears_kinematics\"}",
+      "{\"op\":\"loadTourStop\",\"index\":3}",
+      "{\"op\":\"loadTourStop\",\"index\":5}",
+      "{\"op\":\"wedgeAction\",\"action\":\"goto\",\"arg\":17}",
+      "{\"op\":\"seekTime\",\"t\":2.5}",
+      "{\"op\":\"resetTime\"}",
       "{\"op\":\"calcEval\",\"mode\":\"STA\",\"expr\":\"e1 * e2\"}"
     };
     for (size_t i = 0; i < sizeof(events) / sizeof(events[0]); ++i) {

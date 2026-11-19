@@ -248,4 +248,8 @@ def studioGetFrameExport (sid : UInt64) : IO (Int32 × ByteArray) :=
 def studioPresetCatalogExport (_ : UInt8) : ByteArray :=
   getPresetCatalogJson.toUTF8
 
+@[export grassmann_lean_studio_tour_catalog]
+def studioTourCatalogExport (_ : UInt8) : ByteArray :=
+  getTourCatalogJson.toUTF8
+
 end Grassmann.CABI

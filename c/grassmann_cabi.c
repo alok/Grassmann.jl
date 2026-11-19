@@ -103,6 +103,7 @@ extern lean_obj_res grassmann_lean_studio_dispatch_bin(uint64_t, lean_obj_arg);
 extern lean_obj_res grassmann_lean_studio_dispatch_json(uint64_t, lean_obj_arg);
 extern lean_obj_res grassmann_lean_studio_get_frame(uint64_t);
 extern lean_obj_res grassmann_lean_studio_preset_catalog(uint8_t);
+extern lean_obj_res grassmann_lean_studio_tour_catalog(uint8_t);
 
 /* ============================================================================
  * Internal State & Helpers
@@ -351,13 +352,11 @@ int32_t grassmann_studio_get_frame(
   return rc;
 }
 
-int32_t grassmann_studio_preset_catalog(
+static int32_t copy_utf8_byte_array(
+    lean_obj_res ba,
     char *outBuf,
     uint32_t outCap,
     uint32_t *outLen) {
-  int32_t st = require_init();
-  if (st != GSIR_OK) return st;
-  lean_obj_res ba = grassmann_lean_studio_preset_catalog(0);
   if (ba == NULL || !lean_is_sarray(ba) || lean_sarray_elem_size(ba) != 1) {
     if (ba != NULL) lean_dec(ba);
     return GSIR_ERR_BAD_RESULT;
@@ -371,6 +370,24 @@ int32_t grassmann_studio_preset_catalog(
   if (sz > 0) memcpy(outBuf, lean_sarray_cptr(ba), sz);
   lean_dec(ba);
   return GSIR_OK;
+}
+
+int32_t grassmann_studio_preset_catalog(
+    char *outBuf,
+    uint32_t outCap,
+    uint32_t *outLen) {
+  int32_t st = require_init();
+  if (st != GSIR_OK) return st;
+  return copy_utf8_byte_array(grassmann_lean_studio_preset_catalog(0), outBuf, outCap, outLen);
+}
+
+int32_t grassmann_studio_tour_catalog(
+    char *outBuf,
+    uint32_t outCap,
+    uint32_t *outLen) {
+  int32_t st = require_init();
+  if (st != GSIR_OK) return st;
+  return copy_utf8_byte_array(grassmann_lean_studio_tour_catalog(0), outBuf, outCap, outLen);
 }
 
 /* ============================================================================

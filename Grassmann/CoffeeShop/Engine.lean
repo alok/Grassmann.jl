@@ -118,11 +118,28 @@ def loadPreset (st : CoffeeShopState) (presetId : String) : CoffeeShopState :=
     doublePendulum := initDoublePendulumState 1.0 }
 
 def setHandle (st : CoffeeShopState) (hid : UInt32) (pos : Vec3) : CoffeeShopState :=
-  let next :=
-    match st.handles.findIdx? fun kv => kv.1 == hid with
-    | some idx => st.handles.set! idx (hid, pos)
-    | none     => st.handles.push (hid, pos)
-  { st with handles := next }
+  let upsert (arr : Array (UInt32 × Vec3)) (k : UInt32) (v : Vec3) : Array (UInt32 × Vec3) :=
+    match arr.findIdx? fun kv => kv.1 == k with
+    | some idx => arr.set! idx (k, v)
+    | none     => arr.push (k, v)
+  let isSlicer := !st.useCustom && (st.presetId == "pga3d_slicing" || st.presetId == "pga3d_slicing_hq")
+  let nextHandles :=
+    if isSlicer && hid == 0 then
+      -- Preserve any user-tilted normal handle (`hid == 1`) rigidly when translating center (`hid == 0`)
+      match st.handles.find? (·.1 == 1) with
+      | some (_, oldTip) =>
+        let defC : Vec3 :=
+          if st.presetId == "pga3d_slicing" then ⟨0.0, 0.15 + 0.45 * Float.sin (st.simTime * 0.65), 0.0⟩
+          else ⟨0.0, 0.12 + 0.42 * Float.sin (st.simTime * 0.65), 0.0⟩
+        let oldC := (st.handles.find? (·.1 == 0)).map (·.2) |>.getD defC
+        let delta := Vec3.sub pos oldC
+        upsert (upsert st.handles 0 pos) 1 (Vec3.add oldTip delta)
+      | none => upsert st.handles 0 pos
+    else
+      upsert st.handles hid pos
+  let nextSliceMotor :=
+    if isSlicer && (hid == 0 || hid == 1) then none else st.sliceMotor
+  { st with handles := nextHandles, sliceMotor := nextSliceMotor }
 
 /-- Update a live `@param` / `slider(...)` value (used by both interactive presets and LiveScript v2). -/
 def setParam (st : CoffeeShopState) (name : String) (val : Float) : CoffeeShopState :=
@@ -269,20 +286,40 @@ def stepTick (st : CoffeeShopState) (dt timeSec : Float) : CoffeeShopState :=
   else
     { st with simTime := nextT }
 
+/-- Reset simulation clock cleanly to `0.0` AND reset integrated RK4 physics state. -/
+def resetTime (st : CoffeeShopState) : CoffeeShopState :=
+  let spin := paramVal st.paramOverrides "spin" 2.6 0.0 8.0
+  let armLen := paramVal st.paramOverrides "length" 1.0 0.4 1.5
+  { st with
+    simTime := 0.0,
+    topMotor := Motor3.identity,
+    topOmega := ⟨0.08, 3.2, 0.05⟩,
+    topTrail := FloatArray.empty,
+    cubeState := initBouncingCubeState spin,
+    doublePendulum := initDoublePendulumState armLen }
+
+/-- Seek simulation clock cleanly to `timeSec` without advancing by clamped `dt`. -/
+def seekTime (st : CoffeeShopState) (timeSec : Float) : CoffeeShopState :=
+  if timeSec ≤ 0.0 then resetTime st
+  else { st with simTime := timeSec }
+
 /-- Build a GPU-raymarched implicit 3D frame via strictly `Init`-only `GPUInit`
-(GLSL 300 es + WGSL + Metal MSL). -/
-private def buildImplicitGpuFrame (exprStr : String) (seq : UInt64) (t : Float) : SceneFrame :=
+(GLSL 300 es + WGSL + Metal MSL), respecting requested half-extent `bound`. -/
+private def buildImplicitGpuFrame (exprStr : String) (seq : UInt64) (t : Float)
+    (bound : Float := 1.6) : SceneFrame :=
+  let b := if bound > 0.1 then min 20.0 bound else 1.6
+  let camDist := max 4.6 (b * 2.8)
   let base : SceneFrame :=
     { frameSeq := seq, simTime := t, mode := .surface, is2D := false,
-      gridEnabled := true, darkTheme := true, gridSize := 2.2,
+      gridEnabled := true, darkTheme := true, gridSize := max 2.2 b,
       algebra := { name := "R3", p := 3, q := 0, r := 0,
                    basisNames := #["1","e1","e2","e3","e12","e13","e23","I"],
                    basisMetric := #[1,1,1,1,-1,-1,-1,-1] },
       presetId := "implicit_gpu", title := s!"GPU Implicit: {exprStr} = 0",
       formula := "f(x, y, z, t) = 0,\\qquad \\mathbf{p}_{k+1} = \\mathbf{p}_k + \\tfrac{f(\\mathbf{p}_k)}{\\|\\nabla f\\|}\\,\\mathbf{d}",
       summary := s!"Real-time Lean-compiled GLSL3/WGSL/MSL sphere-tracing raymarcher for `{exprStr} = 0`.",
-      camera := { motor := Motor3.orbitCamera 0.55 (-0.32) 4.6, fovDeg := 45.0, distance := 4.6 } }
-  match compileImplicitExprToGpu exprStr "implicit_gpu" with
+      camera := { motor := Motor3.orbitCamera 0.55 (-0.32) camDist, fovDeg := 45.0, distance := camDist } }
+  match compileImplicitExprToGpu exprStr "implicit_gpu" b with
   | .ok shader =>
     { base with
       opnsShaders := #[shader],
@@ -291,18 +328,18 @@ private def buildImplicitGpuFrame (exprStr : String) (seq : UInt64) (t : Float) 
         thresh := 0.015, maxSteps := 96, stepSize := 0.01,
         color := ⟨0.36, 0.78, 1.0, 0.96⟩, isIPNS := false }],
       inspect := #[{ idx := 0, name := "GPU Raymarcher", grade := 0,
-                     formatted := s!"{exprStr} = 0 · WGSL+GLSL3+MSL ({shader.hash})" }] }
+                     formatted := s!"{exprStr} = 0 · bound=±{b} · WGSL+GLSL3+MSL ({shader.hash})" }] }
   | .error err =>
     { base with diagnostics := #[err] }
 
-/-- Emit the live `SceneFrame` for the active CoffeeShop preset (all 74 presets),
+/-- Emit the live `SceneFrame` for the active CoffeeShop preset (all 77 presets),
 custom GA script, `z = f(x,y,t)` surface, 3D implicit equation (mesh or GPU raymarcher),
 or 3D parametric surface. -/
 def toSceneFrame (st : CoffeeShopState) (frameSeq : UInt64 := 0) : SceneFrame :=
   let f0 : SceneFrame :=
     if st.useImplicit then
       if st.implicitGpuRaymarch then
-        buildImplicitGpuFrame st.implicitExpr frameSeq st.simTime
+        buildImplicitGpuFrame st.implicitExpr frameSeq st.simTime st.implicitBound
       else
         let b := st.implicitBound
         evalImplicitExprToFrame st.implicitExpr frameSeq st.simTime

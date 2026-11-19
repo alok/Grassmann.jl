@@ -546,6 +546,11 @@ structure WedgeHudState where
   hintText     : String := ""
   solved       : Bool   := false
   canUndo      : Bool   := false
+  isRandom     : Bool   := false
+  seedStr      : String := ""
+  difficulty   : UInt32 := 0
+  dim          : UInt32 := 2
+  tutorialId   : String := ""
   deriving Repr, Inhabited
 
 /-- Algebra signature & basis metadata. -/
@@ -639,6 +644,9 @@ inductive InputEvent where
   | wedgeTutorial  (id : String)
   | wedgeRandom    (is3D : Bool) (difficulty : UInt32) (seed : UInt64)
   | setParam       (name : String) (value : Float)
+  | loadTourStop   (index : UInt32)
+  | resetTime
+  | seekTime       (timeSec : Float)
   | snapshot
   deriving Repr, Inhabited
 

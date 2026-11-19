@@ -280,7 +280,7 @@ def levelToSceneFrame (lvl : WedgeLevel) (seq : UInt64 := 0) (t : Float := 0.0)
       else { motor := Motor3.orbitCamera (0.52 + 0.12 * Float.sin (t * 0.4)) (-0.34) 5.0, fovDeg := 45.0, distance := 5.0 },
     points := pts, lines := lines, planes := planes, segments := segs, inspect := insp,
     wedgeHud := some {
-      level := lvl.number, totalLevels := 16, moves := 0, score := 1000,
+      level := lvl.number, totalLevels := 17, moves := 0, score := 1000,
       is3D := !is2D, solved := false,
       title := lvl.title, goal := lvl.goal,
       hintText := lvl.hintText, tutorialText := lvl.tutorialText

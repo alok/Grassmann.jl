@@ -128,12 +128,12 @@ try {
   const opt = await httpReq(agent, "OPTIONS", "/api/frame");
   assert.equal(opt.status, 204);
 
-  // 1b. Full Lean preset catalog endpoint (/api/presets — all 74 presets!)
+  // 1b. Full Lean preset catalog endpoint (/api/presets — all 77 presets!) + Guided Tour (/api/tour — 6 stops!)
   const cat = await httpReq(agent, "GET", "/api/presets");
   assert.equal(cat.status, 200);
   const catalog = JSON.parse(cat.body.toString("utf8"));
-  assert.ok(Array.isArray(catalog) && catalog.length === 74, `expected 74 presets, got ${catalog.length}`);
-  assert.equal(new Set(catalog.map((p) => p.id)).size, 74, "all 74 preset IDs unique");
+  assert.ok(Array.isArray(catalog) && catalog.length === 77, `expected 77 presets, got ${catalog.length}`);
+  assert.equal(new Set(catalog.map((p) => p.id)).size, 77, "all 77 preset IDs unique");
   assert.ok(catalog.some((p) => p.id === "pga3d_slicing"));
   assert.ok(catalog.some((p) => p.id === "pga3d_slicing_hq"));
   assert.ok(catalog.some((p) => p.id === "implicit_gyroid"));
@@ -141,6 +141,16 @@ try {
   assert.ok(catalog.some((p) => p.id === "sta_terrell_penrose"));
   assert.ok(catalog.some((p) => p.id === "sta_maxwell_streamlines"));
   assert.ok(catalog.some((p) => p.id === "pga3d_bouncing_cube"));
+  assert.ok(catalog.some((p) => p.id === "implicit_barth_sextic"));
+  assert.ok(catalog.some((p) => p.id === "cga3d_dupin_cyclide_raymarch"));
+  assert.ok(catalog.some((p) => p.id === "pga3d_gears_kinematics"));
+
+  const tourRes = await httpReq(agent, "GET", "/api/tour");
+  assert.equal(tourRes.status, 200);
+  const tour = JSON.parse(tourRes.body.toString("utf8"));
+  assert.ok(Array.isArray(tour) && tour.length === 6, `expected 6 tour stops, got ${tour.length}`);
+  assert.equal(tour[0].id, "tour_points_lines");
+  assert.equal(tour[5].id, "tour_play_wedge");
 
   // 2. Session lifecycle + binary GSIR frames (sculpted bunny + pga3d_objects delta cache + STA)
   const cr = await httpReq(agent, "POST", "/api/session");

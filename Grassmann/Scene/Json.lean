@@ -153,7 +153,12 @@ def wedgeHudJson (w : WedgeHudState) : String :=
     ("previewOp", quote w.previewOp),
     ("hintText", quote w.hintText),
     ("solved", if w.solved then "true" else "false"),
-    ("canUndo", if w.canUndo then "true" else "false")
+    ("canUndo", if w.canUndo then "true" else "false"),
+    ("isRandom", if w.isRandom then "true" else "false"),
+    ("seedStr", quote w.seedStr),
+    ("difficulty", toString w.difficulty.toNat),
+    ("dim", toString w.dim.toNat),
+    ("tutorialId", quote w.tutorialId)
   ]
 
 def paramSpecJson (p : ParamSpec) : String :=
@@ -236,11 +241,22 @@ def toFullJson (f : SceneFrame) : String :=
 inductive JVal where
   | null
   | bool (b : Bool)
-  | num (x : Float)
+  | num (x : Float) (raw : String := "")
   | str (s : String)
   | arr (xs : Array JVal)
   | obj (kvs : Array (String × JVal))
   deriving Repr, Inhabited
+
+/-- Parse an exact unsigned base-10 integer string into `UInt64` with zero `Float` rounding. -/
+private def parseUInt64Decimal? (s : String) : Option UInt64 :=
+  let trimmed := s.trimAscii.toString
+  if trimmed.isEmpty then none
+  else
+    let cs := trimmed.toList
+    if cs.all Char.isDigit then
+      let n : Nat := cs.foldl (fun acc c => acc * 10 + (c.toNat - 48)) 0
+      some n.toUInt64
+    else none
 
 namespace JVal
 
@@ -254,7 +270,15 @@ def asStr? : JVal → Option String
   | _ => none
 
 def asNum? : JVal → Option Float
-  | .num x => some x
+  | .num x _ => some x
+  | _ => none
+
+def asUInt64? : JVal → Option UInt64
+  | .str s => parseUInt64Decimal? s
+  | .num x raw =>
+    match parseUInt64Decimal? raw with
+    | some u => some u
+    | none   => if x ≥ 0.0 then some x.toUInt64 else none
   | _ => none
 
 def asBool? : JVal → Option Bool
@@ -393,7 +417,7 @@ private partial def parseVal (st : PState) : Except String (JVal × PState) := d
       let stop := scan st.pos
       let tok := String.ofList (st.chars.extract st.pos stop).toList
       match parseFloatStr tok with
-      | some x => return (.num x, { st with pos := stop })
+      | some x => return (.num x tok, { st with pos := stop })
       | none => throw s!"invalid number: {tok}"
     else throw s!"unexpected char: {c}"
 
@@ -516,8 +540,11 @@ def parseInputEventJson (s : String) : Except String InputEvent := do
   | "wedgeRandom" =>
     let dim := ((j.get? "dim").bind JVal.asNum?).getD 2.0
     let diff := ((j.get? "difficulty").bind JVal.asNum?).getD 1.0
-    let seed := ((j.get? "seed").bind JVal.asNum?).getD 0.0
-    return .wedgeRandom (dim ≥ 2.5) diff.toUInt32 seed.toUInt64
+    let seed : UInt64 :=
+      match (j.get? "seedStr").bind JVal.asUInt64? with
+      | some s => s
+      | none   => ((j.get? "seed").bind JVal.asUInt64?).getD 0
+    return .wedgeRandom (dim ≥ 2.5) diff.toUInt32 seed
   | "setParam" =>
     let some name := (j.get? "name").bind JVal.asStr? | throw "setParam missing 'name' string"
     let val :=
@@ -525,6 +552,20 @@ def parseInputEventJson (s : String) : Except String InputEvent := do
       | some v => v
       | none   => ((j.get? "val").bind JVal.asNum?).getD 0.0
     return .setParam name val
+  | "loadTourStop" =>
+    let idx := ((j.get? "index").bind JVal.asNum?).getD 0.0
+    return .loadTourStop idx.toUInt32
+  | "resetTime" =>
+    return .resetTime
+  | "seekTime" =>
+    let t :=
+      match (j.get? "t").bind JVal.asNum? with
+      | some v => v
+      | none =>
+        match (j.get? "timeSec").bind JVal.asNum? with
+        | some v => v
+        | none   => ((j.get? "time").bind JVal.asNum?).getD 0.0
+    return .seekTime t
   | _ => throw s!"unknown InputEvent op: {op}"
 
 end Grassmann.Scene.Json
