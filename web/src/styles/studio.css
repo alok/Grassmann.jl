@@ -694,7 +694,7 @@ body,
   padding: 12px 7px 12px 0;
   text-align: right;
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 11.5px;
   line-height: 1.55;
   white-space: pre;
   color: var(--text-dim);
@@ -722,7 +722,7 @@ body,
   border: 0;
   padding: 12px;
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 11.5px;
   line-height: 1.55;
   letter-spacing: 0;
   white-space: pre;
@@ -773,6 +773,11 @@ body,
   font-weight: 600;
 }
 
+.tok-directive {
+  color: #f472b6;
+  font-weight: 650;
+}
+
 .tok-kw {
   color: #c084fc;
   font-weight: 550;
@@ -804,6 +809,10 @@ body,
 
 [data-theme='light'] .tok-blade {
   color: #0284c7;
+}
+
+[data-theme='light'] .tok-directive {
+  color: #be185d;
 }
 
 [data-theme='light'] .tok-kw {
@@ -2069,24 +2078,44 @@ body,
    Zen Mode & 60fps WebM Recorder
    ============================================================================ */
 
-/* KaTeX Math Formula & Summary Card */
-.gs-formula-card {
+/* Top-left non-overlapping HUD stack (Formula Card + Floating @param Sliders) */
+.gs-vp-left-stack {
   position: absolute;
   top: 48px;
   left: 12px;
   z-index: 12;
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: flex-start;
   gap: 8px;
   max-width: min(355px, calc(100% - 24px));
+  pointer-events: none;
+}
+
+.gs-app.zen-mode .gs-vp-left-stack {
+  top: 46px;
+}
+
+/* KaTeX Math Formula & Summary Card */
+.gs-formula-card {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 100%;
   padding: 7px 10px;
   border-radius: 10px;
-  background: var(--bg-glass);
-  border: 1px solid var(--border);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+  background: rgba(10, 16, 30, 0.86);
+  border: 1px solid rgba(148, 175, 224, 0.24);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.36);
   pointer-events: auto;
   transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.gs-app[data-theme='light'] .gs-formula-card,
+.gs-app[data-theme='light'] .gs-param-panel {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(51, 65, 85, 0.2);
 }
 
 .gs-formula-card.collapsed {
@@ -2144,22 +2173,19 @@ body,
 
 /* Floating @param Sliders Card */
 .gs-param-panel {
-  position: absolute;
-  top: 134px;
-  left: 12px;
-  z-index: 12;
   width: 226px;
-  max-height: 280px;
+  max-height: 260px;
   overflow-y: auto;
   padding: 9px 11px;
   border-radius: 11px;
-  background: var(--bg-glass);
-  border: 1px solid var(--border);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.32);
+  background: rgba(10, 16, 30, 0.86);
+  border: 1px solid rgba(148, 175, 224, 0.24);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.38);
   display: flex;
   flex-direction: column;
   gap: 8px;
+  pointer-events: auto;
 }
 
 .gs-param-header {
@@ -2510,7 +2536,7 @@ body,
 }
 
 @media (max-width: 1020px) {
-  .gs-formula-card {
+  .gs-vp-left-stack {
     max-width: 260px;
     top: 42px;
   }

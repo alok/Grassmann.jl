@@ -109,7 +109,7 @@ async function main() {
   const browser = await chromium.launch({
     executablePath: findChrome(),
     headless: true,
-    args: ['--use-gl=angle', '--use-angle=swiftshader-webgl', '--enable-webgl', '--ignore-gpu-blocklist'],
+    args: ['--use-gl=angle', '--enable-webgl', '--ignore-gpu-blocklist', '--no-sandbox'],
   });
 
   try {
@@ -131,18 +131,19 @@ async function main() {
     });
     page.on('pageerror', (e) => pageErrors.push(e.message));
 
-    // 1. Cold HTTPS Load -> verify 69 presets + Web Worker WASM + GA syntax highlight + Sculpted Bunny
+    // 1. Cold HTTPS Load -> verify 74 presets + Web Worker WASM + GA syntax highlight + KaTeX Formula Card + Sculpted Bunny
     await page.goto(BASE_URL, { waitUntil: 'networkidle' });
     await page.waitForTimeout(1000);
 
     const sCold = await page.evaluate(() => window.__grassmannStudio.getState());
     assert(sCold.transportKind === 'wasm', `Cold load expected wasm, got ${sCold.transportKind}`);
     assert(sCold.transportLabel.includes(manifest.hash), `Expected worker hash ${manifest.hash}, got ${sCold.transportLabel}`);
-    assert(sCold.presetCount >= 69, `Cold load expected >=69 presets, got ${sCold.presetCount}`);
+    assert(sCold.presetCount >= 74, `Cold load expected >=74 presets, got ${sCold.presetCount}`);
+    assert(typeof sCold.formula === 'string' && sCold.formula.length > 0, `Expected Lean metaJson.formula on cold HTTPS load`);
     assert(typeof sCold.metaScript === 'string' && sCold.metaScript.length >= 60, `Expected LiveScript v2 metaJson.script on cold HTTPS load, got ${JSON.stringify(sCold.metaScript)}`);
 
     // Verify GA syntax highlight tokens rendered in Code Editor
-    const tokCount = await page.locator('.gs-editor-highlight .tok-kw, .gs-editor-highlight .tok-op, .gs-editor-highlight .tok-num').count();
+    const tokCount = await page.locator('.gs-editor-highlight .tok-kw, .gs-editor-highlight .tok-op, .gs-editor-highlight .tok-num, .gs-editor-highlight .tok-directive').count();
     assert(tokCount >= 5, `Expected GA syntax highlighted tokens in editor, got ${tokCount}`);
 
     const c1 = await measureCanvas(page);
@@ -159,14 +160,41 @@ async function main() {
     assert(Number(sLiveEdit.frameSeq) > Number(sCold.frameSeq) && sLiveEdit.diagnostics.length === 0, `LiveScript v2 edit failed over HTTPS: ${JSON.stringify(sLiveEdit.diagnostics)}`);
     console.log(`[vercel] 1b. LiveScript v2 Live Edit PASS (seq ${sCold.frameSeq} -> ${sLiveEdit.frameSeq})`);
 
-    // 2. Warm Reload (browser HTTP cache enabled!) -> verify zero stale-cache failure
+    // 2. Warm Reload (browser HTTP cache enabled!) -> verify zero stale-cache failure (a60f037ad8 -> cbaef49869)
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForTimeout(800);
     const sWarm = await page.evaluate(() => window.__grassmannStudio.getState());
-    assert(sWarm.transportKind === 'wasm' && sWarm.presetCount >= 69, `Warm reload failed: ${JSON.stringify(sWarm)}`);
+    assert(sWarm.transportKind === 'wasm' && sWarm.presetCount >= 74 && sWarm.transportLabel.includes(manifest.hash), `Warm reload failed: ${JSON.stringify(sWarm)}`);
     console.log(`[vercel] 2. Warm Cached Reload PASS | ${sWarm.presetCount} presets | ${sWarm.transportLabel}`);
 
-    // 3. Symmetric Gyroid Marching Tetrahedra Mesh (0 stale contours!) + Live GPUInit GLSL3 OPNS Gyroid over HTTPS
+    // 2b. Wave 5B Live HTTPS Showcase Check: 74-card Gallery + sta_terrell_penrose beta=0.85 scrub + sta_maxwell_streamlines 0x0D flow!
+    await page.locator('.gs-vp-btn', { hasText: /Gallery/ }).click();
+    await page.waitForTimeout(250);
+    const galleryCards = await page.locator('.gs-gallery-card').count();
+    assert(galleryCards >= 74, `Expected >=74 Gallery cards over HTTPS, got ${galleryCards}`);
+    await page.locator('[data-gallery-preset-id="sta_terrell_penrose"]').click();
+    await page.waitForTimeout(550);
+    const betaSlider = page.locator('.gs-param-slider[data-param-name="beta"]');
+    await betaSlider.waitFor({ state: 'visible', timeout: 3000 });
+    await betaSlider.evaluate((el) => {
+      el.value = '0.85';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await page.waitForTimeout(400);
+    const sTP = await page.evaluate(() => window.__grassmannStudio.getState());
+    const betaVal = sTP.params.find((p) => p.name === 'beta')?.value ?? 0;
+    assert(Math.abs(betaVal - 0.85) < 0.03, `Expected live HTTPS sta_terrell_penrose beta=0.85, got ${betaVal}`);
+    await page.screenshot({ path: path.join(OUT_DIR, 'vercel-05-terrell-penrose.png') });
+
+    await page.locator('.gs-vp-btn', { hasText: /Gallery/ }).click();
+    await page.locator('[data-gallery-preset-id="sta_maxwell_streamlines"]').click();
+    await page.waitForTimeout(550);
+    const sMax = await page.evaluate(() => window.__grassmannStudio.getState());
+    assert(sMax.flowCount > 0 && sMax.bivectorCount >= 6, `Expected Maxwell streamlines over HTTPS, got flow=${sMax.flowCount} biv=${sMax.bivectorCount}`);
+    await page.screenshot({ path: path.join(OUT_DIR, 'vercel-06-maxwell-streamlines.png') });
+    console.log(`[vercel] 2b. Wave 5B Showcases PASS | gallery=${galleryCards} | terrell beta=${betaVal} | maxwell flow=${sMax.flowCount}, biv=${sMax.bivectorCount}`);
+
+    // 3. Symmetric Gyroid Marching Tetrahedra Mesh (0 stale contours! + fast bytecode <12ms) + Live GPUInit GLSL3 OPNS Gyroid over HTTPS
     await page.locator('.gs-mode-btn', { hasText: 'LeanCalculator 3D' }).click();
     await page.locator('.gs-subtab-btn', { hasText: /^Imp 3D$/ }).click();
     await page.locator('.gs-seg-btn', { hasText: 'Marching Tet Mesh' }).click();
@@ -174,8 +202,21 @@ async function main() {
     const cMesh = await measureCanvas(page);
     assert(cMesh.variance >= 400 && cMesh.distinctColors >= 80, `Expected full symmetric Gyroid mesh over HTTPS, got ${JSON.stringify(cMesh)}`);
     assert(!(await page.locator('.gs-contour-pip').isVisible()), 'Expected zero stale contour PiP on Imp 3D');
+    const gyroidBench = await page.evaluate(() =>
+      window.__grassmannStudio.benchmarkJson(
+        {
+          op: 'evalImplicit',
+          expr: 'sin(x*2.2)*cos(y*2.2) + sin(y*2.2)*cos(z*2.2) + sin(z*2.2)*cos(x*2.2)',
+          bounds: [-2.4, 2.4, -2.4, 2.4, -2.4, 2.4],
+          gridN: 16,
+          gpuRaymarch: false,
+        },
+        5
+      )
+    );
+    assert(gyroidBench.warmAvgMs < 10.0, `Expected fast bytecode Gyroid 16^3 (<10ms) over HTTPS, got ${JSON.stringify(gyroidBench)}`);
     await page.screenshot({ path: path.join(OUT_DIR, 'vercel-02b-gyroid-mesh.png') });
-    console.log(`[vercel] 3a. Symmetric Gyroid Marching Tet Mesh PASS | canvas=`, cMesh);
+    console.log(`[vercel] 3a. Symmetric Gyroid Bytecode Mesh PASS | bench=${JSON.stringify(gyroidBench)} | canvas=`, cMesh);
 
     await page.locator('.gs-seg-btn', { hasText: 'GPU Raymarch (GLSL3)' }).click();
     await page.waitForTimeout(700);

@@ -373,9 +373,11 @@ export class GrassmannStudioApp {
     this.exitZenBtn.addEventListener('click', () => this.setZenMode(false));
     viewportWrap.appendChild(this.exitZenBtn);
 
-    // Collapsible KaTeX Math Formula & Summary Card (top-left of viewport)
+    // Top-left non-overlapping HUD stack: KaTeX Math Formula Card + Dynamic @param Sliders
+    const vpLeftStack = document.createElement('div');
+    vpLeftStack.className = 'gs-vp-left-stack';
+
     this.formulaCard = new FormulaCardOverlay();
-    viewportWrap.appendChild(this.formulaCard.element);
 
     // Dynamic @param Sliders + Compact Bottom-Center Simulation Timeline Bar
     this.paramTimeline = new ParamTimelineOverlay({
@@ -395,7 +397,8 @@ export class GrassmannStudioApp {
         this.enqueueBinaryEvent(encodeTick(0, 0));
       },
     });
-    viewportWrap.append(this.paramTimeline.paramPanel, this.paramTimeline.timelineBar);
+    vpLeftStack.append(this.formulaCard.element, this.paramTimeline.paramPanel);
+    viewportWrap.append(vpLeftStack, this.paramTimeline.timelineBar);
 
     // Subtle non-blocking Updating… pill for heavy Lean 3D remeshes (keeps last accepted mesh visible)
     this.updatingPill = document.createElement('div');
@@ -606,12 +609,20 @@ export class GrassmannStudioApp {
         frameSeq: this.lastFrame ? this.lastFrame.header.frameSeq.toString() : null,
         presetId: this.lastFrame?.meta?.presetId ?? this.activePresetId,
         title: this.lastFrame?.meta?.title ?? null,
+        formula: this.lastFrame?.meta?.formula ?? null,
+        summary: this.lastFrame?.meta?.summary ?? null,
+        params: this.lastFrame?.meta?.params ?? [],
         script: this.codeEditor.getCode(),
         metaScript: this.lastFrame?.meta?.script ?? null,
         diagnostics: this.lastFrame?.meta?.diagnostics ?? [],
         cachedMeshes: this.decoder.getCachedMeshCount(),
         presetCount: this.livePresets.length,
         opnsCount: this.lastFrame?.opnsUniforms.length ?? 0,
+        flowCount: this.lastFrame?.flowParticles.reduce((acc, fp) => acc + fp.particleCount, 0) ?? 0,
+        bivectorCount: this.lastFrame?.bivectorDisks.length ?? 0,
+        meshCount: this.lastFrame?.meshRefs.length ?? 0,
+        segmentCount: this.lastFrame?.segments.length ?? 0,
+        curveCount: this.lastFrame?.curves.length ?? 0,
         wedge: this.lastFrame?.meta?.wedge ?? null,
         calc: this.lastFrame?.meta?.calc ?? null,
         points: this.lastFrame?.points.map((p) => ({
@@ -625,6 +636,22 @@ export class GrassmannStudioApp {
       getHandleScreenPos: (handleId?: number) => this.renderer.getInteractiveHandleScreenPos(handleId),
       exportExperiment: () => this.buildExperimentSnapshot(),
       importExperiment: (exp: GrassmannExperimentV1) => this.applyExperiment(exp),
+      benchmarkJson: async (ev: JsonInputEvent, runs = 5): Promise<{ coldMs: number; warmAvgMs: number; minMs: number }> => {
+        if (!this.transport) throw new Error('No transport connected');
+        const times: number[] = [];
+        for (let i = 0; i < runs; i++) {
+          const t0 = performance.now();
+          await this.transport.dispatchJson(ev);
+          times.push(performance.now() - t0);
+        }
+        const warm = times.length > 1 ? times.slice(1) : times;
+        const warmAvgMs = warm.reduce((a, b) => a + b, 0) / warm.length;
+        return {
+          coldMs: Number(times[0]!.toFixed(2)),
+          warmAvgMs: Number(warmAvgMs.toFixed(2)),
+          minMs: Number(Math.min(...warm).toFixed(2)),
+        };
+      },
     };
 
     // Probe WebXR support (Vision Pro / Quest)
@@ -954,6 +981,7 @@ export class GrassmannStudioApp {
     this.activeAlgebra = preset.algebra;
     this.algebraSelect.value = preset.algebra;
     this.codeEditor.setCode(preset.defaultCode);
+    this.rebuildPresetBrowser?.();
     if (typeof window !== 'undefined') {
       window.history.replaceState(null, '', `#${preset.id}`);
     }

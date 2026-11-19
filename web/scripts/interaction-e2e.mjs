@@ -57,15 +57,16 @@ function findChromium() {
 }
 
 function stageWasm() {
-  const wasmSrcDir = path.resolve(WEB_DIR, '..', '..', 'cabi', 'wasm', 'dist');
-  const mjs = path.join(wasmSrcDir, 'grassmann.mjs');
-  const wasm = path.join(wasmSrcDir, 'grassmann.wasm');
-  if (!fs.existsSync(mjs) || !fs.existsSync(wasm)) {
-    throw new Error(`Compiled Lean WASM missing in ${wasmSrcDir}`);
+  const manifestPath = path.join(PUBLIC_WASM_DIR, 'wasm-manifest.json');
+  if (!fs.existsSync(manifestPath)) {
+    execSync('node scripts/stage-wasm.mjs', { cwd: WEB_DIR, stdio: 'inherit' });
   }
-  fs.mkdirSync(PUBLIC_WASM_DIR, { recursive: true });
-  fs.copyFileSync(mjs, path.join(PUBLIC_WASM_DIR, 'grassmann.mjs'));
-  fs.copyFileSync(wasm, path.join(PUBLIC_WASM_DIR, 'grassmann.wasm'));
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const mjs = path.join(PUBLIC_WASM_DIR, manifest.loaderFile);
+  const wasm = path.join(PUBLIC_WASM_DIR, manifest.wasmFile);
+  if (!fs.existsSync(mjs) || !fs.existsSync(wasm)) {
+    throw new Error(`Fingerprinted Lean WASM missing in ${PUBLIC_WASM_DIR}`);
+  }
 }
 
 async function waitForServer(url, timeoutMs = 15000) {

@@ -437,7 +437,22 @@ export class GrassmannSceneRenderer {
     this.clearDynamicGroup();
     const labelTexts = frame.meta?.labels ?? [];
     const renderedLabelIndices = new Set<number>();
+    const renderedLabelTexts = new Set<string>();
     const dedicatedLabelIndices = new Set<number>(frame.labels.map((l) => l.textIdx));
+    for (const lb of frame.labels) {
+      const t = labelTexts[lb.textIdx];
+      if (t) renderedLabelTexts.add(t);
+    }
+    const canEmitInlineLabel = (idx: number): string | null => {
+      if (idx === GSIR_NO_LABEL) return null;
+      const txt = labelTexts[idx];
+      if (!txt || dedicatedLabelIndices.has(idx) || renderedLabelIndices.has(idx) || renderedLabelTexts.has(txt)) {
+        return null;
+      }
+      renderedLabelIndices.add(idx);
+      renderedLabelTexts.add(txt);
+      return txt;
+    };
 
     // 0x02 POINTS (strictly gated on pt.draggable; handleId = 0 is valid!)
     for (const pt of frame.points) {
@@ -494,16 +509,11 @@ export class GrassmannSceneRenderer {
         this.dynamicGroup.add(ring);
       }
 
-      if (
-        pt.labelIdx !== GSIR_NO_LABEL &&
-        labelTexts[pt.labelIdx] &&
-        !dedicatedLabelIndices.has(pt.labelIdx) &&
-        !renderedLabelIndices.has(pt.labelIdx)
-      ) {
-        renderedLabelIndices.add(pt.labelIdx);
+      const ptLabel = canEmitInlineLabel(pt.labelIdx);
+      if (ptLabel) {
         this.addLabelObject(
           [pt.pos[0], pt.pos[1] + r * 1.9, pt.pos[2]],
-          labelTexts[pt.labelIdx]!,
+          ptLabel,
           pt.rgba,
           false
         );
@@ -596,13 +606,8 @@ export class GrassmannSceneRenderer {
         this.interactiveObjects.push(mesh);
       }
 
-      if (
-        pl.labelIdx !== GSIR_NO_LABEL &&
-        labelTexts[pl.labelIdx] &&
-        !dedicatedLabelIndices.has(pl.labelIdx) &&
-        !renderedLabelIndices.has(pl.labelIdx)
-      ) {
-        renderedLabelIndices.add(pl.labelIdx);
+      const plLabel = canEmitInlineLabel(pl.labelIdx);
+      if (plLabel) {
         // Place plane label near a clean front edge/corner so it never collides with center handles or intersection circles!
         const ext = Math.max(0.1, pl.extent || 2.0) * 0.62;
         const labelPos: Vec3Tuple = [
@@ -610,7 +615,7 @@ export class GrassmannSceneRenderer {
           pl.center[1] + pl.u[1] * ext + pl.v[1] * ext,
           pl.center[2] + pl.u[2] * ext + pl.v[2] * ext,
         ];
-        this.addLabelObject(labelPos, labelTexts[pl.labelIdx]!, pl.rgba, false);
+        this.addLabelObject(labelPos, plLabel, pl.rgba, false);
       }
     }
 
@@ -629,8 +634,9 @@ export class GrassmannSceneRenderer {
         );
       }
       this.addThickPolyline(pts, c.width || 2.2, c.rgba, c.imaginary, null, 'segment', c.center);
-      if (c.labelIdx !== GSIR_NO_LABEL && labelTexts[c.labelIdx]) {
-        this.addLabelObject(c.center, labelTexts[c.labelIdx]!, c.rgba, false);
+      const cirLabel = canEmitInlineLabel(c.labelIdx);
+      if (cirLabel) {
+        this.addLabelObject(c.center, cirLabel, c.rgba, false);
       }
     }
 
@@ -644,10 +650,11 @@ export class GrassmannSceneRenderer {
       mesh.renderOrder = 3;
       this.dynamicGroup.add(mesh);
 
-      if (sp.labelIdx !== GSIR_NO_LABEL && labelTexts[sp.labelIdx]) {
+      const spLabel = canEmitInlineLabel(sp.labelIdx);
+      if (spLabel) {
         this.addLabelObject(
           [sp.center[0], sp.center[1] + sp.radius + 0.14, sp.center[2]],
-          labelTexts[sp.labelIdx]!,
+          spLabel,
           sp.rgba,
           false
         );
@@ -823,6 +830,62 @@ export class GrassmannSceneRenderer {
 
     // 0x10 OPNS_UNIFORMS (Cached Lean-emitted GLSL ShaderMaterial pass)
     this.updateOpnsGroup(frame);
+
+    // 4. Smart viewport framing guard on preset load: if a 3D scene's rendered bounds exceed
+    // Lean's default camera distance (e.g. relativistic Terrell-Penrose warped cube + observer),
+    // smoothly pull back so nothing clips viewport edges!
+    if (syncCamera && !wantOrtho && frame.opnsUniforms.length === 0) {
+      this.ensureSceneFitsCamera(frame, frame.camera?.distance || 5.0);
+    }
+  }
+
+  private ensureSceneFitsCamera(frame: GsirFrame, leanDist: number): void {
+    const box = new THREE.Box3();
+    const tmp = new THREE.Vector3();
+    const mat4 = new THREE.Matrix4();
+    const localBox = new THREE.Box3();
+
+    for (const pt of frame.points) {
+      box.expandByPoint(tmp.set(pt.pos[0], pt.pos[1], pt.pos[2]));
+    }
+    for (const sp of frame.spheres) {
+      const r = Math.max(0.05, sp.radius);
+      box.expandByPoint(tmp.set(sp.center[0] - r, sp.center[1] - r, sp.center[2] - r));
+      box.expandByPoint(tmp.set(sp.center[0] + r, sp.center[1] + r, sp.center[2] + r));
+    }
+    for (const seg of frame.segments) {
+      box.expandByPoint(tmp.set(seg.a[0], seg.a[1], seg.a[2]));
+      box.expandByPoint(tmp.set(seg.b[0], seg.b[1], seg.b[2]));
+    }
+    for (const mr of frame.meshRefs) {
+      const cached = this.meshGeoCache.get(mr.meshId);
+      if (!cached) continue;
+      if (!cached.geometry.boundingBox) cached.geometry.computeBoundingBox();
+      if (cached.geometry.boundingBox) {
+        localBox.copy(cached.geometry.boundingBox).applyMatrix4(mat4.fromArray(mr.modelMat4));
+        box.union(localBox);
+      }
+    }
+
+    if (box.isEmpty()) return;
+    const sphere = box.getBoundingSphere(new THREE.Sphere());
+    if (!Number.isFinite(sphere.radius) || sphere.radius <= 0.1 || sphere.radius > 18) return;
+
+    const neededDist = sphere.radius * 2.55;
+    const centerShift = sphere.center.length();
+    if (neededDist > leanDist * 1.08 || centerShift > 0.75) {
+      const target = new THREE.Vector3(
+        Math.max(-1.6, Math.min(1.6, sphere.center.x)),
+        Math.max(-1.0, Math.min(1.0, sphere.center.y)),
+        Math.max(-1.6, Math.min(1.6, sphere.center.z))
+      );
+      const d = Math.max(leanDist, neededDist);
+      this.startCameraTransition(
+        new THREE.Vector3(target.x + d * 0.56, target.y + d * 0.42, target.z + d * 0.72),
+        target,
+        440
+      );
+    }
   }
 
   setThemeOverride(dark: boolean | null): void {

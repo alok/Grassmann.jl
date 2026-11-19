@@ -56,16 +56,18 @@ function findChromium() {
   throw new Error('No Chromium executable found');
 }
 
-function stageWasm() {
-  const wasmSrcDir = path.resolve(WEB_DIR, '..', '..', 'cabi', 'wasm', 'dist');
-  const mjs = path.join(wasmSrcDir, 'grassmann.mjs');
-  const wasm = path.join(wasmSrcDir, 'grassmann.wasm');
-  if (!fs.existsSync(mjs) || !fs.existsSync(wasm)) {
-    throw new Error(`Missing compiled Lean WASM in ${wasmSrcDir}`);
+function ensureStagedWasm() {
+  const manifestPath = path.join(PUBLIC_WASM_DIR, 'wasm-manifest.json');
+  if (!fs.existsSync(manifestPath)) {
+    execSync('node scripts/stage-wasm.mjs', { cwd: WEB_DIR, stdio: 'inherit' });
   }
-  fs.mkdirSync(PUBLIC_WASM_DIR, { recursive: true });
-  fs.copyFileSync(mjs, path.join(PUBLIC_WASM_DIR, 'grassmann.mjs'));
-  fs.copyFileSync(wasm, path.join(PUBLIC_WASM_DIR, 'grassmann.wasm'));
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const wasmPath = path.join(PUBLIC_WASM_DIR, manifest.wasmFile);
+  const mjsPath = path.join(PUBLIC_WASM_DIR, manifest.loaderFile);
+  if (!fs.existsSync(wasmPath) || !fs.existsSync(mjsPath)) {
+    throw new Error(`Missing fingerprinted WASM files referenced by ${manifestPath}`);
+  }
+  return manifest;
 }
 
 async function waitForServer(url, timeoutMs = 15000) {
@@ -120,7 +122,8 @@ async function measureCanvas(page) {
 
 async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
-  stageWasm();
+  const stagedManifest = ensureStagedWasm();
+  console.log(`[wave3] Using staged fingerprinted WASM hash=${stagedManifest.hash} (presets=${stagedManifest.presetCount ?? 'dynamic'})`);
   execSync('npm run build', { cwd: WEB_DIR, stdio: 'inherit' });
 
   const preview = spawn(
@@ -165,11 +168,13 @@ async function main() {
     await page.goto(BASE_URL, { waitUntil: 'networkidle' });
     await page.waitForTimeout(900);
 
-    // 1. Dynamic Preset Catalog (69 presets!) + Dedicated Web Worker WASM + Sculpted Bunny #pga3d_slicing + LiveScript v2 metaJson.script
+    // 1. Dynamic Preset Catalog (74 presets!) + Dedicated Web Worker WASM + Sculpted Bunny #pga3d_slicing + LiveScript v2 metaJson.script
     const s0 = await snap('w3-01-bunny-before.png');
     assert(s0.transportKind === 'wasm', 'Expected live Lean WASM');
     assert(/Worker/i.test(s0.transportLabel || ''), `Expected dedicated Web Worker WASM, got ${s0.transportLabel}`);
-    assert(s0.presetCount >= 69, `Expected >=69 dynamic Lean presets, got ${s0.presetCount}`);
+    assert(s0.presetCount >= 74, `Expected >=74 dynamic Lean presets, got ${s0.presetCount}`);
+    assert(typeof s0.formula === 'string' && s0.formula.length > 0, `Expected Lean metaJson.formula on #pga3d_slicing, got ${JSON.stringify(s0.formula)}`);
+    assert(typeof s0.summary === 'string' && s0.summary.length > 0, `Expected Lean metaJson.summary on #pga3d_slicing, got ${JSON.stringify(s0.summary)}`);
     assert(await page.locator('.gs-contour-pip').isVisible(), 'Expected sculpted bunny 2D slice contour PiP visible!');
     assert(typeof s0.metaScript === 'string' && s0.metaScript.length >= 60, `Expected Lean metaJson.script populated on #pga3d_slicing, got ${JSON.stringify(s0.metaScript)}`);
     assert(s0.script === s0.metaScript, 'Expected Code Editor synced directly to Lean metaJson.script');
@@ -282,13 +287,28 @@ async function main() {
     await snap('w3-11-equations-contours.png');
     assert(await page.locator('.gs-contour-pip').isVisible(), 'Expected 2D Contour Overlay PiP visible after evalEquations');
 
-    // 7b. Implicit 3D Gyroid (Symmetric Kuhn Marching Tetrahedra Mesh + ZERO stale contour PiP, AND live GPUInit GLSL3 Raymarch!)
+    // 7b. Implicit 3D Gyroid (Symmetric Kuhn Marching Tetrahedra Mesh + ZERO stale contour PiP, bytecode <10ms WASM Worker, AND live GPUInit GLSL3 Raymarch!)
     await page.locator('.gs-subtab-btn', { hasText: /^Imp 3D$/ }).click();
     await page.locator('.gs-seg-btn', { hasText: 'Marching Tet Mesh' }).click();
     await snap('w3-13-implicit-mesh.png');
     assert(!(await page.locator('.gs-contour-pip').isVisible()), 'Expected stale 2D Contour Overlay PiP CLEARED on evalImplicit!');
     const cMesh = await measureCanvas(page);
     assert(cMesh.variance >= 400 && cMesh.distinctColors >= 80, `Expected full symmetric Gyroid mesh, got ${JSON.stringify(cMesh)}`);
+
+    const gyroidBench = await page.evaluate(() =>
+      window.__grassmannStudio.benchmarkJson(
+        {
+          op: 'evalImplicit',
+          expr: 'sin(x*2.2)*cos(y*2.2) + sin(y*2.2)*cos(z*2.2) + sin(z*2.2)*cos(x*2.2)',
+          bounds: [-2.4, 2.4, -2.4, 2.4, -2.4, 2.4],
+          gridN: 16,
+          gpuRaymarch: false,
+        },
+        6
+      )
+    );
+    console.log(`[wave3] Bytecode Gyroid 16^3 WASM Worker benchmark:`, gyroidBench);
+    assert(gyroidBench.warmAvgMs < 10.0, `Expected warm bytecode Gyroid 16^3 < 10ms in WASM Worker, got ${JSON.stringify(gyroidBench)}`);
 
     await page.locator('.gs-seg-btn', { hasText: 'GPU Raymarch (GLSL3)' }).click();
     const sImpGpu = await snap('w3-14-implicit-gpu.png');
@@ -318,25 +338,109 @@ async function main() {
     const sAfterImport = await page.evaluate(() => window.__grassmannStudio.getState());
     assert(sAfterImport.presetId === 'pga3d_slicing', `Expected experiment import to restore pga3d_slicing, got ${sAfterImport.presetId}`);
 
-    // 10. Wave 4B UX Craft: KaTeX Formula Card + Timeline Bar + Visual Preset Gallery (G) + Velocity Flow Ribbons + Zen Mode (F)
+    // 10. Wave 4B + Wave 5B UX Craft: 74-Preset Gallery Modal + ALL 5 Showstopper Presets + @param Sliders + LiveScript slider(...) + Zen Mode
     assert(await page.locator('.gs-formula-card').isVisible(), 'Expected KaTeX Formula Card visible on #pga3d_slicing');
     assert((await page.locator('.gs-formula-card .katex').count()) >= 1, 'Expected rendered KaTeX math in Formula Card');
     assert(await page.locator('.gs-timeline-bar').isVisible(), 'Expected Simulation Timeline Bar visible');
 
-    // Open Visual Preset Gallery Modal (G)
+    // Open Visual Preset Gallery Modal (G) -> assert 74 dynamic Lean cards!
     await page.locator('.gs-vp-btn', { hasText: /Gallery/ }).click();
     await page.waitForTimeout(250);
     assert(await page.locator('.gs-gallery-modal').isVisible(), 'Expected Visual Preset Gallery Modal visible');
     const galleryCards = await page.locator('.gs-gallery-card').count();
-    assert(galleryCards >= 69, `Expected >=69 visual preset gallery cards, got ${galleryCards}`);
+    assert(galleryCards >= 74, `Expected >=74 visual preset gallery cards, got ${galleryCards}`);
     await page.screenshot({ path: path.join(OUT_DIR, 'w4-01-gallery-modal.png') });
     console.log(`[wave3] Visual Preset Gallery Modal PASS (${galleryCards} cards)`);
 
-    // Load pga3d_objects (Lathed Solids & Motor Flow) via Gallery Modal -> verify velocity-colored flow ribbons!
-    await page.locator('[data-gallery-preset-id="pga3d_objects"]').click();
-    await snap('w4-03-flow-ribbons.png');
+    // Helper to scrub a floating @param range slider cleanly
+    const scrubParamSlider = async (paramName, value) => {
+      const slider = page.locator(`.gs-param-slider[data-param-name="${paramName}"]`);
+      await slider.waitFor({ state: 'visible', timeout: 3000 });
+      await slider.evaluate((el, val) => {
+        el.value = String(val);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }, value);
+      await page.waitForTimeout(350);
+    };
 
-    // Enter Fullscreen Zen Mode (F) -> verify unobstructed full-bleed viewport + Exit Zen pill!
+    // 10a. Showstopper 1: pga3d_bouncing_cube -> verify gravity/restitution/spin @param sliders + KaTeX + live drag!
+    await page.locator('[data-gallery-preset-id="pga3d_bouncing_cube"]').click();
+    const sBounce0 = await snap('w5-01-bouncing-cube.png');
+    assert(sBounce0.params.length >= 2, `Expected >=2 @param sliders on pga3d_bouncing_cube, got ${JSON.stringify(sBounce0.params)}`);
+    assert(await page.locator('.gs-param-panel').isVisible(), 'Expected floating @param panel visible on pga3d_bouncing_cube');
+    assert(typeof sBounce0.formula === 'string' && sBounce0.formula.length > 0, 'Expected Lean formula on pga3d_bouncing_cube');
+    const firstBounceParam = sBounce0.params[0].name;
+    const targetBounceVal = Math.min(sBounce0.params[0].max, sBounce0.params[0].min + (sBounce0.params[0].max - sBounce0.params[0].min) * 0.8);
+    await scrubParamSlider(firstBounceParam, targetBounceVal);
+    const sBounce1 = await page.evaluate(() => window.__grassmannStudio.getState());
+    assert(Number(sBounce1.frameSeq) > Number(sBounce0.frameSeq), 'Expected setParam slider drag to advance frameSeq on pga3d_bouncing_cube');
+    const updatedBounceParam = sBounce1.params.find((p) => p.name === firstBounceParam);
+    assert(updatedBounceParam && Math.abs(updatedBounceParam.value - targetBounceVal) < 0.25, `Expected ${firstBounceParam} updated near ${targetBounceVal}, got ${JSON.stringify(updatedBounceParam)}`);
+    console.log(`[wave3] Showcase 1 pga3d_bouncing_cube PASS | params=[${sBounce0.params.map((p) => p.name).join(', ')}]`);
+
+    // 10b. Showstopper 2: pga3d_double_pendulum -> chaotic 3D trails + sliders + zero duplicate "Bob 2" label!
+    await page.locator('.gs-vp-btn', { hasText: /Gallery/ }).click();
+    await page.locator('[data-gallery-preset-id="pga3d_double_pendulum"]').click();
+    const sPend = await snap('w5-02-double-pendulum.png');
+    assert(sPend.params.length >= 1, `Expected @param sliders on pga3d_double_pendulum, got ${JSON.stringify(sPend.params)}`);
+    const bob2Labels = await page.locator('.gs-scene-label', { hasText: /^Bob 2$/ }).count();
+    assert(bob2Labels === 1, `Expected exactly 1 deduplicated 'Bob 2' label, got ${bob2Labels}`);
+    console.log(`[wave3] Showcase 2 pga3d_double_pendulum PASS | params=[${sPend.params.map((p) => p.name).join(', ')}]`);
+
+    // 10c. Showstopper 3: sta_terrell_penrose -> relativistic Cl(3,1) cube vs dashed ghost + scrub beta -> 0.85!
+    await page.locator('.gs-vp-btn', { hasText: /Gallery/ }).click();
+    await page.locator('[data-gallery-preset-id="sta_terrell_penrose"]').click();
+    const sTP0 = await snap('w5-03a-terrell-penrose-default.png');
+    assert(sTP0.params.some((p) => p.name === 'beta'), `Expected 'beta' @param on sta_terrell_penrose, got ${JSON.stringify(sTP0.params)}`);
+    await scrubParamSlider('beta', 0.85);
+    const sTP1 = await snap('w5-03b-terrell-penrose-beta85.png');
+    const betaAfter = sTP1.params.find((p) => p.name === 'beta');
+    assert(betaAfter && Math.abs(betaAfter.value - 0.85) < 0.03, `Expected beta=0.85 after scrub, got ${JSON.stringify(betaAfter)}`);
+    console.log(`[wave3] Showcase 3 sta_terrell_penrose PASS | beta=${betaAfter.value}`);
+
+    // 10d. Showstopper 4: sta_maxwell_streamlines -> velocity-colored 0x0D flow ribbons + 6 Faraday bivector disks!
+    await page.locator('.gs-vp-btn', { hasText: /Gallery/ }).click();
+    await page.locator('[data-gallery-preset-id="sta_maxwell_streamlines"]').click();
+    const sMax = await snap('w5-04-maxwell-streamlines.png');
+    assert(sMax.flowCount > 0, `Expected 0x0D FLOW_PARTICLES on sta_maxwell_streamlines, got ${sMax.flowCount}`);
+    assert(sMax.bivectorCount >= 6, `Expected >=6 Faraday bivector disks on sta_maxwell_streamlines, got ${sMax.bivectorCount}`);
+    console.log(`[wave3] Showcase 4 sta_maxwell_streamlines PASS | flow=${sMax.flowCount} bivectors=${sMax.bivectorCount}`);
+
+    // 10e. Showstopper 5: pga3d_hopf_streamlines -> Hopf fibration + PGA3 screw-motor flow ribbons!
+    await page.locator('.gs-vp-btn', { hasText: /Gallery/ }).click();
+    await page.locator('[data-gallery-preset-id="pga3d_hopf_streamlines"]').click();
+    const sHopf = await snap('w5-05-hopf-streamlines.png');
+    assert(sHopf.flowCount > 0 || sHopf.curveCount > 0, `Expected Hopf flow ribbons/curves, got flow=${sHopf.flowCount} curves=${sHopf.curveCount}`);
+    console.log(`[wave3] Showcase 5 pga3d_hopf_streamlines PASS | flow=${sHopf.flowCount} curves=${sHopf.curveCount}`);
+
+    // 10f. LiveScript v2 slider("amp", 0.5, 0.1, 2.0) live execution + dynamic slider render + scrub!
+    const liveSliderScript = [
+      '@basis PGA3',
+      'let amp = slider("amp", 0.5, 0.1, 2.0, 0.05, "Wave Amplitude")',
+      'let A = point(-amp, 0.2, 0)',
+      'let B = point(amp, 0.8, 0.3)',
+      'let L = A & B',
+      'let span = seg(A, B)',
+    ].join('\n');
+    await page.locator('.gs-editor-textarea').fill(liveSliderScript);
+    await page.locator('.gs-editor-textarea').press('Shift+Enter');
+    await page.waitForTimeout(450);
+    const sLS0 = await page.evaluate(() => window.__grassmannStudio.getState());
+    assert(sLS0.diagnostics.length === 0, `LiveScript slider(...) had diagnostics: ${JSON.stringify(sLS0.diagnostics)}`);
+    assert(sLS0.params.some((p) => p.name === 'amp'), `Expected dynamic 'amp' @param from LiveScript slider(...), got ${JSON.stringify(sLS0.params)}`);
+    const ptBefore = sLS0.points[0]?.pos?.[0] ?? 0;
+    await scrubParamSlider('amp', 1.65);
+    const sLS1 = await snap('w5-06-livescript-slider.png');
+    const ampAfter = sLS1.params.find((p) => p.name === 'amp');
+    assert(ampAfter && Math.abs(ampAfter.value - 1.65) < 0.05, `Expected LiveScript amp=1.65 after scrub, got ${JSON.stringify(ampAfter)}`);
+    const ptAfter = sLS1.points[0]?.pos?.[0] ?? 0;
+    assert(Math.abs(ptAfter - ptBefore) > 0.5, `Expected LiveScript slider scrub to move 3D point A (before=${ptBefore}, after=${ptAfter})`);
+    console.log(`[wave3] LiveScript v2 slider("amp") live execution + scrub PASS | amp=${ampAfter.value} A.x: ${ptBefore.toFixed(2)} -> ${ptAfter.toFixed(2)}`);
+
+    // Enter Fullscreen Zen Mode (F) on sta_maxwell_streamlines -> verify unobstructed full-bleed viewport + Exit Zen pill!
+    await page.locator('.gs-vp-btn', { hasText: /Gallery/ }).click();
+    await page.locator('[data-gallery-preset-id="sta_maxwell_streamlines"]').click();
+    await page.waitForTimeout(450);
     await page.locator('.gs-vp-btn', { hasText: /Zen/ }).click();
     await page.waitForTimeout(350);
     assert(await page.locator('.gs-exit-zen-pill').isVisible(), 'Expected Exit Zen pill visible');
@@ -350,7 +454,7 @@ async function main() {
     assert(consoleErrors.length === 0, `Console errors: ${JSON.stringify(consoleErrors)}`);
     assert(consoleWarnings.length === 0, `WebGL/Shader warnings: ${JSON.stringify(consoleWarnings)}`);
     assert(pageErrors.length === 0, `Page errors: ${JSON.stringify(pageErrors)}`);
-    console.log('[wave3] ALL 18 FULL-STUDIO 69-PRESET + WAVE 4B UX + WORKER E2E CHECKS PASSED (0 console/shader/page errors)!');
+    console.log('[wave3] ALL 24 FULL-STUDIO 74-PRESET + WAVE 5B SHOWCASE + BYTECODE + WORKER E2E CHECKS PASSED (0 console/shader/page errors)!');
   } finally {
     if (browser) await browser.close();
     preview.kill('SIGTERM');

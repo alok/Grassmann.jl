@@ -8,6 +8,7 @@ import {
   GSIR_VERSION,
 } from '../src/gsir';
 import { OrderedStudioEventQueue } from '../src/transport';
+import { highlightGaCode } from '../src/ui/gaHighlight';
 
 describe('Wave 4B: setParam Coalescing in OrderedStudioEventQueue', () => {
   it('coalesces consecutive setParam events per parameter name while strictly respecting discrete barriers & distinct params', async () => {
@@ -100,5 +101,19 @@ describe('Wave 4B: GSIR v1 metaJson.{params, formula, summary} Decoding', () => 
     expect(frame.meta?.params).toHaveLength(2);
     expect(frame.meta?.params?.[0]).toEqual(meta.params[0]);
     expect(frame.meta?.params?.[1]?.name).toBe('tilt');
+  });
+
+  it('highlights @basis / @param directives and slider(...) with exact zero-drift text fidelity', () => {
+    const src = '@basis STA\n@param beta = 0.78 (0..0.95, 0.01)\nlet amp = slider("amp", 0.5, 0.1, 2.0)';
+    const html = highlightGaCode(src);
+    expect(html).toContain('<span class="tok-directive">@basis</span>');
+    expect(html).toContain('<span class="tok-directive">@param</span>');
+    expect(html).toContain('<span class="tok-kw">slider</span>');
+    const plain = html
+      .replace(/<[^>]+>/g, '')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&');
+    expect(plain).toBe(src);
   });
 });
