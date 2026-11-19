@@ -242,6 +242,7 @@ structure WedgeState where
   selectedIds   : Array UInt32 := #[]
   showHints     : Bool     := true
   solved        : Bool     := false
+  customCamera  : Option CameraState := none
   undoStack     : Array (Array BoardItem × UInt32) := #[]
   deriving Repr, Inhabited
 

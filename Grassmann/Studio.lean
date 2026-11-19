@@ -159,7 +159,9 @@ def dispatchEvent (st : StudioSession) (ev : InputEvent) (forceSnap : Bool := fa
     | .calcEval mode expr =>
       ({ st with active := .calculator, calcState := Calc.evalDirect st.calcState mode expr }, true)
     | .setCamera m fov dist =>
-      ({ st with coffee := CoffeeShop.setCamera st.coffee m fov dist }, forceSnap)
+      match st.active with
+      | .wedge => ({ st with wedge := Wedge.setCamera st.wedge m fov dist }, forceSnap)
+      | _      => ({ st with coffee := CoffeeShop.setCamera st.coffee m fov dist }, forceSnap)
     | .slicePlane m =>
       ({ st with active := .coffeeShop, coffee := CoffeeShop.setSlicePlane st.coffee m }, forceSnap)
     | .evalEquations eqs minX maxX minY maxY gridN =>
