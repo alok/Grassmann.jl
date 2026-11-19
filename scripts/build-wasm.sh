@@ -84,13 +84,12 @@ emcc -O3 -DNDEBUG \
   -sEXPORT_NAME='createGrassmannRaw' \
   -sEXPORTED_FUNCTIONS="$exported_fns" \
   -sEXPORTED_RUNTIME_METHODS='["HEAPU8","HEAPU32","HEAPF64"]' \
-  -o "$dist_dir/grassmann_raw.mjs"
+  -o "$dist_dir/grassmann.mjs"
 
 cp "$repo_root/wasm/grassmann_wasm.mjs" "$dist_dir/grassmann_wasm.mjs"
-# Rename wasm artifact cleanly? Keep grassmann_raw.wasm referenced by grassmann_raw.mjs
 echo "[wasm] built artifacts:"
-ls -lh "$dist_dir/grassmann_raw.wasm" "$dist_dir/grassmann_raw.mjs" "$dist_dir/grassmann_wasm.mjs"
-gzip -c "$dist_dir/grassmann_raw.wasm" | wc -c | awk '{printf "[wasm] gzipped wasm size: %d bytes (%.1f KB)\n", $1, $1/1024.0}'
+ls -lh "$dist_dir/grassmann.wasm" "$dist_dir/grassmann.mjs" "$dist_dir/grassmann_wasm.mjs"
+gzip -c "$dist_dir/grassmann.wasm" | wc -c | awk '{printf "[wasm] gzipped wasm size: %d bytes (%.1f KB)\n", $1, $1/1024.0}'
 
 echo "[wasm] running Node.js verification + benchmark suite"
 node "$repo_root/wasm/test_wasm.mjs"

@@ -97,3 +97,7 @@ name = "FlowGeometry"
 
 [[lean_lib]]
 name = "Clifford"
+
+[[lean_exe]]
+name = "ga-server"
+root = "Grassmann.Server.Main"

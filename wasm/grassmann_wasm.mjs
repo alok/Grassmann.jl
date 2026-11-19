@@ -204,7 +204,7 @@ export class GrassmannWasm {
  * Works in browsers (Vite/Vercel) and Node.js.
  */
 export async function loadGrassmannWasm(moduleOpts = {}) {
-  const { default: createGrassmannRaw } = await import("./grassmann_raw.mjs");
+  const { default: createGrassmannRaw } = await import("./grassmann.mjs");
   const mod = await createGrassmannRaw(moduleOpts);
   const rc = mod._grassmann_initialize();
   if (rc !== GSIR_OK) {
