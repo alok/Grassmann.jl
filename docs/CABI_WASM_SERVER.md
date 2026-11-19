@@ -75,12 +75,12 @@ node scripts/test-ga-server.mjs
 
 ---
 
-## 5. Measured Wave 3A Unified Benchmarks (31 `Init`-Only Modules, 69 Presets, M4 Max)
+## 5. Measured Wave 3B Unified Benchmarks (31 `Init`-Only Modules, 69 Presets + LiveScript v2, M4 Max)
 
 | Target | Artifact Size | Key Verified Latency / Metrics |
 |---|---|---|
-| Native C ABI (`libgrassmann_cabi.dylib`) | **4.6 MB** (`4,801,992 B`, `libc++` + `libSystem` only) | `pga3_motor_compose` **38.3 ns**, `apply_xyz_batch` **7.34 ns/pt** (`0.21 ns/pt` shim 2× memcpy), `DragHandle→GSIR` **24.46 µs/frame** (40,891 fps max); `ALOK-1007` linearity PASS |
-| Emscripten WASM (`grassmann.<hash>.wasm`) | **1.5 MB raw / 403.7 KB gz** (`wasm-manifest.json`) | ALL **69 presets** + sculpted bunny (`1754` verts, `10` contours), user-typed Gyroid `16³` **3.82 ms**, `GPUInit` GLSL3+WGSL+MSL **1.71 ms**, `motor_compose` **53.5 ns**, `DragHandle→GSIR` **61.38 µs/frame** (16,291 fps max) |
-| Apple 3-Platform XCFramework (`GrassmannCABI.xcframework`) | `macos` **5.2 MB**, `xrsim` **5.6 MB**, `xros` **5.6 MB** | Live-linked ZERO warnings against `LeanVisionOSRuntime.xcframework` on ALL 3 platforms (`15M` macOS, `17M` xrsim, `17M` xros), live exec `169,952 B` bunny + `18,736 B` 69-preset catalog |
-| Pure-Lean `ga-server` (`lake exe ga-server`) | Standalone native binary | RFC 6455 WS **90.8 µs/frame** (11,010 fps max), HTTP/1.1 keep-alive **121.0 µs/req**, `GET /api/presets` (69 presets) |
+| Native C ABI (`libgrassmann_cabi.dylib`) | **4.9 MB** (`5,153,608 B`, `libc++` + `libSystem` only) | `pga3_motor_compose` **36.8 ns**, `apply_xyz_batch` **7.12 ns/pt** (`0.20 ns/pt` shim 2× memcpy), `DragHandle→GSIR` **29.66 µs/frame** (33,718 fps max); `ALOK-1007` linearity PASS |
+| Emscripten WASM (`grassmann.<hash>.wasm`) | **1.8 MB raw / 472.5 KB gz** (`a60f037ad8`, `wasm-manifest.json`) | ALL **69 presets** + sculpted bunny (`1754` verts, `10` contours, editable `metaJson.script`), **LiveScript v2** + reactive `DragHandle`, symmetric Gyroid `16³` (`3959` verts / `7404` tris, `[-1.60,1.60]³`) **19.70 ms**, `GPUInit` GLSL3+WGSL+MSL **1.80 ms**, `motor_compose` **58.3 ns**, `DragHandle→GSIR` **83.09 µs/frame** (12,035 fps max) |
+| Apple 3-Platform XCFramework (`GrassmannCABI.xcframework`) | `macos` **5.7 MB**, `xrsim` **6.1 MB**, `xros` **6.1 MB** | Live-linked ZERO warnings against `LeanVisionOSRuntime.xcframework` on ALL 3 platforms (`15M` macOS, `17M` xrsim, `17M` xros), live exec `170,136 B` bunny + `21,539 B` 69-preset catalog |
+| Pure-Lean `ga-server` (`lake exe ga-server`) | Standalone native binary | RFC 6455 WS **104.2 µs/frame** (9,593 fps max), HTTP/1.1 keep-alive **143.7 µs/req**, `GET /api/presets` (69 presets) |
 

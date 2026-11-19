@@ -50,15 +50,22 @@ mods=(
 )
 
 targets=()
-c_files=()
 for m in "${mods[@]}"; do
   targets+=("${m}:c")
-  c_files+=("$repo_root/.lake/build/ir/${m//.//}.c")
 done
 
 echo "[wasm] generating ${#mods[@]} strictly Init-only Lean 4.36 C sources (--wfail)"
 lake --dir "$repo_root" build --wfail "${targets[@]}"
 
+c_files=()
+while IFS= read -r line; do
+  [[ -n "$line" ]] && c_files+=("$line")
+done < <(lake --dir "$repo_root" query "${targets[@]}")
+
+if (( ${#c_files[@]} != ${#mods[@]} )); then
+  echo "ERROR: expected ${#mods[@]} C files from lake query, got ${#c_files[@]}" >&2
+  exit 1
+fi
 for f in "${c_files[@]}"; do
   [[ -f "$f" ]] || { echo "missing Lean-generated C file: $f" >&2; exit 1; }
 done

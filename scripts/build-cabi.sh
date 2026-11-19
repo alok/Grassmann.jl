@@ -51,14 +51,18 @@ mods=(
 )
 
 targets=()
-objs=()
 for m in "${mods[@]}"; do
   targets+=("${m}:o.export")
-  objs+=("$repo_root/.lake/build/ir/${m//.//}.c.o.export")
 done
 
 echo "[cabi] building ${#mods[@]} strictly Init-only Lean export objects (--wfail)"
-LAKE_CACHE_DIR='' lake --dir "$repo_root" --no-cache build --wfail "${targets[@]}"
+lake --dir "$repo_root" build --wfail "${targets[@]}" Grassmann.CABI.Kernels:c
+
+objs=()
+while IFS= read -r line; do
+  [[ -n "$line" ]] && objs+=("$line")
+done < <(lake --dir "$repo_root" query "${targets[@]}")
+kernels_c="$(lake --dir "$repo_root" query Grassmann.CABI.Kernels:c)"
 
 for obj in "${objs[@]}"; do
   [[ -f "$obj" ]] || { echo "missing object: $obj" >&2; exit 1; }
@@ -132,7 +136,7 @@ case "$(uname -s)" in
 esac
 
 echo "[cabi] checking ALOK-1007 generated-C linearity on hot batch loop (Kernels.c)"
-uv run python - "$repo_root/.lake/build/ir/Grassmann/CABI/Kernels.c" << 'PY'
+uv run python - "$kernels_c" << 'PY'
 import pathlib, re, sys
 src = pathlib.Path(sys.argv[1]).read_text()
 m = re.search(r"LEAN_EXPORT lean_object\* lp_Grassmann_Grassmann_CABI_Kernels_pga3MotorApplyXYZBatch_go\([^)]*\)\{.*?(?=\nLEAN_EXPORT )", src, re.S)

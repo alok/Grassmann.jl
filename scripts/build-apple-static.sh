@@ -56,15 +56,23 @@ MODULES=(
 )
 
 C_TARGETS=()
-C_FILES=()
 for m in "${MODULES[@]}"; do
   C_TARGETS+=("${m}:c")
-  C_FILES+=("$ROOT/.lake/build/ir/${m//./\/}.c")
 done
 
 echo "[apple] Lean toolchain: $(lean --version)"
 echo "[apple] generating ${#MODULES[@]} strictly Init-only Lean 4.36 C sources (--wfail)"
 lake build --wfail "${C_TARGETS[@]}"
+
+C_FILES=()
+while IFS= read -r line; do
+  [[ -n "$line" ]] && C_FILES+=("$line")
+done < <(lake query "${C_TARGETS[@]}")
+
+if (( ${#C_FILES[@]} != ${#MODULES[@]} )); then
+  echo "ERROR: expected ${#MODULES[@]} C files from lake query, got ${#C_FILES[@]}" >&2
+  exit 1
+fi
 
 rm -rf "$STAGE_ROOT"
 mkdir -p "$VISIONOS_INC/lean"

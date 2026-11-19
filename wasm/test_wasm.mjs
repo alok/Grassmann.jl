@@ -129,7 +129,8 @@ assert.ok(contourSec, "pga3d_slicing has CONTOUR_OVERLAY");
   assert.ok(spanX > 1.5 && spanY > 0.9 && spanZ > 0.9, `bunny mesh full 360-deg span expected >(1.5,0.9,0.9), got (${spanX.toFixed(3)}, ${spanY.toFixed(3)}, ${spanZ.toFixed(3)})`);
   const polyCount = dv.getUint32(contourSec.byteOffset + 16, true);
   assert.ok(polyCount > 0, `pga3d_slicing bunny contour has polylines (got ${polyCount})`);
-  console.log(`[wasm test] sculpted bunny verified: ${vCount} verts, span=(${spanX.toFixed(2)}, ${spanY.toFixed(2)}, ${spanZ.toFixed(2)}), ${polyCount} slice contours`);
+  assert.ok(typeof f0.meta.script === "string" && f0.meta.script.length > 20, "pga3d_slicing populates editable metaJson.script");
+  console.log(`[wasm test] sculpted bunny verified: ${vCount} verts, span=(${spanX.toFixed(2)}, ${spanY.toFixed(2)}, ${spanZ.toFixed(2)}), ${polyCount} slice contours, script=${f0.meta.script.length} chars`);
 }
 
 // Exercise EVERY SINGLE preset (all 69!) in compiled Lean WASM!
@@ -196,10 +197,44 @@ const wCommit = parseGSIR(sess.dispatchBin(wg));
 assert.ok(wCommit.meta && wCommit.meta.wedge.moves === 1, "WedgeGesture commit increments moves to 1");
 assert.equal(wCommit.meta.wedge.solved, true, "WedgeGesture Join solves Level 1!");
 
-// Live evalScript, evalSurface, evalEquations, evalImplicit (mesh + GPU raymarch!), evalParametric, calcEval
-const sScript = parseGSIR(sess.dispatchJson({ op: "evalScript", algebra: "PGA3", code: "let P = point(1,2,3); let Q = point(-1,0,1); let L = P & Q" }));
-assert.equal(sScript.meta.diagnostics.length, 0, "evalScript zero diagnostics");
-assert.ok(sScript.sections.some(s => s.kind === 0x04), "evalScript emitted PGA3 line");
+// Live LiveScript v2 execution: multi-statement + fn + for loop + hex color + reactive DragHandle!
+const liveCode = [
+  "@basis PGA3",
+  "fn mid(a, b) = (a + b) * 0.5",
+  "let A = point(-1.0, 0.0, 0.0)",
+  "let B = point(1.0, 0.5, 0.0)",
+  "let L = A & B",
+  "let M = mid(A, B)",
+  "let pts = [point(cos(i * 0.8), sin(i * 0.8), 0.2) for i in 0..4]",
+  "graph([0x44aaff, A, B, L, M, pts])"
+].join("\n");
+const sScriptRaw = sess.dispatchJson({ op: "evalScript", algebra: "PGA3", code: liveCode });
+const sScript = parseGSIR(sScriptRaw);
+assert.equal(sScript.meta.diagnostics.length, 0, "LiveScript v2 zero diagnostics");
+assert.ok(sScript.sections.some(s => s.kind === 0x02), "LiveScript v2 emitted draggable points");
+assert.ok(sScript.sections.some(s => s.kind === 0x04), "LiveScript v2 emitted PGA3 line L = A & B");
+// Reactive DragHandle on script handle 0 (A) updates point coordinates live in WASM!
+const ptSecBefore = sScript.sections.find(s => s.kind === 0x02);
+const ptDvBefore = new DataView(sScriptRaw.buffer, sScriptRaw.byteOffset, sScriptRaw.byteLength);
+const hId0 = ptDvBefore.getUint32(ptSecBefore.byteOffset + 0, true);
+const scriptDrag = new Uint8Array(20);
+const sddv = new DataView(scriptDrag.buffer);
+scriptDrag[0] = 0x01; sddv.setUint16(2, 16, true); sddv.setUint32(4, hId0, true);
+sddv.setFloat32(8, 0.75, true); sddv.setFloat32(12, 1.25, true); sddv.setFloat32(16, -0.5, true);
+const sDraggedRaw = sess.dispatchBin(scriptDrag);
+const sDragged = parseGSIR(sDraggedRaw);
+// POINTS record layout: handleId(+0), flags(+4), pos.x(+8), pos.y(+12), pos.z(+16), ...
+const ptSecAfter = sDragged.sections.find(s => s.kind === 0x02);
+const ptDvAfter = new DataView(sDraggedRaw.buffer, sDraggedRaw.byteOffset, sDraggedRaw.byteLength);
+const draggedX = ptDvAfter.getFloat32(ptSecAfter.byteOffset + 8, true);
+const draggedY = ptDvAfter.getFloat32(ptSecAfter.byteOffset + 12, true);
+const draggedZ = ptDvAfter.getFloat32(ptSecAfter.byteOffset + 16, true);
+assertNear(draggedX, 0.75, 1e-4, "LiveScript v2 reactive DragHandle updated point.x");
+assertNear(draggedY, 1.25, 1e-4, "LiveScript v2 reactive DragHandle updated point.y");
+assertNear(draggedZ, -0.5, 1e-4, "LiveScript v2 reactive DragHandle updated point.z");
+// Also verify #pga3d_slicing's editable metaJson.script executes cleanly via evalScript!
+const bunnyScriptRes = parseGSIR(sess.dispatchJson({ op: "evalScript", algebra: "PGA3", code: f0.meta.script }));
+assert.equal(bunnyScriptRes.meta.diagnostics.length, 0, "#pga3d_slicing metaJson.script executes with 0 diagnostics");
 
 const sSurf = parseGSIR(sess.dispatchJson({ op: "evalSurface", expr: "sin(x*x+y*y-t)*0.5", bounds: [-2, 2, -2, 2], gridN: 24 }));
 assert.ok(sSurf.sections.some(s => s.kind === 0x0B), "evalSurface emitted CCW mesh");
@@ -207,14 +242,33 @@ assert.ok(sSurf.sections.some(s => s.kind === 0x0B), "evalSurface emitted CCW me
 const sEq = parseGSIR(sess.dispatchJson({ op: "evalEquations", equations: ["x^2+y^2-1", "y-x"], bounds: [-2, 2, -2, 2], gridN: 32 }));
 assert.ok(sEq.sections.some(s => s.kind === 0x0F), "evalEquations emitted marching-triangles CONTOUR_OVERLAY");
 
-// User-typed 3D Implicit Equation (Kuhn Marching Tetrahedra mesh + latency benchmark!)
+// User-typed 3D Implicit Equation (Kuhn Marching Tetrahedra mesh + symmetric bounds + cleared stale contour!)
 const gyroidExpr = "cos(x*2)*sin(y*2)+cos(y*2)*sin(z*2)+cos(z*2)*sin(x*2)";
 const tImp0 = performance.now();
-const sImpMesh = parseGSIR(sess.dispatchJson({ op: "evalImplicit", expr: gyroidExpr, gpuRaymarch: false, gridN: 16 }));
+const sImpRaw = sess.dispatchJson({ op: "evalImplicit", expr: gyroidExpr, gpuRaymarch: false, gridN: 16 });
 const dtImpMesh = performance.now() - tImp0;
+const sImpMesh = parseGSIR(sImpRaw);
 assert.equal(sImpMesh.meta.diagnostics.length, 0, "evalImplicit mesh zero diagnostics");
-assert.ok(sImpMesh.sections.some(s => s.kind === 0x0B), "evalImplicit mesh emitted CCW MESH_ASSETS");
-console.log(`[wasm bench] evalImplicit gyroid 16^3: ${dtImpMesh.toFixed(2)} ms (${sImpMesh.meta.inspect[0].formatted})`);
+assert.ok(!sImpMesh.sections.some(s => s.kind === 0x0F), "evalImplicit cleared stale CONTOUR_OVERLAY");
+const gyMeshSec = sImpMesh.sections.find(s => s.kind === 0x0B);
+assert.ok(gyMeshSec, "evalImplicit mesh emitted CCW MESH_ASSETS");
+{
+  const gdv = new DataView(sImpRaw.buffer, sImpRaw.byteOffset, sImpRaw.byteLength);
+  const gVerts = gdv.getUint32(gyMeshSec.byteOffset + 16, true);
+  let gx0 = Infinity, gx1 = -Infinity, gy0 = Infinity, gy1 = -Infinity, gz0 = Infinity, gz1 = -Infinity;
+  const gPos = gyMeshSec.byteOffset + 32;
+  for (let i = 0; i < gVerts; i++) {
+    const x = gdv.getFloat32(gPos + i * 12, true);
+    const y = gdv.getFloat32(gPos + i * 12 + 4, true);
+    const z = gdv.getFloat32(gPos + i * 12 + 8, true);
+    if (x < gx0) gx0 = x; if (x > gx1) gx1 = x;
+    if (y < gy0) gy0 = y; if (y > gy1) gy1 = y;
+    if (z < gz0) gz0 = z; if (z > gz1) gz1 = z;
+  }
+  assert.ok(gx0 < -1.0 && gx1 > 1.0 && gy0 < -1.0 && gy1 > 1.0 && gz0 < -1.0 && gz1 > 1.0,
+    `symmetric Gyroid expected spanning [-1,+1]^3, got x=[${gx0.toFixed(2)},${gx1.toFixed(2)}] y=[${gy0.toFixed(2)},${gy1.toFixed(2)}] z=[${gz0.toFixed(2)},${gz1.toFixed(2)}]`);
+  console.log(`[wasm bench] evalImplicit gyroid 16^3: ${dtImpMesh.toFixed(2)} ms (${sImpMesh.meta.inspect[0].formatted}, sym=[${gx0.toFixed(2)},${gx1.toFixed(2)}])`);
+}
 
 // User-typed 3D Implicit Equation (GPUInit GLSL3 + WGSL + Metal MSL raymarcher!)
 const tGpu0 = performance.now();
