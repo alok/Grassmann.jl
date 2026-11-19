@@ -114,12 +114,39 @@ def defaultUpExprs (alg : AlgSpec) : Array String :=
     (Array.range n).map fun i =>
       match i with | 0 => "x" | 1 => "y" | 2 => "z" | _ => "0.0"
 
-/-- Format a GPU float literal cleanly (`1.0`, `-0.5`, etc.) avoiding bare integer syntax. -/
+/-- Format a GPU float literal cleanly (`1.0`, `-0.5`, `1.000000e-7`, `1.234568e8`)
+avoiding bare integer syntax AND never truncating small nonzero float32 constants
+like `0.0000001` (`1e-7`) to `0.000000` (which fixed-6-decimal `Float.toString` does).
+Valid verbatim in GLSL 300 es, WebGPU WGSL, and Apple Metal MSL. -/
 private def fmtFloat (v : Float) : String :=
-  if v.isNaN || v.isInf then "0.0"
+  if v.isNaN || !v.isFinite || v == 0.0 then "0.0"
   else
-    let s := toString v
-    if s.contains '.' || s.contains 'e' || s.contains 'E' then s else s ++ ".0"
+    let sign := if v < 0.0 then "-" else ""
+    let av0 := Float.abs v
+    if av0 >= 1e-4 && av0 < 1e7 then
+      let s := toString v
+      if s.contains '.' || s.contains 'e' || s.contains 'E' then s else s ++ ".0"
+    else
+      -- Clamp nonzero extremes to normal IEEE-754 float32 range so WGSL/GLSL/MSL
+      -- never reject oversized literals (> FLT_MAX) or flush subnormals to 0.0f (FTZ).
+      let av := max 1e-35 (min 3.4e38 av0)
+      let exp0 : Int := (Float.floor (Float.log av / Float.log 10.0)).toInt64.toInt
+      Id.run do
+        let mut exp := exp0
+        let mut mant := av / Float.pow 10.0 (Float.ofInt exp)
+        for _ in [:8] do
+          if mant >= 10.0 then
+            mant := mant / 10.0
+            exp := exp + 1
+          else if mant < 1.0 && mant > 0.0 then
+            mant := mant * 10.0
+            exp := exp - 1
+        if mant >= 9.9999995 then
+          mant := 1.0
+          exp := exp + 1
+        let ms0 := toString mant
+        let ms := if ms0.contains '.' then ms0 else ms0 ++ ".0"
+        return s!"{sign}{ms}e{exp}"
 
 /-- Compute an FNV-1a 64-bit hex cache hash string for `OpnsShaderSource.hash`. -/
 private def hashShaderTag (tag : String) (payload : String) : String := Id.run do
@@ -719,6 +746,51 @@ vec2 intersectBox(vec3 ro, vec3 rd, float b) \{
   return vec2(max(0.0, tNear), tFar);
 }
 
+vec2 gs_refine_min(vec3 ro, vec3 rd, float ta, float tb, float tMidInit, float gMidInit, float s, float g0, float g2) \{
+  float ga = ta, gb = tb;
+  const float invPhi = 0.61803398875;
+  float gc = gb - (gb - ga) * invPhi;
+  float gd = ga + (gb - ga) * invPhi;
+  float fc = s * eval_implicit(ro + rd * gc);
+  float fd = s * eval_implicit(ro + rd * gd);
+  bool flipped = false;
+  float tFlip = ta;
+  if (fc <= 0.0) \{ flipped = true; tFlip = gc; }
+  else if (fd <= 0.0) \{ flipped = true; tFlip = gd; }
+  else \{
+    for (int k = 0; k < 16; k++) \{
+      if (fc < fd) \{
+        gb = gd; gd = gc; fd = fc;
+        gc = gb - (gb - ga) * invPhi;
+        fc = s * eval_implicit(ro + rd * gc);
+        if (fc <= 0.0) \{ flipped = true; tFlip = gc; break; }
+      } else \{
+        ga = gc; gc = gd; fc = fd;
+        gd = ga + (gb - ga) * invPhi;
+        fd = s * eval_implicit(ro + rd * gd);
+        if (fd <= 0.0) \{ flipped = true; tFlip = gd; break; }
+      }
+    }
+  }
+  if (flipped) \{
+    float lo = (tMidInit > ta && tFlip > tMidInit) ? tMidInit : ta;
+    float hi = tFlip;
+    for (int k = 0; k < 6; k++) \{
+      float mid = 0.5 * (lo + hi);
+      if (s * eval_implicit(ro + rd * mid) > 0.0) \{ lo = mid; } else \{ hi = mid; }
+    }
+    return vec2(1.0, 0.5 * (lo + hi));
+  }
+  float tMin = (fc < fd) ? gc : gd;
+  float gMin = min(fc, fd);
+  if (tMidInit > ta && gMidInit < gMin) \{ gMin = gMidInit; tMin = tMidInit; }
+  float gMaxEnd = max(g0, g2);
+  if (gMaxEnd > 0.0 && gMin < g0 && gMin < g2 && gMin <= 1e-5 * gMaxEnd) \{
+    return vec2(1.0, tMin);
+  }
+  return vec2(0.0, 0.0);
+}
+
 void main() \{
   vec3 ro = cameraPosition;
   vec3 rd = normalize(vWorldPos - cameraPosition);
@@ -727,6 +799,8 @@ void main() \{
 
   int steps = clamp(uMaxSteps, 32, 160);
   float dt = (hitRange.y - hitRange.x) / float(steps);
+  float tPrev2 = hitRange.x;
+  float fPrev2 = 0.0;
   float tPrev = hitRange.x;
   float fPrev = eval_implicit(ro + rd * tPrev);
   bool hit = (fPrev == 0.0);
@@ -759,6 +833,26 @@ void main() \{
         hit = true;
         break;
       }
+      float s = fPrev > 0.0 ? 1.0 : -1.0;
+      float gPrev = s * fPrev;
+      float gCur  = s * fCur;
+      if (i == 1 && gPrev < gCur) \{
+        vec2 rHit = gs_refine_min(ro, rd, tPrev, tCur, tPrev, gPrev, s, gPrev, gCur);
+        if (rHit.x > 0.5) \{ tHit = rHit.y; hit = true; break; }
+      }
+      if (i >= 2) \{
+        float gPrev2 = s * fPrev2;
+        if (gPrev <= gPrev2 && gPrev <= gCur && (gPrev < gPrev2 || gPrev < gCur)) \{
+          vec2 rHit = gs_refine_min(ro, rd, tPrev2, tCur, tPrev, gPrev, s, gPrev2, gCur);
+          if (rHit.x > 0.5) \{ tHit = rHit.y; hit = true; break; }
+        }
+      }
+      if (i == steps && gCur < gPrev) \{
+        vec2 rHit = gs_refine_min(ro, rd, tPrev, tCur, tPrev, gPrev, s, gPrev, gCur);
+        if (rHit.x > 0.5) \{ tHit = rHit.y; hit = true; break; }
+      }
+      tPrev2 = tPrev;
+      fPrev2 = fPrev;
       tPrev = tCur;
       fPrev = fCur;
     }
@@ -767,13 +861,20 @@ void main() \{
 
   vec3 pos = ro + rd * tHit;
   float h = {fmtFloat gradH};
-  vec3 g = vec3(
-    eval_implicit(pos + vec3(h,0.0,0.0)) - eval_implicit(pos - vec3(h,0.0,0.0)),
-    eval_implicit(pos + vec3(0.0,h,0.0)) - eval_implicit(pos - vec3(0.0,h,0.0)),
-    eval_implicit(pos + vec3(0.0,0.0,h)) - eval_implicit(pos - vec3(0.0,0.0,h))
-  );
+  float f0 = eval_implicit(pos);
+  float fpx = eval_implicit(pos + vec3(h,0.0,0.0)), fmx = eval_implicit(pos - vec3(h,0.0,0.0));
+  float fpy = eval_implicit(pos + vec3(0.0,h,0.0)), fmy = eval_implicit(pos - vec3(0.0,h,0.0));
+  float fpz = eval_implicit(pos + vec3(0.0,0.0,h)), fmz = eval_implicit(pos - vec3(0.0,0.0,h));
+  vec3 g = vec3(fpx - fmx, fpy - fmy, fpz - fmz);
   float gMax = max(abs(g.x), max(abs(g.y), abs(g.z)));
-  vec3 N = gMax > 1e-20 ? normalize(g / gMax) : vec3(0.0, 1.0, 0.0);
+  vec3 N = -rd;
+  if (gMax > 1e-20) \{
+    N = normalize(g / gMax);
+  } else \{
+    vec3 h2 = vec3(fpx + fmx - 2.0 * f0, fpy + fmy - 2.0 * f0, fpz + fmz - 2.0 * f0);
+    float h2Max = max(abs(h2.x), max(abs(h2.y), abs(h2.z)));
+    if (h2Max > 1e-20) N = normalize(h2 / h2Max);
+  }
   if (dot(N, -rd) < 0.0) N = -N;
   vec3 V = -rd;
   vec3 Lk = normalize(vec3(0.55, 0.78, 0.38));
@@ -873,6 +974,52 @@ fn intersectBox(ro: vec3<f32>, rd: vec3<f32>, b: f32) -> vec2<f32> \{
   return vec2<f32>(max(0.0, tNear), tFar);
 }
 
+fn gs_refine_min(ro: vec3<f32>, rd: vec3<f32>, ta: f32, tb: f32, tMidInit: f32, gMidInit: f32, s: f32, g0: f32, g2: f32) -> vec2<f32> \{
+  var ga = ta;
+  var gb = tb;
+  let invPhi: f32 = 0.61803398875;
+  var gc = gb - (gb - ga) * invPhi;
+  var gd = ga + (gb - ga) * invPhi;
+  var fc = s * eval_implicit(ro + rd * gc);
+  var fd = s * eval_implicit(ro + rd * gd);
+  var flipped: bool = false;
+  var tFlip: f32 = ta;
+  if (fc <= 0.0) \{ flipped = true; tFlip = gc; }
+  else if (fd <= 0.0) \{ flipped = true; tFlip = gd; }
+  else \{
+    for (var k: i32 = 0; k < 16; k = k + 1) \{
+      if (fc < fd) \{
+        gb = gd; gd = gc; fd = fc;
+        gc = gb - (gb - ga) * invPhi;
+        fc = s * eval_implicit(ro + rd * gc);
+        if (fc <= 0.0) \{ flipped = true; tFlip = gc; break; }
+      } else \{
+        ga = gc; gc = gd; fc = fd;
+        gd = ga + (gb - ga) * invPhi;
+        fd = s * eval_implicit(ro + rd * gd);
+        if (fd <= 0.0) \{ flipped = true; tFlip = gd; break; }
+      }
+    }
+  }
+  if (flipped) \{
+    var lo = select(ta, tMidInit, tMidInit > ta && tFlip > tMidInit);
+    var hi = tFlip;
+    for (var k: i32 = 0; k < 6; k = k + 1) \{
+      let mid = 0.5 * (lo + hi);
+      if (s * eval_implicit(ro + rd * mid) > 0.0) \{ lo = mid; } else \{ hi = mid; }
+    }
+    return vec2<f32>(1.0, 0.5 * (lo + hi));
+  }
+  var tMin = select(gd, gc, fc < fd);
+  var gMin = min(fc, fd);
+  if (tMidInit > ta && gMidInit < gMin) \{ gMin = gMidInit; tMin = tMidInit; }
+  let gMaxEnd = max(g0, g2);
+  if (gMaxEnd > 0.0 && gMin < g0 && gMin < g2 && gMin <= 1e-5 * gMaxEnd) \{
+    return vec2<f32>(1.0, tMin);
+  }
+  return vec2<f32>(0.0, 0.0);
+}
+
 @fragment
 fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> \{
   let ndc = uv * 2.0 - vec2<f32>(1.0, 1.0);
@@ -884,6 +1031,8 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> \{
   let tFar = hitRange.y;
   let steps = clamp(i32(u.params.z), 32, 160);
   let dt = (tFar - tNear) / f32(steps);
+  var tPrev2 = tNear;
+  var fPrev2: f32 = 0.0;
   var tPrev = tNear;
   var fPrev = eval_implicit(ro + rd * tPrev);
   var hit: bool = (fPrev == 0.0);
@@ -914,6 +1063,26 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> \{
         hit = true;
         break;
       }
+      let s = select(-1.0, 1.0, fPrev > 0.0);
+      let gPrev = s * fPrev;
+      let gCur  = s * fCur;
+      if (i == 1 && gPrev < gCur) \{
+        let rHit = gs_refine_min(ro, rd, tPrev, tCur, tPrev, gPrev, s, gPrev, gCur);
+        if (rHit.x > 0.5) \{ tHit = rHit.y; hit = true; break; }
+      }
+      if (i >= 2) \{
+        let gPrev2 = s * fPrev2;
+        if (gPrev <= gPrev2 && gPrev <= gCur && (gPrev < gPrev2 || gPrev < gCur)) \{
+          let rHit = gs_refine_min(ro, rd, tPrev2, tCur, tPrev, gPrev, s, gPrev2, gCur);
+          if (rHit.x > 0.5) \{ tHit = rHit.y; hit = true; break; }
+        }
+      }
+      if (i == steps && gCur < gPrev) \{
+        let rHit = gs_refine_min(ro, rd, tPrev, tCur, tPrev, gPrev, s, gPrev, gCur);
+        if (rHit.x > 0.5) \{ tHit = rHit.y; hit = true; break; }
+      }
+      tPrev2 = tPrev;
+      fPrev2 = fPrev;
       tPrev = tCur;
       fPrev = fCur;
     }
@@ -921,14 +1090,23 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> \{
   if (!hit) \{ discard; }
   let pos = ro + rd * tHit;
   let h: f32 = {fmtFloat gradH};
-  let g = vec3<f32>(
-    eval_implicit(pos + vec3<f32>(h,0.0,0.0)) - eval_implicit(pos - vec3<f32>(h,0.0,0.0)),
-    eval_implicit(pos + vec3<f32>(0.0,h,0.0)) - eval_implicit(pos - vec3<f32>(0.0,h,0.0)),
-    eval_implicit(pos + vec3<f32>(0.0,0.0,h)) - eval_implicit(pos - vec3<f32>(0.0,0.0,h))
-  );
+  let f0 = eval_implicit(pos);
+  let fpx = eval_implicit(pos + vec3<f32>(h,0.0,0.0));
+  let fmx = eval_implicit(pos - vec3<f32>(h,0.0,0.0));
+  let fpy = eval_implicit(pos + vec3<f32>(0.0,h,0.0));
+  let fmy = eval_implicit(pos - vec3<f32>(0.0,h,0.0));
+  let fpz = eval_implicit(pos + vec3<f32>(0.0,0.0,h));
+  let fmz = eval_implicit(pos - vec3<f32>(0.0,0.0,h));
+  let g = vec3<f32>(fpx - fmx, fpy - fmy, fpz - fmz);
   let gMax = max(abs(g.x), max(abs(g.y), abs(g.z)));
-  var N = vec3<f32>(0.0, 1.0, 0.0);
-  if (gMax > 1e-20) \{ N = normalize(g / gMax); }
+  var N = -rd;
+  if (gMax > 1e-20) \{
+    N = normalize(g / gMax);
+  } else \{
+    let h2 = vec3<f32>(fpx + fmx - 2.0 * f0, fpy + fmy - 2.0 * f0, fpz + fmz - 2.0 * f0);
+    let h2Max = max(abs(h2.x), max(abs(h2.y), abs(h2.z)));
+    if (h2Max > 1e-20) \{ N = normalize(h2 / h2Max); }
+  }
   if (dot(N, -rd) < 0.0) \{ N = -N; }
   let V = -rd;
   let Lk = normalize(vec3<f32>(0.55, 0.78, 0.38));
@@ -1025,6 +1203,51 @@ inline float2 intersectBox(float3 ro, float3 rd, float b) \{
   return float2(max(0.0f, tNear), tFar);
 }
 
+inline float2 gs_refine_min(float3 ro, float3 rd, float simTime, float ta, float tb, float tMidInit, float gMidInit, float s, float g0, float g2) \{
+  float ga = ta, gb = tb;
+  const float invPhi = 0.61803398875f;
+  float gc = gb - (gb - ga) * invPhi;
+  float gd = ga + (gb - ga) * invPhi;
+  float fc = s * eval_implicit(ro + rd * gc, simTime);
+  float fd = s * eval_implicit(ro + rd * gd, simTime);
+  bool flipped = false;
+  float tFlip = ta;
+  if (fc <= 0.0f) \{ flipped = true; tFlip = gc; }
+  else if (fd <= 0.0f) \{ flipped = true; tFlip = gd; }
+  else \{
+    for (int k = 0; k < 16; ++k) \{
+      if (fc < fd) \{
+        gb = gd; gd = gc; fd = fc;
+        gc = gb - (gb - ga) * invPhi;
+        fc = s * eval_implicit(ro + rd * gc, simTime);
+        if (fc <= 0.0f) \{ flipped = true; tFlip = gc; break; }
+      } else \{
+        ga = gc; gc = gd; fc = fd;
+        gd = ga + (gb - ga) * invPhi;
+        fd = s * eval_implicit(ro + rd * gd, simTime);
+        if (fd <= 0.0f) \{ flipped = true; tFlip = gd; break; }
+      }
+    }
+  }
+  if (flipped) \{
+    float lo = (tMidInit > ta && tFlip > tMidInit) ? tMidInit : ta;
+    float hi = tFlip;
+    for (int k = 0; k < 6; ++k) \{
+      float mid = 0.5f * (lo + hi);
+      if (s * eval_implicit(ro + rd * mid, simTime) > 0.0f) \{ lo = mid; } else \{ hi = mid; }
+    }
+    return float2(1.0f, 0.5f * (lo + hi));
+  }
+  float tMin = (fc < fd) ? gc : gd;
+  float gMin = min(fc, fd);
+  if (tMidInit > ta && gMidInit < gMin) \{ gMin = gMidInit; tMin = tMidInit; }
+  float gMaxEnd = max(g0, g2);
+  if (gMaxEnd > 0.0f && gMin < g0 && gMin < g2 && gMin <= 1e-5f * gMaxEnd) \{
+    return float2(1.0f, tMin);
+  }
+  return float2(0.0f, 0.0f);
+}
+
 kernel void gsir_lean_opns_compute(
     texture2d<half, access::write> outTex [[texture(0)]],
     constant OpnsUniforms& u [[buffer(0)]],
@@ -1044,6 +1267,8 @@ kernel void gsir_lean_opns_compute(
   int steps = clamp(int(u.params.z), 32, 160);
   float dt = (tFar - tNear) / float(steps);
   float simTime = u.params.w;
+  float tPrev2 = tNear;
+  float fPrev2 = 0.0f;
   float tPrev = tNear;
   float fPrev = eval_implicit(ro + rd * tPrev, simTime);
   bool hit = (fPrev == 0.0f);
@@ -1074,6 +1299,26 @@ kernel void gsir_lean_opns_compute(
         hit = true;
         break;
       }
+      float s = fPrev > 0.0f ? 1.0f : -1.0f;
+      float gPrev = s * fPrev;
+      float gCur  = s * fCur;
+      if (i == 1 && gPrev < gCur) \{
+        float2 rHit = gs_refine_min(ro, rd, simTime, tPrev, tCur, tPrev, gPrev, s, gPrev, gCur);
+        if (rHit.x > 0.5f) \{ tHit = rHit.y; hit = true; break; }
+      }
+      if (i >= 2) \{
+        float gPrev2 = s * fPrev2;
+        if (gPrev <= gPrev2 && gPrev <= gCur && (gPrev < gPrev2 || gPrev < gCur)) \{
+          float2 rHit = gs_refine_min(ro, rd, simTime, tPrev2, tCur, tPrev, gPrev, s, gPrev2, gCur);
+          if (rHit.x > 0.5f) \{ tHit = rHit.y; hit = true; break; }
+        }
+      }
+      if (i == steps && gCur < gPrev) \{
+        float2 rHit = gs_refine_min(ro, rd, simTime, tPrev, tCur, tPrev, gPrev, s, gPrev, gCur);
+        if (rHit.x > 0.5f) \{ tHit = rHit.y; hit = true; break; }
+      }
+      tPrev2 = tPrev;
+      fPrev2 = fPrev;
       tPrev = tCur;
       fPrev = fCur;
     }
@@ -1081,13 +1326,20 @@ kernel void gsir_lean_opns_compute(
   if (!hit) \{ outTex.write(half4(0.0h), gid); return; }
   float3 pos = ro + rd * tHit;
   const float eps = {fmtFloat gradH}f;
-  float3 grad = float3(
-    eval_implicit(pos + float3(eps,0.0f,0.0f), simTime) - eval_implicit(pos - float3(eps,0.0f,0.0f), simTime),
-    eval_implicit(pos + float3(0.0f,eps,0.0f), simTime) - eval_implicit(pos - float3(0.0f,eps,0.0f), simTime),
-    eval_implicit(pos + float3(0.0f,0.0f,eps), simTime) - eval_implicit(pos - float3(0.0f,0.0f,eps), simTime)
-  );
+  float f0 = eval_implicit(pos, simTime);
+  float fpx = eval_implicit(pos + float3(eps,0.0f,0.0f), simTime), fmx = eval_implicit(pos - float3(eps,0.0f,0.0f), simTime);
+  float fpy = eval_implicit(pos + float3(0.0f,eps,0.0f), simTime), fmy = eval_implicit(pos - float3(0.0f,eps,0.0f), simTime);
+  float fpz = eval_implicit(pos + float3(0.0f,0.0f,eps), simTime), fmz = eval_implicit(pos - float3(0.0f,0.0f,eps), simTime);
+  float3 grad = float3(fpx - fmx, fpy - fmy, fpz - fmz);
   float gMax = max(abs(grad.x), max(abs(grad.y), abs(grad.z)));
-  float3 N = gMax > 1e-20f ? normalize(grad / gMax) : float3(0.0f, 1.0f, 0.0f);
+  float3 N = -rd;
+  if (gMax > 1e-20f) \{
+    N = normalize(grad / gMax);
+  } else \{
+    float3 h2 = float3(fpx + fmx - 2.0f * f0, fpy + fmy - 2.0f * f0, fpz + fmz - 2.0f * f0);
+    float h2Max = max(abs(h2.x), max(abs(h2.y), abs(h2.z)));
+    if (h2Max > 1e-20f) N = normalize(h2 / h2Max);
+  }
   if (dot(N, -rd) < 0.0f) N = -N;
   float3 V = -rd;
   float3 Lk = normalize(float3(0.55f, 0.78f, 0.38f));
