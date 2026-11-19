@@ -189,17 +189,41 @@ export class WasmTransport implements StudioTransport {
     if (this.loadExportsFn) {
       raw = await this.loadExportsFn();
     } else if (this.wasmUrl.endsWith('.mjs') || this.wasmUrl.endsWith('.js')) {
-      const modNs = (await import(/* @vite-ignore */ this.wasmUrl)) as {
-        default?: (opts?: Record<string, unknown>) => Promise<GrassmannWasmExports>;
-      };
-      if (typeof modNs.default !== 'function') {
-        throw new Error(`Emscripten glue module at ${this.wasmUrl} has no default factory export`);
+      // Resolve relative to document URL (NOT bundled /assets/index-*.js!) so Vite/Vercel builds load /wasm/*.mjs cleanly
+      const resolvedUrl =
+        typeof window !== 'undefined'
+          ? new URL(this.wasmUrl, window.location.href).href
+          : this.wasmUrl;
+      // Pre-flight check ensures Vite SPA fallback HTML doesn't produce a browser MIME error
+      const probe = await fetch(resolvedUrl, { method: 'GET', signal });
+      const ct = probe.headers.get('content-type') ?? '';
+      if (!probe.ok || ct.includes('text/html')) {
+        throw new Error(`WASM JS loader not found at ${resolvedUrl} (HTTP ${probe.status}, ${ct || 'unknown'})`);
       }
-      raw = await modNs.default({});
+      const modNs = (await import(/* @vite-ignore */ resolvedUrl)) as {
+        default?: (opts?: Record<string, unknown>) => Promise<GrassmannWasmExports>;
+        loadGrassmannWasm?: (opts?: Record<string, unknown>) => Promise<{ mod: GrassmannWasmExports }>;
+      };
+      const moduleOpts = {
+        locateFile: (file: string) => new URL(file, resolvedUrl).href,
+      };
+      if (typeof modNs.default === 'function') {
+        raw = await modNs.default(moduleOpts);
+      } else if (typeof modNs.loadGrassmannWasm === 'function') {
+        const loaded = await modNs.loadGrassmannWasm(moduleOpts);
+        raw = loaded.mod;
+      } else {
+        throw new Error(`Emscripten glue module at ${resolvedUrl} has no default factory export`);
+      }
     } else {
-      const resp = await fetch(this.wasmUrl, { signal });
-      if (!resp.ok) {
-        throw new Error(`Failed to fetch ${this.wasmUrl} (HTTP ${resp.status})`);
+      const resolvedUrl =
+        typeof window !== 'undefined'
+          ? new URL(this.wasmUrl, window.location.href).href
+          : this.wasmUrl;
+      const resp = await fetch(resolvedUrl, { signal });
+      const ct = resp.headers.get('content-type') ?? '';
+      if (!resp.ok || ct.includes('text/html')) {
+        throw new Error(`Failed to fetch ${resolvedUrl} (HTTP ${resp.status})`);
       }
       const bytes = await resp.arrayBuffer();
       const instantiated = await WebAssembly.instantiate(bytes, {

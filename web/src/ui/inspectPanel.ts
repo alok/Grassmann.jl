@@ -6,6 +6,27 @@
 
 import type { GsirFrame } from '../gsir/types';
 
+// Pure static display-label dictionary used ONLY when a compact GSIR frame omits
+// meta.algebra.basisNames / basisMetric (zero GA arithmetic!).
+const DISPLAY_BASIS_PRESETS: Record<string, { names: string[]; metric: number[] }> = {
+  PGA3: {
+    names: ['1', 'e0', 'e1', 'e2', 'e3', 'e01', 'e02', 'e03', 'e12', 'e13', 'e23', 'e012', 'e013', 'e023', 'e123', 'e0123'],
+    metric: [1, 0, 1, 1, 1, 0, 0, 0, -1, -1, -1, 0, 0, 0, -1, 0],
+  },
+  PGA2: {
+    names: ['1', 'e0', 'e1', 'e2', 'e01', 'e02', 'e12', 'e012'],
+    metric: [1, 0, 1, 1, 0, 0, -1, 0],
+  },
+  STA: {
+    names: ['1', 'et', 'ex', 'ey', 'ez', 'etx', 'ety', 'etz', 'exy', 'exz', 'eyz', 'etxy', 'etxz', 'etyz', 'exyz', 'I'],
+    metric: [1, -1, 1, 1, 1, 1, 1, 1, -1, -1, -1, 1, 1, 1, -1, -1],
+  },
+  R3: {
+    names: ['1', 'e1', 'e2', 'e3', 'e12', 'e13', 'e23', 'e123'],
+    metric: [1, 1, 1, 1, -1, -1, -1, -1],
+  },
+};
+
 export interface InspectPanelCallbacks {
   onEditCoeff: (entryIdx: number, bladeIdx: number, value: number) => void;
 }
@@ -129,8 +150,11 @@ export class InspectStashPanel {
     coeffMap: Map<number, Float32Array>
   ): void {
     const algebra = this.lastFrame?.meta?.algebra;
-    const basisNames = algebra?.basisNames ?? [];
-    const basisMetric = algebra?.basisMetric ?? [];
+    const fallback = algebra ? DISPLAY_BASIS_PRESETS[algebra.name] : undefined;
+    const basisNames =
+      algebra?.basisNames && algebra.basisNames.length > 0 ? algebra.basisNames : (fallback?.names ?? []);
+    const basisMetric =
+      algebra?.basisMetric && algebra.basisMetric.length > 0 ? algebra.basisMetric : (fallback?.metric ?? []);
     const coeffs = coeffMap.get(entryIdx);
     const count = Math.max(basisNames.length, coeffs?.length ?? 0);
 

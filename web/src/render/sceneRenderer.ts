@@ -200,6 +200,14 @@ export class GrassmannSceneRenderer {
   private orthoScale = 3.0;
   private lastCameraSyncMs = 0;
   private suppressCameraSync = false;
+  private cameraTransition: {
+    startPos: THREE.Vector3;
+    endPos: THREE.Vector3;
+    startTarget: THREE.Vector3;
+    endTarget: THREE.Vector3;
+    startMs: number;
+    durationMs: number;
+  } | null = null;
   private width = 800;
   private height = 600;
   private simTime = 0;
@@ -261,8 +269,8 @@ export class GrassmannSceneRenderer {
     const fillLight = new THREE.DirectionalLight(0x60a5fa, 0.65);
     fillLight.position.set(-7, 4, -5);
     this.scene.add(fillLight);
-    const rimLight = new THREE.DirectionalLight(0xa78bfa, 0.45);
-    rimLight.position.set(0, -5, -8);
+    const rimLight = new THREE.DirectionalLight(0x93c5fd, 0.38);
+    rimLight.position.set(-5, 5, -7);
     this.scene.add(rimLight);
 
     // Backdrop & Infinite AA Grid
@@ -299,12 +307,15 @@ export class GrassmannSceneRenderer {
     this.controls.dampingFactor = 0.08;
     this.controls.rotateSpeed = 0.85;
     this.controls.zoomSpeed = 1.05;
+    this.controls.addEventListener('start', () => {
+      this.cameraTransition = null;
+    });
     this.controls.addEventListener('change', () => this.maybeEmitCameraChange());
 
-    // Post-processing Composer with crisp subtle bloom
+    // Post-processing Composer with calibrated subtle bloom (no surface hotspot glare)
     this.composer = new EffectComposer(this.renderer);
     this.renderPass = new RenderPass(this.scene, this.activeCamera);
-    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(this.width, this.height), 0.28, 0.35, 0.9);
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(this.width, this.height), 0.2, 0.32, 0.96);
     this.composer.addPass(this.renderPass);
     this.composer.addPass(this.bloomPass);
     this.composer.addPass(new OutputPass());
@@ -373,6 +384,8 @@ export class GrassmannSceneRenderer {
     // 3. Rebuild dynamic primitives (reusing cached mesh BufferGeometries & OPNS ShaderMaterials!)
     this.clearDynamicGroup();
     const labelTexts = frame.meta?.labels ?? [];
+    const renderedLabelIndices = new Set<number>();
+    const dedicatedLabelIndices = new Set<number>(frame.labels.map((l) => l.textIdx));
 
     // 0x02 POINTS (strictly gated on pt.draggable; handleId = 0 is valid!)
     for (const pt of frame.points) {
@@ -428,7 +441,13 @@ export class GrassmannSceneRenderer {
         this.dynamicGroup.add(ring);
       }
 
-      if (pt.labelIdx !== GSIR_NO_LABEL && labelTexts[pt.labelIdx]) {
+      if (
+        pt.labelIdx !== GSIR_NO_LABEL &&
+        labelTexts[pt.labelIdx] &&
+        !dedicatedLabelIndices.has(pt.labelIdx) &&
+        !renderedLabelIndices.has(pt.labelIdx)
+      ) {
+        renderedLabelIndices.add(pt.labelIdx);
         this.addLabelObject(
           [pt.pos[0], pt.pos[1] + r * 1.9, pt.pos[2]],
           labelTexts[pt.labelIdx]!,
@@ -522,7 +541,13 @@ export class GrassmannSceneRenderer {
         this.interactiveObjects.push(mesh);
       }
 
-      if (pl.labelIdx !== GSIR_NO_LABEL && labelTexts[pl.labelIdx]) {
+      if (
+        pl.labelIdx !== GSIR_NO_LABEL &&
+        labelTexts[pl.labelIdx] &&
+        !dedicatedLabelIndices.has(pl.labelIdx) &&
+        !renderedLabelIndices.has(pl.labelIdx)
+      ) {
+        renderedLabelIndices.add(pl.labelIdx);
         this.addLabelObject(pl.center, labelTexts[pl.labelIdx]!, pl.rgba, false);
       }
     }
@@ -646,10 +671,10 @@ export class GrassmannSceneRenderer {
       const mat = new THREE.MeshPhysicalMaterial({
         color: mr.useVertexColors ? 0xffffff : toColor(mr.rgba),
         vertexColors: mr.useVertexColors && cached.geometry.hasAttribute('color'),
-        roughness: 0.28,
-        metalness: 0.14,
-        clearcoat: 0.45,
-        clearcoatRoughness: 0.25,
+        roughness: 0.34,
+        metalness: 0.12,
+        clearcoat: 0.25,
+        clearcoatRoughness: 0.3,
         transparent: mr.rgba[3] < 0.99,
         opacity: mr.rgba[3],
         side: mr.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
@@ -757,16 +782,27 @@ export class GrassmannSceneRenderer {
 
   resetCamera(): void {
     if (this.isOrtho) {
+      this.cameraTransition = null;
       this.orthoCamera.position.set(0, 0, 10);
       this.orthoCamera.zoom = 1;
       this.orthoCamera.updateProjectionMatrix();
       this.controls.target.set(0, 0, 0);
+      this.controls.update();
     } else {
-      this.perspCamera.position.set(3.8, 2.8, 4.8);
-      this.controls.target.set(0, 0, 0);
+      this.startCameraTransition(new THREE.Vector3(3.8, 2.8, 4.8), new THREE.Vector3(0, 0, 0), 420);
     }
-    this.controls.update();
     this.maybeEmitCameraChange(true);
+  }
+
+  private startCameraTransition(endPos: THREE.Vector3, endTarget: THREE.Vector3, durationMs = 460): void {
+    this.cameraTransition = {
+      startPos: this.perspCamera.position.clone(),
+      endPos: endPos.clone(),
+      startTarget: this.controls.target.clone(),
+      endTarget: endTarget.clone(),
+      startMs: performance.now(),
+      durationMs,
+    };
   }
 
   clearWedgeSelection(): void {
@@ -821,6 +857,66 @@ export class GrassmannSceneRenderer {
 
     const frame = this.currentFrame;
     if (frame) {
+      const labelTexts = frame.meta?.labels ?? [];
+
+      // Planes (translucent quads)
+      for (const pl of frame.planes) {
+        const e = pl.extent || 2.0;
+        const corners: Vec3Tuple[] = [
+          [pl.center[0] - pl.u[0] * e - pl.v[0] * e, pl.center[1] - pl.u[1] * e - pl.v[1] * e, pl.center[2] - pl.u[2] * e - pl.v[2] * e],
+          [pl.center[0] + pl.u[0] * e - pl.v[0] * e, pl.center[1] + pl.u[1] * e - pl.v[1] * e, pl.center[2] + pl.u[2] * e - pl.v[2] * e],
+          [pl.center[0] + pl.u[0] * e + pl.v[0] * e, pl.center[1] + pl.u[1] * e + pl.v[1] * e, pl.center[2] + pl.u[2] * e + pl.v[2] * e],
+          [pl.center[0] - pl.u[0] * e + pl.v[0] * e, pl.center[1] - pl.u[1] * e + pl.v[1] * e, pl.center[2] - pl.u[2] * e + pl.v[2] * e],
+        ];
+        const pts = corners.map((c) => project(c).map((v) => v.toFixed(1)).join(',')).join(' ');
+        parts.push(`<polygon points="${pts}" fill="${hex([pl.rgba[0], pl.rgba[1], pl.rgba[2], Math.min(0.32, pl.rgba[3])])}" stroke="${hex([pl.rgba[0], pl.rgba[1], pl.rgba[2], 0.85])}" stroke-width="1.5"/>`);
+      }
+
+      // Bivector disks / parallelograms
+      for (const bv of frame.bivectorDisks) {
+        if (bv.isDisk) {
+          const pts: string[] = [];
+          for (let i = 0; i < 48; i++) {
+            const a = (i / 48) * Math.PI * 2;
+            const c = Math.cos(a), s = Math.sin(a);
+            const [px, py] = project([
+              bv.origin[0] + c * bv.u[0] + s * bv.v[0],
+              bv.origin[1] + c * bv.u[1] + s * bv.v[1],
+              bv.origin[2] + c * bv.u[2] + s * bv.v[2],
+            ]);
+            pts.push(`${px.toFixed(1)},${py.toFixed(1)}`);
+          }
+          parts.push(`<polygon points="${pts.join(' ')}" fill="${hex([bv.rgba[0], bv.rgba[1], bv.rgba[2], Math.min(0.45, bv.rgba[3])])}" stroke="${hex([bv.rgba[0], bv.rgba[1], bv.rgba[2], 0.95])}" stroke-width="1.8"/>`);
+        } else {
+          const quad: Vec3Tuple[] = [
+            bv.origin,
+            [bv.origin[0] + bv.u[0], bv.origin[1] + bv.u[1], bv.origin[2] + bv.u[2]],
+            [bv.origin[0] + bv.u[0] + bv.v[0], bv.origin[1] + bv.u[1] + bv.v[1], bv.origin[2] + bv.u[2] + bv.v[2]],
+            [bv.origin[0] + bv.v[0], bv.origin[1] + bv.v[1], bv.origin[2] + bv.v[2]],
+          ];
+          const pts = quad.map((c) => project(c).map((v) => v.toFixed(1)).join(',')).join(' ');
+          parts.push(`<polygon points="${pts}" fill="${hex([bv.rgba[0], bv.rgba[1], bv.rgba[2], Math.min(0.45, bv.rgba[3])])}" stroke="${hex([bv.rgba[0], bv.rgba[1], bv.rgba[2], 0.95])}" stroke-width="1.8"/>`);
+        }
+      }
+
+      // Circles
+      for (const cir of frame.circles) {
+        const pts: string[] = [];
+        for (let i = 0; i <= 64; i++) {
+          const a = (i / 64) * Math.PI * 2;
+          const ct = Math.cos(a) * cir.radius;
+          const st = Math.sin(a) * cir.radius;
+          const [px, py] = project([
+            cir.center[0] + ct * cir.u[0] + st * cir.v[0],
+            cir.center[1] + ct * cir.u[1] + st * cir.v[1],
+            cir.center[2] + ct * cir.u[2] + st * cir.v[2],
+          ]);
+          pts.push(`${px.toFixed(1)},${py.toFixed(1)}`);
+        }
+        const dash = cir.imaginary ? ' stroke-dasharray="6,5"' : '';
+        parts.push(`<polyline fill="none" points="${pts.join(' ')}" stroke="${hex(cir.rgba)}" stroke-width="${Math.max(1.6, cir.width)}"${dash}/>`);
+      }
+
       for (const ln of frame.lines) {
         const c = ln.clip || 6;
         const [x1, y1] = project([ln.origin[0] - ln.dir[0] * c, ln.origin[1] - ln.dir[1] * c, ln.origin[2] - ln.dir[2] * c]);
@@ -841,7 +937,9 @@ export class GrassmannSceneRenderer {
           const [px, py] = project([curve.xyz[i * 3]!, curve.xyz[i * 3 + 1]!, curve.xyz[i * 3 + 2]!]);
           pts.push(`${px.toFixed(1)},${py.toFixed(1)}`);
         }
-        parts.push(`<polyline fill="none" points="${pts.join(' ')}" stroke="${hex(curve.rgba)}" stroke-width="${Math.max(1.5, curve.width)}"/>`);
+        const tag = curve.closed ? 'polygon' : 'polyline';
+        const dash = curve.dashed ? ' stroke-dasharray="6,5"' : '';
+        parts.push(`<${tag} fill="none" points="${pts.join(' ')}" stroke="${hex(curve.rgba)}" stroke-width="${Math.max(1.5, curve.width)}"${dash}/>`);
       }
       for (const pt of frame.points) {
         const [cx, cy] = project(pt.pos);
@@ -849,6 +947,44 @@ export class GrassmannSceneRenderer {
         parts.push(
           `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${pt.hollow ? 'none' : hex(pt.rgba)}" stroke="${hex(pt.rgba)}" stroke-width="2"/>`
         );
+      }
+
+      // Labels
+      for (const lb of frame.labels) {
+        const txt = labelTexts[lb.textIdx];
+        if (!txt) continue;
+        const [lx, ly] = project(lb.pos);
+        const safe = txt.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        parts.push(
+          `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" fill="${hex(lb.rgba)}" font-family="ui-monospace,Menlo,monospace" font-size="13">${safe}</text>`
+        );
+      }
+
+      // 2D Contour Overlay inset (0x0F)
+      if (frame.contourOverlay && (frame.contourOverlay.curves.length > 0 || frame.contourOverlay.intersections.length > 0)) {
+        const co = frame.contourOverlay;
+        const boxW = Math.round(width * 0.24);
+        const boxH = Math.round(height * 0.26);
+        const ox = 20;
+        const oy = height - boxH - 20;
+        const pad = 16;
+        const spanX = Math.max(1e-5, co.maxX - co.minX);
+        const spanY = Math.max(1e-5, co.maxY - co.minY);
+        const mx = (x: number) => ox + pad + ((x - co.minX) / spanX) * (boxW - pad * 2);
+        const my = (y: number) => oy + pad + (1 - (y - co.minY) / spanY) * (boxH - pad * 2);
+
+        parts.push(`<rect x="${ox}" y="${oy}" width="${boxW}" height="${boxH}" rx="10" fill="${this.darkTheme ? '#0b1222' : '#ffffff'}" stroke="rgba(148,175,224,0.45)" stroke-width="1.2"/>`);
+        for (const c of co.curves) {
+          if (c.ptCount < 2) continue;
+          const pts: string[] = [];
+          for (let i = 0; i < c.ptCount; i++) {
+            pts.push(`${mx(c.xy[i * 2]!).toFixed(1)},${my(c.xy[i * 2 + 1]!).toFixed(1)}`);
+          }
+          parts.push(`<polyline fill="none" points="${pts.join(' ')}" stroke="${hex(c.rgba)}" stroke-width="${Math.max(1.4, c.width)}"/>`);
+        }
+        for (const pt of co.intersections) {
+          parts.push(`<circle cx="${mx(pt.x).toFixed(1)}" cy="${my(pt.y).toFixed(1)}" r="3.5" fill="${hex(pt.rgba)}"/>`);
+        }
       }
     }
 
@@ -1055,11 +1191,18 @@ export class GrassmannSceneRenderer {
         const quat = new THREE.Quaternion();
         const scale = new THREE.Vector3();
         inv.decompose(pos, quat, scale);
-        if (pos.lengthSq() > 1e-4) {
-          this.perspCamera.position.copy(pos);
+        const dist = Math.max(2.6, distance || pos.length() || 5.0);
+        // If Lean supplies a flat eye-level Z-axis default (x≈0, y≈0), elevate to a dramatic 3/4 studio hero angle!
+        if (Math.abs(pos.x) < 1e-2 && Math.abs(pos.y) < 1e-2) {
+          this.startCameraTransition(
+            new THREE.Vector3(dist * 0.78, dist * 0.62, dist * 0.92),
+            new THREE.Vector3(0, 0, 0),
+            440
+          );
+        } else if (pos.lengthSq() > 1e-4) {
           const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(quat);
-          this.controls.target.copy(pos).addScaledVector(forward, Math.max(0.5, distance || 5.0));
-          this.controls.update();
+          const nextTarget = pos.clone().addScaledVector(forward, dist);
+          this.startCameraTransition(pos, nextTarget, 460);
         }
       }
     } finally {
@@ -1301,11 +1444,18 @@ export class GrassmannSceneRenderer {
     if (!force && now - this.lastCameraSyncMs < 50) return;
     this.lastCameraSyncMs = now;
 
-    // Pack standard Three.js camera orientation quaternion + distance into the 8-float wire slot
+    // Pack Three.js camera unit orientation quaternion + distance into the 8-float wire slot
+    // (ganja motor order [s, e01, e02, e03, e12, e13, e23, e0123])
     const q = this.activeCamera.quaternion;
     const t = this.controls.target;
     const dist = this.activeCamera.position.distanceTo(t);
-    const motor = new Float32Array([q.w, -0.5 * t.x, -0.5 * t.y, -0.5 * t.z, -q.z, q.y, -q.x, 0]);
+    const tx = -0.5 * t.x, ty = -0.5 * t.y, tz = -0.5 * t.z;
+    const rw = q.w, r12 = -q.z, r13 = q.y, r23 = -q.x;
+    const e01 = tx * rw + ty * r12 + tz * r13;
+    const e02 = -tx * r12 + ty * rw + tz * r23;
+    const e03 = -tx * r13 - ty * r23 + tz * rw;
+    const e0123 = tx * r23 - ty * r13 + tz * r12;
+    const motor = new Float32Array([rw, e01, e02, e03, r12, r13, r23, e0123]);
     this.callbacks.onCameraChange?.(motor, this.perspCamera.fov, dist);
   }
 
@@ -1340,7 +1490,19 @@ export class GrassmannSceneRenderer {
     const t0 = performance.now();
 
     if (!this.xr.isActive()) {
-      this.controls.update();
+      if (this.cameraTransition && !this.isOrtho) {
+        const tr = this.cameraTransition;
+        const u = Math.min(1, (t0 - tr.startMs) / tr.durationMs);
+        const ease = 1 - Math.pow(1 - u, 3);
+        this.suppressCameraSync = true;
+        this.perspCamera.position.lerpVectors(tr.startPos, tr.endPos, ease);
+        this.controls.target.lerpVectors(tr.startTarget, tr.endTarget, ease);
+        this.controls.update();
+        this.suppressCameraSync = false;
+        if (u >= 1) this.cameraTransition = null;
+      } else {
+        this.controls.update();
+      }
     } else {
       this.xr.updateFrame();
     }

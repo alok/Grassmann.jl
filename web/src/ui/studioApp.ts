@@ -9,6 +9,7 @@ import katex from 'katex';
 import { StudioAudioSynth } from '../audio/synth';
 import {
   GsirSessionDecoder,
+  WedgeActionCode,
   buildAllSectionsFixtureBytes,
   encodeDragHandle,
   encodeEditCoeff,
@@ -62,6 +63,11 @@ export class GrassmannStudioApp {
   private readonly rightGutter: HTMLDivElement;
   private readonly statusPill: HTMLButtonElement;
   private readonly telemetryPill: HTMLDivElement;
+  private readonly telemetryText: HTMLSpanElement;
+  private readonly sparkCanvas: HTMLCanvasElement;
+  private readonly sparkCtx: CanvasRenderingContext2D | null;
+  private readonly sparkSamples: number[] = [];
+  private readonly playBtn: HTMLButtonElement;
   private readonly xrBtn: HTMLButtonElement;
   private readonly offlineBanner: HTMLDivElement;
   private readonly modeButtons = new Map<StudioMode, HTMLButtonElement>();
@@ -133,7 +139,14 @@ export class GrassmannStudioApp {
 
     this.telemetryPill = document.createElement('div');
     this.telemetryPill.className = 'gs-telemetry-pill mono';
-    this.telemetryPill.textContent = '60 FPS · 0 µs';
+    this.sparkCanvas = document.createElement('canvas');
+    this.sparkCanvas.className = 'gs-sparkline';
+    this.sparkCanvas.width = 52;
+    this.sparkCanvas.height = 16;
+    this.sparkCtx = this.sparkCanvas.getContext('2d');
+    this.telemetryText = document.createElement('span');
+    this.telemetryText.textContent = '60 FPS · 0 µs';
+    this.telemetryPill.append(this.sparkCanvas, this.telemetryText);
 
     this.statusPill = document.createElement('button');
     this.statusPill.type = 'button';
@@ -274,7 +287,9 @@ export class GrassmannStudioApp {
     // Floating Viewport Quick Toolbar (top-right inside viewport)
     const vpTools = document.createElement('div');
     vpTools.className = 'gs-vp-toolbar';
+    this.playBtn = this.makeVpBtn('▶ Play', () => this.setAnimationRunning(!this.animRunning));
     vpTools.append(
+      this.playBtn,
       this.makeVpBtn('Grid', () => {
         this.gridVisible = !this.gridVisible;
         this.renderer.setGridVisible(this.gridVisible);
@@ -284,10 +299,15 @@ export class GrassmannStudioApp {
         this.renderer.setWireframeOverride(this.wireframe);
         if (this.lastFrame) this.renderer.applyFrame(this.lastFrame, this.decoder);
       }),
-      this.makeVpBtn('Reset View', () => this.renderer.resetCamera()),
+      this.makeVpBtn('Reset (R)', () => this.renderer.resetCamera()),
       this.makeVpBtn('PNG', () =>
         this.downloadDataUrl(this.renderer.exportPng(1600, 1000), `grassmann-${Date.now()}.png`)
-      )
+      ),
+      this.makeVpBtn('SVG', () => {
+        const svg = this.renderer.exportSvg(1200, 800);
+        const blob = new Blob([svg], { type: 'image/svg+xml' });
+        this.downloadDataUrl(URL.createObjectURL(blob), `grassmann-${Date.now()}.svg`);
+      })
     );
     viewportWrap.appendChild(vpTools);
 
@@ -387,11 +407,28 @@ export class GrassmannStudioApp {
         }
       },
       onTelemetry: ({ fps, renderUs, cachedMeshes }) => {
-        const leanStr = this.lastLeanUs > 0 ? ` · Lean ${Math.round(this.lastLeanUs)}µs` : '';
-        this.telemetryPill.textContent =
-          `${fps} FPS · Dec ${Math.round(this.lastDecodeUs)}µs · Rnd ${Math.round(renderUs)}µs${leanStr} · ${cachedMeshes}m`;
+        this.telemetryText.textContent = `${fps} FPS · Dec ${Math.round(this.lastDecodeUs)}µs · Rnd ${(renderUs / 1000).toFixed(2)}ms · ${cachedMeshes}m`;
+        this.pushSparkSample((renderUs + this.lastDecodeUs) / 1000);
       },
     });
+
+    // Global keyboard shortcuts (1/2/3/4 modes, Space play/pause, R reset camera, Cmd/Ctrl+Z undo, H hint, Shift+Enter eval)
+    window.addEventListener('keydown', this.onGlobalKeyDown);
+
+    // Expose read-only diagnostics handle for Playwright E2E visual audit
+    (window as unknown as Record<string, unknown>).__grassmannStudio = {
+      getState: () => ({
+        mode: this.mode,
+        transportKind: this.transport?.kind ?? null,
+        transportLabel: this.transport?.label ?? null,
+        lastLeanUs: this.lastLeanUs,
+        lastDecodeUs: this.lastDecodeUs,
+        frameSeq: this.lastFrame ? this.lastFrame.header.frameSeq.toString() : null,
+        presetId: this.lastFrame?.meta?.presetId ?? this.activePresetId,
+        title: this.lastFrame?.meta?.title ?? null,
+        cachedMeshes: this.decoder.getCachedMeshCount(),
+      }),
+    };
 
     // Probe WebXR support (Vision Pro / Quest)
     void this.renderer.xr.detectSupport().then((mode) => {
@@ -412,11 +449,15 @@ export class GrassmannStudioApp {
     this.setStatus('connecting', 'Connecting Lean…');
     try {
       const { transport, initialFrame } = await connectLeanBackend(cfg);
+      // Measure warm per-frame Lean call separately from one-time WASM download/compile
+      const tWarm = performance.now();
+      await transport.getFrame();
+      this.lastLeanUs = (performance.now() - tWarm) * 1000;
       this.transport?.dispose();
       this.transport = transport;
       this.decoder.reset();
       this.offlineBanner.classList.add('hidden');
-      this.setStatus('connected', transport.label);
+      this.updateEngineBadge();
       this.ingestRawFrame(initialFrame, true);
       this.applyUrlHashOnConnect();
     } catch (err) {
@@ -436,12 +477,24 @@ export class GrassmannStudioApp {
       this.transport = next;
       this.decoder.reset();
       this.offlineBanner.classList.add('hidden');
-      this.setStatus('connected', next.label);
+      this.updateEngineBadge();
       this.ingestRawFrame(bytes, true);
     } catch (err) {
       next.dispose();
       this.setStatus('error', 'Connection Failed');
       this.connModal.open((err as Error).message);
+    }
+  }
+
+  private updateEngineBadge(): void {
+    if (!this.transport) return;
+    const ms = Math.max(0.01, this.lastLeanUs / 1000).toFixed(2);
+    if (this.transport.kind === 'wasm') {
+      this.setStatus('connected', `Lean 4.36 WASM • ${ms}ms`);
+    } else if (this.transport.kind === 'server') {
+      this.setStatus('connected', `Lean Native Server • ${ms}ms`);
+    } else {
+      this.setStatus('connected', `Static GSIR • ${ms}ms`);
     }
   }
 
@@ -612,10 +665,13 @@ export class GrassmannStudioApp {
     keys.className = 'gs-help-shortcuts';
     keys.innerHTML =
       '<strong>Studio Shortcuts</strong>' +
+      '<div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd> Switch studio modes</div>' +
+      '<div><kbd>Space</kbd> Play / Pause simulation clock</div>' +
+      '<div><kbd>R</kbd> Smooth reset camera</div>' +
+      '<div><kbd>⌘/Ctrl Z</kbd> / <kbd>H</kbd> Wedge Undo / Hint</div>' +
       '<div><kbd>⇧ Enter</kbd> Evaluate script in Lean</div>' +
       '<div><kbd>Select Number</kbd> Inline drag-to-scrub slider</div>' +
-      '<div><kbd>Select 0xRRGGBB</kbd> Inline hex color picker</div>' +
-      '<div><kbd>Double-click Gutter</kbd> Collapse / restore pane</div>';
+      '<div><kbd>Select 0xRRGGBB</kbd> Inline hex color picker</div>';
     pane.appendChild(keys);
 
     return pane;
@@ -698,6 +754,7 @@ export class GrassmannStudioApp {
         const t0 = performance.now();
         const frameBytes = await this.transport.dispatchBin(next);
         this.lastLeanUs = (performance.now() - t0) * 1000;
+        this.updateEngineBadge();
         this.ingestRawFrame(frameBytes, false);
       }
     } catch (err) {
@@ -716,6 +773,7 @@ export class GrassmannStudioApp {
       const t0 = performance.now();
       const frameBytes = await this.transport.dispatchJson(ev);
       this.lastLeanUs = (performance.now() - t0) * 1000;
+      this.updateEngineBadge();
       this.ingestRawFrame(frameBytes, ev.op === 'loadPreset');
     } catch (err) {
       this.setStatus('error', `Error: ${(err as Error).message}`);
@@ -739,6 +797,8 @@ export class GrassmannStudioApp {
 
   private setAnimationRunning(running: boolean): void {
     this.animRunning = running;
+    this.playBtn.textContent = running ? '⏸ Pause' : '▶ Play';
+    this.playBtn.classList.toggle('active', running);
     if (running) {
       this.lastAnimTickMs = performance.now();
       const step = () => {
@@ -829,7 +889,78 @@ export class GrassmannStudioApp {
     a.remove();
   }
 
+  private pushSparkSample(ms: number): void {
+    this.sparkSamples.push(ms);
+    if (this.sparkSamples.length > 26) this.sparkSamples.shift();
+    const ctx = this.sparkCtx;
+    if (!ctx) return;
+    const w = this.sparkCanvas.width;
+    const h = this.sparkCanvas.height;
+    ctx.clearRect(0, 0, w, h);
+    const maxMs = Math.max(8, ...this.sparkSamples);
+    const barW = 2;
+    for (let i = 0; i < this.sparkSamples.length; i++) {
+      const v = this.sparkSamples[i]!;
+      const barH = Math.max(2, Math.round((v / maxMs) * (h - 2)));
+      ctx.fillStyle = v <= 6 ? '#34d399' : v <= 16.7 ? '#38bdf8' : '#fbbf24';
+      ctx.fillRect(i * barW, h - barH, barW - 0.5, barH);
+    }
+  }
+
+  private readonly onGlobalKeyDown = (ev: KeyboardEvent): void => {
+    const target = ev.target as HTMLElement | null;
+    const isTyping =
+      target !== null &&
+      (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT');
+
+    if (ev.key === 'Enter' && ev.shiftKey) {
+      ev.preventDefault();
+      void this.dispatchJson({ op: 'evalScript', algebra: this.activeAlgebra, code: this.codeEditor.getCode() });
+      return;
+    }
+
+    if (isTyping) return;
+
+    if (!ev.metaKey && !ev.ctrlKey && !ev.altKey) {
+      if (ev.key === '1') {
+        this.setMode('coffeeshop');
+        return;
+      }
+      if (ev.key === '2') {
+        this.setMode('wedge');
+        return;
+      }
+      if (ev.key === '3') {
+        this.setMode('calculator');
+        return;
+      }
+      if (ev.key === '4') {
+        this.setMode('galculator');
+        return;
+      }
+      if (ev.key === ' ') {
+        ev.preventDefault();
+        this.setAnimationRunning(!this.animRunning);
+        return;
+      }
+      if (ev.key === 'r' || ev.key === 'R') {
+        this.renderer.resetCamera();
+        return;
+      }
+      if ((ev.key === 'h' || ev.key === 'H') && this.mode === 'wedge') {
+        this.enqueueBinaryEvent(encodeWedgeAction(WedgeActionCode.HINT, 0));
+        return;
+      }
+    }
+
+    if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 'z' && this.mode === 'wedge') {
+      ev.preventDefault();
+      this.enqueueBinaryEvent(encodeWedgeAction(WedgeActionCode.UNDO, 0));
+    }
+  };
+
   dispose(): void {
+    window.removeEventListener('keydown', this.onGlobalKeyDown);
     this.setAnimationRunning(false);
     this.transport?.dispose();
     this.renderer.dispose();

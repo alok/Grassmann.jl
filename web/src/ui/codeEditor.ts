@@ -56,7 +56,7 @@ export class CoffeeShopCodeEditor {
 
     const tip = document.createElement('span');
     tip.className = 'gs-hint-chip';
-    tip.textContent = 'Select a number or 0xRRGGBB to scrub';
+    tip.textContent = 'Select num / 0xRGB';
 
     this.runBtn = document.createElement('button');
     this.runBtn.type = 'button';

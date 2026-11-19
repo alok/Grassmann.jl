@@ -222,7 +222,7 @@ export function createFlowParticleMaterial(rgba: RgbaTuple, pointSize: number): 
 
 const OPNS_MAX_COEFFS = 64;
 
-const OPNS_VERTEX_SHADER = `
+const OPNS_VERTEX_SHADER_GLSL1 = `
   varying vec3 vWorldPos;
   varying vec3 vLocalPos;
   void main() {
@@ -232,6 +232,25 @@ const OPNS_VERTEX_SHADER = `
     gl_Position = projectionMatrix * viewMatrix * wp;
   }
 `;
+
+const OPNS_VERTEX_SHADER_GLSL3 = `
+  out vec3 vWorldPos;
+  out vec3 vLocalPos;
+  void main() {
+    vLocalPos = position;
+    vec4 wp = modelMatrix * vec4(position, 1.0);
+    vWorldPos = wp.xyz;
+    gl_Position = projectionMatrix * viewMatrix * wp;
+  }
+`;
+
+function isGlsl3Shader(rawGlsl: string): boolean {
+  return /#version\s+300\s+es/.test(rawGlsl) || /\bout\s+vec4\s+\w+/.test(rawGlsl);
+}
+
+function stripVersionDirective(rawGlsl: string): string {
+  return rawGlsl.replace(/^\s*#version\s+300\s+es\s*\n?/m, '');
+}
 
 function wrapLeanOpnsGlsl(rawGlsl: string): string {
   // If Lean emitted a full fragment shader with `void main()`, use it directly.
@@ -304,8 +323,10 @@ export class OpnsShaderCache {
     if (existing) return existing;
     if (!meta.glsl) return null;
 
+    const glsl3 = isGlsl3Shader(meta.glsl);
     const coeffsBuf = new Float32Array(OPNS_MAX_COEFFS);
     const mat = new THREE.ShaderMaterial({
+      glslVersion: glsl3 ? THREE.GLSL3 : THREE.GLSL1,
       transparent: true,
       depthWrite: false,
       side: THREE.BackSide,
@@ -319,8 +340,8 @@ export class OpnsShaderCache {
         uIsIPNS: { value: 0 },
         uSimTime: { value: 0 },
       },
-      vertexShader: OPNS_VERTEX_SHADER,
-      fragmentShader: wrapLeanOpnsGlsl(meta.glsl),
+      vertexShader: glsl3 ? OPNS_VERTEX_SHADER_GLSL3 : OPNS_VERTEX_SHADER_GLSL1,
+      fragmentShader: glsl3 ? stripVersionDirective(meta.glsl) : wrapLeanOpnsGlsl(meta.glsl),
     });
 
     this.materials.set(meta.hash, mat);
